@@ -63,3 +63,13 @@ When MDS scheduler logic lands in Phase 3, pick one approach:
 Recommendation: Option A for Phase 3 simplicity. Drop `mds_blob_cache_seq` at that point if it's unused.
 
 **Phase 0 verdict:** Table schema as-is is fine because no rows are written. Pick policy in Phase 3.
+
+## From T7 — V3 VPD policy
+
+### Add INDEX statement type for defense-in-depth
+
+V3 attaches the VPD policy with `statement_types => 'SELECT,INSERT,UPDATE,DELETE'`. Phase 0 risk model assumes only APP_ADMIN (with `EXEMPT ACCESS POLICY`) ever has index DDL privileges — and codex review confirmed APP_RUNTIME does not. So Phase 0 has no exposure.
+
+Before any production rollout, add `INDEX` to `statement_types` for defense-in-depth: this protects against future code (or a forgotten grant) that lets a non-admin user create or rebuild indexes on `credential`. With `INDEX` enforcement, an index build cannot read rows of other tenants either.
+
+Implementation: when modifying the policy later, prefer `DBMS_RLS.ALTER_POLICY` over drop-and-recreate, and add `'SELECT,INSERT,UPDATE,DELETE,INDEX'` as `statement_types`.
