@@ -74,6 +74,30 @@ Before any production rollout, add `INDEX` to `statement_types` for defense-in-d
 
 Implementation: when modifying the policy later, prefer `DBMS_RLS.ALTER_POLICY` over drop-and-recreate, and add `'SELECT,INSERT,UPDATE,DELETE,INDEX'` as `statement_types`.
 
+## From T15 — admin-app application.yml
+
+### Gate `flyway.baseline-on-migrate` by profile/env before prod
+
+`spring.flyway.baseline-on-migrate: true` is enabled unconditionally in `admin-app/src/main/resources/application.yml`. This is correct for Phase 0 because `bootstrap-vpd.sql` populates APP_OWNER with the CTX_PKG package before Flyway ever runs.
+
+In a production deployment, leaving `baseline-on-migrate: true` as an unconditional default would silently auto-baseline ANY non-empty schema without history — masking a real "this DB is already managed by another tool" warning. Before any non-local deploy:
+
+- Move the setting into `application-local.yml` or a profile-specific block.
+- Default it to `false` for `prod` / `staging`.
+- Document the operational expectation: bootstrap-vpd.sql runs once at provisioning, Flyway picks up cleanly afterwards.
+
+### Boundary debt: SchedulerLease entity in :core
+
+`SchedulerLease` is admin-app's concern (the MDS scheduler in Phase 3). It currently lives in `core/entity` because :core is the only place Spring Data JPA + Hibernate scan from in T8/T9. The side effect: passkey-app must also scan SchedulerLease and APP_RUNTIME must have `SELECT` grant on `scheduler_lease` just to pass ddl-validate (V4 migration).
+
+Cleaner long-term shape (defer until at least Phase 3):
+
+- Move admin-only entities out of `:core/entity` into an `admin-app`-local package.
+- Narrow `@EntityScan` in PasskeyApplication to exclude admin entities, or add `@EntityScan({"com.crosscert.passkey.core.entity", "com.crosscert.passkey.app.entity"})`-style allow-lists.
+- Roll back the `GRANT SELECT ON scheduler_lease TO APP_RUNTIME` in V4 once passkey-app no longer scans the entity.
+
+Cost-benefit: small. Phase 0 priority is "VPD works", not entity-package hygiene.
+
 ## From T9 — note for T16 implementation
 
 ### Use saveAndFlush() (not save()) for VPD cross-tenant INSERT assertions

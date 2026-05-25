@@ -1,0 +1,11 @@
+spring:
+  # Pull shared local-profile defaults (DataSource URL/driver, Redis host)
+  # from :core's classpath. Required because Spring Boot's profile-specific
+  # file loader uses ClassLoader.getResource (single-resource), so two
+  # application-local.yml files at the same classpath root would shadow
+  # each other instead of merging.
+  config:
+    import: classpath:application-local-shared.yml
+  datasource:
+    username: APP_ADMIN_USER
+    password: admin_pw
