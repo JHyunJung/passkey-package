@@ -56,6 +56,10 @@ GRANT CREATE ANY CONTEXT   TO APP_OWNER;
 GRANT UNLIMITED TABLESPACE TO APP_OWNER;
 GRANT EXECUTE ON DBMS_RLS     TO APP_OWNER;
 GRANT EXECUTE ON DBMS_SESSION TO APP_OWNER;
+-- Flyway runs as APP_ADMIN_USER and must invoke DBMS_RLS.ADD_POLICY in V3
+-- to attach VPD policies to credential. GRANT ALL PRIVILEGES does not
+-- cover object EXECUTE on SYS-owned packages, so grant explicitly here.
+GRANT EXECUTE ON DBMS_RLS     TO APP_ADMIN;
 
 -- ============================================================
 -- Users
