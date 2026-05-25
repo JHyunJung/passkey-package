@@ -12,10 +12,14 @@ import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.webauthn4j.WebAuthnManager;
+import com.webauthn4j.converter.AttestationObjectConverter;
+import com.webauthn4j.converter.AuthenticationExtensionsClientOutputsConverter;
+import com.webauthn4j.converter.CollectedClientDataConverter;
 import com.webauthn4j.converter.util.ObjectConverter;
-import com.webauthn4j.credential.CredentialRecord;
-import com.webauthn4j.credential.CredentialRecordImpl;
+import com.webauthn4j.data.AuthenticatorTransport;
 import com.webauthn4j.data.PublicKeyCredentialParameters;
 import com.webauthn4j.data.PublicKeyCredentialType;
 import com.webauthn4j.data.RegistrationData;
@@ -153,12 +157,19 @@ public class RegistrationFinishService {
             throw new IllegalArgumentException("authenticator metadata verification failed");
         }
 
-        CredentialRecord record = new CredentialRecordImpl(
-                data.getAttestationObject(),
-                data.getCollectedClientData(),
-                data.getClientExtensions(),
-                data.getTransports());
-        byte[] credentialRecordBytes = objectConverter.getCborConverter().writeValueAsBytes(record);
+        // Persist the four CredentialRecordImpl constructor inputs
+        // (attestationObject, clientData, clientExtensions, transports)
+        // in a JSON envelope. The natural choice would be to serialize
+        // CredentialRecordImpl whole via objectConverter.getCborConverter(),
+        // but webauthn4j 0.31.5's CredentialRecordImpl has no @JsonCreator
+        // and Jackson 3 cannot synthesize one — so a CBOR readValue at
+        // auth time throws "no Creators, like default constructor, exist".
+        // The IT surfaced this as the actual blocker on first /authentication/finish.
+        // Solution: round-trip each component through its own webauthn4j
+        // converter (which IS @JsonCreator-friendly), envelope the bytes
+        // as JSON, and reconstruct CredentialRecordImpl at verify time
+        // via the public 4-arg constructor.
+        byte[] credentialRecordBytes = serializeCredentialRecordEnvelope(data);
 
         byte[] credentialId = data.getAttestationObject().getAuthenticatorData()
                 .getAttestedCredentialData().getCredentialId();
@@ -175,6 +186,33 @@ public class RegistrationFinishService {
                 aaguid == null ? null : HexFormat.of().formatHex(aaguid),
                 fmt,
                 clock.instant());
+    }
+
+    private byte[] serializeCredentialRecordEnvelope(RegistrationData data) {
+        try {
+            AttestationObjectConverter aoConv = new AttestationObjectConverter(objectConverter);
+            CollectedClientDataConverter cdConv = new CollectedClientDataConverter(objectConverter);
+            AuthenticationExtensionsClientOutputsConverter ceConv =
+                    new AuthenticationExtensionsClientOutputsConverter(objectConverter);
+
+            byte[] aoBytes = aoConv.convertToBytes(data.getAttestationObject());
+            byte[] cdBytes = cdConv.convertToBytes(data.getCollectedClientData());
+            String ceJson = ceConv.convertToString(data.getClientExtensions());
+
+            ObjectNode envelope = mapper.createObjectNode();
+            envelope.put("ao", b64url(aoBytes));
+            envelope.put("cd", b64url(cdBytes));
+            envelope.put("ce", ceJson);
+            ArrayNode transports = envelope.putArray("tr");
+            if (data.getTransports() != null) {
+                for (AuthenticatorTransport t : data.getTransports()) {
+                    if (t != null) transports.add(t.getValue());
+                }
+            }
+            return mapper.writeValueAsBytes(envelope);
+        } catch (Exception e) {
+            throw new IllegalStateException("credential record envelope serialization failed", e);
+        }
     }
 
     private Set<Origin> parseOrigins(Tenant t) {

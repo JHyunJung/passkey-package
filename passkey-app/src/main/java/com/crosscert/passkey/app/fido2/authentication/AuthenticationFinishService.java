@@ -10,15 +10,24 @@ import com.crosscert.passkey.core.jwt.IdTokenIssuer;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.webauthn4j.WebAuthnManager;
+import com.webauthn4j.converter.AttestationObjectConverter;
+import com.webauthn4j.converter.AuthenticationExtensionsClientOutputsConverter;
+import com.webauthn4j.converter.CollectedClientDataConverter;
 import com.webauthn4j.converter.util.ObjectConverter;
 import com.webauthn4j.credential.CredentialRecord;
 import com.webauthn4j.credential.CredentialRecordImpl;
 import com.webauthn4j.data.AuthenticationData;
 import com.webauthn4j.data.AuthenticationParameters;
+import com.webauthn4j.data.AuthenticatorTransport;
+import com.webauthn4j.data.attestation.AttestationObject;
+import com.webauthn4j.data.client.CollectedClientData;
 import com.webauthn4j.data.client.Origin;
 import com.webauthn4j.data.client.challenge.DefaultChallenge;
+import com.webauthn4j.data.extension.client.AuthenticationExtensionsClientOutputs;
+import com.webauthn4j.data.extension.client.RegistrationExtensionClientOutput;
 import com.webauthn4j.server.ServerProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -113,17 +123,39 @@ public class AuthenticationFinishService {
             throw new IllegalArgumentException("credential not registered");
         }
 
-        // codex P2: sanitize CBOR deserialization failures the same way
+        // codex P2: sanitize deserialization failures the same way
         // parse/verify failures are handled.
+        //
+        // Storage envelope (set by RegistrationFinishService.serializeCredentialRecordEnvelope):
+        //   { "ao": "<b64url AttestationObject CBOR>",
+        //     "cd": "<b64url CollectedClientData JSON>",
+        //     "ce": "<JSON string of AuthenticationExtensionsClientOutputs>",
+        //     "tr": ["usb", ...] }
+        // We must round-trip each component through the corresponding
+        // webauthn4j Converter and then call the public 4-arg
+        // CredentialRecordImpl constructor. The natural shortcut of
+        // CborConverter.readValue(bytes, CredentialRecordImpl.class)
+        // does not work in webauthn4j 0.31.5: that class has no
+        // @JsonCreator/default constructor and Jackson 3 will not
+        // synthesize one (manifests at runtime as "no Creators…
+        // cannot deserialize from Object value").
         CredentialRecord record;
         try {
-            record = objectConverter.getCborConverter()
-                    .readValue(cred.getCredentialRecordBytes(), CredentialRecordImpl.class);
+            record = deserializeCredentialRecordEnvelope(cred.getCredentialRecordBytes());
         } catch (Exception e) {
             log.warn("stored credential record deserialization failed for credential {} on tenant {}: {}",
                     cred.getId(), ch.tenantId(), e.toString());
             throw new IllegalArgumentException("assertion verify failed");
         }
+
+        // Leave the reconstructed record's counter at the registration
+        // baseline for manager.verify(...). webauthn4j's default
+        // verifier only enforces tampering on the signature/origin/
+        // challenge — it does NOT enforce strict-monotonic counter
+        // semantics on its own. That's the app's job; see the
+        // explicit check below this verify call. Advancing the
+        // record's counter to cred.signCount BEFORE verify would mask
+        // our own strict-monotonic branch (codex round-2 P1).
 
         Set<Origin> origins = parseOrigins(tenant);
         ServerProperty serverProperty = ServerProperty.builder()
@@ -160,12 +192,17 @@ public class AuthenticationFinishService {
             throw new IllegalArgumentException("signCount replay detected");
         }
 
-        // Mutate the in-memory CredentialRecord, re-serialize, persist.
+        // Persist the new counter. We only update the cred.signCount
+        // column (the envelope's stored counter is the AttestationObject's
+        // initial value and cannot change without re-serializing the
+        // immutable AttestationObject). The strict-monotonic check above
+        // reads cred.getSignCount(), so the persisted column is the
+        // single source of truth for replay defense.
+        //
         // Pessimistic lock (above) + the @Transactional boundary make
         // this read-check-update sequence safe under concurrency.
         record.setCounter(newCounter);
-        byte[] updatedBytes = objectConverter.getCborConverter().writeValueAsBytes(record);
-        cred.recordAuthentication(newCounter, updatedBytes, clock.instant());
+        cred.recordAuthentication(newCounter, cred.getCredentialRecordBytes(), clock.instant());
         credentials.saveAndFlush(cred);
 
         String jwt = idTokens.issue(
@@ -174,6 +211,42 @@ public class AuthenticationFinishService {
                 cred.getId(),
                 cred.getAaguid());
         return new AuthenticationFinishResponse(jwt, "Bearer", 900);
+    }
+
+    private CredentialRecord deserializeCredentialRecordEnvelope(byte[] envelopeBytes) throws Exception {
+        JsonNode env = mapper.readTree(envelopeBytes);
+
+        byte[] ao = Base64.getUrlDecoder().decode(env.get("ao").asText());
+        byte[] cd = Base64.getUrlDecoder().decode(env.get("cd").asText());
+        JsonNode ceNode = env.get("ce");
+        String ceJson = ceNode == null || ceNode.isNull() ? "{}" : ceNode.asText();
+        JsonNode trNode = env.get("tr");
+
+        AttestationObjectConverter aoConv = new AttestationObjectConverter(objectConverter);
+        CollectedClientDataConverter cdConv = new CollectedClientDataConverter(objectConverter);
+        AuthenticationExtensionsClientOutputsConverter ceConv =
+                new AuthenticationExtensionsClientOutputsConverter(objectConverter);
+
+        AttestationObject attestationObject = aoConv.convert(ao);
+        CollectedClientData clientData = cdConv.convert(cd);
+        AuthenticationExtensionsClientOutputs<RegistrationExtensionClientOutput> clientExtensions =
+                ceConv.convert(ceJson);
+
+        Set<AuthenticatorTransport> transports = new LinkedHashSet<>();
+        if (trNode != null && trNode.isArray()) {
+            for (JsonNode t : trNode) {
+                String value = t.asText();
+                if (value != null && !value.isBlank()) {
+                    transports.add(AuthenticatorTransport.create(value));
+                }
+            }
+        }
+
+        return new CredentialRecordImpl(
+                attestationObject,
+                clientData,
+                clientExtensions,
+                transports);
     }
 
     private Set<Origin> parseOrigins(Tenant t) {

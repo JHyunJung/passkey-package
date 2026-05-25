@@ -4,6 +4,17 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+
+    // T26 Fido2EndToEndIT brings up a Testcontainers Oracle + Redis and
+    // exercises the FIDO2 RP API end-to-end. We need :core's test deps
+    // (OracleContainer, junit-jupiter container support) plus the
+    // webauthn4j-test ClientPlatform/PackedAuthenticator emulator to
+    // build attestations/assertions the server will accept, plus the
+    // Nimbus JWT parser for ID-Token JWKS verification.
+    testImplementation(rootProject.libs.testcontainers.oracle)
+    testImplementation(rootProject.libs.testcontainers.junit)
+    testImplementation(rootProject.libs.webauthn4j.test)
+    testImplementation(rootProject.libs.nimbus.jose.jwt)
 }
 
 springBoot {
@@ -12,4 +23,19 @@ springBoot {
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     archiveFileName.set("passkey-app.jar")
+}
+
+tasks.named<Test>("test") {
+    // Same Docker-API-version pin as :core (see core/build.gradle.kts
+    // comment). Required so Testcontainers' shaded docker-java does not
+    // fall back to v1.32 and get HTTP 400 from Docker Engine v25+.
+    systemProperty("api.version", "1.43")
+}
+
+// Copy scripts/bootstrap-vpd.sql onto the test classpath so
+// Fido2EndToEndIT can ship it into the Testcontainers Oracle via
+// MountableFile (same pattern as core/build.gradle.kts — scripts/ is
+// the single source of truth used by docker-compose).
+tasks.named<Copy>("processTestResources") {
+    from(rootProject.file("scripts/bootstrap-vpd.sql"))
 }

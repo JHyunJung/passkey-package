@@ -1,0 +1,52 @@
+spring:
+  application.name: passkey-app-it
+  # Pull shared Jackson + JPA + Hikari defaults from :core's classpath
+  # (application-common.yml). This is what production application.yml
+  # imports too, so the IT runs against the same baseline.
+  config:
+    import: classpath:application-common.yml
+  # Re-enable Flyway for the IT so V1..V8 migrations are applied against
+  # the Testcontainers Oracle on context start. Runtime application.yml
+  # disables Flyway because the admin-app owns migrations in production.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: APP_OWNER
+    default-schema: APP_OWNER
+    baseline-on-migrate: true
+    baseline-version: 0
+    # Flyway DDL (CREATE TABLE / DBMS_RLS.ADD_POLICY in V3, V8) needs
+    # APP_ADMIN_USER's wide grants AND its EXEMPT ACCESS POLICY. The
+    # runtime Spring DataSource below logs in as APP_RUNTIME_USER so
+    # VPD policies actually engage during scenario execution — which
+    # is the whole point of the cross-tenant-isolation scenario. Split
+    # credentials via spring.flyway.user/password keep migration and
+    # runtime separate within a single Spring Boot context.
+    user: APP_ADMIN_USER
+    password: admin_pw
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    # url/username/password come from @DynamicPropertySource (after
+    # the OracleContainer boots and bootstrap-vpd.sql runs).
+  data:
+    redis:
+      # host/port come from @DynamicPropertySource (Redis container).
+      lettuce:
+        pool:
+          enabled: false  # one-shot test, no need for pool warm-up
+
+passkey:
+  id-token:
+    issuer-base: https://passkey.test
+    ttl: PT15M
+
+# Quiet down Hibernate's startup banner & Flyway info — tests print
+# ample diagnostics on their own.
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    org.flywaydb: INFO
+    com.crosscert.passkey: INFO

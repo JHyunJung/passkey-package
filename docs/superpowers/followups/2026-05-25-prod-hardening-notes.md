@@ -178,3 +178,49 @@ Phase 2 cleanup:
 Phase 1 keeps the `findAll`-and-filter shape to avoid widening the
 repository surface mid-Phase. Cost: small per-call latency on
 high-cardinality tenants; nothing user-facing breaks.
+
+## From Phase 1 T26 — CredentialRecord storage envelope: dropped state
+
+The Phase 1 envelope (introduced in T26 to fix the JSON-3 / @JsonCreator
+defect on CredentialRecordImpl) persists exactly four components:
+`AttestationObject`, `CollectedClientData`, the client extensions JSON,
+and the `transports` set. This is enough for `manager.verify(...)` to
+succeed and for strict-monotonic counter checks (which read the
+column-level `cred.signCount`).
+
+However, webauthn4j's `CredentialRecordImpl.updateRecord(...)` mutates
+two additional fields that we currently discard on every authentication:
+
+- `uvInitialized` (user-verification initialized flag)
+- `backupState` (per-credential backup-state flag)
+
+Current verification only relies on `backupEligible` (which is
+immutable and lives inside the persisted `AttestationObject`), so this
+is not an auth bypass. But a future custom `AuthenticationVerifier`
+that wants to react to backup-state transitions (e.g. "credential just
+got cloud-backed-up — re-verify trust") will see stale values.
+
+Phase 2 cleanup: persist these two flags as separate columns
+(`UV_INITIALIZED CHAR(1)`, `BACKUP_STATE CHAR(1)`) on `CREDENTIAL` and
+update both writers (`RegistrationFinishService`,
+`AuthenticationFinishService`) to round-trip them through the envelope
+reconstruction. Then the deserialize step does
+`record.setUvInitialized(...)` and `record.setBackedUp(...)` before
+verification.
+
+Phase 1 accepts this gap deliberately because the simpler 4-component
+envelope is enough to make happyPath/signCountReplay green.
+
+## From Phase 1 T26 — signCountReplay test isolation
+
+The IT exercises the strict-monotonic branch by inflating
+`APP_OWNER.credential.sign_count` to a five-digit floor via direct
+JDBC before the second `/authentication/finish`. This works because
+webauthn4j-test's PackedAuthenticator increments by 1 per ceremony.
+
+If the test authenticator's counter behavior ever changes
+(e.g., randomized initial value, larger increments), reassess the
+inflated floor. The floor is intentionally well clear of any
+realistic value but a real authenticator could in theory return a
+value above 99999 — that's not relevant for the test which runs
+against the emulator only.
