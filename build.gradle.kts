@@ -34,6 +34,10 @@ subprojects {
 
     dependencies {
         "testImplementation"("org.springframework.boot:spring-boot-starter-test")
+        // Align junit-platform-launcher with junit-platform-engine 1.12.x (Spring Boot 3.5 BOM).
+        // Gradle 8.10 bundles an older launcher, causing
+        // "OutputDirectoryProvider not available" at test discovery time.
+        "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     }
 
     tasks.withType<Test> {
