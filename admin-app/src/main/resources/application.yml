@@ -14,4 +14,16 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
 
+  session:
+    store-type: redis
+    timeout: PT30M
+    redis:
+      namespace: spring:session
+  security:
+    user:
+      # We do not use Spring Security's default in-memory user — set a
+      # random impossible-to-guess password to suppress the "Using
+      # generated security password" startup log line.
+      password: "____disabled____never-used-loaded-from-db-instead____"
+
 server.port: 8081
