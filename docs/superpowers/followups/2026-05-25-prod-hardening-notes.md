@@ -48,3 +48,18 @@ The same applies to T4's bootstrap SQL — it should be idempotent, but if you c
 ### T16 Testcontainers note
 
 Testcontainers will spawn its own Oracle container for VpdIsolationIT. The init must run this same bootstrap-vpd.sql as a SQL*Plus script (via `docker exec`), NOT via JDBC `withInitScript`, because the script uses SQL*Plus-specific syntax (`/`, `EXIT`, `WHENEVER`). Plan task T16 already calls this out — keep that in mind during T16 execution.
+
+## From T5 — V1 migration
+
+### mds_blob_cache singleton policy
+
+The table schema permits multiple rows; the design intent (per Phase 0 spec) is one current BLOB at a time. Phase 0 leaves the table empty (BLOB population is Phase 3).
+
+When MDS scheduler logic lands in Phase 3, pick one approach:
+
+- **Option A — singleton row** (`id = 1` always, no use of `mds_blob_cache_seq`, UPSERT instead of INSERT). Simple semantics, but no version history.
+- **Option B — keep multiple rows + "current" rule** (max `fetched_at` or max `version` wins). Allows comparing against old BLOBs for forensics.
+
+Recommendation: Option A for Phase 3 simplicity. Drop `mds_blob_cache_seq` at that point if it's unused.
+
+**Phase 0 verdict:** Table schema as-is is fine because no rows are written. Pick policy in Phase 3.
