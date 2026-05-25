@@ -10,6 +10,7 @@ import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.webauthn4j.WebAuthnManager;
 import com.webauthn4j.converter.util.ObjectConverter;
@@ -84,6 +85,16 @@ public class RegistrationFinishService {
         RegistrationChallenge ch = store.takeRegistration(req.registrationToken())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "registration token missing or expired"));
+
+        // codex P2: bind challenge tenant to current API-key tenant
+        // before touching tenant config — defense-in-depth on top of
+        // VPD. Mirrors AuthenticationFinishService.
+        String ctxTenant = TenantContextHolder.get();
+        if (ctxTenant == null || !ctxTenant.equals(ch.tenantId())) {
+            log.warn("tenant mismatch on registration/finish: ctx={} ch={}",
+                    ctxTenant, ch.tenantId());
+            throw new IllegalArgumentException("tenant mismatch");
+        }
 
         Tenant tenant = tenants.findById(ch.tenantId())
                 .orElseThrow(() -> new IllegalStateException(

@@ -71,14 +71,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !LIMITS.containsKey(request.getRequestURI());
+        // getServletPath() strips the deployment context path so the
+        // rate-limit match is robust under e.g.
+        // server.servlet.context-path=/passkey. getRequestURI() would
+        // include that prefix and miss the LIMITS keys entirely,
+        // silently disabling the limiter.
+        String path = request.getServletPath();
+        return path == null || !LIMITS.containsKey(path);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,
                                     HttpServletResponse res,
                                     FilterChain chain) throws ServletException, IOException {
-        String uri = req.getRequestURI();
+        String uri = req.getServletPath();
         BucketConfiguration config = LIMITS.get(uri);
 
         // IP bucket — fired on EVERY request. Attackers spraying prefixes

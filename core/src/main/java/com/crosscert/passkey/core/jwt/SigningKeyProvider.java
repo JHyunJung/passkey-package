@@ -1,5 +1,6 @@
 package com.crosscert.passkey.core.jwt;
 
+import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -27,6 +28,7 @@ public class SigningKeyProvider {
             RSAKey withoutKid = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
                     .privateKey((RSAPrivateKey) pair.getPrivate())
                     .keyUse(KeyUse.SIGNATURE)
+                    .algorithm(JWSAlgorithm.RS256)
                     .build();
             String kid = withoutKid.computeThumbprint().toString();
 

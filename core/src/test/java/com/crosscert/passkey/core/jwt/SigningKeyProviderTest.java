@@ -1,6 +1,8 @@
 package com.crosscert.passkey.core.jwt;
 
+import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +19,10 @@ class SigningKeyProviderTest {
         assertThat(key.getKeyID()).isNotBlank();
         assertThat(key.size()).isEqualTo(2048);
         assertThat(key.isPrivate()).isTrue();
+        // codex P2: alg=RS256 must be published in JWKS so verifying
+        // RPs use the right signature algorithm without guessing.
+        assertThat(key.getAlgorithm()).isEqualTo(JWSAlgorithm.RS256);
+        assertThat(key.getKeyUse()).isEqualTo(KeyUse.SIGNATURE);
     }
 
     @Test

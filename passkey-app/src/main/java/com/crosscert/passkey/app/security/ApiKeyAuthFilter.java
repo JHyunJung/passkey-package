@@ -69,7 +69,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/v1/rp/");
+        // getServletPath() strips the servlet context path so the
+        // match is robust under a non-root deployment context (e.g.
+        // server.servlet.context-path=/passkey). getRequestURI()
+        // would include that prefix and let an attacker bypass
+        // authentication for /passkey/api/v1/rp/** paths.
+        String path = request.getServletPath();
+        return path == null || !path.startsWith("/api/v1/rp/");
     }
 
     @Override

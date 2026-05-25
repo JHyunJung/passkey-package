@@ -42,6 +42,7 @@ class ApiKeyAuthFilterTest {
     @Test
     void rejectsRequestWithoutHeader() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/anything");
+        req.setServletPath("/api/v1/rp/anything");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
@@ -55,6 +56,7 @@ class ApiKeyAuthFilterTest {
     @Test
     void rejectsHeaderWithoutPkPrefix() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
+        req.setServletPath("/api/v1/rp/x");
         req.addHeader("X-API-Key", "AAAAAAAA_some_random_secret_value_here");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -70,6 +72,7 @@ class ApiKeyAuthFilterTest {
         when(lookup.findByPrefix("pk_unknwn")).thenReturn(Optional.empty());
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
+        req.setServletPath("/api/v1/rp/x");
         req.addHeader("X-API-Key", "pk_unknwnSECRETSECRETSECRET");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -87,6 +90,7 @@ class ApiKeyAuthFilterTest {
                 new ApiKeyLookupService.ApiKeyAuthRow(1L, "T_A", hash, null, null)));
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
+        req.setServletPath("/api/v1/rp/x");
         req.addHeader("X-API-Key", fullKey);
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -105,6 +109,7 @@ class ApiKeyAuthFilterTest {
                 new ApiKeyLookupService.ApiKeyAuthRow(7L, "T_A", hash, null, null)));
 
         MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/rp/x");
+        req.setServletPath("/api/v1/rp/x");
         req.addHeader("X-API-Key", fullKey);
         MockHttpServletResponse res = new MockHttpServletResponse();
         String[] tenantSeenInChain = new String[1];
@@ -128,6 +133,7 @@ class ApiKeyAuthFilterTest {
                         /* revokedAt */ Instant.now().minusSeconds(60))));
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
+        req.setServletPath("/api/v1/rp/x");
         req.addHeader("X-API-Key", prefix + secret);
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -148,6 +154,7 @@ class ApiKeyAuthFilterTest {
                         /* revokedAt */ null)));
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
+        req.setServletPath("/api/v1/rp/x");
         req.addHeader("X-API-Key", prefix + secret);
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);

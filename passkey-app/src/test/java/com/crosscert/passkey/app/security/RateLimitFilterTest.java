@@ -57,6 +57,7 @@ class RateLimitFilterTest {
 
         MockHttpServletRequest req = new MockHttpServletRequest("POST",
                 "/api/v1/rp/registration/start");
+        req.setServletPath("/api/v1/rp/registration/start");
         req.setRemoteAddr("127.0.0.1");
         req.addHeader("X-API-Key", "pk_abcd1234SECRETSECRETSECRET");
         MockHttpServletResponse res = new MockHttpServletResponse();
@@ -78,6 +79,7 @@ class RateLimitFilterTest {
 
         MockHttpServletRequest req = new MockHttpServletRequest("POST",
                 "/api/v1/rp/registration/start");
+        req.setServletPath("/api/v1/rp/registration/start");
         req.setRemoteAddr("9.9.9.9");
         req.addHeader("X-API-Key", "pk_abcd1234SECRETSECRETSECRET");
         MockHttpServletResponse res = new MockHttpServletResponse();
@@ -99,6 +101,7 @@ class RateLimitFilterTest {
 
         MockHttpServletRequest req = new MockHttpServletRequest("POST",
                 "/api/v1/rp/registration/start");
+        req.setServletPath("/api/v1/rp/registration/start");
         req.setRemoteAddr("127.0.0.1");
         req.addHeader("X-API-Key", "pk_abcd1234SECRETSECRETSECRET");
         MockHttpServletResponse res = new MockHttpServletResponse();
@@ -123,6 +126,7 @@ class RateLimitFilterTest {
 
         MockHttpServletRequest req = new MockHttpServletRequest("POST",
                 "/api/v1/rp/registration/start");
+        req.setServletPath("/api/v1/rp/registration/start");
         req.setRemoteAddr("127.0.0.1");
         // Long enough to bypass the length check but not the pk_ prefix check.
         req.addHeader("X-API-Key", "garbage_payload_here_not_pk_prefix");
@@ -141,6 +145,7 @@ class RateLimitFilterTest {
     void doesNotFilterUnknownPath() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET",
                 "/.well-known/jwks.json");
+        req.setServletPath("/.well-known/jwks.json");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
