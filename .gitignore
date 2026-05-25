@@ -1,0 +1,31 @@
+# Worktrees
+.worktrees/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+build/
+out/
+target/
+dist/
+node_modules/
+
+# Gradle
+.gradle/
+!gradle-wrapper.jar
+
+# Logs
+logs/
+*.log
+
+# Secrets
+*.env
+*.env.local
+application-secret*.yml
