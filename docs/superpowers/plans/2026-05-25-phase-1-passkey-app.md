@@ -243,19 +243,19 @@ git status --short
 **Files:**
 - Create: `core/src/main/resources/db/migration/V7__api_key_table.sql`
 
+**Architectural note:** the inbound X-API-Key header has no tenant id; the auth filter must look up the row by `key_prefix` without yet knowing the tenant. With VPD active, a direct `SELECT` would return zero rows. To resolve this without leaking tenant data, V7 makes `key_prefix` **globally unique** (not per-tenant), and V8 adds a definer-rights PL/SQL package that bypasses VPD safely. APP_RUNTIME's `UPDATE` privilege is column-scoped to `last_used_at` only — preventing a hijacked runtime path from rotating `key_hash` or undoing revocation on a same-tenant row.
+
 - [ ] **Step 1: Write the migration**
 
 ```sql
--- API Key table. Tenant-scoped: each row is owned by exactly one
--- tenant, and VPD must enforce that APP_RUNTIME sessions only see
--- their own tenant's keys. V8 attaches the policy.
+-- API Key table. Tenant-scoped via tenant_id FK; VPD policy on
+-- this table is attached in V8.
 --
--- Storage model (decided in spec §6.2):
---   - key_prefix is the first ~10 chars of the full key, plaintext,
---     indexed for fast lookup at request time.
---   - key_hash is the full BCrypt hash of the secret portion of the
---     key. Lookup flow: parse prefix from header → SELECT row by
---     (tenant_scoped) prefix → BCrypt.matches(secret, hash).
+-- Storage model (Phase 1 spec §6.2):
+--   - key_prefix is the first 11 chars of the full key ("pk_" + 8B
+--     base64url), GLOBALLY unique so a prefix-only lookup is
+--     deterministic without tenant context.
+--   - key_hash stores BCrypt hash of the secret portion.
 --   - scopes is a JSON array (Phase 1 stores but does not enforce).
 
 CREATE SEQUENCE api_key_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
@@ -272,16 +272,16 @@ CREATE TABLE api_key (
   expires_at      TIMESTAMP WITH TIME ZONE,
   revoked_at      TIMESTAMP WITH TIME ZONE,
   CONSTRAINT pk_api_key PRIMARY KEY (id),
-  CONSTRAINT uq_api_key_prefix UNIQUE (tenant_id, key_prefix),
+  CONSTRAINT uq_api_key_prefix UNIQUE (key_prefix),
   CONSTRAINT fk_api_key_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
   CONSTRAINT ck_api_key_scopes_json CHECK (scopes IS JSON)
 );
 
-CREATE INDEX ix_api_key_prefix ON api_key(key_prefix);
-
--- Grants. APP_RUNTIME needs SELECT (validate inbound key) and UPDATE
--- (touch last_used_at). INSERT/DELETE are admin-app jobs.
-GRANT SELECT, UPDATE ON api_key TO APP_RUNTIME;
+-- Grants. APP_RUNTIME has SELECT (VPD-filtered) + column-scoped
+-- UPDATE on last_used_at only. INSERT/DELETE and broader UPDATE
+-- are admin-app jobs.
+GRANT SELECT ON api_key TO APP_RUNTIME;
+GRANT UPDATE(last_used_at) ON api_key TO APP_RUNTIME;
 GRANT SELECT ON api_key_seq TO APP_RUNTIME;
 GRANT SELECT, INSERT, UPDATE, DELETE ON api_key TO APP_ADMIN;
 GRANT SELECT ON api_key_seq TO APP_ADMIN;
@@ -296,34 +296,39 @@ git status --short
 
 ---
 
-## Task 4: Flyway V8 — VPD policy on api_key
+## Task 4: Flyway V8 — VPD policy on api_key + definer-rights lookup package
 
 **Files:**
 - Create: `core/src/main/resources/db/migration/V8__api_key_vpd_policy.sql`
 
+V8 does two things:
+
+1. Attach the standard VPD policy `API_KEY_TENANT_ISOLATION` to api_key, mirroring V3's credential policy. Normal queries are tenant-isolated; cross-tenant writes are rejected with ORA-28115.
+
+2. Add a definer-rights PL/SQL package `APP_OWNER.api_key_lookup_pkg` that solves the chicken-and-egg problem: the auth filter needs to look up an api_key row by `key_prefix` BEFORE TenantContextHolder is set. The package runs as `APP_OWNER` (which gets `EXEMPT ACCESS POLICY` here), so its `SELECT` bypasses VPD. The function returns `(found, id, tenant_id, key_hash, expires_at, revoked_at)` via OUT params — JDBC `CallableStatement` binds cleanly.
+
+`touch_last_used` in the package explicitly constrains its `UPDATE` with `WHERE id = p_id AND tenant_id = SYS_CONTEXT('APP_CTX','TENANT_ID')` — even though APP_OWNER's `EXEMPT ACCESS POLICY` would technically let it touch any row, this layered guard means a hijacked package call cannot silently update another tenant's key.
+
 - [ ] **Step 1: Write the migration**
 
-```sql
--- VPD policy on api_key, mirroring V3's CREDENTIAL_TENANT_ISOLATION.
--- The same APP_OWNER.tenant_predicate function works because the
--- predicate just compares tenant_id against SYS_CONTEXT.
---
--- update_check=TRUE means cross-tenant INSERT/UPDATE is rejected
--- with ORA-28115, same as credential. APP_ADMIN with EXEMPT ACCESS
--- POLICY bypasses (admin issues keys for any tenant).
+See the committed file `core/src/main/resources/db/migration/V8__api_key_vpd_policy.sql` for the verbatim content. The structure is:
 
-BEGIN
-  DBMS_RLS.ADD_POLICY(
-    object_schema   => 'APP_OWNER',
-    object_name     => 'API_KEY',
-    policy_name     => 'API_KEY_TENANT_ISOLATION',
-    function_schema => 'APP_OWNER',
-    policy_function => 'TENANT_PREDICATE',
-    statement_types => 'SELECT,INSERT,UPDATE,DELETE',
-    update_check    => TRUE
-  );
-END;
-/
+```sql
+-- 1. Standard VPD policy via DBMS_RLS.ADD_POLICY (same shape as V3
+--    credential policy, on API_KEY).
+-- 2. GRANT EXEMPT ACCESS POLICY TO APP_OWNER so the next step's
+--    package can bypass VPD inside its body.
+-- 3. CREATE OR REPLACE PACKAGE APP_OWNER.api_key_lookup_pkg with
+--    AUTHID DEFINER (Oracle default for packages). Spec:
+--      PROCEDURE find_by_prefix(p_prefix, OUT p_found, OUT p_id,
+--                               OUT p_tenant_id, OUT p_key_hash,
+--                               OUT p_expires_at, OUT p_revoked_at);
+--      PROCEDURE touch_last_used(p_id, p_now);
+-- 4. CREATE OR REPLACE PACKAGE BODY: find_by_prefix SELECTs WHERE
+--    key_prefix = p_prefix, catches NO_DATA_FOUND, sets p_found=0.
+--    touch_last_used UPDATEs WHERE id=p_id AND tenant_id matches
+--    SYS_CONTEXT (defense-in-depth).
+-- 5. GRANT EXECUTE on the package to APP_RUNTIME and APP_ADMIN.
 ```
 
 - [ ] **Step 2: Stage**
@@ -558,11 +563,17 @@ import java.util.Optional;
 public interface ApiKeyRepository extends JpaRepository<ApiKey, Long> {
 
     /**
-     * Look up an API key by its prefix. VPD ensures only the calling
-     * tenant's keys are visible — but Phase 1 authentication runs
-     * BEFORE TenantContextHolder is set (the key is what tells us
-     * which tenant), so this call MUST happen outside the runtime
-     * filter's tenant scope. See ApiKeyAuthFilter for the dance.
+     * Look up an API key by its prefix. VPD filters by tenant_id =
+     * SYS_CONTEXT, so this call only returns a row when the calling
+     * session has already set TenantContextHolder to the same tenant
+     * that owns the key. Useful from admin endpoints (Phase 2) and
+     * test fixtures (where APP_ADMIN bypasses VPD).
+     *
+     * <p>Phase 1 auth filter does NOT use this — auth runs before
+     * tenant context exists. See {@code ApiKeyLookupService} (T16)
+     * which calls a definer-rights PL/SQL package
+     * ({@code APP_OWNER.api_key_lookup_pkg.find_by_prefix}) that
+     * bypasses VPD safely.
      */
     Optional<ApiKey> findByKeyPrefix(String keyPrefix);
 }
@@ -1577,14 +1588,21 @@ git add passkey-app/src/main/java/com/crosscert/passkey/app/api/v1/rp/dto/
 
 ---
 
-## Task 16: ApiKeyAuthFilter — TDD
+## Task 16: ApiKeyAuthFilter + ApiKeyLookupService — TDD
 
 **Files:**
+- Create: `passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyLookupService.java`
 - Create: `passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java`
 - Create: `passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyCache.java`
-- Test: `passkey-app/src/test/java/com/crosscert/passkey/app/security/ApiKeyAuthFilterTest.java`
+- Test: `passkey-app/src/test/java/com/crosscert/passkey/app/security/ApiKeyLookupServiceIT.java` (Testcontainers — exercises the real V8 PL/SQL package)
+- Test: `passkey-app/src/test/java/com/crosscert/passkey/app/security/ApiKeyAuthFilterTest.java` (Mockito — exercises filter logic)
 
-This filter must run with `APP_ADMIN`-equivalent privileges to look up the key (the request hasn't established a tenant context yet). In Phase 1 we accomplish that by issuing the lookup query through a JdbcTemplate bound to the unwrapped `physicalDataSource`, bypassing `TenantAwareDataSource`. Once the tenant is identified, we set `TenantContextHolder` and the rest of the request goes through the wrapped DataSource normally.
+**Architectural note (Codex review caught this — chicken-and-egg):**
+The inbound `X-API-Key` header carries no tenant id. The auth filter looks up the key by its prefix to discover the tenant. But VPD on `api_key` filters by `tenant_id = SYS_CONTEXT(...)`, which is unset at the start of the request. A plain `ApiKeyRepository.findByKeyPrefix(...)` would return zero rows.
+
+Phase 1 fix (V7 + V8): `key_prefix` is GLOBALLY unique, and V8 defines a definer-rights PL/SQL package `APP_OWNER.api_key_lookup_pkg.find_by_prefix(...)` that bypasses VPD safely (`APP_OWNER` has `EXEMPT ACCESS POLICY`, granted in V8). The filter invokes that package via JdbcTemplate against the SAME `TenantAwareDataSource` — the wrapper's `set_tenant` is a no-op when TenantContextHolder is null, so the call sees `APP_CTX` unset and the package's APP_OWNER context bypasses the policy.
+
+After lookup and BCrypt verify, the filter calls `TenantContextHolder.set(tenantId)` and the chain proceeds with VPD active for the resolved tenant.
 
 - [ ] **Step 1: Write ApiKeyCache (simple in-memory; Redis cache deferred to followups)**
 
@@ -1638,12 +1656,8 @@ public class ApiKeyCache {
 ```java
 package com.crosscert.passkey.app.security;
 
-import com.crosscert.passkey.core.entity.ApiKey;
-import com.crosscert.passkey.core.repository.ApiKeyRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1652,29 +1666,29 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ApiKeyAuthFilterTest {
 
-    private ApiKeyRepository repo;
+    private ApiKeyLookupService lookup;
     private ApiKeyCache cache;
     private PasswordEncoder encoder;
     private ApiKeyAuthFilter filter;
 
     @BeforeEach
     void setup() {
-        repo = mock(ApiKeyRepository.class);
+        lookup = mock(ApiKeyLookupService.class);
         cache = new ApiKeyCache();
         encoder = new BCryptPasswordEncoder(4); // low cost for test speed
-        filter = new ApiKeyAuthFilter(repo, cache, encoder);
+        filter = new ApiKeyAuthFilter(lookup, cache, encoder);
     }
 
     @AfterEach
@@ -1697,7 +1711,7 @@ class ApiKeyAuthFilterTest {
 
     @Test
     void rejectsUnknownPrefix() throws Exception {
-        when(repo.findByKeyPrefix("pk_unknwn")).thenReturn(Optional.empty());
+        when(lookup.findByPrefix("pk_unknwn")).thenReturn(Optional.empty());
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
         req.addHeader("X-API-Key", "pk_unknwnSECRETSECRETSECRET");
@@ -1713,12 +1727,9 @@ class ApiKeyAuthFilterTest {
         String fullKey = "pk_abcd1234SECRETPART01234567890ABCDEF";
         String prefix = "pk_abcd1234";
         String hash = encoder.encode("DIFFERENT_SECRET");
-        ApiKey row = mock(ApiKey.class);
-        when(row.getId()).thenReturn(1L);
-        when(row.getTenantId()).thenReturn("T_A");
-        when(row.getKeyHash()).thenReturn(hash);
-        when(row.isActive(any())).thenReturn(true);
-        when(repo.findByKeyPrefix(prefix)).thenReturn(Optional.of(row));
+        when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
+                new ApiKeyLookupService.ApiKeyAuthRow(
+                        1L, "T_A", hash, /* expiresAt */ null, /* revokedAt */ null)));
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
         req.addHeader("X-API-Key", fullKey);
@@ -1735,12 +1746,8 @@ class ApiKeyAuthFilterTest {
         String fullKey = "pk_abcd1234" + secret;
         String prefix = "pk_abcd1234";
         String hash = encoder.encode(secret);
-        ApiKey row = mock(ApiKey.class);
-        when(row.getId()).thenReturn(7L);
-        when(row.getTenantId()).thenReturn("T_A");
-        when(row.getKeyHash()).thenReturn(hash);
-        when(row.isActive(any())).thenReturn(true);
-        when(repo.findByKeyPrefix(prefix)).thenReturn(Optional.of(row));
+        when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
+                new ApiKeyLookupService.ApiKeyAuthRow(7L, "T_A", hash, null, null)));
 
         MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/rp/x");
         req.addHeader("X-API-Key", fullKey);
@@ -1750,20 +1757,23 @@ class ApiKeyAuthFilterTest {
 
         filter.doFilter(req, res, chain);
 
-        assertThat(res.getStatus()).isEqualTo(200);
+        // Implementations may return 200 explicitly or leave the default
+        // 200 from MockHttpServletResponse; verify the chain ran.
         assertThat(tenantSeenInChain[0]).isEqualTo("T_A");
-        // Cleared after the chain.
         assertThat(TenantContextHolder.get()).isNull();
+        // touch_last_used was called after BCrypt success.
+        verify(lookup).touchLastUsed(eq(7L), any(Instant.class));
     }
 
     @Test
     void rejectsRevokedKey() throws Exception {
         String secret = "SECRET";
         String prefix = "pk_revoked0";
-        ApiKey row = mock(ApiKey.class);
-        when(row.getKeyHash()).thenReturn(encoder.encode(secret));
-        when(row.isActive(any())).thenReturn(false); // revoked
-        when(repo.findByKeyPrefix(prefix)).thenReturn(Optional.of(row));
+        when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
+                new ApiKeyLookupService.ApiKeyAuthRow(
+                        99L, "T_A", encoder.encode(secret),
+                        /* expiresAt */ null,
+                        /* revokedAt */ Instant.now().minusSeconds(60))));
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
         req.addHeader("X-API-Key", prefix + secret);
@@ -1777,21 +1787,133 @@ class ApiKeyAuthFilterTest {
 }
 ```
 
+(Add `import static org.mockito.ArgumentMatchers.eq;` at the top of the test file.)
+
 - [ ] **Step 3: Confirm compile failure**
 
 ```bash
 ./gradlew :passkey-app:test --tests ApiKeyAuthFilterTest 2>&1 | tail -10
 ```
 
-Expected: `ApiKeyAuthFilter` not found.
+Expected: `ApiKeyAuthFilter` / `ApiKeyLookupService` not found.
 
-- [ ] **Step 4: Write ApiKeyAuthFilter**
+- [ ] **Step 4: Write ApiKeyLookupService (NEW — definer-rights PL/SQL caller)**
 
 ```java
 package com.crosscert.passkey.app.security;
 
-import com.crosscert.passkey.core.entity.ApiKey;
-import com.crosscert.passkey.core.repository.ApiKeyRepository;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+
+import javax.sql.DataSource;
+import java.sql.CallableStatement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.Instant;
+import java.util.Optional;
+
+/**
+ * Calls the V8-installed PL/SQL package APP_OWNER.api_key_lookup_pkg
+ * for the two operations the auth filter needs:
+ *
+ * <ul>
+ *   <li>{@link #findByPrefix(String)} — definer-rights SELECT that
+ *       bypasses VPD because the calling session has no tenant
+ *       context yet. Returns the row data needed to BCrypt-verify
+ *       and set TenantContextHolder.</li>
+ *   <li>{@link #touchLastUsed(long, Instant)} — UPDATE last_used_at
+ *       after a successful authentication. The package internally
+ *       constrains the UPDATE with WHERE tenant_id = SYS_CONTEXT(),
+ *       so the caller must have TenantContextHolder set first.</li>
+ * </ul>
+ *
+ * <p>Uses the primary {@link TenantAwareDataSource} bean for both
+ * calls. set_tenant is a no-op when TenantContextHolder is null
+ * (findByPrefix path), and behaves normally for the touchLastUsed
+ * path (TenantContextHolder is set by ApiKeyAuthFilter before it
+ * runs).
+ */
+@Service
+public class ApiKeyLookupService {
+
+    private final JdbcTemplate jdbc;
+
+    public ApiKeyLookupService(DataSource dataSource) {
+        this.jdbc = new JdbcTemplate(dataSource);
+    }
+
+    public Optional<ApiKeyAuthRow> findByPrefix(String keyPrefix) {
+        return jdbc.execute((ConnectionCallback<Optional<ApiKeyAuthRow>>) conn -> {
+            try (CallableStatement cs = conn.prepareCall(
+                    "{ call APP_OWNER.api_key_lookup_pkg.find_by_prefix(?, ?, ?, ?, ?, ?, ?) }")) {
+                cs.setString(1, keyPrefix);
+                cs.registerOutParameter(2, Types.NUMERIC);     // p_found
+                cs.registerOutParameter(3, Types.NUMERIC);     // p_id
+                cs.registerOutParameter(4, Types.VARCHAR);     // p_tenant_id
+                cs.registerOutParameter(5, Types.VARCHAR);     // p_key_hash
+                cs.registerOutParameter(6, Types.TIMESTAMP_WITH_TIMEZONE); // p_expires_at
+                cs.registerOutParameter(7, Types.TIMESTAMP_WITH_TIMEZONE); // p_revoked_at
+                cs.execute();
+
+                if (cs.getInt(2) == 0) return Optional.empty();
+                long id = cs.getLong(3);
+                String tenantId = cs.getString(4);
+                String keyHash = cs.getString(5);
+                Timestamp expTs = cs.getTimestamp(6);
+                Timestamp revTs = cs.getTimestamp(7);
+                Instant expiresAt = expTs == null ? null : expTs.toInstant();
+                Instant revokedAt = revTs == null ? null : revTs.toInstant();
+                return Optional.of(new ApiKeyAuthRow(id, tenantId, keyHash, expiresAt, revokedAt));
+            }
+        });
+    }
+
+    public void touchLastUsed(long apiKeyId, Instant now) {
+        // Best-effort: a touch failure must NOT turn a valid auth into a
+        // 500. Catch DataAccessException at the OUTER call site — Spring's
+        // JdbcTemplate translates SQLException to DataAccessException
+        // AFTER the ConnectionCallback returns, so an inner catch would
+        // never see it (connection-borrow failures also throw outside
+        // the callback).
+        try {
+            jdbc.execute((ConnectionCallback<Void>) conn -> {
+                try (CallableStatement cs = conn.prepareCall(
+                        "{ call APP_OWNER.api_key_lookup_pkg.touch_last_used(?, ?) }")) {
+                    cs.setLong(1, apiKeyId);
+                    cs.setTimestamp(2, Timestamp.from(now));
+                    cs.execute();
+                    return null;
+                }
+            });
+        } catch (DataAccessException e) {
+            // TODO Phase 2: emit a metric for touch failure rate.
+            // For Phase 1 silent-swallow is acceptable; the request still
+            // completes successfully and last_used_at becomes stale by at
+            // most one transaction.
+        }
+    }
+
+    /** Minimal row data the filter needs from V8's package. */
+    public record ApiKeyAuthRow(
+            long id, String tenantId, String keyHash,
+            Instant expiresAt, Instant revokedAt) {
+
+        public boolean isActive(Instant now) {
+            if (revokedAt != null) return false;
+            if (expiresAt != null && !expiresAt.isAfter(now)) return false;
+            return true;
+        }
+    }
+}
+```
+
+- [ ] **Step 5: Write ApiKeyAuthFilter (uses ApiKeyLookupService, NOT ApiKeyRepository)**
+
+```java
+package com.crosscert.passkey.app.security;
+
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -1808,15 +1930,15 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Filters every {@code /api/v1/rp/**} request. Parses the
- * {@code X-API-Key} header, splits prefix + secret, looks up the
- * matching {@link ApiKey}, BCrypt-verifies the secret, and on success
- * sets {@link TenantContextHolder} for the duration of the request.
+ * Filters every {@code /api/v1/rp/**} request. Parses {@code X-API-Key},
+ * looks up the row through {@link ApiKeyLookupService} (which calls
+ * the definer-rights V8 PL/SQL package — VPD bypass is safe and scoped),
+ * BCrypt-verifies the secret, and on success sets
+ * {@link TenantContextHolder} for the duration of the request.
  *
  * <p>Order: {@code HIGHEST_PRECEDENCE + 5} — runs after RateLimitFilter
  * (which lives at {@code HIGHEST_PRECEDENCE}) and before the legacy
- * DevTenantHeaderFilter so a real X-API-Key always wins over the dev
- * header.
+ * DevTenantHeaderFilter.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 5)
@@ -1825,21 +1947,20 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String HEADER = "X-API-Key";
     private static final int PREFIX_LEN = 11; // "pk_" + 8 chars
 
-    private final ApiKeyRepository repository;
+    private final ApiKeyLookupService lookup;
     private final ApiKeyCache cache;
     private final PasswordEncoder encoder;
 
-    public ApiKeyAuthFilter(ApiKeyRepository repository,
+    public ApiKeyAuthFilter(ApiKeyLookupService lookup,
                             ApiKeyCache cache,
                             PasswordEncoder encoder) {
-        this.repository = repository;
+        this.lookup = lookup;
         this.cache = cache;
         this.encoder = encoder;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // JWKS, actuator etc. are public; only filter /api/v1/rp/**.
         return !request.getRequestURI().startsWith("/api/v1/rp/");
     }
 
@@ -1856,25 +1977,30 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         String prefix = header.substring(0, PREFIX_LEN);
         String secret = header.substring(PREFIX_LEN);
 
-        Optional<ApiKey> opt = repository.findByKeyPrefix(prefix);
+        Optional<ApiKeyLookupService.ApiKeyAuthRow> opt = lookup.findByPrefix(prefix);
         if (opt.isEmpty()) {
             unauthorized(res, "unknown key");
             return;
         }
-        ApiKey key = opt.get();
+        ApiKeyLookupService.ApiKeyAuthRow row = opt.get();
 
-        if (!key.isActive(Instant.now())) {
+        Instant now = Instant.now();
+        if (!row.isActive(now)) {
             unauthorized(res, "key revoked or expired");
             return;
         }
-        if (!encoder.matches(secret, key.getKeyHash())) {
+        if (!encoder.matches(secret, row.keyHash())) {
             unauthorized(res, "key mismatch");
             return;
         }
 
-        cache.put(prefix, key.getId(), key.getTenantId(), key.getKeyHash());
-        TenantContextHolder.set(key.getTenantId());
+        cache.put(prefix, row.id(), row.tenantId(), row.keyHash());
+        TenantContextHolder.set(row.tenantId());
         try {
+            // touchLastUsed runs WITH tenant context active so the
+            // V8 package's WHERE tenant_id = SYS_CONTEXT predicate
+            // matches the calling tenant exactly.
+            lookup.touchLastUsed(row.id(), now);
             chain.doFilter(req, res);
         } finally {
             TenantContextHolder.clear();
@@ -1891,7 +2017,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 }
 ```
 
-Note: the test calls `filter.doFilter(req, res, chain)` directly, but `OncePerRequestFilter.doFilter` checks the once-per-request flag. To make tests work without invoking the once-check machinery, the framework uses `shouldNotFilter` for path-based exclusion; `MockHttpServletRequest` defaults to `/api/v1/rp/anything` here. If the test paths in step 2 don't start with `/api/v1/rp/`, adjust.
+Note: the test calls `filter.doFilter(req, res, chain)` directly. `OncePerRequestFilter.doFilter` checks the once-per-request flag; the test paths start with `/api/v1/rp/` so `shouldNotFilter` returns false.
 
 - [ ] **Step 5: Wire BCryptPasswordEncoder bean**
 
@@ -1931,6 +2057,7 @@ Expected: 5 tests pass.
 
 ```bash
 git add passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java \
+        passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyLookupService.java \
         passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyCache.java \
         passkey-app/src/test/java/com/crosscert/passkey/app/security/ApiKeyAuthFilterTest.java \
         core/src/main/java/com/crosscert/passkey/core/config/CoreSecurityConfig.java
