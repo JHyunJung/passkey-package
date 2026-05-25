@@ -75,4 +75,13 @@ public class ApiKey {
     public void touchLastUsed(Instant now) {
         this.lastUsedAt = now;
     }
+
+    /**
+     * Soft-revoke this key. Called by ApiKeyAdminService and persisted
+     * by the caller. Reusing isActive(now) means a revoked key fails
+     * the next /api/v1/rp/** auth attempt.
+     */
+    public void revoke(Instant now) {
+        this.revokedAt = now;
+    }
 }
