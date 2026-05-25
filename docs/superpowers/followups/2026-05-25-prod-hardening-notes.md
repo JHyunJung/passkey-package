@@ -98,6 +98,26 @@ Cleaner long-term shape (defer until at least Phase 3):
 
 Cost-benefit: small. Phase 0 priority is "VPD works", not entity-package hygiene.
 
+## From Phase 1 T19 — Credential.publicKey naming
+
+Phase 0 created `credential.public_key BLOB` intending to store the raw
+COSE public key. Phase 1 T19 (RegistrationFinishService) now stores the
+CBOR-serialized form of webauthn4j's `CredentialRecord` there instead —
+which includes the public key plus attestation object, client data,
+extensions, and transports. The column/field name `publicKey` is
+misleading.
+
+Phase 2 cleanup options (defer rename to avoid mid-Phase churn):
+- Rename the column to `credential_record` via a new Flyway migration
+  (rename in place, no data migration).
+- Update the JPA `@Column(name = ...)` accordingly.
+- Update the planned `Credential.getCredentialRecordBytes()` accessor
+  (added in T21) and the RegistrationFinish/AuthenticationFinish
+  services.
+
+Phase 1 lives with the misleading name to avoid churn during ceremony
+implementation.
+
 ## From T16 — Docker API version pin
 
 ### Replace `api.version=1.43` pin with a Testcontainers upgrade
