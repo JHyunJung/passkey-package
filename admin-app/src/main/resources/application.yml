@@ -1,0 +1,17 @@
+spring:
+  application.name: admin-app
+  config.import: classpath:application-common.yml
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: APP_OWNER
+    default-schema: APP_OWNER
+    # APP_OWNER schema already contains the CTX_PKG package and APP_CTX
+    # context created by scripts/bootstrap-vpd.sql before Flyway ever
+    # runs. baseline-on-migrate lets Flyway record V0 in its history
+    # table on first run instead of refusing to start because the
+    # schema is "non-empty". V1+ migrations apply normally afterwards.
+    baseline-on-migrate: true
+    baseline-version: 0
+
+server.port: 8081

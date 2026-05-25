@@ -1,0 +1,34 @@
+spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: true
+    default-property-inclusion: non_null
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate.dialect: org.hibernate.dialect.OracleDialect
+      hibernate.jdbc.time_zone: UTC
+      # The app connects as APP_RUNTIME_USER (passkey) or APP_ADMIN_USER
+      # (admin). All entity tables live in APP_OWNER schema, so Hibernate
+      # must validate and issue DML against APP_OWNER, not the login
+      # user's default schema. This mirrors Flyway's default-schema
+      # setting (admin-app application.yml).
+      hibernate.default_schema: APP_OWNER
+    hibernate.ddl-auto: validate
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      pool-name: passkey-pool
+  data:
+    redis:
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 8
+
+management:
+  endpoint.health.show-details: always
+  endpoints.web.exposure.include: health,info

@@ -1,0 +1,18 @@
+[versions]
+spring-boot = "3.5.0"
+spring-dep-mgmt = "1.1.6"
+oracle-jdbc = "23.4.0.24.05"
+testcontainers = "1.20.4"
+flyway = "10.20.1"
+
+[libraries]
+oracle-jdbc = { module = "com.oracle.database.jdbc:ojdbc11", version.ref = "oracle-jdbc" }
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-oracle = { module = "org.flywaydb:flyway-database-oracle", version.ref = "flyway" }
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-oracle = { module = "org.testcontainers:oracle-xe" }
+testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dep-mgmt = { id = "io.spring.dependency-management", version.ref = "spring-dep-mgmt" }
