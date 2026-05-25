@@ -1,5 +1,5 @@
 [versions]
-spring-boot = "3.5.0"
+spring-boot = "3.5.14"
 spring-dep-mgmt = "1.1.6"
 oracle-jdbc = "23.4.0.24.05"
 testcontainers = "1.20.4"
