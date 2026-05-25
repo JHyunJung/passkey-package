@@ -17,6 +17,20 @@ public class Tenant {
     @Column(name = "STATUS", length = 16, nullable = false)
     private String status;
 
+    @Column(name = "RP_ID", length = 256, nullable = false)
+    private String rpId;
+
+    @Column(name = "RP_NAME", length = 256, nullable = false)
+    private String rpName;
+
+    @Lob
+    @Column(name = "ALLOWED_ORIGINS", nullable = false)
+    private String allowedOriginsJson;
+
+    @Lob
+    @Column(name = "ATTESTATION_POLICY")
+    private String attestationPolicyJson;
+
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -25,10 +39,30 @@ public class Tenant {
 
     protected Tenant() {}
 
+    /**
+     * Convenience constructor for test fixtures and Phase 0 call sites.
+     * Applies the same safe local-dev defaults V6's backfill UPDATE uses,
+     * so any pre-Phase-1 code path keeps working without an architectural
+     * change. Production callers (admin-app, Phase 2) use the 6-arg
+     * constructor to set explicit WebAuthn RP configuration.
+     */
     public Tenant(String id, String displayName) {
+        this(id, displayName,
+             /* rpId */ "localhost",
+             /* rpName */ displayName,
+             /* allowedOriginsJson */ "[\"http://localhost:8080\",\"http://localhost:8082\"]",
+             /* attestationPolicyJson */ "{\"acceptedFormats\":[\"none\",\"packed\",\"android-key\",\"android-safetynet\",\"fido-u2f\",\"apple\",\"tpm\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
+    }
+
+    public Tenant(String id, String displayName, String rpId, String rpName,
+                  String allowedOriginsJson, String attestationPolicyJson) {
         this.id = id;
         this.displayName = displayName;
         this.status = "active";
+        this.rpId = rpId;
+        this.rpName = rpName;
+        this.allowedOriginsJson = allowedOriginsJson;
+        this.attestationPolicyJson = attestationPolicyJson;
         Instant now = Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
@@ -37,6 +71,10 @@ public class Tenant {
     public String getId() { return id; }
     public String getDisplayName() { return displayName; }
     public String getStatus() { return status; }
+    public String getRpId() { return rpId; }
+    public String getRpName() { return rpName; }
+    public String getAllowedOriginsJson() { return allowedOriginsJson; }
+    public String getAttestationPolicyJson() { return attestationPolicyJson; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }
