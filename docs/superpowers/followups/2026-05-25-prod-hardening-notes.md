@@ -33,3 +33,18 @@ The same applies to T4's bootstrap SQL — it should be idempotent, but if you c
 ### Apple Silicon (arm64) notes
 
 `gvenzl/oracle-xe:21-slim-faststart` is amd64-only and runs under Rosetta/QEMU on Apple Silicon. It works, but Flyway migrations and JPA tests may be slower than on a native amd64 host. The arm64-native alternative is `gvenzl/oracle-free:23-slim-faststart`, which would change the PDB name from `XEPDB1` to `FREEPDB1` and require updates in the bootstrap script + JDBC URLs + Testcontainers config. Defer this swap until perf becomes a team-wide tax.
+
+## From T4 — scripts/bootstrap-vpd.sql
+
+### Tighten APP_ADMIN_USER privileges
+
+`GRANT ALL PRIVILEGES TO APP_ADMIN_USER` is broader than required. APP_ADMIN_USER needs:
+- Whatever Flyway needs to create/alter APP_OWNER objects (most of `CREATE ANY TABLE`, `CREATE ANY SEQUENCE`, `ALTER ANY TABLE`, `INSERT ANY TABLE` family — confirm exact set against actual migrations once T5/T6/T7 land).
+- `EXECUTE ON DBMS_RLS` for VPD policy management.
+- The `APP_ADMIN` role grant gives it `CREATE SESSION` + `EXEMPT ACCESS POLICY`.
+
+**Phase 0 verdict:** `GRANT ALL PRIVILEGES` is acceptable for local dev to unblock work. Codex flagged this as P2. Before any non-local deployment, replace with the tight privilege set.
+
+### T16 Testcontainers note
+
+Testcontainers will spawn its own Oracle container for VpdIsolationIT. The init must run this same bootstrap-vpd.sql as a SQL*Plus script (via `docker exec`), NOT via JDBC `withInitScript`, because the script uses SQL*Plus-specific syntax (`/`, `EXIT`, `WHENEVER`). Plan task T16 already calls this out — keep that in mind during T16 execution.
