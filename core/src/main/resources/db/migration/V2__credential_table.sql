@@ -6,12 +6,13 @@
 CREATE SEQUENCE credential_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
 CREATE TABLE credential (
-  id               NUMBER                   NOT NULL,
+  -- NUMBER(19,0) sized to match Java long via Hibernate BIGINT mapping.
+  id               NUMBER(19,0)             NOT NULL,
   tenant_id        VARCHAR2(64)             NOT NULL,
   user_handle      RAW(64)                  NOT NULL,
   credential_id    RAW(1023)                NOT NULL,
   public_key       BLOB                     NOT NULL,
-  sign_count       NUMBER                   DEFAULT 0 NOT NULL,
+  sign_count       NUMBER(19,0)             DEFAULT 0 NOT NULL,
   aaguid           RAW(16),
   transports       VARCHAR2(128),
   attestation_fmt  VARCHAR2(64),

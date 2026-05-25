@@ -26,8 +26,9 @@ CREATE TABLE scheduler_lease (
 CREATE SEQUENCE mds_blob_cache_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
 CREATE TABLE mds_blob_cache (
-  id           NUMBER                   NOT NULL,
-  version      NUMBER                   NOT NULL,
+  -- NUMBER(19,0) sized to match Java long via Hibernate BIGINT mapping.
+  id           NUMBER(19,0)             NOT NULL,
+  version      NUMBER(19,0)             NOT NULL,
   next_update  DATE                     NOT NULL,
   fetched_at   TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
   blob_jwt     CLOB                     NOT NULL,

@@ -10,6 +10,12 @@ spring:
     properties:
       hibernate.dialect: org.hibernate.dialect.OracleDialect
       hibernate.jdbc.time_zone: UTC
+      # The app connects as APP_RUNTIME_USER (passkey) or APP_ADMIN_USER
+      # (admin). All entity tables live in APP_OWNER schema, so Hibernate
+      # must validate and issue DML against APP_OWNER, not the login
+      # user's default schema. This mirrors Flyway's default-schema
+      # setting (admin-app application.yml).
+      hibernate.default_schema: APP_OWNER
     hibernate.ddl-auto: validate
   datasource:
     hikari:
