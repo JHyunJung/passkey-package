@@ -1,0 +1,10 @@
+spring:
+  application.name: admin-app
+  config.import: classpath:application-common.yml
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: APP_OWNER
+    default-schema: APP_OWNER
+
+server.port: 8081
