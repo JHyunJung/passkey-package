@@ -1,0 +1,42 @@
+# VpdIsolationIT — Phase 0 acceptance gate.
+#
+# The Testcontainers Oracle container is started by @Testcontainers /
+# @Container in VpdIsolationIT, and a @DynamicPropertySource registers
+# the JDBC URL/username/password at runtime — those keys are intentionally
+# omitted here. Everything else (Flyway, JPA, driver) is fixed.
+#
+# Spring connects as APP_ADMIN_USER (EXEMPT ACCESS POLICY) which is the
+# correct identity for Flyway migrations and lets the "appAdminBypass"
+# scenario observe every credential row directly. APP_RUNTIME-scoped
+# assertions go through RuntimeDsHelper, which builds its own pool.
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: APP_OWNER
+    default-schema: APP_OWNER
+    baseline-on-migrate: true
+    baseline-version: 0
+  jpa:
+    hibernate.ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.dialect: org.hibernate.dialect.OracleDialect
+      hibernate.jdbc.time_zone: UTC
+      hibernate.default_schema: APP_OWNER
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 1
+      pool-name: vpd-it-pool
+  # Disable Redis auto-config in the IT — no Redis container is needed
+  # to prove VPD isolation, and forcing one would slow the suite down
+  # by another 30+ seconds for zero coverage benefit.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
+management:
+  endpoints.web.exposure.include: health

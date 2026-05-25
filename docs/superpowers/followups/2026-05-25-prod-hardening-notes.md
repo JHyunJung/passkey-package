@@ -98,6 +98,16 @@ Cleaner long-term shape (defer until at least Phase 3):
 
 Cost-benefit: small. Phase 0 priority is "VPD works", not entity-package hygiene.
 
+## From T16 — Docker API version pin
+
+### Replace `api.version=1.43` pin with a Testcontainers upgrade
+
+`core/build.gradle.kts` pins `systemProperty("api.version", "1.43")` on the test task to work around a known Testcontainers 1.20.4 + Docker Engine v25+ incompatibility (shaded docker-java defaults to API v1.32 which Engine MinAPIVersion 1.40 rejects with HTTP 400). See https://github.com/testcontainers/testcontainers-java/issues/9434.
+
+The pin works for current Docker daemons (e.g. Docker Desktop 4.30+) but breaks on older daemons whose max API < 1.43. Long-term fix: bump the Testcontainers BOM. As of Apr 2026 the latest release is 2.0.5. Validate the suite (Oracle container start, MountableFile, execInContainer) under the new version before removing the pin.
+
+Tracking: `gradle/libs.versions.toml` has `testcontainers = "1.20.4"`. Upgrade target: 2.0.5 (or whatever is current at upgrade time).
+
 ## From T9 — note for T16 implementation
 
 ### Use saveAndFlush() (not save()) for VPD cross-tenant INSERT assertions
