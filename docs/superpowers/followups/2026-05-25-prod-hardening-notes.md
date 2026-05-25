@@ -98,6 +98,26 @@ Cleaner long-term shape (defer until at least Phase 3):
 
 Cost-benefit: small. Phase 0 priority is "VPD works", not entity-package hygiene.
 
+## From Phase 1 T19 — Credential.publicKey naming
+
+Phase 0 created `credential.public_key BLOB` intending to store the raw
+COSE public key. Phase 1 T19 (RegistrationFinishService) now stores the
+CBOR-serialized form of webauthn4j's `CredentialRecord` there instead —
+which includes the public key plus attestation object, client data,
+extensions, and transports. The column/field name `publicKey` is
+misleading.
+
+Phase 2 cleanup options (defer rename to avoid mid-Phase churn):
+- Rename the column to `credential_record` via a new Flyway migration
+  (rename in place, no data migration).
+- Update the JPA `@Column(name = ...)` accordingly.
+- Update the planned `Credential.getCredentialRecordBytes()` accessor
+  (added in T21) and the RegistrationFinish/AuthenticationFinish
+  services.
+
+Phase 1 lives with the misleading name to avoid churn during ceremony
+implementation.
+
 ## From T16 — Docker API version pin
 
 ### Replace `api.version=1.43` pin with a Testcontainers upgrade
@@ -120,3 +140,87 @@ When implementing T16, use one of:
 - Use a direct JDBC INSERT via `RuntimeDsHelper.insertCredentialAs(...)` (the T16 plan already wires this for the assertion test case).
 
 The T16 plan's `RuntimeDsHelper.insertCredentialAs` already uses raw JDBC, so the issue is moot for that specific test path. But if T16 implementation drifts and uses JPA `save()` for the cross-tenant assertion, it would silently mask the bug.
+
+## From Phase 1 T21 — `cred_id` claim semantics
+
+`IdTokenIssuer.issue` accepts `Long credentialId` and serializes the DB
+row ID (big-endian 8 bytes → b64url) into the `cred_id` JWT claim.
+Phase 1 settled on this as a stable, opaque per-credential identifier
+that does not leak the raw WebAuthn credential ID bytes to RPs.
+
+Codex P2 flagged this on the T20/T21 review noting that some readers
+might expect `cred_id` to be the WebAuthn credential ID itself. The
+Phase 1 spec is the source of truth and uses DB row ID; the claim name
+is intentionally a stable internal handle, not the raw FIDO credentialId.
+
+If a future RP needs the raw credentialId, add a separate claim
+(e.g. `webauthn_cred_id`) rather than overloading `cred_id`. Don't
+change the existing claim's meaning — it's a breaking change for any
+RP that's already pinning to the current encoding.
+
+## From Phase 1 T21 — Authentication credential lookup is `findAll` + filter
+
+`AuthenticationStartService` calls `credentials.findAll().stream().filter(...)`
+to enumerate a tenant's credentials when the typed flow specifies a
+`userHandle`. VPD limits the row set to the current tenant, but a
+tenant with N credentials still pays an O(N) round-trip per
+`/authentication/start` call.
+
+Phase 2 cleanup:
+- Add a derived `List<Credential> findByUserHandle(byte[] userHandle)`
+  query on `CredentialRepository`. VPD still filters per tenant, so
+  the derived query is safe to use without an explicit `tenantId`
+  parameter.
+- `AuthenticationFinishService.findByCredentialIdForUpdate` (added in
+  T21 to fix the codex P1 TOCTOU race) already takes this efficient
+  shape — use it as the model.
+
+Phase 1 keeps the `findAll`-and-filter shape to avoid widening the
+repository surface mid-Phase. Cost: small per-call latency on
+high-cardinality tenants; nothing user-facing breaks.
+
+## From Phase 1 T26 — CredentialRecord storage envelope: dropped state
+
+The Phase 1 envelope (introduced in T26 to fix the JSON-3 / @JsonCreator
+defect on CredentialRecordImpl) persists exactly four components:
+`AttestationObject`, `CollectedClientData`, the client extensions JSON,
+and the `transports` set. This is enough for `manager.verify(...)` to
+succeed and for strict-monotonic counter checks (which read the
+column-level `cred.signCount`).
+
+However, webauthn4j's `CredentialRecordImpl.updateRecord(...)` mutates
+two additional fields that we currently discard on every authentication:
+
+- `uvInitialized` (user-verification initialized flag)
+- `backupState` (per-credential backup-state flag)
+
+Current verification only relies on `backupEligible` (which is
+immutable and lives inside the persisted `AttestationObject`), so this
+is not an auth bypass. But a future custom `AuthenticationVerifier`
+that wants to react to backup-state transitions (e.g. "credential just
+got cloud-backed-up — re-verify trust") will see stale values.
+
+Phase 2 cleanup: persist these two flags as separate columns
+(`UV_INITIALIZED CHAR(1)`, `BACKUP_STATE CHAR(1)`) on `CREDENTIAL` and
+update both writers (`RegistrationFinishService`,
+`AuthenticationFinishService`) to round-trip them through the envelope
+reconstruction. Then the deserialize step does
+`record.setUvInitialized(...)` and `record.setBackedUp(...)` before
+verification.
+
+Phase 1 accepts this gap deliberately because the simpler 4-component
+envelope is enough to make happyPath/signCountReplay green.
+
+## From Phase 1 T26 — signCountReplay test isolation
+
+The IT exercises the strict-monotonic branch by inflating
+`APP_OWNER.credential.sign_count` to a five-digit floor via direct
+JDBC before the second `/authentication/finish`. This works because
+webauthn4j-test's PackedAuthenticator increments by 1 per ceremony.
+
+If the test authenticator's counter behavior ever changes
+(e.g., randomized initial value, larger increments), reassess the
+inflated floor. The floor is intentionally well clear of any
+realistic value but a real authenticator could in theory return a
+value above 99999 — that's not relevant for the test which runs
+against the emulator only.

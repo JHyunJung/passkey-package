@@ -18,8 +18,16 @@ dependencies {
     api(rootProject.libs.flyway.core)
     api(rootProject.libs.flyway.oracle)
 
+    api(rootProject.libs.webauthn4j.core)
+    api(rootProject.libs.webauthn4j.metadata)
+    api(rootProject.libs.nimbus.jose.jwt)
+    api(rootProject.libs.spring.security.crypto)
+    api(rootProject.libs.bucket4j.core)
+    api(rootProject.libs.bucket4j.redis)
+
     testImplementation(rootProject.libs.testcontainers.oracle)
     testImplementation(rootProject.libs.testcontainers.junit)
+    testImplementation(rootProject.libs.webauthn4j.test)
 }
 
 tasks.named<Test>("test") {

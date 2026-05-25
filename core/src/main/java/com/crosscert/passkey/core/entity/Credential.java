@@ -65,4 +65,18 @@ public class Credential {
     public String getTenantId() { return tenantId; }
     public byte[] getCredentialId() { return credentialId; }
     public long getSignCount() { return signCount; }
+    public byte[] getUserHandle() { return userHandle; }
+    public byte[] getAaguid() { return aaguid; }
+    public byte[] getCredentialRecordBytes() { return publicKey; } // BLOB now holds CBOR CredentialRecord — see followups doc
+
+    /**
+     * Atomic state mutation after a successful authentication. signCount
+     * must be strictly increasing (replay defense); callers verify that
+     * before calling this.
+     */
+    public void recordAuthentication(long newSignCount, byte[] newCredentialRecordBytes, java.time.Instant now) {
+        this.signCount = newSignCount;
+        this.publicKey = newCredentialRecordBytes;
+        this.lastUsedAt = now;
+    }
 }
