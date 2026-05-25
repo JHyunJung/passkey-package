@@ -140,3 +140,41 @@ When implementing T16, use one of:
 - Use a direct JDBC INSERT via `RuntimeDsHelper.insertCredentialAs(...)` (the T16 plan already wires this for the assertion test case).
 
 The T16 plan's `RuntimeDsHelper.insertCredentialAs` already uses raw JDBC, so the issue is moot for that specific test path. But if T16 implementation drifts and uses JPA `save()` for the cross-tenant assertion, it would silently mask the bug.
+
+## From Phase 1 T21 — `cred_id` claim semantics
+
+`IdTokenIssuer.issue` accepts `Long credentialId` and serializes the DB
+row ID (big-endian 8 bytes → b64url) into the `cred_id` JWT claim.
+Phase 1 settled on this as a stable, opaque per-credential identifier
+that does not leak the raw WebAuthn credential ID bytes to RPs.
+
+Codex P2 flagged this on the T20/T21 review noting that some readers
+might expect `cred_id` to be the WebAuthn credential ID itself. The
+Phase 1 spec is the source of truth and uses DB row ID; the claim name
+is intentionally a stable internal handle, not the raw FIDO credentialId.
+
+If a future RP needs the raw credentialId, add a separate claim
+(e.g. `webauthn_cred_id`) rather than overloading `cred_id`. Don't
+change the existing claim's meaning — it's a breaking change for any
+RP that's already pinning to the current encoding.
+
+## From Phase 1 T21 — Authentication credential lookup is `findAll` + filter
+
+`AuthenticationStartService` calls `credentials.findAll().stream().filter(...)`
+to enumerate a tenant's credentials when the typed flow specifies a
+`userHandle`. VPD limits the row set to the current tenant, but a
+tenant with N credentials still pays an O(N) round-trip per
+`/authentication/start` call.
+
+Phase 2 cleanup:
+- Add a derived `List<Credential> findByUserHandle(byte[] userHandle)`
+  query on `CredentialRepository`. VPD still filters per tenant, so
+  the derived query is safe to use without an explicit `tenantId`
+  parameter.
+- `AuthenticationFinishService.findByCredentialIdForUpdate` (added in
+  T21 to fix the codex P1 TOCTOU race) already takes this efficient
+  shape — use it as the model.
+
+Phase 1 keeps the `findAll`-and-filter shape to avoid widening the
+repository surface mid-Phase. Cost: small per-call latency on
+high-cardinality tenants; nothing user-facing breaks.
