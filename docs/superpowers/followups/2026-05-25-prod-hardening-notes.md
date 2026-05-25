@@ -73,3 +73,16 @@ V3 attaches the VPD policy with `statement_types => 'SELECT,INSERT,UPDATE,DELETE
 Before any production rollout, add `INDEX` to `statement_types` for defense-in-depth: this protects against future code (or a forgotten grant) that lets a non-admin user create or rebuild indexes on `credential`. With `INDEX` enforcement, an index build cannot read rows of other tenants either.
 
 Implementation: when modifying the policy later, prefer `DBMS_RLS.ALTER_POLICY` over drop-and-recreate, and add `'SELECT,INSERT,UPDATE,DELETE,INDEX'` as `statement_types`.
+
+## From T9 — note for T16 implementation
+
+### Use saveAndFlush() (not save()) for VPD cross-tenant INSERT assertions
+
+JPA's `repository.save(entity)` is lazy — the actual INSERT happens at the next flush or commit, not at the call site. T16's `assertThatThrownBy(() -> credentialRepository.save(...))` would NOT trigger VPD's `update_check=TRUE` rejection inside the lambda if the INSERT is deferred.
+
+When implementing T16, use one of:
+- `credentialRepository.saveAndFlush(entity)` — forces the INSERT immediately.
+- Run the assertion outside an `@Transactional` boundary, or wrap explicitly with a programmatic transaction that flushes.
+- Use a direct JDBC INSERT via `RuntimeDsHelper.insertCredentialAs(...)` (the T16 plan already wires this for the assertion test case).
+
+The T16 plan's `RuntimeDsHelper.insertCredentialAs` already uses raw JDBC, so the issue is moot for that specific test path. But if T16 implementation drifts and uses JPA `save()` for the cross-tenant assertion, it would silently mask the bug.
