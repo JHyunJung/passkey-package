@@ -95,6 +95,9 @@ export default function TenantList() {
                 <th>TENANT</th>
                 <th>RP ID</th>
                 <th>RP NAME</th>
+                <th>ORIGINS</th>
+                <th>UV</th>
+                <th>MDS</th>
                 <th>STATUS</th>
                 <th>CREATED</th>
               </tr>
@@ -108,6 +111,9 @@ export default function TenantList() {
                   </td>
                   <td className="mono">{t.rpId}</td>
                   <td>{t.rpName}</td>
+                  <td className="mono">{t.allowedOrigins.length}개</td>
+                  <td>{t.requireUserVerification ? '✓' : '—'}</td>
+                  <td>{t.mdsRequired ? '✓' : '—'}</td>
                   <td><span className={`badge badge--${t.status === 'active' ? 'success' : 'warning'} badge--dot`}>{t.status}</span></td>
                   <td className="mono muted">{t.createdAt?.slice(0, 10)}</td>
                 </tr>

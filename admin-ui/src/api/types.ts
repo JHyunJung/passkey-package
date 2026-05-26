@@ -10,19 +10,23 @@ export interface TenantView {
   status: string;
   rpId: string;
   rpName: string;
-  allowedOriginsJson: string;
-  attestationPolicyJson: string;
+  allowedOrigins: string[];         // was allowedOriginsJson: string
+  acceptedFormats: string[];        // was inside attestationPolicyJson
+  requireUserVerification: boolean; // was inside attestationPolicyJson
+  mdsRequired: boolean;             // was inside attestationPolicyJson
   createdAt: string;
   updatedAt: string;
 }
 
 export interface TenantCreateRequest {
-  slug: string;        // was 'id'; human-readable slug like "acme"
+  slug: string;
   displayName: string;
   rpId: string;
   rpName: string;
-  allowedOriginsJson: string;
-  attestationPolicyJson: string;
+  allowedOrigins: string[];
+  acceptedFormats: string[];
+  requireUserVerification: boolean;
+  mdsRequired: boolean;
 }
 
 export interface ApiKeyView {
