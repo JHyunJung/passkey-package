@@ -4,7 +4,7 @@ import com.crosscert.passkey.app.api.v1.rp.dto.RegistrationFinishRequest;
 import com.crosscert.passkey.app.api.v1.rp.dto.RegistrationFinishResponse;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
-import com.crosscert.passkey.app.fido2.mds.MdsStubVerifier;
+import com.crosscert.passkey.app.fido2.mds.MdsVerifier;
 import com.crosscert.passkey.app.fido2.policy.AttestationPolicy;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
@@ -62,7 +62,7 @@ public class RegistrationFinishService {
     private final WebAuthnManager manager;
     private final TenantRepository tenants;
     private final CredentialRepository credentials;
-    private final MdsStubVerifier mds;
+    private final MdsVerifier mds;
     private final ObjectMapper mapper;
     private final ObjectConverter objectConverter;
     private final Clock clock;
@@ -71,7 +71,7 @@ public class RegistrationFinishService {
                                      WebAuthnManager manager,
                                      TenantRepository tenants,
                                      CredentialRepository credentials,
-                                     MdsStubVerifier mds,
+                                     MdsVerifier mds,
                                      ObjectMapper mapper,
                                      Clock clock) {
         this.store = store;

@@ -62,3 +62,34 @@ export interface AuditLogView {
   payload: string;
   createdAt: string;
 }
+
+export interface MdsStatusView {
+  version: number;
+  nextUpdate?: string;
+  fetchedAt?: string;
+}
+
+export interface SyncResult {
+  status: 'SYNCED' | 'SKIPPED' | 'FAILED';
+  version?: number;
+  error?: string;
+}
+
+export interface SigningKeyView {
+  id: number;
+  kid: string;
+  alg: string;
+  status: 'ACTIVE' | 'ROTATED' | 'REVOKED';
+  createdAt: string;
+  rotatedAt?: string;
+  revokedAt?: string;
+}
+
+export interface KeyList {
+  keys: SigningKeyView[];
+}
+
+export interface RotateResponse {
+  oldKid: string;
+  newKid: string;
+}

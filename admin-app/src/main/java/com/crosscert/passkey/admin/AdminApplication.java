@@ -13,6 +13,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(scanBasePackages = "com.crosscert.passkey")
 @EntityScan("com.crosscert.passkey.core.entity")
 @EnableJpaRepositories("com.crosscert.passkey.core.repository")
+@org.springframework.scheduling.annotation.EnableScheduling
 public class AdminApplication {
     public static void main(String[] args) {
         SpringApplication.run(AdminApplication.class, args);

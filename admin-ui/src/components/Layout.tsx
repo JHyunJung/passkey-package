@@ -17,6 +17,8 @@ export default function Layout() {
         <Link to="/tenants">Tenants</Link>
         <Link to="/api-keys">API Keys</Link>
         <Link to="/audit">Audit Log</Link>
+        <Link to="/mds">MDS</Link>
+        <Link to="/keys">Keys</Link>
         <span style={{ flex: 1 }} />
         <button onClick={logout}>Logout</button>
       </nav>

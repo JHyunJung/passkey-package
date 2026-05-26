@@ -42,6 +42,11 @@ passkey:
   id-token:
     issuer-base: https://passkey.test
     ttl: PT15M
+  key-envelope:
+    # Test profile master key (32 zero bytes b64). Matches the
+    # local-shared default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
+    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
 
 # Quiet down Hibernate's startup banner & Flyway info — tests print
 # ample diagnostics on their own.

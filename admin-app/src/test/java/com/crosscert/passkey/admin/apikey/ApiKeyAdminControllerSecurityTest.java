@@ -73,6 +73,7 @@ class ApiKeyAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
+    @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
 
     private static final String BODY = """
             {"tenantId":"T_A","name":"primary","scopesJson":"[]"}
