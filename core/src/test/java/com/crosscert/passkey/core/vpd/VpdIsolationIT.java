@@ -150,13 +150,13 @@ class VpdIsolationIT {
         tenants.save(new Tenant("T_A", "Tenant A"));
         tenants.save(new Tenant("T_B", "Tenant B"));
         credentials.save(new Credential(
-                "T_A",
+                TENANT_A,
                 "user_a".getBytes(),
                 "cred_a".getBytes(),
                 "pk_a".getBytes(),
                 null));
         credentials.save(new Credential(
-                "T_B",
+                TENANT_B,
                 "user_b".getBytes(),
                 "cred_b".getBytes(),
                 "pk_b".getBytes(),

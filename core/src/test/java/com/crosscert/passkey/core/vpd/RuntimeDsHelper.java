@@ -66,8 +66,8 @@ public class RuntimeDsHelper {
                 TenantContextHolder.set(tenantId);
             }
             return runtimeJdbc.query(
-                    "SELECT id, tenant_id FROM APP_OWNER.credential ORDER BY id",
-                    (rs, i) -> new Object[]{rs.getLong("id"), rs.getString("tenant_id")});
+                    "SELECT RAWTOHEX(id) AS id, RAWTOHEX(tenant_id) AS tenant_id FROM APP_OWNER.credential ORDER BY id",
+                    (rs, i) -> new Object[]{rs.getString("id"), rs.getString("tenant_id")});
         } finally {
             TenantContextHolder.clear();
         }
@@ -86,7 +86,7 @@ public class RuntimeDsHelper {
             runtimeJdbc.update(
                     "INSERT INTO APP_OWNER.credential " +
                     "(id, tenant_id, user_handle, credential_id, public_key) " +
-                    "VALUES (APP_OWNER.credential_seq.NEXTVAL, HEXTORAW(?), " +
+                    "VALUES (SYS_GUID(), HEXTORAW(?), " +
                     "UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?))",
                     rowTenant, userHandle, credentialId, publicKey);
         } finally {

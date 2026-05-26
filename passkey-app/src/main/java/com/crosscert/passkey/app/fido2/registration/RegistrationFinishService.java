@@ -176,7 +176,7 @@ public class RegistrationFinishService {
         byte[] credentialId = data.getAttestationObject().getAuthenticatorData()
                 .getAttestedCredentialData().getCredentialId();
         Credential cred = new Credential(
-                ch.tenantId(),
+                UUID.fromString(ch.tenantId()),
                 ch.userHandle(),
                 credentialId,
                 credentialRecordBytes,

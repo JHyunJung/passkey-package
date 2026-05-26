@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -73,7 +74,12 @@ class IdTokenIssuerTest {
     void issuesSignedJwtWithExpectedClaims() throws Exception {
         byte[] userHandle = new byte[]{1, 2, 3, 4};
         byte[] aaguid = new byte[]{(byte)0xab, (byte)0xcd};
-        String jwt = issuer.issue("T_A", userHandle, 42L, aaguid);
+        // UUID PK: cred_id is the 16-byte big-endian UUID, base64url-no-pad.
+        // 00000000-0000-0000-0000-000000000001 →
+        //   bytes: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01
+        //   base64url: "AAAAAAAAAAAAAAAAAAAAAQ"
+        UUID credId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        String jwt = issuer.issue("T_A", userHandle, credId, aaguid);
 
         SignedJWT parsed = SignedJWT.parse(jwt);
         assertThat(parsed.getHeader().getAlgorithm()).isEqualTo(JWSAlgorithm.RS256);
@@ -91,21 +97,20 @@ class IdTokenIssuerTest {
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
                 .containsExactly("webauthn");
         assertThat(parsed.getJWTClaimsSet().getClaim("aaguid")).isEqualTo("abcd");
-        // cred_id is the 8-byte big-endian credentialId, base64url-no-pad.
-        // 42L → bytes 00 00 00 00 00 00 00 2A → "AAAAAAAAACo".
-        assertThat(parsed.getJWTClaimsSet().getClaim("cred_id")).isEqualTo("AAAAAAAAACo");
+        // cred_id is the 16-byte big-endian UUID, base64url-no-pad.
+        assertThat(parsed.getJWTClaimsSet().getClaim("cred_id")).isEqualTo("AAAAAAAAAAAAAAAAAAAAAQ");
     }
 
     @Test
     void aaguidClaimIsOmittedWhenNull() throws Exception {
-        String jwt = issuer.issue("T_A", new byte[]{0}, 1L, null);
+        String jwt = issuer.issue("T_A", new byte[]{0}, UUID.randomUUID(), null);
         SignedJWT parsed = SignedJWT.parse(jwt);
         assertThat(parsed.getJWTClaimsSet().getClaim("aaguid")).isNull();
     }
 
     @Test
     void signatureVerifiesAgainstPublicJwk() throws Exception {
-        String jwt = issuer.issue("T_A", new byte[]{0}, 1L, null);
+        String jwt = issuer.issue("T_A", new byte[]{0}, UUID.randomUUID(), null);
         SignedJWT parsed = SignedJWT.parse(jwt);
         JWSVerifier verifier = new RSASSAVerifier(signingKeys.signingKey().toPublicJWK());
         assertThat(parsed.verify(verifier)).isTrue();

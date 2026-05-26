@@ -1,20 +1,26 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "CREDENTIAL")
 public class Credential {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "credential_seq")
-    @SequenceGenerator(name = "credential_seq", sequenceName = "CREDENTIAL_SEQ", allocationSize = 1)
-    @Column(name = "ID")
-    private Long id;
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "ID", columnDefinition = "RAW(16)")
+    private UUID id;
 
-    @Column(name = "TENANT_ID", length = 64, nullable = false)
-    private String tenantId;
+    @Column(name = "TENANT_ID", nullable = false, columnDefinition = "RAW(16)")
+    @JdbcTypeCode(SqlTypes.UUID)
+    private UUID tenantId;
 
     @Column(name = "USER_HANDLE", length = 64, nullable = false)
     private byte[] userHandle;
@@ -50,7 +56,7 @@ public class Credential {
 
     protected Credential() {}
 
-    public Credential(String tenantId, byte[] userHandle, byte[] credentialId,
+    public Credential(UUID tenantId, byte[] userHandle, byte[] credentialId,
                       byte[] publicKey, byte[] aaguid) {
         this.tenantId = tenantId;
         this.userHandle = userHandle;
@@ -61,8 +67,8 @@ public class Credential {
         this.createdAt = Instant.now();
     }
 
-    public Long getId() { return id; }
-    public String getTenantId() { return tenantId; }
+    public UUID getId() { return id; }
+    public UUID getTenantId() { return tenantId; }
     public byte[] getCredentialId() { return credentialId; }
     public long getSignCount() { return signCount; }
     public byte[] getUserHandle() { return userHandle; }
