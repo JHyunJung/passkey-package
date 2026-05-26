@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Passkey Admin · Design Variations</title>
+
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+
+<style>
+  html, body { margin: 0; padding: 0; background: #0c0f17; color: #e5e9f0;
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  /* Frame styling for iframes */
+  .frame {
+    width: 100%; height: 100%;
+    border: 0; display: block;
+    background: white;
+  }
+  .frame--dark { background: #0c0f17; }
+  .ab-note { position: absolute; bottom: 12px; right: 12px; font-size: 11px; color: rgba(255,255,255,0.55); font-family: "JetBrains Mono", monospace; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 4px; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+
+<script type="text/babel">
+const PROTO = "Passkey Admin Console.html";
+
+function Frame({ params, dark }) {
+  const qp = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: dark ? "#0c0f17" : "white" }}>
+      <iframe src={`${PROTO}#${qp}&chrome=hide`} className={`frame${dark ? " frame--dark" : ""}`} />
+    </div>
+  );
+}
+
+function Caption({ title, sub, accent }) {
+  return (
+    <div style={{
+      position: "absolute", top: 12, left: 12,
+      background: "rgba(15, 22, 40, 0.92)", color: "white",
+      padding: "8px 12px", borderRadius: 8, fontSize: 12, zIndex: 5,
+      borderLeft: `3px solid ${accent || "#5469d4"}`,
+      backdropFilter: "blur(4px)",
+      maxWidth: 340,
+    }}>
+      <div style={{ fontWeight: 600 }}>{title}</div>
+      {sub && <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function App() {
+  // The iframes are sized to fit common desktop viewport ratios. The canvas
+  // scales them down for an overview, and a user can focus any one fullscreen.
+  const W = 1200, H = 760;
+
+  return (
+    <DesignCanvas>
+      <DCSection id="overview" title="콘솔 전체 — Stripe Dashboard 풍" subtitle="기본 라이트 테마 · compact density · 구분선 테이블">
+        <DCArtboard id="login" label="로그인" width={W} height={H}>
+          <Caption title="로그인" sub="P · Crosscert 운영자용 entrypoint. 좌측 마케팅 패널 + 우측 폼." />
+          <Frame params={{}} />
+        </DCArtboard>
+
+        <DCArtboard id="tenants-list" label="Tenants 목록 (PLATFORM)" width={W} height={H}>
+          <Caption title="Tenants 목록" sub="cross-tenant 운영. KPI 카드 + 검색 + 페이지된 테이블." />
+          <Frame params={{ me: "platform" }} />
+        </DCArtboard>
+
+        <DCArtboard id="tenant-overview" label="Tenant 개요" width={W} height={H}>
+          <Caption title="Tenant 상세 — 개요" sub="WebAuthn 요약 · 최근 활동 · audit chain 인디케이터." />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "overview" }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="theme" title="테마 비교 — Light / Dark / Accent" subtitle="같은 화면을 두 모드 + accent 컬러 변형으로. Tweaks 패널에서 실시간 전환 가능.">
+        <DCArtboard id="theme-light" label="Light · Indigo (기본)" width={W} height={H}>
+          <Caption title="Light · #5469d4" sub="기본 — Crosscert 사내 운영자 대상" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "apikeys", theme: "light" }} />
+        </DCArtboard>
+
+        <DCArtboard id="theme-dark" label="Dark · Indigo" width={W} height={H}>
+          <Caption title="Dark · 보안 콘솔 톤" sub="장시간 모니터링 + 사고 대응 야간 대응을 고려" accent="#7b8fff" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "apikeys", theme: "dark" }} dark />
+        </DCArtboard>
+
+        <DCArtboard id="theme-violet" label="Light · Violet accent" width={W} height={H}>
+          <Caption title="Violet accent · #7c3aed" sub="PLATFORM_OPERATOR 권한을 시각적으로 구분하고 싶을 때" accent="#7c3aed" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "apikeys", theme: "light", accent: "#7c3aed" }} />
+        </DCArtboard>
+
+        <DCArtboard id="theme-dark-teal" label="Dark · Teal accent" width={W} height={H}>
+          <Caption title="Dark · #0d9488" sub="실험적 — 보안 그린 톤" accent="#0d9488" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "apikeys", theme: "dark", accent: "#0d9488" }} dark />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="role" title="역할 비교 — PLATFORM vs RP_ADMIN" subtitle="같은 콘솔이 role에 따라 어떻게 다르게 보이는지">
+        <DCArtboard id="role-platform" label="PLATFORM_OPERATOR" width={W} height={H}>
+          <Caption title="PLATFORM_OPERATOR" sub="좌측에 'Tenants' 진입점 + breadcrumb로 cross-tenant 컨텍스트." accent="#7c3aed" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "credentials" }} />
+        </DCArtboard>
+
+        <DCArtboard id="role-rp" label="RP_ADMIN — 자기 tenant 직행" width={W} height={H}>
+          <Caption title="RP_ADMIN" sub="로그인 즉시 자기 tenant로 라우팅. 'Tenants' 항목 없음, breadcrumb 짧음." accent="#2563eb" />
+          <Frame params={{ me: "rp", tab: "credentials" }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="density" title="정보 밀도 — Compact / Comfortable" subtitle="운영자가 하루 종일 보는 도구이므로 compact 권장. comfort는 처음 익숙해질 때.">
+        <DCArtboard id="density-compact" label="Compact (기본)" width={W} height={H}>
+          <Caption title="Compact · row 28px · 13px font" sub="한 화면 30+ rows. PRD 권장." />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "credentials", density: "compact" }} />
+        </DCArtboard>
+
+        <DCArtboard id="density-comfortable" label="Comfortable" width={W} height={H}>
+          <Caption title="Comfortable · row 38px · 14px font" sub="가독성 우선 · onboarding 단계 권장" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "credentials", density: "comfortable" }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="sidebar" title="사이드바 — 라벨 / 아이콘만" subtitle="네비게이션 폭을 줄여 화면 여유를 늘리고 싶을 때">
+        <DCArtboard id="sidebar-labels" label="Labels (232px)" width={W} height={H}>
+          <Caption title="Labels 모드" sub="신규 사용자 친화적 · audit chain 상태 인디케이터 노출" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "audit", sidebarMode: "labels" }} />
+        </DCArtboard>
+
+        <DCArtboard id="sidebar-icons" label="Icons only (60px)" width={W} height={H}>
+          <Caption title="Icons-only 모드" sub="공간 절약 · hover로 tooltip · 운영 베테랑 모드" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "audit", sidebarMode: "icons" }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="table" title="테이블 스타일 — 구분선 / 줄무늬 / 보더리스" subtitle="audit log 같은 dense 데이터에서 row 분리 방식">
+        <DCArtboard id="table-lines" label="구분선 (기본)" width={W} height={H}>
+          <Caption title="구분선" sub="row 사이 1px 라인 · Stripe Dashboard 스타일" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "audit", tableStyle: "lines" }} />
+        </DCArtboard>
+
+        <DCArtboard id="table-striped" label="줄무늬" width={W} height={H}>
+          <Caption title="줄무늬" sub="대규모 log 스캔 시 가독성 · 클래식 enterprise 룩" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "audit", tableStyle: "striped" }} />
+        </DCArtboard>
+
+        <DCArtboard id="table-borderless" label="보더리스" width={W} height={H}>
+          <Caption title="보더리스" sub="공간 미니멀 · 짧은 목록에 적합" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "audit", tableStyle: "borderless" }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="hero" title="Hero moments — 위험/관찰성 UX" subtitle="콘솔의 정체성이 드러나는 결정적 순간들">
+        <DCArtboard id="hero-webauthn" label="WebAuthn config — 라이브 RP 영향" width={W} height={H}>
+          <Caption title="WebAuthn 편집" sub="저장 직전 diff 모달 + rpId 변경 시 강한 경고. 모든 origin은 chip." accent="#c27803" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "webauthn" }} />
+        </DCArtboard>
+
+        <DCArtboard id="hero-aaguid" label="AAGUID Policy — ALLOWLIST" width={W} height={H}>
+          <Caption title="AAGUID Allowlist" sub="MDS 매핑 이름 자동 표시 · mode segmented control" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "aaguid" }} />
+        </DCArtboard>
+
+        <DCArtboard id="hero-apikeys" label="API Keys 목록 + rotation" width={W} height={H}>
+          <Caption title="API Keys" sub="REVOKED 행은 회색 처리하되 정렬 유지 · plaintext 1회 노출은 모달로" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "apikeys" }} />
+        </DCArtboard>
+
+        <DCArtboard id="hero-funnel" label="Funnel — 시각화" width={W} height={H}>
+          <Caption title="Funnel" sub="등록/인증 단계별 시도/성공 · 일별 bar chart · eventType 분포" accent="#0d9488" />
+          <Frame params={{ me: "platform", tenant: "tnt_01HBXAC8FE", tab: "funnel" }} />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+
+</body>
+</html>

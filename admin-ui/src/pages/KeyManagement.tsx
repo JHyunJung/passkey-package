@@ -1,64 +1,137 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { ApiError } from '../api/types';
 import type { KeyList, RotateResponse, SigningKeyView } from '../api/types';
+import { useToast } from '../components/Toast';
+import Dialog from '../components/Dialog';
+import { Refresh, Key } from '../components/Icons';
 
 export default function KeyManagement() {
   const [keys, setKeys] = useState<SigningKeyView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [rotating, setRotating] = useState(false);
-  const [lastResult, setLastResult] = useState<RotateResponse | string | null>(null);
+  const [last, setLast] = useState<RotateResponse | null>(null);
+  const toast = useToast();
 
   function refresh() {
-    api.get<KeyList>('/admin/api/keys').then(r => setKeys(r.keys));
+    setLoading(true);
+    api.get<KeyList>('/admin/api/keys')
+      .then((r) => { setKeys(r.keys); setLoading(false); })
+      .catch(() => setLoading(false));
   }
 
   useEffect(refresh, []);
 
   async function rotate() {
-    if (!confirm('Rotate signing key now? Existing JWTs remain valid for ~30 minutes after.')) return;
     setRotating(true);
     try {
       const r = await api.post<RotateResponse>('/admin/api/keys/rotate', {});
-      setLastResult(r);
+      setLast(r);
+      toast({ kind: 'ok', title: '키 회전됨', message: `${r.oldKid} → ${r.newKid}` });
+      setConfirmOpen(false);
       refresh();
-    } catch (e) {
-      setLastResult(String(e));
+    } catch (err) {
+      const e = err instanceof ApiError ? err : null;
+      toast({ kind: 'err', title: '회전 실패', message: e?.serverMessage ?? String(err), traceId: e?.traceId });
     } finally {
       setRotating(false);
     }
   }
 
+  // Status literals are uppercase strings per SigningKey.java constructor/rotate()/revoke()
+  const active = keys.filter((k) => k.status === 'ACTIVE').length;
+  const rotated = keys.filter((k) => k.status === 'ROTATED').length;
+  const revoked = keys.filter((k) => k.status === 'REVOKED').length;
+
   return (
-    <div>
-      <h2>Signing Keys</h2>
-      <p>
-        <button onClick={rotate} disabled={rotating}>
-          {rotating ? 'Rotating…' : 'Rotate now'}
+    <div className="stack-6">
+      <div className="page__head">
+        <div>
+          <h1 className="page__title">Signing Keys</h1>
+          <div className="page__sub">ID Token 서명 키 생애 주기 (ACTIVE → ROTATED → REVOKED, 30분 grace).</div>
+        </div>
+        <button className="btn btn--primary" onClick={() => setConfirmOpen(true)} disabled={rotating}>
+          <Refresh size={14} /> 지금 회전
         </button>
-      </p>
-      {lastResult && (
-        <p>
-          {typeof lastResult === 'string'
-            ? <code>{lastResult}</code>
-            : <span>Rotated <code>{lastResult.oldKid}</code> → <code>{lastResult.newKid}</code></span>}
-        </p>
+      </div>
+
+      <div className="grid-3">
+        <Metric label="ACTIVE" value={String(active)} sub="현재 서명 중" />
+        <Metric label="ROTATED" value={String(rotated)} sub="grace window" />
+        <Metric label="REVOKED" value={String(revoked)} sub="JWKS에서 제외" />
+      </div>
+
+      {last && (
+        <div className="banner banner--success">
+          <Key size={16} className="banner__icon" />
+          <div>
+            <div className="banner__title">키 회전 완료</div>
+            <div className="banner__body mono">old: {last.oldKid} → new: {last.newKid}</div>
+          </div>
+        </div>
       )}
-      <table border={1} cellPadding={4} cellSpacing={0}>
-        <thead>
-          <tr><th>kid</th><th>alg</th><th>status</th><th>created</th><th>rotated</th><th>revoked</th></tr>
-        </thead>
-        <tbody>
-          {keys.map(k => (
-            <tr key={k.id}>
-              <td><code>{k.kid}</code></td>
-              <td>{k.alg}</td>
-              <td>{k.status}</td>
-              <td>{k.createdAt}</td>
-              <td>{k.rotatedAt ?? '-'}</td>
-              <td>{k.revokedAt ?? '-'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+      <div className="card">
+        <div className="card__head">
+          <h2 className="card__title">모든 키</h2>
+          <span className="muted" style={{ fontSize: 12 }}>{keys.length}건</span>
+        </div>
+        {loading ? (
+          <div className="card__body"><div className="skeleton" style={{ height: 100 }} /></div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr><th>KID</th><th>ALG</th><th>STATUS</th><th>CREATED</th><th>ROTATED</th><th>REVOKED</th></tr>
+            </thead>
+            <tbody>
+              {keys.map((k) => (
+                <tr key={k.id}>
+                  <td className="mono" title={k.kid}>{k.kid.slice(0, 16)}…</td>
+                  <td>{k.alg}</td>
+                  <td>
+                    <span className={`badge badge--${k.status === 'ACTIVE' ? 'success' : k.status === 'ROTATED' ? 'warning' : 'danger'} badge--dot`}>
+                      {k.status}
+                    </span>
+                  </td>
+                  <td className="mono muted">{k.createdAt?.slice(0, 19).replace('T', ' ')}</td>
+                  <td className="mono muted">{k.rotatedAt?.slice(0, 19).replace('T', ' ') ?? '-'}</td>
+                  <td className="mono muted">{k.revokedAt?.slice(0, 19).replace('T', ' ') ?? '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <Dialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="서명 키 회전"
+        sub="새 ACTIVE 키 생성, 기존 ACTIVE는 ROTATED(30분 grace) 후 REVOKED 처리됩니다."
+        footer={
+          <>
+            <button className="btn btn--outline" onClick={() => setConfirmOpen(false)}>취소</button>
+            <button className="btn btn--danger" onClick={rotate} disabled={rotating}>
+              {rotating ? '회전 중…' : '회전 실행'}
+            </button>
+          </>
+        }
+      >
+        <div className="banner banner--warning">
+          이 작업은 즉시 실행됩니다. RP가 캐시한 JWKS는 grace window 동안 ROTATED 키도 검증 가능.
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="card" style={{ padding: 'var(--card-pad)' }}>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value">{value}</div>
+      {sub && <div className="metric-delta">{sub}</div>}
     </div>
   );
 }

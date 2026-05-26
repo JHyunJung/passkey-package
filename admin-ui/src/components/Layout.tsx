@@ -1,30 +1,33 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import Sidebar from './Sidebar';
+import Header from './Header';
+import CommandPalette from './CommandPalette';
 
 export default function Layout() {
-  const nav = useNavigate();
-  async function logout() {
-    const csrf = document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1];
-    await fetch('/admin/logout', {
-      method: 'POST',
-      credentials: 'include',
-      headers: csrf ? { 'X-XSRF-TOKEN': decodeURIComponent(csrf) } : {},
-    });
-    nav('/login');
-  }
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []);
+
   return (
-    <div>
-      <nav style={{ display: 'flex', gap: '1rem', padding: '1rem', background: '#f0f0f0' }}>
-        <Link to="/tenants">Tenants</Link>
-        <Link to="/api-keys">API Keys</Link>
-        <Link to="/audit">Audit Log</Link>
-        <Link to="/mds">MDS</Link>
-        <Link to="/keys">Keys</Link>
-        <span style={{ flex: 1 }} />
-        <button onClick={logout}>Logout</button>
-      </nav>
-      <main style={{ padding: '1rem' }}>
-        <Outlet />
-      </main>
+    <div className="app" style={{ gridTemplateAreas: '"sidebar content"' }}>
+      <Sidebar />
+      <div className="content" style={{ gridArea: 'content' }}>
+        <Header onOpenPalette={() => setPaletteOpen(true)} />
+        <main className="page">
+          <Outlet />
+        </main>
+      </div>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }
