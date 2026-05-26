@@ -22,9 +22,41 @@ class JwksControllerTest {
 
     @BeforeEach
     void setUp() {
-        keys = new SigningKeyProvider();
+        var repo = org.mockito.Mockito.mock(
+                com.crosscert.passkey.core.repository.SigningKeyRepository.class);
+        var envelope = new com.crosscert.passkey.core.jwt.KeyEnvelope(
+                java.util.Base64.getEncoder().encodeToString(new byte[32]),
+                new java.security.SecureRandom());
+        var clock = java.time.Clock.fixed(
+                java.time.Instant.parse("2026-06-01T00:00:00Z"),
+                java.time.ZoneOffset.UTC);
+
+        // First findFirstByStatus call returns empty → provider creates initial key.
+        org.mockito.Mockito.when(
+                repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(java.util.Optional.empty());
+
+        // Capture the saved row so we can return it from findAllByStatusIn.
+        java.util.concurrent.atomic.AtomicReference<
+                com.crosscert.passkey.core.entity.SigningKey> savedRef =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        org.mockito.Mockito.when(repo.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> {
+                    var row = (com.crosscert.passkey.core.entity.SigningKey) inv.getArgument(0);
+                    savedRef.set(row);
+                    return row;
+                });
+        org.mockito.Mockito.when(repo.findAllByStatusIn(
+                java.util.List.of("ACTIVE", "ROTATED")))
+                .thenAnswer(inv -> savedRef.get() == null
+                        ? java.util.List.of()
+                        : java.util.List.of(savedRef.get()));
+
+        keys = new com.crosscert.passkey.core.jwt.SigningKeyProvider(
+                repo, envelope, new com.fasterxml.jackson.databind.ObjectMapper(), clock);
         keys.init();
-        mvc = MockMvcBuilders.standaloneSetup(new JwksController(keys)).build();
+        mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(new JwksController(keys)).build();
     }
 
     @Test
