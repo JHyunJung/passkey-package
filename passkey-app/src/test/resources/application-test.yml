@@ -47,6 +47,7 @@ passkey:
     # local-shared default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
     master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
+
 # Quiet down Hibernate's startup banner & Flyway info — tests print
 # ample diagnostics on their own.
 logging:

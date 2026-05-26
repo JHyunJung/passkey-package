@@ -9,8 +9,10 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 import jakarta.annotation.PostConstruct;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+
+import java.sql.Types;
 
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -30,11 +32,11 @@ import java.util.List;
  * the PKCS8 private bytes, and INSERT as ACTIVE. Subsequent boots find
  * the persisted row.
  *
- * <p>Concurrent first boots are race-tolerant: the
- * {@code signing_key_one_active_uix} unique index guarantees at most
- * one ACTIVE row at the DB level. If a parallel writer wins the race
- * we observe a {@link DataIntegrityViolationException} on save and
- * re-read the ACTIVE row instead of crashing.
+ * <p>Concurrent first boots are race-tolerant via the definer-rights
+ * PL/SQL package {@code APP_OWNER.signing_key_bootstrap_pkg} (V18),
+ * which only allows INSERT when no ACTIVE row exists. The
+ * function-based {@code signing_key_one_active_uix} unique index (V15)
+ * is a belt-and-suspenders safety net at the storage layer.
  *
  * <p>JWKS: returns ACTIVE + ROTATED keys so RPs still verify JWTs
  * signed by a recently-rotated key during the grace window
@@ -55,16 +57,33 @@ public class SigningKeyProvider {
     private final KeyEnvelope envelope;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final JdbcTemplate jdbc;
     private volatile RSAKey cachedActive;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public SigningKeyProvider(SigningKeyRepository repo,
                               KeyEnvelope envelope,
                               ObjectMapper mapper,
-                              Clock clock) {
+                              Clock clock,
+                              JdbcTemplate jdbc) {
         this.repo = repo;
         this.envelope = envelope;
         this.mapper = mapper;
         this.clock = clock;
+        this.jdbc = jdbc;
+    }
+
+    /**
+     * Backward-compatible 4-arg constructor for unit tests that don't
+     * exercise the createInitialKey PL/SQL path. Tests construct with
+     * a mocked repo that returns a pre-existing ACTIVE key, so jdbc is
+     * never touched. Spring DI uses the @Autowired 5-arg variant.
+     */
+    public SigningKeyProvider(SigningKeyRepository repo,
+                              KeyEnvelope envelope,
+                              ObjectMapper mapper,
+                              Clock clock) {
+        this(repo, envelope, mapper, clock, null);
     }
 
     @PostConstruct
@@ -95,19 +114,37 @@ public class SigningKeyProvider {
     }
 
     private SigningKey createInitialKey() {
-        SigningKey generated = generate();
-        try {
-            return repo.save(generated);
-        } catch (DataIntegrityViolationException e) {
-            // Another writer (the sibling app booting in parallel) won
-            // the race and inserted the ACTIVE row first. The unique
-            // index on (CASE WHEN status='ACTIVE' THEN 1 END) blocked
-            // us. Re-read and use the winning row.
-            return repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE")
-                    .orElseThrow(() -> new IllegalStateException(
-                            "signing_key save failed with constraint violation "
-                                    + "but no ACTIVE row visible on re-read", e));
+        if (jdbc == null) {
+            throw new IllegalStateException(
+                    "SigningKeyProvider was constructed without a JdbcTemplate. "
+                            + "The 4-arg test constructor only works when an ACTIVE row "
+                            + "already exists in the mocked repository.");
         }
+        SigningKey generated = generate();
+        // Call the definer-rights PL/SQL package APP_OWNER.signing_key_bootstrap_pkg
+        // (V18). It allows the caller (APP_ADMIN or APP_RUNTIME) to
+        // INSERT the first ACTIVE row ONLY when none exists. This
+        // narrows the runtime DB principal's attack surface compared
+        // to a plain GRANT INSERT (codex review T6-followup Medium).
+        jdbc.execute((java.sql.Connection conn) -> {
+            try (java.sql.CallableStatement cs = conn.prepareCall(
+                    "{ call APP_OWNER.signing_key_bootstrap_pkg.bootstrap_active(?,?,?,?,?) }")) {
+                cs.setString(1, generated.getKid());
+                cs.setString(2, generated.getAlg());
+                cs.setString(3, generated.getPublicJwk());
+                cs.setBytes(4, generated.getPrivatePkcs8());
+                cs.registerOutParameter(5, Types.NUMERIC);
+                cs.execute();
+                // p_inserted = 1 if we won, 0 if an ACTIVE row already existed.
+                // Either way we re-read below to get the canonical row.
+                return null;
+            }
+        });
+        // Re-read whichever row is now ACTIVE (ours, or the one a
+        // sibling app inserted while we were generating).
+        return repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE")
+                .orElseThrow(() -> new IllegalStateException(
+                        "signing_key bootstrap completed but no ACTIVE row visible"));
     }
 
     private SigningKey generate() {
