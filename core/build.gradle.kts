@@ -23,6 +23,10 @@ dependencies {
     api(rootProject.libs.webauthn4j.metadata)
     api(rootProject.libs.nimbus.jose.jwt)
     api(rootProject.libs.spring.security.crypto)
+    // GlobalExceptionHandler handles AccessDeniedException / AuthenticationException
+    // from spring-security-core; the individual apps add the full security starter
+    // on top, but core must be able to compile the advice without them.
+    api("org.springframework.security:spring-security-core")
     api(rootProject.libs.bucket4j.core)
     api(rootProject.libs.bucket4j.redis)
 
