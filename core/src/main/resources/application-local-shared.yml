@@ -7,3 +7,10 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+passkey:
+  key-envelope:
+    # Local dev only — 32 zero bytes base64-encoded. Production sets
+    # PASSKEY_KEY_ENVELOPE_MASTER_KEY environment variable with a
+    # 32-byte secret. See followups doc.
+    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="

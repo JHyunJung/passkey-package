@@ -238,3 +238,23 @@ Before any non-local deploy:
 - Add an admin self-service "change password" endpoint (Phase 4
   scope per Phase 2 design).
 - Add a password-rotation policy and force-change-on-first-login flag.
+
+## From Phase 3 T5 — KeyEnvelope master key
+
+`KeyEnvelope` (`core/src/main/java/com/crosscert/passkey/core/jwt/KeyEnvelope.java`)
+seals ID-Token signing key PKCS8 bytes with AES-256-GCM. The 32-byte
+master key is supplied via `passkey.key-envelope.master-key` — local
+dev hard-codes 32 zero bytes (base64 `AAAA...=`). Production deployments
+MUST:
+
+- Generate a fresh random 32-byte key per environment.
+- Provide it via the `PASSKEY_KEY_ENVELOPE_MASTER_KEY` environment
+  variable (Spring relaxed binding maps env → property).
+- Back it up out-of-band; losing the master key invalidates every
+  encrypted `signing_key.private_pkcs8` row, forcing a forced rotation
+  to a freshly-generated key.
+
+Phase 4+ migrates the master key to an external KMS (AWS KMS / HashiCorp
+Vault) so the application never sees raw key material. The
+`KeyEnvelope` interface (seal/open byte[]) is the migration boundary —
+swap the constructor wiring without changing callers.
