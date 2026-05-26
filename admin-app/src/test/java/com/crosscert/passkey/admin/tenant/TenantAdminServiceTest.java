@@ -6,12 +6,12 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.util.Optional;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,24 +31,31 @@ class TenantAdminServiceTest {
     void setUp() {
         repo = mock(TenantRepository.class);
         audit = mock(AuditLogService.class);
-        service = new TenantAdminService(repo, audit, new ObjectMapper());
+        service = new TenantAdminService(repo, audit);
     }
 
     @Test
     void createPersistsTenantAndAppendsAudit() {
         when(repo.existsBySlug("T_A")).thenReturn(false);
-        when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(repo.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
-                "[\"http://localhost\"]",
-                "{\"acceptedFormats\":[\"none\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
+                List.of("http://localhost"),
+                Set.of("none", "packed"),
+                true, false);
 
         TenantAdminDto.TenantView view = service.create(req, UUID.randomUUID(), "alice@example.com");
 
         assertThat(view.slug()).isEqualTo("T_A");
         ArgumentCaptor<Tenant> tenantCaptor = ArgumentCaptor.forClass(Tenant.class);
-        verify(repo).save(tenantCaptor.capture());
+        verify(repo).saveAndFlush(tenantCaptor.capture());
         assertThat(tenantCaptor.getValue().getRpId()).isEqualTo("localhost");
+        assertThat(tenantCaptor.getValue().isRequireUserVerification()).isTrue();
+        assertThat(tenantCaptor.getValue().isMdsRequired()).isFalse();
+        assertThat(tenantCaptor.getValue().getAllowedOriginValues())
+                .containsExactly("http://localhost");
+        assertThat(tenantCaptor.getValue().getAcceptedFormatValues())
+                .containsExactlyInAnyOrder("none", "packed");
 
         ArgumentCaptor<AuditAppendRequest> auditCaptor = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());
@@ -61,35 +68,12 @@ class TenantAdminServiceTest {
         when(repo.existsBySlug("T_A")).thenReturn(true);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
-                "[\"http://localhost\"]",
-                "{\"acceptedFormats\":[\"none\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
+                List.of("http://localhost"),
+                Set.of("none"),
+                true, false);
         assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
                         .isEqualTo(ErrorCode.TENANT_DUPLICATE));
-    }
-
-    @Test
-    void createRejectsMalformedOriginsJson() {
-        when(repo.existsBySlug("T_A")).thenReturn(false);
-        TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
-                "T_A", "Tenant A", "localhost", "Tenant A",
-                "not json",
-                "{\"acceptedFormats\":[\"none\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
-        assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("allowed_origins JSON invalid");
-    }
-
-    @Test
-    void createRejectsMalformedPolicyJson() {
-        when(repo.existsBySlug("T_A")).thenReturn(false);
-        TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
-                "T_A", "Tenant A", "localhost", "Tenant A",
-                "[\"http://localhost\"]",
-                "not json");
-        assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("attestation_policy JSON invalid");
     }
 }

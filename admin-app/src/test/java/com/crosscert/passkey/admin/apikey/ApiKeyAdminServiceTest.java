@@ -43,7 +43,8 @@ class ApiKeyAdminServiceTest {
         service = new ApiKeyAdminService(repo, audit, encoder, new SecureRandom(), clock);
         // @UuidGenerator sets id during JPA persist. In unit tests we must
         // set it reflectively so getId() is non-null after repo.save() mock.
-        when(repo.save(any())).thenAnswer(inv -> {
+        // The service uses saveAndFlush for issue() and save() for revoke().
+        org.mockito.stubbing.Answer<ApiKey> assignId = inv -> {
             ApiKey k = inv.getArgument(0);
             try {
                 var f = ApiKey.class.getDeclaredField("id");
@@ -51,7 +52,9 @@ class ApiKeyAdminServiceTest {
                 if (f.get(k) == null) f.set(k, UUID.randomUUID());
             } catch (Exception e) { throw new RuntimeException(e); }
             return k;
-        });
+        };
+        when(repo.save(any())).thenAnswer(assignId);
+        when(repo.saveAndFlush(any())).thenAnswer(assignId);
     }
 
     @Test
@@ -59,7 +62,7 @@ class ApiKeyAdminServiceTest {
         when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
 
         ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
-                TENANT_UUID.toString(), "primary", "[]", null);
+                TENANT_UUID, "primary", java.util.Set.of("registration", "authentication"));
         ApiKeyAdminDto.ApiKeyCreateResponse resp =
                 service.issue(req, ACTOR_UUID, "alice@example.com");
 
@@ -68,7 +71,7 @@ class ApiKeyAdminServiceTest {
         assertThat(resp.prefix()).hasSize(11); // pk_ + 8 chars
 
         ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
-        verify(repo).save(keyCaptor.capture());
+        verify(repo).saveAndFlush(keyCaptor.capture());
         ApiKey saved = keyCaptor.getValue();
         // Verify the persisted hash actually matches the plaintext secret
         // (full plainText = prefix + secret; we know prefix == resp.prefix).
@@ -80,7 +83,8 @@ class ApiKeyAdminServiceTest {
     void issueAppendsAuditWithoutSecret() {
         when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
 
-        service.issue(new ApiKeyAdminDto.ApiKeyCreateRequest(TENANT_UUID.toString(), "primary", "[]", null),
+        service.issue(new ApiKeyAdminDto.ApiKeyCreateRequest(
+                        TENANT_UUID, "primary", java.util.Set.of("registration")),
                       ACTOR_UUID, "alice@example.com");
 
         ArgumentCaptor<AuditAppendRequest> auditCaptor =
@@ -98,12 +102,13 @@ class ApiKeyAdminServiceTest {
     void issueRetriesOnPrefixCollision() {
         // First two random prefixes already exist; third is fresh.
         when(repo.findByKeyPrefix(anyString()))
-                .thenReturn(Optional.of(new ApiKey(TENANT_UUID,"pk_xxxxxxxx","h","n","[]")))
-                .thenReturn(Optional.of(new ApiKey(TENANT_UUID,"pk_yyyyyyyy","h","n","[]")))
+                .thenReturn(Optional.of(new ApiKey(TENANT_UUID,"pk_xxxxxxxx","h","n")))
+                .thenReturn(Optional.of(new ApiKey(TENANT_UUID,"pk_yyyyyyyy","h","n")))
                 .thenReturn(Optional.empty());
 
         ApiKeyAdminDto.ApiKeyCreateResponse resp = service.issue(
-                new ApiKeyAdminDto.ApiKeyCreateRequest(TENANT_UUID.toString(), "primary", "[]", null),
+                new ApiKeyAdminDto.ApiKeyCreateRequest(
+                        TENANT_UUID, "primary", java.util.Set.of("registration")),
                 ACTOR_UUID, "alice@example.com");
         assertThat(resp.prefix()).startsWith("pk_");
     }
@@ -125,7 +130,7 @@ class ApiKeyAdminServiceTest {
     @Test
     void revokeSetsRevokedAtAndAuditsPrefixOnly() {
         UUID existingId = UUID.randomUUID();
-        ApiKey existing = new ApiKey(TENANT_UUID, "pk_abcd1234", "$2a$04$x", "primary", "[]");
+        ApiKey existing = new ApiKey(TENANT_UUID, "pk_abcd1234", "$2a$04$x", "primary");
         try {
             var f = ApiKey.class.getDeclaredField("id");
             f.setAccessible(true);

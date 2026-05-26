@@ -13,8 +13,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.Set;
 
+import static org.hamcrest.Matchers.hasItems;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -79,8 +81,10 @@ class TenantAdminControllerSecurityTest {
 
     private static final String BODY = """
             {"slug":"tenant-a","displayName":"Tenant A","rpId":"localhost","rpName":"Tenant A",
-             "allowedOriginsJson":"[\\"http://localhost\\"]",
-             "attestationPolicyJson":"{\\"acceptedFormats\\":[\\"none\\"],\\"requireUserVerification\\":true,\\"mdsRequired\\":false}"}
+             "allowedOrigins":["http://localhost"],
+             "acceptedFormats":["none","packed"],
+             "requireUserVerification":true,
+             "mdsRequired":false}
             """;
 
     @Test
@@ -117,7 +121,10 @@ class TenantAdminControllerSecurityTest {
         when(service.create(any(), any(java.util.UUID.class), anyString()))
                 .thenReturn(new TenantAdminDto.TenantView(
                         java.util.UUID.randomUUID(), "tenant-a", "Tenant A", "active",
-                        "localhost", "Tenant A", "[]", "{}",
+                        "localhost", "Tenant A",
+                        List.of("http://localhost"),
+                        Set.of("none", "packed"),
+                        true, false,
                         java.time.Instant.now(), java.time.Instant.now()));
         mvc.perform(post("/admin/api/tenants")
                 .with(csrf())
@@ -126,7 +133,11 @@ class TenantAdminControllerSecurityTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.message").value("Tenant created"))
-            .andExpect(jsonPath("$.data.slug").value("tenant-a"));
+            .andExpect(jsonPath("$.data.slug").value("tenant-a"))
+            .andExpect(jsonPath("$.data.allowedOrigins[0]").value("http://localhost"))
+            .andExpect(jsonPath("$.data.acceptedFormats", hasItems("none", "packed")))
+            .andExpect(jsonPath("$.data.requireUserVerification").value(true))
+            .andExpect(jsonPath("$.data.mdsRequired").value(false));
     }
 
     @Test

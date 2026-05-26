@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.hasItems;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -78,8 +79,10 @@ class ApiKeyAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
 
+    private static final UUID TENANT_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     private static final String BODY = """
-            {"tenantId":"T_A","name":"primary","scopesJson":"[]"}
+            {"tenantId":"00000000-0000-0000-0000-000000000001","name":"primary","scopes":["registration","authentication"]}
             """;
 
     @Test
@@ -118,14 +121,16 @@ class ApiKeyAdminControllerSecurityTest {
                 .thenReturn(java.util.Optional.of(adminUserWithUuid()));
         org.mockito.Mockito.when(service.issue(any(), any(UUID.class), anyString()))
                 .thenReturn(new ApiKeyAdminDto.ApiKeyCreateResponse(
-                        UUID.randomUUID(), "pk_abcd1234", "pk_abcd1234SECRET", "primary",
-                        "T_A", java.time.Instant.now(), null));
+                        UUID.randomUUID(), "pk_abcd1234SECRET", "pk_abcd1234",
+                        java.util.Set.of("registration", "authentication")));
         mvc.perform(post("/admin/api/api-keys")
                 .with(csrf()).contentType("application/json").content(BODY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("API key issued"))
-                .andExpect(jsonPath("$.data.plainText").exists());
+                .andExpect(jsonPath("$.data.plainText").exists())
+                .andExpect(jsonPath("$.data.prefix").value("pk_abcd1234"))
+                .andExpect(jsonPath("$.data.scopes", hasItems("registration", "authentication")));
     }
 
     @Test

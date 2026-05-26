@@ -149,8 +149,14 @@ class VpdIsolationIT {
         // tenant's row directly through JPA. We do NOT set APP_CTX here —
         // setting it would prove nothing for the admin bypass scenario.
         TenantContextHolder.clear();
-        Tenant tenantA = tenants.save(new Tenant("T_A", "Tenant A"));
-        Tenant tenantB = tenants.save(new Tenant("T_B", "Tenant B"));
+        Tenant tenantA = new Tenant("T_A", "Tenant A", "localhost", "Tenant A RP");
+        tenantA.addAllowedOrigin("http://localhost", 0);
+        tenantA.addAcceptedFormat("none");
+        tenantA = tenants.save(tenantA);
+        Tenant tenantB = new Tenant("T_B", "Tenant B", "localhost", "Tenant B RP");
+        tenantB.addAllowedOrigin("http://localhost", 0);
+        tenantB.addAcceptedFormat("none");
+        tenantB = tenants.save(tenantB);
         savedTenantAId = tenantA.getId();
         savedTenantBId = tenantB.getId();
         credentials.save(new Credential(
@@ -245,5 +251,39 @@ class VpdIsolationIT {
                 // issue, etc.). ORA-28115 is the documented code for
                 // DBMS_RLS update_check rejection.
                 .hasMessageContaining("ORA-28115");
+    }
+
+    /**
+     * Scenario 6 (Phase 7): child tables tenant_allowed_origin and
+     * tenant_accepted_format are NOT VPD-protected — they are admin-scoped
+     * tables accessible to APP_RUNTIME_USER even when no tenant context is set.
+     * Contrast with credential, which IS VPD-protected (returns 0 without context).
+     *
+     * <p>Queries run through {@link RuntimeDsHelper#countAsRuntimeNoContext} which
+     * uses the APP_RUNTIME_USER pool with TenantContextHolder cleared, so if VPD
+     * were accidentally applied to these tables they would return 0 just like
+     * credential does — proving the assertion actually validates the absence of VPD.
+     */
+    @Test
+    void tenantChildTablesAreNotVpdProtected() {
+        // Child tables (tenant_allowed_origin, tenant_accepted_format) are granted
+        // SELECT to APP_RUNTIME but are NOT VPD-scoped. A runtime session with no
+        // tenant context must still see all rows.
+        long origins = runtime.countAsRuntimeNoContext("APP_OWNER.tenant_allowed_origin");
+        assertThat(origins)
+                .as("tenant_allowed_origin must be visible to APP_RUNTIME without VPD restriction "
+                        + "(not VPD-protected: no context → all rows visible)")
+                .isGreaterThanOrEqualTo(2L); // T_A + T_B each seeded 1 origin
+
+        long formats = runtime.countAsRuntimeNoContext("APP_OWNER.tenant_accepted_format");
+        assertThat(formats)
+                .as("tenant_accepted_format must be visible to APP_RUNTIME without VPD restriction")
+                .isGreaterThanOrEqualTo(2L); // T_A + T_B each seeded 1 format
+
+        // Contrast: credential IS VPD-protected. APP_RUNTIME with no context sees 0 rows.
+        long creds = runtime.countAsRuntimeNoContext("APP_OWNER.credential");
+        assertThat(creds)
+                .as("credential IS VPD-protected: no context → 0 rows visible to APP_RUNTIME")
+                .isEqualTo(0L);
     }
 }

@@ -93,4 +93,26 @@ public class RuntimeDsHelper {
             TenantContextHolder.clear();
         }
     }
+
+    /**
+     * COUNT rows in the given table as APP_RUNTIME_USER with no tenant context.
+     *
+     * <p>Used to verify that admin-scoped child tables
+     * ({@code tenant_allowed_origin}, {@code tenant_accepted_format}) are NOT
+     * VPD-protected: all rows should be visible regardless of context.
+     * Contrast with {@code credential}, which is VPD-protected and returns 0
+     * when no context is set.
+     *
+     * @param qualifiedTable fully-qualified table name, e.g. {@code APP_OWNER.tenant_allowed_origin}
+     */
+    public long countAsRuntimeNoContext(String qualifiedTable) {
+        TenantContextHolder.clear();
+        try {
+            Long count = runtimeJdbc.queryForObject(
+                    "SELECT COUNT(*) FROM " + qualifiedTable, Long.class);
+            return count == null ? 0L : count;
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
 }
