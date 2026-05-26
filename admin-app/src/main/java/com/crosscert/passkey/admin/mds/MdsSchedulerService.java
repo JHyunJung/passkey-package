@@ -79,6 +79,30 @@ public class MdsSchedulerService {
                 redis.delete(keys);
             }
 
+            // Populate per-AAGUID cache entries (mirrors passkey-app's
+            // MdsAaguidCache key format: "mds:aaguid:<UUID>" → CSV of
+            // status strings). Statuses are ordered as the MDS BLOB
+            // returns them (most recent last); MdsVerifier only inspects
+            // the last entry per FIDO MDS spec §5.4.
+            //
+            // TTL 7h > scheduler cadence of 6h: entries stay live until
+            // the next sync cycle invalidates + repopulates them. A 30min
+            // TTL would leave a ~5.5h stale-miss window that fails closed.
+            for (com.webauthn4j.metadata.data.MetadataBLOBPayloadEntry entry
+                    : blob.getPayload().getEntries()) {
+                if (entry.getAaguid() == null) continue; // legacy U2F entries
+                String uuid = entry.getAaguid().getValue().toString();
+                String csv = entry.getStatusReports().stream()
+                        .map(sr -> sr.getStatus() == null ? "" : sr.getStatus().getValue())
+                        .filter(s -> !s.isBlank())
+                        .reduce((a, b) -> a + "," + b)
+                        .orElse("");
+                if (!csv.isBlank()) {
+                    redis.opsForValue().set("mds:aaguid:" + uuid, csv,
+                            java.time.Duration.ofHours(7));
+                }
+            }
+
             long version = blob.getPayload().getNo();
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("version", version);
