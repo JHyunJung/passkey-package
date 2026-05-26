@@ -27,3 +27,13 @@ spring:
       password: "____disabled____never-used-loaded-from-db-instead____"
 
 server.port: 8081
+
+passkey:
+  mds:
+    fixed-delay: PT6H
+    initial-delay: PT30S
+  key-rotation:
+    grace: PT30M
+    expiration-job:
+      fixed-delay: PT1M
+      initial-delay: PT45S
