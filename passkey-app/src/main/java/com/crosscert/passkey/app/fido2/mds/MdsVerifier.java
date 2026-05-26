@@ -1,6 +1,5 @@
 package com.crosscert.passkey.app.fido2.mds;
 
-import com.crosscert.passkey.app.fido2.policy.AttestationPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -39,8 +38,8 @@ public class MdsVerifier {
         this.cache = cache;
     }
 
-    public boolean verify(AttestationPolicy policy, byte[] aaguid) {
-        if (!policy.mdsRequired()) return true;
+    public boolean verify(boolean mdsRequired, byte[] aaguid) {
+        if (!mdsRequired) return true;
 
         Optional<MdsAaguidCache.Entry> entryOpt = cache.lookup(aaguid);
         if (entryOpt.isEmpty()) {

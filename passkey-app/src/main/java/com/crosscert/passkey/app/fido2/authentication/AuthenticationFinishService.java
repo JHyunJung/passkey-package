@@ -41,6 +41,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthenticationFinishService {
@@ -159,7 +160,13 @@ public class AuthenticationFinishService {
         // record's counter to cred.signCount BEFORE verify would mask
         // our own strict-monotonic branch (codex round-2 P1).
 
-        Set<Origin> origins = parseOrigins(tenant);
+        Set<Origin> origins = tenant.getAllowedOriginValues().stream()
+                .map(Origin::create)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (origins.isEmpty()) {
+            throw new IllegalStateException(
+                    "tenant " + tenant.getId() + " has no allowed_origins configured");
+        }
         ServerProperty serverProperty = ServerProperty.builder()
                 .origins(origins)
                 .rpId(tenant.getRpId())
@@ -170,7 +177,7 @@ public class AuthenticationFinishService {
                 serverProperty,
                 record,
                 /* allowCredentials */ List.of(credentialId),
-                /* userVerificationRequired */ true,
+                /* userVerificationRequired */ tenant.isRequireUserVerification(),
                 /* userPresenceRequired */ true);
 
         try {
@@ -249,26 +256,6 @@ public class AuthenticationFinishService {
                 clientData,
                 clientExtensions,
                 transports);
-    }
-
-    private Set<Origin> parseOrigins(Tenant t) {
-        try {
-            String[] originStrings = mapper.readValue(t.getAllowedOriginsJson(), String[].class);
-            Set<Origin> set = new LinkedHashSet<>();
-            for (String s : originStrings) {
-                set.add(Origin.create(s));
-            }
-            if (set.isEmpty()) {
-                throw new IllegalStateException(
-                        "tenant " + t.getId() + " has no allowed_origins configured");
-            }
-            return set;
-        } catch (IllegalStateException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalStateException(
-                    "tenant " + t.getId() + " allowed_origins JSON invalid", e);
-        }
     }
 
 }

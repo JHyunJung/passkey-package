@@ -5,7 +5,6 @@ import com.crosscert.passkey.app.api.v1.rp.dto.RegistrationFinishResponse;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
 import com.crosscert.passkey.app.fido2.mds.MdsVerifier;
-import com.crosscert.passkey.app.fido2.policy.AttestationPolicy;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
@@ -40,6 +39,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class RegistrationFinishService {
@@ -105,7 +105,6 @@ public class RegistrationFinishService {
         Tenant tenant = tenants.findById(UUID.fromString(ch.tenantId()))
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + ch.tenantId() + " missing"));
-        AttestationPolicy policy = AttestationPolicy.fromJson(tenant.getAttestationPolicyJson());
 
         String publicKeyCredentialJson;
         try {
@@ -124,7 +123,13 @@ public class RegistrationFinishService {
 
         // Build the ServerProperty with ALL tenant origins so cross-
         // origin RP setups (e.g. www. + app.) work, not just the first.
-        Set<Origin> origins = parseOrigins(tenant);
+        Set<Origin> origins = tenant.getAllowedOriginValues().stream()
+                .map(Origin::create)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (origins.isEmpty()) {
+            throw new IllegalStateException(
+                    "tenant " + tenant.getId() + " has no allowed_origins configured");
+        }
         ServerProperty serverProperty = ServerProperty.builder()
                 .origins(origins)
                 .rpId(tenant.getRpId())
@@ -137,7 +142,7 @@ public class RegistrationFinishService {
         RegistrationParameters wParams = new RegistrationParameters(
                 serverProperty,
                 ALLOWED_PUB_KEY_CRED_PARAMS,
-                /* userVerificationRequired */ policy.requireUserVerification(),
+                /* userVerificationRequired */ tenant.isRequireUserVerification(),
                 /* userPresenceRequired */ true);
 
         try {
@@ -148,14 +153,14 @@ public class RegistrationFinishService {
         }
 
         String fmt = data.getAttestationObject().getFormat();
-        if (!policy.acceptedFormats().contains(fmt)) {
+        if (!tenant.getAcceptedFormatValues().contains(fmt)) {
             throw new IllegalArgumentException("attestation format not accepted by tenant policy");
         }
 
         // webauthn4j 0.31.5: AAGUID.getValue() returns UUID; getBytes() returns the raw 16-byte form.
         byte[] aaguid = data.getAttestationObject().getAuthenticatorData()
                 .getAttestedCredentialData().getAaguid().getBytes();
-        if (!mds.verify(policy, aaguid)) {
+        if (!mds.verify(tenant.isMdsRequired(), aaguid)) {
             throw new IllegalArgumentException("authenticator metadata verification failed");
         }
 
@@ -214,26 +219,6 @@ public class RegistrationFinishService {
             return mapper.writeValueAsBytes(envelope);
         } catch (Exception e) {
             throw new IllegalStateException("credential record envelope serialization failed", e);
-        }
-    }
-
-    private Set<Origin> parseOrigins(Tenant t) {
-        try {
-            String[] originStrings = mapper.readValue(t.getAllowedOriginsJson(), String[].class);
-            Set<Origin> set = new LinkedHashSet<>();
-            for (String s : originStrings) {
-                set.add(Origin.create(s));
-            }
-            if (set.isEmpty()) {
-                throw new IllegalStateException(
-                        "tenant " + t.getId() + " has no allowed_origins configured");
-            }
-            return set;
-        } catch (IllegalStateException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalStateException(
-                    "tenant " + t.getId() + " allowed_origins JSON invalid", e);
         }
     }
 
