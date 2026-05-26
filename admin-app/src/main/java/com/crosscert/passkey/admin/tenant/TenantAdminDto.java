@@ -1,10 +1,11 @@
 package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.core.entity.Tenant;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.*;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public final class TenantAdminDto {
@@ -13,19 +14,23 @@ public final class TenantAdminDto {
 
     public record TenantCreateRequest(
             @NotBlank @Pattern(regexp = "^[a-z0-9][a-z0-9-]{1,62}$") String slug,
-            @NotBlank String displayName,
-            @NotBlank String rpId,
-            @NotBlank String rpName,
-            @NotBlank String allowedOriginsJson,
-            @NotBlank String attestationPolicyJson
+            @NotBlank @Size(max = 256) String displayName,
+            @NotBlank @Size(max = 256) String rpId,
+            @NotBlank @Size(max = 256) String rpName,
+            @NotEmpty List<@NotBlank @Size(max = 512) String> allowedOrigins,
+            @NotEmpty Set<@NotBlank @Size(max = 32) String> acceptedFormats,
+            boolean requireUserVerification,
+            boolean mdsRequired
     ) {}
 
     public record TenantUpdateRequest(
-            @NotBlank String displayName,
-            @NotBlank String rpId,
-            @NotBlank String rpName,
-            @NotBlank String allowedOriginsJson,
-            @NotBlank String attestationPolicyJson
+            @NotBlank @Size(max = 256) String displayName,
+            @NotBlank @Size(max = 256) String rpId,
+            @NotBlank @Size(max = 256) String rpName,
+            @NotEmpty List<@NotBlank @Size(max = 512) String> allowedOrigins,
+            @NotEmpty Set<@NotBlank @Size(max = 32) String> acceptedFormats,
+            boolean requireUserVerification,
+            boolean mdsRequired
     ) {}
 
     public record TenantView(
@@ -35,8 +40,10 @@ public final class TenantAdminDto {
             String status,
             String rpId,
             String rpName,
-            String allowedOriginsJson,
-            String attestationPolicyJson,
+            List<String> allowedOrigins,
+            Set<String> acceptedFormats,
+            boolean requireUserVerification,
+            boolean mdsRequired,
             Instant createdAt,
             Instant updatedAt
     ) {
@@ -44,7 +51,10 @@ public final class TenantAdminDto {
             return new TenantView(
                     t.getId(), t.getSlug(), t.getDisplayName(), t.getStatus(),
                     t.getRpId(), t.getRpName(),
-                    t.getAllowedOriginsJson(), t.getAttestationPolicyJson(),
+                    t.getAllowedOriginValues(),
+                    t.getAcceptedFormatValues(),
+                    t.isRequireUserVerification(),
+                    t.isMdsRequired(),
                     t.getCreatedAt(), t.getUpdatedAt());
         }
     }
