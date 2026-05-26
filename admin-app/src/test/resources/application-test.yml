@@ -19,3 +19,9 @@ spring:
   security:
     user:
       password: "____disabled____never-used-loaded-from-db-instead____"
+
+passkey:
+  key-envelope:
+    # Test profile master key (32 zero bytes b64). Matches local-shared
+    # default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
+    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
