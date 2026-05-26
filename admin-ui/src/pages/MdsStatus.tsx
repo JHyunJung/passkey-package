@@ -1,55 +1,74 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { ApiError } from '../api/types';
 import type { MdsStatusView, SyncResult } from '../api/types';
+import { useToast } from '../components/Toast';
+import { Refresh, Activity } from '../components/Icons';
 
 export default function MdsStatus() {
   const [status, setStatus] = useState<MdsStatusView | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [lastResult, setLastResult] = useState<SyncResult | null>(null);
+  const [last, setLast] = useState<SyncResult | null>(null);
+  const toast = useToast();
 
   function refresh() {
-    api.get<MdsStatusView>('/admin/api/mds/status').then(setStatus);
+    api.get<MdsStatusView>('/admin/api/mds/status').then(setStatus).catch(() => {});
   }
 
   useEffect(refresh, []);
 
-  async function forceSync() {
+  async function sync() {
     setSyncing(true);
     try {
       const r = await api.post<SyncResult>('/admin/api/mds/sync', {});
-      setLastResult(r);
+      setLast(r);
+      toast({ kind: r.status === 'SYNCED' ? 'ok' : 'warn', title: `Sync ${r.status}`, message: r.error });
       refresh();
+    } catch (err) {
+      const e = err instanceof ApiError ? err : null;
+      toast({ kind: 'err', title: 'Sync 실패', message: e?.serverMessage ?? String(err), traceId: e?.traceId });
     } finally {
       setSyncing(false);
     }
   }
 
   return (
-    <div>
-      <h2>MDS Status</h2>
-      {status === null ? (
-        <p>Loading…</p>
-      ) : (
-        <table border={1} cellPadding={4} cellSpacing={0}>
-          <tbody>
-            <tr><th>Version</th><td>{status.version}</td></tr>
-            <tr><th>Next update</th><td>{status.nextUpdate ?? '-'}</td></tr>
-            <tr><th>Last fetched</th><td>{status.fetchedAt ?? '(never)'}</td></tr>
-          </tbody>
-        </table>
-      )}
-      <p style={{ marginTop: '1rem' }}>
-        <button onClick={forceSync} disabled={syncing}>
-          {syncing ? 'Syncing…' : 'Force sync now'}
+    <div className="stack-6">
+      <div className="page__head">
+        <div>
+          <h1 className="page__title">MDS Status</h1>
+          <div className="page__sub">FIDO Alliance Metadata Service BLOB 동기화 상태.</div>
+        </div>
+        <button className="btn btn--primary" onClick={sync} disabled={syncing}>
+          <Refresh size={14} /> {syncing ? '동기화 중…' : '지금 동기화'}
         </button>
-      </p>
-      {lastResult && (
-        <p>
-          Last result: <code>{lastResult.status}</code>
-          {lastResult.version != null && ` (version ${lastResult.version})`}
-          {lastResult.error && ` — ${lastResult.error}`}
-        </p>
+      </div>
+
+      <div className="grid-3">
+        <Metric label="VERSION" value={status?.version != null ? String(status.version) : '—'} sub="현재 BLOB" />
+        <Metric label="NEXT UPDATE" value={status?.nextUpdate ?? '—'} sub="MDS 권고 다음 갱신" />
+        <Metric label="LAST FETCHED" value={status?.fetchedAt?.slice(0, 19).replace('T', ' ') ?? '—'} sub="UTC" />
+      </div>
+
+      {last && (
+        <div className={`banner banner--${last.status === 'SYNCED' ? 'success' : last.status === 'SKIPPED' ? 'info' : 'danger'}`}>
+          <Activity size={16} className="banner__icon" />
+          <div>
+            <div className="banner__title">Last sync: {last.status} {last.version != null && `· v${last.version}`}</div>
+            {last.error && <div className="banner__body">{last.error}</div>}
+          </div>
+        </div>
       )}
+    </div>
+  );
+}
+
+function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="card" style={{ padding: 'var(--card-pad)' }}>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value" style={{ fontSize: 20 }}>{value}</div>
+      {sub && <div className="metric-delta">{sub}</div>}
     </div>
   );
 }
