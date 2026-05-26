@@ -80,6 +80,7 @@ class KeyMgmtControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
+    @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
 
     @Test
     void anonymousListIsUnauthorized() throws Exception {

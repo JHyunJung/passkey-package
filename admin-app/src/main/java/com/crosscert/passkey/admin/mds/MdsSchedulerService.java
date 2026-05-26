@@ -107,9 +107,9 @@ public class MdsSchedulerService {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("version", version);
             payload.put("fetchedAt", clock.instant().toString());
-            // Actor 0 = scheduler (no human operator).
+            // Actor null = scheduler (no human operator).
             audit.append(new AuditAppendRequest(
-                    0L, "(scheduler)", "MDS_BLOB_SYNC", null, null, payload));
+                    null, "(scheduler)", "MDS_BLOB_SYNC", null, null, payload));
 
             log.info("MDS sync complete — version={}", version);
             return SyncResult.synced(version);

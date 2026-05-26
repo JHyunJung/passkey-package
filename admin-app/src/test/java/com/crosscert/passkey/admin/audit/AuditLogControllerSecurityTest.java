@@ -72,6 +72,7 @@ class AuditLogControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository creds;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeys;
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
+    @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
 
     @Test
     void anonymousGetListIsUnauthorized() throws Exception {
