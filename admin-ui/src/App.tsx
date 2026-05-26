@@ -3,6 +3,8 @@ import Login from './pages/Login';
 import Layout from './components/Layout';
 import TenantList from './pages/TenantList';
 import TenantCreate from './pages/TenantCreate';
+import ApiKeyList from './pages/ApiKeyList';
+import AuditLog from './pages/AuditLog';
 
 export default function App() {
   return (
@@ -11,8 +13,8 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/tenants" element={<TenantList />} />
         <Route path="/tenants/new" element={<TenantCreate />} />
-        <Route path="/api-keys" element={<div>(coming soon)</div>} />
-        <Route path="/audit" element={<div>(coming soon)</div>} />
+        <Route path="/api-keys" element={<ApiKeyList />} />
+        <Route path="/audit" element={<AuditLog />} />
       </Route>
       <Route path="*" element={<Navigate to="/tenants" replace />} />
     </Routes>
