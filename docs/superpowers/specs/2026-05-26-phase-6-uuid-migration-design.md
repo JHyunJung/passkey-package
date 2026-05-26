@@ -6,7 +6,7 @@
 
 ## 1. Goal
 
-전체 8개 JPA entity의 primary key를 **UUID v7 (RAW(16) 저장)** 으로 통일한다. 운영자 가독성을 잃지 않기 위해 `Tenant`는 별도 `slug` 컬럼을 추가해 URL/API contract를 보존하고, `SchedulerLease`는 `name` UNIQUE 컬럼으로 의미 있는 lookup을 유지한다.
+전체 8개 JPA entity의 primary key를 **UUID v1 time-ordered (RAW(16) 저장)** 으로 통일한다. (Hibernate 6.6 `@UuidGenerator(Style.TIME)`이 v1을 생성한다 — RFC 9562 v7과 운영 특성 동일하지만 표준 이름은 v1. MAC 노출은 Hibernate가 random node를 사용하므로 없음.) 운영자 가독성을 잃지 않기 위해 `Tenant`는 별도 `slug` 컬럼을 추가해 URL/API contract를 보존하고, `SchedulerLease`는 `name` UNIQUE 컬럼으로 의미 있는 lookup을 유지한다.
 
 본 Phase는 **운영 데이터 없음 (dev/staging만, prod 미배포)** 전제로 진행한다 → V19 migration은 DROP + 재생성 우선 전략. ALTER 기반 backfill 미포함.
 
@@ -27,7 +27,7 @@
 
 | 항목 | 결정 |
 |------|------|
-| UUID 버전 | **UUID v7** (RFC 9562, time-ordered) |
+| UUID 버전 | **UUID v1 time-ordered** (Hibernate `Style.TIME`, RFC 4122. random node mode → MAC 미노출. v7과 동일한 시간 정렬/B-tree 친화성) |
 | Hibernate 매핑 | `@UuidGenerator(style = UuidGenerator.Style.TIME)` |
 | Oracle 저장 타입 | **`RAW(16)`** |
 | 매핑 어노테이션 | `@JdbcTypeCode(SqlTypes.UUID)` (Hibernate 6 native) |
@@ -45,7 +45,7 @@
 
 ```
 Application (Java)
-  └─ Entity 생성 시: @UuidGenerator(TIME) → UUID v7 즉시 발급 (DB 왕복 0)
+  └─ Entity 생성 시: @UuidGenerator(TIME) → UUID v1 time-ordered 즉시 발급 (DB 왕복 0)
        │
        ▼
 Hibernate 6

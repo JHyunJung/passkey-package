@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Migrate every JPA entity primary key from `Long`/`String` to `UUID v7` stored as Oracle `RAW(16)`. Preserve operator-facing readability via `Tenant.slug` (UNIQUE) and `SchedulerLease.name` (UNIQUE). Bootstrap from clean DB — no production data backfill needed.
+**Goal:** Migrate every JPA entity primary key from `Long`/`String` to time-ordered `UUID` (Hibernate `Style.TIME`, RFC 4122 v1 with random node — same operational profile as RFC 9562 v7) stored as Oracle `RAW(16)`. Preserve operator-facing readability via `Tenant.slug` (UNIQUE) and `SchedulerLease.name` (UNIQUE). Bootstrap from clean DB — no production data backfill needed.
 
 **Architecture:** Hibernate 6 `@UuidGenerator(style = TIME)` + `@JdbcTypeCode(SqlTypes.UUID)` maps `java.util.UUID` ↔ `RAW(16)`. V19 Flyway migration DROPs all V1–V18 tables/sequences and recreates with `RAW(16)` PK and FK columns. VPD policy in `bootstrap-vpd.sql` updated to compare `tenant_id` against `HEXTORAW(SYS_CONTEXT('APP_CTX','TENANT_ID'))`. All Tenant/Lease lookups go through `findBySlug` / `findByName` so URLs and lease names keep their meaning.
 
@@ -472,7 +472,7 @@ git commit -m "feat(db): VPD policy + CTX_PKG accept hex tenant_id (Phase 6 T2)"
 
 **Files:** (verification only — no new file)
 
-Hibernate 6.5+ ships native UUID support: `@UuidGenerator(style = UuidGenerator.Style.TIME)` produces UUID v7, `@JdbcTypeCode(SqlTypes.UUID)` maps `java.util.UUID` to dialect-specific binary. For Oracle that's `RAW(16)` automatically.
+Hibernate 6.5+ ships native UUID support: `@UuidGenerator(style = UuidGenerator.Style.TIME)` produces RFC 4122 v1 time-ordered UUIDs with random node (no MAC leak). `@JdbcTypeCode(SqlTypes.UUID)` maps `java.util.UUID` to dialect-specific binary. For Oracle that's `RAW(16)` automatically. Operational profile (time-sortable, B-tree friendly) matches RFC 9562 v7 even though the standard name differs.
 
 Sanity: confirm the imports + classes resolve in the project's Hibernate version.
 
@@ -1211,7 +1211,7 @@ git tag -a phase-6-uuid-migration-complete -m "$(cat <<'EOF'
 Phase 6 (UUID migration) complete.
 
 Acceptance:
-- All 8 entities migrated from Long/String PK to UUID v7 stored as RAW(16)
+- All 8 entities migrated from Long/String PK to UUID v1 time-ordered (Hibernate Style.TIME) stored as RAW(16)
 - Tenant.slug + SchedulerLease.name unique columns preserve operator-readable
   identifiers
 - VPD policy + CTX_PKG accept hex-string tenant_id
@@ -1239,7 +1239,7 @@ Expected output includes `phase-6-uuid-migration-complete`.
 ### Spec coverage
 
 - §1 Goal — all 8 entities UUID + slug/name preservation: T1 + T6–T13.
-- §3 Architecture decisions — UUID v7 (T6–T13 via @UuidGenerator TIME), RAW(16) (T1 schema + T6–T13 mapping), Tenant slug (T1+T13+T14), Lease name (T1+T11+T16), DROP+recreate (T1).
+- §3 Architecture decisions — UUID v1 time-ordered (T6–T13 via @UuidGenerator TIME, RFC 4122 with random node), RAW(16) (T1 schema + T6–T13 mapping), Tenant slug (T1+T13+T14), Lease name (T1+T11+T16), DROP+recreate (T1).
 - §3.5 VPD policy — T2 (CTX_PKG hex param + V20 ADD_POLICY).
 - §4.1 V19 + V20 migrations — T1 + T2.
 - §4.2 8 entities + repositories — T6–T13.
