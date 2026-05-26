@@ -3,6 +3,8 @@ package com.crosscert.passkey.admin.keymgmt;
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.jwt.KeyEnvelope;
 import com.crosscert.passkey.core.jwt.SigningKeyProvider;
@@ -98,14 +100,13 @@ class KeyRotationServiceTest {
     }
 
     @Test
-    void rotateThrowsConflictWhenLeaseUnavailable() {
+    void rotateThrowsBusinessExceptionWhenLeaseUnavailable() {
         when(leases.tryAcquire(anyString(), anyString(), any(Duration.class)))
                 .thenReturn(false);
-        // Dedicated RotationConflictException so T19 maps THIS to 409,
-        // not the other IllegalStateException paths (no ACTIVE key, etc.).
         assertThatThrownBy(() -> svc.rotate(7L, "alice@example.com"))
-                .isInstanceOf(RotationConflictException.class)
-                .hasMessageContaining("another rotation in progress");
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.KEY_ROTATION_CONFLICT);
     }
 
     @Test
@@ -115,8 +116,9 @@ class KeyRotationServiceTest {
         when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
                 .thenReturn(Optional.empty());
         assertThatThrownBy(() -> svc.rotate(7L, "alice@example.com"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("no ACTIVE key");
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.KEY_NO_ACTIVE);
     }
 
     private SigningKey freshActiveKey(String kid) throws Exception {

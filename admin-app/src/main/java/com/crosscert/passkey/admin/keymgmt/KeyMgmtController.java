@@ -1,12 +1,11 @@
 package com.crosscert.passkey.admin.keymgmt;
 
+import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/admin/api/keys")
@@ -25,23 +24,18 @@ public class KeyMgmtController {
     }
 
     @GetMapping
-    public KeyMgmtDto.KeyList list() {
+    public ApiResponse<KeyMgmtDto.KeyList> list() {
         var keys = repo.findAll().stream()
                 .map(KeyMgmtDto.SigningKeyView::from)
                 .toList();
-        return new KeyMgmtDto.KeyList(keys);
+        return ApiResponse.ok(new KeyMgmtDto.KeyList(keys));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/rotate")
-    public KeyMgmtDto.RotateResponse rotate(Authentication auth) {
+    public ApiResponse<KeyMgmtDto.RotateResponse> rotate(Authentication auth) {
         long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
-        try {
-            var result = rotation.rotate(actorId, auth.getName());
-            return new KeyMgmtDto.RotateResponse(result.oldKid(), result.newKid());
-        } catch (RotationConflictException e) {
-            // lease conflict → 409 Conflict; other IllegalStateException bubbles to 500
-            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage(), e);
-        }
+        var result = rotation.rotate(actorId, auth.getName());
+        return ApiResponse.ok(new KeyMgmtDto.RotateResponse(result.oldKid(), result.newKid()));
     }
 }

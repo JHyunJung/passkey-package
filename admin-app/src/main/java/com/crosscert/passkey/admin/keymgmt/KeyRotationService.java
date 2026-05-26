@@ -3,6 +3,8 @@ package com.crosscert.passkey.admin.keymgmt;
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.jwt.KeyEnvelope;
 import com.crosscert.passkey.core.jwt.SigningKeyProvider;
@@ -83,10 +85,10 @@ public class KeyRotationService {
         String holder = ManagementFactory.getRuntimeMXBean().getName()
                 + "#" + UUID.randomUUID();
         if (!leases.tryAcquire(LEASE_NAME, holder, LEASE_TTL)) {
-            throw new RotationConflictException("another rotation in progress");
+            throw new BusinessException(ErrorCode.KEY_ROTATION_CONFLICT);
         }
         SigningKey old = repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE")
-                .orElseThrow(() -> new IllegalStateException("no ACTIVE key"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.KEY_NO_ACTIVE));
 
         // Inside the @Transactional: transition old → ROTATED then INSERT
         // new ACTIVE. saveAndFlush forces Hibernate to emit the UPDATE

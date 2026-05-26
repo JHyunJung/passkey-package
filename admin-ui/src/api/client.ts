@@ -3,6 +3,14 @@ function getCookie(name: string): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  code: string;
+  message: string;
+  data?: T;
+  error?: { errorCode: string; fieldErrors?: unknown[] };
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -25,7 +33,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error(`HTTP ${res.status}: ${text}`);
   }
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  const envelope: ApiResponse<T> = await res.json();
+  // All admin API responses are wrapped in ApiResponse. Unwrap .data so callers
+  // receive the typed payload directly and don't need to know the envelope shape.
+  return envelope.data as T;
 }
 
 export const api = {
