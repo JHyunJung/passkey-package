@@ -6,7 +6,6 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,14 +20,11 @@ public class TenantAdminService {
 
     private final TenantRepository tenants;
     private final AuditLogService audit;
-    private final ObjectMapper mapper;
 
     public TenantAdminService(TenantRepository tenants,
-                              AuditLogService audit,
-                              ObjectMapper mapper) {
+                              AuditLogService audit) {
         this.tenants = tenants;
         this.audit = audit;
-        this.mapper = mapper;
     }
 
     @Transactional(readOnly = true)
@@ -62,12 +58,20 @@ public class TenantAdminService {
         if (tenants.existsBySlug(req.slug())) {
             throw new BusinessException(ErrorCode.TENANT_DUPLICATE);
         }
-        validateJson(req.allowedOriginsJson(), "allowed_origins");
-        validateJson(req.attestationPolicyJson(), "attestation_policy");
 
-        Tenant t = new Tenant(req.slug(), req.displayName(), req.rpId(), req.rpName(),
-                              req.allowedOriginsJson(), req.attestationPolicyJson());
-        tenants.save(t);
+        Tenant t = new Tenant(req.slug(), req.displayName(), req.rpId(), req.rpName());
+        t.setRequireUserVerification(req.requireUserVerification());
+        t.setMdsRequired(req.mdsRequired());
+
+        int order = 0;
+        for (String origin : req.allowedOrigins()) {
+            t.addAllowedOrigin(origin, order++);
+        }
+        for (String format : req.acceptedFormats()) {
+            t.addAcceptedFormat(format);
+        }
+
+        tenants.saveAndFlush(t);
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("slug", req.slug());
@@ -78,13 +82,5 @@ public class TenantAdminService {
                 "TENANT", req.slug(), payload));
 
         return TenantAdminDto.TenantView.from(t);
-    }
-
-    private void validateJson(String value, String fieldName) {
-        try {
-            mapper.readTree(value);
-        } catch (Exception e) {
-            throw new IllegalArgumentException(fieldName + " JSON invalid");
-        }
     }
 }

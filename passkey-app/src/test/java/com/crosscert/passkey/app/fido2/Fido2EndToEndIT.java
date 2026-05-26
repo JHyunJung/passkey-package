@@ -199,8 +199,14 @@ class Fido2EndToEndIT {
         // Clear out any state lingering from a previous scenario before
         // seeding anew. Order matters because of FK from api_key →
         // tenant and credential → tenant.
+        // Child tables have ON DELETE CASCADE FKs, so deleting parents
+        // implicitly removes children; however explicit deletes are safer
+        // when testing concurrent seeds.
         adminJdbc.update("DELETE FROM APP_OWNER.credential");
+        adminJdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         adminJdbc.update("DELETE FROM APP_OWNER.api_key");
+        adminJdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
+        adminJdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
         adminJdbc.update("DELETE FROM APP_OWNER.tenant");
 
         seedTenant(TENANT_A_HEX, SLUG_A, "Tenant A", PREFIX_A, SECRET_A);
@@ -235,7 +241,10 @@ class Fido2EndToEndIT {
         // don't have to juggle APP_CTX for every DELETE.
         if (adminJdbc != null) {
             adminJdbc.update("DELETE FROM APP_OWNER.credential");
+            adminJdbc.update("DELETE FROM APP_OWNER.api_key_scope");
             adminJdbc.update("DELETE FROM APP_OWNER.api_key");
+            adminJdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
+            adminJdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
             adminJdbc.update("DELETE FROM APP_OWNER.tenant");
         }
         // Redis is shared across scenarios — flush all challenge tokens
@@ -262,10 +271,15 @@ class Fido2EndToEndIT {
     }
 
     /**
-     * Seeds one tenant + one api_key row via the APP_ADMIN pool.
+     * Seeds one tenant + child config rows + one api_key + scope rows via the APP_ADMIN pool.
+     *
+     * <p>Phase 7: tenant no longer carries JSON CLOB columns. Origins and
+     * accepted formats live in the {@code tenant_allowed_origin} and
+     * {@code tenant_accepted_format} child tables. Similarly, api_key
+     * scopes moved to the {@code api_key_scope} child table.
      *
      * @param tenantHex  32-char hex string for the RAW(16) id column
-     * @param slug       short human-readable slug (SLUG NOT NULL in V19)
+     * @param slug       short human-readable slug
      * @param displayName tenant display name
      * @param prefix     api_key key_prefix
      * @param secret     api_key plaintext secret (bcrypt-hashed before INSERT)
@@ -274,30 +288,59 @@ class Fido2EndToEndIT {
                              String prefix, String secret) {
         // INSERT via raw JDBC as APP_ADMIN — VPD does not engage for
         // APP_ADMIN (EXEMPT ACCESS POLICY), and APP_ADMIN has full DML
-        // on tenant and api_key (V19 grants).
+        // on tenant and api_key (V21 grants).
         //
         // Phase 6: id and tenant_id are RAW(16); HEXTORAW converts the
-        // 32-char hex literal. SYS_GUID() generates the api_key PK
-        // (api_key_seq was dropped in V19).
-        String allowedOrigins = "[\"" + origin() + "\"]";
-        String attestationPolicy =
-                "{\"acceptedFormats\":[\"none\",\"packed\"],"
-                        + "\"requireUserVerification\":true,"
-                        + "\"mdsRequired\":false}";
+        // 32-char hex literal. SYS_GUID() generates the api_key PK.
+        // Phase 7: flag columns require_user_verification + mds_required
+        // replace the attestation_policy CLOB. Origins and formats are in
+        // child tables.
         adminJdbc.update(
                 "INSERT INTO APP_OWNER.tenant "
                         + "(id, slug, display_name, status, rp_id, rp_name, "
-                        + " allowed_origins, attestation_policy, "
+                        + " require_user_verification, mds_required, "
                         + " created_at, updated_at) "
-                        + "VALUES (HEXTORAW(?), ?, ?, 'active', 'localhost', ?, ?, ?, "
-                        + "        SYSTIMESTAMP, SYSTIMESTAMP)",
-                tenantHex, slug, displayName, displayName, allowedOrigins, attestationPolicy);
+                        + "VALUES (HEXTORAW(?), ?, ?, 'active', 'localhost', ?, "
+                        + "        'Y', 'N', SYSTIMESTAMP, SYSTIMESTAMP)",
+                tenantHex, slug, displayName, displayName);
+
+        // Seed allowed origin — must match origin() so WebAuthn4J accepts it.
+        adminJdbc.update(
+                "INSERT INTO APP_OWNER.tenant_allowed_origin "
+                        + "(id, tenant_id, origin, sort_order) "
+                        + "VALUES (SYS_GUID(), HEXTORAW(?), ?, 0)",
+                tenantHex, origin());
+
+        // Seed accepted formats (none + packed cover the test authenticator).
+        adminJdbc.update(
+                "INSERT INTO APP_OWNER.tenant_accepted_format "
+                        + "(id, tenant_id, format) "
+                        + "VALUES (SYS_GUID(), HEXTORAW(?), 'none')",
+                tenantHex);
+        adminJdbc.update(
+                "INSERT INTO APP_OWNER.tenant_accepted_format "
+                        + "(id, tenant_id, format) "
+                        + "VALUES (SYS_GUID(), HEXTORAW(?), 'packed')",
+                tenantHex);
+
+        // Seed api_key (no scopes CLOB in Phase 7).
         adminJdbc.update(
                 "INSERT INTO APP_OWNER.api_key "
-                        + "(id, tenant_id, key_prefix, key_hash, name, scopes, created_at) "
-                        + "VALUES (SYS_GUID(), HEXTORAW(?), ?, ?, 'primary', '[]', "
-                        + "        SYSTIMESTAMP)",
+                        + "(id, tenant_id, key_prefix, key_hash, name, created_at) "
+                        + "VALUES (SYS_GUID(), HEXTORAW(?), ?, ?, 'primary', SYSTIMESTAMP)",
                 tenantHex, prefix, encoder.encode(secret));
+
+        // Seed api_key_scope — re-fetch the api_key id we just inserted by prefix.
+        adminJdbc.update(
+                "INSERT INTO APP_OWNER.api_key_scope (id, api_key_id, scope) "
+                        + "SELECT SYS_GUID(), id, 'registration' FROM APP_OWNER.api_key "
+                        + "WHERE key_prefix = ?",
+                prefix);
+        adminJdbc.update(
+                "INSERT INTO APP_OWNER.api_key_scope (id, api_key_id, scope) "
+                        + "SELECT SYS_GUID(), id, 'authentication' FROM APP_OWNER.api_key "
+                        + "WHERE key_prefix = ?",
+                prefix);
     }
 
     // ------------------------------------------------------------

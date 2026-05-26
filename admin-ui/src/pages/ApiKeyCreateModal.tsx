@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { ApiError } from '../api/types';
-import type { ApiKeyCreateResponse } from '../api/types';
+import type { ApiKeyCreateRequest, ApiKeyCreateResponse } from '../api/types';
 import { useToast } from '../components/Toast';
 import Dialog from '../components/Dialog';
 import { Copy, Alert } from '../components/Icons';
+import ScopeCheckboxGrid from '../components/ScopeCheckboxGrid';
 
 interface Props {
   tenantId: string;
@@ -14,7 +15,7 @@ interface Props {
 
 export default function ApiKeyCreateModal({ tenantId, onClose, onIssued }: Props) {
   const [name, setName] = useState('');
-  const [scopesJson, setScopesJson] = useState('[]');
+  const [scopes, setScopes] = useState<Set<string>>(new Set(['registration', 'authentication']));
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<ApiKeyCreateResponse | null>(null);
   const [copied, setCopied] = useState(false);
@@ -22,13 +23,18 @@ export default function ApiKeyCreateModal({ tenantId, onClose, onIssued }: Props
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (scopes.size === 0) {
+      toast({ kind: 'err', title: '발급 불가', message: '최소 하나 이상의 scope를 선택하세요.' });
+      return;
+    }
     setBusy(true);
     try {
-      const resp = await api.post<ApiKeyCreateResponse>('/admin/api/api-keys', {
+      const body: ApiKeyCreateRequest = {
         tenantId,
         name,
-        scopesJson,
-      });
+        scopes: [...scopes],
+      };
+      const resp = await api.post<ApiKeyCreateResponse>('/admin/api/api-keys', body);
       setIssued(resp);
     } catch (err) {
       const e = err instanceof ApiError ? err : null;
@@ -138,14 +144,9 @@ export default function ApiKeyCreateModal({ tenantId, onClose, onIssued }: Props
           />
         </div>
         <div>
-          <label className="label">scopes (JSON 배열)</label>
-          <textarea
-            className="input mono"
-            value={scopesJson}
-            onChange={(e) => setScopesJson(e.target.value)}
-            rows={2}
-          />
-          <div className="hint">비워두면 모든 scope. 예: ["registration", "authentication"]</div>
+          <label className="label">허용 scope</label>
+          <div className="hint" style={{ marginBottom: 8 }}>API key가 호출할 수 있는 endpoint 범위. 최소 1개 선택 필요.</div>
+          <ScopeCheckboxGrid value={scopes} onChange={setScopes} />
         </div>
       </form>
     </Dialog>

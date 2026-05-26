@@ -46,7 +46,8 @@ public class ApiKeyAdminService {
     @Transactional(readOnly = true)
     public List<ApiKeyAdminDto.ApiKeyView> list(String tenantId) {
         return repo.findAll().stream()
-                .filter(k -> tenantId == null || tenantId.equals(k.getTenantId()))
+                .filter(k -> tenantId == null || tenantId.equals(
+                        k.getTenantId() == null ? null : k.getTenantId().toString()))
                 .map(ApiKeyAdminDto.ApiKeyView::from)
                 .toList();
     }
@@ -58,24 +59,24 @@ public class ApiKeyAdminService {
         String secret = b64url(SECRET_RANDOM_BYTES);
         String hash = encoder.encode(secret);
 
-        ApiKey key = new ApiKey(UUID.fromString(req.tenantId()), prefix, hash, req.name(), req.scopesJson());
-        // expiresAt is not set by Phase 2 (entity has no setter). Phase 2
-        // ignores ApiKeyCreateRequest.expiresAt. If a future task wants
-        // expiry support, add a setter on ApiKey + wire here.
-        ApiKey saved = repo.save(key);
+        ApiKey key = new ApiKey(req.tenantId(), prefix, hash, req.name());
+        for (String scope : req.scopes()) {
+            key.addScope(scope);
+        }
+        ApiKey saved = repo.saveAndFlush(key);
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("id", saved.getId().toString());
         payload.put("prefix", prefix);
-        payload.put("tenantId", req.tenantId());
+        payload.put("tenantId", req.tenantId().toString());
         payload.put("name", req.name());
+        payload.put("scopes", req.scopes());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "API_KEY_ISSUE",
                 "API_KEY", saved.getId().toString(), payload));
 
         return new ApiKeyAdminDto.ApiKeyCreateResponse(
-                saved.getId(), prefix, prefix + secret, saved.getName(),
-                saved.getTenantId().toString(), saved.getCreatedAt(), saved.getExpiresAt());
+                saved.getId(), prefix + secret, prefix, req.scopes());
     }
 
     @Transactional

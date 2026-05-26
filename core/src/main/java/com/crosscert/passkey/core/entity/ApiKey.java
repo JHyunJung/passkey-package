@@ -4,8 +4,12 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "API_KEY")
@@ -30,9 +34,8 @@ public class ApiKey {
     @Column(name = "NAME", length = 256, nullable = false)
     private String name;
 
-    @Lob
-    @Column(name = "SCOPES", nullable = false)
-    private String scopesJson;
+    @OneToMany(mappedBy = "apiKey", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private Set<ApiKeyScope> scopes = new HashSet<>();
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private Instant createdAt;
@@ -48,22 +51,42 @@ public class ApiKey {
 
     protected ApiKey() {}
 
-    public ApiKey(UUID tenantId, String keyPrefix, String keyHash,
-                  String name, String scopesJson) {
+    public ApiKey(UUID tenantId, String keyPrefix, String keyHash, String name) {
         this.tenantId = tenantId;
         this.keyPrefix = keyPrefix;
         this.keyHash = keyHash;
         this.name = name;
-        this.scopesJson = scopesJson;
         this.createdAt = Instant.now();
     }
+
+    // ── Collection helpers (keeps parent in sync) ──
+
+    public void addScope(String scope) {
+        // String dedup (transient safety per T4 P2 pattern)
+        boolean exists = scopes.stream().anyMatch(s -> scope.equals(s.getScope()));
+        if (!exists) {
+            scopes.add(new ApiKeyScope(this, scope));
+        }
+    }
+
+    public void clearScopes() { scopes.clear(); }
+
+    // ── Typed convenience getters ──
+
+    public Set<String> getScopeValues() {
+        return scopes.stream().map(ApiKeyScope::getScope).collect(Collectors.toSet());
+    }
+
+    // For test-only reflective access
+    public Set<ApiKeyScope> getScopes() { return scopes; }
+
+    // ── Standard getters ──
 
     public UUID getId() { return id; }
     public UUID getTenantId() { return tenantId; }
     public String getKeyPrefix() { return keyPrefix; }
     public String getKeyHash() { return keyHash; }
     public String getName() { return name; }
-    public String getScopesJson() { return scopesJson; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getLastUsedAt() { return lastUsedAt; }
     public Instant getExpiresAt() { return expiresAt; }

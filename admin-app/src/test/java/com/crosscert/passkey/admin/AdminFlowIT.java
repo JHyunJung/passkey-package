@@ -148,9 +148,15 @@ class AdminFlowIT {
         // FK chain: api_key.tenant_id → tenant.id; credential.tenant_id →
         // tenant.id. audit_log has no FK. admin_user (V11 seed) is left
         // untouched so alice/bob stay logged-in-able across test runs.
+        // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
+        // use ON DELETE CASCADE from their parent FKs, so deleting the
+        // parent rows implicitly removes children too.
         jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");
+        jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
+        jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
         // Close the connection explicitly — RedisConnection isn't
         // AutoCloseable in Spring Data 3.x.
@@ -328,8 +334,10 @@ class AdminFlowIT {
         // ③ Alice creates tenant acme (slug-based; Phase 6).
         String tenantBody = """
                 {"slug":"acme","displayName":"Acme Inc","rpId":"acme.example.com","rpName":"Acme Inc",
-                 "allowedOriginsJson":"[\\"http://localhost\\"]",
-                 "attestationPolicyJson":"{\\"acceptedFormats\\":[\\"none\\"],\\"requireUserVerification\\":true,\\"mdsRequired\\":false}"}
+                 "allowedOrigins":["http://localhost"],
+                 "acceptedFormats":["none","packed"],
+                 "requireUserVerification":true,
+                 "mdsRequired":false}
                 """;
         ResponseEntity<JsonNode> createT = rest.exchange(
                 url("/admin/api/tenants"), HttpMethod.POST,
@@ -341,7 +349,7 @@ class AdminFlowIT {
         String tenantId = unwrap(createT).get("id").asText();
 
         // ④ Alice issues an API Key.
-        String keyBody = "{\"tenantId\":\"" + tenantId + "\",\"name\":\"primary\",\"scopesJson\":\"[]\"}";
+        String keyBody = "{\"tenantId\":\"" + tenantId + "\",\"name\":\"primary\",\"scopes\":[\"registration\",\"authentication\"]}";
         ResponseEntity<JsonNode> issue = rest.exchange(
                 url("/admin/api/api-keys"), HttpMethod.POST,
                 new HttpEntity<>(keyBody, aliceAuth), JsonNode.class);
@@ -407,8 +415,10 @@ class AdminFlowIT {
         // Use a different slug ("beta") so it doesn't conflict with "acme".
         String betaTenantBody = """
                 {"slug":"beta","displayName":"Beta Inc","rpId":"beta.example.com","rpName":"Beta Inc",
-                 "allowedOriginsJson":"[\\"http://localhost\\"]",
-                 "attestationPolicyJson":"{\\"acceptedFormats\\":[\\"none\\"],\\"requireUserVerification\\":true,\\"mdsRequired\\":false}"}
+                 "allowedOrigins":["http://localhost"],
+                 "acceptedFormats":["none","packed"],
+                 "requireUserVerification":true,
+                 "mdsRequired":false}
                 """;
         ResponseEntity<String> bobCreate = rest.exchange(
                 url("/admin/api/tenants"), HttpMethod.POST,
