@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/admin/api/audit")
@@ -25,7 +26,7 @@ public class AuditLogController {
 
     @GetMapping
     public ApiResponse<List<AuditLogView>> list(@RequestParam(required = false) String action,
-                                                @RequestParam(required = false) Long actorId,
+                                                @RequestParam(required = false) UUID actorId,
                                                 @RequestParam(required = false) Instant from,
                                                 @RequestParam(required = false) Instant to,
                                                 @RequestParam(defaultValue = "0") int page,
@@ -42,7 +43,7 @@ public class AuditLogController {
     }
 
     public record AuditLogView(
-            Long id, Long actorId, String actorEmail, String action,
+            UUID id, UUID actorId, String actorEmail, String action,
             String targetType, String targetId, String payload, Instant createdAt) {
         public static AuditLogView from(AuditLog a) {
             return new AuditLogView(

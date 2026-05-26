@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.entity.ApiKey;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public final class ApiKeyAdminDto {
 
@@ -17,7 +18,7 @@ public final class ApiKeyAdminDto {
     ) {}
 
     public record ApiKeyCreateResponse(
-            Long id,
+            UUID id,
             String prefix,
             String plainText,          // ONE-TIME — only returned at issue
             String name,
@@ -27,7 +28,7 @@ public final class ApiKeyAdminDto {
     ) {}
 
     public record ApiKeyView(
-            Long id,
+            UUID id,
             String prefix,
             String name,
             String tenantId,
@@ -38,7 +39,8 @@ public final class ApiKeyAdminDto {
     ) {
         public static ApiKeyView from(ApiKey k) {
             return new ApiKeyView(
-                    k.getId(), k.getKeyPrefix(), k.getName(), k.getTenantId(),
+                    k.getId(), k.getKeyPrefix(), k.getName(),
+                    k.getTenantId() == null ? null : k.getTenantId().toString(),
                     k.getCreatedAt(), k.getLastUsedAt(), k.getExpiresAt(), k.getRevokedAt());
         }
     }

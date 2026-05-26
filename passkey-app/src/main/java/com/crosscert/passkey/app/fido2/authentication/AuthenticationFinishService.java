@@ -40,6 +40,7 @@ import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class AuthenticationFinishService {
@@ -80,14 +81,15 @@ public class AuthenticationFinishService {
 
         // codex P2: bind challenge tenant to current API-key tenant before
         // touching tenant config — defense-in-depth on top of VPD.
-        String ctxTenant = TenantContextHolder.get();
+        UUID ctxTenantUuid = TenantContextHolder.get();
+        String ctxTenant = ctxTenantUuid == null ? null : ctxTenantUuid.toString();
         if (ctxTenant == null || !ctxTenant.equals(ch.tenantId())) {
             log.warn("tenant mismatch on authentication/finish: ctx={} ch={}",
                     ctxTenant, ch.tenantId());
             throw new IllegalArgumentException("tenant mismatch");
         }
 
-        Tenant tenant = tenants.findById(ch.tenantId())
+        Tenant tenant = tenants.findById(UUID.fromString(ch.tenantId()))
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + ch.tenantId() + " missing"));
 

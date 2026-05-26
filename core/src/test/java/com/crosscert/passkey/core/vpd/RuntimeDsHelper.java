@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Test-only helper that drives APP_RUNTIME_USER traffic through the same
@@ -57,7 +58,7 @@ public class RuntimeDsHelper {
      * session tenant ({@code null} → no APP_CTX value, VPD filters all
      * rows out as the safe default).
      */
-    public List<Object[]> selectAllCredentialsAsRuntime(String tenantId) {
+    public List<Object[]> selectAllCredentialsAsRuntime(UUID tenantId) {
         try {
             if (tenantId == null) {
                 TenantContextHolder.clear();
@@ -65,8 +66,8 @@ public class RuntimeDsHelper {
                 TenantContextHolder.set(tenantId);
             }
             return runtimeJdbc.query(
-                    "SELECT id, tenant_id FROM APP_OWNER.credential ORDER BY id",
-                    (rs, i) -> new Object[]{rs.getLong("id"), rs.getString("tenant_id")});
+                    "SELECT RAWTOHEX(id) AS id, RAWTOHEX(tenant_id) AS tenant_id FROM APP_OWNER.credential ORDER BY id",
+                    (rs, i) -> new Object[]{rs.getString("id"), rs.getString("tenant_id")});
         } finally {
             TenantContextHolder.clear();
         }
@@ -74,18 +75,18 @@ public class RuntimeDsHelper {
 
     /**
      * INSERT a credential row as APP_RUNTIME_USER. {@code sessionTenant}
-     * sets APP_CTX; {@code rowTenant} is the value written to the row's
-     * tenant_id column. When the two differ, VPD's update_check=TRUE
-     * must raise ORA-28115 (policy violation).
+     * sets APP_CTX; {@code rowTenant} is the hex-encoded tenant UUID
+     * written to the row's tenant_id RAW(16) column. When the two differ,
+     * VPD's update_check=TRUE must raise ORA-28115 (policy violation).
      */
-    public void insertCredentialAs(String sessionTenant, String rowTenant,
+    public void insertCredentialAs(UUID sessionTenant, String rowTenant,
                                    String userHandle, String credentialId, String publicKey) {
         try {
             TenantContextHolder.set(sessionTenant);
             runtimeJdbc.update(
                     "INSERT INTO APP_OWNER.credential " +
                     "(id, tenant_id, user_handle, credential_id, public_key) " +
-                    "VALUES (APP_OWNER.credential_seq.NEXTVAL, ?, " +
+                    "VALUES (SYS_GUID(), HEXTORAW(?), " +
                     "UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?))",
                     rowTenant, userHandle, credentialId, publicKey);
         } finally {

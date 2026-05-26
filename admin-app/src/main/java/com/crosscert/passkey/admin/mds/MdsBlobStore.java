@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.mds;
 
+import com.crosscert.passkey.core.entity.MdsBlobCache;
 import com.webauthn4j.metadata.data.MetadataBLOB;
 import org.springframework.dao.IncorrectUpdateSemanticsDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,7 +14,7 @@ import java.time.LocalDate;
 
 /**
  * Persists the most recent verified MDS BLOB into the singleton
- * row id=1 of {@code mds_blob_cache} (seeded by V17).
+ * row of {@code mds_blob_cache} (seeded by V19, id = SINGLETON_ID).
  *
  * <p>The raw JWT bytes are not surfaced by webauthn4j MetadataBLOB,
  * so this Phase 3 store passes an empty JSON ("{}") for blob_jwt
@@ -23,6 +24,9 @@ import java.time.LocalDate;
  */
 @Service
 public class MdsBlobStore {
+
+    private static final String SINGLETON_HEX =
+            MdsBlobCache.SINGLETON_ID.toString().replace("-", "");
 
     private final JdbcTemplate jdbc;
     private final Clock clock;
@@ -40,14 +44,14 @@ public class MdsBlobStore {
         int updated = jdbc.update(
                 "UPDATE APP_OWNER.mds_blob_cache " +
                 "SET version=?, next_update=?, fetched_at=?, blob_jwt=? " +
-                "WHERE id=1",
+                "WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
                 version,
                 java.sql.Date.valueOf(nextUpdate),
                 Timestamp.from(now),
                 rawJwt);
         if (updated != 1) {
             throw new IncorrectUpdateSemanticsDataAccessException(
-                    "mds_blob_cache sentinel row (id=1) missing — V17 migration may not have run");
+                    "mds_blob_cache sentinel row missing — V19 migration may not have run");
         }
     }
 }

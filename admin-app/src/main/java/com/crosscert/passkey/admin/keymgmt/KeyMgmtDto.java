@@ -4,13 +4,14 @@ import com.crosscert.passkey.core.entity.SigningKey;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 public final class KeyMgmtDto {
 
     private KeyMgmtDto() {}
 
     public record SigningKeyView(
-            Long id,
+            UUID id,
             String kid,
             String alg,
             String status,

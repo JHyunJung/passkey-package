@@ -1,17 +1,22 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "AUDIT_LOG")
 public class AuditLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "audit_log_seq")
-    @SequenceGenerator(name = "audit_log_seq", sequenceName = "AUDIT_LOG_SEQ", allocationSize = 1)
-    @Column(name = "ID")
-    private Long id;
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "ID", columnDefinition = "RAW(16)")
+    private UUID id;
 
     @Column(name = "PREV_HASH", length = 32)
     private byte[] prevHash;
@@ -19,8 +24,9 @@ public class AuditLog {
     @Column(name = "HASH", length = 32, nullable = false)
     private byte[] hash;
 
-    @Column(name = "ACTOR_ID", nullable = false)
-    private Long actorId;
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "ACTOR_ID", columnDefinition = "RAW(16)")
+    private UUID actorId;
 
     @Column(name = "ACTOR_EMAIL", length = 255, nullable = false)
     private String actorEmail;
@@ -43,7 +49,7 @@ public class AuditLog {
 
     protected AuditLog() {}
 
-    public AuditLog(byte[] prevHash, byte[] hash, long actorId, String actorEmail,
+    public AuditLog(byte[] prevHash, byte[] hash, UUID actorId, String actorEmail,
                     String action, String targetType, String targetId,
                     String payload, Instant createdAt) {
         this.prevHash = prevHash;
@@ -57,10 +63,10 @@ public class AuditLog {
         this.createdAt = createdAt;
     }
 
-    public Long getId() { return id; }
+    public UUID getId() { return id; }
     public byte[] getPrevHash() { return prevHash; }
     public byte[] getHash() { return hash; }
-    public Long getActorId() { return actorId; }
+    public UUID getActorId() { return actorId; }
     public String getActorEmail() { return actorEmail; }
     public String getAction() { return action; }
     public String getTargetType() { return targetType; }

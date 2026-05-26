@@ -10,6 +10,7 @@ import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -61,9 +62,11 @@ public class TenantAwareDataSource implements DataSource {
             // in Oracle.
             executeCall(raw, CLEAR_SQL, null);
 
-            String tenantId = TenantContextHolder.get();
+            UUID tenantId = TenantContextHolder.get();
             if (tenantId != null) {
-                executeCall(raw, SET_SQL, tenantId);
+                // Convert UUID to 32-char hex string (no dashes) — matches
+                // HEXTORAW input expected by V19's VPD policy function.
+                executeCall(raw, SET_SQL, toHex(tenantId));
             }
         } catch (SQLException setup) {
             // Return the underlying connection to the pool so we do not
@@ -152,4 +155,14 @@ public class TenantAwareDataSource implements DataSource {
     @Override public Logger getParentLogger() throws SQLFeatureNotSupportedException { return delegate.getParentLogger(); }
     @Override public <T> T unwrap(Class<T> iface) throws SQLException { return delegate.unwrap(iface); }
     @Override public boolean isWrapperFor(Class<?> iface) throws SQLException { return delegate.isWrapperFor(iface); }
+
+    /**
+     * Converts a UUID to the 32-char lowercase hex string (no dashes)
+     * expected by Oracle's HEXTORAW in the VPD policy function.
+     * Example: {@code 11111111-1111-1111-1111-111111111111} →
+     * {@code "11111111111111111111111111111111"}.
+     */
+    static String toHex(UUID id) {
+        return id.toString().replace("-", "");
+    }
 }

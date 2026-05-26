@@ -1,18 +1,28 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "MDS_BLOB_CACHE")
 public class MdsBlobCache {
 
+    /**
+     * The singleton row id seeded by V19 migration.
+     * Matches HEXTORAW('00000000000000000000000000000001').
+     * No @UuidGenerator — this id is fixed; the app never inserts another row.
+     */
+    public static final UUID SINGLETON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "mds_blob_cache_seq")
-    @SequenceGenerator(name = "mds_blob_cache_seq", sequenceName = "MDS_BLOB_CACHE_SEQ", allocationSize = 1)
-    @Column(name = "ID")
-    private Long id;
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "ID", columnDefinition = "RAW(16)")
+    private UUID id;
 
     @Column(name = "VERSION", nullable = false)
     private long version;
@@ -29,7 +39,7 @@ public class MdsBlobCache {
 
     protected MdsBlobCache() {}
 
-    public Long getId() { return id; }
+    public UUID getId() { return id; }
     public long getVersion() { return version; }
     public LocalDate getNextUpdate() { return nextUpdate; }
     public String getBlobJwt() { return blobJwt; }

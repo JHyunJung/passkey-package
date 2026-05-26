@@ -31,7 +31,7 @@ export default function TenantList() {
 
   const filtered = useMemo(
     () => tenants.filter((t) =>
-      !q || t.id.toLowerCase().includes(q.toLowerCase())
+      !q || t.slug.toLowerCase().includes(q.toLowerCase())
          || (t.displayName ?? '').toLowerCase().includes(q.toLowerCase())
     ),
     [tenants, q]
@@ -101,10 +101,10 @@ export default function TenantList() {
             </thead>
             <tbody>
               {filtered.map((t) => (
-                <tr key={t.id}>
+                <tr key={t.slug}>
                   <td>
-                    <div style={{ fontWeight: 500 }}>{t.displayName ?? t.id}</div>
-                    <div className="mono muted">{t.id}</div>
+                    <div style={{ fontWeight: 500 }}>{t.displayName ?? t.slug}</div>
+                    <div className="mono muted">{t.slug}</div>
                   </td>
                   <td className="mono">{t.rpId}</td>
                   <td>{t.rpName}</td>

@@ -2,15 +2,17 @@ package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.core.entity.Tenant;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public final class TenantAdminDto {
 
     private TenantAdminDto() {}
 
     public record TenantCreateRequest(
-            @NotBlank String id,
+            @NotBlank @Pattern(regexp = "^[a-z0-9][a-z0-9-]{1,62}$") String slug,
             @NotBlank String displayName,
             @NotBlank String rpId,
             @NotBlank String rpName,
@@ -27,7 +29,8 @@ public final class TenantAdminDto {
     ) {}
 
     public record TenantView(
-            String id,
+            UUID id,
+            String slug,
             String displayName,
             String status,
             String rpId,
@@ -39,7 +42,7 @@ public final class TenantAdminDto {
     ) {
         public static TenantView from(Tenant t) {
             return new TenantView(
-                    t.getId(), t.getDisplayName(), t.getStatus(),
+                    t.getId(), t.getSlug(), t.getDisplayName(), t.getStatus(),
                     t.getRpId(), t.getRpName(),
                     t.getAllowedOriginsJson(), t.getAttestationPolicyJson(),
                     t.getCreatedAt(), t.getUpdatedAt());

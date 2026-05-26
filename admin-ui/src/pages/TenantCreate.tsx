@@ -13,7 +13,7 @@ const DEFAULT_POLICY = JSON.stringify(
 export default function TenantCreate() {
   const nav = useNavigate();
   const toast = useToast();
-  const [id, setId] = useState('');
+  const [slug, setSlug] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [rpId, setRpId] = useState('');
   const [rpName, setRpName] = useState('');
@@ -26,9 +26,9 @@ export default function TenantCreate() {
     setBusy(true);
     try {
       await api.post<TenantView>('/admin/api/tenants', {
-        id, displayName, rpId, rpName, allowedOriginsJson, attestationPolicyJson,
+        slug, displayName, rpId, rpName, allowedOriginsJson, attestationPolicyJson,
       });
-      toast({ kind: 'ok', title: 'Tenant 생성됨', message: id });
+      toast({ kind: 'ok', title: 'Tenant 생성됨', message: slug });
       nav('/tenants');
     } catch (err) {
       if (err instanceof ApiError) {
@@ -51,11 +51,11 @@ export default function TenantCreate() {
       </div>
       <form onSubmit={submit} className="card">
         <div className="card__body stack-4">
-          <Field label="Tenant ID" hint="고유 식별자. 영문 소문자 + 숫자 + 하이픈.">
+          <Field label="Tenant Slug" hint="고유 식별자. 영문 소문자 + 숫자 + 하이픈. (예: acme, globex-corp)">
             <input
               className="input mono"
-              value={id}
-              onChange={(e) => setId(e.target.value)}
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
               required
               pattern="^[a-z0-9][a-z0-9-]{1,62}$"
             />

@@ -14,8 +14,9 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Set;
+import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -80,6 +81,8 @@ class KeyMgmtControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
+    @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
+    @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
 
     @Test
     void anonymousListIsUnauthorized() throws Exception {
@@ -107,8 +110,8 @@ class KeyMgmtControllerSecurityTest {
     @WithMockUser(username = "alice@example.com", roles = "ADMIN")
     void adminCanRotate() throws Exception {
         when(admins.findByEmail(anyString())).thenReturn(
-                java.util.Optional.of(adminUserWithId(7L)));
-        when(rotation.rotate(anyLong(), anyString()))
+                java.util.Optional.of(adminUserWithUuid()));
+        when(rotation.rotate(any(UUID.class), anyString()))
                 .thenReturn(new KeyRotationService.RotateResult("old-kid", "new-kid"));
         mvc.perform(post("/admin/api/keys/rotate").with(csrf()))
                 .andExpect(status().isOk())
@@ -121,8 +124,8 @@ class KeyMgmtControllerSecurityTest {
     @WithMockUser(username = "alice@example.com", roles = "ADMIN")
     void rotateConflictWhenLeaseUnavailable() throws Exception {
         when(admins.findByEmail(anyString())).thenReturn(
-                java.util.Optional.of(adminUserWithId(7L)));
-        when(rotation.rotate(anyLong(), anyString()))
+                java.util.Optional.of(adminUserWithUuid()));
+        when(rotation.rotate(any(UUID.class), anyString()))
                 .thenThrow(new com.crosscert.passkey.core.api.BusinessException(
                         com.crosscert.passkey.core.api.ErrorCode.KEY_ROTATION_CONFLICT));
         mvc.perform(post("/admin/api/keys/rotate").with(csrf()))
@@ -132,12 +135,12 @@ class KeyMgmtControllerSecurityTest {
                 .andExpect(jsonPath("$.error.errorCode").value("S001"));
     }
 
-    private static com.crosscert.passkey.core.entity.AdminUser adminUserWithId(long id) {
+    private static com.crosscert.passkey.core.entity.AdminUser adminUserWithUuid() {
         var u = new com.crosscert.passkey.core.entity.AdminUser("alice@example.com", "x", "ADMIN");
         try {
             var f = com.crosscert.passkey.core.entity.AdminUser.class.getDeclaredField("id");
             f.setAccessible(true);
-            f.set(u, id);
+            f.set(u, UUID.randomUUID());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

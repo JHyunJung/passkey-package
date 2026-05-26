@@ -117,13 +117,13 @@ class MdsSchedulerIT {
         jdbc = new JdbcTemplate(ds);
         // Clear any audit rows from previous test runs.
         jdbc.update("DELETE FROM APP_OWNER.audit_log");
-        // Reset the mds_blob_cache sentinel row to its V17 seed values,
+        // Reset the mds_blob_cache sentinel row to its V19 seed values,
         // including next_update so that the happy-path test's 2099-01-01
         // write does not bleed into later tests.
         jdbc.update("UPDATE APP_OWNER.mds_blob_cache " +
                     "SET version=0, next_update=DATE '1970-01-01', blob_jwt='{}', " +
                     "    fetched_at=TIMESTAMP '1970-01-01 00:00:00 +00:00' " +
-                    "WHERE id=1");
+                    "WHERE id=HEXTORAW('00000000000000000000000000000001')");
         // Clear mds-sync lease rows but preserve the AUDIT_CHAIN_LOCK sentinel
         // row seeded by V14. Deleting AUDIT_CHAIN_LOCK causes AuditLogService
         // to throw NoResultException when it does FOR UPDATE on that row.
@@ -163,7 +163,8 @@ class MdsSchedulerIT {
 
         // ── DB: version updated in sentinel row ──────────────────────
         Long version = jdbc.queryForObject(
-                "SELECT version FROM APP_OWNER.mds_blob_cache WHERE id=1", Long.class);
+                "SELECT version FROM APP_OWNER.mds_blob_cache " +
+                "WHERE id=HEXTORAW('00000000000000000000000000000001')", Long.class);
         assertThat(version).isEqualTo(42L);
 
         // ── Redis: per-AAGUID CSV entries written ────────────────────

@@ -32,10 +32,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 import javax.sql.DataSource;
+import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -140,7 +142,7 @@ class KeyRotationIT {
         String oldKid = oldKey.getKeyID();
         SignedJWT oldSigned = signJwt(oldKey, "old-token");
 
-        KeyRotationService.RotateResult result = rotation.rotate(0L, "(test)");
+        KeyRotationService.RotateResult result = rotation.rotate(null, "(test)");
         assertThat(result.oldKid()).isEqualTo(oldKid);
         assertThat(result.newKid()).isNotEqualTo(oldKid);
 
@@ -171,7 +173,7 @@ class KeyRotationIT {
 
     @Test
     void expirationJobRevokesAfterGrace() throws Exception {
-        rotation.rotate(0L, "(test)");
+        rotation.rotate(null, "(test)");
 
         // Find the ROTATED key and back-date its rotated_at by 31 minutes
         // (beyond the default PT30M grace).
@@ -181,8 +183,12 @@ class KeyRotationIT {
                 .orElseThrow();
 
         Instant past = Instant.now().minus(Duration.ofMinutes(31));
+        UUID rotatedId = rotated.getId();
+        ByteBuffer bb = ByteBuffer.allocate(16);
+        bb.putLong(rotatedId.getMostSignificantBits());
+        bb.putLong(rotatedId.getLeastSignificantBits());
         jdbc.update("UPDATE APP_OWNER.signing_key SET rotated_at=? WHERE id=?",
-                Timestamp.from(past), rotated.getId());
+                Timestamp.from(past), bb.array());
 
         expirationJob.runOnce();
 
@@ -207,7 +213,7 @@ class KeyRotationIT {
                 "INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                 "VALUES ('key-rotation', 'somebody-else', SYSTIMESTAMP + INTERVAL '5' MINUTE)");
 
-        assertThatThrownBy(() -> rotation.rotate(0L, "(test)"))
+        assertThatThrownBy(() -> rotation.rotate(null, "(test)"))
                 .isInstanceOf(com.crosscert.passkey.core.api.BusinessException.class)
                 .extracting(e -> ((com.crosscert.passkey.core.api.BusinessException) e).getErrorCode())
                 .isEqualTo(com.crosscert.passkey.core.api.ErrorCode.KEY_ROTATION_CONFLICT);

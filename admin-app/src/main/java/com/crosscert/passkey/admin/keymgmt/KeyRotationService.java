@@ -78,7 +78,7 @@ public class KeyRotationService {
     }
 
     @Transactional
-    public RotateResult rotate(long actorId, String actorEmail) {
+    public RotateResult rotate(UUID actorId, String actorEmail) {
         // Per-attempt holder: hostname/PID + a UUID so SchedulerLeaseService's
         // owner-renewal path (holder=?) cannot let a second same-JVM caller
         // piggy-back on a still-held lease.

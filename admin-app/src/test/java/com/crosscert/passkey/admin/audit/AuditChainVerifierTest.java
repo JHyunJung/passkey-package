@@ -12,12 +12,16 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AuditChainVerifierTest {
+
+    /** Stable UUID for row 2 — used in tamper/prevHash-mismatch assertions. */
+    private static final UUID ROW_2_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     private AuditLogRepository repo;
     private AuditChainVerifier verifier;
@@ -54,13 +58,13 @@ class AuditChainVerifierTest {
                 middle.getPrevHash(), middle.getHash(), middle.getActorId(),
                 middle.getActorEmail(), middle.getAction(), middle.getTargetType(),
                 middle.getTargetId(), "{\"x\":\"tampered\"}", middle.getCreatedAt());
-        copyId(tampered, 2L);
+        copyId(tampered, ROW_2_ID);
         rows.set(1, tampered);
         when(repo.findAllOrdered()).thenReturn(rows);
 
         AuditChainVerifier.Result r = verifier.verify();
         assertThat(r.ok()).isFalse();
-        assertThat(r.brokenAt()).isEqualTo(2L);
+        assertThat(r.brokenAt()).isEqualTo(ROW_2_ID);
     }
 
     @Test
@@ -72,13 +76,13 @@ class AuditChainVerifierTest {
                 second.getHash(), second.getActorId(), second.getActorEmail(),
                 second.getAction(), second.getTargetType(), second.getTargetId(),
                 second.getPayload(), second.getCreatedAt());
-        copyId(rebound, 2L);
+        copyId(rebound, ROW_2_ID);
         rows.set(1, rebound);
         when(repo.findAllOrdered()).thenReturn(rows);
 
         AuditChainVerifier.Result r = verifier.verify();
         assertThat(r.ok()).isFalse();
-        assertThat(r.brokenAt()).isEqualTo(2L);
+        assertThat(r.brokenAt()).isEqualTo(ROW_2_ID);
     }
 
     /** Build a valid chain by reusing AuditLogService.computeHash. */
@@ -86,8 +90,10 @@ class AuditChainVerifierTest {
         List<AuditLog> chain = new ArrayList<>();
         byte[] prev = null;
         for (int i = 1; i <= n; i++) {
+            UUID actorId = UUID.fromString(
+                    String.format("00000000-0000-0000-0000-%012d", i));
             AuditAppendRequest req = new AuditAppendRequest(
-                    i, "alice@example.com", "ACTION_" + i,
+                    actorId, "alice@example.com", "ACTION_" + i,
                     "TENANT", "T_" + i, Map.of("seq", i));
             String payload = "{\"seq\":" + i + "}";
             byte[] hash = AuditLogService.computeHash(prev, req, payload, clock.instant());
@@ -95,14 +101,16 @@ class AuditChainVerifierTest {
                     prev, hash, req.actorId(), req.actorEmail(),
                     req.action(), req.targetType(), req.targetId(),
                     payload, clock.instant());
-            copyId(row, (long) i);
+            UUID rowId = UUID.fromString(
+                    String.format("00000000-0000-0000-0000-%012d", i));
+            copyId(row, rowId);
             chain.add(row);
             prev = hash;
         }
         return chain;
     }
 
-    private static void copyId(AuditLog row, long id) {
+    private static void copyId(AuditLog row, UUID id) {
         try {
             java.lang.reflect.Field f = AuditLog.class.getDeclaredField("id");
             f.setAccessible(true);

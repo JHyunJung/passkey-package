@@ -27,9 +27,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 import javax.sql.DataSource;
+import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,8 +46,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>(① implicit) Application starts, Flyway runs all migrations
  *       including V11 seed of alice@/bob@.</li>
  *   <li>② Alice (ADMIN) logs in via POST /admin/login (form).</li>
- *   <li>③ Alice creates tenant T_A via POST /admin/api/tenants.</li>
- *   <li>④ Alice issues an API Key via POST /admin/api/api-keys.</li>
+ *   <li>③ Alice creates tenant "acme" (slug) via POST /admin/api/tenants.</li>
+ *   <li>④ Alice issues an API Key via POST /admin/api/api-keys (tenantId = UUID from ③).</li>
  *   <li>⑤ The issued prefix is now in api_key (durable admin write).</li>
  *   <li>⑥ GET /admin/api/audit returns 3 rows (ADMIN_LOGIN, TENANT_CREATE,
  *       API_KEY_ISSUE).</li>
@@ -323,9 +325,9 @@ class AdminFlowIT {
         // ② Alice logs in.
         HttpHeaders aliceAuth = loginAs("alice@crosscert.com", "alice-temp-pw");
 
-        // ③ Alice creates tenant T_A.
+        // ③ Alice creates tenant acme (slug-based; Phase 6).
         String tenantBody = """
-                {"id":"T_A","displayName":"Tenant A","rpId":"localhost","rpName":"Tenant A",
+                {"slug":"acme","displayName":"Acme Inc","rpId":"acme.example.com","rpName":"Acme Inc",
                  "allowedOriginsJson":"[\\"http://localhost\\"]",
                  "attestationPolicyJson":"{\\"acceptedFormats\\":[\\"none\\"],\\"requireUserVerification\\":true,\\"mdsRequired\\":false}"}
                 """;
@@ -335,11 +337,11 @@ class AdminFlowIT {
         assertThat(createT.getStatusCode().value())
                 .as("create tenant: %s body=%s", createT.getStatusCode(), createT.getBody())
                 .isEqualTo(201);
+        // Phase 6: tenant UUID is in the response data; use it when issuing the API key.
+        String tenantId = unwrap(createT).get("id").asText();
 
         // ④ Alice issues an API Key.
-        String keyBody = """
-                {"tenantId":"T_A","name":"primary","scopesJson":"[]"}
-                """;
+        String keyBody = "{\"tenantId\":\"" + tenantId + "\",\"name\":\"primary\",\"scopesJson\":\"[]\"}";
         ResponseEntity<JsonNode> issue = rest.exchange(
                 url("/admin/api/api-keys"), HttpMethod.POST,
                 new HttpEntity<>(keyBody, aliceAuth), JsonNode.class);
@@ -348,7 +350,7 @@ class AdminFlowIT {
                 .isEqualTo(201);
         JsonNode issueData = unwrap(issue);
         String fullKey = issueData.get("plainText").asText();
-        long keyId = issueData.get("id").asLong();
+        String keyId = issueData.get("id").asText();   // UUID string (Phase 6)
         String prefix = issueData.get("prefix").asText();
         assertThat(fullKey).startsWith(prefix);
 
@@ -379,7 +381,7 @@ class AdminFlowIT {
                 .as("audit/verify pre-tamper: %s", verifyData)
                 .isTrue();
 
-        // ⑧ Alice revokes the key.
+        // ⑧ Alice revokes the key. keyId is a UUID string (Phase 6).
         // DELETE now returns 200 + ApiResponse envelope (changed in Phase 4 T5).
         ResponseEntity<JsonNode> del = rest.exchange(
                 url("/admin/api/api-keys/" + keyId), HttpMethod.DELETE,
@@ -389,9 +391,11 @@ class AdminFlowIT {
         unwrap(del);
 
         // ⑨ Same key now soft-deleted (revoked_at populated).
+        // api_key.id is RAW(16) — pass byte[] representation of the UUID.
+        byte[] keyIdBytes = uuidToBytes(UUID.fromString(keyId));
         Long revokedCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM APP_OWNER.api_key WHERE id=? AND revoked_at IS NOT NULL",
-                Long.class, keyId);
+                Long.class, keyIdBytes);
         assertThat(revokedCount).isEqualTo(1L);
 
         // ⑩ Bob (VIEWER) — list 200, create 403.
@@ -400,9 +404,15 @@ class AdminFlowIT {
                 url("/admin/api/tenants"), HttpMethod.GET,
                 new HttpEntity<>(bobAuth), String.class);
         assertThat(bobList.getStatusCode().value()).isEqualTo(200);
+        // Use a different slug ("beta") so it doesn't conflict with "acme".
+        String betaTenantBody = """
+                {"slug":"beta","displayName":"Beta Inc","rpId":"beta.example.com","rpName":"Beta Inc",
+                 "allowedOriginsJson":"[\\"http://localhost\\"]",
+                 "attestationPolicyJson":"{\\"acceptedFormats\\":[\\"none\\"],\\"requireUserVerification\\":true,\\"mdsRequired\\":false}"}
+                """;
         ResponseEntity<String> bobCreate = rest.exchange(
                 url("/admin/api/tenants"), HttpMethod.POST,
-                new HttpEntity<>(tenantBody.replace("T_A", "T_B"), bobAuth), String.class);
+                new HttpEntity<>(betaTenantBody, bobAuth), String.class);
         assertThat(bobCreate.getStatusCode().value())
                 .as("VIEWER must be denied tenant create: %s body=%s",
                         bobCreate.getStatusCode(), bobCreate.getBody())
@@ -441,5 +451,16 @@ class AdminFlowIT {
             sb.append(arr.get(i).get("action").asText());
         }
         return sb.append(']').toString();
+    }
+
+    /**
+     * Convert a UUID to the 16-byte big-endian RAW representation used by Oracle.
+     * Required when comparing a UUID PK via JDBC against a RAW(16) column.
+     */
+    private static byte[] uuidToBytes(UUID id) {
+        ByteBuffer bb = ByteBuffer.allocate(16);
+        bb.putLong(id.getMostSignificantBits());
+        bb.putLong(id.getLeastSignificantBits());
+        return bb.array();
     }
 }

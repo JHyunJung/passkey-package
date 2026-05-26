@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,6 +23,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ApiKeyAuthFilterTest {
+
+    private static final UUID TENANT_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID KEY_ID_7  = UUID.fromString("00000000-0000-0000-0000-000000000007");
+    private static final UUID KEY_ID_1  = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID KEY_ID_99 = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final UUID KEY_ID_100 = UUID.fromString("00000000-0000-0000-0000-000000000100");
 
     private ApiKeyLookupService lookup;
     private PasswordEncoder encoder;
@@ -87,7 +94,7 @@ class ApiKeyAuthFilterTest {
         String prefix = "pk_abcd1234";
         String hash = encoder.encode("DIFFERENT_SECRET");
         when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
-                new ApiKeyLookupService.ApiKeyAuthRow(1L, "T_A", hash, null, null)));
+                new ApiKeyLookupService.ApiKeyAuthRow(KEY_ID_1, TENANT_A, hash, null, null)));
 
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/rp/x");
         req.setServletPath("/api/v1/rp/x");
@@ -106,20 +113,20 @@ class ApiKeyAuthFilterTest {
         String prefix = "pk_abcd1234";
         String hash = encoder.encode(secret);
         when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
-                new ApiKeyLookupService.ApiKeyAuthRow(7L, "T_A", hash, null, null)));
+                new ApiKeyLookupService.ApiKeyAuthRow(KEY_ID_7, TENANT_A, hash, null, null)));
 
         MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/rp/x");
         req.setServletPath("/api/v1/rp/x");
         req.addHeader("X-API-Key", fullKey);
         MockHttpServletResponse res = new MockHttpServletResponse();
-        String[] tenantSeenInChain = new String[1];
+        UUID[] tenantSeenInChain = new UUID[1];
         FilterChain chain = (r, s) -> tenantSeenInChain[0] = TenantContextHolder.get();
 
         filter.doFilter(req, res, chain);
 
-        assertThat(tenantSeenInChain[0]).isEqualTo("T_A");
+        assertThat(tenantSeenInChain[0]).isEqualTo(TENANT_A);
         assertThat(TenantContextHolder.get()).isNull();
-        verify(lookup).touchLastUsed(eq(7L), any(Instant.class));
+        verify(lookup).touchLastUsed(eq(KEY_ID_7), any(Instant.class));
     }
 
     @Test
@@ -128,7 +135,7 @@ class ApiKeyAuthFilterTest {
         String prefix = "pk_revoked0";
         when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
                 new ApiKeyLookupService.ApiKeyAuthRow(
-                        99L, "T_A", encoder.encode(secret),
+                        KEY_ID_99, TENANT_A, encoder.encode(secret),
                         /* expiresAt */ null,
                         /* revokedAt */ Instant.now().minusSeconds(60))));
 
@@ -149,7 +156,7 @@ class ApiKeyAuthFilterTest {
         String prefix = "pk_expired0";
         when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
                 new ApiKeyLookupService.ApiKeyAuthRow(
-                        100L, "T_A", encoder.encode(secret),
+                        KEY_ID_100, TENANT_A, encoder.encode(secret),
                         /* expiresAt */ Instant.now().minusSeconds(60),
                         /* revokedAt */ null)));
 

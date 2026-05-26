@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Issues a PublicKeyCredentialRequestOptions and stashes the challenge
@@ -57,12 +58,13 @@ public class AuthenticationStartService {
 
     @Transactional(readOnly = true)
     public AuthenticationStartResponse start(AuthenticationStartRequest req) {
-        String tenantId = TenantContextHolder.get();
-        if (tenantId == null) {
+        UUID tenantUuid = TenantContextHolder.get();
+        if (tenantUuid == null) {
             throw new IllegalStateException(
                     "authentication/start invoked without tenant context");
         }
-        Tenant tenant = tenants.findById(tenantId)
+        String tenantId = tenantUuid.toString();
+        Tenant tenant = tenants.findById(tenantUuid)
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + tenantId + " not found"));
 

@@ -3,5 +3,10 @@ package com.crosscert.passkey.core.repository;
 import com.crosscert.passkey.core.entity.Tenant;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface TenantRepository extends JpaRepository<Tenant, String> {
+import java.util.Optional;
+import java.util.UUID;
+
+public interface TenantRepository extends JpaRepository<Tenant, UUID> {
+    Optional<Tenant> findBySlug(String slug);
+    boolean existsBySlug(String slug);
 }

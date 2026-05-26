@@ -20,6 +20,8 @@ import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -82,6 +84,10 @@ class VpdIsolationIT {
     // connect as SYS-AS-SYSDBA with the password we know.
     private static final String SYS_PASSWORD = "app_owner_pw";
 
+    // Phase 6: tenant UUIDs are @UuidGenerator-assigned on save.
+    // Captured in @BeforeEach into savedTenantAId / savedTenantBId;
+    // the static constants below are removed in favour of instance fields.
+
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE =
             new OracleContainer(ORACLE_IMAGE)
@@ -131,22 +137,30 @@ class VpdIsolationIT {
     @Autowired
     RuntimeDsHelper runtime;
 
+    // Actual tenant UUIDs as saved by JPA (@UuidGenerator assigns on save).
+    // Captured in @BeforeEach so RuntimeDsHelper queries and the VPD
+    // assertions use the same UUID that the DB row carries.
+    private UUID savedTenantAId;
+    private UUID savedTenantBId;
+
     @BeforeEach
     void seed() {
         // APP_ADMIN holds EXEMPT ACCESS POLICY so it can read/write any
         // tenant's row directly through JPA. We do NOT set APP_CTX here —
         // setting it would prove nothing for the admin bypass scenario.
         TenantContextHolder.clear();
-        tenants.save(new Tenant("T_A", "Tenant A"));
-        tenants.save(new Tenant("T_B", "Tenant B"));
+        Tenant tenantA = tenants.save(new Tenant("T_A", "Tenant A"));
+        Tenant tenantB = tenants.save(new Tenant("T_B", "Tenant B"));
+        savedTenantAId = tenantA.getId();
+        savedTenantBId = tenantB.getId();
         credentials.save(new Credential(
-                "T_A",
+                savedTenantAId,
                 "user_a".getBytes(),
                 "cred_a".getBytes(),
                 "pk_a".getBytes(),
                 null));
         credentials.save(new Credential(
-                "T_B",
+                savedTenantBId,
                 "user_b".getBytes(),
                 "cred_b".getBytes(),
                 "pk_b".getBytes(),
@@ -172,21 +186,25 @@ class VpdIsolationIT {
     /** Scenario 2: APP_RUNTIME with APP_CTX=T_A → only T_A row. */
     @Test
     void runtimeWithTenantASeesOnlyTenantA() {
-        var rows = runtime.selectAllCredentialsAsRuntime("T_A");
+        // Oracle RAWTOHEX returns uppercase hex.
+        String expectedHex = savedTenantAId.toString().replace("-", "").toUpperCase();
+        var rows = runtime.selectAllCredentialsAsRuntime(savedTenantAId);
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)[1])
                 .as("VPD predicate must restrict APP_RUNTIME to APP_CTX tenant")
-                .isEqualTo("T_A");
+                .isEqualTo(expectedHex);
     }
 
     /** Scenario 3: APP_RUNTIME with APP_CTX=T_B → only T_B row. */
     @Test
     void runtimeWithTenantBSeesOnlyTenantB() {
-        var rows = runtime.selectAllCredentialsAsRuntime("T_B");
+        // Oracle RAWTOHEX returns uppercase hex.
+        String expectedHex = savedTenantBId.toString().replace("-", "").toUpperCase();
+        var rows = runtime.selectAllCredentialsAsRuntime(savedTenantBId);
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)[1])
                 .as("VPD predicate must restrict APP_RUNTIME to APP_CTX tenant")
-                .isEqualTo("T_B");
+                .isEqualTo(expectedHex);
     }
 
     /** Scenario 4: APP_RUNTIME with no APP_CTX → safe default (zero rows). */
@@ -215,8 +233,11 @@ class VpdIsolationIT {
         // ORA-28115 would fire OUTSIDE the assertThatThrownBy lambda
         // and the test would either pass for the wrong reason or fail
         // with a TransactionSystemException wrapping the real cause.
+        // Session = tenant A; row tenant_id = tenant B (cross-tenant).
+        // HEXTORAW in RuntimeDsHelper accepts uppercase hex.
+        String tenantBHex = savedTenantBId.toString().replace("-", "").toUpperCase();
         assertThatThrownBy(() -> runtime.insertCredentialAs(
-                "T_A", "T_B", "user_x", "cred_x", "pk_x"))
+                savedTenantAId, tenantBHex, "user_x", "cred_x", "pk_x"))
                 .as("VPD update_check=TRUE must reject cross-tenant INSERT")
                 // Match the specific Oracle code for "policy with check
                 // option violation" so the test cannot pass on an

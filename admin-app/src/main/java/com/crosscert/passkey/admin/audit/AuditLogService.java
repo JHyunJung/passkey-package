@@ -54,8 +54,9 @@ import java.util.Map;
  * values for controlled fields ({@code action}, {@code target_type},
  * {@code target_id}) never contain {@code |} by convention, so pipe
  * delimiters unambiguously separate fields.  {@code actorEmail} is stored but
- * intentionally excluded from the hash input — {@code actorId} (numeric,
- * stable) is the trusted identity anchor; email can change.
+ * intentionally excluded from the hash input — {@code actorId} (UUID,
+ * stable) is the trusted identity anchor; email can change. Null actor
+ * (system/scheduler entries) collapses to empty string.
  *
  * <h2>Timestamp precision</h2>
  * <p>The {@code Instant} is truncated to microseconds before hashing and
@@ -156,7 +157,9 @@ public class AuditLogService {
         StringBuilder input = new StringBuilder();
         input.append(prevHash == null ? "" : hex(prevHash));
         input.append('|');
-        input.append(req.actorId());
+        // Null actorId (system/unknown actor) collapses to empty string,
+        // matching the null-collapse convention for targetType/targetId.
+        input.append(req.actorId() == null ? "" : req.actorId().toString());
         input.append('|');
         input.append(req.action());
         input.append('|');

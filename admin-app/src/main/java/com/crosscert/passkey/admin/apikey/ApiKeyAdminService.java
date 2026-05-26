@@ -16,6 +16,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class ApiKeyAdminService {
@@ -52,33 +53,33 @@ public class ApiKeyAdminService {
 
     @Transactional
     public ApiKeyAdminDto.ApiKeyCreateResponse issue(ApiKeyAdminDto.ApiKeyCreateRequest req,
-                                                     long actorId, String actorEmail) {
+                                                     UUID actorId, String actorEmail) {
         String prefix = generateUniquePrefix();
         String secret = b64url(SECRET_RANDOM_BYTES);
         String hash = encoder.encode(secret);
 
-        ApiKey key = new ApiKey(req.tenantId(), prefix, hash, req.name(), req.scopesJson());
+        ApiKey key = new ApiKey(UUID.fromString(req.tenantId()), prefix, hash, req.name(), req.scopesJson());
         // expiresAt is not set by Phase 2 (entity has no setter). Phase 2
         // ignores ApiKeyCreateRequest.expiresAt. If a future task wants
         // expiry support, add a setter on ApiKey + wire here.
         ApiKey saved = repo.save(key);
 
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("id", saved.getId());
+        payload.put("id", saved.getId().toString());
         payload.put("prefix", prefix);
         payload.put("tenantId", req.tenantId());
         payload.put("name", req.name());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "API_KEY_ISSUE",
-                "API_KEY", String.valueOf(saved.getId()), payload));
+                "API_KEY", saved.getId().toString(), payload));
 
         return new ApiKeyAdminDto.ApiKeyCreateResponse(
                 saved.getId(), prefix, prefix + secret, saved.getName(),
-                saved.getTenantId(), saved.getCreatedAt(), saved.getExpiresAt());
+                saved.getTenantId().toString(), saved.getCreatedAt(), saved.getExpiresAt());
     }
 
     @Transactional
-    public void revoke(long id, long actorId, String actorEmail) {
+    public void revoke(UUID id, UUID actorId, String actorEmail) {
         ApiKey k = repo.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.API_KEY_NOT_FOUND));
         k.revoke(clock.instant());
@@ -86,10 +87,10 @@ public class ApiKeyAdminService {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("prefix", k.getKeyPrefix());
-        payload.put("tenantId", k.getTenantId());
+        payload.put("tenantId", k.getTenantId().toString());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "API_KEY_REVOKE",
-                "API_KEY", String.valueOf(id), payload));
+                "API_KEY", id.toString(), payload));
     }
 
     private String generateUniquePrefix() {

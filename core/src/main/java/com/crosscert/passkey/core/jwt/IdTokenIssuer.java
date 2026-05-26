@@ -9,6 +9,7 @@ import com.nimbusds.jwt.SignedJWT;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.ByteBuffer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,6 +17,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 public class IdTokenIssuer {
@@ -37,7 +39,7 @@ public class IdTokenIssuer {
         this.clock = clock;
     }
 
-    public String issue(String tenantId, byte[] userHandle, Long credentialId, byte[] aaguid) {
+    public String issue(String tenantId, byte[] userHandle, UUID credentialId, byte[] aaguid) {
         Instant now = clock.instant();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .issuer(issuerBase + "/" + tenantId)
@@ -48,7 +50,7 @@ public class IdTokenIssuer {
                 .claim("amr", List.of("webauthn"))
                 .claim("cred_id",
                         Base64.getUrlEncoder().withoutPadding()
-                                .encodeToString(longToBytes(credentialId)));
+                                .encodeToString(uuidToBytes(credentialId)));
         if (aaguid != null) {
             claims.claim("aaguid", HexFormat.of().formatHex(aaguid));
         }
@@ -65,10 +67,10 @@ public class IdTokenIssuer {
         return jwt.serialize();
     }
 
-    private static byte[] longToBytes(long v) {
-        return new byte[]{
-                (byte)(v >>> 56), (byte)(v >>> 48), (byte)(v >>> 40), (byte)(v >>> 32),
-                (byte)(v >>> 24), (byte)(v >>> 16), (byte)(v >>> 8),  (byte) v
-        };
+    private static byte[] uuidToBytes(UUID uuid) {
+        ByteBuffer buf = ByteBuffer.wrap(new byte[16]);
+        buf.putLong(uuid.getMostSignificantBits());
+        buf.putLong(uuid.getLeastSignificantBits());
+        return buf.array();
     }
 }

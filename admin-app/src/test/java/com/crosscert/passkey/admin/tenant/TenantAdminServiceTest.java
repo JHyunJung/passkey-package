@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,16 +36,16 @@ class TenantAdminServiceTest {
 
     @Test
     void createPersistsTenantAndAppendsAudit() {
-        when(repo.existsById("T_A")).thenReturn(false);
+        when(repo.existsBySlug("T_A")).thenReturn(false);
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 "[\"http://localhost\"]",
                 "{\"acceptedFormats\":[\"none\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
 
-        TenantAdminDto.TenantView view = service.create(req, 7L, "alice@example.com");
+        TenantAdminDto.TenantView view = service.create(req, UUID.randomUUID(), "alice@example.com");
 
-        assertThat(view.id()).isEqualTo("T_A");
+        assertThat(view.slug()).isEqualTo("T_A");
         ArgumentCaptor<Tenant> tenantCaptor = ArgumentCaptor.forClass(Tenant.class);
         verify(repo).save(tenantCaptor.capture());
         assertThat(tenantCaptor.getValue().getRpId()).isEqualTo("localhost");
@@ -56,13 +57,13 @@ class TenantAdminServiceTest {
     }
 
     @Test
-    void createRejectsDuplicateId() {
-        when(repo.existsById("T_A")).thenReturn(true);
+    void createRejectsDuplicateSlug() {
+        when(repo.existsBySlug("T_A")).thenReturn(true);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 "[\"http://localhost\"]",
                 "{\"acceptedFormats\":[\"none\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
-        assertThatThrownBy(() -> service.create(req, 7L, "alice@example.com"))
+        assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
                         .isEqualTo(ErrorCode.TENANT_DUPLICATE));
@@ -70,24 +71,24 @@ class TenantAdminServiceTest {
 
     @Test
     void createRejectsMalformedOriginsJson() {
-        when(repo.existsById("T_A")).thenReturn(false);
+        when(repo.existsBySlug("T_A")).thenReturn(false);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 "not json",
                 "{\"acceptedFormats\":[\"none\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
-        assertThatThrownBy(() -> service.create(req, 7L, "alice@example.com"))
+        assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("allowed_origins JSON invalid");
     }
 
     @Test
     void createRejectsMalformedPolicyJson() {
-        when(repo.existsById("T_A")).thenReturn(false);
+        when(repo.existsBySlug("T_A")).thenReturn(false);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 "[\"http://localhost\"]",
                 "not json");
-        assertThatThrownBy(() -> service.create(req, 7L, "alice@example.com"))
+        assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("attestation_policy JSON invalid");
     }

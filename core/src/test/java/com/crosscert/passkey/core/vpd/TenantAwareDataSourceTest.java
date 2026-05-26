@@ -8,7 +8,9 @@ import javax.sql.DataSource;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -22,9 +24,19 @@ import static org.mockito.Mockito.when;
 
 class TenantAwareDataSourceTest {
 
+    private static final UUID TENANT_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final String TENANT_A_HEX = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; // 32-char no-dash
+
     @AfterEach
     void cleanup() {
         TenantContextHolder.clear();
+    }
+
+    @Test
+    void toHexProduces32CharNoDashString() {
+        // UUID has 32 hex digits and 4 dashes = 36 chars. toHex strips dashes → 32.
+        String hex = TenantAwareDataSource.toHex(TENANT_A);
+        assertThat(hex).hasSize(32).isEqualTo(TENANT_A_HEX);
     }
 
     @Test
@@ -36,7 +48,7 @@ class TenantAwareDataSourceTest {
         DataSource delegate = mock(DataSource.class);
         when(delegate.getConnection()).thenReturn(underlying);
 
-        TenantContextHolder.set("T_A");
+        TenantContextHolder.set(TENANT_A);
         TenantAwareDataSource ds = new TenantAwareDataSource(delegate);
         Connection conn = ds.getConnection();
 
@@ -46,7 +58,8 @@ class TenantAwareDataSourceTest {
         InOrder order = inOrder(underlying);
         order.verify(underlying).prepareCall(contains("clear_tenant"));
         order.verify(underlying).prepareCall(contains("set_tenant"));
-        verify(cs).setString(eq(1), eq("T_A"));
+        // UUID is passed as 32-char hex (no dashes) for HEXTORAW compatibility.
+        verify(cs).setString(eq(1), eq(TENANT_A_HEX));
         verify(cs, times(2)).execute(); // one clear + one set
         conn.close();
     }
@@ -114,7 +127,7 @@ class TenantAwareDataSourceTest {
         DataSource delegate = mock(DataSource.class);
         when(delegate.getConnection()).thenReturn(underlying);
 
-        TenantContextHolder.set("T_A");
+        TenantContextHolder.set(TENANT_A);
         TenantAwareDataSource ds = new TenantAwareDataSource(delegate);
 
         assertThatThrownBy(ds::getConnection)
@@ -137,7 +150,7 @@ class TenantAwareDataSourceTest {
         DataSource delegate = mock(DataSource.class);
         when(delegate.getConnection()).thenReturn(underlying);
 
-        TenantContextHolder.set("T_A");
+        TenantContextHolder.set(TENANT_A);
         TenantAwareDataSource ds = new TenantAwareDataSource(delegate);
 
         assertThatThrownBy(ds::getConnection)
