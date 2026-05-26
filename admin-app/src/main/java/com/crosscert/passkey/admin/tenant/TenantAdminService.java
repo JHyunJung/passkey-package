@@ -2,6 +2,8 @@ package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,15 +39,15 @@ public class TenantAdminService {
     @Transactional(readOnly = true)
     public TenantAdminDto.TenantView get(String id) {
         Tenant t = tenants.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("tenant not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
         return TenantAdminDto.TenantView.from(t);
     }
 
     @Transactional
     public TenantAdminDto.TenantView create(TenantAdminDto.TenantCreateRequest req,
                                             long actorId, String actorEmail) {
-        if (tenants.findById(req.id()).isPresent()) {
-            throw new IllegalArgumentException("tenant id already exists");
+        if (tenants.existsById(req.id())) {
+            throw new BusinessException(ErrorCode.TENANT_DUPLICATE);
         }
         validateJson(req.allowedOriginsJson(), "allowed_origins");
         validateJson(req.attestationPolicyJson(), "attestation_policy");

@@ -1,13 +1,13 @@
 package com.crosscert.passkey.admin.tenant;
 
+import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.URI;
 import java.util.List;
 
 @RestController
@@ -24,22 +24,23 @@ public class TenantAdminController {
     }
 
     @GetMapping
-    public List<TenantAdminDto.TenantView> list() {
-        return service.list();
+    public ApiResponse<List<TenantAdminDto.TenantView>> list() {
+        return ApiResponse.ok(service.list());
     }
 
     @GetMapping("/{id}")
-    public TenantAdminDto.TenantView get(@PathVariable String id) {
-        return service.get(id);
+    public ApiResponse<TenantAdminDto.TenantView> get(@PathVariable String id) {
+        return ApiResponse.ok(service.get(id));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ResponseEntity<TenantAdminDto.TenantView> create(
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<TenantAdminDto.TenantView> create(
             @Valid @RequestBody TenantAdminDto.TenantCreateRequest req,
             Authentication auth) {
         long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
         var view = service.create(req, actorId, auth.getName());
-        return ResponseEntity.created(URI.create("/admin/api/tenants/" + view.id())).body(view);
+        return ApiResponse.ok("Tenant created", view);
     }
 }

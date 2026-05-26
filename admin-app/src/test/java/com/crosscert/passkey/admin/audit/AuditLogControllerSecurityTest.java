@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -82,7 +83,10 @@ class AuditLogControllerSecurityTest {
     void viewerCanList() throws Exception {
         when(repo.search(any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.<com.crosscert.passkey.core.entity.AuditLog>of()));
-        mvc.perform(get("/admin/api/audit")).andExpect(status().isOk());
+        mvc.perform(get("/admin/api/audit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
@@ -97,6 +101,9 @@ class AuditLogControllerSecurityTest {
         // NOTE: T9 renamed the static factory from ok() to valid() because
         // Java records auto-generate an accessor method named ok() for the ok field.
         when(verifier.verify()).thenReturn(AuditChainVerifier.Result.valid());
-        mvc.perform(get("/admin/api/audit/verify")).andExpect(status().isOk());
+        mvc.perform(get("/admin/api/audit/verify"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.ok").exists());
     }
 }

@@ -19,9 +19,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -88,7 +90,12 @@ class TenantAdminControllerSecurityTest {
     @Test
     @WithMockUser(roles = "VIEWER")
     void viewerCanGet() throws Exception {
-        mvc.perform(get("/admin/api/tenants")).andExpect(status().isOk());
+        when(service.list()).thenReturn(java.util.List.of());
+        mvc.perform(get("/admin/api/tenants"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.code").value("OK"))
+            .andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
@@ -104,9 +111,9 @@ class TenantAdminControllerSecurityTest {
     @Test
     @WithMockUser(username = "alice@example.com", roles = "ADMIN")
     void adminCanPost() throws Exception {
-        org.mockito.Mockito.when(admins.findByEmail(anyString()))
+        when(admins.findByEmail(anyString()))
                 .thenReturn(java.util.Optional.of(adminUserWithId(7L)));
-        org.mockito.Mockito.when(service.create(any(), anyLong(), anyString()))
+        when(service.create(any(), anyLong(), anyString()))
                 .thenReturn(new TenantAdminDto.TenantView(
                         "T_A","Tenant A","active","localhost","Tenant A",
                         "[]", "{}", java.time.Instant.now(), java.time.Instant.now()));
@@ -114,7 +121,23 @@ class TenantAdminControllerSecurityTest {
                 .with(csrf())
                 .contentType("application/json")
                 .content(BODY))
-            .andExpect(status().isCreated());
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.message").value("Tenant created"))
+            .andExpect(jsonPath("$.data.id").value("T_A"));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void getReturnsApiErrorWhenTenantNotFound() throws Exception {
+        when(service.get("missing"))
+            .thenThrow(new com.crosscert.passkey.core.api.BusinessException(
+                com.crosscert.passkey.core.api.ErrorCode.TENANT_NOT_FOUND));
+        mvc.perform(get("/admin/api/tenants/missing"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("T001"))
+            .andExpect(jsonPath("$.error.errorCode").value("T001"));
     }
 
     private static com.crosscert.passkey.core.entity.AdminUser adminUserWithId(long id) {

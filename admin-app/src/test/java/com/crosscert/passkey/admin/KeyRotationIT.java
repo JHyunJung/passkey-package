@@ -38,6 +38,7 @@ import java.time.Instant;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Phase 3 acceptance gate #2 (T24).
@@ -50,8 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>expirationJobRevokesAfterGrace — ROTATED key is revoked once grace
  *       elapses; JWKS stops publishing it.</li>
  *   <li>rotateRejectsConcurrentWithConflict — pre-INSERTed lease causes
- *       rotate() to throw RotationConflictException (subtype of
- *       IllegalStateException).</li>
+ *       rotate() to throw BusinessException(KEY_ROTATION_CONFLICT).</li>
  * </ol>
  *
  * <p>Both @Scheduled jobs (MdsSyncJob + KeyExpirationJob) have their
@@ -207,12 +207,10 @@ class KeyRotationIT {
                 "INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                 "VALUES ('key-rotation', 'somebody-else', SYSTIMESTAMP + INTERVAL '5' MINUTE)");
 
-        try {
-            rotation.rotate(0L, "(test)");
-            assertThat(false).as("expected IllegalStateException (RotationConflictException)").isTrue();
-        } catch (IllegalStateException e) {
-            assertThat(e).hasMessageContaining("another rotation in progress");
-        }
+        assertThatThrownBy(() -> rotation.rotate(0L, "(test)"))
+                .isInstanceOf(com.crosscert.passkey.core.api.BusinessException.class)
+                .extracting(e -> ((com.crosscert.passkey.core.api.BusinessException) e).getErrorCode())
+                .isEqualTo(com.crosscert.passkey.core.api.ErrorCode.KEY_ROTATION_CONFLICT);
     }
 
     // ----------------------------------------------------------------

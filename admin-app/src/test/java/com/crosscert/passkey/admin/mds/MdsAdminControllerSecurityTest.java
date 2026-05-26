@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -85,8 +86,11 @@ class MdsAdminControllerSecurityTest {
     void viewerCanGetStatus() throws Exception {
         when(jdbc.queryForObject(anyString(),
                 any(org.springframework.jdbc.core.RowMapper.class)))
-                .thenReturn(java.util.Map.of("version", 0L));
-        mvc.perform(get("/admin/api/mds/status")).andExpect(status().isOk());
+                .thenReturn(new MdsStatusView(0L, null, null));
+        mvc.perform(get("/admin/api/mds/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.version").exists());
     }
 
     @Test
@@ -102,6 +106,8 @@ class MdsAdminControllerSecurityTest {
         when(scheduler.runOnce())
                 .thenReturn(MdsSchedulerService.SyncResult.synced(42L));
         mvc.perform(post("/admin/api/mds/sync").with(csrf()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").exists());
     }
 }

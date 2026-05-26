@@ -560,6 +560,18 @@ class Fido2EndToEndIT {
     // Endpoint helpers (typed JSON in/out)
     // ------------------------------------------------------------
 
+    /**
+     * Unwraps the {@code data} node from an ApiResponse envelope.
+     * Fails fast with a descriptive message if {@code success} is false.
+     */
+    private JsonNode unwrap(String rawBody) throws Exception {
+        JsonNode tree = mapper.readTree(rawBody);
+        if (!tree.path("success").asBoolean()) {
+            throw new AssertionError("API call failed: " + rawBody);
+        }
+        return tree.path("data");
+    }
+
     private JsonNode registerStart(String tenantId, String prefix, String secret,
                                    String userHandleB64Url) throws Exception {
         ObjectNode body = mapper.createObjectNode();
@@ -577,7 +589,7 @@ class Fido2EndToEndIT {
                     "registration/start failed status=" + res.getStatusCodeValue()
                             + " body=" + res.getBody());
         }
-        return mapper.readTree(res.getBody());
+        return unwrap(res.getBody());
     }
 
     private JsonNode registerFinish(String prefix, String secret,
@@ -596,7 +608,7 @@ class Fido2EndToEndIT {
                     "registration/finish failed status=" + res.getStatusCodeValue()
                             + " body=" + res.getBody());
         }
-        return mapper.readTree(res.getBody());
+        return unwrap(res.getBody());
     }
 
     private JsonNode authenticationStart(String prefix, String secret,
@@ -616,7 +628,7 @@ class Fido2EndToEndIT {
                     "authentication/start failed status=" + res.getStatusCodeValue()
                             + " body=" + res.getBody());
         }
-        return mapper.readTree(res.getBody());
+        return unwrap(res.getBody());
     }
 
     private JsonNode authenticationFinish(String prefix, String secret,
@@ -635,7 +647,7 @@ class Fido2EndToEndIT {
                     "authentication/finish failed status=" + res.getStatusCodeValue()
                             + " body=" + res.getBody());
         }
-        return mapper.readTree(res.getBody());
+        return unwrap(res.getBody());
     }
 
     private JsonNode fetchJwks() throws Exception {

@@ -93,3 +93,39 @@ export interface RotateResponse {
   oldKid: string;
   newKid: string;
 }
+
+// Phase 4 — server returns every endpoint (except /.well-known/jwks.json)
+// wrapped in this envelope. client.ts strips it so page code keeps using
+// the inner typed payload directly. ApiError carries the error envelope
+// when success=false so try/catch in pages can branch on code + traceId.
+export interface FieldError {
+  field: string;
+  rejectedValue: unknown;
+  reason: string;
+}
+
+export interface ApiEnvelope<T> {
+  success: boolean;
+  code: string;
+  message: string;
+  data?: T;
+  error?: {
+    errorCode: string;
+    fieldErrors?: FieldError[];
+  };
+  traceId?: string;
+  timestamp?: string;
+}
+
+export class ApiError extends Error {
+  constructor(
+    public readonly httpStatus: number,
+    public readonly code: string,
+    public readonly serverMessage: string,
+    public readonly fieldErrors?: FieldError[],
+    public readonly traceId?: string
+  ) {
+    super(`[${code}] ${serverMessage}`);
+    this.name = 'ApiError';
+  }
+}

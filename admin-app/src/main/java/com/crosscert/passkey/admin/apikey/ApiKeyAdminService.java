@@ -2,6 +2,8 @@ package com.crosscert.passkey.admin.apikey;
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.ApiKey;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -78,7 +80,7 @@ public class ApiKeyAdminService {
     @Transactional
     public void revoke(long id, long actorId, String actorEmail) {
         ApiKey k = repo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("api key not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.API_KEY_NOT_FOUND));
         k.revoke(clock.instant());
         repo.save(k);
 

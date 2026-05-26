@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import org.springframework.data.domain.Page;
@@ -23,21 +24,21 @@ public class AuditLogController {
     }
 
     @GetMapping
-    public List<AuditLogView> list(@RequestParam(required = false) String action,
-                                   @RequestParam(required = false) Long actorId,
-                                   @RequestParam(required = false) Instant from,
-                                   @RequestParam(required = false) Instant to,
-                                   @RequestParam(defaultValue = "0") int page,
-                                   @RequestParam(defaultValue = "50") int size) {
+    public ApiResponse<List<AuditLogView>> list(@RequestParam(required = false) String action,
+                                                @RequestParam(required = false) Long actorId,
+                                                @RequestParam(required = false) Instant from,
+                                                @RequestParam(required = false) Instant to,
+                                                @RequestParam(defaultValue = "0") int page,
+                                                @RequestParam(defaultValue = "50") int size) {
         Page<AuditLog> p = repo.search(action, actorId, from, to,
                 PageRequest.of(page, Math.min(size, 200)));
-        return p.getContent().stream().map(AuditLogView::from).toList();
+        return ApiResponse.ok(p.getContent().stream().map(AuditLogView::from).toList());
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/verify")
-    public AuditChainVerifier.Result verify() {
-        return verifier.verify();
+    public ApiResponse<AuditChainVerifier.Result> verify() {
+        return ApiResponse.ok(verifier.verify());
     }
 
     public record AuditLogView(

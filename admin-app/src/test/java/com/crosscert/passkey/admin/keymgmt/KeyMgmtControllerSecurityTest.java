@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -89,7 +90,10 @@ class KeyMgmtControllerSecurityTest {
     @WithMockUser(roles = "VIEWER")
     void viewerCanList() throws Exception {
         when(repo.findAll()).thenReturn(java.util.List.of());
-        mvc.perform(get("/admin/api/keys")).andExpect(status().isOk());
+        mvc.perform(get("/admin/api/keys"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.keys").isArray());
     }
 
     @Test
@@ -107,7 +111,10 @@ class KeyMgmtControllerSecurityTest {
         when(rotation.rotate(anyLong(), anyString()))
                 .thenReturn(new KeyRotationService.RotateResult("old-kid", "new-kid"));
         mvc.perform(post("/admin/api/keys/rotate").with(csrf()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.oldKid").value("old-kid"))
+                .andExpect(jsonPath("$.data.newKid").value("new-kid"));
     }
 
     @Test
@@ -116,9 +123,13 @@ class KeyMgmtControllerSecurityTest {
         when(admins.findByEmail(anyString())).thenReturn(
                 java.util.Optional.of(adminUserWithId(7L)));
         when(rotation.rotate(anyLong(), anyString()))
-                .thenThrow(new RotationConflictException("another rotation in progress"));
+                .thenThrow(new com.crosscert.passkey.core.api.BusinessException(
+                        com.crosscert.passkey.core.api.ErrorCode.KEY_ROTATION_CONFLICT));
         mvc.perform(post("/admin/api/keys/rotate").with(csrf()))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("S001"))
+                .andExpect(jsonPath("$.error.errorCode").value("S001"));
     }
 
     private static com.crosscert.passkey.core.entity.AdminUser adminUserWithId(long id) {

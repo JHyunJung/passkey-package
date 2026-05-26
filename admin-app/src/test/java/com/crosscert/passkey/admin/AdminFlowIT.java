@@ -170,6 +170,27 @@ class AdminFlowIT {
 
     private String url(String path) { return "http://localhost:" + port + path; }
 
+    // ------------------------------------------------------------
+    // Envelope helper
+    // ------------------------------------------------------------
+
+    /**
+     * Unwrap an ApiResponse envelope and return the data node.
+     * Fails fast with the server-side code/message if success=false.
+     */
+    private JsonNode unwrap(ResponseEntity<JsonNode> res) {
+        JsonNode env = res.getBody();
+        if (env == null) {
+            throw new AssertionError("API call returned empty body (status=" + res.getStatusCode() + ")");
+        }
+        if (!env.path("success").asBoolean()) {
+            throw new AssertionError("API call failed (status=" + res.getStatusCode() +
+                                     ", code=" + env.path("code").asText() +
+                                     ", message=" + env.path("message").asText() + ")");
+        }
+        return env.path("data");
+    }
+
     private static synchronized JdbcTemplate ownerJdbc() {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
@@ -325,9 +346,10 @@ class AdminFlowIT {
         assertThat(issue.getStatusCode().value())
                 .as("issue API key: %s body=%s", issue.getStatusCode(), issue.getBody())
                 .isEqualTo(201);
-        String fullKey = issue.getBody().get("plainText").asText();
-        long keyId = issue.getBody().get("id").asLong();
-        String prefix = issue.getBody().get("prefix").asText();
+        JsonNode issueData = unwrap(issue);
+        String fullKey = issueData.get("plainText").asText();
+        long keyId = issueData.get("id").asLong();
+        String prefix = issueData.get("prefix").asText();
         assertThat(fullKey).startsWith(prefix);
 
         // ⑤ The issued prefix is registered (durable admin write).
@@ -341,9 +363,10 @@ class AdminFlowIT {
                 url("/admin/api/audit"), HttpMethod.GET,
                 new HttpEntity<>(aliceAuth), JsonNode.class);
         assertThat(audit.getStatusCode().value()).isEqualTo(200);
-        assertThat(audit.getBody().isArray()).isTrue();
-        assertThat(audit.getBody().size())
-                .as("audit row count: actions=%s", actionsOf(audit.getBody()))
+        JsonNode auditData = unwrap(audit);
+        assertThat(auditData.isArray()).isTrue();
+        assertThat(auditData.size())
+                .as("audit row count: actions=%s", actionsOf(auditData))
                 .isEqualTo(3);
 
         // ⑦ Chain verify is OK at this point.
@@ -351,15 +374,19 @@ class AdminFlowIT {
                 url("/admin/api/audit/verify"), HttpMethod.GET,
                 new HttpEntity<>(aliceAuth), JsonNode.class);
         assertThat(verify.getStatusCode().value()).isEqualTo(200);
-        assertThat(verify.getBody().get("ok").asBoolean())
-                .as("audit/verify pre-tamper: %s", verify.getBody())
+        JsonNode verifyData = unwrap(verify);
+        assertThat(verifyData.get("ok").asBoolean())
+                .as("audit/verify pre-tamper: %s", verifyData)
                 .isTrue();
 
         // ⑧ Alice revokes the key.
-        ResponseEntity<String> del = rest.exchange(
+        // DELETE now returns 200 + ApiResponse envelope (changed in Phase 4 T5).
+        ResponseEntity<JsonNode> del = rest.exchange(
                 url("/admin/api/api-keys/" + keyId), HttpMethod.DELETE,
-                new HttpEntity<>(aliceAuth), String.class);
-        assertThat(del.getStatusCode().value()).isEqualTo(204);
+                new HttpEntity<>(aliceAuth), JsonNode.class);
+        assertThat(del.getStatusCode().value()).isEqualTo(200);
+        // Verify envelope is well-formed (success=true); data is null/missing for void payload.
+        unwrap(del);
 
         // ⑨ Same key now soft-deleted (revoked_at populated).
         Long revokedCount = jdbc.queryForObject(
@@ -399,10 +426,11 @@ class AdminFlowIT {
                 url("/admin/api/audit/verify"), HttpMethod.GET,
                 new HttpEntity<>(aliceAuth), JsonNode.class);
         assertThat(verifyBroken.getStatusCode().value()).isEqualTo(200);
-        assertThat(verifyBroken.getBody().get("ok").asBoolean())
-                .as("audit/verify post-tamper: %s", verifyBroken.getBody())
+        JsonNode verifyBrokenData = unwrap(verifyBroken);
+        assertThat(verifyBrokenData.get("ok").asBoolean())
+                .as("audit/verify post-tamper: %s", verifyBrokenData)
                 .isFalse();
-        assertThat(verifyBroken.getBody().get("brokenAt").isNull()).isFalse();
+        assertThat(verifyBrokenData.get("brokenAt").isNull()).isFalse();
     }
 
     /** For richer audit-count failure messages. */

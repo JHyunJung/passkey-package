@@ -6,6 +6,7 @@ import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationStartRequest;
 import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationStartResponse;
 import com.crosscert.passkey.app.fido2.authentication.AuthenticationFinishService;
 import com.crosscert.passkey.app.fido2.authentication.AuthenticationStartService;
+import com.crosscert.passkey.core.api.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,12 +27,14 @@ public class AuthenticationController {
     }
 
     @PostMapping("/start")
-    public AuthenticationStartResponse start(@Valid @RequestBody AuthenticationStartRequest req) {
-        return start.start(req);
+    public ApiResponse<AuthenticationStartResponse> start(
+            @Valid @RequestBody AuthenticationStartRequest req) {
+        return ApiResponse.ok(start.start(req));
     }
 
     @PostMapping("/finish")
-    public AuthenticationFinishResponse finish(@Valid @RequestBody AuthenticationFinishRequest req) {
-        return finish.finish(req);
+    public ApiResponse<AuthenticationFinishResponse> finish(
+            @Valid @RequestBody AuthenticationFinishRequest req) {
+        return ApiResponse.ok(finish.finish(req));
     }
 }

@@ -1,3 +1,6 @@
+import type { ApiEnvelope } from './types';
+import { ApiError } from './types';
+
 function getCookie(name: string): string | null {
   const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
   return m ? decodeURIComponent(m[1]) : null;
@@ -18,14 +21,30 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
   if (res.status === 401) {
     window.location.href = '/admin/login';
-    throw new Error('unauthorized');
+    throw new ApiError(401, 'A001', 'Authentication required');
   }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
-  }
+  // 204 historically meant "void success"; Phase 4 admin DELETE returns 200
+  // with an empty-data envelope, but keep the 204 short-circuit so any
+  // non-envelope responses (legacy or static) still work.
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+
+  let envelope: ApiEnvelope<T>;
+  try {
+    envelope = (await res.json()) as ApiEnvelope<T>;
+  } catch {
+    throw new ApiError(res.status, 'C999', `Non-JSON response (status ${res.status})`);
+  }
+
+  if (!envelope.success) {
+    throw new ApiError(
+      res.status,
+      envelope.code ?? 'C999',
+      envelope.message ?? 'Unknown error',
+      envelope.error?.fieldErrors,
+      envelope.traceId
+    );
+  }
+  return envelope.data as T;
 }
 
 export const api = {
