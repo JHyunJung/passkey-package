@@ -1,20 +1,25 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "API_KEY")
 public class ApiKey {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "api_key_seq")
-    @SequenceGenerator(name = "api_key_seq", sequenceName = "API_KEY_SEQ", allocationSize = 1)
-    @Column(name = "ID")
-    private Long id;
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "ID", columnDefinition = "RAW(16)")
+    private UUID id;
 
-    @Column(name = "TENANT_ID", length = 64, nullable = false)
-    private String tenantId;
+    @Column(name = "TENANT_ID", nullable = false, columnDefinition = "RAW(16)")
+    @JdbcTypeCode(SqlTypes.UUID)
+    private UUID tenantId;
 
     @Column(name = "KEY_PREFIX", length = 16, nullable = false)
     private String keyPrefix;
@@ -43,7 +48,7 @@ public class ApiKey {
 
     protected ApiKey() {}
 
-    public ApiKey(String tenantId, String keyPrefix, String keyHash,
+    public ApiKey(UUID tenantId, String keyPrefix, String keyHash,
                   String name, String scopesJson) {
         this.tenantId = tenantId;
         this.keyPrefix = keyPrefix;
@@ -53,8 +58,8 @@ public class ApiKey {
         this.createdAt = Instant.now();
     }
 
-    public Long getId() { return id; }
-    public String getTenantId() { return tenantId; }
+    public UUID getId() { return id; }
+    public UUID getTenantId() { return tenantId; }
     public String getKeyPrefix() { return keyPrefix; }
     public String getKeyHash() { return keyHash; }
     public String getName() { return name; }

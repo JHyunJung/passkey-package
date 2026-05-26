@@ -4,8 +4,9 @@ import com.crosscert.passkey.core.entity.ApiKey;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
+import java.util.UUID;
 
-public interface ApiKeyRepository extends JpaRepository<ApiKey, Long> {
+public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
 
     /**
      * Look up an API key by its prefix. VPD filters by tenant_id =
