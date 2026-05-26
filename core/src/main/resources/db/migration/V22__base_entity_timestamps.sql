@@ -59,3 +59,11 @@ ALTER TABLE app_owner.scheduler_lease ADD (
 );
 
 -- Tenant: no change — created_at + updated_at already exist (V19 carries them).
+
+-- ── Column-level UPDATE grants: add updated_at for tables with column-restrict grants ──
+-- @PreUpdate on BaseEntity entities writes updated_at; existing column-level grants
+-- must include updated_at or Oracle will reject the UPDATE with insufficient privileges.
+-- credential, audit_log: full UPDATE or no UPDATE grant — no change needed.
+GRANT UPDATE(updated_at) ON signing_key TO APP_ADMIN;
+GRANT UPDATE(updated_at) ON admin_user TO APP_ADMIN;
+GRANT UPDATE(updated_at) ON api_key TO APP_RUNTIME;

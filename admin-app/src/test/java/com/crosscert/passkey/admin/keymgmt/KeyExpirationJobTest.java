@@ -91,7 +91,7 @@ class KeyExpirationJobTest {
     }
 
     private static SigningKey withId(SigningKey k, UUID id) throws Exception {
-        Field f = SigningKey.class.getDeclaredField("id");
+        Field f = SigningKey.class.getSuperclass().getDeclaredField("id");
         f.setAccessible(true);
         f.set(k, id);
         return k;
