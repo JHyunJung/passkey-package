@@ -21,7 +21,7 @@ class JwksControllerTest {
     private SigningKeyProvider keys;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         var repo = org.mockito.Mockito.mock(
                 com.crosscert.passkey.core.repository.SigningKeyRepository.class);
         var envelope = new com.crosscert.passkey.core.jwt.KeyEnvelope(
@@ -31,26 +31,29 @@ class JwksControllerTest {
                 java.time.Instant.parse("2026-06-01T00:00:00Z"),
                 java.time.ZoneOffset.UTC);
 
-        // First findFirstByStatus call returns empty → provider creates initial key.
+        // Build a pre-existing ACTIVE key so we don't need the PL/SQL bootstrap path
+        // (which requires a real JdbcTemplate). The 4-arg test constructor sets jdbc=null.
+        var gen = java.security.KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048);
+        var pair = gen.generateKeyPair();
+        com.nimbusds.jose.jwk.RSAKey rsa = new com.nimbusds.jose.jwk.RSAKey.Builder(
+                (java.security.interfaces.RSAPublicKey) pair.getPublic())
+                .privateKey((java.security.interfaces.RSAPrivateKey) pair.getPrivate())
+                .keyID("test-kid")
+                .keyUse(com.nimbusds.jose.jwk.KeyUse.SIGNATURE)
+                .algorithm(com.nimbusds.jose.JWSAlgorithm.RS256)
+                .build();
+        String publicJwk = rsa.toPublicJWK().toJSONString();
+        byte[] sealed = envelope.seal(pair.getPrivate().getEncoded());
+        var activeRow = new com.crosscert.passkey.core.entity.SigningKey(
+                "test-kid", "RS256", publicJwk, sealed);
+
         org.mockito.Mockito.when(
                 repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
-                .thenReturn(java.util.Optional.empty());
-
-        // Capture the saved row so we can return it from findAllByStatusIn.
-        java.util.concurrent.atomic.AtomicReference<
-                com.crosscert.passkey.core.entity.SigningKey> savedRef =
-                new java.util.concurrent.atomic.AtomicReference<>();
-        org.mockito.Mockito.when(repo.save(org.mockito.ArgumentMatchers.any()))
-                .thenAnswer(inv -> {
-                    var row = (com.crosscert.passkey.core.entity.SigningKey) inv.getArgument(0);
-                    savedRef.set(row);
-                    return row;
-                });
+                .thenReturn(java.util.Optional.of(activeRow));
         org.mockito.Mockito.when(repo.findAllByStatusIn(
                 java.util.List.of("ACTIVE", "ROTATED")))
-                .thenAnswer(inv -> savedRef.get() == null
-                        ? java.util.List.of()
-                        : java.util.List.of(savedRef.get()));
+                .thenReturn(java.util.List.of(activeRow));
 
         keys = new com.crosscert.passkey.core.jwt.SigningKeyProvider(
                 repo, envelope, new com.fasterxml.jackson.databind.ObjectMapper(), clock);

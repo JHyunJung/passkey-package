@@ -21,7 +21,6 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Clock;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -58,6 +57,7 @@ public class SigningKeyProvider {
     private final ObjectMapper mapper;
     private final Clock clock;
     private final JdbcTemplate jdbc;
+    private final JwksAssembler jwksAssembler;
     private volatile RSAKey cachedActive;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -65,25 +65,28 @@ public class SigningKeyProvider {
                               KeyEnvelope envelope,
                               ObjectMapper mapper,
                               Clock clock,
-                              JdbcTemplate jdbc) {
+                              JdbcTemplate jdbc,
+                              JwksAssembler jwksAssembler) {
         this.repo = repo;
         this.envelope = envelope;
         this.mapper = mapper;
         this.clock = clock;
         this.jdbc = jdbc;
+        this.jwksAssembler = jwksAssembler;
     }
 
     /**
      * Backward-compatible 4-arg constructor for unit tests that don't
      * exercise the createInitialKey PL/SQL path. Tests construct with
      * a mocked repo that returns a pre-existing ACTIVE key, so jdbc is
-     * never touched. Spring DI uses the @Autowired 5-arg variant.
+     * never touched. Spring DI uses the @Autowired 6-arg variant.
+     * Internally self-wires a {@link JwksAssembler} backed by the same repo.
      */
     public SigningKeyProvider(SigningKeyRepository repo,
                               KeyEnvelope envelope,
                               ObjectMapper mapper,
                               Clock clock) {
-        this(repo, envelope, mapper, clock, null);
+        this(repo, envelope, mapper, clock, null, new JwksAssembler(repo));
     }
 
     @PostConstruct
@@ -98,11 +101,7 @@ public class SigningKeyProvider {
     }
 
     public JWKSet publicJwkSet() {
-        List<JWK> publics = new ArrayList<>();
-        for (SigningKey row : repo.findAllByStatusIn(List.of("ACTIVE", "ROTATED"))) {
-            publics.add(parsePublicJwk(row));
-        }
-        return new JWKSet(publics);
+        return jwksAssembler.build();
     }
 
     /** Called by KeyRotationService after a successful rotation. */
@@ -165,24 +164,6 @@ public class SigningKeyProvider {
             return new SigningKey(kid, "RS256", publicJwk, sealed);
         } catch (Exception e) {
             throw new IllegalStateException("initial signing key generation failed", e);
-        }
-    }
-
-    /**
-     * Build the public-only JWK from the stored {@code public_jwk}
-     * column. No envelope decryption needed.
-     *
-     * <p>Defense-in-depth: forces {@link JWK#toPublicJWK()} projection
-     * before returning, so even if the column ever contains private
-     * RSA fields (rotation bug, admin import error, bad seed) the
-     * JWKS endpoint cannot leak them.
-     */
-    private JWK parsePublicJwk(SigningKey row) {
-        try {
-            return JWK.parse(row.getPublicJwk()).toPublicJWK();
-        } catch (Exception e) {
-            throw new IllegalStateException(
-                    "failed to parse public_jwk kid=" + row.getKid(), e);
         }
     }
 

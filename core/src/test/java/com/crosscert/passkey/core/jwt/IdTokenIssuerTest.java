@@ -1,17 +1,22 @@
 package com.crosscert.passkey.core.jwt;
 
+import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jose.jwk.KeyUse;
+import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
+import java.security.KeyPairGenerator;
 import java.security.SecureRandom;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,18 +33,32 @@ class IdTokenIssuerTest {
     private final Instant fixedNow = Instant.parse("2026-05-25T08:00:00Z");
 
     @BeforeEach
-    void setUp() {
-        // Phase 3: SigningKeyProvider is DB-backed. Stub the repo so init()
-        // generates+saves a fresh in-memory key without touching JPA.
+    void setUp() throws Exception {
+        // Phase 3: SigningKeyProvider is DB-backed. Provide a pre-existing ACTIVE key
+        // so init() loads it directly without triggering the PL/SQL bootstrap path
+        // (which requires a real JdbcTemplate). The 4-arg test constructor sets jdbc=null.
         SigningKeyRepository repo = Mockito.mock(SigningKeyRepository.class);
         KeyEnvelope envelope = new KeyEnvelope(
                 Base64.getEncoder().encodeToString(new byte[32]),
                 new SecureRandom());
         Clock providerClock = Clock.fixed(fixedNow, ZoneOffset.UTC);
+
+        var gen = KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048);
+        var pair = gen.generateKeyPair();
+        RSAKey rsa = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
+                .privateKey((RSAPrivateKey) pair.getPrivate())
+                .keyID("issuer-test-kid")
+                .keyUse(KeyUse.SIGNATURE)
+                .algorithm(JWSAlgorithm.RS256)
+                .build();
+        String publicJwk = rsa.toPublicJWK().toJSONString();
+        byte[] sealed = envelope.seal(pair.getPrivate().getEncoded());
+        SigningKey activeRow = new SigningKey("issuer-test-kid", "RS256", publicJwk, sealed);
+
         Mockito.when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
-                .thenReturn(Optional.empty());
-        Mockito.when(repo.save(ArgumentMatchers.any()))
-                .thenAnswer(inv -> inv.getArgument(0));
+                .thenReturn(Optional.of(activeRow));
+
         signingKeys = new SigningKeyProvider(repo, envelope, new ObjectMapper(), providerClock);
         signingKeys.init();
         Clock clock = Clock.fixed(fixedNow, ZoneOffset.UTC);

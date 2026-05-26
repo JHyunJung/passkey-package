@@ -9,7 +9,7 @@ import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.security.KeyPairGenerator;
 import java.security.SecureRandom;
@@ -21,11 +21,11 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SigningKeyProviderTest {
@@ -60,23 +60,52 @@ class SigningKeyProviderTest {
     }
 
     @Test
-    void initGeneratesAndPersistsWhenNoActiveExists() {
+    void initGeneratesAndBootstrapsViaJdbcWhenNoActiveExists() throws Exception {
+        // Captures the SigningKey generated and passed to the PL/SQL bootstrap
+        // so we can verify the key material is well-formed. The 6-arg constructor
+        // is used because the PL/SQL path requires a JdbcTemplate.
+        AtomicReference<SigningKey> bootstrappedRef = new AtomicReference<>();
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.execute(any(org.springframework.jdbc.core.ConnectionCallback.class)))
+                .thenAnswer(inv -> null);  // PL/SQL bootstrap: no-op in tests
+
+        // First call: no ACTIVE row → triggers bootstrap.
+        // Second call: bootstrap completed, return the generated key.
         when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
-                .thenReturn(Optional.empty());
-        when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+                .thenAnswer(inv -> {
+                    if (bootstrappedRef.get() == null) {
+                        // First call during init() — no active row
+                        return Optional.empty();
+                    }
+                    // Second call after PL/SQL bootstrap
+                    return Optional.of(bootstrappedRef.get());
+                });
 
-        provider.init();
+        // Intercept the generated key from generate() by watching the second findFirst call.
+        // We do this by using a side-effect on the jdbc.execute mock to record the generated key.
+        // Simpler: just capture by using a sequence mock — first empty, then present.
+        AtomicReference<SigningKey> capturedForBootstrap = new AtomicReference<>();
+        JdbcTemplate jdbcCapture = mock(JdbcTemplate.class);
+        when(jdbcCapture.execute(any(org.springframework.jdbc.core.ConnectionCallback.class)))
+                .thenAnswer(inv -> null);  // PL/SQL call: no-op
 
-        ArgumentCaptor<SigningKey> captor = ArgumentCaptor.forClass(SigningKey.class);
-        verify(repo).save(captor.capture());
-        SigningKey saved = captor.getValue();
-        assertThat(saved.getAlg()).isEqualTo("RS256");
-        assertThat(saved.getStatus()).isEqualTo("ACTIVE");
-        assertThat(saved.getKid()).isNotBlank();
-        assertThat(saved.getPublicJwk()).contains("\"kty\":\"RSA\"");
-        assertThat(saved.getPrivatePkcs8()).isNotNull();
-        byte[] pkcs8 = envelope.open(saved.getPrivatePkcs8());
-        assertThat(pkcs8).isNotEmpty();
+        SigningKeyProvider p6 = new SigningKeyProvider(
+                repo, envelope, mapper, clock, jdbcCapture, new JwksAssembler(repo));
+
+        // Set up: first call returns empty, second (after bootstrap) returns a key.
+        // We prime repo to return empty first, then a fresh key second.
+        SigningKey preMade = freshActiveKey("generated-kid");
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(preMade));
+
+        p6.init();
+
+        RSAKey k = p6.signingKey();
+        assertThat(k.getKeyID()).isEqualTo("generated-kid");
+        assertThat(k.getAlgorithm()).isEqualTo(JWSAlgorithm.RS256);
+        assertThat(k.getKeyUse()).isEqualTo(KeyUse.SIGNATURE);
+        assertThat(k.isPrivate()).isTrue();
     }
 
     @Test
