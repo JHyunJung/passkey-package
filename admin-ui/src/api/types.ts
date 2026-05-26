@@ -30,10 +30,11 @@ export interface TenantCreateRequest {
 }
 
 export interface ApiKeyView {
-  id: number;
-  prefix: string;
+  id: string;          // UUID
+  keyPrefix: string;
   name: string;
   tenantId: string;
+  scopes: string[];        // was scopesJson: string
   createdAt: string;
   lastUsedAt?: string;
   expiresAt?: string;
@@ -43,18 +44,15 @@ export interface ApiKeyView {
 export interface ApiKeyCreateRequest {
   tenantId: string;
   name: string;
-  scopesJson: string;
+  scopes: string[];        // was scopesJson: string
   expiresAt?: string;
 }
 
 export interface ApiKeyCreateResponse {
-  id: number;
+  id: string;          // UUID
   prefix: string;
   plainText: string;   // ONE-TIME
-  name: string;
-  tenantId: string;
-  createdAt: string;
-  expiresAt?: string;
+  scopes: string[];
 }
 
 export interface AuditLogView {

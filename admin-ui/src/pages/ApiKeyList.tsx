@@ -51,7 +51,7 @@ export default function ApiKeyList() {
     if (tenantId) loadKeys(tenantId);
   }
 
-  async function revoke(id: number) {
+  async function revoke(id: string) {
     if (!confirm('이 API 키를 회수합니다. 즉시 사용 불가가 됩니다.')) return;
     try {
       await api.delete(`/admin/api/api-keys/${id}`);
@@ -114,6 +114,7 @@ export default function ApiKeyList() {
               <tr>
                 <th>이름</th>
                 <th>PREFIX</th>
+                <th>SCOPES</th>
                 <th>STATUS</th>
                 <th>CREATED</th>
                 <th>EXPIRES</th>
@@ -127,7 +128,14 @@ export default function ApiKeyList() {
                 return (
                   <tr key={k.id}>
                     <td>{k.name}</td>
-                    <td className="mono">{k.prefix}…</td>
+                    <td className="mono">{k.keyPrefix}…</td>
+                    <td>
+                      <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
+                        {(k.scopes ?? []).map(s => (
+                          <span key={s} className="badge">{s}</span>
+                        ))}
+                      </div>
+                    </td>
                     <td>
                       <span className={`badge badge--${isRevoked ? 'danger' : 'success'} badge--dot`}>
                         {isRevoked ? 'REVOKED' : 'ACTIVE'}
