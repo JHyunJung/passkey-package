@@ -2,8 +2,12 @@ package com.crosscert.passkey.admin.apikey;
 
 import com.crosscert.passkey.core.entity.ApiKey;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
 public final class ApiKeyAdminDto {
@@ -11,37 +15,35 @@ public final class ApiKeyAdminDto {
     private ApiKeyAdminDto() {}
 
     public record ApiKeyCreateRequest(
-            @NotBlank String tenantId,
-            @NotBlank String name,
-            @NotBlank String scopesJson,
-            Instant expiresAt          // optional
+            @NotNull UUID tenantId,
+            @NotBlank @Size(max = 256) String name,
+            @NotEmpty Set<@NotBlank @Size(max = 32) String> scopes
     ) {}
 
     public record ApiKeyCreateResponse(
             UUID id,
-            String prefix,
             String plainText,          // ONE-TIME — only returned at issue
-            String name,
-            String tenantId,
-            Instant createdAt,
-            Instant expiresAt
+            String prefix,
+            Set<String> scopes
     ) {}
 
     public record ApiKeyView(
             UUID id,
-            String prefix,
+            UUID tenantId,
             String name,
-            String tenantId,
+            String keyPrefix,
+            Set<String> scopes,
             Instant createdAt,
-            Instant lastUsedAt,
             Instant expiresAt,
-            Instant revokedAt
+            Instant revokedAt,
+            Instant lastUsedAt
     ) {
         public static ApiKeyView from(ApiKey k) {
             return new ApiKeyView(
-                    k.getId(), k.getKeyPrefix(), k.getName(),
-                    k.getTenantId() == null ? null : k.getTenantId().toString(),
-                    k.getCreatedAt(), k.getLastUsedAt(), k.getExpiresAt(), k.getRevokedAt());
+                    k.getId(), k.getTenantId(), k.getName(), k.getKeyPrefix(),
+                    k.getScopeValues(),
+                    k.getCreatedAt(), k.getExpiresAt(),
+                    k.getRevokedAt(), k.getLastUsedAt());
         }
     }
 }
