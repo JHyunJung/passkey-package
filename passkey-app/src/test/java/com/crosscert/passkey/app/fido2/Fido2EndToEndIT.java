@@ -37,7 +37,9 @@ import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
+import java.nio.ByteBuffer;
 import java.util.Base64;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -152,8 +154,20 @@ class Fido2EndToEndIT {
 
     private RestTemplate http;
 
-    private static final String T_A = "T_A";
-    private static final String T_B = "T_B";
+    // Phase 6: tenant IDs are UUIDs stored as RAW(16). Fixed deterministic
+    // UUIDs are used for seeding so test data is reproducible and the
+    // JWT audience assertion can compare against a known value.
+    private static final UUID TENANT_A_UUID =
+            UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID TENANT_B_UUID =
+            UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private static final String TENANT_A_HEX =
+            TENANT_A_UUID.toString().replace("-", "");
+    private static final String TENANT_B_HEX =
+            TENANT_B_UUID.toString().replace("-", "");
+
+    private static final String SLUG_A = "acme";
+    private static final String SLUG_B = "beta";
     private static final String PREFIX_A = "pk_aaaaaaaa";
     private static final String PREFIX_B = "pk_bbbbbbbb";
     private static final String SECRET_A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA1";
@@ -189,8 +203,8 @@ class Fido2EndToEndIT {
         adminJdbc.update("DELETE FROM APP_OWNER.api_key");
         adminJdbc.update("DELETE FROM APP_OWNER.tenant");
 
-        seedTenant(T_A, PREFIX_A, SECRET_A);
-        seedTenant(T_B, PREFIX_B, SECRET_B);
+        seedTenant(TENANT_A_HEX, SLUG_A, "Tenant A", PREFIX_A, SECRET_A);
+        seedTenant(TENANT_B_HEX, SLUG_B, "Tenant B", PREFIX_B, SECRET_B);
 
         http = new RestTemplate();
         http.setErrorHandler(new org.springframework.web.client.DefaultResponseErrorHandler() {
@@ -247,10 +261,24 @@ class Fido2EndToEndIT {
         adminJdbc = new JdbcTemplate(adminPool);
     }
 
-    private void seedTenant(String id, String prefix, String secret) {
+    /**
+     * Seeds one tenant + one api_key row via the APP_ADMIN pool.
+     *
+     * @param tenantHex  32-char hex string for the RAW(16) id column
+     * @param slug       short human-readable slug (SLUG NOT NULL in V19)
+     * @param displayName tenant display name
+     * @param prefix     api_key key_prefix
+     * @param secret     api_key plaintext secret (bcrypt-hashed before INSERT)
+     */
+    private void seedTenant(String tenantHex, String slug, String displayName,
+                             String prefix, String secret) {
         // INSERT via raw JDBC as APP_ADMIN — VPD does not engage for
         // APP_ADMIN (EXEMPT ACCESS POLICY), and APP_ADMIN has full DML
-        // on tenant and api_key (V1, V7 grants).
+        // on tenant and api_key (V19 grants).
+        //
+        // Phase 6: id and tenant_id are RAW(16); HEXTORAW converts the
+        // 32-char hex literal. SYS_GUID() generates the api_key PK
+        // (api_key_seq was dropped in V19).
         String allowedOrigins = "[\"" + origin() + "\"]";
         String attestationPolicy =
                 "{\"acceptedFormats\":[\"none\",\"packed\"],"
@@ -258,18 +286,18 @@ class Fido2EndToEndIT {
                         + "\"mdsRequired\":false}";
         adminJdbc.update(
                 "INSERT INTO APP_OWNER.tenant "
-                        + "(id, display_name, status, rp_id, rp_name, "
+                        + "(id, slug, display_name, status, rp_id, rp_name, "
                         + " allowed_origins, attestation_policy, "
                         + " created_at, updated_at) "
-                        + "VALUES (?, ?, 'active', 'localhost', ?, ?, ?, "
+                        + "VALUES (HEXTORAW(?), ?, ?, 'active', 'localhost', ?, ?, ?, "
                         + "        SYSTIMESTAMP, SYSTIMESTAMP)",
-                id, id, id, allowedOrigins, attestationPolicy);
+                tenantHex, slug, displayName, displayName, allowedOrigins, attestationPolicy);
         adminJdbc.update(
                 "INSERT INTO APP_OWNER.api_key "
                         + "(id, tenant_id, key_prefix, key_hash, name, scopes, created_at) "
-                        + "VALUES (APP_OWNER.api_key_seq.NEXTVAL, ?, ?, ?, 'primary', '[]', "
+                        + "VALUES (SYS_GUID(), HEXTORAW(?), ?, ?, 'primary', '[]', "
                         + "        SYSTIMESTAMP)",
-                id, prefix, encoder.encode(secret));
+                tenantHex, prefix, encoder.encode(secret));
     }
 
     // ------------------------------------------------------------
@@ -296,7 +324,7 @@ class Fido2EndToEndIT {
         Fido2TestAuthenticator authn = new Fido2TestAuthenticator(
                 Origin.create(origin()), mapper);
 
-        JsonNode regStart = registerStart(T_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
+        JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
         String regToken = regStart.get("registrationToken").asText();
         JsonNode creationOptions = regStart.get("publicKeyCredentialCreationOptions");
 
@@ -329,9 +357,30 @@ class Fido2EndToEndIT {
         JWSVerifier verifier = new RSASSAVerifier(rsa.toRSAPublicKey());
         assertThat(parsed.verify(verifier)).isTrue();
 
+        // Phase 6: the JWT audience is the tenant UUID string (IdTokenIssuer
+        // calls tenantUuid.toString()), not the legacy slug/label.
         assertThat(parsed.getJWTClaimsSet().getAudience())
-                .as("audience must contain the issuing tenant id")
-                .contains(T_A);
+                .as("audience must contain the issuing tenant UUID")
+                .contains(TENANT_A_UUID.toString());
+
+        // Phase 6: cred_id claim is now base64url of 16-byte UUID
+        // (IdTokenIssuer.uuidToBytes: MSB then LSB via ByteBuffer).
+        // Verify the claim decodes to exactly 16 bytes and round-trips
+        // back to a valid UUID — confirms the PK type migration is
+        // reflected correctly in the issued token.
+        String credIdClaim = parsed.getJWTClaimsSet().getStringClaim("cred_id");
+        assertThat(credIdClaim)
+                .as("cred_id claim must be present")
+                .isNotBlank();
+        byte[] credIdBytes = Base64.getUrlDecoder().decode(credIdClaim);
+        assertThat(credIdBytes)
+                .as("cred_id claim must decode to 16-byte UUID")
+                .hasSize(16);
+        ByteBuffer bb = ByteBuffer.wrap(credIdBytes);
+        UUID credentialId = new UUID(bb.getLong(), bb.getLong());
+        assertThat(credentialId)
+                .as("cred_id must round-trip to a non-nil UUID")
+                .isNotEqualTo(new UUID(0, 0));
     }
 
     // ------------------------------------------------------------
@@ -343,7 +392,7 @@ class Fido2EndToEndIT {
         // Register under T_A first so the database has T_A's credential.
         Fido2TestAuthenticator authn = new Fido2TestAuthenticator(
                 Origin.create(origin()), mapper);
-        JsonNode regStart = registerStart(T_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
+        JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
         JsonNode attestationJson = authn.register(
                 regStart.get("publicKeyCredentialCreationOptions"));
         registerFinish(PREFIX_A, SECRET_A, regStart.get("registrationToken").asText(),
@@ -404,7 +453,7 @@ class Fido2EndToEndIT {
     void expiredChallenge() throws Exception {
         Fido2TestAuthenticator authn = new Fido2TestAuthenticator(
                 Origin.create(origin()), mapper);
-        JsonNode regStart = registerStart(T_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
+        JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
         String token = regStart.get("registrationToken").asText();
 
         // Simulate TTL expiry by deleting the Redis key directly. The
@@ -450,7 +499,7 @@ class Fido2EndToEndIT {
         Fido2TestAuthenticator authn = new Fido2TestAuthenticator(
                 Origin.create(origin()), mapper);
 
-        JsonNode regStart = registerStart(T_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
+        JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
         JsonNode attestationJson = authn.register(
                 regStart.get("publicKeyCredentialCreationOptions"));
         registerFinish(PREFIX_A, SECRET_A,
