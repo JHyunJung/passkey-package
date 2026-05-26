@@ -6,6 +6,7 @@ import TenantCreate from './pages/TenantCreate';
 import ApiKeyList from './pages/ApiKeyList';
 import AuditLog from './pages/AuditLog';
 import MdsStatus from './pages/MdsStatus';
+import KeyManagement from './pages/KeyManagement';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/api-keys" element={<ApiKeyList />} />
         <Route path="/audit" element={<AuditLog />} />
         <Route path="/mds" element={<MdsStatus />} />
+        <Route path="/keys" element={<KeyManagement />} />
       </Route>
       <Route path="*" element={<Navigate to="/tenants" replace />} />
     </Routes>

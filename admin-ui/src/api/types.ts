@@ -74,3 +74,22 @@ export interface SyncResult {
   version?: number;
   error?: string;
 }
+
+export interface SigningKeyView {
+  id: number;
+  kid: string;
+  alg: string;
+  status: 'ACTIVE' | 'ROTATED' | 'REVOKED';
+  createdAt: string;
+  rotatedAt?: string;
+  revokedAt?: string;
+}
+
+export interface KeyList {
+  keys: SigningKeyView[];
+}
+
+export interface RotateResponse {
+  oldKid: string;
+  newKid: string;
+}
