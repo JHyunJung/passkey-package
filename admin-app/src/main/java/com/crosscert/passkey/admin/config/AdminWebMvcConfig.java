@@ -26,6 +26,8 @@ public class AdminWebMvcConfig {
                 registry.addViewController("/admin/tenants/**").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/api-keys").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/audit").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/mds").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/keys").setViewName("forward:/admin/index.html");
             }
         };
     }

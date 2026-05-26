@@ -57,8 +57,8 @@ public class AdminSecurityConfig {
         http
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
-                .requestMatchers("/admin/static/**", "/admin/index.html", "/admin/", "/admin").permitAll()
-                .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit").permitAll()
+                .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/", "/admin", "/admin/favicon.ico", "/favicon.ico").permitAll()
+                .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 .requestMatchers("/admin/api/**").authenticated()
                 .anyRequest().denyAll())
