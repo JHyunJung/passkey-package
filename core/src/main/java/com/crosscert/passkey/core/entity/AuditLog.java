@@ -2,7 +2,6 @@ package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
@@ -10,13 +9,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "AUDIT_LOG")
-public class AuditLog {
-
-    @Id
-    @UuidGenerator(style = UuidGenerator.Style.TIME)
-    @JdbcTypeCode(SqlTypes.UUID)
-    @Column(name = "ID", columnDefinition = "RAW(16)")
-    private UUID id;
+public class AuditLog extends BaseEntity {
 
     @Column(name = "PREV_HASH", length = 32)
     private byte[] prevHash;
@@ -44,14 +37,11 @@ public class AuditLog {
     @Column(name = "PAYLOAD", nullable = false)
     private String payload;
 
-    @Column(name = "CREATED_AT", nullable = false, updatable = false)
-    private Instant createdAt;
-
     protected AuditLog() {}
 
     public AuditLog(byte[] prevHash, byte[] hash, UUID actorId, String actorEmail,
                     String action, String targetType, String targetId,
-                    String payload, Instant createdAt) {
+                    String payload, Instant createdAtArg) {
         this.prevHash = prevHash;
         this.hash = hash;
         this.actorId = actorId;
@@ -60,10 +50,36 @@ public class AuditLog {
         this.targetType = targetType;
         this.targetId = targetId;
         this.payload = payload;
-        this.createdAt = createdAt;
+        // Pre-set BaseEntity.createdAt + updatedAt so @PrePersist's null-check
+        // preserves caller-supplied value for hash-chain integrity. AuditLog
+        // is append-only — updatedAt always equals createdAt at insert and
+        // never advances (no @PreUpdate path).
+        seedTimestamps(createdAtArg);
     }
 
-    public UUID getId() { return id; }
+    /**
+     * Reflectively seed BaseEntity's private createdAt and updatedAt fields.
+     * Required because:
+     *   1. AuditLog's hash chain depends on a caller-chosen createdAt that
+     *      must survive @PrePersist (which uses Instant.now() by default).
+     *   2. BaseEntity intentionally exposes no setters for createdAt/updatedAt
+     *      to keep the lifecycle contract uniform across the other 9 entities.
+     * @PrePersist's null-check ({@code if (createdAt == null) createdAt = now})
+     * then leaves the seeded value alone.
+     */
+    private void seedTimestamps(Instant t) {
+        try {
+            java.lang.reflect.Field createdAtField = BaseEntity.class.getDeclaredField("createdAt");
+            createdAtField.setAccessible(true);
+            createdAtField.set(this, t);
+            java.lang.reflect.Field updatedAtField = BaseEntity.class.getDeclaredField("updatedAt");
+            updatedAtField.setAccessible(true);
+            updatedAtField.set(this, t);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to seed AuditLog timestamps", e);
+        }
+    }
+
     public byte[] getPrevHash() { return prevHash; }
     public byte[] getHash() { return hash; }
     public UUID getActorId() { return actorId; }
@@ -72,5 +88,4 @@ public class AuditLog {
     public String getTargetType() { return targetType; }
     public String getTargetId() { return targetId; }
     public String getPayload() { return payload; }
-    public Instant getCreatedAt() { return createdAt; }
 }

@@ -1,6 +1,9 @@
 package com.crosscert.passkey.core.entity;
 
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import com.crosscert.passkey.core.repository.AuditLogRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -103,9 +106,16 @@ class BaseEntityCallbackIT {
     @Autowired
     AdminUserRepository adminUsers;
 
+    @Autowired
+    AuditLogRepository auditLogs;
+
+    @PersistenceContext
+    EntityManager em;
+
     @AfterEach
     void cleanup() {
         adminUsers.deleteAll();
+        auditLogs.deleteAll();
     }
 
     /** BCrypt-shaped hash exactly 60 chars long (matches V9 column width). */
@@ -176,6 +186,43 @@ class BaseEntityCallbackIT {
         assertThat(merged.getUpdatedAt())
                 .as("@PreUpdate must advance updatedAt past the insert timestamp")
                 .isAfter(originalUpdatedAt);
+    }
+
+    /**
+     * Scenario 4 (T7): AuditLog's caller-supplied createdAt must survive
+     * @PrePersist so the hash chain remains verifiable after a DB round-trip.
+     *
+     * <p>The hash is computed over the caller's timestamp BEFORE persist
+     * (see {@code AuditLogService.computeHash}); if BaseEntity's @PrePersist
+     * overwrote that value with {@code Instant.now()}, the stored hash would
+     * no longer recompute from the reloaded row. This test guards against
+     * that regression directly at the JPA layer (which mock-based unit tests
+     * cannot cover because {@code repo.save()} on a Mockito repo never fires
+     * lifecycle callbacks).
+     */
+    @Test
+    void auditLog_preservesCallerSuppliedCreatedAt_acrossPersistAndReload() {
+        Instant caller = Instant.parse("2026-05-01T12:34:56.789012Z");
+        AuditLog row = new AuditLog(
+                null, new byte[]{1, 2, 3},
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                "alice@example.com", "ADMIN_LOGIN", null, null, "{}", caller);
+
+        auditLogs.saveAndFlush(row);
+        // Evict from the persistence context so findById round-trips through
+        // the DB rather than returning the in-memory instance — otherwise we
+        // would not detect Hibernate overwriting the field during INSERT.
+        em.clear();
+
+        AuditLog reloaded = auditLogs.findById(row.getId()).orElseThrow();
+        assertThat(reloaded.getCreatedAt())
+                .as("caller-supplied createdAt must survive @PrePersist "
+                        + "— hash chain integrity depends on this")
+                .isEqualTo(caller);
+        assertThat(reloaded.getUpdatedAt())
+                .as("updatedAt is seeded to createdAt at insert "
+                        + "(audit_log is append-only — never advances)")
+                .isEqualTo(caller);
     }
 
     /**
