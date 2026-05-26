@@ -1,17 +1,22 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "SIGNING_KEY")
 public class SigningKey {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "signing_key_seq")
-    @SequenceGenerator(name = "signing_key_seq", sequenceName = "SIGNING_KEY_SEQ", allocationSize = 1)
-    @Column(name = "ID")
-    private Long id;
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "ID", columnDefinition = "RAW(16)")
+    private UUID id;
 
     @Column(name = "KID", length = 64, nullable = false, updatable = false)
     private String kid;
@@ -50,7 +55,7 @@ public class SigningKey {
         this.createdAt = Instant.now();
     }
 
-    public Long getId() { return id; }
+    public UUID getId() { return id; }
     public String getKid() { return kid; }
     public String getAlg() { return alg; }
     public String getStatus() { return status; }

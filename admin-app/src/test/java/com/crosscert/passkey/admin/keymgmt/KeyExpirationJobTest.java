@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +55,7 @@ class KeyExpirationJobTest {
         when(leases.tryAcquire(anyString(), anyString(), any(Duration.class)))
                 .thenReturn(true);
         // rotated at clock - 31min — past the 30min grace
-        SigningKey old = withId(rotatedKey("expired"), 1L);
+        SigningKey old = withId(rotatedKey("expired"), UUID.fromString("00000000-0000-0000-0000-000000000001"));
         setRotatedAt(old, clock.instant().minus(Duration.ofMinutes(31)));
         when(repo.findAllByStatusAndRotatedAtBefore(eq("ROTATED"), any()))
                 .thenReturn(List.of(old));
@@ -89,7 +90,7 @@ class KeyExpirationJobTest {
         return k;
     }
 
-    private static SigningKey withId(SigningKey k, long id) throws Exception {
+    private static SigningKey withId(SigningKey k, UUID id) throws Exception {
         Field f = SigningKey.class.getDeclaredField("id");
         f.setAccessible(true);
         f.set(k, id);

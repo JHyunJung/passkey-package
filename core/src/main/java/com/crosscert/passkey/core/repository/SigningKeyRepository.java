@@ -6,8 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-public interface SigningKeyRepository extends JpaRepository<SigningKey, Long> {
+public interface SigningKeyRepository extends JpaRepository<SigningKey, UUID> {
 
     /**
      * Returns the single ACTIVE key. There should be at most one at any

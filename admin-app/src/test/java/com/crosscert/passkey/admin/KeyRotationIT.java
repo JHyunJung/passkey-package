@@ -32,10 +32,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 import javax.sql.DataSource;
+import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -181,8 +183,12 @@ class KeyRotationIT {
                 .orElseThrow();
 
         Instant past = Instant.now().minus(Duration.ofMinutes(31));
+        UUID rotatedId = rotated.getId();
+        ByteBuffer bb = ByteBuffer.allocate(16);
+        bb.putLong(rotatedId.getMostSignificantBits());
+        bb.putLong(rotatedId.getLeastSignificantBits());
         jdbc.update("UPDATE APP_OWNER.signing_key SET rotated_at=? WHERE id=?",
-                Timestamp.from(past), rotated.getId());
+                Timestamp.from(past), bb.array());
 
         expirationJob.runOnce();
 

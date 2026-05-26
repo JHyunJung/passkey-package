@@ -76,7 +76,7 @@ export interface SyncResult {
 }
 
 export interface SigningKeyView {
-  id: number;
+  id: string;
   kid: string;
   alg: string;
   status: 'ACTIVE' | 'ROTATED' | 'REVOKED';
