@@ -2,6 +2,8 @@ package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,7 +35,7 @@ class TenantAdminServiceTest {
 
     @Test
     void createPersistsTenantAndAppendsAudit() {
-        when(repo.findById("T_A")).thenReturn(Optional.empty());
+        when(repo.existsById("T_A")).thenReturn(false);
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
@@ -55,19 +57,20 @@ class TenantAdminServiceTest {
 
     @Test
     void createRejectsDuplicateId() {
-        when(repo.findById("T_A")).thenReturn(Optional.of(new Tenant("T_A", "X")));
+        when(repo.existsById("T_A")).thenReturn(true);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 "[\"http://localhost\"]",
                 "{\"acceptedFormats\":[\"none\"],\"requireUserVerification\":true,\"mdsRequired\":false}");
         assertThatThrownBy(() -> service.create(req, 7L, "alice@example.com"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("tenant id already exists");
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ErrorCode.TENANT_DUPLICATE));
     }
 
     @Test
     void createRejectsMalformedOriginsJson() {
-        when(repo.findById("T_A")).thenReturn(Optional.empty());
+        when(repo.existsById("T_A")).thenReturn(false);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 "not json",
@@ -79,7 +82,7 @@ class TenantAdminServiceTest {
 
     @Test
     void createRejectsMalformedPolicyJson() {
-        when(repo.findById("T_A")).thenReturn(Optional.empty());
+        when(repo.existsById("T_A")).thenReturn(false);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 "[\"http://localhost\"]",
