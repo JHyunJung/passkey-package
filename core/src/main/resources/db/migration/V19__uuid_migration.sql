@@ -286,7 +286,7 @@ CREATE TABLE audit_log (
   id           RAW(16)                  NOT NULL,
   prev_hash    RAW(32),
   hash         RAW(32)                  NOT NULL,
-  actor_id     RAW(16)                  NOT NULL,
+  actor_id     RAW(16),                              -- nullable: null = system/scheduler actor
   actor_email  VARCHAR2(255)            NOT NULL,
   action       VARCHAR2(64)             NOT NULL,
   target_type  VARCHAR2(32),

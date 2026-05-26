@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * On-demand tamper detector for the audit_log SHA-256 hash chain.
@@ -47,8 +48,8 @@ public class AuditChainVerifier {
     /**
      * Verify the entire hash chain.
      *
-     * @return {@link Result#ok()} when the chain is intact, or
-     *         {@link Result#broken(long)} with the id of the first failing row.
+     * @return {@link Result#valid()} when the chain is intact, or
+     *         {@link Result#broken(UUID)} with the id of the first failing row.
      */
     public Result verify() {
         List<AuditLog> rows = repo.findAllOrdered();
@@ -94,8 +95,8 @@ public class AuditChainVerifier {
      * @param ok       true when the entire chain is intact
      * @param brokenAt id of the first row that failed verification, or null
      */
-    public record Result(boolean ok, Long brokenAt) {
+    public record Result(boolean ok, UUID brokenAt) {
         public static Result valid() { return new Result(true, null); }
-        public static Result broken(long id) { return new Result(false, id); }
+        public static Result broken(UUID id) { return new Result(false, id); }
     }
 }
