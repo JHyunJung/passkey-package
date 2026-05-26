@@ -29,3 +29,8 @@ logs/
 *.env
 *.env.local
 application-secret*.yml
+
+# Phase 2 admin-ui build outputs
+admin-ui/node_modules/
+admin-ui/dist/
+admin-app/src/main/resources/static/admin/
