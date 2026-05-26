@@ -1,17 +1,21 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "ADMIN_USER")
 public class AdminUser {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "admin_user_seq")
-    @SequenceGenerator(name = "admin_user_seq", sequenceName = "ADMIN_USER_SEQ", allocationSize = 1)
-    @Column(name = "ID")
-    private Long id;
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "ID", columnDefinition = "RAW(16)")
+    private UUID id;
 
     @Column(name = "EMAIL", length = 255, nullable = false)
     private String email;
@@ -41,7 +45,7 @@ public class AdminUser {
         this.createdAt = Instant.now();
     }
 
-    public Long getId() { return id; }
+    public UUID getId() { return id; }
     public String getEmail() { return email; }
     public String getBcryptHash() { return bcryptHash; }
     public String getRole() { return role; }
