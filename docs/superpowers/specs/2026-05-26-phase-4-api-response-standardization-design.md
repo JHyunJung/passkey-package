@@ -303,6 +303,8 @@ public class TraceIdFilter extends OncePerRequestFilter {
 
 `logback-spring.xml` 패턴에 `%X{traceId:-}` 포함하도록 갱신.
 
+**Component scan:** `:core`의 다른 `@Component` (e.g., `core.vpd.TenantContextHolder`)가 admin-app/passkey-app 양쪽에서 이미 자동 등록되어 동작하는 동일 패턴 사용 (두 앱의 `@SpringBootApplication`이 `com.crosscert.passkey.*`을 scan하므로 `core.api.TraceIdFilter` + `core.api.GlobalExceptionHandler`도 자동 등록).
+
 ### 3.2 기존 `core/config/GlobalExceptionHandler.java` 제거
 
 ProblemDetail 기반 기존 핸들러는 본 Phase의 `core/api/GlobalExceptionHandler`로 완전 대체된다. 파일 삭제 + import 정리.
