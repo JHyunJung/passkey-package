@@ -14,9 +14,9 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Set;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -76,6 +76,7 @@ class ApiKeyAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
+    @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
 
     private static final String BODY = """
             {"tenantId":"T_A","name":"primary","scopesJson":"[]"}
@@ -106,7 +107,7 @@ class ApiKeyAdminControllerSecurityTest {
     @Test
     @WithMockUser(roles = "VIEWER")
     void viewerCannotRevoke() throws Exception {
-        mvc.perform(delete("/admin/api/api-keys/42").with(csrf()))
+        mvc.perform(delete("/admin/api/api-keys/" + UUID.randomUUID()).with(csrf()))
             .andExpect(status().isForbidden());
     }
 
@@ -114,10 +115,10 @@ class ApiKeyAdminControllerSecurityTest {
     @WithMockUser(username = "alice@example.com", roles = "ADMIN")
     void adminCanIssue() throws Exception {
         org.mockito.Mockito.when(admins.findByEmail(anyString()))
-                .thenReturn(java.util.Optional.of(adminUserWithId(7L)));
-        org.mockito.Mockito.when(service.issue(any(), anyLong(), anyString()))
+                .thenReturn(java.util.Optional.of(adminUserWithUuid()));
+        org.mockito.Mockito.when(service.issue(any(), any(UUID.class), anyString()))
                 .thenReturn(new ApiKeyAdminDto.ApiKeyCreateResponse(
-                        1L, "pk_abcd1234", "pk_abcd1234SECRET", "primary",
+                        UUID.randomUUID(), "pk_abcd1234", "pk_abcd1234SECRET", "primary",
                         "T_A", java.time.Instant.now(), null));
         mvc.perform(post("/admin/api/api-keys")
                 .with(csrf()).contentType("application/json").content(BODY))
@@ -131,8 +132,8 @@ class ApiKeyAdminControllerSecurityTest {
     @WithMockUser(username = "alice@example.com", roles = "ADMIN")
     void adminCanRevoke() throws Exception {
         org.mockito.Mockito.when(admins.findByEmail(anyString()))
-                .thenReturn(java.util.Optional.of(adminUserWithId(7L)));
-        mvc.perform(delete("/admin/api/api-keys/42").with(csrf()))
+                .thenReturn(java.util.Optional.of(adminUserWithUuid()));
+        mvc.perform(delete("/admin/api/api-keys/" + UUID.randomUUID()).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
@@ -140,23 +141,24 @@ class ApiKeyAdminControllerSecurityTest {
     @Test
     @WithMockUser(username = "alice@example.com", roles = "ADMIN")
     void revokeReturnsApiErrorWhenNotFound() throws Exception {
+        UUID missingId = UUID.randomUUID();
         org.mockito.Mockito.when(admins.findByEmail(anyString()))
-                .thenReturn(java.util.Optional.of(adminUserWithId(7L)));
+                .thenReturn(java.util.Optional.of(adminUserWithUuid()));
         org.mockito.Mockito.doThrow(new com.crosscert.passkey.core.api.BusinessException(
                         com.crosscert.passkey.core.api.ErrorCode.API_KEY_NOT_FOUND))
-                .when(service).revoke(org.mockito.ArgumentMatchers.eq(999L), anyLong(), anyString());
-        mvc.perform(delete("/admin/api/api-keys/999").with(csrf()))
+                .when(service).revoke(org.mockito.ArgumentMatchers.eq(missingId), any(UUID.class), anyString());
+        mvc.perform(delete("/admin/api/api-keys/" + missingId).with(csrf()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("K001"));
     }
 
-    private static com.crosscert.passkey.core.entity.AdminUser adminUserWithId(long id) {
+    private static com.crosscert.passkey.core.entity.AdminUser adminUserWithUuid() {
         var u = new com.crosscert.passkey.core.entity.AdminUser("alice@example.com", "x", "ADMIN");
         try {
             var f = com.crosscert.passkey.core.entity.AdminUser.class.getDeclaredField("id");
             f.setAccessible(true);
-            f.set(u, id);
+            f.set(u, UUID.randomUUID());
         } catch (Exception e) { throw new RuntimeException(e); }
         return u;
     }

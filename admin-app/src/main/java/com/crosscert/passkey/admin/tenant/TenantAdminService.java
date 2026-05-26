@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class TenantAdminService {
@@ -37,32 +39,43 @@ public class TenantAdminService {
     }
 
     @Transactional(readOnly = true)
-    public TenantAdminDto.TenantView get(String id) {
-        Tenant t = tenants.findById(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
-        return TenantAdminDto.TenantView.from(t);
+    public TenantAdminDto.TenantView get(String idOrSlug) {
+        // Try slug first (operator-friendly URL pattern: /admin/api/tenants/acme)
+        Optional<Tenant> bySlug = tenants.findBySlug(idOrSlug);
+        if (bySlug.isPresent()) {
+            return TenantAdminDto.TenantView.from(bySlug.get());
+        }
+        // UUID fallback (direct API call with UUID string)
+        try {
+            UUID asUuid = UUID.fromString(idOrSlug);
+            return tenants.findById(asUuid)
+                    .map(TenantAdminDto.TenantView::from)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
+        } catch (IllegalArgumentException invalidUuid) {
+            throw new BusinessException(ErrorCode.TENANT_NOT_FOUND);
+        }
     }
 
     @Transactional
     public TenantAdminDto.TenantView create(TenantAdminDto.TenantCreateRequest req,
-                                            long actorId, String actorEmail) {
-        if (tenants.existsById(req.id())) {
+                                            UUID actorId, String actorEmail) {
+        if (tenants.existsBySlug(req.slug())) {
             throw new BusinessException(ErrorCode.TENANT_DUPLICATE);
         }
         validateJson(req.allowedOriginsJson(), "allowed_origins");
         validateJson(req.attestationPolicyJson(), "attestation_policy");
 
-        Tenant t = new Tenant(req.id(), req.displayName(), req.rpId(), req.rpName(),
+        Tenant t = new Tenant(req.slug(), req.displayName(), req.rpId(), req.rpName(),
                               req.allowedOriginsJson(), req.attestationPolicyJson());
         tenants.save(t);
 
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("id", req.id());
+        payload.put("slug", req.slug());
         payload.put("displayName", req.displayName());
         payload.put("rpId", req.rpId());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "TENANT_CREATE",
-                "TENANT", req.id(), payload));
+                "TENANT", req.slug(), payload));
 
         return TenantAdminDto.TenantView.from(t);
     }

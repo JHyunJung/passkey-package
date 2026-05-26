@@ -16,6 +16,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -52,8 +53,9 @@ class AuditLogServiceTest {
         payload.put("ip", "127.0.0.1");
         payload.put("ua", "JUnit");
 
+        UUID actorUuid = UUID.fromString("00000000-0000-0000-0000-000000000042");
         service.append(new AuditAppendRequest(
-                42L, "alice@example.com", "ADMIN_LOGIN",
+                actorUuid, "alice@example.com", "ADMIN_LOGIN",
                 null, null, payload));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
@@ -61,13 +63,13 @@ class AuditLogServiceTest {
         AuditLog row = captor.getValue();
 
         assertThat(row.getPrevHash()).isNull();
-        assertThat(row.getActorId()).isEqualTo(42L);
+        assertThat(row.getActorId()).isEqualTo(actorUuid);
         assertThat(row.getAction()).isEqualTo("ADMIN_LOGIN");
         assertThat(row.getPayload()).isEqualTo("{\"ip\":\"127.0.0.1\",\"ua\":\"JUnit\"}");
 
-        // Manually recompute the expected hash.
+        // Manually recompute the expected hash (actorId is UUID string in hash input).
         byte[] expected = MessageDigest.getInstance("SHA-256")
-                .digest(("|42|ADMIN_LOGIN||"
+                .digest(("|" + actorUuid + "|ADMIN_LOGIN||"
                          + "|2026-06-01T00:00:00Z|"
                          + row.getPayload()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         assertThat(row.getHash()).containsExactly(toIntArray(expected));
@@ -75,13 +77,14 @@ class AuditLogServiceTest {
 
     @Test
     void secondRowChainsToFirst() {
+        UUID actorUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AuditLog prev = new AuditLog(
-                null, new byte[]{9, 9, 9}, 1L, "alice@example.com",
+                null, new byte[]{9, 9, 9}, actorUuid, "alice@example.com",
                 "ADMIN_LOGIN", null, null, "{}", clock.instant());
         when(repo.findLatestForUpdate()).thenReturn(Optional.of(prev));
 
         service.append(new AuditAppendRequest(
-                1L, "alice@example.com", "TENANT_CREATE",
+                actorUuid, "alice@example.com", "TENANT_CREATE",
                 "TENANT", "T_A", Map.of("id", "T_A")));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
@@ -98,7 +101,8 @@ class AuditLogServiceTest {
         payload.put("a", 2);
 
         service.append(new AuditAppendRequest(
-                1L, "alice@example.com", "X", null, null, payload));
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                "alice@example.com", "X", null, null, payload));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(repo).save(captor.capture());
@@ -115,7 +119,8 @@ class AuditLogServiceTest {
         when(lockQuery.getSingleResult()).thenReturn(1);
 
         service.append(new AuditAppendRequest(
-                1L, "alice@example.com", "ADMIN_LOGIN", null, null, Map.of()));
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                "alice@example.com", "ADMIN_LOGIN", null, null, Map.of()));
 
         // The lock query on the sentinel row must precede the chain-head read.
         var ordered = inOrder(em, repo);

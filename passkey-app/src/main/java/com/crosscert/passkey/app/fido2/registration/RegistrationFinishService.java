@@ -102,7 +102,7 @@ public class RegistrationFinishService {
             throw new IllegalArgumentException("tenant mismatch");
         }
 
-        Tenant tenant = tenants.findById(ch.tenantId())
+        Tenant tenant = tenants.findById(UUID.fromString(ch.tenantId()))
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + ch.tenantId() + " missing"));
         AttestationPolicy policy = AttestationPolicy.fromJson(tenant.getAttestationPolicyJson());

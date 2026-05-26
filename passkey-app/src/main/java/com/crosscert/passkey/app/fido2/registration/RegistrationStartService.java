@@ -46,7 +46,7 @@ public class RegistrationStartService {
                             + "must have set it");
         }
         String tenantId = tenantUuid.toString();
-        Tenant tenant = tenants.findById(tenantId)
+        Tenant tenant = tenants.findById(tenantUuid)
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + tenantId + " not found"));
 

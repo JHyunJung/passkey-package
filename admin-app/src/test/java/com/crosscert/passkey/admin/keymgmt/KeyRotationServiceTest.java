@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,7 +67,7 @@ class KeyRotationServiceTest {
         when(repo.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        KeyRotationService.RotateResult result = svc.rotate(7L, "alice@example.com");
+        KeyRotationService.RotateResult result = svc.rotate(UUID.randomUUID(), "alice@example.com");
 
         assertThat(current.getStatus()).isEqualTo("ROTATED");
         assertThat(current.getRotatedAt()).isEqualTo(clock.instant());
@@ -103,7 +104,7 @@ class KeyRotationServiceTest {
     void rotateThrowsBusinessExceptionWhenLeaseUnavailable() {
         when(leases.tryAcquire(anyString(), anyString(), any(Duration.class)))
                 .thenReturn(false);
-        assertThatThrownBy(() -> svc.rotate(7L, "alice@example.com"))
+        assertThatThrownBy(() -> svc.rotate(UUID.randomUUID(), "alice@example.com"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.KEY_ROTATION_CONFLICT);
@@ -115,7 +116,7 @@ class KeyRotationServiceTest {
                 .thenReturn(true);
         when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
                 .thenReturn(Optional.empty());
-        assertThatThrownBy(() -> svc.rotate(7L, "alice@example.com"))
+        assertThatThrownBy(() -> svc.rotate(UUID.randomUUID(), "alice@example.com"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.KEY_NO_ACTIVE);

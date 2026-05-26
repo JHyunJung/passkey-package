@@ -4,7 +4,8 @@ export interface Me {
 }
 
 export interface TenantView {
-  id: string;
+  id: string;          // UUID string (e.g. "550e8400-e29b-41d4-a716-446655440000")
+  slug: string;        // operator-readable identifier (e.g. "acme", "globex")
   displayName: string;
   status: string;
   rpId: string;
@@ -16,7 +17,7 @@ export interface TenantView {
 }
 
 export interface TenantCreateRequest {
-  id: string;
+  slug: string;        // was 'id'; human-readable slug like "acme"
   displayName: string;
   rpId: string;
   rpName: string;

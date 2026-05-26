@@ -52,5 +52,10 @@ subprojects {
 
     tasks.withType<Test> {
         useJUnitPlatform()
+        // Spring Data introspects UUID fields via reflection when building
+        // JPA mapping metadata for UUID-PK repositories (e.g. TenantRepository,
+        // SchedulerLeaseRepository). Java 17 module system blocks access to
+        // java.util.UUID.mostSigBits/leastSigBits without this flag.
+        jvmArgs("--add-opens", "java.base/java.util=ALL-UNNAMED")
     }
 }

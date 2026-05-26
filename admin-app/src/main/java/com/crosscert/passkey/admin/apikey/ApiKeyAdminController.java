@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/admin/api/api-keys")
@@ -35,14 +36,14 @@ public class ApiKeyAdminController {
     public ApiResponse<ApiKeyAdminDto.ApiKeyCreateResponse> issue(
             @Valid @RequestBody ApiKeyAdminDto.ApiKeyCreateRequest req,
             Authentication auth) {
-        long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
         return ApiResponse.ok("API key issued", service.issue(req, actorId, auth.getName()));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> revoke(@PathVariable Long id, Authentication auth) {
-        long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+    public ApiResponse<Void> revoke(@PathVariable UUID id, Authentication auth) {
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
         service.revoke(id, actorId, auth.getName());
         return ApiResponse.ok();
     }

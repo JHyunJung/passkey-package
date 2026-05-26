@@ -129,7 +129,7 @@ public class AdminSecurityConfig {
             String email = raw == null ? "(unknown)"
                     : raw.length() > MAX_EMAIL_LEN ? raw.substring(0, MAX_EMAIL_LEN) : raw;
             audit.append(new AuditAppendRequest(
-                    0L, email,
+                    null, email,
                     "ADMIN_LOGIN_FAILED", null, null,
                     Map.of("ip", req.getRemoteAddr(),
                            "reason", ex.getClass().getSimpleName())));

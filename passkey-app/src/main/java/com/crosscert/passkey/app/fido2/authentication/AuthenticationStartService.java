@@ -64,7 +64,7 @@ public class AuthenticationStartService {
                     "authentication/start invoked without tenant context");
         }
         String tenantId = tenantUuid.toString();
-        Tenant tenant = tenants.findById(tenantId)
+        Tenant tenant = tenants.findById(tenantUuid)
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + tenantId + " not found"));
 

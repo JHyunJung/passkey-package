@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/admin/api/tenants")
@@ -28,9 +29,9 @@ public class TenantAdminController {
         return ApiResponse.ok(service.list());
     }
 
-    @GetMapping("/{id}")
-    public ApiResponse<TenantAdminDto.TenantView> get(@PathVariable String id) {
-        return ApiResponse.ok(service.get(id));
+    @GetMapping("/{idOrSlug}")
+    public ApiResponse<TenantAdminDto.TenantView> get(@PathVariable String idOrSlug) {
+        return ApiResponse.ok(service.get(idOrSlug));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -39,7 +40,7 @@ public class TenantAdminController {
     public ApiResponse<TenantAdminDto.TenantView> create(
             @Valid @RequestBody TenantAdminDto.TenantCreateRequest req,
             Authentication auth) {
-        long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
         var view = service.create(req, actorId, auth.getName());
         return ApiResponse.ok("Tenant created", view);
     }

@@ -142,7 +142,7 @@ class KeyRotationIT {
         String oldKid = oldKey.getKeyID();
         SignedJWT oldSigned = signJwt(oldKey, "old-token");
 
-        KeyRotationService.RotateResult result = rotation.rotate(0L, "(test)");
+        KeyRotationService.RotateResult result = rotation.rotate(null, "(test)");
         assertThat(result.oldKid()).isEqualTo(oldKid);
         assertThat(result.newKid()).isNotEqualTo(oldKid);
 
@@ -173,7 +173,7 @@ class KeyRotationIT {
 
     @Test
     void expirationJobRevokesAfterGrace() throws Exception {
-        rotation.rotate(0L, "(test)");
+        rotation.rotate(null, "(test)");
 
         // Find the ROTATED key and back-date its rotated_at by 31 minutes
         // (beyond the default PT30M grace).
@@ -213,7 +213,7 @@ class KeyRotationIT {
                 "INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                 "VALUES ('key-rotation', 'somebody-else', SYSTIMESTAMP + INTERVAL '5' MINUTE)");
 
-        assertThatThrownBy(() -> rotation.rotate(0L, "(test)"))
+        assertThatThrownBy(() -> rotation.rotate(null, "(test)"))
                 .isInstanceOf(com.crosscert.passkey.core.api.BusinessException.class)
                 .extracting(e -> ((com.crosscert.passkey.core.api.BusinessException) e).getErrorCode())
                 .isEqualTo(com.crosscert.passkey.core.api.ErrorCode.KEY_ROTATION_CONFLICT);

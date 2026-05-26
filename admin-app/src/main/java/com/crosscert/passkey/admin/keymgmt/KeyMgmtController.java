@@ -7,6 +7,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/admin/api/keys")
 public class KeyMgmtController {
@@ -34,7 +36,7 @@ public class KeyMgmtController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/rotate")
     public ApiResponse<KeyMgmtDto.RotateResponse> rotate(Authentication auth) {
-        long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
         var result = rotation.rotate(actorId, auth.getName());
         return ApiResponse.ok(new KeyMgmtDto.RotateResponse(result.oldKid(), result.newKid()));
     }
