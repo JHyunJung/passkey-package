@@ -80,10 +80,23 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResponse<Void>> handleResponseStatus(ResponseStatusException e, HttpServletRequest req) {
-        log.warn("[ResponseStatusException] {} {} - status={} reason={}",
-                 req.getMethod(), req.getRequestURI(), e.getStatusCode(), e.getReason());
+        // Pick the envelope ErrorCode by HTTP status family so the code matches
+        // the wire status (e.g., 404 → C003 ENTITY_NOT_FOUND, 409 → S001-style
+        // would need explicit BusinessException — generic 4xx falls back to
+        // INVALID_INPUT; 5xx to INTERNAL_SERVER_ERROR). Callers that need an
+        // exact ErrorCode should throw BusinessException directly.
+        int status = e.getStatusCode().value();
+        ErrorCode code = status >= 500 ? ErrorCode.INTERNAL_SERVER_ERROR
+                       : status == 404 ? ErrorCode.ENTITY_NOT_FOUND
+                       : status == 401 ? ErrorCode.UNAUTHORIZED
+                       : status == 403 ? ErrorCode.ACCESS_DENIED
+                       : status == 405 ? ErrorCode.METHOD_NOT_ALLOWED
+                       : ErrorCode.INVALID_INPUT;
+        log.warn("[ResponseStatusException] {} {} - status={} code={} reason={}",
+                 req.getMethod(), req.getRequestURI(), e.getStatusCode(), code.getCode(), e.getReason());
+        String detail = e.getReason() != null ? e.getReason() : e.getMessage();
         return ResponseEntity.status(e.getStatusCode())
-                .body(ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, e.getReason() != null ? e.getReason() : e.getMessage()));
+                .body(ApiResponse.error(code, detail));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
