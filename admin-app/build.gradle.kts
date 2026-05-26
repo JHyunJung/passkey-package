@@ -8,6 +8,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
 
     testImplementation("org.springframework.security:spring-security-test")
+    // T24 AdminFlowIT (Phase 2 acceptance gate) brings up a Testcontainers
+    // Oracle XE 21 + Redis 7 and exercises admin flows end-to-end. Same
+    // dependency shape as :passkey-app for Phase 1's Fido2EndToEndIT.
+    testImplementation(rootProject.libs.testcontainers.oracle)
+    testImplementation(rootProject.libs.testcontainers.junit)
 }
 
 springBoot {
@@ -46,4 +51,20 @@ tasks.named<Copy>("processResources") {
     from(rootProject.file("admin-ui/dist")) {
         into("static/admin")
     }
+}
+
+tasks.named<Test>("test") {
+    // Same Docker-API-version pin as :core / :passkey-app (Phase 0
+    // followup notes). Required so Testcontainers' shaded docker-java
+    // does not fall back to v1.32 and get HTTP 400 from Docker Engine
+    // v25+.
+    systemProperty("api.version", "1.43")
+}
+
+// Copy scripts/bootstrap-vpd.sql onto the test classpath so
+// AdminFlowIT can ship it into the Testcontainers Oracle via
+// MountableFile (same pattern as core / passkey-app — scripts/ is
+// the single source of truth used by docker-compose).
+tasks.named<Copy>("processTestResources") {
+    from(rootProject.file("scripts/bootstrap-vpd.sql"))
 }
