@@ -1,22 +1,13 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.UuidGenerator;
-import org.hibernate.type.SqlTypes;
 
 import java.util.Objects;
 import java.util.UUID;
 
 @Entity
 @Table(name = "API_KEY_SCOPE")
-public class ApiKeyScope {
-
-    @Id
-    @UuidGenerator(style = UuidGenerator.Style.TIME)
-    @JdbcTypeCode(SqlTypes.UUID)
-    @Column(name = "ID", columnDefinition = "RAW(16)")
-    private UUID id;
+public class ApiKeyScope extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "API_KEY_ID", nullable = false, columnDefinition = "RAW(16)")
@@ -32,7 +23,6 @@ public class ApiKeyScope {
         this.scope = scope;
     }
 
-    public UUID getId() { return id; }
     public ApiKey getApiKey() { return apiKey; }
     public String getScope() { return scope; }
 
