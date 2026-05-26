@@ -7,6 +7,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * Exposes the public JWKS (RFC 7517) for RPs to verify ID Tokens issued
+ * by this passkey-app. Intentionally NOT wrapped in ApiResponse —
+ * RFC 7517 + OIDC Discovery wire format is mandatory; any envelope
+ * breaks standard JWT libraries (Nimbus, jose4j, jsonwebtoken, jose).
+ */
 @RestController
 public class JwksController {
 
