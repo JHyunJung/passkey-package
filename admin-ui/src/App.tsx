@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Layout from './components/Layout';
@@ -7,12 +8,35 @@ import ApiKeyList from './pages/ApiKeyList';
 import AuditLog from './pages/AuditLog';
 import MdsStatus from './pages/MdsStatus';
 import KeyManagement from './pages/KeyManagement';
-import { ToastProvider } from './components/Toast';
+import { ToastProvider, useToast } from './components/Toast';
 import IdleTimeout from './components/IdleTimeout';
+import { ApiError } from './api/types';
+
+function ApiErrorBridge() {
+  const toast = useToast();
+  useEffect(() => {
+    const h = (e: PromiseRejectionEvent) => {
+      const r = e.reason;
+      if (r instanceof ApiError) {
+        toast({
+          kind: 'err',
+          title: r.serverMessage,
+          message: `[${r.code}] HTTP ${r.httpStatus}`,
+          traceId: r.traceId,
+        });
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', h);
+    return () => window.removeEventListener('unhandledrejection', h);
+  }, [toast]);
+  return null;
+}
 
 export default function App() {
   return (
     <ToastProvider>
+      <ApiErrorBridge />
       <IdleTimeout />
       <Routes>
         <Route path="/login" element={<Login />} />
