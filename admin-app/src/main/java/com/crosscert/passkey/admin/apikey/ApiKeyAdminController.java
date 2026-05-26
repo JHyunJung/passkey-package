@@ -1,8 +1,9 @@
 package com.crosscert.passkey.admin.apikey;
 
+import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -23,24 +24,26 @@ public class ApiKeyAdminController {
     }
 
     @GetMapping
-    public List<ApiKeyAdminDto.ApiKeyView> list(@RequestParam(required = false) String tenantId) {
-        return service.list(tenantId);
+    public ApiResponse<List<ApiKeyAdminDto.ApiKeyView>> list(
+            @RequestParam(required = false) String tenantId) {
+        return ApiResponse.ok(service.list(tenantId));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ResponseEntity<ApiKeyAdminDto.ApiKeyCreateResponse> issue(
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<ApiKeyAdminDto.ApiKeyCreateResponse> issue(
             @Valid @RequestBody ApiKeyAdminDto.ApiKeyCreateRequest req,
             Authentication auth) {
         long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
-        return ResponseEntity.status(201).body(service.issue(req, actorId, auth.getName()));
+        return ApiResponse.ok("API key issued", service.issue(req, actorId, auth.getName()));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> revoke(@PathVariable Long id, Authentication auth) {
+    public ApiResponse<Void> revoke(@PathVariable Long id, Authentication auth) {
         long actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
         service.revoke(id, actorId, auth.getName());
-        return ResponseEntity.noContent().build();
+        return ApiResponse.ok();
     }
 }

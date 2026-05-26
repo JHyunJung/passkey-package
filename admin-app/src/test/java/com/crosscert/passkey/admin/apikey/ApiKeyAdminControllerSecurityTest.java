@@ -23,6 +23,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -87,7 +88,10 @@ class ApiKeyAdminControllerSecurityTest {
     @Test
     @WithMockUser(roles = "VIEWER")
     void viewerCanList() throws Exception {
-        mvc.perform(get("/admin/api/api-keys")).andExpect(status().isOk());
+        mvc.perform(get("/admin/api/api-keys"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
@@ -116,7 +120,34 @@ class ApiKeyAdminControllerSecurityTest {
                         "T_A", java.time.Instant.now(), null));
         mvc.perform(post("/admin/api/api-keys")
                 .with(csrf()).contentType("application/json").content(BODY))
-            .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("API key issued"))
+                .andExpect(jsonPath("$.data.plainText").exists());
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    void adminCanRevoke() throws Exception {
+        org.mockito.Mockito.when(admins.findByEmail(anyString()))
+                .thenReturn(java.util.Optional.of(adminUserWithId(7L)));
+        mvc.perform(delete("/admin/api/api-keys/42").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    void revokeReturnsApiErrorWhenNotFound() throws Exception {
+        org.mockito.Mockito.when(admins.findByEmail(anyString()))
+                .thenReturn(java.util.Optional.of(adminUserWithId(7L)));
+        org.mockito.Mockito.doThrow(new com.crosscert.passkey.core.api.BusinessException(
+                        com.crosscert.passkey.core.api.ErrorCode.API_KEY_NOT_FOUND))
+                .when(service).revoke(org.mockito.ArgumentMatchers.eq(999L), anyLong(), anyString());
+        mvc.perform(delete("/admin/api/api-keys/999").with(csrf()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("K001"));
     }
 
     private static com.crosscert.passkey.core.entity.AdminUser adminUserWithId(long id) {

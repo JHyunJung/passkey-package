@@ -97,6 +97,19 @@ class ApiKeyAdminServiceTest {
     }
 
     @Test
+    void revokeThrowsBusinessExceptionWhenIdNotFound() {
+        when(repo.findById(404L)).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.revoke(404L, 7L, "alice@example.com"))
+                .isInstanceOf(com.crosscert.passkey.core.api.BusinessException.class)
+                .extracting(e -> ((com.crosscert.passkey.core.api.BusinessException) e).getErrorCode())
+                .isEqualTo(com.crosscert.passkey.core.api.ErrorCode.API_KEY_NOT_FOUND);
+
+        org.mockito.Mockito.verify(audit, org.mockito.Mockito.never()).append(any());
+    }
+
+    @Test
     void revokeSetsRevokedAtAndAuditsPrefixOnly() {
         ApiKey existing = new ApiKey("T_A", "pk_abcd1234", "$2a$04$x", "primary", "[]");
         try {
