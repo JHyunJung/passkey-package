@@ -20,6 +20,8 @@ import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -81,6 +83,14 @@ class VpdIsolationIT {
     // therefore use the same secret for both so the bootstrap SQL can
     // connect as SYS-AS-SYSDBA with the password we know.
     private static final String SYS_PASSWORD = "app_owner_pw";
+
+    // Phase 6: tenant IDs are UUIDs. T6 will migrate entity constructors;
+    // for now RuntimeDsHelper calls use these UUID fixtures while entity
+    // constructors still accept String (pre-T6 entities).
+    private static final UUID TENANT_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID TENANT_B = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private static final String TENANT_A_HEX = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private static final String TENANT_B_HEX = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE =
@@ -172,21 +182,21 @@ class VpdIsolationIT {
     /** Scenario 2: APP_RUNTIME with APP_CTX=T_A → only T_A row. */
     @Test
     void runtimeWithTenantASeesOnlyTenantA() {
-        var rows = runtime.selectAllCredentialsAsRuntime("T_A");
+        var rows = runtime.selectAllCredentialsAsRuntime(TENANT_A);
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)[1])
                 .as("VPD predicate must restrict APP_RUNTIME to APP_CTX tenant")
-                .isEqualTo("T_A");
+                .isEqualTo(TENANT_A_HEX);
     }
 
     /** Scenario 3: APP_RUNTIME with APP_CTX=T_B → only T_B row. */
     @Test
     void runtimeWithTenantBSeesOnlyTenantB() {
-        var rows = runtime.selectAllCredentialsAsRuntime("T_B");
+        var rows = runtime.selectAllCredentialsAsRuntime(TENANT_B);
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)[1])
                 .as("VPD predicate must restrict APP_RUNTIME to APP_CTX tenant")
-                .isEqualTo("T_B");
+                .isEqualTo(TENANT_B_HEX);
     }
 
     /** Scenario 4: APP_RUNTIME with no APP_CTX → safe default (zero rows). */
@@ -216,7 +226,7 @@ class VpdIsolationIT {
         // and the test would either pass for the wrong reason or fail
         // with a TransactionSystemException wrapping the real cause.
         assertThatThrownBy(() -> runtime.insertCredentialAs(
-                "T_A", "T_B", "user_x", "cred_x", "pk_x"))
+                TENANT_A, TENANT_B_HEX, "user_x", "cred_x", "pk_x"))
                 .as("VPD update_check=TRUE must reject cross-tenant INSERT")
                 // Match the specific Oracle code for "policy with check
                 // option violation" so the test cannot pass on an

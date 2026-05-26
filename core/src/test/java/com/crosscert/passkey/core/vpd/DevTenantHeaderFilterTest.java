@@ -8,6 +8,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,6 +19,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class DevTenantHeaderFilterTest {
+
+    private static final UUID TENANT_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     private final DevTenantHeaderFilter filter = new DevTenantHeaderFilter();
 
@@ -30,11 +34,12 @@ class DevTenantHeaderFilterTest {
         HttpServletRequest req = mock(HttpServletRequest.class);
         HttpServletResponse res = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);
-        when(req.getHeader("X-Tenant-Id")).thenReturn("T_A");
+        // Phase 6: header must be a valid UUID string; operators pass UUID directly.
+        when(req.getHeader("X-Tenant-Id")).thenReturn(TENANT_A.toString());
 
         // Capture the value visible inside the chain — proves the
         // header reached TenantContextHolder before downstream code ran.
-        String[] visibleInChain = new String[1];
+        UUID[] visibleInChain = new UUID[1];
         doAnswer((InvocationOnMock i) -> {
             visibleInChain[0] = TenantContextHolder.get();
             return null;
@@ -42,7 +47,7 @@ class DevTenantHeaderFilterTest {
 
         filter.doFilter(req, res, chain);
 
-        assertThat(visibleInChain[0]).isEqualTo("T_A");
+        assertThat(visibleInChain[0]).isEqualTo(TENANT_A);
         // ThreadLocal must be cleared by the time control returns.
         assertThat(TenantContextHolder.get()).isNull();
     }
@@ -54,7 +59,7 @@ class DevTenantHeaderFilterTest {
         FilterChain chain = mock(FilterChain.class);
         when(req.getHeader("X-Tenant-Id")).thenReturn("   ");
 
-        String[] visibleInChain = new String[1];
+        UUID[] visibleInChain = new UUID[1];
         doAnswer((InvocationOnMock i) -> {
             visibleInChain[0] = TenantContextHolder.get();
             return null;
@@ -66,16 +71,39 @@ class DevTenantHeaderFilterTest {
     }
 
     @Test
+    void invalidUuidHeaderIsIgnoredWithWarning() throws Exception {
+        // A slug-format value (e.g., "acme") is not a valid UUID.
+        // Slug→UUID resolution is deferred to T13/T14. For now the filter
+        // logs a warning and treats the request as if no tenant was supplied.
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        HttpServletResponse res = mock(HttpServletResponse.class);
+        FilterChain chain = mock(FilterChain.class);
+        when(req.getHeader("X-Tenant-Id")).thenReturn("acme");
+
+        UUID[] visibleInChain = new UUID[1];
+        doAnswer((InvocationOnMock i) -> {
+            visibleInChain[0] = TenantContextHolder.get();
+            return null;
+        }).when(chain).doFilter(any(), any());
+
+        filter.doFilter(req, res, chain);
+
+        // Invalid UUID header must not set any tenant context.
+        assertThat(visibleInChain[0]).isNull();
+        assertThat(TenantContextHolder.get()).isNull();
+    }
+
+    @Test
     void clearsStaleContextBeforeReadingHeader() throws Exception {
         // Simulate a leaked tenant from a prior request on this thread.
-        TenantContextHolder.set("T_STALE");
+        TenantContextHolder.set(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));
 
         HttpServletRequest req = mock(HttpServletRequest.class);
         HttpServletResponse res = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);
         when(req.getHeader("X-Tenant-Id")).thenReturn(null);  // no header
 
-        String[] visibleInChain = new String[1];
+        UUID[] visibleInChain = new UUID[1];
         doAnswer((InvocationOnMock i) -> {
             visibleInChain[0] = TenantContextHolder.get();
             return null;
@@ -92,7 +120,7 @@ class DevTenantHeaderFilterTest {
         HttpServletRequest req = mock(HttpServletRequest.class);
         HttpServletResponse res = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);
-        when(req.getHeader("X-Tenant-Id")).thenReturn("T_A");
+        when(req.getHeader("X-Tenant-Id")).thenReturn(TENANT_A.toString());
         doThrow(new ServletException("downstream boom"))
                 .when(chain).doFilter(any(), any());
 

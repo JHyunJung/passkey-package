@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.UUID;
+import java.util.logging.Logger;
 
 /**
  * Phase 0 / dev-only request filter that copies the {@code X-Tenant-Id}
@@ -35,6 +37,7 @@ import java.io.IOException;
 public class DevTenantHeaderFilter extends OncePerRequestFilter {
 
     private static final String HEADER = "X-Tenant-Id";
+    private static final Logger LOG = Logger.getLogger(DevTenantHeaderFilter.class.getName());
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -55,10 +58,21 @@ public class DevTenantHeaderFilter extends OncePerRequestFilter {
         // previous tenant into this one.
         TenantContextHolder.clear();
 
-        String tenant = req.getHeader(HEADER);
-        if (tenant != null && !tenant.isBlank()) {
-            TenantContextHolder.set(tenant);
+        // Phase 6: X-Tenant-Id must be a UUID string for dev/test use.
+        // Slug → UUID resolution is deferred to T13/T14 (TenantRepository
+        // findBySlug). For now, operators pass the UUID directly.
+        // TODO T13/T14: add slug fallback via TenantRepository.findBySlug.
+        String headerValue = req.getHeader(HEADER);
+        UUID tenantId = null;
+        if (headerValue != null && !headerValue.isBlank()) {
+            try {
+                tenantId = UUID.fromString(headerValue);
+            } catch (IllegalArgumentException e) {
+                // Slug resolution deferred to T13/T14. For now reject invalid UUID.
+                LOG.warning("X-Tenant-Id is not a valid UUID: " + headerValue);
+            }
         }
+        TenantContextHolder.set(tenantId);
         try {
             chain.doFilter(req, res);
         } finally {
