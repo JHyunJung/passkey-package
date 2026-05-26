@@ -1,13 +1,16 @@
 package com.crosscert.passkey.admin.scheduler;
 
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.crosscert.passkey.core.entity.SchedulerLease;
+import com.crosscert.passkey.core.repository.SchedulerLeaseRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Database-backed lease for one-leader-at-a-time scheduler jobs
@@ -15,20 +18,24 @@ import java.time.Instant;
  * "mds-sync", "key-expiration") and held by a host+process id.
  *
  * <p>Acquisition:
- *   - INSERT new row if name absent.
- *   - UPDATE row if held by us OR expired (expires_at &lt; now()).
- *   - UPDATE matches 0 rows → another holder is active → return false.
+ *   - INSERT new row if name absent (catching duplicate-key race).
+ *   - UPDATE row via PESSIMISTIC_WRITE lock if held by us OR expired.
+ *   - If lock is obtained but another holder is still active → return false.
  *
- * <p>Release is best-effort (TTL eventually expires anyway).
+ * <p>Release is atomic: {@code DELETE … WHERE name=? AND holder=?} so a
+ * stale releaser cannot evict a row that another node has since acquired.
+ *
+ * <p>Phase 6 T11: SchedulerLease PK is now UUID; name is UNIQUE.
+ * Public signature of tryAcquire/release is unchanged.
  */
 @Service
 public class SchedulerLeaseService {
 
-    private final JdbcTemplate jdbc;
+    private final SchedulerLeaseRepository repo;
     private final Clock clock;
 
-    public SchedulerLeaseService(JdbcTemplate jdbc, Clock clock) {
-        this.jdbc = jdbc;
+    public SchedulerLeaseService(SchedulerLeaseRepository repo, Clock clock) {
+        this.repo = repo;
         this.clock = clock;
     }
 
@@ -36,35 +43,41 @@ public class SchedulerLeaseService {
     public boolean tryAcquire(String name, String holder, Duration ttl) {
         Instant now = clock.instant();
         Instant newExpiry = now.plus(ttl);
-        Integer existing = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.scheduler_lease WHERE name=?",
-                Integer.class, name);
-        if (existing == null || existing == 0) {
+
+        // Pessimistic-write lock on the existing row serializes concurrent callers.
+        Optional<SchedulerLease> existing = repo.findByNameForUpdate(name);
+
+        if (existing.isEmpty()) {
+            // No row yet — try to INSERT.  Another node may race us here;
+            // if they win the unique constraint throws and we return false.
             try {
-                jdbc.update(
-                        "INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
-                        "VALUES (?, ?, ?)",
-                        name, holder, Timestamp.from(newExpiry));
+                SchedulerLease fresh = new SchedulerLease(UUID.randomUUID(), name, holder, newExpiry);
+                repo.save(fresh);
                 return true;
-            } catch (org.springframework.dao.DuplicateKeyException e) {
-                // Race: another instance INSERTed between our SELECT and INSERT.
-                // Fall through to the UPDATE-takeover path below.
+            } catch (DataIntegrityViolationException e) {
+                // Concurrent INSERT won the race — we did not acquire the lease.
+                return false;
             }
         }
 
-        int updated = jdbc.update(
-                "UPDATE APP_OWNER.scheduler_lease " +
-                "SET holder=?, expires_at=? " +
-                "WHERE name=? AND (holder=? OR expires_at < ?)",
-                holder, Timestamp.from(newExpiry),
-                name, holder, Timestamp.from(now));
-        return updated > 0;
+        SchedulerLease lease = existing.get();
+        // Allow takeover if the lease belongs to us or has expired.
+        if (!holder.equals(lease.getHolder()) && !lease.getExpiresAt().isBefore(now)) {
+            return false;  // another holder is still active
+        }
+        lease.setHolder(holder);
+        lease.setExpiresAt(newExpiry);
+        repo.save(lease);
+        return true;
     }
 
+    /**
+     * Best-effort release. The predicate {@code WHERE name=:name AND holder=:holder}
+     * is evaluated atomically in the DB, so a stale releaser cannot evict a row that
+     * another instance has since (re-)acquired.
+     */
     @Transactional
     public void release(String name, String holder) {
-        jdbc.update(
-                "DELETE FROM APP_OWNER.scheduler_lease WHERE name=? AND holder=?",
-                name, holder);
+        repo.deleteByNameAndHolder(name, holder);
     }
 }
