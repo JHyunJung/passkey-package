@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.security.SecureRandom;
+
 @Configuration
 public class CoreSecurityConfig {
 
@@ -15,5 +17,16 @@ public class CoreSecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
+    }
+
+    /**
+     * Shared SecureRandom instance for cryptographic key generation
+     * (e.g. ApiKeyAdminService prefix + secret). java.security.SecureRandom
+     * auto-reseeds from the OS entropy pool; a single shared instance is safe
+     * and avoids the startup cost of seeding one per request.
+     */
+    @Bean
+    public SecureRandom secureRandom() {
+        return new SecureRandom();
     }
 }

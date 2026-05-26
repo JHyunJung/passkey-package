@@ -224,3 +224,17 @@ inflated floor. The floor is intentionally well clear of any
 realistic value but a real authenticator could in theory return a
 value above 99999 — that's not relevant for the test which runs
 against the emulator only.
+
+## From Phase 2 T4 — admin_user seed passwords
+
+V11 seeds two operator accounts with hard-coded BCrypt-hashed temporary
+passwords (`alice-temp-pw`, `bob-temp-pw`). These are local-dev / IT
+fixtures only.
+
+Before any non-local deploy:
+- Update the V11 migration in your private overlay (or run an
+  out-of-band SQL UPDATE) to replace both hashes with real
+  per-environment values.
+- Add an admin self-service "change password" endpoint (Phase 4
+  scope per Phase 2 design).
+- Add a password-rotation policy and force-change-on-first-login flag.
