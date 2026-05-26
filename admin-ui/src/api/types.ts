@@ -62,3 +62,15 @@ export interface AuditLogView {
   payload: string;
   createdAt: string;
 }
+
+export interface MdsStatusView {
+  version: number;
+  nextUpdate?: string;
+  fetchedAt?: string;
+}
+
+export interface SyncResult {
+  status: 'SYNCED' | 'SKIPPED' | 'FAILED';
+  version?: number;
+  error?: string;
+}
