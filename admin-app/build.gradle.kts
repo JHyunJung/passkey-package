@@ -13,6 +13,10 @@ dependencies {
     // dependency shape as :passkey-app for Phase 1's Fido2EndToEndIT.
     testImplementation(rootProject.libs.testcontainers.oracle)
     testImplementation(rootProject.libs.testcontainers.junit)
+    // T23 MdsSchedulerIT stubs the FIDO MDS3 endpoint via WireMock so the
+    // IT runs offline and exercises the real FidoMDS3MetadataBLOBProvider
+    // chain against a controlled BLOB + test root CA.
+    testImplementation(rootProject.libs.wiremock.standalone)
 }
 
 springBoot {

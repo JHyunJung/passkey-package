@@ -8,6 +8,7 @@ webauthn4j = "0.31.5.RELEASE"
 nimbus-jose-jwt = "9.40"
 bucket4j = "8.18.0"
 node-gradle = "7.0.2"
+wiremock = "3.10.0"
 
 [libraries]
 oracle-jdbc = { module = "com.oracle.database.jdbc:ojdbc11", version.ref = "oracle-jdbc" }
@@ -26,6 +27,7 @@ spring-security-crypto = { module = "org.springframework.security:spring-securit
 spring-session-data-redis = { module = "org.springframework.session:spring-session-data-redis" }
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
+wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
