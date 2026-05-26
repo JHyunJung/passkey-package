@@ -95,15 +95,17 @@ GRANT ALL PRIVILEGES TO APP_ADMIN_USER;
 -- ============================================================
 
 CREATE OR REPLACE PACKAGE APP_OWNER.CTX_PKG AS
-  PROCEDURE set_tenant(p_tid IN VARCHAR2);
+  -- Phase 6: tenant_id is now RAW(16). Callers pass 32-char hex string
+  -- (no dashes). VPD policy function uses HEXTORAW() to compare.
+  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2);
   PROCEDURE clear_tenant;
 END;
 /
 
 CREATE OR REPLACE PACKAGE BODY APP_OWNER.CTX_PKG AS
-  PROCEDURE set_tenant(p_tid IN VARCHAR2) IS
+  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2) IS
   BEGIN
-    DBMS_SESSION.SET_CONTEXT('APP_CTX', 'TENANT_ID', p_tid);
+    DBMS_SESSION.SET_CONTEXT('APP_CTX', 'TENANT_ID', p_tenant_hex);
   END;
   PROCEDURE clear_tenant IS
   BEGIN
