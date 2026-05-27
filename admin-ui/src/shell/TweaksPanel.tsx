@@ -33,6 +33,7 @@ function Segment<T extends string>({
         <button
           key={opt}
           type="button"
+          aria-pressed={value === opt}
           onClick={() => onChange(opt)}
           className={cn(
             'px-2.5 py-1 text-[12px] rounded-sm transition-colors',
