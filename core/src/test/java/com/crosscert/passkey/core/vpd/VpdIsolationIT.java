@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -137,6 +138,9 @@ class VpdIsolationIT {
     @Autowired
     RuntimeDsHelper runtime;
 
+    @Autowired
+    JdbcTemplate jdbc;
+
     // Actual tenant UUIDs as saved by JPA (@UuidGenerator assigns on save).
     // Captured in @BeforeEach so RuntimeDsHelper queries and the VPD
     // assertions use the same UUID that the DB row carries.
@@ -149,6 +153,10 @@ class VpdIsolationIT {
         // tenant's row directly through JPA. We do NOT set APP_CTX here —
         // setting it would prove nothing for the admin bypass scenario.
         TenantContextHolder.clear();
+        // Wipe state from any prior test / seed. V23 added
+        // admin_user.tenant_id FK → tenants 삭제 전에 child reference NULL.
+        // (V11 seed alice/bob + V23 demo-rp tenant 가 같은 schema 에 남아 있다.)
+        resetState();
         Tenant tenantA = new Tenant("T_A", "Tenant A", "localhost", "Tenant A RP");
         tenantA.addAllowedOrigin("http://localhost", 0);
         tenantA.addAcceptedFormat("none");
@@ -176,8 +184,25 @@ class VpdIsolationIT {
     @AfterEach
     void cleanup() {
         TenantContextHolder.clear();
-        credentials.deleteAll();
-        tenants.deleteAll();
+        resetState();
+    }
+
+    /**
+     * Schema-wide cleanup. V23 의 fk_admin_user_tenant FK 가 admin_user.tenant_id
+     * 를 가리키므로 tenant 직접 삭제 전에 NULL set 필요. V11 seed (alice/bob) +
+     * V23 seed (demo-rp tenant + bob 의 tenant_id 매핑) 가 매 테스트 후 동일
+     * 상태로 reset 되도록 admin_user 의 tenant_id 도 비운다.
+     *
+     * credential 은 VPD 정책 적용 + admin user 가 EXEMPT ACCESS POLICY 라 직접
+     * native DELETE 가 안전.
+     */
+    private void resetState() {
+        // V23 의 CK_ADMIN_USER_ROLE_TENANT CHECK 제약: RP_ADMIN 은 tenant_id
+        // NOT NULL 강제. tenant_id 만 NULL set 하면 위반 → role 도 동시에
+        // PLATFORM_OPERATOR 로 (admin-role-separation IT 의 패턴).
+        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+        jdbc.update("DELETE FROM APP_OWNER.credential");
+        jdbc.update("DELETE FROM APP_OWNER.tenant");
     }
 
     /** Scenario 1: APP_ADMIN_USER bypasses VPD via EXEMPT ACCESS POLICY. */
