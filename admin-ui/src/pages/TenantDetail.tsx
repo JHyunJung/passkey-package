@@ -6,10 +6,11 @@ import WebAuthnConfigTab from './tenant/WebAuthnConfigTab';
 import CredentialsTab from './tenant/CredentialsTab';
 import ApiKeysTab from './tenant/ApiKeysTab';
 import TenantActivityTab from './tenant/TenantActivityTab';
+import AaguidPolicyTab from './tenant/AaguidPolicyTab';
 import type { TenantView } from '../api/types';
 import { useMe } from '../me/MeContext';
 
-type TabKey = 'overview' | 'webauthn' | 'credentials' | 'apikeys' | 'activity';
+type TabKey = 'overview' | 'webauthn' | 'credentials' | 'apikeys' | 'activity' | 'aaguid';
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: 'overview',    label: 'Overview' },
@@ -17,6 +18,7 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: 'credentials', label: 'Credentials' },
     { key: 'apikeys',     label: 'API Keys' },
     { key: 'activity',    label: 'Activity' },
+    { key: 'aaguid',      label: 'AAGUID' },
 ];
 
 export default function TenantDetail() {
@@ -86,6 +88,7 @@ export default function TenantDetail() {
             {tab === 'credentials' && <CredentialsTab tenantId={tenant.id} />}
             {tab === 'apikeys'     && <ApiKeysTab tenantId={tenant.id} />}
             {tab === 'activity'    && <TenantActivityTab tenantId={tenant.id} />}
+            {tab === 'aaguid'      && <AaguidPolicyTab />}
         </div>
     );
 }

@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import { updateTenant } from '../../api/client';
+import { webauthnDiffApi } from '../../api/aaguidPolicy';
 import { useToast } from '../../components/Toast';
 import OriginChipInput from '../../components/OriginChipInput';
 import FormatCheckboxGrid from '../../components/FormatCheckboxGrid';
 import Switch from '../../components/Switch';
-import type { TenantView, TenantUpdateRequest } from '../../api/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody,
+  DialogFooter,
+  DialogClose,
+} from '../../components/ui/dialog';
+import type { TenantView, TenantUpdateRequest, WebauthnConfigDiff } from '../../api/types';
 
 interface Props {
     tenant: TenantView;
@@ -59,6 +70,9 @@ function shallowEqual(a: Draft, b: Draft): boolean {
 export default function WebAuthnConfigTab({ tenant, onUpdated }: Props) {
     const [draft, setDraft] = useState<Draft>(toDraft(tenant));
     const [busy, setBusy] = useState(false);
+    const [diffOpen, setDiffOpen] = useState(false);
+    const [diffResult, setDiffResult] = useState<WebauthnConfigDiff | null>(null);
+    const [diffLoading, setDiffLoading] = useState(false);
     const toast = useToast();
     const dirty = !shallowEqual(draft, toDraft(tenant));
 
@@ -73,7 +87,29 @@ export default function WebAuthnConfigTab({ tenant, onUpdated }: Props) {
         }
     }
 
+    async function previewDiff() {
+        setDiffLoading(true);
+        try {
+            const req = toRequest(draft);
+            const result = await webauthnDiffApi.diff(tenant.id, {
+                rpId: tenant.rpId,
+                rpName: req.rpName,
+                allowedOrigins: req.allowedOrigins,
+                acceptedFormats: req.acceptedFormats,
+                requireUserVerification: req.requireUserVerification,
+                mdsRequired: req.mdsRequired,
+            });
+            setDiffResult(result);
+            setDiffOpen(true);
+        } catch {
+            toast({ kind: 'err', title: 'diff 조회 실패' });
+        } finally {
+            setDiffLoading(false);
+        }
+    }
+
     return (
+        <>
         <form
             className="stack-4"
             onSubmit={(e) => {
@@ -134,8 +170,84 @@ export default function WebAuthnConfigTab({ tenant, onUpdated }: Props) {
                 </button>
                 <button type="button" className="btn" disabled={!dirty || busy}
                         onClick={() => setDraft(toDraft(tenant))}>되돌리기</button>
+                <button
+                    type="button"
+                    className="btn btn--outline btn--sm"
+                    disabled={!dirty || diffLoading}
+                    onClick={previewDiff}
+                    style={{ marginLeft: 8 }}
+                >
+                    {diffLoading ? '분석 중…' : '변경 미리보기'}
+                </button>
             </div>
         </form>
+
+        <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
+            <DialogContent wide>
+                <DialogHeader>
+                    <DialogTitle>WebAuthn 설정 변경 미리보기</DialogTitle>
+                    <DialogDescription>
+                        {diffResult ? `${diffResult.changes.length}개 필드 변경됨` : ''}
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogBody>
+                    {diffResult && (
+                        <div className="stack-3">
+                            {diffResult.warnings.length > 0 && (
+                                <div className="banner banner--danger">
+                                    <div className="stack-1">
+                                        {diffResult.warnings.map((w, i) => (
+                                            <div key={i} style={{ fontSize: 13 }}>{w}</div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {diffResult.changes.length === 0 && (
+                                <div style={{ color: 'var(--text-mute)', fontSize: 14 }}>변경 사항 없음</div>
+                            )}
+                            {diffResult.changes.map((c, i) => (
+                                <div key={i} className="card">
+                                    <div className="card__body stack-2">
+                                        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{c.field}</div>
+                                        {c.added && c.added.length > 0 && (
+                                            <div className="stack-1">
+                                                {c.added.map((item, j) => (
+                                                    <div key={j} style={{ fontSize: 12, color: 'var(--success)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                                        + {item}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {c.removed && c.removed.length > 0 && (
+                                            <div className="stack-1">
+                                                {c.removed.map((item, j) => (
+                                                    <div key={j} style={{ fontSize: 12, color: 'var(--danger)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                                        - {item}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {!c.added && !c.removed && (
+                                            <div style={{ fontSize: 12, color: 'var(--text-soft)' }}>
+                                                <span style={{ color: 'var(--danger)' }}>{String(c.from)}</span>
+                                                <span style={{ margin: '0 6px', color: 'var(--text-mute)' }}>→</span>
+                                                <span style={{ color: 'var(--success)' }}>{String(c.to)}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </DialogBody>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <button type="button" className="btn btn--sm">닫기</button>
+                    </DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }
 
