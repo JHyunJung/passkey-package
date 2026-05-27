@@ -8,5 +8,5 @@
     "expiresIn": 900
   },
   "traceId": "abc",
-  "timestamp": "2026-05-27T09:03:00"
+  "timestamp": "2026-05-27T09:03:00Z"
 }

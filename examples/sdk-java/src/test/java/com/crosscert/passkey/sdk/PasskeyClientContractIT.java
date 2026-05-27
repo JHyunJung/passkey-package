@@ -112,7 +112,7 @@ class PasskeyClientContractIT {
         wm.stubFor(post(urlEqualTo("/api/v1/rp/registration/start"))
                 .inScenario("auth").whenScenarioStateIs("rotated")
                 .willReturn(aResponse().withStatus(401)
-                        .withHeader("Content-Type", "application/json")
+                        .withHeader("Content-Type", "application/problem+json")
                         .withBody(read("contract/error-401.json"))));
         wm.setScenarioState("auth", "rotated");
 
