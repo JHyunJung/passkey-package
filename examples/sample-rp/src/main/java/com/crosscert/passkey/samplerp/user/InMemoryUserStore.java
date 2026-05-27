@@ -19,15 +19,15 @@ public class InMemoryUserStore {
 
     /** username 으로 새 userHandle (32B base64url) 발급 + pending 상태로 저장. 중복이면 USERNAME_TAKEN. */
     public String createPending(String username, String displayName) {
-        if (byUsername.containsKey(username)) {
-            throw new BusinessException(ErrorCode.USERNAME_TAKEN);
-        }
         byte[] raw = new byte[32];
         rng.nextBytes(raw);
         String userHandle = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+        // putIfAbsent 로 username 을 원자적으로 예약. 동시 호출 시 두 번째는 non-null 반환 → 거부.
+        if (byUsername.putIfAbsent(username, userHandle) != null) {
+            throw new BusinessException(ErrorCode.USERNAME_TAKEN);
+        }
         SampleRpUser user = new SampleRpUser(userHandle, username, displayName, Instant.now(), null);
         byHandle.put(userHandle, user);
-        byUsername.put(username, userHandle);
         return userHandle;
     }
 
