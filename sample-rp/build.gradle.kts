@@ -1,23 +1,13 @@
 plugins {
     java
-    id("org.springframework.boot") version "3.5.0"
-    id("io.spring.dependency-management") version "1.1.6"
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dep.mgmt)
 }
 
-group = "com.crosscert.passkey"
-version = "0.0.1-SNAPSHOT"
-
-java {
-    toolchain { languageVersion.set(JavaLanguageVersion.of(17)) }
-}
-
-repositories {
-    mavenLocal()        // sdk-java 픽업
-    mavenCentral()
-}
+// group / version / toolchain / repositories 모두 root allprojects + subprojects 가 처리.
 
 dependencies {
-    implementation("com.crosscert.passkey:passkey-sdk-java:0.1.0-SNAPSHOT")
+    implementation(project(":sdk-java"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("org.springframework.boot:spring-boot-starter-security")
@@ -27,9 +17,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     // SampleRpSmokeIT 용 webauthn4j-test (ClientPlatform + PackedAuthenticator).
-    // Passkey2 root pins 0.31.5 — must match so T17 can reuse Fido2EndToEndIT patterns.
-    testImplementation("com.webauthn4j:webauthn4j-test:0.31.5.RELEASE")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(rootProject.libs.webauthn4j.test)
+    // junit-platform-launcher 는 root subprojects 가 자동 적용
 }
 
 tasks.named<Test>("test") {
