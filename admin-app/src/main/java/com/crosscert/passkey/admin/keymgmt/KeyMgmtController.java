@@ -25,6 +25,7 @@ public class KeyMgmtController {
         this.admins = admins;
     }
 
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @GetMapping
     public ApiResponse<KeyMgmtDto.KeyList> list() {
         var keys = repo.findAll().stream()
@@ -33,7 +34,7 @@ public class KeyMgmtController {
         return ApiResponse.ok(new KeyMgmtDto.KeyList(keys));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @PostMapping("/rotate")
     public ApiResponse<KeyMgmtDto.RotateResponse> rotate(Authentication auth) {
         UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();

@@ -5,6 +5,7 @@ import type { AuditLogView } from '../api/types';
 import { useToast } from '../components/Toast';
 import { Receipt, Refresh, Shield } from '../components/Icons';
 import { formatDateTime } from '../lib/formatDateTime';
+import PlatformOnlyGuard from '../components/PlatformOnlyGuard';
 
 // AuditChainVerifier.Result record fields (verified via java source):
 //   ok: boolean
@@ -63,7 +64,8 @@ export default function AuditLog() {
   }
 
   return (
-    <div className="stack-6">
+    <PlatformOnlyGuard>
+      <div className="stack-6">
       <div className="page__head">
         <div>
           <h1 className="page__title">Audit Log</h1>
@@ -157,5 +159,6 @@ export default function AuditLog() {
         )}
       </div>
     </div>
+    </PlatformOnlyGuard>
   );
 }

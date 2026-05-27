@@ -5,6 +5,7 @@ import type { MdsStatusView, SyncResult } from '../api/types';
 import { useToast } from '../components/Toast';
 import { Refresh, Activity } from '../components/Icons';
 import { formatDateTime, formatDate } from '../lib/formatDateTime';
+import PlatformOnlyGuard from '../components/PlatformOnlyGuard';
 
 export default function MdsStatus() {
   const [status, setStatus] = useState<MdsStatusView | null>(null);
@@ -34,33 +35,35 @@ export default function MdsStatus() {
   }
 
   return (
-    <div className="stack-6">
-      <div className="page__head">
-        <div>
-          <h1 className="page__title">MDS Status</h1>
-          <div className="page__sub">FIDO Alliance Metadata Service BLOB 동기화 상태.</div>
-        </div>
-        <button className="btn btn--primary" onClick={sync} disabled={syncing}>
-          <Refresh size={14} /> {syncing ? '동기화 중…' : '지금 동기화'}
-        </button>
-      </div>
-
-      <div className="grid-3">
-        <Metric label="VERSION" value={status?.version != null ? String(status.version) : '—'} sub="현재 BLOB" />
-        <Metric label="NEXT UPDATE" value={formatDate(status?.nextUpdate)} sub="MDS 권고 다음 갱신" />
-        <Metric label="LAST FETCHED" value={formatDateTime(status?.fetchedAt)} sub="KST" />
-      </div>
-
-      {last && (
-        <div className={`banner banner--${last.status === 'SYNCED' ? 'success' : last.status === 'SKIPPED' ? 'info' : 'danger'}`}>
-          <Activity size={16} className="banner__icon" />
+    <PlatformOnlyGuard>
+      <div className="stack-6">
+        <div className="page__head">
           <div>
-            <div className="banner__title">Last sync: {last.status} {last.version != null && `· v${last.version}`}</div>
-            {last.error && <div className="banner__body">{last.error}</div>}
+            <h1 className="page__title">MDS Status</h1>
+            <div className="page__sub">FIDO Alliance Metadata Service BLOB 동기화 상태.</div>
           </div>
+          <button className="btn btn--primary" onClick={sync} disabled={syncing}>
+            <Refresh size={14} /> {syncing ? '동기화 중…' : '지금 동기화'}
+          </button>
         </div>
-      )}
-    </div>
+
+        <div className="grid-3">
+          <Metric label="VERSION" value={status?.version != null ? String(status.version) : '—'} sub="현재 BLOB" />
+          <Metric label="NEXT UPDATE" value={formatDate(status?.nextUpdate)} sub="MDS 권고 다음 갱신" />
+          <Metric label="LAST FETCHED" value={formatDateTime(status?.fetchedAt)} sub="KST" />
+        </div>
+
+        {last && (
+          <div className={`banner banner--${last.status === 'SYNCED' ? 'success' : last.status === 'SKIPPED' ? 'info' : 'danger'}`}>
+            <Activity size={16} className="banner__icon" />
+            <div>
+              <div className="banner__title">Last sync: {last.status} {last.version != null && `· v${last.version}`}</div>
+              {last.error && <div className="banner__body">{last.error}</div>}
+            </div>
+          </div>
+        )}
+      </div>
+    </PlatformOnlyGuard>
   );
 }
 

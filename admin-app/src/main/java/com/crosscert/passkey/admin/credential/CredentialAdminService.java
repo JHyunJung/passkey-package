@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.credential;
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
+import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.admin.credential.CredentialAdminDto.CredentialView;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
@@ -32,17 +33,21 @@ public class CredentialAdminService {
     private final CredentialRepository creds;
     private final MdsAaguidCache mds;
     private final AuditLogService audit;
+    private final TenantBoundary tenantBoundary;
 
     public CredentialAdminService(CredentialRepository creds,
                                   MdsAaguidCache mds,
-                                  AuditLogService audit) {
+                                  AuditLogService audit,
+                                  TenantBoundary tenantBoundary) {
         this.creds = creds;
         this.mds = mds;
         this.audit = audit;
+        this.tenantBoundary = tenantBoundary;
     }
 
     @Transactional(readOnly = true)
     public PageView<CredentialView> list(UUID tenantId, int page, int size, String q) {
+        tenantBoundary.assertCanAccessTenant(tenantId);
         int cappedSize = Math.min(Math.max(size, 1), 200);
         // Sort 는 findAllByTenantId 의 @Query ORDER BY 절에서 처리 (NULLS LAST 포함).
         // searchByTenantId native query 는 Pageable sort 미적용 — 필요 시 쿼리 내 ORDER BY 추가.
@@ -62,6 +67,7 @@ public class CredentialAdminService {
     @Transactional
     public void revoke(UUID tenantId, String credentialIdB64,
                        UUID actorId, String actorEmail) {
+        tenantBoundary.assertCanAccessTenant(tenantId);
         byte[] credId;
         try {
             credId = Base64.getUrlDecoder().decode(credentialIdB64);

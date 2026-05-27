@@ -103,13 +103,52 @@ class TenantAdminControllerUpdateIT {
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
+        // FK chain: api_key.tenant_id → tenant.id; credential.tenant_id →
+        // tenant.id. audit_log has no FK. admin_user (V11 seed) is left
+        // untouched so alice/bob stay logged-in-able across test runs.
+        // V23 added admin_user.tenant_id FK → tenant.id: null it out before
+        // deleting tenants so the FK constraint is not violated.
+        // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
+        // use ON DELETE CASCADE from their parent FKs, so deleting the
+        // parent rows implicitly removes children too.
         jdbc.update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
         jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        // NULL out admin_user.tenant_id before deleting tenants (V23 FK —
+        // fk_admin_user_tenant blocks DELETE FROM tenant while child rows exist)
+        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
+        // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
+        // bob (RP_ADMIN) needs this tenant to exist and be assigned to him.
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
+                    require_user_verification, mds_required, created_at, updated_at)
+                VALUES (HEXTORAW('0000000000000000000000000000C0DE'),
+                    'demo-rp', 'Demo RP', 'localhost', 'Demo RP', 'active', 'Y', 'N',
+                    SYSTIMESTAMP, SYSTIMESTAMP)
+                """);
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
+                VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'http://localhost:9090', 0)
+                """);
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'none')
+                """);
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
+                """);
+        // Re-assign bob to demo-rp as RP_ADMIN (mirrors V23 step 9)
+        jdbc.update("""
+                UPDATE APP_OWNER.admin_user
+                   SET role = 'RP_ADMIN',
+                       tenant_id = HEXTORAW('0000000000000000000000000000C0DE')
+                 WHERE email = 'bob@crosscert.com'
+                """);
         var redisConn = redisFactory.getConnection();
         try {
             redisConn.serverCommands().flushAll();

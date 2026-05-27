@@ -11,6 +11,7 @@ import KeyManagement from './pages/KeyManagement';
 import { ToastProvider, useToast } from './components/Toast';
 import IdleTimeout from './components/IdleTimeout';
 import { ApiError } from './api/types';
+import { MeProvider } from './me/MeContext';
 
 function ApiErrorBridge() {
   const toast = useToast();
@@ -40,7 +41,7 @@ export default function App() {
       <IdleTimeout />
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route element={<Layout />}>
+        <Route element={<MeProvider><Layout /></MeProvider>}>
           <Route path="/tenants" element={<TenantList />} />
           <Route path="/tenants/new" element={<TenantCreate />} />
           <Route path="/tenants/:id" element={<TenantDetail />} />

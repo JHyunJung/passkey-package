@@ -1,3 +1,5 @@
 package com.crosscert.passkey.admin.config;
 
-public record MeView(String email, String role) {}
+import java.util.UUID;
+
+public record MeView(String email, String role, UUID tenantId) {}

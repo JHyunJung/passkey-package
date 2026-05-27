@@ -10,14 +10,11 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.List;
 import java.util.Set;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -81,24 +78,13 @@ class AuditLogControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
-    void viewerCanList() throws Exception {
-        when(repo.search(any(), any(), any(), any(), any()))
-                .thenReturn(new PageImpl<>(List.<com.crosscert.passkey.core.entity.AuditLog>of()));
-        mvc.perform(get("/admin/api/audit"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data").isArray());
-    }
-
-    @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(roles = "RP_ADMIN")
     void viewerCannotVerify() throws Exception {
         mvc.perform(get("/admin/api/audit/verify")).andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(roles = "PLATFORM_OPERATOR")
     void adminCanVerify() throws Exception {
         // NOTE: T9 renamed the static factory from ok() to valid() because
         // Java records auto-generate an accessor method named ok() for the ok field.

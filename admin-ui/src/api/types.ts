@@ -1,6 +1,7 @@
 export interface Me {
   email: string;
-  role: 'ADMIN' | 'VIEWER';
+  role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
+  tenantId: string | null;
 }
 
 export interface TenantView {

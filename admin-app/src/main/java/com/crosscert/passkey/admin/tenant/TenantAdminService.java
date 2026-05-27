@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
+import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
@@ -27,25 +28,35 @@ public class TenantAdminService {
     private final TenantRepository tenants;
     private final AuditLogService audit;
     private final EntityManager em;
+    private final TenantBoundary tenantBoundary;
 
     public TenantAdminService(TenantRepository tenants,
                               AuditLogService audit,
-                              EntityManager em) {
+                              EntityManager em,
+                              TenantBoundary tenantBoundary) {
         this.tenants = tenants;
         this.audit = audit;
         this.em = em;
+        this.tenantBoundary = tenantBoundary;
     }
 
     @Transactional(readOnly = true)
     public List<TenantAdminDto.TenantView> list() {
-        return tenants.findAll().stream()
-                .map(TenantAdminDto.TenantView::from)
-                .toList();
+        return tenantBoundary.currentTenantScope()
+                .map(tid -> tenants.findById(tid)
+                        .map(TenantAdminDto.TenantView::from)
+                        .map(java.util.List::of)
+                        .orElseGet(java.util.List::of))
+                .orElseGet(() -> tenants.findAll().stream()
+                        .map(TenantAdminDto.TenantView::from)
+                        .toList());
     }
 
     @Transactional(readOnly = true)
     public TenantAdminDto.TenantView get(String idOrSlug) {
-        return TenantAdminDto.TenantView.from(lookup(idOrSlug));
+        Tenant t = lookup(idOrSlug);
+        tenantBoundary.assertCanAccessTenant(t.getId());
+        return TenantAdminDto.TenantView.from(t);
     }
 
     @Transactional
@@ -86,6 +97,7 @@ public class TenantAdminService {
                                             UUID actorId,
                                             String actorEmail) {
         Tenant t = lookup(idOrSlug);
+        tenantBoundary.assertCanAccessTenant(t.getId());
         TenantSnapshot before = TenantSnapshot.of(t);
 
         // rpId / slug 는 silent ignore (별도 워크플로우 필요 — spec § 6.1)

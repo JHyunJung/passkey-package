@@ -24,6 +24,7 @@ public class AuditLogController {
         this.verifier = verifier;
     }
 
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @GetMapping
     public ApiResponse<List<AuditLogView>> list(@RequestParam(required = false) String action,
                                                 @RequestParam(required = false) UUID actorId,
@@ -36,7 +37,7 @@ public class AuditLogController {
         return ApiResponse.ok(p.getContent().stream().map(AuditLogView::from).toList());
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @GetMapping("/verify")
     public ApiResponse<AuditChainVerifier.Result> verify() {
         return ApiResponse.ok(verifier.verify());

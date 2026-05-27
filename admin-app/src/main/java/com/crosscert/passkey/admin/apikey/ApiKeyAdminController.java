@@ -30,7 +30,7 @@ public class ApiKeyAdminController {
         return ApiResponse.ok(service.list(tenantId));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ApiKeyAdminDto.ApiKeyCreateResponse> issue(
@@ -40,7 +40,7 @@ public class ApiKeyAdminController {
         return ApiResponse.ok("API key issued", service.issue(req, actorId, auth.getName()));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> revoke(@PathVariable UUID id, Authentication auth) {
         UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();

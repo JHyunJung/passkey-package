@@ -1,7 +1,5 @@
-package com.crosscert.passkey.admin.credential;
+package com.crosscert.passkey.admin.auth;
 
-import com.crosscert.passkey.core.entity.Credential;
-import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +18,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -27,40 +27,31 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 import javax.sql.DataSource;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
 
 /**
- * Cross-tenant boundary 회귀 채널. admin-app 은 VPD 비활성이므로
- * service 의 entity.tenantId vs path.tenantId 비교가 단일 방어선.
+ * T13 — RpAdminBoundaryIT: cross-tenant 차단 회귀 채널 (자동 IT 1).
  *
- * 시나리오:
- *   1. tenant_A, tenant_B 생성
- *   2. tenant_A 에 credential 1개 직접 fixture insert (CredentialRepository.save)
- *   3. GET /admin/api/tenants/{tenant_A}/credentials → credential 포함
- *   4. GET /admin/api/tenants/{tenant_B}/credentials → credential 미포함
- *   5. DELETE /admin/api/tenants/{tenant_B}/credentials/{credentialId} → 4xx ACCESS_DENIED (A002)
- *   6. credential row 여전히 DB 에 존재 (tenant_A 의 GET 에서 다시 확인)
+ * <p>bob (RP_ADMIN, demo-rp) 로 14 assertion 실행. service boundary 또는
+ * {@code @PreAuthorize} 누락 시 200 으로 즉시 회귀 탐지.
  *
- * T6 의 TenantAdminControllerUpdateIT 와 동일한 Testcontainers + 로그인 inline 패턴 사용.
+ * <p>Testcontainers + loginAs inline 패턴은 AdminFlowIT 에서 복사.
+ * resetState() 는 T12 AdminFlowIT 패턴 (bob 을 매 test 시작 시 RP_ADMIN(demo-rp)
+ * 으로 reset) 그대로 사용.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
-class CredentialAdminControllerSecurityIT {
+class RpAdminBoundaryIT {
 
     // ----------------------------------------------------------------
-    // Containers (same config as AdminFlowIT and T6 TenantAdminControllerUpdateIT)
+    // Containers (identical to AdminFlowIT / TenantAdminControllerUpdateIT)
     // ----------------------------------------------------------------
 
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
@@ -106,24 +97,20 @@ class CredentialAdminControllerSecurityIT {
     @Autowired ObjectMapper om;
     @Autowired DataSource ds;
     @Autowired RedisConnectionFactory redisFactory;
-    @Autowired CredentialRepository credentialRepository;
+
+    /** Plain RestTemplate so 4xx throws HttpClientErrorException (not swallowed). */
+    private final RestTemplate http = new RestTemplate();
 
     JdbcTemplate jdbc;
-    private final SecureRandom rng = new SecureRandom();
-    // Separate plain RestTemplate (not TestRestTemplate) for error response inspection
-    private final RestTemplate http = new RestTemplate();
+
+    // ----------------------------------------------------------------
+    // State reset — copies AdminFlowIT.resetState() (T12 FK pattern):
+    //   bob is re-assigned to demo-rp as RP_ADMIN each test.
+    // ----------------------------------------------------------------
 
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
-        // FK chain: api_key.tenant_id → tenant.id; credential.tenant_id →
-        // tenant.id. audit_log has no FK. admin_user (V11 seed) is left
-        // untouched so alice/bob stay logged-in-able across test runs.
-        // V23 added admin_user.tenant_id FK → tenant.id: null it out before
-        // deleting tenants so the FK constraint is not violated.
-        // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
-        // use ON DELETE CASCADE from their parent FKs, so deleting the
-        // parent rows implicitly removes children too.
         jdbc.update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
@@ -135,7 +122,6 @@ class CredentialAdminControllerSecurityIT {
         jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
         // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
-        // bob (RP_ADMIN) needs this tenant to exist and be assigned to him.
         jdbc.update("""
                 INSERT INTO APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
                     require_user_verification, mds_required, created_at, updated_at)
@@ -171,7 +157,7 @@ class CredentialAdminControllerSecurityIT {
     }
 
     // ----------------------------------------------------------------
-    // Login helper (inlined from AdminFlowIT.loginAs / T6 TenantAdminControllerUpdateIT)
+    // Login helper (inlined from AdminFlowIT.loginAs)
     // ----------------------------------------------------------------
 
     private String url(String path) { return "http://localhost:" + port + path; }
@@ -243,26 +229,12 @@ class CredentialAdminControllerSecurityIT {
         return sb.toString();
     }
 
-    /** Unwrap ApiResponse envelope — fail fast on success=false. */
-    private JsonNode unwrap(ResponseEntity<JsonNode> res) {
-        JsonNode env = res.getBody();
-        if (env == null) {
-            throw new AssertionError("API call returned empty body (status=" + res.getStatusCode() + ")");
-        }
-        if (!env.path("success").asBoolean()) {
-            throw new AssertionError("API call failed (status=" + res.getStatusCode() +
-                    ", code=" + env.path("code").asText() +
-                    ", message=" + env.path("message").asText() + ")");
-        }
-        return env.path("data");
-    }
-
     // ----------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------
 
     private String createTenantViaApi(HttpHeaders auth, String slug, String displayName) throws Exception {
-        Map<String, Object> reqBody = Map.of(
+        Map<String, Object> body = Map.of(
                 "slug", slug,
                 "displayName", displayName,
                 "rpId", "localhost",
@@ -274,125 +246,168 @@ class CredentialAdminControllerSecurityIT {
         ResponseEntity<JsonNode> res = rest.exchange(
                 url("/admin/api/tenants"),
                 HttpMethod.POST,
-                new HttpEntity<>(om.writeValueAsString(reqBody), auth),
+                new HttpEntity<>(om.writeValueAsString(body), auth),
                 JsonNode.class);
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return unwrap(res).get("id").asText();
+        return res.getBody().get("data").get("id").asText();
     }
 
     /**
-     * Directly inserts a credential fixture into tenant_A via CredentialRepository.
-     * Uses the Credential constructor (no individual setters exist).
-     * Returns the credentialId as base64url (no padding) — the format used by admin endpoints.
+     * Asserts that the given call throws {@link HttpClientErrorException} with HTTP 403.
+     * Uses a plain RestTemplate (set as field {@code http}) so 4xx is not swallowed.
      */
-    private String insertFixtureCredential(UUID tenantId) {
-        byte[] credId = new byte[16];
-        rng.nextBytes(credId);
-        byte[] userHandle = new byte[32];
-        rng.nextBytes(userHandle);
-        byte[] publicKey = new byte[]{ 0x01, 0x02, 0x03 };  // dummy; admin endpoint does not validate CBOR
-        byte[] aaguid = new byte[16];                        // zero aaguid
-
-        Credential c = new Credential(tenantId, userHandle, credId, publicKey, aaguid);
-        credentialRepository.save(c);
-
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(credId);
-    }
-
-    // ----------------------------------------------------------------
-    // Test
-    // ----------------------------------------------------------------
-
-    /**
-     * Verifies cross-tenant boundary:
-     * - tenant_A credential is visible in tenant_A list but NOT in tenant_B list
-     * - DELETE via tenant_B path is rejected with 4xx + code=A002 (ACCESS_DENIED)
-     * - credential still exists in tenant_A after failed cross-tenant revoke attempt
-     */
-    @Test
-    void crossTenantRevoke_isRejected_andCredentialIsListedOnlyInOwnTenant() throws Exception {
-        // Build auth headers using the same inline login pattern as T6
-        HttpHeaders auth = loginAs("alice@crosscert.com", "alice-temp-pw");
-
-        // 1. Create two tenants
-        String tenantAId = createTenantViaApi(auth, "sec-it-a-" + UUID.randomUUID().toString().substring(0, 8), "Tenant A");
-        String tenantBId = createTenantViaApi(auth, "sec-it-b-" + UUID.randomUUID().toString().substring(0, 8), "Tenant B");
-
-        // 2. Insert credential fixture directly into tenant_A (bypasses ceremony)
-        String credentialIdB64 = insertFixtureCredential(UUID.fromString(tenantAId));
-
-        // 3. GET tenant_A credentials → credential MUST be present
-        ResponseEntity<JsonNode> listA = rest.exchange(
-                url("/admin/api/tenants/" + tenantAId + "/credentials"),
-                HttpMethod.GET,
-                new HttpEntity<>(auth),
-                JsonNode.class);
-        assertThat(listA.getStatusCode().is2xxSuccessful())
-                .as("GET tenant_A credentials: %s", listA.getStatusCode())
-                .isTrue();
-        boolean foundInA = StreamSupport.stream(
-                        unwrap(listA).get("content").spliterator(), false)
-                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asText()));
-        assertThat(foundInA)
-                .as("credential must appear in tenant_A list")
-                .isTrue();
-
-        // 4. GET tenant_B credentials → credential must NOT appear
-        ResponseEntity<JsonNode> listB = rest.exchange(
-                url("/admin/api/tenants/" + tenantBId + "/credentials"),
-                HttpMethod.GET,
-                new HttpEntity<>(auth),
-                JsonNode.class);
-        assertThat(listB.getStatusCode().is2xxSuccessful()).isTrue();
-        boolean foundInB = StreamSupport.stream(
-                        unwrap(listB).get("content").spliterator(), false)
-                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asText()));
-        assertThat(foundInB)
-                .as("tenant_A credential must NOT appear in tenant_B list")
-                .isFalse();
-
-        // 5. DELETE via tenant_B path → must be rejected with 4xx + code=A002
-        // Use plain RestTemplate (not TestRestTemplate) so the exception carries the response body.
-        // Transfer auth cookies & CSRF header from the TestRestTemplate session.
-        HttpHeaders deleteHeaders = new HttpHeaders();
-        deleteHeaders.set(HttpHeaders.COOKIE, auth.getFirst(HttpHeaders.COOKIE));
-        deleteHeaders.set("X-XSRF-TOKEN", auth.getFirst("X-XSRF-TOKEN"));
-        deleteHeaders.setContentType(MediaType.APPLICATION_JSON);
-
-        assertThatThrownBy(() ->
-                http.exchange(
-                        url("/admin/api/tenants/" + tenantBId + "/credentials/" + credentialIdB64),
-                        HttpMethod.DELETE,
-                        new HttpEntity<>(deleteHeaders),
-                        JsonNode.class))
+    private void assertForbidden(Runnable call) {
+        assertThatThrownBy(call::run)
                 .isInstanceOf(HttpClientErrorException.class)
-                .satisfies(e -> {
-                    HttpClientErrorException ex = (HttpClientErrorException) e;
-                    assertThat(ex.getStatusCode().is4xxClientError())
-                            .as("cross-tenant DELETE must be 4xx, got %s", ex.getStatusCode())
-                            .isTrue();
-                    JsonNode errorBody = om.readTree(ex.getResponseBodyAsString());
-                    assertThat(errorBody.get("success").asBoolean())
-                            .as("success must be false for access denied")
-                            .isFalse();
-                    assertThat(errorBody.get("code").asText())
-                            .as("error code must be A002 (ACCESS_DENIED)")
-                            .isEqualTo("A002");
-                });
+                .satisfies(e -> assertThat(((HttpClientErrorException) e)
+                        .getStatusCode().value())
+                        .isEqualTo(403));
+    }
 
-        // 6. Credential still exists — tenant_A list still contains it after failed cross-tenant attempt
-        ResponseEntity<JsonNode> listAAfter = rest.exchange(
-                url("/admin/api/tenants/" + tenantAId + "/credentials"),
-                HttpMethod.GET,
-                new HttpEntity<>(auth),
-                JsonNode.class);
-        boolean stillInA = StreamSupport.stream(
-                        unwrap(listAAfter).get("content").spliterator(), false)
-                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asText()));
-        assertThat(stillInA)
-                .as("credential must still exist in tenant_A after rejected cross-tenant DELETE")
+    // ----------------------------------------------------------------
+    // Test — 14 assertions
+    // ----------------------------------------------------------------
+
+    @Test
+    void rpAdmin_seesAndMutatesOnlyOwnTenant_andCannotPlatformOperations() throws Exception {
+        // 사전: alice (PLATFORM_OPERATOR) 로 tenant_A 생성
+        HttpHeaders aliceAuth = loginAs("alice@crosscert.com", "alice-temp-pw");
+        String tenantAId = createTenantViaApi(aliceAuth, "boundary-it-a", "Tenant A");
+
+        // bob (RP_ADMIN, demo-rp) 로그인
+        HttpHeaders bobAuth = loginAs("bob@crosscert.com", "bob-temp-pw");
+
+        // ── 1. GET /me — role=RP_ADMIN + tenantId ──────────────────────────────
+        ResponseEntity<JsonNode> me = http.exchange(
+                url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
+        assertThat(me.getStatusCode().is2xxSuccessful()).isTrue();
+        JsonNode meData = me.getBody().get("data");
+        assertThat(meData.get("role").asText())
+                .as("bob must have role RP_ADMIN")
+                .isEqualTo("RP_ADMIN");
+        String myTenantId = meData.get("tenantId").asText();
+        assertThat(myTenantId)
+                .as("bob must have a tenantId")
+                .isNotBlank();
+
+        // ── 2. GET /tenants — demo-rp 만 포함, boundary-it-a 미포함 ───────────
+        ResponseEntity<JsonNode> tList = http.exchange(
+                url("/admin/api/tenants"), HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
+        assertThat(tList.getStatusCode().is2xxSuccessful()).isTrue();
+        List<String> slugs = StreamSupport
+                .stream(tList.getBody().get("data").spliterator(), false)
+                .map(n -> n.get("slug").asText())
+                .toList();
+        assertThat(slugs)
+                .as("bob sees only own tenant — actual slugs: %s", slugs)
+                .contains("demo-rp")
+                .doesNotContain("boundary-it-a");
+
+        // ── 3. GET /tenants/{my} → 200 ────────────────────────────────────────
+        ResponseEntity<JsonNode> myT = http.exchange(
+                url("/admin/api/tenants/" + myTenantId), HttpMethod.GET,
+                new HttpEntity<>(bobAuth), JsonNode.class);
+        assertThat(myT.getStatusCode().is2xxSuccessful())
+                .as("bob GET own tenant must succeed")
                 .isTrue();
+
+        // ── 4. GET /tenants/{other} → 403 ────────────────────────────────────
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/tenants/" + tenantAId), HttpMethod.GET,
+                new HttpEntity<>(bobAuth), JsonNode.class));
+
+        // ── 5. PUT /tenants/{my} → 200 ────────────────────────────────────────
+        Map<String, Object> updateBody = Map.of(
+                "displayName", "Updated by Bob",
+                "rpId", "localhost",
+                "rpName", "Demo RP",
+                "allowedOrigins", List.of("http://localhost:9090"),
+                "acceptedFormats", List.of("none", "packed"),
+                "requireUserVerification", true,
+                "mdsRequired", false);
+        ResponseEntity<JsonNode> putMy = http.exchange(
+                url("/admin/api/tenants/" + myTenantId), HttpMethod.PUT,
+                new HttpEntity<>(om.writeValueAsString(updateBody), bobAuth),
+                JsonNode.class);
+        assertThat(putMy.getStatusCode().is2xxSuccessful())
+                .as("bob PUT own tenant must succeed")
+                .isTrue();
+
+        // ── 6. PUT /tenants/{other} → 403 ────────────────────────────────────
+        String updateBodyJson = om.writeValueAsString(updateBody);
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/tenants/" + tenantAId), HttpMethod.PUT,
+                new HttpEntity<>(updateBodyJson, bobAuth),
+                JsonNode.class));
+
+        // ── 7. GET /tenants/{my}/credentials → 200 ───────────────────────────
+        ResponseEntity<JsonNode> credsMy = http.exchange(
+                url("/admin/api/tenants/" + myTenantId + "/credentials"),
+                HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
+        assertThat(credsMy.getStatusCode().is2xxSuccessful())
+                .as("bob GET own tenant credentials must succeed")
+                .isTrue();
+
+        // ── 8. GET /tenants/{other}/credentials → 403 ────────────────────────
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/tenants/" + tenantAId + "/credentials"),
+                HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class));
+
+        // ── 9. POST /tenants → 403 (RP_ADMIN 은 tenant create 불가) ──────────
+        Map<String, Object> newTenant = Map.of(
+                "slug", "bob-attempt",
+                "displayName", "Bob Attempt",
+                "rpId", "localhost",
+                "rpName", "X",
+                "allowedOrigins", List.of("http://localhost:9090"),
+                "acceptedFormats", List.of("none"),
+                "requireUserVerification", true,
+                "mdsRequired", false);
+        String newTenantJson = om.writeValueAsString(newTenant);
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/tenants"), HttpMethod.POST,
+                new HttpEntity<>(newTenantJson, bobAuth),
+                JsonNode.class));
+
+        // ── 10. POST /api-keys (my tenant) → 200 ─────────────────────────────
+        Map<String, Object> myKey = Map.of(
+                "tenantId", myTenantId,
+                "name", "bob-key-own",
+                "scopes", List.of("registration", "authentication"));
+        ResponseEntity<JsonNode> keyMy = http.exchange(
+                url("/admin/api/api-keys"), HttpMethod.POST,
+                new HttpEntity<>(om.writeValueAsString(myKey), bobAuth),
+                JsonNode.class);
+        assertThat(keyMy.getStatusCode().is2xxSuccessful())
+                .as("bob POST api-key for own tenant must succeed")
+                .isTrue();
+
+        // ── 11. POST /api-keys (other tenant) → 403 ──────────────────────────
+        Map<String, Object> otherKey = Map.of(
+                "tenantId", tenantAId,
+                "name", "bob-key-other",
+                "scopes", List.of("registration"));
+        String otherKeyJson = om.writeValueAsString(otherKey);
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/api-keys"), HttpMethod.POST,
+                new HttpEntity<>(otherKeyJson, bobAuth),
+                JsonNode.class));
+
+        // ── 12. POST /keys/rotate → 403 ──────────────────────────────────────
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/keys/rotate"), HttpMethod.POST,
+                new HttpEntity<>(bobAuth), JsonNode.class));
+
+        // ── 13. POST /mds/sync → 403 ─────────────────────────────────────────
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/mds/sync"), HttpMethod.POST,
+                new HttpEntity<>(bobAuth), JsonNode.class));
+
+        // ── 14. GET /audit → 403 ─────────────────────────────────────────────
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/audit"), HttpMethod.GET,
+                new HttpEntity<>(bobAuth), JsonNode.class));
     }
 }

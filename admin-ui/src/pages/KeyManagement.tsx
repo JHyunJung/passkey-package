@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast';
 import Dialog from '../components/Dialog';
 import { Refresh, Key } from '../components/Icons';
 import { formatDateTime } from '../lib/formatDateTime';
+import PlatformOnlyGuard from '../components/PlatformOnlyGuard';
 
 export default function KeyManagement() {
   const [keys, setKeys] = useState<SigningKeyView[]>([]);
@@ -46,7 +47,8 @@ export default function KeyManagement() {
   const revoked = keys.filter((k) => k.status === 'REVOKED').length;
 
   return (
-    <div className="stack-6">
+    <PlatformOnlyGuard>
+      <div className="stack-6">
       <div className="page__head">
         <div>
           <h1 className="page__title">Signing Keys</h1>
@@ -124,6 +126,7 @@ export default function KeyManagement() {
         </div>
       </Dialog>
     </div>
+    </PlatformOnlyGuard>
   );
 }
 

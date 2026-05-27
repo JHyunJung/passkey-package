@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.apikey;
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
+import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.entity.ApiKey;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ class ApiKeyAdminServiceTest {
     private ApiKeyRepository repo;
     private AuditLogService audit;
     private PasswordEncoder encoder;
+    private TenantBoundary boundary;
     private ApiKeyAdminService service;
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -40,7 +42,8 @@ class ApiKeyAdminServiceTest {
         repo = mock(ApiKeyRepository.class);
         audit = mock(AuditLogService.class);
         encoder = new BCryptPasswordEncoder(4); // fast for tests
-        service = new ApiKeyAdminService(repo, audit, encoder, new SecureRandom(), clock);
+        boundary = mock(TenantBoundary.class);
+        service = new ApiKeyAdminService(repo, audit, encoder, new SecureRandom(), clock, boundary);
         // @UuidGenerator sets id during JPA persist. In unit tests we must
         // set it reflectively so getId() is non-null after repo.save() mock.
         // The service uses saveAndFlush for issue() and save() for revoke().

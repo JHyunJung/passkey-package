@@ -21,6 +21,7 @@ public class MdsAdminController {
         this.scheduler = scheduler;
     }
 
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @GetMapping("/status")
     public ApiResponse<MdsStatusView> status() {
         MdsStatusView view = jdbc.queryForObject(
@@ -38,7 +39,7 @@ public class MdsAdminController {
         return ApiResponse.ok(view);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @PostMapping("/sync")
     public ApiResponse<MdsSchedulerService.SyncResult> sync() {
         return ApiResponse.ok(scheduler.runOnce());

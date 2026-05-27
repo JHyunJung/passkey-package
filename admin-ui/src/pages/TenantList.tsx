@@ -6,6 +6,7 @@ import type { TenantView } from '../api/types';
 import { useToast } from '../components/Toast';
 import { Plus, Search, Building } from '../components/Icons';
 import { formatDateTime } from '../lib/formatDateTime';
+import { useMe } from '../me/MeContext';
 
 export default function TenantList() {
   const [tenants, setTenants] = useState<TenantView[]>([]);
@@ -14,8 +15,15 @@ export default function TenantList() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const toast = useToast();
   const nav = useNavigate();
+  const { me, loading: meLoading } = useMe();
 
   useEffect(() => {
+    if (meLoading) return;   // me 로드 대기
+    if (me?.role === 'RP_ADMIN' && me.tenantId) {
+      nav(`/tenants/${me.tenantId}`, { replace: true });
+      return;   // RP_ADMIN 은 fetch 안 함
+    }
+    // PLATFORM_OPERATOR 만 list fetch
     api.get<TenantView[]>('/admin/api/tenants')
       .then((r) => { setTenants(r); setLoading(false); })
       .catch((e: unknown) => {
@@ -28,7 +36,7 @@ export default function TenantList() {
           toast({ kind: 'err', title: '테넌트 목록을 가져오지 못했습니다' });
         }
       });
-  }, [toast]);
+  }, [meLoading, me, nav, toast]);
 
   const filtered = useMemo(
     () => tenants.filter((t) =>
@@ -41,6 +49,9 @@ export default function TenantList() {
   const total = tenants.length;
   // Server emits lowercase "active"
   const activeCount = tenants.filter((t) => t.status === 'active').length;
+
+  if (meLoading) return <div className="muted">불러오는 중…</div>;
+  if (me?.role === 'RP_ADMIN') return null;   // redirect 진행 중
 
   return (
     <div className="stack-6">

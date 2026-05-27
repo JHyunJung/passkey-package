@@ -6,6 +6,7 @@ import WebAuthnConfigTab from './tenant/WebAuthnConfigTab';
 import CredentialsTab from './tenant/CredentialsTab';
 import ApiKeysTab from './tenant/ApiKeysTab';
 import type { TenantView } from '../api/types';
+import { useMe } from '../me/MeContext';
 
 type TabKey = 'overview' | 'webauthn' | 'credentials' | 'apikeys';
 
@@ -19,17 +20,22 @@ const TABS: { key: TabKey; label: string }[] = [
 export default function TenantDetail() {
     const { id } = useParams<{ id: string }>();
     const nav = useNavigate();
+    const { me } = useMe();
     const [tenant, setTenant] = useState<TenantView | null>(null);
     const [tab, setTab] = useState<TabKey>('overview');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!id) return;
+        if (me?.role === 'RP_ADMIN' && me.tenantId && me.tenantId !== id) {
+            nav(`/tenants/${me.tenantId}`, { replace: true });
+            return;
+        }
         setError(null);
         api.get<TenantView>(`/admin/api/tenants/${id}`)
             .then(setTenant)
             .catch((e) => setError(e?.message ?? 'tenant 조회 실패'));
-    }, [id]);
+    }, [id, me]);
 
     if (error) {
         return (

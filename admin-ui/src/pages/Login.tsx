@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, getMe } from '../api/client';
 import { BrandMark } from '../components/Icons';
 
 // V11 seed 계정 — local profile 일 때만 prefill. 운영 profile 에서는 응답이 local:false 라
@@ -33,10 +33,17 @@ export default function Login() {
     setError(null);
     setBusy(true);
     try {
-      await fetch('/admin/api/me', { credentials: 'include' }).catch(() => null);
       const ok = await api.loginForm(email, password);
-      if (ok) nav('/tenants');
-      else setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+      if (!ok) {
+        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        return;
+      }
+      const me = await getMe();
+      if (me.role === 'RP_ADMIN' && me.tenantId) {
+        nav(`/tenants/${me.tenantId}`);
+      } else {
+        nav('/tenants');
+      }
     } finally {
       setBusy(false);
     }

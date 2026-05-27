@@ -1,16 +1,14 @@
 package com.crosscert.passkey.admin.config;
 
+import com.crosscert.passkey.admin.auth.AdminUserDetails;
 import com.crosscert.passkey.core.api.ApiResponse;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * SPA bootstrap call. Returns the logged-in operator's identity so the
- * frontend can decide what to render. Returns 401 (handled by Spring
- * Security) when the session cookie is missing or expired.
+ * SPA bootstrap call. AdminUserDetails 에서 직접 email/role/tenantId 추출.
  */
 @RestController
 @RequestMapping("/admin/api")
@@ -18,11 +16,11 @@ public class MeController {
 
     @GetMapping("/me")
     public ApiResponse<MeView> me(Authentication auth) {
-        String role = auth.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .filter(a -> a.startsWith("ROLE_"))
-                .map(a -> a.substring(5))
-                .findFirst().orElse("UNKNOWN");
-        return ApiResponse.ok(new MeView(auth.getName(), role));
+        AdminUserDetails principal = (AdminUserDetails) auth.getPrincipal();
+        return ApiResponse.ok(new MeView(
+                principal.getUsername(),
+                principal.getRole(),
+                principal.getTenantId()
+        ));
     }
 }

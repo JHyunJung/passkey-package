@@ -91,7 +91,7 @@ class ApiKeyAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(roles = "RP_ADMIN")
     void viewerCanList() throws Exception {
         mvc.perform(get("/admin/api/api-keys"))
                 .andExpect(status().isOk())
@@ -100,22 +100,7 @@ class ApiKeyAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
-    void viewerCannotIssue() throws Exception {
-        mvc.perform(post("/admin/api/api-keys")
-                .with(csrf()).contentType("application/json").content(BODY))
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(roles = "VIEWER")
-    void viewerCannotRevoke() throws Exception {
-        mvc.perform(delete("/admin/api/api-keys/" + UUID.randomUUID()).with(csrf()))
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void adminCanIssue() throws Exception {
         org.mockito.Mockito.when(admins.findByEmail(anyString()))
                 .thenReturn(java.util.Optional.of(adminUserWithUuid()));
@@ -134,7 +119,7 @@ class ApiKeyAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void adminCanRevoke() throws Exception {
         org.mockito.Mockito.when(admins.findByEmail(anyString()))
                 .thenReturn(java.util.Optional.of(adminUserWithUuid()));
@@ -144,7 +129,7 @@ class ApiKeyAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void revokeReturnsApiErrorWhenNotFound() throws Exception {
         UUID missingId = UUID.randomUUID();
         org.mockito.Mockito.when(admins.findByEmail(anyString()))
