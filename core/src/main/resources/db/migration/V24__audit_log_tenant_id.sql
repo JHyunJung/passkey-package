@@ -38,4 +38,4 @@ END;
 --    이미 막고 있어 dangling 위험 없음. 단순화 위해 FK 생략.
 --
 -- 4. 권한 변경 없음 — APP_USER 가 이미 audit_log 에 SELECT/INSERT 갖고 있음
---    (V01 grants). 컬럼 추가는 기존 grant 를 그대로 상속.
+--    (V10 테이블 생성 + V13 runtime grants). 컬럼 추가는 기존 grant 를 그대로 상속.
