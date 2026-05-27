@@ -56,6 +56,25 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
             """)
     List<AuditLog> findLatestByTenant(@Param("tenantId") UUID tenantId, Pageable limit);
 
+    /**
+     * Phase B Task 4 — per-tenant chain 검증용 전체 스캔 (id ASC).
+     * tenantId 가 null 인 경우(PLATFORM_OPERATOR row) 와 non-null 인 경우를 모두 처리.
+     */
+    @Query("""
+            select a from AuditLog a
+            where (:tenantId is null and a.tenantId is null)
+               or (a.tenantId = :tenantId)
+            order by a.id asc
+            """)
+    List<AuditLog> findAllByTenantOrdered(@Param("tenantId") UUID tenantId);
+
+    /**
+     * Phase B Task 4 — 백필 및 검증에 필요한 distinct tenant_id 목록.
+     * NULL tenant_id (PLATFORM_OPERATOR row) 도 포함된다.
+     */
+    @Query(value = "SELECT DISTINCT tenant_id FROM audit_log", nativeQuery = true)
+    List<UUID> findDistinctTenantIds();
+
     /** Read API for the audit-log page. Filters are all optional. */
     @Query("select a from AuditLog a " +
            "where (:action is null or a.action = :action) " +

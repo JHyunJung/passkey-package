@@ -107,8 +107,8 @@ public class AuditLog extends BaseEntity {
     // Phase B — per-tenant chain
     public byte[] getTenantPrevHash() { return tenantPrevHash; }
     public byte[] getTenantHash() { return tenantHash; }
-    /** 백필 endpoint 전용 package-private setter */
-    void setTenantPrevHash(byte[] v) { this.tenantPrevHash = v; }
-    void setTenantHash(byte[] v) { this.tenantHash = v; }
+    /** 백필 endpoint 전용 setter — BackfillService 는 다른 패키지이므로 public */
+    public void setTenantPrevHash(byte[] v) { this.tenantPrevHash = v; }
+    public void setTenantHash(byte[] v) { this.tenantHash = v; }
     public String getPayload() { return payload; }
 }
