@@ -44,4 +44,15 @@ public class TenantAdminController {
         var view = service.create(req, actorId, auth.getName());
         return ApiResponse.ok("Tenant created", view);
     }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{idOrSlug}")
+    public ApiResponse<TenantAdminDto.TenantView> update(
+            @PathVariable String idOrSlug,
+            @Valid @RequestBody TenantAdminDto.TenantUpdateRequest req,
+            Authentication auth) {
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+        return ApiResponse.ok("Tenant updated",
+                service.update(idOrSlug, req, actorId, auth.getName()));
+    }
 }
