@@ -1,7 +1,10 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "ADMIN_USER")
@@ -18,6 +21,10 @@ public class AdminUser extends BaseEntity {
 
     @Column(name = "ENABLED", columnDefinition = "CHAR(1)", nullable = false)
     private String enabledFlag;
+
+    @Column(name = "tenant_id", columnDefinition = "RAW(16)")
+    @JdbcTypeCode(SqlTypes.UUID)
+    private UUID tenantId;
 
     @Column(name = "LAST_LOGIN_AT")
     private Instant lastLoginAt;
@@ -40,4 +47,10 @@ public class AdminUser extends BaseEntity {
     public void recordLogin(Instant now) {
         this.lastLoginAt = now;
     }
+
+    public boolean isPlatformOperator() { return "PLATFORM_OPERATOR".equals(role); }
+    public boolean isRpAdmin()          { return "RP_ADMIN".equals(role); }
+
+    public UUID getTenantId() { return tenantId; }
+    public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
 }
