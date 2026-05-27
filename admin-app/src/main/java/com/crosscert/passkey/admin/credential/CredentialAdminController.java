@@ -37,7 +37,7 @@ public class CredentialAdminController {
         return ApiResponse.ok(service.list(tenantId, page, size, q));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @DeleteMapping("/{credentialId}")
     public ResponseEntity<ApiResponse<Void>> revoke(
             @PathVariable UUID tenantId,
