@@ -1,3 +1,3 @@
 rootProject.name = "passkey2"
 
-include(":core", ":passkey-app", ":admin-app")
+include(":core", ":passkey-app", ":admin-app", ":sdk-java", ":sample-rp")
