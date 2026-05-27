@@ -3,28 +3,27 @@ plugins {
     `maven-publish`
 }
 
-group = "com.crosscert.passkey"
-version = "0.1.0-SNAPSHOT"
+// group / version 은 root allprojects 가 com.crosscert.passkey / 0.0.1-SNAPSHOT
+// 로 설정. 옛 standalone 의 0.1.0-SNAPSHOT 은 monorepo 표준으로 통일.
+// toolchain 17 + repositories(mavenCentral) 은 root subprojects 가 처리.
 
 java {
-    toolchain { languageVersion.set(JavaLanguageVersion.of(17)) }
     withSourcesJar()
 }
 
-repositories { mavenCentral() }
-
 dependencies {
-    // Spring Boot 3.5.x BOM 이 spring-web 6.2.x 를 가져오므로 동일 라인업으로 잠근다.
-    api("org.springframework:spring-web:6.2.0")
-    api("com.fasterxml.jackson.core:jackson-databind:2.21.0")
-    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.0")
-    api("com.nimbusds:nimbus-jose-jwt:9.40")
-    api("org.slf4j:slf4j-api:2.0.16")
+    // Spring Boot 3.5 BOM (root subprojects 에서 import) 이 spring-web 6.2.x,
+    // jackson-databind, jackson-jsr310, slf4j-api 를 모두 관리.
+    api("org.springframework:spring-web")
+    api("com.fasterxml.jackson.core:jackson-databind")
+    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    api(rootProject.libs.nimbus.jose.jwt)
+    api("org.slf4j:slf4j-api")
 
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("org.assertj:assertj-core:3.26.3")
-    testImplementation("org.wiremock:wiremock-standalone:3.10.0")
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.assertj:assertj-core")
+    testImplementation(rootProject.libs.wiremock.standalone)
+    // junit-platform-launcher 는 root subprojects 가 모든 모듈에 testRuntimeOnly 적용
 }
 
 tasks.named<Test>("test") { useJUnitPlatform() }
