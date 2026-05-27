@@ -11,29 +11,25 @@ export default function AuditChainMonitor() {
   const toast = useToast();
 
   async function load() {
+    // ApiError 는 ApiErrorBridge(window unhandledrejection) 가 toast 로 표시.
+    // 여기서 catch 하지 않아 의도적으로 unhandled rejection 으로 흘러가게 한다.
     setLoading(true);
     try {
       const d = await auditChainApi.overview(24);
       setData(d);
-    } catch {
-      /* toast bridge */
     } finally {
       setLoading(false);
     }
   }
 
   async function runBackfill() {
-    try {
-      const r = await auditChainApi.backfill();
-      toast({
-        kind: 'ok',
-        title: '백필 완료',
-        message: `${r.tenantsProcessed} tenants · ${r.rowsUpdated} updated · ${r.rowsSkipped} skipped`,
-      });
-      await load();
-    } catch {
-      /* toast bridge */
-    }
+    const r = await auditChainApi.backfill();
+    toast({
+      kind: 'ok',
+      title: '백필 완료',
+      message: `${r.tenantsProcessed} tenants · ${r.rowsUpdated} updated · ${r.rowsSkipped} skipped`,
+    });
+    await load();
   }
 
   useEffect(() => {
@@ -71,7 +67,7 @@ export default function AuditChainMonitor() {
       </div>
 
       {tamperedTenants.length > 0 && (
-        <div className="banner banner--danger mb-5">
+        <div className="banner banner--danger mb-5" role="alert">
           <div className="banner__icon">⚠</div>
           <div>
             <div className="banner__title">
