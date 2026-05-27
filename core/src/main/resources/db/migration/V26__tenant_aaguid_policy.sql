@@ -70,9 +70,8 @@ WHERE NOT EXISTS (
   SELECT 1 FROM tenant_aaguid_policy p WHERE p.tenant_id = t.id
 );
 
--- 4. 권한 — APP_USER (passkey-app 등록 ceremony READ) + APP_ADMIN (admin-app CRUD)
---    APP_RUNTIME SELECT 는 V28 (runtime_grants 패턴, 기존 V12/V13/V16 과 일관)
-GRANT SELECT ON tenant_aaguid_policy TO APP_USER;
-GRANT SELECT ON tenant_aaguid_policy_entry TO APP_USER;
+-- 4. 권한 — APP_ADMIN inline (admin-app CRUD).
+--    APP_RUNTIME (passkey-app 등록 ceremony READ) 는 V28 별도 파일
+--    (V12/V13/V16 의 runtime_grants 패턴 일관). 환경에는 APP_USER 롤이 존재하지 않음.
 GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_aaguid_policy TO APP_ADMIN;
 GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_aaguid_policy_entry TO APP_ADMIN;
