@@ -9,7 +9,7 @@ import Activity from './pages/Activity';
 import AuditLog from './pages/AuditLog';
 import MdsStatus from './pages/MdsStatus';
 import KeyManagement from './pages/KeyManagement';
-import { ToastProvider, useToast } from './components/Toast';
+import { useToast } from './components/Toast';
 import IdleTimeout from './components/IdleTimeout';
 import { ApiError } from './api/types';
 import { MeProvider } from './me/MeContext';
@@ -37,7 +37,7 @@ function ApiErrorBridge() {
 
 export default function App() {
   return (
-    <ToastProvider>
+    <>
       <ApiErrorBridge />
       <IdleTimeout />
       <Routes>
@@ -53,6 +53,6 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/tenants" replace />} />
       </Routes>
-    </ToastProvider>
+    </>
   );
 }

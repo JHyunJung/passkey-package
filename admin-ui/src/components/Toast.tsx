@@ -1,59 +1,32 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { Check, X, Alert } from './Icons';
+import * as React from 'react';
+import { toast as sonnerToast } from 'sonner';
 
-type ToastKind = 'ok' | 'err' | 'warn';
-
-interface Toast {
-  id: string;
-  kind: ToastKind;
+export type ToastInput = {
+  kind: 'ok' | 'err' | 'warn';
   title: string;
   message?: string;
   traceId?: string;
   duration?: number;
+};
+
+function show({ kind, title, message, traceId, duration }: ToastInput) {
+  const descriptionParts = [message, traceId ? `traceId: ${traceId}` : null].filter(Boolean) as string[];
+  const description = descriptionParts.length > 0 ? descriptionParts.join('\n') : undefined;
+  const opts: Parameters<typeof sonnerToast.success>[1] = {
+    ...(description ? { description } : {}),
+    ...(duration !== undefined ? { duration } : {}),
+  };
+  if (kind === 'ok') return sonnerToast.success(title, opts);
+  if (kind === 'err') return sonnerToast.error(title, opts);
+  return sonnerToast.warning(title, opts);
 }
 
-type PushFn = (t: Omit<Toast, 'id'>) => void;
-
-const ToastCtx = createContext<PushFn | null>(null);
-
-export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const push: PushFn = useCallback((t) => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((arr) => [...arr, { id, ...t }]);
-    setTimeout(() => setToasts((arr) => arr.filter((x) => x.id !== id)), t.duration ?? 4200);
-  }, []);
-
-  return (
-    <ToastCtx.Provider value={push}>
-      {children}
-      <div className="toast-rack">
-        {toasts.map((t) => (
-          <div key={t.id} className="toast" role="status">
-            <div className={`toast__icon toast__icon--${t.kind}`}>
-              {t.kind === 'err' ? <X size={11} /> : t.kind === 'warn' ? <Alert size={11} /> : <Check size={11} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="toast__title">{t.title}</div>
-              {t.message && <div className="toast__sub">{t.message}</div>}
-              {t.traceId && <div className="toast__trace">traceId · {t.traceId}</div>}
-            </div>
-            <button
-              className="btn btn--ghost btn--xs"
-              onClick={() => setToasts((a) => a.filter((x) => x.id !== t.id))}
-              aria-label="닫기"
-            >
-              <X size={12} />
-            </button>
-          </div>
-        ))}
-      </div>
-    </ToastCtx.Provider>
-  );
+export function useToast() {
+  return show;
 }
 
-export function useToast(): PushFn {
-  const ctx = useContext(ToastCtx);
-  if (!ctx) throw new Error('useToast must be used within ToastProvider');
-  return ctx;
+// Backwards-compat shim — 기존 App.tsx 의 <ToastProvider> wrap 호환용 no-op.
+// sonner Toaster 가 AppProviders 안에서 단일 host 역할.
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
