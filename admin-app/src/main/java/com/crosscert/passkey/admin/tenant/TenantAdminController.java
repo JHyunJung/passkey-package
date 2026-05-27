@@ -17,11 +17,14 @@ public class TenantAdminController {
 
     private final TenantAdminService service;
     private final AdminUserRepository admins;
+    private final WebauthnDiffService webauthnDiffService;
 
     public TenantAdminController(TenantAdminService service,
-                                 AdminUserRepository admins) {
+                                 AdminUserRepository admins,
+                                 WebauthnDiffService webauthnDiffService) {
         this.service = service;
         this.admins = admins;
+        this.webauthnDiffService = webauthnDiffService;
     }
 
     @GetMapping
@@ -54,5 +57,13 @@ public class TenantAdminController {
         UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
         return ApiResponse.ok("Tenant updated",
                 service.update(idOrSlug, req, actorId, auth.getName()));
+    }
+
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
+    @PostMapping("/{idOrSlug}/webauthn-config/diff")
+    public WebauthnConfigDiff diff(@PathVariable String idOrSlug,
+                                   @RequestBody TenantAdminDto.TenantUpdateRequest proposed) {
+        UUID tenantId = service.get(idOrSlug).id();
+        return webauthnDiffService.diff(tenantId, proposed);
     }
 }
