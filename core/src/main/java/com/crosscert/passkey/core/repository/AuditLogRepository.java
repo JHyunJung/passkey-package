@@ -71,8 +71,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     /**
      * Phase B Task 4 — 백필 및 검증에 필요한 distinct tenant_id 목록.
      * NULL tenant_id (PLATFORM_OPERATOR row) 도 포함된다.
+     * NOTE: nativeQuery=true 는 Oracle RAW(16) 를 byte[] 로 반환하므로
+     * JPQL (Hibernate 가 UUID 변환 처리) 을 사용한다.
      */
-    @Query(value = "SELECT DISTINCT tenant_id FROM audit_log", nativeQuery = true)
+    @Query("select distinct a.tenantId from AuditLog a")
     List<UUID> findDistinctTenantIds();
 
     /** Read API for the audit-log page. Filters are all optional. */
