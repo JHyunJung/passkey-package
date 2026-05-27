@@ -75,6 +75,7 @@ class MdsAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeys;
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
+    @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
 
     @Test
     void anonymousGetStatusIsUnauthorized() throws Exception {

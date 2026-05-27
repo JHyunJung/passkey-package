@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "code": "OK",
+  "message": "Success",
+  "data": {
+    "registrationToken": "rt_abc123",
+    "publicKeyCredentialCreationOptions": {
+      "challenge": "Y2gxMjM",
+      "rp": { "id": "localhost", "name": "Test RP" },
+      "user": { "id": "dWg0NTY", "displayName": "Alice", "name": "alice@example.com" },
+      "pubKeyCredParams": [{"type":"public-key","alg":-7}],
+      "timeout": 60000,
+      "attestation": "indirect",
+      "authenticatorSelection": {"userVerification":"required","residentKey":"preferred"}
+    }
+  },
+  "traceId": "abc",
+  "timestamp": "2026-05-27T09:00:00Z"
+}
