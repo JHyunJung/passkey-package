@@ -45,7 +45,7 @@ export function Sidebar() {
         <ShieldCheck className="h-4 w-4 text-accent shrink-0" />
         {!iconOnly && <span>Passkey Admin</span>}
       </Link>
-      <nav className="flex-1 p-2 flex flex-col gap-0.5">
+      <nav aria-label="Main navigation" className="flex-1 p-2 flex flex-col gap-0.5">
         {items.map((it) => (
           <NavLink
             key={it.to}

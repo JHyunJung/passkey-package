@@ -35,7 +35,14 @@ export function Header({ onOpenPalette }: Props) {
         {me?.role === 'PLATFORM_OPERATOR' ? 'Platform Operator Console' : 'Tenant Admin Console'}
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" onClick={onOpenPalette} className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenPalette}
+          className="gap-2"
+          aria-label="Open command palette"
+          aria-keyshortcuts="Meta+k Control+k"
+        >
           <Command className="h-3.5 w-3.5" />
           <span className="text-[12px]">⌘K</span>
         </Button>
