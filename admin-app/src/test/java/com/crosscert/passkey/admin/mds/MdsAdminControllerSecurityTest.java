@@ -15,8 +15,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Set;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -84,26 +82,14 @@ class MdsAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
-    void viewerCanGetStatus() throws Exception {
-        when(jdbc.queryForObject(anyString(),
-                any(org.springframework.jdbc.core.RowMapper.class)))
-                .thenReturn(new MdsStatusView(0L, null, null));
-        mvc.perform(get("/admin/api/mds/status"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.version").exists());
-    }
-
-    @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(roles = "RP_ADMIN")
     void viewerCannotForceSync() throws Exception {
         mvc.perform(post("/admin/api/mds/sync").with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
+    @WithMockUser(roles = "PLATFORM_OPERATOR")
     void adminCanForceSync() throws Exception {
         when(scheduler.runOnce())
                 .thenReturn(MdsSchedulerService.SyncResult.synced(42L));

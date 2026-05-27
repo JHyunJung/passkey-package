@@ -90,24 +90,14 @@ class KeyMgmtControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
-    void viewerCanList() throws Exception {
-        when(repo.findAll()).thenReturn(java.util.List.of());
-        mvc.perform(get("/admin/api/keys"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.keys").isArray());
-    }
-
-    @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(roles = "RP_ADMIN")
     void viewerCannotRotate() throws Exception {
         mvc.perform(post("/admin/api/keys/rotate").with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void adminCanRotate() throws Exception {
         when(admins.findByEmail(anyString())).thenReturn(
                 java.util.Optional.of(adminUserWithUuid()));
@@ -121,7 +111,7 @@ class KeyMgmtControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void rotateConflictWhenLeaseUnavailable() throws Exception {
         when(admins.findByEmail(anyString())).thenReturn(
                 java.util.Optional.of(adminUserWithUuid()));

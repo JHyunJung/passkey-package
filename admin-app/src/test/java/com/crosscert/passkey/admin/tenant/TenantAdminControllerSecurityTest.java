@@ -93,7 +93,7 @@ class TenantAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(roles = "RP_ADMIN")
     void viewerCanGet() throws Exception {
         when(service.list()).thenReturn(java.util.List.of());
         mvc.perform(get("/admin/api/tenants"))
@@ -104,7 +104,7 @@ class TenantAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(roles = "RP_ADMIN")
     void viewerCannotPost() throws Exception {
         mvc.perform(post("/admin/api/tenants")
                 .with(csrf())
@@ -114,7 +114,7 @@ class TenantAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "alice@example.com", roles = "ADMIN")
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void adminCanPost() throws Exception {
         when(admins.findByEmail(anyString()))
                 .thenReturn(java.util.Optional.of(adminUserWithUuid()));
@@ -141,7 +141,7 @@ class TenantAdminControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(roles = "RP_ADMIN")
     void getReturnsApiErrorWhenTenantNotFound() throws Exception {
         when(service.get("missing"))
             .thenThrow(new com.crosscert.passkey.core.api.BusinessException(
