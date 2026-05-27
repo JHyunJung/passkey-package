@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
-import Layout from './components/Layout';
+import { Layout } from '@/shell/Layout';
 import TenantList from './pages/TenantList';
 import TenantCreate from './pages/TenantCreate';
 import TenantDetail from './pages/TenantDetail';
@@ -9,8 +9,7 @@ import Activity from './pages/Activity';
 import AuditLog from './pages/AuditLog';
 import MdsStatus from './pages/MdsStatus';
 import KeyManagement from './pages/KeyManagement';
-import { ToastProvider, useToast } from './components/Toast';
-import IdleTimeout from './components/IdleTimeout';
+import { useToast } from './components/Toast';
 import { ApiError } from './api/types';
 import { MeProvider } from './me/MeContext';
 
@@ -37,9 +36,8 @@ function ApiErrorBridge() {
 
 export default function App() {
   return (
-    <ToastProvider>
+    <>
       <ApiErrorBridge />
-      <IdleTimeout />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route element={<MeProvider><Layout /></MeProvider>}>
@@ -53,6 +51,6 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/tenants" replace />} />
       </Routes>
-    </ToastProvider>
+    </>
   );
 }

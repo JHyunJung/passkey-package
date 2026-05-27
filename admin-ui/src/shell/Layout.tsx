@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import Sidebar from './Sidebar';
-import Header from './Header';
-import CommandPalette from './CommandPalette';
+import { Sidebar } from './Sidebar';
+import { Header } from './Header';
+import { CommandPalette } from './CommandPalette';
+import { IdleTimeoutDialog } from './IdleTimeoutDialog';
+import { TweaksPanel } from './TweaksPanel';
 
-export default function Layout() {
+export function Layout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -19,15 +21,20 @@ export default function Layout() {
   }, []);
 
   return (
-    <div className="app" style={{ gridTemplateAreas: '"sidebar content"' }}>
+    <div
+      className="grid min-h-screen"
+      style={{ gridTemplateColumns: 'var(--sidebar-w) 1fr' }}
+    >
       <Sidebar />
-      <div className="content" style={{ gridArea: 'content' }}>
+      <div className="min-w-0 flex flex-col">
         <Header onOpenPalette={() => setPaletteOpen(true)} />
-        <main className="page">
+        <main className="flex-1">
           <Outlet />
         </main>
       </div>
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <IdleTimeoutDialog />
+      <TweaksPanel />
     </div>
   );
 }
