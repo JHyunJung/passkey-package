@@ -101,7 +101,10 @@ export function IdleTimeoutDialog() {
         if (!v) extend();
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>세션이 곧 만료됩니다</DialogTitle>
           <DialogDescription>
