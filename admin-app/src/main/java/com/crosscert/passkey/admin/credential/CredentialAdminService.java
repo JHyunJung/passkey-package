@@ -44,8 +44,10 @@ public class CredentialAdminService {
     @Transactional(readOnly = true)
     public PageView<CredentialView> list(UUID tenantId, int page, int size, String q) {
         int cappedSize = Math.min(Math.max(size, 1), 200);
+        // Sort 는 findAllByTenantId 의 @Query ORDER BY 절에서 처리 (NULLS LAST 포함).
+        // searchByTenantId native query 는 Pageable sort 미적용 — 필요 시 쿼리 내 ORDER BY 추가.
         Pageable pageReq = PageRequest.of(Math.max(page, 0), cappedSize,
-                Sort.by(Sort.Order.desc("lastUsedAt").nullsLast())
+                Sort.by(Sort.Order.desc("lastUsedAt"))
                     .and(Sort.by(Sort.Order.desc("id"))));
 
         Page<Credential> rows = (q == null || q.isBlank())

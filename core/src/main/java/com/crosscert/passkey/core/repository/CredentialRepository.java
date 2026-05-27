@@ -29,10 +29,13 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     Optional<Credential> findByCredentialIdForUpdate(@Param("credentialId") byte[] credentialId);
 
     /**
-     * tenant 의 모든 credential — 정렬은 호출자 Pageable 이 결정.
+     * tenant 의 모든 credential — lastUsedAt DESC NULLS LAST, id DESC 정렬.
+     * Criteria API 는 NullPrecedence 미지원이므로 JPQL @Query 로 명시.
      * admin-app 의 CredentialAdminService.list() 가 사용.
      */
-    Page<Credential> findAllByTenantId(UUID tenantId, Pageable p);
+    @Query(value = "select c from Credential c where c.tenantId = :tenantId order by c.lastUsedAt desc nulls last, c.id desc",
+           countQuery = "select count(c) from Credential c where c.tenantId = :tenantId")
+    Page<Credential> findAllByTenantId(@Param("tenantId") UUID tenantId, Pageable p);
 
     /**
      * tenant 안에서 credential_id 또는 user_handle 의 hex 표현이 q 를 substring 으로 포함하는 행.
