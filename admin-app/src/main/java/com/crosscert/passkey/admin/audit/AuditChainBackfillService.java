@@ -52,7 +52,13 @@ public class AuditChainBackfillService {
             List<AuditLog> rows = repo.findAllByTenantOrdered(tenantId);
             byte[] prev = null;
             for (AuditLog row : rows) {
-                if (row.getTenantHash() != null) {
+                // Skip only when *both* tenantHash and tenantPrevHash are present —
+                // a partial-completion row (hash set, prev_hash null) would otherwise
+                // leave the chain broken on re-run.  Recomputing is idempotent.
+                if (row.getTenantHash() != null
+                        && (prev == null
+                            ? row.getTenantPrevHash() == null
+                            : java.util.Arrays.equals(prev, row.getTenantPrevHash()))) {
                     prev = row.getTenantHash();
                     skipped++;
                     continue;
