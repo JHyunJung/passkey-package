@@ -135,7 +135,7 @@ class BaseEntityCallbackIT {
      */
     @Test
     void onPersist_setsCreatedAtAndUpdatedAt_toSameInstant() {
-        AdminUser fresh = new AdminUser(uniqueEmail("persist"), bcryptHash(), "ADMIN");
+        AdminUser fresh = new AdminUser(uniqueEmail("persist"), bcryptHash(), "PLATFORM_OPERATOR");
         assertThat(fresh.getCreatedAt())
                 .as("pre-persist: callback has not fired yet")
                 .isNull();
@@ -169,7 +169,7 @@ class BaseEntityCallbackIT {
     @Test
     void onUpdate_advancesUpdatedAt_butNotCreatedAt() throws InterruptedException {
         AdminUser saved = adminUsers.saveAndFlush(
-                new AdminUser(uniqueEmail("update"), bcryptHash(), "ADMIN"));
+                new AdminUser(uniqueEmail("update"), bcryptHash(), "PLATFORM_OPERATOR"));
         Instant originalCreatedAt = saved.getCreatedAt();
         Instant originalUpdatedAt = saved.getUpdatedAt();
 
@@ -234,9 +234,9 @@ class BaseEntityCallbackIT {
     @Test
     void persistedUuid_isTimeOrdered() {
         AdminUser first = adminUsers.saveAndFlush(
-                new AdminUser(uniqueEmail("uuid1"), bcryptHash(), "ADMIN"));
+                new AdminUser(uniqueEmail("uuid1"), bcryptHash(), "PLATFORM_OPERATOR"));
         AdminUser second = adminUsers.saveAndFlush(
-                new AdminUser(uniqueEmail("uuid2"), bcryptHash(), "ADMIN"));
+                new AdminUser(uniqueEmail("uuid2"), bcryptHash(), "PLATFORM_OPERATOR"));
 
         assertThat(first.getId()).as("first UUID assigned").isNotNull();
         assertThat(second.getId()).as("second UUID assigned").isNotNull();
