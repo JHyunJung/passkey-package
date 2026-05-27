@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   Database,
   KeyRound,
+  Link2,
 } from 'lucide-react';
 import { useMe } from '@/me/MeContext';
 import { useTweaks } from '@/app/providers/TweaksProvider';
@@ -13,11 +14,12 @@ import { cn } from '@/lib/utils';
 type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
 const PLATFORM_NAV: NavItem[] = [
-  { to: '/tenants',  label: 'Tenants',      icon: Building2 },
-  { to: '/activity', label: 'Activity',     icon: ActivityIcon },
-  { to: '/audit',    label: 'Audit Log',    icon: ShieldCheck },
-  { to: '/keys',     label: 'Signing Keys', icon: KeyRound },
-  { to: '/mds',      label: 'MDS',          icon: Database },
+  { to: '/tenants',     label: 'Tenants',      icon: Building2 },
+  { to: '/activity',    label: 'Activity',     icon: ActivityIcon },
+  { to: '/audit',       label: 'Audit Log',    icon: ShieldCheck },
+  { to: '/audit-chain', label: 'Chain',        icon: Link2 },
+  { to: '/keys',        label: 'Signing Keys', icon: KeyRound },
+  { to: '/mds',         label: 'MDS',          icon: Database },
 ];
 
 const RP_NAV = (tenantId: string): NavItem[] => [

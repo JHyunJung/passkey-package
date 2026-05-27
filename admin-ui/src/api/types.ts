@@ -196,3 +196,37 @@ export interface PageView<T> {
   totalElements: number;
   hasNext: boolean;
 }
+
+export type AuditChainOverview = {
+  verifiedAt: string;
+  windowHours: number;
+  bucketSizeMinutes: number;
+  totals: {
+    tenantsIntact: number;
+    tenantsTotal: number;
+    tenantsTampered: number;
+    verifiedRows: number;
+    verificationMs: number;
+  };
+  tenants: {
+    tenantId: string | null;
+    tenantName: string;
+    intact: boolean;
+    verifiedRows: number;
+    buckets: number[];
+    tamperedEntryId: string | null;
+  }[];
+};
+
+export type ChainVerifyResponse = {
+  tenantId: string | null;
+  intact: boolean;
+  tamperedEntryId: string | null;
+  verifiedAt: string;
+};
+
+export type BackfillResponse = {
+  tenantsProcessed: number;
+  rowsUpdated: number;
+  rowsSkipped: number;
+};

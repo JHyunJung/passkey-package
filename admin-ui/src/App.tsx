@@ -9,6 +9,7 @@ import Activity from './pages/Activity';
 import AuditLog from './pages/AuditLog';
 import MdsStatus from './pages/MdsStatus';
 import KeyManagement from './pages/KeyManagement';
+import AuditChainMonitor from './pages/AuditChainMonitor';
 import { useToast } from './components/Toast';
 import { ApiError } from './api/types';
 import { MeProvider } from './me/MeContext';
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/tenants/:id" element={<TenantDetail />} />
           <Route path="/activity" element={<Activity />} />
           <Route path="/audit" element={<AuditLog />} />
+          <Route path="/audit-chain" element={<AuditChainMonitor />} />
           <Route path="/mds" element={<MdsStatus />} />
           <Route path="/keys" element={<KeyManagement />} />
         </Route>
