@@ -112,7 +112,8 @@ class AuditChainVerifierTest {
 
     private static void copyId(AuditLog row, UUID id) {
         try {
-            java.lang.reflect.Field f = AuditLog.class.getDeclaredField("id");
+            // id now lives on BaseEntity (Phase 8 T7).
+            java.lang.reflect.Field f = AuditLog.class.getSuperclass().getDeclaredField("id");
             f.setAccessible(true);
             f.set(row, id);
         } catch (Exception e) { throw new RuntimeException(e); }

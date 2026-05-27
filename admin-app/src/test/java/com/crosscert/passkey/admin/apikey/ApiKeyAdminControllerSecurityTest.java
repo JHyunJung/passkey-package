@@ -161,7 +161,8 @@ class ApiKeyAdminControllerSecurityTest {
     private static com.crosscert.passkey.core.entity.AdminUser adminUserWithUuid() {
         var u = new com.crosscert.passkey.core.entity.AdminUser("alice@example.com", "x", "ADMIN");
         try {
-            var f = com.crosscert.passkey.core.entity.AdminUser.class.getDeclaredField("id");
+            // Phase 8 T3: id moved to BaseEntity superclass.
+            var f = com.crosscert.passkey.core.entity.AdminUser.class.getSuperclass().getDeclaredField("id");
             f.setAccessible(true);
             f.set(u, UUID.randomUUID());
         } catch (Exception e) { throw new RuntimeException(e); }

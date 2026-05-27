@@ -4,6 +4,7 @@ import { ApiError } from '../api/types';
 import type { AuditLogView } from '../api/types';
 import { useToast } from '../components/Toast';
 import { Receipt, Refresh, Shield } from '../components/Icons';
+import { formatDateTime } from '../lib/formatDateTime';
 
 // AuditChainVerifier.Result record fields (verified via java source):
 //   ok: boolean
@@ -148,7 +149,7 @@ export default function AuditLog() {
                   <td className="mono muted">
                     {r.targetType ?? '–'}{r.targetId ? `/${r.targetId}` : ''}
                   </td>
-                  <td className="mono muted">{r.createdAt?.slice(0, 19).replace('T', ' ')}</td>
+                  <td className="mono muted">{formatDateTime(r.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

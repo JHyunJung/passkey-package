@@ -2,7 +2,6 @@ package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
@@ -10,13 +9,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "CREDENTIAL")
-public class Credential {
-
-    @Id
-    @UuidGenerator(style = UuidGenerator.Style.TIME)
-    @JdbcTypeCode(SqlTypes.UUID)
-    @Column(name = "ID", columnDefinition = "RAW(16)")
-    private UUID id;
+public class Credential extends BaseEntity {
 
     @Column(name = "TENANT_ID", nullable = false, columnDefinition = "RAW(16)")
     @JdbcTypeCode(SqlTypes.UUID)
@@ -48,9 +41,6 @@ public class Credential {
     @Column(name = "BACKUP_STATE")
     private String backupStateJson;
 
-    @Column(name = "CREATED_AT", nullable = false, updatable = false)
-    private Instant createdAt;
-
     @Column(name = "LAST_USED_AT")
     private Instant lastUsedAt;
 
@@ -64,10 +54,8 @@ public class Credential {
         this.publicKey = publicKey;
         this.aaguid = aaguid;
         this.signCount = 0;
-        this.createdAt = Instant.now();
     }
 
-    public UUID getId() { return id; }
     public UUID getTenantId() { return tenantId; }
     public byte[] getCredentialId() { return credentialId; }
     public long getSignCount() { return signCount; }
@@ -80,7 +68,7 @@ public class Credential {
      * must be strictly increasing (replay defense); callers verify that
      * before calling this.
      */
-    public void recordAuthentication(long newSignCount, byte[] newCredentialRecordBytes, java.time.Instant now) {
+    public void recordAuthentication(long newSignCount, byte[] newCredentialRecordBytes, Instant now) {
         this.signCount = newSignCount;
         this.publicKey = newCredentialRecordBytes;
         this.lastUsedAt = now;

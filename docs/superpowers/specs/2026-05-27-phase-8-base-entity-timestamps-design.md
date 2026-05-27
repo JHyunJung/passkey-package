@@ -15,8 +15,9 @@ Phase 8은 두 가지를 묶어 처리한다:
 
 ### 2.1 In Scope
 
-- 새 `@MappedSuperclass com.crosscert.passkey.core.entity.BaseEntity`
-- 11개 entity (`AdminUser`, `ApiKey`, `ApiKeyScope`, `AuditLog`, `Credential`, `MdsBlobCache`, `SchedulerLease`, `SigningKey`, `Tenant`, `TenantAcceptedFormat`, `TenantAllowedOrigin`) 모두 BaseEntity 상속
+- 새 `@MappedSuperclass com.crosscert.passkey.core.entity.BaseEntity` (UUID PK + createdAt + updatedAt + @PrePersist/@PreUpdate)
+- 9개 entity가 BaseEntity를 상속: `AdminUser`, `ApiKey`, `ApiKeyScope`, `AuditLog`, `Credential`, `SigningKey`, `Tenant`, `TenantAcceptedFormat`, `TenantAllowedOrigin`
+- 2개 예외 entity는 BaseEntity를 상속하지 않고 직접 `createdAt`/`updatedAt` + `@PrePersist`/`@PreUpdate` 구현: `MdsBlobCache` (singleton row, fixed UUID 보존), `SchedulerLease` (V19 `DEFAULT SYS_GUID()` 및 IT raw SQL insert 호환성 보존). 즉 BaseEntity의 PK strategy만 제외하고 timestamp 정책은 11개 entity 모두 동일.
 - `Tenant.touchUpdatedAt()` 수동 호출 제거 (`@PreUpdate`가 자동 처리)
 - V22 Flyway migration: `updated_at` 컬럼 신규 추가 (Tenant 제외), child 테이블 3개에 `created_at`+`updated_at` 신규 추가, `mds_blob_cache`/`scheduler_lease`에 둘 다 추가
 - `admin-ui/src/lib/formatDateTime.ts` 유틸 신규
@@ -59,19 +60,35 @@ Oracle ON UPDATE trigger는 Oracle이 표준 구문을 지원하지 않아 BEFOR
 
 `AuditLog`도 BaseEntity를 상속. append-only 의도는 보장되지만 `updated_at` 컬럼이 존재. 값은 항상 `created_at`과 동일.
 
-### 3.4 특수 entity 처리: `MdsBlobCache`, `SchedulerLease`
+### 3.4 특수 entity 처리: `MdsBlobCache`, `SchedulerLease` — BaseEntity 제외
+
+두 entity는 PK 관리 방식이 BaseEntity의 `@UuidGenerator(Style.TIME)`과 충돌하므로 BaseEntity를 상속하지 않는다. 그러나 timestamp 정책 ("모든 entity에 updated_at 필수")은 동일하게 적용 — 각자 `createdAt`/`updatedAt` 필드 + `@PrePersist`/`@PreUpdate` 콜백을 직접 선언한다.
 
 #### MdsBlobCache
 
-현재 `@Id @JdbcTypeCode(SqlTypes.UUID) UUID id` (fixed, generator 없음). BaseEntity 상속 시 `@UuidGenerator(Style.TIME)`가 적용된다. 기존 row의 PK는 변경 없이 유지되며 (`@UuidGenerator`는 null PK에만 동작), 신규 row만 TIME-ordered UUID 사용.
+현재 `SINGLETON_ID = "00000000-0000-0000-0000-000000000001"` fixed UUID 사용. V19에서 단 1 row가 seed되어 있고 앱은 absolute never 새 row를 insert하지 않는다는 설계 의도. `@UuidGenerator`를 도입하면 이 singleton 보장이 깨진다.
 
-`fetched_at`은 도메인 의미(MDS BLOB을 마지막으로 fetch한 시점)이므로 별도 컬럼으로 유지. `created_at`/`updated_at`은 BaseEntity가 제공.
+따라서 PK는 그대로 유지하고, 클래스 내부에 직접:
+```java
+@Column(name = "CREATED_AT", nullable = false, updatable = false)
+private Instant createdAt;
+
+@Column(name = "UPDATED_AT", nullable = false)
+private Instant updatedAt;
+
+@PrePersist protected void onCreate() { ... }
+@PreUpdate protected void onUpdate() { ... }
+```
+
+`fetched_at`은 도메인 의미(MDS BLOB을 마지막으로 fetch한 시점)이므로 별도 컬럼으로 유지. updated_at은 row 변경 시점, fetched_at은 BLOB fetch 도메인 이벤트. 의미 다름.
 
 #### SchedulerLease
 
-현재 `@Id UUID id` (generator 없음, 호출자가 UUID 생성). BaseEntity 상속으로 TIME generator 적용 + `created_at`/`updated_at` 추가. `expires_at`은 lease 도메인 컬럼이므로 유지.
+V19 schema가 `DEFAULT SYS_GUID()`로 PK를 자동 채우게 설계되어 있다 (클래스 javadoc 참조). IT 테스트의 raw SQL insert가 id 컬럼을 생략한 채 동작 — 이 호환성을 보존해야 한다.
 
-기존 lease row의 PK는 그대로 보존. 신규 lease만 TIME generator 적용.
+따라서 PK 선언과 V19 `DEFAULT SYS_GUID()`는 그대로 유지하고, `createdAt`/`updatedAt` + 콜백만 추가. `expires_at`은 lease 도메인 컬럼이라 유지.
+
+기존 코드 변경 최소화: 생성자에 timestamp 초기화 추가 없이도 `@PrePersist`가 null 케이스를 안전하게 처리.
 
 ### 3.5 Migration 전략: SYSTIMESTAMP 백필
 

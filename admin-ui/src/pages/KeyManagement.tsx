@@ -5,6 +5,7 @@ import type { KeyList, RotateResponse, SigningKeyView } from '../api/types';
 import { useToast } from '../components/Toast';
 import Dialog from '../components/Dialog';
 import { Refresh, Key } from '../components/Icons';
+import { formatDateTime } from '../lib/formatDateTime';
 
 export default function KeyManagement() {
   const [keys, setKeys] = useState<SigningKeyView[]>([]);
@@ -94,9 +95,9 @@ export default function KeyManagement() {
                       {k.status}
                     </span>
                   </td>
-                  <td className="mono muted">{k.createdAt?.slice(0, 19).replace('T', ' ')}</td>
-                  <td className="mono muted">{k.rotatedAt?.slice(0, 19).replace('T', ' ') ?? '-'}</td>
-                  <td className="mono muted">{k.revokedAt?.slice(0, 19).replace('T', ' ') ?? '-'}</td>
+                  <td className="mono muted">{formatDateTime(k.createdAt)}</td>
+                  <td className="mono muted">{formatDateTime(k.rotatedAt)}</td>
+                  <td className="mono muted">{formatDateTime(k.revokedAt)}</td>
                 </tr>
               ))}
             </tbody>

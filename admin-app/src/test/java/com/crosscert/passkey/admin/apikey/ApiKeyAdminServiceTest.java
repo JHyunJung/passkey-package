@@ -44,10 +44,11 @@ class ApiKeyAdminServiceTest {
         // @UuidGenerator sets id during JPA persist. In unit tests we must
         // set it reflectively so getId() is non-null after repo.save() mock.
         // The service uses saveAndFlush for issue() and save() for revoke().
+        // Phase 8 T4: id is now on BaseEntity superclass — use getSuperclass().
         org.mockito.stubbing.Answer<ApiKey> assignId = inv -> {
             ApiKey k = inv.getArgument(0);
             try {
-                var f = ApiKey.class.getDeclaredField("id");
+                var f = ApiKey.class.getSuperclass().getDeclaredField("id");
                 f.setAccessible(true);
                 if (f.get(k) == null) f.set(k, UUID.randomUUID());
             } catch (Exception e) { throw new RuntimeException(e); }
@@ -132,7 +133,8 @@ class ApiKeyAdminServiceTest {
         UUID existingId = UUID.randomUUID();
         ApiKey existing = new ApiKey(TENANT_UUID, "pk_abcd1234", "$2a$04$x", "primary");
         try {
-            var f = ApiKey.class.getDeclaredField("id");
+            // Phase 8 T4: id is now on BaseEntity superclass — use getSuperclass().
+            var f = ApiKey.class.getSuperclass().getDeclaredField("id");
             f.setAccessible(true);
             f.set(existing, existingId);
         } catch (Exception e) { throw new RuntimeException(e); }

@@ -1,22 +1,13 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.UuidGenerator;
-import org.hibernate.type.SqlTypes;
 
 import java.util.Objects;
 import java.util.UUID;
 
 @Entity
 @Table(name = "TENANT_ALLOWED_ORIGIN")
-public class TenantAllowedOrigin {
-
-    @Id
-    @UuidGenerator(style = UuidGenerator.Style.TIME)
-    @JdbcTypeCode(SqlTypes.UUID)
-    @Column(name = "ID", columnDefinition = "RAW(16)")
-    private UUID id;
+public class TenantAllowedOrigin extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "TENANT_ID", nullable = false, columnDefinition = "RAW(16)")
@@ -36,7 +27,6 @@ public class TenantAllowedOrigin {
         this.sortOrder = sortOrder;
     }
 
-    public UUID getId() { return id; }
     public Tenant getTenant() { return tenant; }
     public String getOrigin() { return origin; }
     public int getSortOrder() { return sortOrder; }

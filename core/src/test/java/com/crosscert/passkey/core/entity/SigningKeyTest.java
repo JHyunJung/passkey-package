@@ -19,7 +19,7 @@ class SigningKeyTest {
         assertThat(k.getStatus()).isEqualTo("ACTIVE");
         assertThat(k.getPublicJwk()).contains("\"n\":\"...\"");
         assertThat(k.getPrivatePkcs8()).containsExactly(1,2,3);
-        assertThat(k.getCreatedAt()).isNotNull();
+        assertThat(k.getCreatedAt()).isNull(); // set by @PrePersist, not constructor
         assertThat(k.getRotatedAt()).isNull();
         assertThat(k.getRevokedAt()).isNull();
     }
