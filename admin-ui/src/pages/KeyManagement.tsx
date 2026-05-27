@@ -47,8 +47,7 @@ export default function KeyManagement() {
   const revoked = keys.filter((k) => k.status === 'REVOKED').length;
 
   return (
-    <>
-      <PlatformOnlyGuard />
+    <PlatformOnlyGuard>
       <div className="stack-6">
       <div className="page__head">
         <div>
@@ -127,7 +126,7 @@ export default function KeyManagement() {
         </div>
       </Dialog>
     </div>
-    </>
+    </PlatformOnlyGuard>
   );
 }
 

@@ -62,8 +62,7 @@ export default function TenantCreate() {
   }
 
   return (
-    <>
-      <PlatformOnlyGuard />
+    <PlatformOnlyGuard>
       <div className="stack-6" style={{ maxWidth: 720 }}>
         <div className="page__head">
           <div>
@@ -107,7 +106,7 @@ export default function TenantCreate() {
           </div>
         </form>
       </div>
-    </>
+    </PlatformOnlyGuard>
   );
 }
 

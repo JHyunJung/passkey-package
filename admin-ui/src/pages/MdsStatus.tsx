@@ -35,8 +35,7 @@ export default function MdsStatus() {
   }
 
   return (
-    <>
-      <PlatformOnlyGuard />
+    <PlatformOnlyGuard>
       <div className="stack-6">
         <div className="page__head">
           <div>
@@ -64,7 +63,7 @@ export default function MdsStatus() {
           </div>
         )}
       </div>
-    </>
+    </PlatformOnlyGuard>
   );
 }
 
