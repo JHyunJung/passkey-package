@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import TenantList from './pages/TenantList';
 import TenantCreate from './pages/TenantCreate';
 import TenantDetail from './pages/TenantDetail';
+import Activity from './pages/Activity';
 import AuditLog from './pages/AuditLog';
 import MdsStatus from './pages/MdsStatus';
 import KeyManagement from './pages/KeyManagement';
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/tenants" element={<TenantList />} />
           <Route path="/tenants/new" element={<TenantCreate />} />
           <Route path="/tenants/:id" element={<TenantDetail />} />
+          <Route path="/activity" element={<Activity />} />
           <Route path="/audit" element={<AuditLog />} />
           <Route path="/mds" element={<MdsStatus />} />
           <Route path="/keys" element={<KeyManagement />} />
