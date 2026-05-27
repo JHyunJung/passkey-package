@@ -19,8 +19,8 @@ public final class TenantAdminDto {
             @NotBlank @Size(max = 256) String rpName,
             @NotEmpty List<@NotBlank @Size(max = 512) String> allowedOrigins,
             @NotEmpty Set<@NotBlank @Size(max = 32) String> acceptedFormats,
-            boolean requireUserVerification,
-            boolean mdsRequired
+            @NotNull Boolean requireUserVerification,
+            @NotNull Boolean mdsRequired
     ) {}
 
     public record TenantUpdateRequest(
@@ -29,8 +29,8 @@ public final class TenantAdminDto {
             @NotBlank @Size(max = 256) String rpName,
             @NotEmpty List<@NotBlank @Size(max = 512) String> allowedOrigins,
             @NotEmpty Set<@NotBlank @Size(max = 32) String> acceptedFormats,
-            boolean requireUserVerification,
-            boolean mdsRequired
+            @NotNull Boolean requireUserVerification,
+            @NotNull Boolean mdsRequired
     ) {}
 
     public record TenantView(

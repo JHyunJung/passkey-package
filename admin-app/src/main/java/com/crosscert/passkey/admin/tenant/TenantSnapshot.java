@@ -15,7 +15,7 @@ import java.util.TreeSet;
 public record TenantSnapshot(
         String displayName,
         String rpName,
-        List<String> allowedOrigins,
+        Set<String> allowedOrigins,
         Set<String> acceptedFormats,
         boolean requireUserVerification,
         boolean mdsRequired
@@ -25,7 +25,7 @@ public record TenantSnapshot(
         return new TenantSnapshot(
                 t.getDisplayName(),
                 t.getRpName(),
-                new ArrayList<>(t.getAllowedOriginValues()),
+                new TreeSet<>(t.getAllowedOriginValues()),
                 new TreeSet<>(t.getAcceptedFormatValues()),
                 t.isRequireUserVerification(),
                 t.isMdsRequired());
