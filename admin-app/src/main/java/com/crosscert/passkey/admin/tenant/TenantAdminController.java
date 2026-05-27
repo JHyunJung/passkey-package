@@ -34,7 +34,7 @@ public class TenantAdminController {
         return ApiResponse.ok(service.get(idOrSlug));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<TenantAdminDto.TenantView> create(
@@ -45,7 +45,7 @@ public class TenantAdminController {
         return ApiResponse.ok("Tenant created", view);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @PutMapping("/{idOrSlug}")
     public ApiResponse<TenantAdminDto.TenantView> update(
             @PathVariable String idOrSlug,
