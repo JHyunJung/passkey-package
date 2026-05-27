@@ -1,8 +1,1 @@
-{
-  "success": false,
-  "code": "A001",
-  "message": "Invalid API key",
-  "error": { "errorCode": "A001" },
-  "traceId": "abc",
-  "timestamp": "2026-05-27T09:00:00"
-}
+{"type":"about:blank","status":401,"title":"Unauthorized"}

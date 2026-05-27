@@ -27,11 +27,13 @@ public class PasskeyResponseErrorHandler implements ResponseErrorHandler {
         int status = response.getStatusCode().value();
         byte[] bodyBytes = response.getBody().readAllBytes();
         ApiResponseEnvelope<?> env = parseQuietly(bodyBytes);
+        // Treat a parsed envelope with no code as a non-envelope response (e.g. RFC 7807 problem+json)
+        boolean isEnvelope = env != null && env.code() != null;
 
-        String code     = env != null ? env.code()    : "C999";
-        String message  = env != null ? env.message() : "Upstream error (no envelope)";
-        String traceId  = env != null ? env.traceId() : null;
-        var fieldErrors = env != null && env.error() != null ? env.error().fieldErrors() : null;
+        String code     = isEnvelope ? env.code()    : "C999";
+        String message  = isEnvelope ? env.message() : "Upstream error (no envelope)";
+        String traceId  = isEnvelope ? env.traceId() : null;
+        var fieldErrors = isEnvelope && env.error() != null ? env.error().fieldErrors() : null;
 
         if (status == 401) {
             throw new PasskeyAuthException(code, message, traceId, fieldErrors);

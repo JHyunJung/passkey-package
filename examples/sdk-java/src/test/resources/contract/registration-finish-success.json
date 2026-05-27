@@ -4,7 +4,7 @@
   "message": "Success",
   "data": {
     "credentialId": "Y3JlZElk",
-    "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96",
+    "aaguid": "08987058cadc4b81b6e130de50dcbe96",
     "attestationFormat": "packed",
     "createdAt": "2026-05-27T09:01:00Z"
   },
