@@ -4,6 +4,7 @@ import { ApiError } from '../api/types';
 import type { MdsStatusView, SyncResult } from '../api/types';
 import { useToast } from '../components/Toast';
 import { Refresh, Activity } from '../components/Icons';
+import { formatDateTime, formatDate } from '../lib/formatDateTime';
 
 export default function MdsStatus() {
   const [status, setStatus] = useState<MdsStatusView | null>(null);
@@ -46,8 +47,8 @@ export default function MdsStatus() {
 
       <div className="grid-3">
         <Metric label="VERSION" value={status?.version != null ? String(status.version) : '—'} sub="현재 BLOB" />
-        <Metric label="NEXT UPDATE" value={status?.nextUpdate ?? '—'} sub="MDS 권고 다음 갱신" />
-        <Metric label="LAST FETCHED" value={status?.fetchedAt?.slice(0, 19).replace('T', ' ') ?? '—'} sub="UTC" />
+        <Metric label="NEXT UPDATE" value={formatDate(status?.nextUpdate)} sub="MDS 권고 다음 갱신" />
+        <Metric label="LAST FETCHED" value={formatDateTime(status?.fetchedAt)} sub="KST" />
       </div>
 
       {last && (

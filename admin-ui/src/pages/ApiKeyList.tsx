@@ -5,6 +5,7 @@ import type { ApiKeyView, TenantView } from '../api/types';
 import { useToast } from '../components/Toast';
 import ApiKeyCreateModal from './ApiKeyCreateModal';
 import { Plus, Key, Trash } from '../components/Icons';
+import { formatDateTime } from '../lib/formatDateTime';
 
 export default function ApiKeyList() {
   const [tenants, setTenants] = useState<TenantView[]>([]);
@@ -141,9 +142,9 @@ export default function ApiKeyList() {
                         {isRevoked ? 'REVOKED' : 'ACTIVE'}
                       </span>
                     </td>
-                    <td className="mono muted">{k.createdAt?.slice(0, 10)}</td>
-                    <td className="mono muted">{k.expiresAt?.slice(0, 10) ?? '-'}</td>
-                    <td className="mono muted">{k.lastUsedAt?.slice(0, 10) ?? '-'}</td>
+                    <td className="mono muted">{formatDateTime(k.createdAt)}</td>
+                    <td className="mono muted">{formatDateTime(k.expiresAt)}</td>
+                    <td className="mono muted">{formatDateTime(k.lastUsedAt)}</td>
                     <td>
                       {!isRevoked && (
                         <button

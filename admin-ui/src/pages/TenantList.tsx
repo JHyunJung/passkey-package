@@ -5,6 +5,7 @@ import { ApiError } from '../api/types';
 import type { TenantView } from '../api/types';
 import { useToast } from '../components/Toast';
 import { Plus, Search, Building } from '../components/Icons';
+import { formatDateTime } from '../lib/formatDateTime';
 
 export default function TenantList() {
   const [tenants, setTenants] = useState<TenantView[]>([]);
@@ -115,7 +116,7 @@ export default function TenantList() {
                   <td>{t.requireUserVerification ? '✓' : '—'}</td>
                   <td>{t.mdsRequired ? '✓' : '—'}</td>
                   <td><span className={`badge badge--${t.status === 'active' ? 'success' : 'warning'} badge--dot`}>{t.status}</span></td>
-                  <td className="mono muted">{t.createdAt?.slice(0, 10)}</td>
+                  <td className="mono muted">{formatDateTime(t.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
