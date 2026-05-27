@@ -1,0 +1,34 @@
+package com.crosscert.passkey.admin.activity;
+
+import com.crosscert.passkey.core.api.ApiResponse;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/admin/api/activity")
+public class ActivityController {
+
+    private final ActivityService service;
+
+    public ActivityController(ActivityService service) {
+        this.service = service;
+    }
+
+    /**
+     * PLATFORM_OPERATOR 전용. RP_ADMIN 은 TenantDetail 의 Activity 탭에서
+     * /admin/api/audit?tenantId={self} 를 사용 — admin-role-separation 의
+     * scope check 가 자기 tenant 강제.
+     */
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
+    @GetMapping
+    public ApiResponse<ActivityView> activity(
+            @RequestParam(required = false) UUID sinceId,
+            @RequestParam(required = false) String category) {
+        return ApiResponse.ok(service.snapshot(sinceId, category));
+    }
+}
