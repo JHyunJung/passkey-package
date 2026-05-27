@@ -132,3 +132,32 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
+export interface TenantUpdateRequest {
+  displayName: string;
+  rpName: string;
+  allowedOrigins: string[];
+  acceptedFormats: string[];
+  requireUserVerification: boolean;
+  mdsRequired: boolean;
+}
+
+export interface CredentialView {
+  credentialId: string;
+  userHandle: string;
+  aaguidHex: string | null;
+  authenticatorName: string | null;
+  attestationFormat: string;
+  transports: string;
+  signCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface PageView<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  hasNext: boolean;
+}

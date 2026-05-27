@@ -1,4 +1,4 @@
-import type { ApiEnvelope } from './types';
+import type { ApiEnvelope, TenantUpdateRequest, TenantView, CredentialView, PageView } from './types';
 import { ApiError } from './types';
 
 function getCookie(name: string): string | null {
@@ -69,3 +69,25 @@ export const api = {
     return res.ok;
   },
 };
+
+export const updateTenant = (id: string, req: TenantUpdateRequest) =>
+  api.put<TenantView>(`/admin/api/tenants/${id}`, req);
+
+export const listCredentials = (
+  tenantId: string,
+  params: { page: number; size: number; q?: string },
+): Promise<PageView<CredentialView>> => {
+  const qs = new URLSearchParams({
+    page: String(params.page),
+    size: String(params.size),
+    ...(params.q ? { q: params.q } : {}),
+  });
+  return api.get<PageView<CredentialView>>(
+    `/admin/api/tenants/${tenantId}/credentials?${qs}`,
+  );
+};
+
+export const revokeCredential = (tenantId: string, credentialId: string) =>
+  api.delete<void>(
+    `/admin/api/tenants/${tenantId}/credentials/${encodeURIComponent(credentialId)}`,
+  );
