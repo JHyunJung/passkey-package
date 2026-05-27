@@ -1,42 +1,50 @@
-import { useEffect, type ReactNode } from 'react';
+import * as React from 'react';
+import {
+  Dialog as SDialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   title: string;
   sub?: string;
-  children: ReactNode;
-  footer?: ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
   wide?: boolean;
   closeOnScrim?: boolean;
 }
 
+/**
+ * @deprecated 기존 페이지 호환용 shim. 신규 코드는 `@/components/ui/dialog` 직접 사용.
+ */
 export default function Dialog({
   open, onClose, title, sub, children, footer, wide, closeOnScrim = true,
 }: Props) {
-  useEffect(() => {
-    if (!open) return;
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  }, [open, onClose]);
+  function handleOpenChange(v: boolean) {
+    // scrim click triggers onOpenChange(false); only forward if closeOnScrim allows
+    if (!v && closeOnScrim) onClose();
+  }
 
-  if (!open) return null;
   return (
-    <div
-      className="scrim"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && closeOnScrim) onClose();
-      }}
-    >
-      <div className={`dialog${wide ? ' dialog--wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-        <div className="dialog__head">
-          <h3 id="dialog-title" className="dialog__title">{title}</h3>
-          {sub && <div className="dialog__sub">{sub}</div>}
-        </div>
-        <div className="dialog__body">{children}</div>
-        {footer && <div className="dialog__foot">{footer}</div>}
-      </div>
-    </div>
+    <SDialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        wide={wide}
+        onEscapeKeyDown={closeOnScrim ? () => onClose() : (e) => e.preventDefault()}
+        onPointerDownOutside={closeOnScrim ? undefined : (e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {sub && <DialogDescription>{sub}</DialogDescription>}
+        </DialogHeader>
+        <DialogBody>{children}</DialogBody>
+        {footer && <DialogFooter>{footer}</DialogFooter>}
+      </DialogContent>
+    </SDialog>
   );
 }
