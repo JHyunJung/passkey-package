@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Command } from 'cmdk';
@@ -20,18 +20,37 @@ type Props = { open: boolean; onOpenChange: (v: boolean) => void };
 export function CommandPalette({ open, onOpenChange }: Props) {
   const navigate = useNavigate();
   const { me } = useMe();
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
-  // ⌘K / Ctrl+K toggle
+  // ⌘K / Ctrl+K toggle + Esc close
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         onOpenChange(!open);
+        return;
+      }
+      if (open && e.key === 'Escape') {
+        e.preventDefault();
+        onOpenChange(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onOpenChange]);
+
+  // Focus return — save the element that opened us, restore on close (WCAG 2.4.3)
+  useEffect(() => {
+    if (open) {
+      lastFocusedRef.current = (document.activeElement as HTMLElement) ?? null;
+      return;
+    }
+    const el = lastFocusedRef.current;
+    if (el && typeof el.focus === 'function') {
+      el.focus();
+    }
+    lastFocusedRef.current = null;
+  }, [open]);
 
   function go(path: string) {
     navigate(path);
