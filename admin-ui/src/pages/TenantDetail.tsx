@@ -55,7 +55,7 @@ export default function TenantDetail() {
                     <span className="muted" style={{
                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                     }}>{tenant.slug}</span>
-                    <span className={'badge ' + (tenant.status === 'active' ? 'badge--ok' : 'badge--warn')}>
+                    <span className={'badge ' + (tenant.status === 'active' ? 'badge--success' : 'badge--warning')}>
                         {tenant.status}
                     </span>
                 </div>
