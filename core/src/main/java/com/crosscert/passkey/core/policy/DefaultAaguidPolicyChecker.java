@@ -39,6 +39,7 @@ public class DefaultAaguidPolicyChecker implements AaguidPolicyChecker {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public void check(UUID tenantId, UUID aaguid) {
         // aaguid null 이면 일부 attestation format 에서 aaguid 가 없는 경우 — pass-through
         if (aaguid == null) {
