@@ -92,6 +92,59 @@ public class AuditChainVerifier {
     }
 
     /**
+     * Verify the hash chain for a specific tenant (or null for PLATFORM_OPERATOR rows).
+     *
+     * @param tenantId tenant UUID, or null for rows with no tenant
+     * @return {@link TenantResult#valid(UUID)} when the chain is intact, or
+     *         {@link TenantResult#broken(UUID, UUID)} with the id of the first failing row.
+     */
+    public TenantResult verifyTenant(UUID tenantId) {
+        List<AuditLog> rows = repo.findAllByTenantOrdered(tenantId);
+        byte[] expectedPrev = null;
+        for (AuditLog row : rows) {
+            if (!Arrays.equals(expectedPrev, row.getTenantPrevHash())) {
+                return TenantResult.broken(tenantId, row.getId());
+            }
+            byte[] expected = recomputeTenantHash(row);
+            if (!Arrays.equals(expected, row.getTenantHash())) {
+                return TenantResult.broken(tenantId, row.getId());
+            }
+            expectedPrev = row.getTenantHash();
+        }
+        return TenantResult.valid(tenantId);
+    }
+
+    /**
+     * Verify the hash chain for every distinct tenant found in the repository.
+     *
+     * @return list of {@link TenantResult} — one entry per distinct tenant_id value
+     */
+    public List<TenantResult> verifyAllTenants() {
+        List<UUID> tenantIds = repo.findDistinctTenantIds();
+        List<TenantResult> out = new java.util.ArrayList<>(tenantIds.size());
+        for (UUID id : tenantIds) {
+            out.add(verifyTenant(id));
+        }
+        return out;
+    }
+
+    private byte[] recomputeTenantHash(AuditLog row) {
+        try {
+            Map<String, Object> payload = canonical.readValue(
+                    row.getPayload(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+            AuditAppendRequest req = new AuditAppendRequest(
+                    row.getActorId(), row.getActorEmail(), row.getAction(),
+                    row.getTargetType(), row.getTargetId(),
+                    row.getTenantId(),
+                    payload);
+            return AuditLogService.computeHash(
+                    row.getTenantPrevHash(), req, row.getPayload(), row.getCreatedAt());
+        } catch (Exception e) {
+            return new byte[0];
+        }
+    }
+
+    /**
      * Verification result.
      *
      * @param ok       true when the entire chain is intact
@@ -100,5 +153,17 @@ public class AuditChainVerifier {
     public record Result(boolean ok, UUID brokenAt) {
         public static Result valid() { return new Result(true, null); }
         public static Result broken(UUID id) { return new Result(false, id); }
+    }
+
+    /**
+     * Per-tenant verification result.
+     *
+     * @param tenantId the tenant that was verified (null for PLATFORM_OPERATOR rows)
+     * @param ok       true when the tenant's chain is intact
+     * @param brokenAt id of the first row that failed verification, or null
+     */
+    public record TenantResult(UUID tenantId, boolean ok, UUID brokenAt) {
+        public static TenantResult valid(UUID tenantId) { return new TenantResult(tenantId, true, null); }
+        public static TenantResult broken(UUID tenantId, UUID id) { return new TenantResult(tenantId, false, id); }
     }
 }

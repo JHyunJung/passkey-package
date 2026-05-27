@@ -118,17 +118,26 @@ public class AuditLogService {
         byte[] prevHash = repo.findLatestForUpdate()
                 .map(AuditLog::getHash)
                 .orElse(null);
+        // Phase B — per-tenant chain head (lock 없이 읽어도 됨: global chain lock 이 직렬화 보장)
+        java.util.List<AuditLog> latestTenantList = repo.findLatestByTenant(
+                req.tenantId(),
+                org.springframework.data.domain.PageRequest.of(0, 1));
+        byte[] tenantPrev = latestTenantList.isEmpty() ? null
+                : latestTenantList.get(0).getTenantHash();
         // Truncate to micros so the hashed timestamp matches what Oracle
         // stores and what the verifier (T9) reads back. Oracle TIMESTAMP
         // WITH TIME ZONE defaults to 6 fractional digits (microseconds).
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         String payloadJson = serialize(req.payload());
         byte[] hash = computeHash(prevHash, req, payloadJson, now);
+        // Phase B — tenant-scoped chain hash (동일 알고리즘, tenantPrev 만 다름)
+        byte[] tenantHash = computeHash(tenantPrev, req, payloadJson, now);
         AuditLog row = new AuditLog(
                 prevHash, hash, req.actorId(), req.actorEmail(),
                 req.action(),
                 req.targetType(), req.targetId(),
                 req.tenantId(),
+                tenantPrev, tenantHash,
                 payloadJson, now);
         return repo.save(row);
     }

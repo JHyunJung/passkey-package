@@ -37,6 +37,13 @@ public class AuditLog extends BaseEntity {
     @Column(name = "TENANT_ID", columnDefinition = "RAW(16)")
     private UUID tenantId;
 
+    // Phase B — per-tenant hash chain (V25)
+    @Column(name = "TENANT_PREV_HASH", length = 32)
+    private byte[] tenantPrevHash;
+
+    @Column(name = "TENANT_HASH", length = 32)
+    private byte[] tenantHash;
+
     @Lob
     @Column(name = "PAYLOAD", nullable = false)
     private String payload;
@@ -45,7 +52,9 @@ public class AuditLog extends BaseEntity {
 
     public AuditLog(byte[] prevHash, byte[] hash, UUID actorId, String actorEmail,
                     String action, String targetType, String targetId,
-                    UUID tenantId, String payload, Instant createdAtArg) {
+                    UUID tenantId,
+                    byte[] tenantPrevHash, byte[] tenantHash,
+                    String payload, Instant createdAtArg) {
         this.prevHash = prevHash;
         this.hash = hash;
         this.actorId = actorId;
@@ -54,6 +63,8 @@ public class AuditLog extends BaseEntity {
         this.targetType = targetType;
         this.targetId = targetId;
         this.tenantId = tenantId;
+        this.tenantPrevHash = tenantPrevHash;
+        this.tenantHash = tenantHash;
         this.payload = payload;
         // Pre-set BaseEntity.createdAt + updatedAt so @PrePersist's null-check
         // preserves caller-supplied value for hash-chain integrity. AuditLog
@@ -93,5 +104,11 @@ public class AuditLog extends BaseEntity {
     public String getTargetType() { return targetType; }
     public String getTargetId() { return targetId; }
     public UUID getTenantId() { return tenantId; }
+    // Phase B — per-tenant chain
+    public byte[] getTenantPrevHash() { return tenantPrevHash; }
+    public byte[] getTenantHash() { return tenantHash; }
+    /** 백필 endpoint 전용 setter — BackfillService 는 다른 패키지이므로 public */
+    public void setTenantPrevHash(byte[] v) { this.tenantPrevHash = v; }
+    public void setTenantHash(byte[] v) { this.tenantHash = v; }
     public String getPayload() { return payload; }
 }

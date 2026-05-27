@@ -19,7 +19,7 @@ class AuditLogTest {
         AuditLog row = new AuditLog(
                 prev, hash, ACTOR_UUID, "alice@example.com",
                 "TENANT_CREATE", "TENANT", "T_A",
-                null,
+                null, null, null,
                 "{\"id\":\"T_A\"}", ts);
 
         assertThat(row.getPrevHash()).containsExactly(1,2,3);
@@ -37,7 +37,7 @@ class AuditLogTest {
     void prevHashMayBeNullForGenesisRow() {
         AuditLog row = new AuditLog(
                 null, new byte[]{0}, ACTOR_UUID, "alice@example.com",
-                "ADMIN_LOGIN", null, null, null, "{}", Instant.now());
+                "ADMIN_LOGIN", null, null, null, null, null, "{}", Instant.now());
         assertThat(row.getPrevHash()).isNull();
     }
 
@@ -45,7 +45,7 @@ class AuditLogTest {
     void nullActorIdAllowedForSystemAuditEntries() {
         AuditLog row = new AuditLog(
                 null, new byte[]{0}, null, "system",
-                "SYSTEM_ACTION", null, null, null, "{}", Instant.now());
+                "SYSTEM_ACTION", null, null, null, null, null, "{}", Instant.now());
         assertThat(row.getActorId()).isNull();
     }
 }
