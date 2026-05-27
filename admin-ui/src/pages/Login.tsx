@@ -1,14 +1,32 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { BrandMark } from '../components/Icons';
+
+// V11 seed 계정 — local profile 일 때만 prefill. 운영 profile 에서는 응답이 local:false 라
+// 절대 노출되지 않는다.
+const LOCAL_PREFILL = { email: 'alice@crosscert.com', password: 'alice-temp-pw' };
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [isLocal, setIsLocal] = useState(false);
   const nav = useNavigate();
+
+  useEffect(() => {
+    fetch('/admin/api/profile', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((env) => {
+        if (env?.data?.local) {
+          setIsLocal(true);
+          setEmail(LOCAL_PREFILL.email);
+          setPassword(LOCAL_PREFILL.password);
+        }
+      })
+      .catch(() => { /* 무시 — local profile 아니면 prefill 없이 빈 폼 */ });
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -100,6 +118,14 @@ export default function Login() {
           </button>
           {error && <div className="banner banner--danger" role="alert">{error}</div>}
         </form>
+
+        {isLocal && (
+          <div className="banner banner--warning" style={{ marginTop: 28 }}>
+            <div className="banner__body">
+              <strong>local profile</strong> · V11 시드 계정 ({LOCAL_PREFILL.email}) 이 자동으로 입력되었습니다. prod 에서는 표시되지 않습니다.
+            </div>
+          </div>
+        )}
 
         <div className="banner banner--info" style={{ marginTop: 28 }}>
           <div className="banner__body">

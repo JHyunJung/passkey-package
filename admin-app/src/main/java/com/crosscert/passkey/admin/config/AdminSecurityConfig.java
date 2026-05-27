@@ -60,6 +60,9 @@ public class AdminSecurityConfig {
                 .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/", "/admin", "/admin/favicon.ico", "/favicon.ico").permitAll()
                 .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                // /admin/api/profile 은 active profile 만 노출. Login.tsx 가 미인증 상태에서
+                // local 여부를 알아 테스트 계정 prefill 을 결정하는 데 쓴다.
+                .requestMatchers("/admin/api/profile").permitAll()
                 .requestMatchers("/admin/api/**").authenticated()
                 .anyRequest().denyAll())
             .formLogin(form -> form
