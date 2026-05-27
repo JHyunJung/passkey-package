@@ -78,7 +78,10 @@ public class WebAuthnController {
         var fin = passkey.authenticationFinish(new AuthenticationFinishRequest(token, req.publicKeyCredential()));
         IdTokenClaims claims = passkey.verifyIdToken(fin.idToken());
 
-        String expectedIss = props.baseUrl() + "/" + props.tenantId();
+        // passkey-app 의 IdTokenIssuer 는 `passkey.id-token.issuer-base` (기본
+        // `https://passkey.crosscert.com`) + "/" + tenantId 를 발급한다.
+        // sample-rp 의 issuerBase 프로퍼티가 그 값과 일치해야 한다.
+        String expectedIss = props.issuerBase() + "/" + props.tenantId();
         if (!expectedIss.equals(claims.iss()))
             throw new BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "iss mismatch");
         if (!props.tenantId().equals(claims.aud()))
