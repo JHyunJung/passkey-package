@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "code": "OK",
+  "message": "Success",
+  "data": {
+    "credentialId": "Y3JlZElk",
+    "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96",
+    "attestationFormat": "packed",
+    "createdAt": "2026-05-27T09:01:00Z"
+  },
+  "traceId": "abc",
+  "timestamp": "2026-05-27T09:01:00"
+}

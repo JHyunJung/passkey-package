@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "code": "OK",
+  "message": "Success",
+  "data": {
+    "authenticationToken": "at_xyz789",
+    "publicKeyCredentialRequestOptions": {
+      "challenge": "Y2gyMjM",
+      "rpId": "localhost",
+      "timeout": 60000,
+      "userVerification": "required",
+      "allowCredentials": [{"type":"public-key","id":"Y3JlZElk"}]
+    }
+  },
+  "traceId": "abc",
+  "timestamp": "2026-05-27T09:02:00"
+}

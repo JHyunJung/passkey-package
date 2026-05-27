@@ -13,8 +13,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
 
 public final class PasskeyClient {
     private final RestClient http;
@@ -26,9 +29,15 @@ public final class PasskeyClient {
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-        SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
-        rf.setConnectTimeout((int) config.connectTimeout().toMillis());
-        rf.setReadTimeout((int) config.readTimeout().toMillis());
+        // Use JdkClientHttpRequestFactory (Java 11 HttpClient) instead of
+        // SimpleClientHttpRequestFactory: the latter sets chunked/fixed-length streaming
+        // mode on HttpURLConnection which prevents getErrorStream() from returning the
+        // 4xx/5xx response body, causing error-envelope parsing to always fail.
+        HttpClient jdkClient = HttpClient.newBuilder()
+                .connectTimeout(config.connectTimeout())
+                .build();
+        JdkClientHttpRequestFactory rf = new JdkClientHttpRequestFactory(jdkClient);
+        rf.setReadTimeout(config.readTimeout());
 
         this.http = RestClient.builder()
                 .baseUrl(config.baseUrl().toString())
