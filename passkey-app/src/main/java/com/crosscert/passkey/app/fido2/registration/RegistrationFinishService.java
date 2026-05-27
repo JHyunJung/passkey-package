@@ -7,6 +7,7 @@ import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
 import com.crosscert.passkey.app.fido2.mds.MdsVerifier;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
+import com.crosscert.passkey.core.policy.AaguidPolicyChecker;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
@@ -64,6 +65,7 @@ public class RegistrationFinishService {
     private final TenantRepository tenants;
     private final CredentialRepository credentials;
     private final MdsVerifier mds;
+    private final AaguidPolicyChecker aaguidPolicyChecker;
     private final ObjectMapper mapper;
     private final ObjectConverter objectConverter;
     private final Clock clock;
@@ -73,6 +75,7 @@ public class RegistrationFinishService {
                                      TenantRepository tenants,
                                      CredentialRepository credentials,
                                      MdsVerifier mds,
+                                     AaguidPolicyChecker aaguidPolicyChecker,
                                      ObjectMapper mapper,
                                      Clock clock) {
         this.store = store;
@@ -80,6 +83,7 @@ public class RegistrationFinishService {
         this.tenants = tenants;
         this.credentials = credentials;
         this.mds = mds;
+        this.aaguidPolicyChecker = aaguidPolicyChecker;
         this.mapper = mapper;
         this.objectConverter = new ObjectConverter();
         this.clock = clock;
@@ -164,6 +168,11 @@ public class RegistrationFinishService {
             throw new IllegalArgumentException("authenticator metadata verification failed");
         }
 
+        // AAGUID 정책 검사 — MDS verify 통과 직후, credential 저장 직전
+        // AaguidPolicyViolationException(BusinessException) 발생 시 GlobalExceptionHandler 가 HTTP 403 반환
+        UUID aaguidUuid = aaguidFromBytes(aaguid);
+        aaguidPolicyChecker.check(tenant.getId(), aaguidUuid);
+
         // Persist the four CredentialRecordImpl constructor inputs
         // (attestationObject, clientData, clientExtensions, transports)
         // in a JSON envelope. The natural choice would be to serialize
@@ -224,5 +233,17 @@ public class RegistrationFinishService {
 
     private static String b64url(byte[] b) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
+    }
+
+    /**
+     * 16-byte 원시 AAGUID 를 {@link UUID} 로 변환.
+     * bytes 가 null 이거나 길이가 16 이 아니면 null 반환 (pass-through 처리).
+     */
+    private static UUID aaguidFromBytes(byte[] bytes) {
+        if (bytes == null || bytes.length != 16) return null;
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bytes);
+        long high = bb.getLong();
+        long low = bb.getLong();
+        return new UUID(high, low);
     }
 }
