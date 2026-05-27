@@ -78,6 +78,7 @@ class TenantAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
+    @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
 
     private static final String BODY = """
             {"slug":"tenant-a","displayName":"Tenant A","rpId":"localhost","rpName":"Tenant A",
