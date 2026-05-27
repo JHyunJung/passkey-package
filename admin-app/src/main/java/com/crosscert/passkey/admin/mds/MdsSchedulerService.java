@@ -109,7 +109,9 @@ public class MdsSchedulerService {
             payload.put("fetchedAt", clock.instant().toString());
             // Actor null = scheduler (no human operator).
             audit.append(new AuditAppendRequest(
-                    null, "(scheduler)", "MDS_BLOB_SYNC", null, null, payload));
+                    null, "(scheduler)", "MDS_BLOB_SYNC", null, null,
+                    null,
+                    payload));
 
             log.info("MDS sync complete — version={}", version);
             return SyncResult.synced(version);

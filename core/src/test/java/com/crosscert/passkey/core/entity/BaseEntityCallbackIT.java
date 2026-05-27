@@ -206,7 +206,7 @@ class BaseEntityCallbackIT {
         AuditLog row = new AuditLog(
                 null, new byte[]{1, 2, 3},
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                "alice@example.com", "ADMIN_LOGIN", null, null, "{}", caller);
+                "alice@example.com", "ADMIN_LOGIN", null, null, null, "{}", caller);
 
         auditLogs.saveAndFlush(row);
         // Evict from the persistence context so findById round-trips through

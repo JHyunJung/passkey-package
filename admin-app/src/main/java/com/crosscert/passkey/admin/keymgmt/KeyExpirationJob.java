@@ -70,7 +70,9 @@ public class KeyExpirationJob {
             payload.put("rotatedAt", k.getRotatedAt().toString());
             audit.append(new AuditAppendRequest(
                     null, "(scheduler)", "SIGNING_KEY_REVOKE",
-                    "SIGNING_KEY", String.valueOf(k.getId()), payload));
+                    "SIGNING_KEY", String.valueOf(k.getId()),
+                    null,
+                    payload));
             log.info("Revoked signing key kid={} after grace period", k.getKid());
         }
     }

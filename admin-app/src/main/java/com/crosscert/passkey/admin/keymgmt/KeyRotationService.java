@@ -106,7 +106,9 @@ public class KeyRotationService {
         payload.put("newKid", fresh.getKid());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "SIGNING_KEY_ROTATE",
-                "SIGNING_KEY", String.valueOf(fresh.getId()), payload));
+                "SIGNING_KEY", String.valueOf(fresh.getId()),
+                null,
+                payload));
 
         // Schedule cache reload to run AFTER commit. If audit append (above)
         // or commit fails, the synchronization's afterCommit() is never

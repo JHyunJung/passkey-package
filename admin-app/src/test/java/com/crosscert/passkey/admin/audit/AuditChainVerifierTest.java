@@ -57,7 +57,8 @@ class AuditChainVerifierTest {
         AuditLog tampered = new AuditLog(
                 middle.getPrevHash(), middle.getHash(), middle.getActorId(),
                 middle.getActorEmail(), middle.getAction(), middle.getTargetType(),
-                middle.getTargetId(), "{\"x\":\"tampered\"}", middle.getCreatedAt());
+                middle.getTargetId(), null,
+                "{\"x\":\"tampered\"}", middle.getCreatedAt());
         copyId(tampered, ROW_2_ID);
         rows.set(1, tampered);
         when(repo.findAllOrdered()).thenReturn(rows);
@@ -75,6 +76,7 @@ class AuditChainVerifierTest {
                 new byte[]{0,0,0}, // wrong prev_hash
                 second.getHash(), second.getActorId(), second.getActorEmail(),
                 second.getAction(), second.getTargetType(), second.getTargetId(),
+                null,
                 second.getPayload(), second.getCreatedAt());
         copyId(rebound, ROW_2_ID);
         rows.set(1, rebound);
@@ -94,12 +96,13 @@ class AuditChainVerifierTest {
                     String.format("00000000-0000-0000-0000-%012d", i));
             AuditAppendRequest req = new AuditAppendRequest(
                     actorId, "alice@example.com", "ACTION_" + i,
-                    "TENANT", "T_" + i, Map.of("seq", i));
+                    "TENANT", "T_" + i, null, Map.of("seq", i));
             String payload = "{\"seq\":" + i + "}";
             byte[] hash = AuditLogService.computeHash(prev, req, payload, clock.instant());
             AuditLog row = new AuditLog(
                     prev, hash, req.actorId(), req.actorEmail(),
                     req.action(), req.targetType(), req.targetId(),
+                    null,
                     payload, clock.instant());
             UUID rowId = UUID.fromString(
                     String.format("00000000-0000-0000-0000-%012d", i));

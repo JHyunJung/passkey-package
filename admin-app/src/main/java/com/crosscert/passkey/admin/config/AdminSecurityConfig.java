@@ -114,6 +114,7 @@ public class AdminSecurityConfig {
             audit.append(new AuditAppendRequest(
                     u.getId(), email, "ADMIN_LOGIN",
                     null, null,
+                    null,
                     Map.of("ip", req.getRemoteAddr(),
                            "ua", req.getHeader("User-Agent") == null ? "" : req.getHeader("User-Agent"))));
             res.setStatus(HttpServletResponse.SC_OK);
@@ -134,6 +135,7 @@ public class AdminSecurityConfig {
             audit.append(new AuditAppendRequest(
                     null, email,
                     "ADMIN_LOGIN_FAILED", null, null,
+                    null,
                     Map.of("ip", req.getRemoteAddr(),
                            "reason", ex.getClass().getSimpleName())));
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

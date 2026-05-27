@@ -83,7 +83,9 @@ public class ApiKeyAdminService {
         payload.put("scopes", req.scopes());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "API_KEY_ISSUE",
-                "API_KEY", saved.getId().toString(), payload));
+                "API_KEY", saved.getId().toString(),
+                req.tenantId(),
+                payload));
 
         return new ApiKeyAdminDto.ApiKeyCreateResponse(
                 saved.getId(), prefix + secret, prefix, req.scopes());
@@ -102,7 +104,9 @@ public class ApiKeyAdminService {
         payload.put("tenantId", k.getTenantId().toString());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "API_KEY_REVOKE",
-                "API_KEY", id.toString(), payload));
+                "API_KEY", id.toString(),
+                k.getTenantId(),
+                payload));
     }
 
     private String generateUniquePrefix() {
