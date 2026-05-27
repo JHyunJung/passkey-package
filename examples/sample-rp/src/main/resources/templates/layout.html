@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf" th:content="${_csrf?.token}">
+  <title th:text="${title}">Sample RP</title>
+  <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<header th:fragment="header">
+  <nav>
+    <a href="/">Home</a>
+    <a href="/register">Register</a>
+    <a href="/login">Login</a>
+  </nav>
+  <span class="status"
+        th:classappend="${user != null} ? 'logged-in' : ''"
+        th:text="${user != null} ? '로그인됨: ' + ${user.username} : '비로그인'">비로그인</span>
+</header>
+</body>
+</html>

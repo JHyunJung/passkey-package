@@ -1,0 +1,31 @@
+server:
+  port: 9090
+
+sample-rp:
+  origin: ${SAMPLE_RP_ORIGIN:http://localhost:9090}
+
+passkey:
+  base-url:    ${PASSKEY_BASE_URL:http://localhost:8080}
+  api-key:     ${PASSKEY_API_KEY:}
+  tenant-id:   ${PASSKEY_TENANT_ID:}
+  # passkey-app 의 IdTokenIssuer 가 발급하는 iss prefix. passkey-app 의
+  # passkey.id-token.issuer-base (기본 https://passkey.crosscert.com) 와 일치해야 한다.
+  # 로컬 데모에서는 passkey-app 측을 application-local.yml 로 같은 값으로 override 하거나
+  # bootRun 시 -Dpasskey.id-token.issuer-base=http://localhost:8080 으로 띄운다.
+  issuer-base: ${PASSKEY_ISSUER_BASE:http://localhost:8080}
+  connect-timeout: 3s
+  read-timeout: 10s
+  jwks-cache-ttl: 5m
+
+spring:
+  session:
+    store-type: none
+  thymeleaf:
+    cache: false
+
+logging:
+  level:
+    com.crosscert.passkey.sdk: DEBUG   # 운영 환경에서는 INFO 이하 (spec § 9 logging redaction)
+    com.crosscert.passkey.samplerp: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Sample RP — Login')}"></head>
+<body>
+<header th:replace="~{layout :: header}"></header>
+
+<h1>Login with a passkey</h1>
+
+<form id="form" onsubmit="return false">
+  <label>Username (선택) <input id="username"></label>
+  <button id="btn-login" type="button">Login with passkey</button>
+</form>
+
+<p id="error" class="error"></p>
+
+<script type="module">
+  import { decodeRequestOptions, encodeAssertionCredential, postJson } from '/js/helpers.js';
+
+  const btn = document.getElementById('btn-login');
+  const error = document.getElementById('error');
+
+  btn.addEventListener('click', async () => {
+    error.textContent = '';
+    try {
+      const username = document.getElementById('username').value || null;
+      const start = await postJson('/webauthn/login/options', { username });
+      const assertion = await navigator.credentials.get({
+        publicKey: decodeRequestOptions(start.publicKeyCredentialRequestOptions)
+      });
+      await postJson('/webauthn/login/complete', {
+        publicKeyCredential: encodeAssertionCredential(assertion)
+      });
+      window.location = '/';
+    } catch (e) {
+      error.textContent = '[' + (e.code || 'ERR') + '] ' + e.message
+                        + (e.traceId ? '  (traceId=' + e.traceId + ')' : '');
+    }
+  });
+</script>
+</body>
+</html>
