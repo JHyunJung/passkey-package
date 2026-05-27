@@ -38,7 +38,10 @@ public class AuditChainMonitorController {
     @GetMapping("/overview")
     @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     public AuditChainOverview overview(@RequestParam(defaultValue = "24") int windowHours) {
-        long startMs = System.currentTimeMillis();
+        if (windowHours < 1 || windowHours > 168) {
+            throw new IllegalArgumentException("windowHours must be between 1 and 168 (1 week)");
+        }
+        long startMs = clock.millis();
         Instant now = clock.instant();
         Instant since = now.minus(windowHours, ChronoUnit.HOURS);
         int bucketSizeMinutes = 60;
@@ -80,7 +83,7 @@ public class AuditChainMonitorController {
                     r.tenantId(), name, r.ok(), rows.size(), bucketList, r.brokenAt()));
         }
 
-        long verifyMs = System.currentTimeMillis() - startMs;
+        long verifyMs = clock.millis() - startMs;
         AuditChainOverview.Totals totals = new AuditChainOverview.Totals(
                 results.size() - tampered, results.size(), tampered, verifiedRowsTotal, verifyMs);
         return new AuditChainOverview(now, windowHours, bucketSizeMinutes, totals, tenants);
