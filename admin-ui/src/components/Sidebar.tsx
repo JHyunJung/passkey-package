@@ -3,7 +3,6 @@ import { BrandMark, Building, Key, Receipt, Activity } from './Icons';
 
 const NAV = [
   { to: '/tenants',  label: 'Tenants', icon: Building },
-  { to: '/api-keys', label: 'API Keys', icon: Key },
   { to: '/keys',     label: 'Signing Keys', icon: Key },
   { to: '/mds',      label: 'MDS', icon: Activity },
   { to: '/audit',    label: 'Audit Log', icon: Receipt },

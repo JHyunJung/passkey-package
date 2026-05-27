@@ -86,6 +86,7 @@ public class Tenant extends BaseEntity {
     public String getStatus() { return status; }
     public String getRpId() { return rpId; }
     public String getRpName() { return rpName; }
+    public void setRpName(String rpName) { this.rpName = rpName; }
 
     public List<TenantAllowedOrigin> getAllowedOrigins() { return allowedOrigins; }
     public Set<TenantAcceptedFormat> getAcceptedFormats() { return acceptedFormats; }

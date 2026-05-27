@@ -6,9 +6,13 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,13 +22,18 @@ import java.util.UUID;
 @Service
 public class TenantAdminService {
 
+    private static final Logger log = LoggerFactory.getLogger(TenantAdminService.class);
+
     private final TenantRepository tenants;
     private final AuditLogService audit;
+    private final EntityManager em;
 
     public TenantAdminService(TenantRepository tenants,
-                              AuditLogService audit) {
+                              AuditLogService audit,
+                              EntityManager em) {
         this.tenants = tenants;
         this.audit = audit;
+        this.em = em;
     }
 
     @Transactional(readOnly = true)
@@ -36,20 +45,7 @@ public class TenantAdminService {
 
     @Transactional(readOnly = true)
     public TenantAdminDto.TenantView get(String idOrSlug) {
-        // Try slug first (operator-friendly URL pattern: /admin/api/tenants/acme)
-        Optional<Tenant> bySlug = tenants.findBySlug(idOrSlug);
-        if (bySlug.isPresent()) {
-            return TenantAdminDto.TenantView.from(bySlug.get());
-        }
-        // UUID fallback (direct API call with UUID string)
-        try {
-            UUID asUuid = UUID.fromString(idOrSlug);
-            return tenants.findById(asUuid)
-                    .map(TenantAdminDto.TenantView::from)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
-        } catch (IllegalArgumentException invalidUuid) {
-            throw new BusinessException(ErrorCode.TENANT_NOT_FOUND);
-        }
+        return TenantAdminDto.TenantView.from(lookup(idOrSlug));
     }
 
     @Transactional
@@ -82,5 +78,92 @@ public class TenantAdminService {
                 "TENANT", req.slug(), payload));
 
         return TenantAdminDto.TenantView.from(t);
+    }
+
+    @Transactional
+    public TenantAdminDto.TenantView update(String idOrSlug,
+                                            TenantAdminDto.TenantUpdateRequest req,
+                                            UUID actorId,
+                                            String actorEmail) {
+        Tenant t = lookup(idOrSlug);
+        TenantSnapshot before = TenantSnapshot.of(t);
+
+        // rpId / slug 는 silent ignore (별도 워크플로우 필요 — spec § 6.1)
+        if (req.rpId() != null && !req.rpId().equals(t.getRpId())) {
+            log.debug("rpId update ignored — not yet implemented (tenant={} from={} to={})",
+                    t.getId(), t.getRpId(), req.rpId());
+        }
+
+        t.setDisplayName(req.displayName());
+        t.setRpName(req.rpName());
+        replaceAllowedOrigins(t, req.allowedOrigins());
+        replaceAcceptedFormats(t, req.acceptedFormats());
+        t.setRequireUserVerification(req.requireUserVerification());
+        t.setMdsRequired(req.mdsRequired());
+
+        tenants.saveAndFlush(t);
+
+        TenantSnapshot after = TenantSnapshot.of(t);
+        List<String> changed = before.diff(after);
+
+        if (!changed.isEmpty()) {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("before", before);
+            payload.put("after", after);
+            payload.put("changedFields", changed);
+            audit.append(new AuditAppendRequest(
+                    actorId, actorEmail, "TENANT_UPDATE",
+                    "TENANT", t.getId().toString(), payload));
+            log.info("tenant updated id={} slug={} changed={} actor={}",
+                    t.getId(), t.getSlug(), changed, actorEmail);
+        } else {
+            log.debug("tenant update no-op id={} slug={} actor={}",
+                    t.getId(), t.getSlug(), actorEmail);
+        }
+
+        return TenantAdminDto.TenantView.from(t);
+    }
+
+    private void replaceAllowedOrigins(Tenant t, List<String> origins) {
+        t.clearAllowedOrigins();
+        // Flush the orphan DELETEs before re-inserting — Oracle's unique constraint
+        // on (tenant_id, origin, sort_order) would otherwise see both DELETE and INSERT
+        // in the same batch with INSERTs ordered before DELETEs.
+        em.flush();
+        int order = 0;
+        for (String origin : origins) {
+            t.addAllowedOrigin(origin, order++);
+        }
+    }
+
+    private void replaceAcceptedFormats(Tenant t, java.util.Set<String> formats) {
+        t.clearAcceptedFormats();
+        // Flush the orphan DELETEs before re-inserting — Oracle's unique constraint
+        // UQ_TAF_TENANT_FORMAT(tenant_id, format) would otherwise be violated when
+        // Hibernate batches INSERTs before DELETEs in the same flush cycle.
+        em.flush();
+        for (String format : formats) {
+            t.addAcceptedFormat(format);
+        }
+    }
+
+    /**
+     * idOrSlug 의 UUID 파싱 시도 후 실패하면 slug 로 조회.
+     * audit log payload 의 changedFields 키로 직렬화.
+     */
+    private Tenant lookup(String idOrSlug) {
+        // Try slug first (operator-friendly URL pattern: /admin/api/tenants/acme)
+        Optional<Tenant> bySlug = tenants.findBySlug(idOrSlug);
+        if (bySlug.isPresent()) {
+            return bySlug.get();
+        }
+        // UUID fallback (direct API call with UUID string)
+        try {
+            UUID id = UUID.fromString(idOrSlug);
+            return tenants.findById(id)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.TENANT_NOT_FOUND);
+        }
     }
 }

@@ -61,6 +61,9 @@ public class Credential extends BaseEntity {
     public long getSignCount() { return signCount; }
     public byte[] getUserHandle() { return userHandle; }
     public byte[] getAaguid() { return aaguid; }
+    public String getTransports() { return transports; }
+    public String getAttestationFmt() { return attestationFmt; }
+    public Instant getLastUsedAt() { return lastUsedAt; }
     public byte[] getCredentialRecordBytes() { return publicKey; } // BLOB now holds CBOR CredentialRecord — see followups doc
 
     /**

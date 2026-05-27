@@ -1,4 +1,4 @@
-package com.crosscert.passkey.app.fido2.mds;
+package com.crosscert.passkey.core.mds;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -41,7 +41,7 @@ public class MdsAaguidCache {
     }
 
     /** AAGUID = 16-byte raw → UUID canonical form. */
-    static UUID canonicalAaguid(byte[] aaguid) {
+    public static UUID canonicalAaguid(byte[] aaguid) {
         long msb = 0, lsb = 0;
         for (int i = 0; i < 8; i++) msb = (msb << 8) | (aaguid[i] & 0xff);
         for (int i = 8; i < 16; i++) lsb = (lsb << 8) | (aaguid[i] & 0xff);
