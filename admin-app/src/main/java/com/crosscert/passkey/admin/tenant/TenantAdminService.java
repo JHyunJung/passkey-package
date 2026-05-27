@@ -6,6 +6,7 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,11 +26,14 @@ public class TenantAdminService {
 
     private final TenantRepository tenants;
     private final AuditLogService audit;
+    private final EntityManager em;
 
     public TenantAdminService(TenantRepository tenants,
-                              AuditLogService audit) {
+                              AuditLogService audit,
+                              EntityManager em) {
         this.tenants = tenants;
         this.audit = audit;
+        this.em = em;
     }
 
     @Transactional(readOnly = true)
@@ -122,6 +126,10 @@ public class TenantAdminService {
 
     private void replaceAllowedOrigins(Tenant t, List<String> origins) {
         t.clearAllowedOrigins();
+        // Flush the orphan DELETEs before re-inserting — Oracle's unique constraint
+        // on (tenant_id, origin, sort_order) would otherwise see both DELETE and INSERT
+        // in the same batch with INSERTs ordered before DELETEs.
+        em.flush();
         int order = 0;
         for (String origin : origins) {
             t.addAllowedOrigin(origin, order++);
@@ -130,6 +138,10 @@ public class TenantAdminService {
 
     private void replaceAcceptedFormats(Tenant t, java.util.Set<String> formats) {
         t.clearAcceptedFormats();
+        // Flush the orphan DELETEs before re-inserting — Oracle's unique constraint
+        // UQ_TAF_TENANT_FORMAT(tenant_id, format) would otherwise be violated when
+        // Hibernate batches INSERTs before DELETEs in the same flush cycle.
+        em.flush();
         for (String format : formats) {
             t.addAcceptedFormat(format);
         }

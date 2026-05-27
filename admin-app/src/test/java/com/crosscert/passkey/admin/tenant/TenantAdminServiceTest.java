@@ -6,6 +6,7 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,13 +26,15 @@ class TenantAdminServiceTest {
 
     private TenantRepository repo;
     private AuditLogService audit;
+    private EntityManager em;
     private TenantAdminService service;
 
     @BeforeEach
     void setUp() {
         repo = mock(TenantRepository.class);
         audit = mock(AuditLogService.class);
-        service = new TenantAdminService(repo, audit);
+        em = mock(EntityManager.class);
+        service = new TenantAdminService(repo, audit, em);
     }
 
     @Test
