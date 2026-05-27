@@ -62,7 +62,7 @@ public class TenantAdminController {
     @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @PostMapping("/{idOrSlug}/webauthn-config/diff")
     public WebauthnConfigDiff diff(@PathVariable String idOrSlug,
-                                   @RequestBody TenantAdminDto.TenantUpdateRequest proposed) {
+                                   @RequestBody WebauthnDiffRequest proposed) {
         UUID tenantId = service.get(idOrSlug).id();
         return webauthnDiffService.diff(tenantId, proposed);
     }

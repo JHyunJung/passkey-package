@@ -17,7 +17,7 @@ public class WebauthnDiffService {
     }
 
     @Transactional(readOnly = true)
-    public WebauthnConfigDiff diff(UUID tenantId, TenantAdminDto.TenantUpdateRequest proposed) {
+    public WebauthnConfigDiff diff(UUID tenantId, WebauthnDiffRequest proposed) {
         Tenant t = tenantRepo.findById(tenantId)
                 .orElseThrow(() -> new IllegalStateException("tenant not found " + tenantId));
 
