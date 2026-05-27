@@ -1,9 +1,0 @@
-# SampleRpSmokeIT 는 .env 의 값을 export 한 상태에서 실행한다.
-# 별도 test 전용 override 가 필요한 항목만 여기에.
-spring:
-  thymeleaf:
-    cache: false
-passkey:
-  connect-timeout: 5s
-  read-timeout: 30s
-  jwks-cache-ttl: 30s
