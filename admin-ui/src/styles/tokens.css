@@ -105,7 +105,8 @@
   }
 
   :root[data-sidebar="icons"]      { --sidebar-w: 60px; }
-  :root[data-sidebar="collapsed"]  { --sidebar-w: 0px; }
+  /* `collapsed` sidebar (width 0) is reserved for a future v1.1 hidden mode;
+     intentionally not exposed via TweaksProvider yet. */
 
   /* ── Dark · Linear-style warm-black ─────────────────────── */
   :root[data-theme="dark"] {
@@ -162,13 +163,15 @@
     --accent-soft-2: oklch(0.92 0.055 295);
     --focus-ring:    0 0 0 3px oklch(0.58 0.215 295 / 0.22);
   }
+  /* `blue` accent uses hue 232 (vs `--info` at hue 245) to keep the
+     interactive accent visually distinct from the semantic info badge. */
   :root[data-accent="blue"] {
-    --accent:        oklch(0.58 0.180 245);
-    --accent-hover:  oklch(0.51 0.190 245);
-    --accent-press:  oklch(0.45 0.185 245);
-    --accent-soft:   oklch(0.96 0.030 245);
-    --accent-soft-2: oklch(0.92 0.055 245);
-    --focus-ring:    0 0 0 3px oklch(0.58 0.180 245 / 0.22);
+    --accent:        oklch(0.58 0.185 232);
+    --accent-hover:  oklch(0.51 0.195 232);
+    --accent-press:  oklch(0.45 0.190 232);
+    --accent-soft:   oklch(0.96 0.030 232);
+    --accent-soft-2: oklch(0.92 0.055 232);
+    --focus-ring:    0 0 0 3px oklch(0.58 0.185 232 / 0.22);
   }
   :root[data-accent="teal"] {
     --accent:        oklch(0.62 0.110 195);
@@ -197,12 +200,12 @@
     --focus-ring:    0 0 0 3px oklch(0.74 0.170 295 / 0.30);
   }
   :root[data-theme="dark"][data-accent="blue"] {
-    --accent:        oklch(0.74 0.155 245);
-    --accent-hover:  oklch(0.80 0.155 245);
-    --accent-press:  oklch(0.68 0.155 245);
-    --accent-soft:   oklch(0.30 0.095 245);
-    --accent-soft-2: oklch(0.37 0.115 245);
-    --focus-ring:    0 0 0 3px oklch(0.74 0.155 245 / 0.30);
+    --accent:        oklch(0.74 0.160 232);
+    --accent-hover:  oklch(0.80 0.160 232);
+    --accent-press:  oklch(0.68 0.160 232);
+    --accent-soft:   oklch(0.30 0.095 232);
+    --accent-soft-2: oklch(0.37 0.115 232);
+    --focus-ring:    0 0 0 3px oklch(0.74 0.160 232 / 0.30);
   }
   :root[data-theme="dark"][data-accent="teal"] {
     --accent:        oklch(0.78 0.110 195);
