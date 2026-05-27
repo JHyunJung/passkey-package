@@ -105,7 +105,7 @@ export default function TenantList() {
             </thead>
             <tbody>
               {filtered.map((t) => (
-                <tr key={t.slug}>
+                <tr key={t.slug} onClick={() => nav('/tenants/' + t.id)} style={{ cursor: 'pointer' }}>
                   <td>
                     <div style={{ fontWeight: 500 }}>{t.displayName ?? t.slug}</div>
                     <div className="mono muted">{t.slug}</div>

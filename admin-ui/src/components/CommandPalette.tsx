@@ -8,7 +8,6 @@ interface Props { open: boolean; onClose: () => void; }
 const ITEMS = [
   { label: 'Tenants',     to: '/tenants' },
   { label: '신규 Tenant', to: '/tenants/new' },
-  { label: 'API Keys',    to: '/api-keys' },
   { label: 'Signing Keys', to: '/keys' },
   { label: 'MDS Status',  to: '/mds' },
   { label: 'Audit Log',   to: '/audit' },
