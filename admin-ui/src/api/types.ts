@@ -60,12 +60,46 @@ export interface AuditLogView {
   id: number;
   actorId: number;
   actorEmail: string;
+  tenantId: string | null;
   action: string;
   targetType?: string;
   targetId?: string;
   payload: string;
   createdAt: string;
 }
+
+export interface ActivityKpi {
+  events24h: number;
+  ops24h: number;
+  security24h: number;
+  p95Ms: number | null;
+}
+
+export interface ActivityTopTenant {
+  tenantId: string;
+  slug: string;
+  count: number;
+}
+
+export interface ActivityEvent {
+  id: string;
+  action: string;
+  actorEmail: string;
+  targetType: string | null;
+  targetId: string | null;
+  tenantId: string | null;
+  tenantSlug: string | null;
+  createdAt: string;
+  category: 'ops' | 'security' | 'system';
+}
+
+export interface ActivityView {
+  kpi: ActivityKpi;
+  top5: ActivityTopTenant[];
+  feed: ActivityEvent[];
+}
+
+export type ActivityCategory = 'all' | 'ops' | 'security';
 
 export interface MdsStatusView {
   version: number;
