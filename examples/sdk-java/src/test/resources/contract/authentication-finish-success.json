@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "code": "OK",
+  "message": "Success",
+  "data": {
+    "idToken": "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0Iiwic3ViIjoiZHVnNDU2In0.sig",
+    "tokenType": "Bearer",
+    "expiresIn": 900
+  },
+  "traceId": "abc",
+  "timestamp": "2026-05-27T09:03:00Z"
+}
