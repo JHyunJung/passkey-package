@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { api } from '../api/client';
-import { ApiError } from '../api/types';
-import type { ApiKeyCreateRequest, ApiKeyCreateResponse } from '../api/types';
-import { useToast } from '../components/Toast';
-import Dialog from '../components/Dialog';
-import { Copy, Alert } from '../components/Icons';
-import ScopeCheckboxGrid from '../components/ScopeCheckboxGrid';
+import { api } from '../../api/client';
+import { ApiError } from '../../api/types';
+import type { ApiKeyCreateRequest, ApiKeyCreateResponse } from '../../api/types';
+import { useToast } from '../../components/Toast';
+import Dialog from '../../components/Dialog';
+import { Copy, Alert } from '../../components/Icons';
+import ScopeCheckboxGrid from '../../components/ScopeCheckboxGrid';
 
 interface Props {
   tenantId: string;
