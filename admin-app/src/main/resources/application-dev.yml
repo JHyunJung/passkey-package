@@ -1,0 +1,17 @@
+# dev profile — local profile 의 superset
+#
+# 목적: 앱 개발자 (RP 측) 가 register / authenticate 테스트를 빠르게 시작할 수
+# 있도록 admin-ui 에서 사전 준비한 tenant + API key 시드를 미리 제공.
+#
+# 활성화: `SPRING_PROFILES_ACTIVE=dev,local ./gradlew :admin-app:bootRun`
+#         또는 단독 `SPRING_PROFILES_ACTIVE=dev` (이 파일이 datasource credential
+#         과 redis host 를 local-shared 에서 받으므로 local 같이 켜는 게 권장).
+#
+# Flyway: 기본 db/migration 위에 db/dev (R__dev_seed.sql) 를 추가 — 반복 가능
+# (repeatable). 시드 데이터가 이미 있으면 INSERT 가 NOT EXISTS 가드로 skip.
+
+spring:
+  config:
+    import: classpath:application-local.yml
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev

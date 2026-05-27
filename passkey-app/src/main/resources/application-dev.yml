@@ -1,0 +1,13 @@
+# dev profile — passkey-app 측 (local 의 superset)
+#
+# passkey-app 은 Flyway 비활성 (admin-app 이 schema migration 책임). dev profile
+# 의 시드도 admin-app 의 `db/dev/R__dev_seed.sql` 가 실제 INSERT 를 수행.
+# 이 파일은 단지 passkey-app 이 같은 datasource (APP_RUNTIME_USER) + redis 로
+# 부팅하도록 local 을 import 만 한다. 추가 설정은 없음.
+#
+# 활성화: `SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun
+#         --args="--passkey.id-token.issuer-base=http://localhost:8080"`
+
+spring:
+  config:
+    import: classpath:application-local.yml
