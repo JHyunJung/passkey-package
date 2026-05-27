@@ -26,8 +26,9 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
-    // SampleRpSmokeIT 용 webauthn4j-test (ClientPlatform + PackedAuthenticator)
-    testImplementation("com.webauthn4j:webauthn4j-test:0.29.4.RELEASE")
+    // SampleRpSmokeIT 용 webauthn4j-test (ClientPlatform + PackedAuthenticator).
+    // Passkey2 root pins 0.31.5 — must match so T17 can reuse Fido2EndToEndIT patterns.
+    testImplementation("com.webauthn4j:webauthn4j-test:0.31.5.RELEASE")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
