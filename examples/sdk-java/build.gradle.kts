@@ -17,6 +17,7 @@ dependencies {
     // Spring Boot 3.5.x BOM 이 spring-web 6.2.x 를 가져오므로 동일 라인업으로 잠근다.
     api("org.springframework:spring-web:6.2.0")
     api("com.fasterxml.jackson.core:jackson-databind:2.21.0")
+    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.0")
     api("com.nimbusds:nimbus-jose-jwt:9.40")
     api("org.slf4j:slf4j-api:2.0.16")
 
