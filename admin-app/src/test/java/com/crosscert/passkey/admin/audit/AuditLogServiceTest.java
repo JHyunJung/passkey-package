@@ -14,6 +14,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,6 +26,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.isNull;
 
 class AuditLogServiceTest {
 
@@ -42,6 +44,9 @@ class AuditLogServiceTest {
         when(em.createNativeQuery(anyString())).thenReturn(lockQuery);
         when(lockQuery.setParameter(anyString(), any())).thenReturn(lockQuery);
         when(lockQuery.getSingleResult()).thenReturn(1);
+        // Phase B — findLatestByTenant 기본 stub: genesis (테넌트 chain 없음)
+        when(repo.findLatestByTenant(isNull(), any())).thenReturn(List.of());
+        when(repo.findLatestByTenant(any(UUID.class), any())).thenReturn(List.of());
         service = new AuditLogService(repo, em, new ObjectMapper(), clock);
     }
 
@@ -80,7 +85,7 @@ class AuditLogServiceTest {
         UUID actorUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AuditLog prev = new AuditLog(
                 null, new byte[]{9, 9, 9}, actorUuid, "alice@example.com",
-                "ADMIN_LOGIN", null, null, null, "{}", clock.instant());
+                "ADMIN_LOGIN", null, null, null, null, null, "{}", clock.instant());
         when(repo.findLatestForUpdate()).thenReturn(Optional.of(prev));
 
         service.append(new AuditAppendRequest(

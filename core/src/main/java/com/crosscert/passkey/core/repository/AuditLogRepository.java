@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,6 +41,20 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      */
     @Query("select a from AuditLog a order by a.createdAt asc, a.id asc")
     java.util.List<AuditLog> findAllOrdered();
+
+    /**
+     * Phase B — per-tenant chain head 조회.
+     * tenant_id 가 NULL 인 경우(PLATFORM_OPERATOR row)와 non-NULL 인 경우를
+     * 모두 올바르게 처리하기 위해 JPQL is null 비교를 사용한다.
+     * 인덱스 hint: audit_log_tenant_seq_ix (tenant_id, id) 로 ORDER BY id DESC LIMIT 1 최적화.
+     */
+    @Query("""
+            select a from AuditLog a
+            where (:tenantId is null and a.tenantId is null)
+               or (a.tenantId = :tenantId)
+            order by a.id desc
+            """)
+    List<AuditLog> findLatestByTenant(@Param("tenantId") UUID tenantId, Pageable limit);
 
     /** Read API for the audit-log page. Filters are all optional. */
     @Query("select a from AuditLog a " +
