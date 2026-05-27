@@ -128,6 +128,7 @@ public class AuditLogService {
                 prevHash, hash, req.actorId(), req.actorEmail(),
                 req.action(),
                 req.targetType(), req.targetId(),
+                req.tenantId(),
                 payloadJson, now);
         return repo.save(row);
     }

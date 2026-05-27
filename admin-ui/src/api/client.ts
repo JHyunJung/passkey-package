@@ -1,4 +1,14 @@
-import type { ApiEnvelope, Me, TenantUpdateRequest, TenantView, CredentialView, PageView } from './types';
+import type {
+  ApiEnvelope,
+  Me,
+  TenantUpdateRequest,
+  TenantView,
+  CredentialView,
+  PageView,
+  ActivityView,
+  ActivityCategory,
+  AuditLogView,
+} from './types';
 import { ApiError } from './types';
 
 function getCookie(name: string): string | null {
@@ -93,3 +103,31 @@ export const revokeCredential = (tenantId: string, credentialId: string) =>
   api.delete<void>(
     `/admin/api/tenants/${tenantId}/credentials/${encodeURIComponent(credentialId)}`,
   );
+
+export const getActivity = (params: { sinceId?: string; category?: ActivityCategory }) => {
+  const qs = new URLSearchParams();
+  if (params.sinceId) qs.set('sinceId', params.sinceId);
+  if (params.category && params.category !== 'all') qs.set('category', params.category);
+  const q = qs.toString();
+  return api.get<ActivityView>(`/admin/api/activity${q ? '?' + q : ''}`);
+};
+
+export const getAuditLog = (params: {
+  action?: string;
+  actorId?: string;
+  tenantId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  size?: number;
+}) => {
+  const qs = new URLSearchParams();
+  if (params.action)   qs.set('action', params.action);
+  if (params.actorId)  qs.set('actorId', params.actorId);
+  if (params.tenantId) qs.set('tenantId', params.tenantId);
+  if (params.from)     qs.set('from', params.from);
+  if (params.to)       qs.set('to', params.to);
+  if (params.page !== undefined) qs.set('page', String(params.page));
+  if (params.size !== undefined) qs.set('size', String(params.size));
+  return api.get<AuditLogView[]>(`/admin/api/audit?${qs}`);
+};

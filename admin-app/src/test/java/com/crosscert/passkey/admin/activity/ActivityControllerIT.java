@@ -1,4 +1,4 @@
-package com.crosscert.passkey.admin.auth;
+package com.crosscert.passkey.admin.activity;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,8 +18,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -30,28 +28,25 @@ import javax.sql.DataSource;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * T13 — RpAdminBoundaryIT: cross-tenant 차단 회귀 채널 (자동 IT 1).
+ * T7 — ActivityControllerIT: PLATFORM_OPERATOR Activity 페이지 회귀 채널 (자동 IT 1/2).
  *
- * <p>bob (RP_ADMIN, demo-rp) 로 14 assertion 실행. service boundary 또는
- * {@code @PreAuthorize} 누락 시 200 으로 즉시 회귀 탐지.
+ * <p>alice (PLATFORM_OPERATOR) 로 단일 시나리오 5 assertion. KPI / Top5 /
+ * sinceId polling 정상 동작 보장 — service boundary 또는 repository tuple
+ * WHERE 가 깨지면 즉시 회귀 탐지.
  *
- * <p>Testcontainers + loginAs inline 패턴은 AdminFlowIT 에서 복사.
- * resetState() 는 T12 AdminFlowIT 패턴 (bob 을 매 test 시작 시 RP_ADMIN(demo-rp)
- * 으로 reset) 그대로 사용.
+ * <p>Testcontainers + loginAs inline 패턴은 RpAdminBoundaryIT 에서 복사.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
-class RpAdminBoundaryIT {
+class ActivityControllerIT {
 
     // ----------------------------------------------------------------
-    // Containers (identical to AdminFlowIT / TenantAdminControllerUpdateIT)
+    // Containers (identical to RpAdminBoundaryIT / PlatformOperatorUnrestrictedIT)
     // ----------------------------------------------------------------
 
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
@@ -98,14 +93,12 @@ class RpAdminBoundaryIT {
     @Autowired DataSource ds;
     @Autowired RedisConnectionFactory redisFactory;
 
-    /** Plain RestTemplate so 4xx throws HttpClientErrorException (not swallowed). */
-    private final RestTemplate http = new RestTemplate();
-
     JdbcTemplate jdbc;
 
     // ----------------------------------------------------------------
-    // State reset — copies AdminFlowIT.resetState() (T12 FK pattern):
-    //   bob is re-assigned to demo-rp as RP_ADMIN each test.
+    // State reset — alice stays PLATFORM_OPERATOR, bob stays RP_ADMIN(demo-rp).
+    // Mirrors the FK-safe pattern from RpAdminBoundaryIT (V23 fk_admin_user_tenant
+    // blocks DELETE FROM tenant while child rows exist).
     // ----------------------------------------------------------------
 
     @BeforeEach
@@ -117,11 +110,8 @@ class RpAdminBoundaryIT {
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
         jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
-        // NULL out admin_user.tenant_id before deleting tenants (V23 FK —
-        // fk_admin_user_tenant blocks DELETE FROM tenant while child rows exist)
         jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
-        // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
         jdbc.update("""
                 INSERT INTO APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
                     require_user_verification, mds_required, created_at, updated_at)
@@ -141,12 +131,19 @@ class RpAdminBoundaryIT {
                 INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
                 """);
-        // Re-assign bob to demo-rp as RP_ADMIN (mirrors V23 step 9)
+        // bob → RP_ADMIN @ demo-rp (mirrors V23 step 9)
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
                    SET role = 'RP_ADMIN',
                        tenant_id = HEXTORAW('0000000000000000000000000000C0DE')
                  WHERE email = 'bob@crosscert.com'
+                """);
+        // alice → PLATFORM_OPERATOR (no tenant)
+        jdbc.update("""
+                UPDATE APP_OWNER.admin_user
+                   SET role = 'PLATFORM_OPERATOR',
+                       tenant_id = NULL
+                 WHERE email = 'alice@crosscert.com'
                 """);
         var redisConn = redisFactory.getConnection();
         try {
@@ -157,7 +154,7 @@ class RpAdminBoundaryIT {
     }
 
     // ----------------------------------------------------------------
-    // Login helper (inlined from AdminFlowIT.loginAs)
+    // Login helpers (inlined from RpAdminBoundaryIT.loginAs)
     // ----------------------------------------------------------------
 
     private String url(String path) { return "http://localhost:" + port + path; }
@@ -201,6 +198,31 @@ class RpAdminBoundaryIT {
         auth.set(HttpHeaders.COOKIE, renderCookieHeader(jar));
         auth.set("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"));
         return auth;
+    }
+
+    /**
+     * Triggers the {@code AuthenticationFailureHandler} path so an
+     * ADMIN_LOGIN_FAILED audit row is appended. Uses TestRestTemplate (not the
+     * field {@code http}) so the 401 response body doesn't throw.
+     */
+    private void attemptLoginFailure(String email, String wrongPassword) {
+        Map<String, String> jar = new LinkedHashMap<>();
+        ResponseEntity<String> seed = rest.exchange(
+                url("/admin/api/me"), HttpMethod.GET,
+                new HttpEntity<>(new HttpHeaders()), String.class);
+        mergeSetCookiesByName(jar, seed.getHeaders().get(HttpHeaders.SET_COOKIE));
+
+        HttpHeaders h = new HttpHeaders();
+        h.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        h.set(HttpHeaders.COOKIE, renderCookieHeader(jar));
+        h.set("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"));
+        String body = "email=" + email + "&password=" + wrongPassword;
+        ResponseEntity<String> resp = rest.exchange(
+                url("/admin/login"), HttpMethod.POST,
+                new HttpEntity<>(body, h), String.class);
+        assertThat(resp.getStatusCode().value())
+                .as("attempt login %s expected 401, got %s", email, resp.getStatusCode())
+                .isEqualTo(401);
     }
 
     private static void mergeSetCookiesByName(Map<String, String> jar, List<String> setCookies) {
@@ -254,172 +276,124 @@ class RpAdminBoundaryIT {
         return res.getBody().get("data").get("id").asText();
     }
 
-    /**
-     * Asserts that the given call throws {@link HttpClientErrorException} with HTTP 403.
-     * Uses a plain RestTemplate (set as field {@code http}) so 4xx is not swallowed.
-     */
-    private void assertForbidden(Runnable call) {
-        assertThatThrownBy(call::run)
-                .isInstanceOf(HttpClientErrorException.class)
-                .satisfies(e -> assertThat(((HttpClientErrorException) e)
-                        .getStatusCode().value())
-                        .isEqualTo(403));
+    private void issueApiKey(HttpHeaders auth, String tenantId, String name) throws Exception {
+        Map<String, Object> body = Map.of(
+                "tenantId", tenantId,
+                "name", name,
+                "scopes", List.of("registration", "authentication"));
+        ResponseEntity<JsonNode> res = rest.exchange(
+                url("/admin/api/api-keys"),
+                HttpMethod.POST,
+                new HttpEntity<>(om.writeValueAsString(body), auth),
+                JsonNode.class);
+        assertThat(res.getStatusCode().is2xxSuccessful())
+                .as("issue api-key tenant=%s: %s body=%s", tenantId, res.getStatusCode(), res.getBody())
+                .isTrue();
     }
 
     // ----------------------------------------------------------------
-    // Test — 14 assertions
+    // Test — single scenario, 5 assertion groups
     // ----------------------------------------------------------------
 
     @Test
-    void rpAdmin_seesAndMutatesOnlyOwnTenant_andCannotPlatformOperations() throws Exception {
-        // 사전: alice (PLATFORM_OPERATOR) 로 tenant_A 생성
+    void activitySnapshotKpiTop5Feed() throws Exception {
+        // ─── 1. alice (PLATFORM_OPERATOR) seeds activity ────────────────────
+        // - 2 tenants (TENANT_CREATE x2) — each row carries tenant_id
+        // - 1 api-key on tenant-a (API_KEY_ISSUE)
+        // - alice's own login (ADMIN_LOGIN, tenant_id=null)
+        // - bob wrong-pw attempt (ADMIN_LOGIN_FAILED, tenant_id=null)
+        // → 5+ audit rows in the 24h window, 3+ ops, 1+ security.
         HttpHeaders aliceAuth = loginAs("alice@crosscert.com", "alice-temp-pw");
-        String tenantAId = createTenantViaApi(aliceAuth, "boundary-it-a", "Tenant A");
+        String tenantAId = createTenantViaApi(aliceAuth, "activity-it-a", "Tenant A");
+        createTenantViaApi(aliceAuth, "activity-it-b", "Tenant B");
+        issueApiKey(aliceAuth, tenantAId, "activity-key-a");
 
-        // bob (RP_ADMIN, demo-rp) 로그인
-        HttpHeaders bobAuth = loginAs("bob@crosscert.com", "bob-temp-pw");
+        attemptLoginFailure("bob@crosscert.com", "wrong-pw-xyz");
 
-        // ── 1. GET /me — role=RP_ADMIN + tenantId ──────────────────────────────
-        ResponseEntity<JsonNode> me = http.exchange(
-                url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
-        assertThat(me.getStatusCode().is2xxSuccessful()).isTrue();
-        JsonNode meData = me.getBody().get("data");
-        assertThat(meData.get("role").asText())
-                .as("bob must have role RP_ADMIN")
-                .isEqualTo("RP_ADMIN");
-        String myTenantId = meData.get("tenantId").asText();
-        assertThat(myTenantId)
-                .as("bob must have a tenantId")
-                .isNotBlank();
+        // ─── 2. GET /admin/api/activity ────────────────────────────────────
+        ResponseEntity<JsonNode> resp1 = rest.exchange(
+                url("/admin/api/activity"), HttpMethod.GET,
+                new HttpEntity<>(aliceAuth), JsonNode.class);
+        assertThat(resp1.getStatusCode().is2xxSuccessful())
+                .as("GET /admin/api/activity: %s body=%s", resp1.getStatusCode(), resp1.getBody())
+                .isTrue();
+        JsonNode data = resp1.getBody().get("data");
 
-        // ── 2. GET /tenants — demo-rp 만 포함, boundary-it-a 미포함 ───────────
-        ResponseEntity<JsonNode> tList = http.exchange(
-                url("/admin/api/tenants"), HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
-        assertThat(tList.getStatusCode().is2xxSuccessful()).isTrue();
-        List<String> slugs = StreamSupport
-                .stream(tList.getBody().get("data").spliterator(), false)
-                .map(n -> n.get("slug").asText())
-                .toList();
-        assertThat(slugs)
-                .as("bob sees only own tenant — actual slugs: %s", slugs)
-                .contains("demo-rp")
-                .doesNotContain("boundary-it-a");
-
-        // ── 3. GET /tenants/{my} → 200 ────────────────────────────────────────
-        ResponseEntity<JsonNode> myT = http.exchange(
-                url("/admin/api/tenants/" + myTenantId), HttpMethod.GET,
-                new HttpEntity<>(bobAuth), JsonNode.class);
-        assertThat(myT.getStatusCode().is2xxSuccessful())
-                .as("bob GET own tenant must succeed")
+        // ── Assertion 1: KPI counts + p95Ms null ─────────────────────────
+        JsonNode kpi = data.get("kpi");
+        assertThat(kpi.get("events24h").asLong())
+                .as("events24h must cover all seeded rows: %s", data)
+                .isGreaterThanOrEqualTo(5L);
+        assertThat(kpi.get("ops24h").asLong())
+                .as("ops24h covers TENANT_CREATE x2 + API_KEY_ISSUE + ADMIN_LOGIN")
+                .isGreaterThanOrEqualTo(3L);
+        assertThat(kpi.get("security24h").asLong())
+                .as("security24h covers ADMIN_LOGIN_FAILED")
+                .isGreaterThanOrEqualTo(1L);
+        // p95Ms is null → Jackson default-property-inclusion: non_null omits it.
+        JsonNode p95 = kpi.path("p95Ms");
+        assertThat(p95.isNull() || p95.isMissingNode())
+                .as("p95Ms must be absent/null (no Micrometer instrumentation yet): %s", kpi)
                 .isTrue();
 
-        // ── 4. GET /tenants/{other} → 403 ────────────────────────────────────
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/tenants/" + tenantAId), HttpMethod.GET,
-                new HttpEntity<>(bobAuth), JsonNode.class));
-
-        // ── 5. PUT /tenants/{my} → 200 ────────────────────────────────────────
-        Map<String, Object> updateBody = Map.of(
-                "displayName", "Updated by Bob",
-                "rpId", "localhost",
-                "rpName", "Demo RP",
-                "allowedOrigins", List.of("http://localhost:9090"),
-                "acceptedFormats", List.of("none", "packed"),
-                "requireUserVerification", true,
-                "mdsRequired", false);
-        ResponseEntity<JsonNode> putMy = http.exchange(
-                url("/admin/api/tenants/" + myTenantId), HttpMethod.PUT,
-                new HttpEntity<>(om.writeValueAsString(updateBody), bobAuth),
-                JsonNode.class);
-        assertThat(putMy.getStatusCode().is2xxSuccessful())
-                .as("bob PUT own tenant must succeed")
+        // ── Assertion 2: Top5 contains tenant-a, excludes NULL-tenant rows ─
+        JsonNode top5 = data.get("top5");
+        assertThat(top5.isArray()).isTrue();
+        boolean tenantAFound = false;
+        for (JsonNode t : top5) {
+            // None of the top5 entries may have null tenantId (NULL rows are
+            // filtered by ActivityRepository.topTenantsSinceRaw, and Jackson
+            // non_null serialization would omit the field if it were null).
+            JsonNode tidNode = t.path("tenantId");
+            assertThat(tidNode.isMissingNode() || tidNode.isNull())
+                    .as("top5 must not contain NULL-tenant rows: %s", t)
+                    .isFalse();
+            if (tenantAId.equals(tidNode.asText())) {
+                tenantAFound = true;
+            }
+        }
+        assertThat(tenantAFound)
+                .as("top5 must contain tenant-a (it had TENANT_CREATE + API_KEY_ISSUE): %s", top5)
                 .isTrue();
 
-        // ── 6. PUT /tenants/{other} → 403 ────────────────────────────────────
-        String updateBodyJson = om.writeValueAsString(updateBody);
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/tenants/" + tenantAId), HttpMethod.PUT,
-                new HttpEntity<>(updateBodyJson, bobAuth),
-                JsonNode.class));
+        // ── Assertion 3: Feed sorted DESC by (createdAt, id) ─────────────
+        JsonNode feed = data.get("feed");
+        assertThat(feed.size())
+                .as("feed must have at least 5 rows: %s", feed)
+                .isGreaterThanOrEqualTo(5);
+        for (int i = 1; i < feed.size(); i++) {
+            String prev = feed.get(i - 1).get("createdAt").asText();
+            String curr = feed.get(i).get("createdAt").asText();
+            assertThat(prev.compareTo(curr))
+                    .as("feed[%d].createdAt=%s should be >= feed[%d].createdAt=%s",
+                            i - 1, prev, i, curr)
+                    .isGreaterThanOrEqualTo(0);
+        }
 
-        // ── 7. GET /tenants/{my}/credentials → 200 ───────────────────────────
-        ResponseEntity<JsonNode> credsMy = http.exchange(
-                url("/admin/api/tenants/" + myTenantId + "/credentials"),
-                HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
-        assertThat(credsMy.getStatusCode().is2xxSuccessful())
-                .as("bob GET own tenant credentials must succeed")
-                .isTrue();
+        // ─── 3. Polling with sinceId={feed[0].id} → empty feed ──────────────
+        String firstId = feed.get(0).get("id").asText();
+        ResponseEntity<JsonNode> resp2 = rest.exchange(
+                url("/admin/api/activity?sinceId=" + firstId), HttpMethod.GET,
+                new HttpEntity<>(aliceAuth), JsonNode.class);
+        assertThat(resp2.getStatusCode().is2xxSuccessful()).isTrue();
+        JsonNode feed2 = resp2.getBody().get("data").get("feed");
 
-        // ── 8. GET /tenants/{other}/credentials → 403 ────────────────────────
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/tenants/" + tenantAId + "/credentials"),
-                HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class));
+        // ── Assertion 4: sinceId=newest → empty feed (idempotent polling) ─
+        assertThat(feed2.size())
+                .as("feed with sinceId=newest must be empty (tuple WHERE works): %s", feed2)
+                .isZero();
 
-        // ── 9. POST /tenants → 403 (RP_ADMIN 은 tenant create 불가) ──────────
-        Map<String, Object> newTenant = Map.of(
-                "slug", "bob-attempt",
-                "displayName", "Bob Attempt",
-                "rpId", "localhost",
-                "rpName", "X",
-                "allowedOrigins", List.of("http://localhost:9090"),
-                "acceptedFormats", List.of("none"),
-                "requireUserVerification", true,
-                "mdsRequired", false);
-        String newTenantJson = om.writeValueAsString(newTenant);
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/tenants"), HttpMethod.POST,
-                new HttpEntity<>(newTenantJson, bobAuth),
-                JsonNode.class));
+        // ─── 4. bob normal login (new ADMIN_LOGIN row) → poll picks it up ──
+        loginAs("bob@crosscert.com", "bob-temp-pw");
+        ResponseEntity<JsonNode> resp3 = rest.exchange(
+                url("/admin/api/activity?sinceId=" + firstId), HttpMethod.GET,
+                new HttpEntity<>(aliceAuth), JsonNode.class);
+        assertThat(resp3.getStatusCode().is2xxSuccessful()).isTrue();
+        JsonNode feed3 = resp3.getBody().get("data").get("feed");
 
-        // ── 10. POST /api-keys (my tenant) → 200 ─────────────────────────────
-        Map<String, Object> myKey = Map.of(
-                "tenantId", myTenantId,
-                "name", "bob-key-own",
-                "scopes", List.of("registration", "authentication"));
-        ResponseEntity<JsonNode> keyMy = http.exchange(
-                url("/admin/api/api-keys"), HttpMethod.POST,
-                new HttpEntity<>(om.writeValueAsString(myKey), bobAuth),
-                JsonNode.class);
-        assertThat(keyMy.getStatusCode().is2xxSuccessful())
-                .as("bob POST api-key for own tenant must succeed")
-                .isTrue();
-
-        // ── 11. POST /api-keys (other tenant) → 403 ──────────────────────────
-        Map<String, Object> otherKey = Map.of(
-                "tenantId", tenantAId,
-                "name", "bob-key-other",
-                "scopes", List.of("registration"));
-        String otherKeyJson = om.writeValueAsString(otherKey);
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/api-keys"), HttpMethod.POST,
-                new HttpEntity<>(otherKeyJson, bobAuth),
-                JsonNode.class));
-
-        // ── 12. POST /keys/rotate → 403 ──────────────────────────────────────
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/keys/rotate"), HttpMethod.POST,
-                new HttpEntity<>(bobAuth), JsonNode.class));
-
-        // ── 13. POST /mds/sync → 403 ─────────────────────────────────────────
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/mds/sync"), HttpMethod.POST,
-                new HttpEntity<>(bobAuth), JsonNode.class));
-
-        // ── 14. GET /audit — semantics shift ─────────────────────────────────
-        // admin-role-separation: GET /audit was PLATFORM_OPERATOR only → 403 for bob.
-        // activity-page: hasAnyRole(PLATFORM_OPERATOR, RP_ADMIN) — bob now allowed,
-        // but cross-tenant tenantId param → 403.
-        //
-        // (a) cross-tenant tenantId → 403 ACCESS_DENIED
-        assertForbidden(() -> http.exchange(
-                url("/admin/api/audit?tenantId=" + tenantAId), HttpMethod.GET,
-                new HttpEntity<>(bobAuth), JsonNode.class));
-        // (b) no tenantId → 200 (service auto-scope to demo-rp)
-        ResponseEntity<JsonNode> auditOwn = http.exchange(
-                url("/admin/api/audit"), HttpMethod.GET,
-                new HttpEntity<>(bobAuth), JsonNode.class);
-        assertThat(auditOwn.getStatusCode().is2xxSuccessful())
-                .as("bob GET /audit (no param) must succeed (auto-scope to demo-rp)")
-                .isTrue();
+        // ── Assertion 5: New events after sinceId visible to poll ────────
+        assertThat(feed3.size())
+                .as("new ADMIN_LOGIN row should appear when polling with old sinceId: %s", feed3)
+                .isGreaterThanOrEqualTo(1);
     }
 }

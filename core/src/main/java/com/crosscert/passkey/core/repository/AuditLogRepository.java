@@ -45,11 +45,13 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     @Query("select a from AuditLog a " +
            "where (:action is null or a.action = :action) " +
            "  and (:actorId is null or a.actorId = :actorId) " +
+           "  and (:tenantId is null or a.tenantId = :tenantId) " +
            "  and (:from is null or a.createdAt >= :from) " +
            "  and (:to   is null or a.createdAt <  :to) " +
            "order by a.createdAt desc, a.id desc")
     Page<AuditLog> search(@Param("action") String action,
                           @Param("actorId") UUID actorId,
+                          @Param("tenantId") UUID tenantId,
                           @Param("from") Instant from,
                           @Param("to") Instant to,
                           Pageable page);

@@ -100,7 +100,9 @@ public class CredentialAdminService {
 
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "CREDENTIAL_REVOKE",
-                "CREDENTIAL", credentialIdB64, payload));
+                "CREDENTIAL", credentialIdB64,
+                tenantId,
+                payload));
 
         log.info("credential revoked tenant={} credentialId={} actor={}",
                 tenantId, credentialIdB64, actorEmail);

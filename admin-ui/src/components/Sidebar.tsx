@@ -4,6 +4,7 @@ import { useMe } from '../me/MeContext';
 
 const PLATFORM_NAV = [
   { to: '/tenants',  label: 'Tenants',      icon: Building },
+  { to: '/activity', label: 'Activity',     icon: Activity },
   { to: '/keys',     label: 'Signing Keys', icon: Key },
   { to: '/mds',      label: 'MDS',          icon: Activity },
   { to: '/audit',    label: 'Audit Log',    icon: Receipt },

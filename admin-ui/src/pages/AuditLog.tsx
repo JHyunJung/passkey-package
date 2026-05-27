@@ -20,6 +20,7 @@ export default function AuditLog() {
   const [rows, setRows] = useState<AuditLogView[]>([]);
   const [action, setAction] = useState('');
   const [actorId, setActorId] = useState('');
+  const [tenantId, setTenantId] = useState('');
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [verify, setVerify] = useState<VerifyResult | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -32,6 +33,7 @@ export default function AuditLog() {
     const params = new URLSearchParams();
     if (action) params.set('action', action);
     if (actorId) params.set('actorId', actorId);
+    if (tenantId) params.set('tenantId', tenantId);
     api.get<AuditLogView[]>(`/admin/api/audit?${params.toString()}`)
       .then((r) => { setRows(r); setLoading(false); })
       .catch((e) => {
@@ -108,6 +110,13 @@ export default function AuditLog() {
               onChange={(e) => setActorId(e.target.value)}
               style={{ maxWidth: 140 }}
             />
+            <input
+              className="input"
+              placeholder="tenantId (UUID)"
+              value={tenantId}
+              onChange={(e) => setTenantId(e.target.value)}
+              style={{ maxWidth: 280 }}
+            />
             <button className="btn btn--outline" onClick={load}>
               <Refresh size={14} /> 적용
             </button>
@@ -138,6 +147,7 @@ export default function AuditLog() {
                 <th>#</th>
                 <th>ACTION</th>
                 <th>ACTOR</th>
+                <th>TENANT</th>
                 <th>TARGET</th>
                 <th>AT</th>
               </tr>
@@ -148,6 +158,9 @@ export default function AuditLog() {
                   <td className="mono muted">{r.id}</td>
                   <td><span className="badge badge--accent">{r.action}</span></td>
                   <td className="mono">{r.actorEmail}</td>
+                  <td className="muted" style={{ fontSize: 12 }}>
+                    {r.tenantId ? r.tenantId.slice(0, 8) + '…' : '—'}
+                  </td>
                   <td className="mono muted">
                     {r.targetType ?? '–'}{r.targetId ? `/${r.targetId}` : ''}
                   </td>

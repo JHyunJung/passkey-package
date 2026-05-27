@@ -86,7 +86,9 @@ public class TenantAdminService {
         payload.put("rpId", req.rpId());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "TENANT_CREATE",
-                "TENANT", req.slug(), payload));
+                "TENANT", req.slug(),
+                t.getId(),
+                payload));
 
         return TenantAdminDto.TenantView.from(t);
     }
@@ -125,7 +127,9 @@ public class TenantAdminService {
             payload.put("changedFields", changed);
             audit.append(new AuditAppendRequest(
                     actorId, actorEmail, "TENANT_UPDATE",
-                    "TENANT", t.getId().toString(), payload));
+                    "TENANT", t.getId().toString(),
+                    t.getId(),
+                    payload));
             log.info("tenant updated id={} slug={} changed={} actor={}",
                     t.getId(), t.getSlug(), changed, actorEmail);
         } else {

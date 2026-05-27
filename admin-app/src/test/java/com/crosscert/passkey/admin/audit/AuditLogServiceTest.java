@@ -56,7 +56,7 @@ class AuditLogServiceTest {
         UUID actorUuid = UUID.fromString("00000000-0000-0000-0000-000000000042");
         service.append(new AuditAppendRequest(
                 actorUuid, "alice@example.com", "ADMIN_LOGIN",
-                null, null, payload));
+                null, null, null, payload));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(repo).save(captor.capture());
@@ -80,12 +80,12 @@ class AuditLogServiceTest {
         UUID actorUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AuditLog prev = new AuditLog(
                 null, new byte[]{9, 9, 9}, actorUuid, "alice@example.com",
-                "ADMIN_LOGIN", null, null, "{}", clock.instant());
+                "ADMIN_LOGIN", null, null, null, "{}", clock.instant());
         when(repo.findLatestForUpdate()).thenReturn(Optional.of(prev));
 
         service.append(new AuditAppendRequest(
                 actorUuid, "alice@example.com", "TENANT_CREATE",
-                "TENANT", "T_A", Map.of("id", "T_A")));
+                "TENANT", "T_A", null, Map.of("id", "T_A")));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(repo).save(captor.capture());
@@ -102,7 +102,7 @@ class AuditLogServiceTest {
 
         service.append(new AuditAppendRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                "alice@example.com", "X", null, null, payload));
+                "alice@example.com", "X", null, null, null, payload));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(repo).save(captor.capture());
@@ -120,7 +120,7 @@ class AuditLogServiceTest {
 
         service.append(new AuditAppendRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                "alice@example.com", "ADMIN_LOGIN", null, null, Map.of()));
+                "alice@example.com", "ADMIN_LOGIN", null, null, null, Map.of()));
 
         // The lock query on the sentinel row must precede the chain-head read.
         var ordered = inOrder(em, repo);

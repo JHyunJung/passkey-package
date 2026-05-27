@@ -80,7 +80,9 @@ public class AuditChainVerifier {
                     row.getPayload(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
             AuditAppendRequest req = new AuditAppendRequest(
                     row.getActorId(), row.getActorEmail(), row.getAction(),
-                    row.getTargetType(), row.getTargetId(), payload);
+                    row.getTargetType(), row.getTargetId(),
+                    row.getTenantId(),
+                    payload);
             return AuditLogService.computeHash(
                     row.getPrevHash(), req, row.getPayload(), row.getCreatedAt());
         } catch (Exception e) {
