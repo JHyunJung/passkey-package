@@ -148,6 +148,8 @@ class AdminFlowIT {
         // FK chain: api_key.tenant_id → tenant.id; credential.tenant_id →
         // tenant.id. audit_log has no FK. admin_user (V11 seed) is left
         // untouched so alice/bob stay logged-in-able across test runs.
+        // V23 added admin_user.tenant_id FK → tenant.id: null it out before
+        // deleting tenants so the FK constraint is not violated.
         // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
         // use ON DELETE CASCADE from their parent FKs, so deleting the
         // parent rows implicitly removes children too.
@@ -157,7 +159,38 @@ class AdminFlowIT {
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
         jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        // NULL out admin_user.tenant_id before deleting tenants (V23 FK —
+        // fk_admin_user_tenant blocks DELETE FROM tenant while child rows exist)
+        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
+        // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
+        // bob (RP_ADMIN) needs this tenant to exist and be assigned to him.
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
+                    require_user_verification, mds_required, created_at, updated_at)
+                VALUES (HEXTORAW('0000000000000000000000000000C0DE'),
+                    'demo-rp', 'Demo RP', 'localhost', 'Demo RP', 'active', 'Y', 'N',
+                    SYSTIMESTAMP, SYSTIMESTAMP)
+                """);
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
+                VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'http://localhost:9090', 0)
+                """);
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'none')
+                """);
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
+                """);
+        // Re-assign bob to demo-rp as RP_ADMIN (mirrors V23 step 9)
+        jdbc.update("""
+                UPDATE APP_OWNER.admin_user
+                   SET role = 'RP_ADMIN',
+                       tenant_id = HEXTORAW('0000000000000000000000000000C0DE')
+                 WHERE email = 'bob@crosscert.com'
+                """);
         // Close the connection explicitly — RedisConnection isn't
         // AutoCloseable in Spring Data 3.x.
         var redisConn = redisFactory.getConnection();
@@ -406,12 +439,24 @@ class AdminFlowIT {
                 Long.class, keyIdBytes);
         assertThat(revokedCount).isEqualTo(1L);
 
-        // ⑩ Bob (VIEWER) — list 200, create 403.
+        // ⑩ Bob (RP_ADMIN demo-rp) — list 200 (sees only own tenant), create 403.
         HttpHeaders bobAuth = loginAs("bob@crosscert.com", "bob-temp-pw");
         ResponseEntity<String> bobList = rest.exchange(
                 url("/admin/api/tenants"), HttpMethod.GET,
                 new HttpEntity<>(bobAuth), String.class);
         assertThat(bobList.getStatusCode().value()).isEqualTo(200);
+
+        // bob は RP_ADMIN(demo-rp) — alice が step ③ で作った acme は見えず demo-rp だけ見える
+        com.fasterxml.jackson.databind.JsonNode bobListData = mapper.readTree(bobList.getBody()).get("data");
+        java.util.List<String> bobSlugs = java.util.stream.StreamSupport
+                .stream(bobListData.spliterator(), false)
+                .map(n -> n.get("slug").asText())
+                .toList();
+        assertThat(bobSlugs)
+                .as("bob (RP_ADMIN) sees only own tenant — actual: %s", bobSlugs)
+                .contains("demo-rp")
+                .doesNotContain("acme");
+
         // Use a different slug ("beta") so it doesn't conflict with "acme".
         String betaTenantBody = """
                 {"slug":"beta","displayName":"Beta Inc","rpId":"beta.example.com","rpName":"Beta Inc",
@@ -424,7 +469,7 @@ class AdminFlowIT {
                 url("/admin/api/tenants"), HttpMethod.POST,
                 new HttpEntity<>(betaTenantBody, bobAuth), String.class);
         assertThat(bobCreate.getStatusCode().value())
-                .as("VIEWER must be denied tenant create: %s body=%s",
+                .as("RP_ADMIN must be denied tenant create: %s body=%s",
                         bobCreate.getStatusCode(), bobCreate.getBody())
                 .isEqualTo(403);
 

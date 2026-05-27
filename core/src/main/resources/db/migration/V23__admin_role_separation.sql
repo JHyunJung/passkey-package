@@ -18,11 +18,14 @@ ALTER TABLE admin_user ADD CONSTRAINT fk_admin_user_tenant
 -- 3. 인덱스: RP_ADMIN 의 같은 tenant 조회 효율화
 CREATE INDEX ix_admin_user_tenant ON admin_user (tenant_id);
 
+-- 4a. 기존 CHECK 제약 제거 — UPDATE 전에 먼저 DROP 해야 PLATFORM_OPERATOR 값 삽입 가능
+ALTER TABLE admin_user DROP CONSTRAINT ck_admin_user_role;
+
+-- 4b. role 컬럼 확장 — PLATFORM_OPERATOR(17자)가 기존 VARCHAR2(16) 에 안 들어가므로 확장
+ALTER TABLE admin_user MODIFY (role VARCHAR2(20));
+
 -- 4. 기존 ADMIN/VIEWER → PLATFORM_OPERATOR 일괄 UPDATE
 UPDATE admin_user SET role = 'PLATFORM_OPERATOR' WHERE role IN ('ADMIN', 'VIEWER');
-
--- 5. 기존 CHECK 제약 제거
-ALTER TABLE admin_user DROP CONSTRAINT ck_admin_user_role;
 
 -- 6. 신규 CHECK — role enum 2 종
 ALTER TABLE admin_user ADD CONSTRAINT ck_admin_user_role
