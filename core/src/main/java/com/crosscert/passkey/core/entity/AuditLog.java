@@ -33,6 +33,10 @@ public class AuditLog extends BaseEntity {
     @Column(name = "TARGET_ID", length = 64)
     private String targetId;
 
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "TENANT_ID", columnDefinition = "RAW(16)")
+    private UUID tenantId;
+
     @Lob
     @Column(name = "PAYLOAD", nullable = false)
     private String payload;
@@ -41,7 +45,7 @@ public class AuditLog extends BaseEntity {
 
     public AuditLog(byte[] prevHash, byte[] hash, UUID actorId, String actorEmail,
                     String action, String targetType, String targetId,
-                    String payload, Instant createdAtArg) {
+                    UUID tenantId, String payload, Instant createdAtArg) {
         this.prevHash = prevHash;
         this.hash = hash;
         this.actorId = actorId;
@@ -49,6 +53,7 @@ public class AuditLog extends BaseEntity {
         this.action = action;
         this.targetType = targetType;
         this.targetId = targetId;
+        this.tenantId = tenantId;
         this.payload = payload;
         // Pre-set BaseEntity.createdAt + updatedAt so @PrePersist's null-check
         // preserves caller-supplied value for hash-chain integrity. AuditLog
@@ -87,5 +92,6 @@ public class AuditLog extends BaseEntity {
     public String getAction() { return action; }
     public String getTargetType() { return targetType; }
     public String getTargetId() { return targetId; }
+    public UUID getTenantId() { return tenantId; }
     public String getPayload() { return payload; }
 }
