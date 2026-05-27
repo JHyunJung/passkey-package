@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
-import type { Me } from '../api/types';
 import { Search } from './Icons';
+import { useMe } from '../me/MeContext';
 
 interface Props {
   onOpenPalette: () => void;
@@ -21,11 +19,7 @@ const PAGE_TITLES: Record<string, string> = {
 export default function Header({ onOpenPalette }: Props) {
   const loc = useLocation();
   const nav = useNavigate();
-  const [me, setMe] = useState<Me | null>(null);
-
-  useEffect(() => {
-    api.get<Me>('/admin/api/me').then(setMe).catch(() => setMe(null));
-  }, []);
+  const { me } = useMe();
 
   const title = PAGE_TITLES[loc.pathname] ?? loc.pathname.replace(/^\//, '');
 
@@ -78,7 +72,10 @@ export default function Header({ onOpenPalette }: Props) {
         <div className="row" style={{ gap: 8 }}>
           <div className="stack-1" style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{me.email}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>{me.role}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>
+              <span className="badge">{me.role}</span>
+              {me.tenantId && <span style={{ marginLeft: 4 }}>{me.tenantId.slice(0, 8)}…</span>}
+            </div>
           </div>
           <button className="btn btn--ghost btn--sm" onClick={logout}>로그아웃</button>
         </div>

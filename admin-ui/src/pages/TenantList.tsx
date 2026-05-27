@@ -6,6 +6,7 @@ import type { TenantView } from '../api/types';
 import { useToast } from '../components/Toast';
 import { Plus, Search, Building } from '../components/Icons';
 import { formatDateTime } from '../lib/formatDateTime';
+import { useMe } from '../me/MeContext';
 
 export default function TenantList() {
   const [tenants, setTenants] = useState<TenantView[]>([]);
@@ -14,6 +15,14 @@ export default function TenantList() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const toast = useToast();
   const nav = useNavigate();
+  const { me } = useMe();
+
+  useEffect(() => {
+    if (me?.role === 'RP_ADMIN' && me.tenantId) {
+      nav(`/tenants/${me.tenantId}`, { replace: true });
+      return;
+    }
+  }, [me, nav]);
 
   useEffect(() => {
     api.get<TenantView[]>('/admin/api/tenants')

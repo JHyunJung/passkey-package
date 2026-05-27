@@ -1,4 +1,4 @@
-import type { ApiEnvelope, TenantUpdateRequest, TenantView, CredentialView, PageView } from './types';
+import type { ApiEnvelope, Me, TenantUpdateRequest, TenantView, CredentialView, PageView } from './types';
 import { ApiError } from './types';
 
 function getCookie(name: string): string | null {
@@ -69,6 +69,8 @@ export const api = {
     return res.ok;
   },
 };
+
+export const getMe = () => api.get<Me>('/admin/api/me');
 
 export const updateTenant = (id: string, req: TenantUpdateRequest) =>
   api.put<TenantView>(`/admin/api/tenants/${id}`, req);

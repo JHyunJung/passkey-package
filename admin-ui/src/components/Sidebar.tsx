@@ -1,14 +1,24 @@
 import { NavLink } from 'react-router-dom';
 import { BrandMark, Building, Key, Receipt, Activity } from './Icons';
+import { useMe } from '../me/MeContext';
 
-const NAV = [
-  { to: '/tenants',  label: 'Tenants', icon: Building },
+const PLATFORM_NAV = [
+  { to: '/tenants',  label: 'Tenants',      icon: Building },
   { to: '/keys',     label: 'Signing Keys', icon: Key },
-  { to: '/mds',      label: 'MDS', icon: Activity },
-  { to: '/audit',    label: 'Audit Log', icon: Receipt },
+  { to: '/mds',      label: 'MDS',          icon: Activity },
+  { to: '/audit',    label: 'Audit Log',    icon: Receipt },
+];
+
+const rpAdminNav = (tenantId: string) => [
+  { to: `/tenants/${tenantId}`, label: 'My Tenant', icon: Building },
 ];
 
 export default function Sidebar() {
+  const { me } = useMe();
+  const nav = me?.role === 'RP_ADMIN' && me.tenantId
+    ? rpAdminNav(me.tenantId)
+    : (me ? PLATFORM_NAV : []);
+
   return (
     <aside style={{
       gridArea: 'sidebar',
@@ -35,7 +45,7 @@ export default function Sidebar() {
         </div>
       </div>
       <nav style={{ flex: 1, padding: '8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {NAV.map(({ to, label, icon: Icon }) => (
+        {nav.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
