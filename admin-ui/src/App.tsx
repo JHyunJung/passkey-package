@@ -91,7 +91,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
 
   const route = useMemo(
     () => urlToRoute(location.pathname, new URLSearchParams(location.search)),
-    [location],
+    [location.pathname, location.search],
   );
 
   const setRoute = useCallback((r: AppRoute) => { navigate(routeToUrl(r)); }, [navigate]);
@@ -179,7 +179,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
         <TweakColor
           label="Accent"
           value={t.accent}
-          onChange={(v) => setTweak('accent', Array.isArray(v) ? v[0] : v)}
+          onChange={(v) => { const c = Array.isArray(v) ? v[0] : v; if (c) setTweak('accent', c); }}
           options={['#4f46e5', '#5b5bd6', '#7c3aed', '#0f766e', '#db7706']}
         />
         <TweakSection label="레이아웃" />
