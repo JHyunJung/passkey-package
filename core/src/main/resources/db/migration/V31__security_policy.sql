@@ -49,3 +49,8 @@ COMMIT;
 -- 3. Grants to APP_ADMIN (split per V29 pattern)
 GRANT SELECT ON security_policy TO APP_ADMIN;
 GRANT UPDATE ON security_policy TO APP_ADMIN;
+
+-- 4. Runtime grant — passkey-app (APP_RUNTIME) 도 @EntityScan("core.entity")
+--    으로 SecurityPolicy 를 스캔하므로 ddl-auto:validate 통과를 위해
+--    SELECT 권한 필요. V30 runtime_grants 패턴 일관.
+GRANT SELECT ON security_policy TO APP_RUNTIME;
