@@ -3,9 +3,9 @@ import {
   Building2,
   Activity as ActivityIcon,
   ShieldCheck,
-  Database,
   KeyRound,
   Link2,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { useMe } from '@/me/MeContext';
 import { useTweaks } from '@/app/providers/TweaksProvider';
@@ -19,7 +19,7 @@ const PLATFORM_NAV: NavItem[] = [
   { to: '/audit',       label: 'Audit Log',    icon: ShieldCheck },
   { to: '/audit-chain', label: 'Chain',        icon: Link2 },
   { to: '/keys',        label: 'Signing Keys', icon: KeyRound },
-  { to: '/mds',         label: 'MDS',          icon: Database },
+  { to: '/settings',    label: 'Settings',     icon: SettingsIcon },
 ];
 
 const RP_NAV = (tenantId: string): NavItem[] => [

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import AcceptInvite from './pages/AcceptInvite';
 import { Layout } from '@/shell/Layout';
 import TenantList from './pages/TenantList';
 import TenantCreate from './pages/TenantCreate';
@@ -10,6 +11,7 @@ import AuditLog from './pages/AuditLog';
 import MdsStatus from './pages/MdsStatus';
 import KeyManagement from './pages/KeyManagement';
 import AuditChainMonitor from './pages/AuditChainMonitor';
+import Settings from './pages/settings/Settings';
 import { useToast } from './components/Toast';
 import { ApiError } from './api/types';
 import { MeProvider } from './me/MeContext';
@@ -41,6 +43,7 @@ export default function App() {
       <ApiErrorBridge />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/accept-invite" element={<AcceptInvite />} />
         <Route element={<MeProvider><Layout /></MeProvider>}>
           <Route path="/tenants" element={<TenantList />} />
           <Route path="/tenants/new" element={<TenantCreate />} />
@@ -50,6 +53,7 @@ export default function App() {
           <Route path="/audit-chain" element={<AuditChainMonitor />} />
           <Route path="/mds" element={<MdsStatus />} />
           <Route path="/keys" element={<KeyManagement />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/tenants" replace />} />
       </Routes>

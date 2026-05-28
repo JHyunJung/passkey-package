@@ -63,6 +63,9 @@ public class AdminSecurityConfig {
                 // /admin/api/profile 은 active profile 만 노출. Login.tsx 가 미인증 상태에서
                 // local 여부를 알아 테스트 계정 prefill 을 결정하는 데 쓴다.
                 .requestMatchers("/admin/api/profile").permitAll()
+                // Invitation token check (GET) and accept (POST) are unauthenticated —
+                // the invited user has no session yet.
+                .requestMatchers("/admin/api/invitations/**").permitAll()
                 .requestMatchers("/admin/api/**").authenticated()
                 .anyRequest().denyAll())
             .formLogin(form -> form
@@ -77,7 +80,11 @@ public class AdminSecurityConfig {
                 .deleteCookies("SPRING_SESSION", "XSRF-TOKEN"))
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfRepo)
-                .csrfTokenRequestHandler(csrfHandler))
+                .csrfTokenRequestHandler(csrfHandler)
+                // Invitation accept is a one-time POST from an unauthenticated context
+                // (no session, no XSRF-TOKEN cookie). Exempt the entire path so that
+                // the SPA can call it without a prior GET to seed the CSRF cookie.
+                .ignoringRequestMatchers("/admin/api/invitations/**"))
             .sessionManagement(s -> s
                 .maximumSessions(5))    // 5 parallel browsers per operator
             // Return 401 JSON for unauthenticated API requests instead of

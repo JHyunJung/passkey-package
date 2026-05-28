@@ -269,3 +269,42 @@ export type WebauthnConfigDiff = {
   changes: { field: string; from: unknown; to: unknown; added: string[] | null; removed: string[] | null }[];
   warnings: string[];
 };
+
+export type AdminUserStatus = 'ACTIVE' | 'PENDING' | 'SUSPENDED';
+
+export type AdminUserView = {
+  id: string;
+  email: string;
+  role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
+  status: AdminUserStatus;
+  tenantId: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  suspendedAt: string | null;
+  createdBy: string | null;
+};
+
+export type InviteRequest = {
+  email: string;
+  role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
+  tenantId?: string;
+};
+
+export type InvitationInfo = {
+  tokenPrefix: string;
+  plaintextToken: string;
+  acceptUrl: string;
+  expiresAt: string;
+};
+
+export type InviteResponse = {
+  user: AdminUserView;
+  invitation: InvitationInfo;
+};
+
+export type InvitationCheck = {
+  email: string;
+  role: string;
+  tenantId: string | null;
+  expiresAt: string;
+};
