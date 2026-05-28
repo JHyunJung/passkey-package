@@ -52,6 +52,34 @@ public class ActivityService {
 
     @Transactional(readOnly = true)
     public ActivityView snapshot(UUID sinceId, String category) {
+        return snapshot(sinceId, category, null, null);
+    }
+
+    /**
+     * Phase F5 — extended snapshot with optional backward pagination ({@code before})
+     * and tenant scoping ({@code tenantId}).
+     *
+     * <p><b>Important:</b> KPIs ({@code events24h}, {@code ops24h}, {@code security24h})
+     * and {@code top5} are intentionally NOT shifted by {@code before} or {@code tenantId}.
+     * They always reflect the latest 24h global window — the dashboard's headline
+     * counters stay stable as the user scrolls back through the feed or narrows
+     * to a single tenant. Only the {@code feed} is affected by the new filters.
+     *
+     * <p>Cursor semantics:
+     * <ul>
+     *   <li>{@code sinceId != null}: forward polling — rows newer than the cursor row.
+     *       {@code before} is ignored when {@code sinceId} is supplied (mutually
+     *       exclusive — forward vs. backward).</li>
+     *   <li>{@code before != null} (and {@code sinceId == null}): backward pagination —
+     *       rows strictly older than the supplied instant.</li>
+     *   <li>{@code tenantId != null}: feed restricted to that tenant. Composable with
+     *       either {@code sinceId} (forward polling, tenant-scoped) or {@code before}
+     *       (backward pagination, tenant-scoped) — or neither (newest 50 for that
+     *       tenant).</li>
+     * </ul>
+     */
+    @Transactional(readOnly = true)
+    public ActivityView snapshot(UUID sinceId, String category, Instant before, UUID tenantId) {
         Instant since = clock.instant().minus(WINDOW);
 
         long events24h    = activity.countSince(since);
@@ -73,9 +101,7 @@ public class ActivityService {
             case "security" -> SECURITY_ACTIONS;
             default         -> Set.of();
         };
-        List<AuditLog> feed = actionFilter.isEmpty()
-                ? activity.feed(sinceId, FEED_PAGE)
-                : activity.feedFiltered(actionFilter, sinceId, FEED_PAGE);
+        List<AuditLog> feed = resolveFeed(sinceId, before, tenantId, actionFilter);
 
         // distinct().toMap() avoids N+1 — 1 query per unique tenant in the page.
         Map<UUID, String> slugByTenant = feed.stream()
@@ -102,6 +128,34 @@ public class ActivityService {
         return new ActivityView(
                 new ActivityView.Kpi(events24h, ops24h, security24h, null),
                 top5, events);
+    }
+
+    /**
+     * Phase F5 — pick the right repository entry point based on which cursor /
+     * filter the caller supplied. Centralised here so the controller-facing
+     * {@link #snapshot} reads as a flat data-pipeline.
+     *
+     * <p>{@code sinceId} (forward polling) takes precedence over {@code before}
+     * (backward pagination). They are not designed to be combined — a polling
+     * client asks "what's new since X", a pagination client asks "what came
+     * before Y". The dashboard never sends both.
+     */
+    private List<AuditLog> resolveFeed(UUID sinceId, Instant before, UUID tenantId,
+                                       Set<String> actionFilter) {
+        if (sinceId != null) {
+            // Forward polling path. tenantId composes — null means global,
+            // non-null restricts polling to a single tenant (e.g. TenantDetail's
+            // Activity tab calling /admin/api/activity?sinceId=X&tenantId=Y).
+            return actionFilter.isEmpty()
+                    ? activity.feed(sinceId, tenantId, FEED_PAGE)
+                    : activity.feedFiltered(actionFilter, sinceId, tenantId, FEED_PAGE);
+        }
+        // No sinceId → use the (before, tenantId) page path. Both may be null,
+        // in which case feedPage returns the newest FEED_PAGE rows globally
+        // (equivalent to feed(null, FEED_PAGE) but expressed via the new query).
+        return actionFilter.isEmpty()
+                ? activity.feedPage(tenantId, before, FEED_PAGE)
+                : activity.feedFilteredPage(actionFilter, tenantId, before, FEED_PAGE);
     }
 
     private String categorize(String action) {
