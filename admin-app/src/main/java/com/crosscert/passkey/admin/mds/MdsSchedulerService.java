@@ -72,6 +72,7 @@ public class MdsSchedulerService {
             // history row. Recording here would double-count cycles.
             return SyncResult.skipped();
         }
+        log.info("mds sync: lease acquired (holder={})", holder);
         // Capture start BEFORE any work so duration covers fetch + persist + cache.
         Instant started = scheduledAt;
         SyncResult result;
@@ -86,6 +87,7 @@ public class MdsSchedulerService {
             // Invalidate AAGUID cache so passkey-app sees fresh data.
             // T16 immediately repopulates these keys with the new entries.
             Set<String> keys = redis.keys("mds:aaguid:*");
+            int previousCount = keys == null ? 0 : keys.size();
             if (keys != null && !keys.isEmpty()) {
                 redis.delete(keys);
             }
@@ -99,9 +101,14 @@ public class MdsSchedulerService {
             // TTL 7h > scheduler cadence of 6h: entries stay live until
             // the next sync cycle invalidates + repopulates them. A 30min
             // TTL would leave a ~5.5h stale-miss window that fails closed.
+            int populated = 0;
+            int skippedLegacy = 0;
             for (com.webauthn4j.metadata.data.MetadataBLOBPayloadEntry entry
                     : blob.getPayload().getEntries()) {
-                if (entry.getAaguid() == null) continue; // legacy U2F entries
+                if (entry.getAaguid() == null) {
+                    skippedLegacy++; // legacy U2F entries
+                    continue;
+                }
                 String uuid = entry.getAaguid().getValue().toString();
                 String csv = entry.getStatusReports().stream()
                         .map(sr -> sr.getStatus() == null ? "" : sr.getStatus().getValue())
@@ -111,8 +118,14 @@ public class MdsSchedulerService {
                 if (!csv.isBlank()) {
                     redis.opsForValue().set("mds:aaguid:" + uuid, csv,
                             java.time.Duration.ofHours(7));
+                    populated++;
                 }
             }
+            // Diff approximation: previousCount = AAGUID keys present
+            // before this cycle; populated = entries written this cycle.
+            // Net delta surfaces churn even without a per-entry compare.
+            log.info("mds sync: entries diff populated={} previousCacheSize={} skippedLegacy={}",
+                    populated, previousCount, skippedLegacy);
 
             long version = blob.getPayload().getNo();
             Map<String, Object> payload = new LinkedHashMap<>();
