@@ -41,6 +41,12 @@ public class AdminUser extends BaseEntity {
     @Column(name = "SUSPENDED_BY", length = 255)
     private String suspendedBy;
 
+    @Column(name = "MFA_ENABLED", columnDefinition = "CHAR(1)", nullable = false)
+    private String mfaEnabledFlag = "N";
+
+    @Column(name = "MFA_SECRET", length = 64)
+    private String mfaSecret;
+
     protected AdminUser() {}
 
     /** No-arg constructor for programmatic creation via setters (e.g. invite flow). */
@@ -94,4 +100,10 @@ public class AdminUser extends BaseEntity {
 
     public String getSuspendedBy() { return suspendedBy; }
     public void setSuspendedBy(String suspendedBy) { this.suspendedBy = suspendedBy; }
+
+    public boolean isMfaEnabled() { return "Y".equals(mfaEnabledFlag); }
+    public void setMfaEnabled(boolean v) { this.mfaEnabledFlag = v ? "Y" : "N"; }
+
+    public String getMfaSecret() { return mfaSecret; }
+    public void setMfaSecret(String v) { this.mfaSecret = v; }
 }
