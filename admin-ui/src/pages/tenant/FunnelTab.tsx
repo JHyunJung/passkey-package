@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { funnelApi } from '@/api/funnel';
-import type { FunnelData, FunnelSeries, FunnelByEventType } from '@/fixtures/funnel';
+import type { FunnelData, FunnelSeries, FunnelByEventType } from '@/api/funnel';
 import type { Tenant } from '@/api/designTypes';
 
 // ── Local util ────────────────────────────────────────────────────────────────
