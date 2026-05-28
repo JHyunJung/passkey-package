@@ -86,7 +86,9 @@ class TenantAdminControllerSecurityTest {
              "allowedOrigins":["http://localhost"],
              "acceptedFormats":["none","packed"],
              "requireUserVerification":true,
-             "mdsRequired":false}
+             "mdsRequired":false,
+             "attestationConveyance":"NONE",
+             "webauthnTimeoutMs":60000}
             """;
 
     @Test
@@ -127,6 +129,8 @@ class TenantAdminControllerSecurityTest {
                         List.of("http://localhost"),
                         Set.of("none", "packed"),
                         true, false,
+                        "NONE", 60000,
+                        0L, 0L, null,
                         java.time.Instant.now(), java.time.Instant.now()));
         mvc.perform(post("/admin/api/tenants")
                 .with(csrf())

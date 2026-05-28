@@ -157,7 +157,8 @@ class AaguidPolicyCeremonyIT {
                 "policy-it", "Policy IT Tenant", "localhost", "Policy IT",
                 List.of("http://localhost:9090"),
                 Set.of("none"),
-                true, false);
+                true, false,
+                "NONE", 60000);
         TenantAdminDto.TenantView tenant = tenantAdminService.create(createReq, ACTOR_ID, ACTOR_EMAIL);
         UUID tenantId = tenant.id();
 

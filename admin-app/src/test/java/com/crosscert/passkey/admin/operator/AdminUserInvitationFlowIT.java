@@ -165,7 +165,8 @@ class AdminUserInvitationFlowIT {
                 "invite-it", "Invite IT Tenant", "localhost", "Invite IT RP",
                 List.of("http://localhost:9090"),
                 Set.of("none"),
-                true, false);
+                true, false,
+                "NONE", 60000);
         TenantAdminDto.TenantView tenant = tenantAdminService.create(createReq, ALICE_ID, ALICE_EMAIL);
         UUID tenantId = tenant.id();
 

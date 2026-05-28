@@ -370,7 +370,9 @@ class AdminFlowIT {
                  "allowedOrigins":["http://localhost"],
                  "acceptedFormats":["none","packed"],
                  "requireUserVerification":true,
-                 "mdsRequired":false}
+                 "mdsRequired":false,
+                 "attestationConveyance":"NONE",
+                 "webauthnTimeoutMs":60000}
                 """;
         ResponseEntity<JsonNode> createT = rest.exchange(
                 url("/admin/api/tenants"), HttpMethod.POST,
@@ -463,7 +465,9 @@ class AdminFlowIT {
                  "allowedOrigins":["http://localhost"],
                  "acceptedFormats":["none","packed"],
                  "requireUserVerification":true,
-                 "mdsRequired":false}
+                 "mdsRequired":false,
+                 "attestationConveyance":"NONE",
+                 "webauthnTimeoutMs":60000}
                 """;
         ResponseEntity<String> bobCreate = rest.exchange(
                 url("/admin/api/tenants"), HttpMethod.POST,

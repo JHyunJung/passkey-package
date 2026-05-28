@@ -34,6 +34,9 @@ class TenantAdminServiceTest {
     private TenantBoundary boundary;
     private TenantAaguidPolicyRepository aaguidPolicyRepo;
     private TenantWebauthnSnapshotRepository snapshotRepo;
+    private com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
+    private com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
+    private com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
     private TenantAdminService service;
 
     @BeforeEach
@@ -44,8 +47,13 @@ class TenantAdminServiceTest {
         boundary = mock(TenantBoundary.class);
         aaguidPolicyRepo = mock(TenantAaguidPolicyRepository.class);
         snapshotRepo = mock(TenantWebauthnSnapshotRepository.class);
+        credentialRepository = mock(com.crosscert.passkey.core.repository.CredentialRepository.class);
+        apiKeyRepository = mock(com.crosscert.passkey.core.repository.ApiKeyRepository.class);
+        auditLogRepository = mock(com.crosscert.passkey.core.repository.AuditLogRepository.class);
         service = new TenantAdminService(repo, audit, em, boundary,
-                aaguidPolicyRepo, snapshotRepo, new ObjectMapper());
+                aaguidPolicyRepo, snapshotRepo,
+                credentialRepository, apiKeyRepository, auditLogRepository,
+                new ObjectMapper());
     }
 
     @Test
@@ -56,7 +64,8 @@ class TenantAdminServiceTest {
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 List.of("http://localhost"),
                 Set.of("none", "packed"),
-                true, false);
+                true, false,
+                "NONE", 60000);
 
         TenantAdminDto.TenantView view = service.create(req, UUID.randomUUID(), "alice@example.com");
 
@@ -84,7 +93,8 @@ class TenantAdminServiceTest {
                 "T_A", "Tenant A", "localhost", "Tenant A",
                 List.of("http://localhost"),
                 Set.of("none"),
-                true, false);
+                true, false,
+                "NONE", 60000);
         assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())

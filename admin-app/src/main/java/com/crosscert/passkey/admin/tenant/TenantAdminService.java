@@ -5,9 +5,13 @@ import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
+import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
 import com.crosscert.passkey.core.entity.TenantWebauthnSnapshot;
+import com.crosscert.passkey.core.repository.ApiKeyRepository;
+import com.crosscert.passkey.core.repository.AuditLogRepository;
+import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
@@ -18,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -37,6 +42,9 @@ public class TenantAdminService {
     private final TenantBoundary tenantBoundary;
     private final TenantAaguidPolicyRepository aaguidPolicyRepo;
     private final TenantWebauthnSnapshotRepository snapshotRepo;
+    private final CredentialRepository credentialRepository;
+    private final ApiKeyRepository apiKeyRepository;
+    private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
 
     public TenantAdminService(TenantRepository tenants,
@@ -45,6 +53,9 @@ public class TenantAdminService {
                               TenantBoundary tenantBoundary,
                               TenantAaguidPolicyRepository aaguidPolicyRepo,
                               TenantWebauthnSnapshotRepository snapshotRepo,
+                              CredentialRepository credentialRepository,
+                              ApiKeyRepository apiKeyRepository,
+                              AuditLogRepository auditLogRepository,
                               ObjectMapper objectMapper) {
         this.tenants = tenants;
         this.audit = audit;
@@ -52,6 +63,9 @@ public class TenantAdminService {
         this.tenantBoundary = tenantBoundary;
         this.aaguidPolicyRepo = aaguidPolicyRepo;
         this.snapshotRepo = snapshotRepo;
+        this.credentialRepository = credentialRepository;
+        this.apiKeyRepository = apiKeyRepository;
+        this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -59,11 +73,11 @@ public class TenantAdminService {
     public List<TenantAdminDto.TenantView> list() {
         return tenantBoundary.currentTenantScope()
                 .map(tid -> tenants.findById(tid)
-                        .map(TenantAdminDto.TenantView::from)
+                        .map(this::toView)
                         .map(java.util.List::of)
                         .orElseGet(java.util.List::of))
                 .orElseGet(() -> tenants.findAll().stream()
-                        .map(TenantAdminDto.TenantView::from)
+                        .map(this::toView)
                         .toList());
     }
 
@@ -71,7 +85,26 @@ public class TenantAdminService {
     public TenantAdminDto.TenantView get(String idOrSlug) {
         Tenant t = lookup(idOrSlug);
         tenantBoundary.assertCanAccessTenant(t.getId());
-        return TenantAdminDto.TenantView.from(t);
+        return toView(t);
+    }
+
+    /**
+     * Phase F2 — TenantView 변환을 한 곳에서 처리. KPI 3종 (credentials/apiKeys/
+     * lastEventAt) 을 per-tenant 로 집계한다.
+     *
+     * <p>NOTE: list() 호출 시 N+1 — tenant 수만큼 3개의 추가 쿼리가 나간다. 현재
+     * 시드된 tenant 수는 ≤4 (demo-rp + IT seeds) 이므로 허용 가능. 향후 cross-tenant
+     * 환경에서 tenant 수가 늘면 단일 GROUP BY 쿼리로 묶거나 별도 dashboard 캐싱이
+     * 필요하다 — 후속 Task 에서 처리.
+     */
+    private TenantAdminDto.TenantView toView(Tenant t) {
+        long credentials = credentialRepository.countByTenantId(t.getId());
+        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), Instant.now());
+        Instant lastEventAt = auditLogRepository
+                .findFirstByTenantIdOrderByCreatedAtDesc(t.getId())
+                .map(AuditLog::getCreatedAt)
+                .orElse(null);
+        return TenantAdminDto.TenantView.from(t, credentials, apiKeys, lastEventAt);
     }
 
     @Transactional
@@ -84,6 +117,8 @@ public class TenantAdminService {
         Tenant t = new Tenant(req.slug(), req.displayName(), req.rpId(), req.rpName());
         t.setRequireUserVerification(req.requireUserVerification());
         t.setMdsRequired(req.mdsRequired());
+        t.setAttestationConveyance(req.attestationConveyance());
+        t.setWebauthnTimeoutMs(req.webauthnTimeoutMs());
 
         int order = 0;
         for (String origin : req.allowedOrigins()) {
@@ -128,7 +163,7 @@ public class TenantAdminService {
                 t.getId(),
                 payload));
 
-        return TenantAdminDto.TenantView.from(t);
+        return toView(t);
     }
 
     @Transactional
@@ -166,6 +201,8 @@ public class TenantAdminService {
         replaceAcceptedFormats(t, req.acceptedFormats());
         t.setRequireUserVerification(req.requireUserVerification());
         t.setMdsRequired(req.mdsRequired());
+        t.setAttestationConveyance(req.attestationConveyance());
+        t.setWebauthnTimeoutMs(req.webauthnTimeoutMs());
 
         tenants.saveAndFlush(t);
 
@@ -189,7 +226,7 @@ public class TenantAdminService {
                     t.getId(), t.getSlug(), actorEmail);
         }
 
-        return TenantAdminDto.TenantView.from(t);
+        return toView(t);
     }
 
     private void replaceAllowedOrigins(Tenant t, List<String> origins) {

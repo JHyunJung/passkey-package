@@ -258,7 +258,9 @@ class TenantAdminControllerUpdateIT {
                  "allowedOrigins":["http://localhost:9090"],
                  "acceptedFormats":["none","packed"],
                  "requireUserVerification":true,
-                 "mdsRequired":false}
+                 "mdsRequired":false,
+                 "attestationConveyance":"NONE",
+                 "webauthnTimeoutMs":60000}
                 """;
         ResponseEntity<JsonNode> createRes = rest.exchange(
                 url("/admin/api/tenants"),
@@ -276,7 +278,9 @@ class TenantAdminControllerUpdateIT {
                  "allowedOrigins":["http://localhost:9090","http://localhost:9091"],
                  "acceptedFormats":["none","packed"],
                  "requireUserVerification":true,
-                 "mdsRequired":false}
+                 "mdsRequired":false,
+                 "attestationConveyance":"NONE",
+                 "webauthnTimeoutMs":60000}
                 """;
         ResponseEntity<JsonNode> putRes = rest.exchange(
                 url("/admin/api/tenants/" + tenantId),

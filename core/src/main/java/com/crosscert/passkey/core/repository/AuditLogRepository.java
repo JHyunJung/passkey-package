@@ -77,6 +77,14 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     @Query("select distinct a.tenantId from AuditLog a")
     List<UUID> findDistinctTenantIds();
 
+    /**
+     * Phase F2 — TenantAdminService.toView() 의 lastEventAt 집계용.
+     * tenant 별 가장 최근 audit log 1건 (createdAt DESC). Spring Data derived
+     * query 가 select ... where tenant_id = :tenantId order by created_at desc fetch first 1 row only
+     * 로 자동 변환된다.
+     */
+    Optional<AuditLog> findFirstByTenantIdOrderByCreatedAtDesc(UUID tenantId);
+
     /** Read API for the audit-log page. Filters are all optional. */
     @Query("select a from AuditLog a " +
            "where (:action is null or a.action = :action) " +

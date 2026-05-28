@@ -238,7 +238,9 @@ class PlatformOperatorUnrestrictedIT {
                 "allowedOrigins", List.of("http://localhost:9090"),
                 "acceptedFormats", List.of("none", "packed"),
                 "requireUserVerification", true,
-                "mdsRequired", false);
+                "mdsRequired", false,
+                "attestationConveyance", "NONE",
+                "webauthnTimeoutMs", 60000);
         ResponseEntity<JsonNode> res = rest.exchange(
                 url("/admin/api/tenants"),
                 HttpMethod.POST,
@@ -286,7 +288,9 @@ class PlatformOperatorUnrestrictedIT {
                 "allowedOrigins", List.of("http://localhost:9090"),
                 "acceptedFormats", List.of("none", "packed"),
                 "requireUserVerification", true,
-                "mdsRequired", false);
+                "mdsRequired", false,
+                "attestationConveyance", "NONE",
+                "webauthnTimeoutMs", 60000);
         ResponseEntity<JsonNode> putA = http.exchange(
                 url("/admin/api/tenants/" + tenantAId), HttpMethod.PUT,
                 new HttpEntity<>(om.writeValueAsString(updateA), auth),
@@ -306,7 +310,9 @@ class PlatformOperatorUnrestrictedIT {
                 "allowedOrigins", List.of("http://localhost:9090"),
                 "acceptedFormats", List.of("none", "packed"),
                 "requireUserVerification", true,
-                "mdsRequired", false);
+                "mdsRequired", false,
+                "attestationConveyance", "NONE",
+                "webauthnTimeoutMs", 60000);
         ResponseEntity<JsonNode> putDemo = http.exchange(
                 url("/admin/api/tenants/" + demoRpId), HttpMethod.PUT,
                 new HttpEntity<>(om.writeValueAsString(updateDemo), auth),
