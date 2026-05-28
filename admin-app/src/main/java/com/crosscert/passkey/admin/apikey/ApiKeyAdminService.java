@@ -7,6 +7,8 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.ApiKey;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,8 @@ import java.util.UUID;
 
 @Service
 public class ApiKeyAdminService {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiKeyAdminService.class);
 
     private static final String PREFIX_HEADER = "pk_";
     private static final int PREFIX_RANDOM_BYTES = 6;   // 6 bytes → 8 b64url chars → 11-char prefix
@@ -87,6 +91,9 @@ public class ApiKeyAdminService {
                 req.tenantId(),
                 payload));
 
+        log.info("api-key issued: prefix={} name={} tenantId={} scopes={}",
+                prefix, req.name(), req.tenantId(), req.scopes());
+
         return new ApiKeyAdminDto.ApiKeyCreateResponse(
                 saved.getId(), prefix + secret, prefix, req.scopes());
     }
@@ -107,6 +114,9 @@ public class ApiKeyAdminService {
                 "API_KEY", id.toString(),
                 k.getTenantId(),
                 payload));
+
+        log.warn("api-key revoked: prefix={} reason=admin tenantId={}",
+                k.getKeyPrefix(), k.getTenantId());
     }
 
     private String generateUniquePrefix() {

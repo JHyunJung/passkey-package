@@ -3,6 +3,8 @@ package com.crosscert.passkey.admin.operator;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import java.util.UUID;
 
 @Service
 public class AdminUserService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminUserService.class);
 
     private final AdminUserRepository userRepo;
     private final AdminUserInvitationRepository invitationRepo;
@@ -58,6 +62,8 @@ public class AdminUserService {
         AdminUser saved = userRepo.save(user);
 
         var inv = invitationService.createInvitation(saved.getId(), invitedBy, req.email());
+        log.info("admin invite issued: emailMasked={} role={} tenantId={}",
+                mask(req.email()), req.role(), req.tenantId());
         return new AdminUserDto.InviteResponse(toView(saved), inv);
     }
 
@@ -68,6 +74,7 @@ public class AdminUserService {
         user.setStatus("SUSPENDED");
         user.setSuspendedAt(clock.instant());
         user.setSuspendedBy(byUser);
+        log.info("admin suspended: emailMasked={}", mask(user.getEmail()));
     }
 
     @Transactional
@@ -76,6 +83,7 @@ public class AdminUserService {
         user.setStatus("ACTIVE");
         user.setSuspendedAt(null);
         user.setSuspendedBy(null);
+        log.info("admin activated: emailMasked={}", mask(user.getEmail()));
     }
 
     @Transactional
@@ -104,6 +112,14 @@ public class AdminUserService {
                 throw new IllegalStateException("Cannot " + action + " the last active PLATFORM_OPERATOR");
             }
         }
+    }
+
+    /** Masks an email to "a***@example.com" — never the full local part. */
+    private static String mask(String email) {
+        if (email == null) return "null";
+        int at = email.indexOf('@');
+        if (at <= 1) return "***";
+        return email.charAt(0) + "***" + email.substring(at);
     }
 
     static AdminUserDto.View toView(AdminUser u) {

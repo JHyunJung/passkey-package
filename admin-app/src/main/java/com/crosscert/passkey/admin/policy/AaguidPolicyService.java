@@ -3,6 +3,8 @@ package com.crosscert.passkey.admin.policy;
 import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import java.util.UUID;
 
 @Service
 public class AaguidPolicyService {
+
+    private static final Logger log = LoggerFactory.getLogger(AaguidPolicyService.class);
 
     private final TenantAaguidPolicyRepository repo;
     private final MdsAaguidCache mdsCache;
@@ -61,6 +65,11 @@ public class AaguidPolicyService {
         p.setUpdatedAt(Instant.now());
         p.setUpdatedBy(updatedBy);
         repo.save(p);
+
+        int entryCount = req.entries() == null ? 0 : req.entries().size();
+        log.info("aaguid policy updated: tenantId={} mode={} mdsStrict={} entries={}",
+                tenantId, req.mode(), req.mdsStrict(), entryCount);
+
         return get(tenantId);
     }
 }

@@ -163,6 +163,9 @@ public class TenantAdminService {
                 t.getId(),
                 payload));
 
+        log.info("tenant created: slug={} id={} rpId={}",
+                req.slug(), t.getId(), req.rpId());
+
         return toView(t);
     }
 
