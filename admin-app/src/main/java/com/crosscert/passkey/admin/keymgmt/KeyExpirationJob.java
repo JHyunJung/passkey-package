@@ -62,8 +62,11 @@ public class KeyExpirationJob {
         }
         Instant cutoff = clock.instant().minus(grace);
         List<SigningKey> expired = repo.findAllByStatusAndRotatedAtBefore("ROTATED", cutoff);
+        log.info("key expiration tick: candidates={}", expired.size());
+        Instant now = clock.instant();
         for (SigningKey k : expired) {
-            k.revoke(clock.instant());
+            long ageMs = Duration.between(k.getRotatedAt(), now).toMillis();
+            k.revoke(now);
             repo.save(k);
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("kid", k.getKid());
@@ -73,7 +76,9 @@ public class KeyExpirationJob {
                     "SIGNING_KEY", String.valueOf(k.getId()),
                     null,
                     payload));
-            log.info("Revoked signing key kid={} after grace period", k.getKid());
+            // SigningKey is global (no tenant column) — emit tenantId=global
+            // to keep field shape consistent with spec's tenantId-keyed pattern.
+            log.warn("key expired: tenantId=global kid={} ageMs={}", k.getKid(), ageMs);
         }
     }
 }
