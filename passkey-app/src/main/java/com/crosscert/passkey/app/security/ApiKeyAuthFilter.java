@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -48,6 +49,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String HEADER = "X-API-Key";
     private static final String KEY_PREFIX = "pk_";
     private static final int PREFIX_LEN = 11; // "pk_" + 8 base64url chars
+
+    private static final String MDC_API_KEY_PREFIX = "apiKeyPrefix";
+    private static final String MDC_TENANT_ID = "tenantId";
 
     /**
      * A fixed BCrypt hash of an unused secret. Used for timing
@@ -115,6 +119,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
 
         TenantContextHolder.set(row.tenantId());
+        MDC.put(MDC_API_KEY_PREFIX, prefix);
+        MDC.put(MDC_TENANT_ID, row.tenantId().toString());
         try {
             // touchLastUsed runs WITH tenant context active so the
             // V8 package's WHERE tenant_id = SYS_CONTEXT predicate
@@ -122,6 +128,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             lookup.touchLastUsed(row.id(), now);
             chain.doFilter(req, res);
         } finally {
+            MDC.remove(MDC_API_KEY_PREFIX);
+            MDC.remove(MDC_TENANT_ID);
             TenantContextHolder.clear();
         }
     }
