@@ -170,6 +170,7 @@ export class ApiError extends Error {
 
 export interface TenantUpdateRequest {
   displayName: string;
+  rpId: string;
   rpName: string;
   allowedOrigins: string[];
   acceptedFormats: string[];
