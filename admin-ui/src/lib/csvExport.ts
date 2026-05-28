@@ -1,10 +1,16 @@
 // Minimal client-side CSV export — no dependencies.
 // RFC 4180 lite: quote fields containing comma/quote/newline, escape quotes by doubling.
+// Excel formula-injection: prefix fields starting with =/+/-/@/tab/CR with a leading
+// single-quote so Excel treats them as literal text. See OWASP CSV-Injection.
 
 export function downloadCsv(filename: string, header: string[], rows: (string | number | null | undefined)[][]): void {
   const escape = (v: string | number | null | undefined): string => {
     if (v == null) return '';
-    const s = String(v);
+    let s = String(v);
+    // Neutralize Excel formula prefixes — applies to strings only (numbers stringify to safe forms).
+    if (/^[=+\-@\t\r]/.test(s)) {
+      s = "'" + s;
+    }
     if (/[",\r\n]/.test(s)) {
       return `"${s.replace(/"/g, '""')}"`;
     }

@@ -165,6 +165,7 @@ export default function ActivityPage() {
 
   const [filter, setFilter] = useState<'all' | 'mutations' | 'failures'>('all');
   const [categoryFilter, setCategoryFilter] = useState<ActivityCategory>('all');
+  const [visibleCount, setVisibleCount] = useState(24);
 
   // 5-second polling
   const cancelledRef = useRef(false);
@@ -198,6 +199,10 @@ export default function ActivityPage() {
         // If we already had server data, keep it (transient network blip)
       }
     }
+
+    // Reset visible window when the query (category/tenant) changes so the
+    // user sees fresh first-page data, not a stale large slice.
+    setVisibleCount(24);
 
     void fetchOnce();
     const id = setInterval(() => void fetchOnce(), 5000);
@@ -358,7 +363,7 @@ export default function ActivityPage() {
             </div>
           </div>
           <div>
-            {filtered.slice(0, 24).map((e, i) => (
+            {filtered.slice(0, visibleCount).map((e, i) => (
               <div
                 key={e.id}
                 style={{
@@ -366,7 +371,7 @@ export default function ActivityPage() {
                   gap: 12,
                   padding: '10px 20px',
                   borderBottom:
-                    i === Math.min(filtered.length, 24) - 1
+                    i === Math.min(filtered.length, visibleCount) - 1
                       ? 0
                       : '1px solid var(--border)',
                   alignItems: 'center',
@@ -418,6 +423,8 @@ export default function ActivityPage() {
                 );
                 const adapted = adaptServerView(more);
                 setEvents([...events, ...adapted.events]);
+                // Expand the visible window so newly-loaded rows actually appear in the feed
+                setVisibleCount((n) => n + Math.max(adapted.events.length, 24));
               } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : String(err);
                 toast({ kind: 'err', title: '추가 로드 실패', message: msg });
