@@ -116,4 +116,14 @@ public class AdminUserInvitation {
         this.resentCount++;
         this.resentAt = now;
     }
+
+    /**
+     * Invalidate this invitation by forcing {@code expiresAt} into the past.
+     * Used when an admin resends an invitation — the previously-issued token
+     * must not remain usable in parallel with the new one (security: stop
+     * accepting tokens that the inviter intended to replace).
+     */
+    public void markRevoked(Instant now) {
+        this.expiresAt = now.minusSeconds(1);
+    }
 }

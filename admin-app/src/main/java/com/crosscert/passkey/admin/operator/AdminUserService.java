@@ -81,9 +81,11 @@ public class AdminUserService {
     @Transactional
     public AdminUserDto.InvitationInfo resendInvitation(UUID userId, String byUser, String email) {
         Instant now = clock.instant();
+        // Resend revokes any prior pending invitations — the new token replaces them.
         var existing = invitationRepo.findByAdminUserIdAndAcceptedAtIsNull(userId);
         for (var inv : existing) {
             inv.recordResend(now);
+            inv.markRevoked(now);
         }
         return invitationService.createInvitation(userId, byUser, email);
     }
