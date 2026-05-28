@@ -53,7 +53,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me }: Tenant
         {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} />}
         {currentTab === 'credentials' && <CredentialsTab tenant={tenant} />}
         {currentTab === 'audit' && <AuditTab tenant={tenant} isPlatformOperator={me.role === 'PLATFORM_OPERATOR'} />}
-        {currentTab === 'funnel' && <FunnelTab />}
+        {currentTab === 'funnel' && <FunnelTab tenant={tenant} />}
       </div>
     </div>
   );
