@@ -21,6 +21,9 @@ dependencies {
 
 springBoot {
     mainClass.set("com.crosscert.passkey.admin.AdminApplication")
+    // Generates META-INF/build-info.properties so BuildProperties bean
+    // is available at runtime (consumed by SystemInfoService).
+    buildInfo()
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
