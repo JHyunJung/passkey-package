@@ -64,14 +64,16 @@ public class MdsSchedulerService {
     }
 
     public SyncResult runOnce() {
+        Instant scheduledAt = Instant.now();
+        log.info("mds sync started: scheduledAt={}", scheduledAt);
         if (!leases.tryAcquire(LEASE_NAME, holder, Duration.ofMinutes(5))) {
-            log.info("MDS sync skipped — another instance holds the lease");
+            log.info("mds sync skipped: reason=lease-held");
             // SKIPPED: peer instance owns the lease and will record its own
             // history row. Recording here would double-count cycles.
             return SyncResult.skipped();
         }
         // Capture start BEFORE any work so duration covers fetch + persist + cache.
-        Instant started = Instant.now();
+        Instant started = scheduledAt;
         SyncResult result;
         try {
             MetadataBLOB blob = client.fetch();
@@ -122,10 +124,11 @@ public class MdsSchedulerService {
                     null,
                     payload));
 
-            log.info("MDS sync complete — version={}", version);
+            long durMs = Duration.between(started, Instant.now()).toMillis();
+            log.info("mds sync ok: version={} durMs={}", version, durMs);
             result = SyncResult.synced(version);
         } catch (RuntimeException e) {
-            log.warn("MDS sync failed: {}", e.toString());
+            log.error("mds sync failed: cause={}", e.toString(), e);
             result = SyncResult.failed(e.getMessage());
         }
         // Best-effort history append; never disrupts the sync result.

@@ -214,12 +214,33 @@ public class AuthenticationFinishService {
         cred.recordAuthentication(newCounter, cred.getCredentialRecordBytes(), clock.instant());
         credentials.saveAndFlush(cred);
 
+        String credentialIdB64 = b64url(credentialId);
+        log.info("authentication/finish ok: credentialIdTail={} counter={}",
+                idTail(credentialIdB64), newCounter);
+
         String jwt = idTokens.issue(
                 ch.tenantId(),
                 cred.getUserHandle(),
                 cred.getId(),
                 cred.getAaguid());
+        // id-token claims meta only — never the JWT body itself
+        String subTail = idTail(b64url(cred.getUserHandle()));
+        log.info("id-token issued: subTail={} aud={} ttlSec={}",
+                subTail, ch.tenantId(), 900);
+
         return new AuthenticationFinishResponse(jwt, "Bearer", 900);
+    }
+
+    private static String b64url(byte[] b) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
+    }
+
+    /** Last 12 chars of a base64url id for correlation — never the full id.
+     *  Short ids (≤12 chars) are masked to "***" so the full value is never logged. */
+    private static String idTail(String id) {
+        if (id == null) return "null";
+        if (id.length() <= 12) return "***";
+        return "..." + id.substring(id.length() - 12);
     }
 
     private CredentialRecord deserializeCredentialRecordEnvelope(byte[] envelopeBytes) throws Exception {

@@ -12,6 +12,8 @@ import com.crosscert.passkey.core.repository.SigningKeyRepository;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -52,6 +54,8 @@ import java.util.UUID;
  */
 @Service
 public class KeyRotationService {
+
+    private static final Logger log = LoggerFactory.getLogger(KeyRotationService.class);
 
     private static final String LEASE_NAME = "key-rotation";
     private static final Duration LEASE_TTL = Duration.ofSeconds(30);
@@ -115,6 +119,8 @@ public class KeyRotationService {
         // invoked — the in-memory cache keeps pointing at the old ACTIVE,
         // matching the rolled-back DB state.
         scheduleProviderReloadAfterCommit();
+
+        log.info("key rotation: oldKid={} newKid={}", old.getKid(), fresh.getKid());
 
         return new RotateResult(old.getKid(), fresh.getKid());
     }

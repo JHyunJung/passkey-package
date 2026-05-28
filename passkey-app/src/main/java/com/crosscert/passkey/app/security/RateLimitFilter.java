@@ -3,6 +3,8 @@ package com.crosscert.passkey.app.security;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,6 +51,8 @@ import java.util.Map;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RateLimitFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
+
     /** {@code "pk_"} + 8 base64url chars — matches {@link ApiKeyAuthFilter}. */
     private static final int PREFIX_LEN = 11;
     private static final String KEY_PREFIX = "pk_";
@@ -84,6 +88,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req,
                                     HttpServletResponse res,
                                     FilterChain chain) throws ServletException, IOException {
+        long startNs = System.nanoTime();
         String uri = req.getServletPath();
         BucketConfiguration config = LIMITS.get(uri);
 
@@ -92,6 +97,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String ipBucketKey = "ratelimit:" + uri + ":ip:" + req.getRemoteAddr();
         var ipBucket = proxy.builder().build(ipBucketKey, () -> config);
         if (!ipBucket.tryConsume(1L)) {
+            log.warn("rate limit exceeded: scope=ip path={} remoteAddr={} durMs={}",
+                    uri, req.getRemoteAddr(),
+                    (System.nanoTime() - startNs) / 1_000_000);
             tooManyRequests(res);
             return;
         }
@@ -113,6 +121,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (keyBucket.tryConsume(1L)) {
             chain.doFilter(req, res);
         } else {
+            log.warn("rate limit exceeded: scope=key path={} prefix={} durMs={}",
+                    uri, keyPart,
+                    (System.nanoTime() - startNs) / 1_000_000);
             tooManyRequests(res);
         }
     }

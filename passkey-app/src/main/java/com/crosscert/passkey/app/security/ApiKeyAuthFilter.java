@@ -5,6 +5,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -45,6 +47,8 @@ import java.util.Optional;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 5)
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiKeyAuthFilter.class);
 
     private static final String HEADER = "X-API-Key";
     private static final String KEY_PREFIX = "pk_";
@@ -101,6 +105,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             // Run BCrypt anyway so the timing of unknown-prefix matches
             // the timing of known-prefix-wrong-secret.
             encoder.matches(secret, DUMMY_HASH);
+            log.warn("api-key auth failed: reason=unknown-prefix prefix={}", prefix);
             unauthorized(res);
             return;
         }
@@ -110,10 +115,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         if (!row.isActive(now)) {
             // Same timing equalization for revoked/expired keys.
             encoder.matches(secret, DUMMY_HASH);
+            String reason = row.revokedAt() != null ? "revoked" : "expired";
+            log.warn("api-key auth failed: reason={} prefix={}", reason, prefix);
             unauthorized(res);
             return;
         }
         if (!encoder.matches(secret, row.keyHash())) {
+            log.warn("api-key auth failed: reason=bad-secret prefix={}", prefix);
             unauthorized(res);
             return;
         }
@@ -126,6 +134,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             // V8 package's WHERE tenant_id = SYS_CONTEXT predicate
             // matches the calling tenant exactly.
             lookup.touchLastUsed(row.id(), now);
+            if (log.isDebugEnabled()) {
+                log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());
+            }
             chain.doFilter(req, res);
         } finally {
             MDC.remove(MDC_API_KEY_PREFIX);

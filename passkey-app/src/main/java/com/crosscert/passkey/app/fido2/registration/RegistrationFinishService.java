@@ -197,11 +197,23 @@ public class RegistrationFinishService {
                 aaguid);
         credentials.saveAndFlush(cred);
 
+        String credentialIdB64 = b64url(credentialId);
+        log.info("registration/finish ok: credentialIdTail={} aaguid={} format={}",
+                idTail(credentialIdB64), aaguidUuid, fmt);
+
         return new RegistrationFinishResponse(
-                b64url(credentialId),
+                credentialIdB64,
                 aaguid == null ? null : HexFormat.of().formatHex(aaguid),
                 fmt,
                 clock.instant());
+    }
+
+    /** Last 12 chars of a base64url id for correlation — never the full credential id.
+     *  Short ids (≤12 chars) are masked to "***" so the full value is never logged. */
+    private static String idTail(String id) {
+        if (id == null) return "null";
+        if (id.length() <= 12) return "***";
+        return "..." + id.substring(id.length() - 12);
     }
 
     private byte[] serializeCredentialRecordEnvelope(RegistrationData data) {

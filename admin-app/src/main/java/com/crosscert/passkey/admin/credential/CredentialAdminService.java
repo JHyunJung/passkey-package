@@ -82,8 +82,8 @@ public class CredentialAdminService {
 
         // VPD 가 admin-app 에서 비활성 — tenantId 일치 검사가 cross-tenant 누출 방어의 단일 layer
         if (!c.getTenantId().equals(tenantId)) {
-            log.warn("cross-tenant revoke attempt: pathTenant={} actualTenant={} credentialId={} actor={}",
-                    tenantId, c.getTenantId(), credentialIdB64, actorEmail);
+            log.warn("cross-tenant revoke attempt: pathTenant={} actualTenant={} credentialId={}",
+                    tenantId, c.getTenantId(), idTail(credentialIdB64));
             throw new BusinessException(ErrorCode.ACCESS_DENIED,
                     "tenant boundary 위반");
         }
@@ -104,8 +104,15 @@ public class CredentialAdminService {
                 tenantId,
                 payload));
 
-        log.info("credential revoked tenant={} credentialId={} actor={}",
-                tenantId, credentialIdB64, actorEmail);
+        log.warn("credential revoked: id={} reason=admin tenantId={}",
+                idTail(credentialIdB64), tenantId);
+    }
+
+    /** Last 12 chars of a base64url id — never the full id. Short ids masked. */
+    private static String idTail(String id) {
+        if (id == null) return "null";
+        if (id.length() <= 12) return "***";
+        return "..." + id.substring(id.length() - 12);
     }
 
     private CredentialView toView(Credential c) {

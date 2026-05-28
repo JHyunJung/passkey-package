@@ -5,6 +5,8 @@ import com.crosscert.passkey.core.repository.SecurityPolicyRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import java.util.List;
 
 @Service
 public class SecurityPolicyService {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityPolicyService.class);
 
     private static final Long SINGLETON_ID = 1L;
 
@@ -42,6 +46,14 @@ public class SecurityPolicyService {
         p.setUpdatedAt(Instant.now());
         p.setUpdatedBy(updatedBy);
         repo.save(p);
+
+        int allowlistSize = req.corsAllowlist() == null ? 0 : req.corsAllowlist().size();
+        log.info("security policy updated: sessionIdle={} pwMin={} mfa={} corsAllowlistSize={}",
+                req.sessionIdleTimeoutMinutes(),
+                req.passwordMinLength(),
+                Boolean.TRUE.equals(req.mfaRequired()),
+                allowlistSize);
+
         return toView(p);
     }
 
