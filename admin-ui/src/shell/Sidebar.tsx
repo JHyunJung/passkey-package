@@ -1,75 +1,131 @@
-import { Link, NavLink } from 'react-router-dom';
-import {
-  Building2,
-  Activity as ActivityIcon,
-  ShieldCheck,
-  KeyRound,
-  Link2,
-  Settings as SettingsIcon,
-} from 'lucide-react';
-import { useMe } from '@/me/MeContext';
-import { useTweaks } from '@/app/providers/TweaksProvider';
-import { cn } from '@/lib/utils';
+import React from 'react';
+import { Icons } from '@/icons/Icons';
 
-type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }> };
-
-const PLATFORM_NAV: NavItem[] = [
-  { to: '/tenants',     label: 'Tenants',      icon: Building2 },
-  { to: '/activity',    label: 'Activity',     icon: ActivityIcon },
-  { to: '/audit',       label: 'Audit Log',    icon: ShieldCheck },
-  { to: '/audit-chain', label: 'Chain',        icon: Link2 },
-  { to: '/keys',        label: 'Signing Keys', icon: KeyRound },
-  { to: '/settings',    label: 'Settings',     icon: SettingsIcon },
+// ===== Nav items =====
+const NAV_PLATFORM = [
+  { id: 'tenants', label: 'Tenants', icon: 'Building' },
+  { id: 'activity', label: 'Activity', icon: 'Activity' },
+  { id: 'audit-chain', label: 'Audit Chain', icon: 'Hash' },
+  { id: 'settings', label: '설정', icon: 'Cog' },
 ];
 
-const RP_NAV = (tenantId: string): NavItem[] => [
-  { to: `/tenants/${tenantId}`, label: 'My Tenant', icon: Building2 },
+const NAV_RP = [
+  { id: 'overview', label: '개요', icon: 'Activity' },
+  { id: 'webauthn', label: 'WebAuthn', icon: 'Globe' },
+  { id: 'aaguid', label: 'AAGUID 정책', icon: 'Shield' },
+  { id: 'apikeys', label: 'API Keys', icon: 'Key' },
+  { id: 'credentials', label: 'Credentials', icon: 'Fingerprint' },
+  { id: 'audit', label: 'Audit Logs', icon: 'Receipt' },
+  { id: 'funnel', label: 'Funnel', icon: 'Activity' },
 ];
 
-export function Sidebar() {
-  const { me, loading } = useMe();
-  const { tweaks } = useTweaks();
-  const iconOnly = tweaks.sidebar === 'icons';
+// ===== NavBtn (private helper) =====
+type NavBtnProps = {
+  item: { id: string; label: string; icon: string };
+  active: boolean;
+  onClick: () => void;
+  mode: 'labels' | 'icons' | 'collapsed';
+};
 
-  const items =
-    loading || !me
-      ? []
-      : me.role === 'RP_ADMIN' && me.tenantId
-        ? RP_NAV(me.tenantId)
-        : PLATFORM_NAV;
-
+function NavBtn({ item, active, onClick, mode }: NavBtnProps) {
+  const IconC = (Icons as Record<string, React.ComponentType<{ size?: number }>>)[item.icon] || Icons.Cog;
   return (
-    <aside className="border-r border-border-subtle bg-surface-2 flex flex-col sticky top-0 h-screen overflow-hidden">
-      <Link
-        to="/"
-        className="px-4 py-4 border-b border-border-subtle flex items-center gap-2 text-sm font-semibold tracking-[-0.011em] text-text no-underline"
-      >
-        <ShieldCheck className="h-4 w-4 text-accent shrink-0" />
-        {!iconOnly && <span>Passkey Admin</span>}
-      </Link>
-      <nav aria-label="Main navigation" className="flex-1 p-2 flex flex-col gap-0.5">
-        {items.map((it) => (
-          <NavLink
-            key={it.to}
-            to={it.to}
-            end={it.to === '/tenants'}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 px-2.5 py-1.5 rounded text-[13px] text-text-soft transition-colors no-underline',
-                'hover:bg-surface-3 hover:text-text',
-                isActive && 'bg-accent-soft text-accent font-medium',
-              )
-            }
-          >
-            <it.icon className="h-4 w-4 shrink-0" />
-            {!iconOnly && <span>{it.label}</span>}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="p-3 border-t border-border-subtle text-[11px] text-text-faint">
-        {/* Audit Chain indicator placeholder — Phase B 에서 채움 */}
-        <span className="opacity-50">chain status · pending</span>
+    <button
+      onClick={onClick}
+      title={mode === 'icons' ? item.label : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        width: '100%', padding: mode === 'icons' ? '9px 0' : '8px 10px',
+        justifyContent: mode === 'icons' ? 'center' : 'flex-start',
+        background: active ? 'var(--accent-soft)' : 'transparent',
+        color: active ? 'var(--accent)' : 'var(--text-soft)',
+        border: '0', borderRadius: 7,
+        fontSize: 13, fontWeight: active ? 600 : 500, cursor: 'pointer',
+        textAlign: 'left', marginBottom: 1,
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--surface-3)'; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+    >
+      <IconC size={16} />
+      {mode === 'labels' && <span>{item.label}</span>}
+    </button>
+  );
+}
+
+// ===== Sidebar =====
+type SidebarProps = {
+  me: { role: string; tenantId?: string | null; email: string; displayName?: string };
+  currentRoute: { name: string; tenantId?: string; tab?: string };
+  onNavigate: (route: { name: string; tenantId?: string; tab?: string }) => void;
+  tenant?: { id: string; name: string; slug: string } | null;
+  sidebarMode?: 'labels' | 'icons' | 'collapsed';
+};
+
+export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'labels' }: SidebarProps) {
+  const isPlatform = me.role === 'PLATFORM_OPERATOR';
+  // Build a contextual nav: when inside a tenant, show tenant-tab nav under the tenant name.
+  return (
+    <aside style={{
+      gridArea: 'sidebar',
+      background: 'var(--surface)',
+      borderRight: '1px solid var(--border)',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'sticky',
+      top: 0,
+      height: '100vh',
+      overflow: 'hidden',
+    }}>
+      <div style={{ padding: sidebarMode === 'icons' ? '16px 8px' : '16px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Icons.BrandMark size={26} />
+        {sidebarMode === 'labels' && (
+          <div className="stack-1" style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.2, letterSpacing: '-0.01em' }}>Passkey Admin</div>
+            <div style={{ fontSize: 11, color: 'var(--text-mute)', lineHeight: 1.2 }}>Crosscert · prod</div>
+          </div>
+        )}
       </div>
+
+      {/* Tenant context block */}
+      {tenant && sidebarMode === 'labels' && (
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+          {isPlatform && (
+            <button className="btn btn--ghost btn--xs" onClick={() => onNavigate({ name: 'tenants' })} style={{ marginBottom: 6, padding: '2px 4px', color: 'var(--text-mute)' }}>
+              <Icons.ChevronLeft size={12} /> Tenants
+            </button>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 11 }}>
+              {tenant.name.slice(0, 1)}
+            </div>
+            <div className="stack-1" style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, letterSpacing: '-0.01em', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tenant.name}</div>
+              <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)', lineHeight: 1.1 }}>{tenant.slug}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav style={{ padding: '10px 8px', flex: 1, overflow: 'auto' }}>
+        {tenant ? (
+          NAV_RP.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.tab === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: 'tenant', tenantId: tenant.id, tab: item.id })} />)
+        ) : (
+          NAV_PLATFORM.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.name === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: item.id })} />)
+        )}
+      </nav>
+
+      {/* Footer: audit chain status (v1.1 sneak peek) */}
+      {sidebarMode === 'labels' && (
+        <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}>
+          <div className="stack-1" style={{ padding: '8px 10px', background: 'var(--success-soft)', borderRadius: 8, border: '1px solid color-mix(in oklab, var(--success) 20%, transparent)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', boxShadow: '0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent)' }}></span>
+              AUDIT CHAIN OK
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>마지막 검증 · 2분 전 · 1,284,920 행</div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
