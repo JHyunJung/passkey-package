@@ -1,20 +1,21 @@
 import { api } from './client';
 import type { TenantView, TenantCreateRequest } from './types';
 import type { Tenant } from './designTypes';
-import { getTenantKpi } from '@/fixtures/tenantKpi';
 
 function adaptTenant(s: TenantView): Tenant {
-  const kpi = getTenantKpi(s.id);
   return {
     id: s.id,
     name: s.displayName,
     slug: s.slug,
     rpId: s.rpId,
     status: s.status?.toUpperCase() === 'ACTIVE' || s.status === 'active' ? 'ACTIVE' : 'SUSPENDED',
-    credentials: kpi.credentials,
-    apiKeys: kpi.apiKeys,
-    lastEventAt: kpi.lastEventAt,
+    credentials: s.credentials,
+    apiKeys: s.apiKeys,
+    lastEventAt: s.lastEventAt,
     createdAt: s.createdAt,
+    userVerification: s.requireUserVerification ? 'REQUIRED' : 'PREFERRED',
+    attestationConveyance: s.attestationConveyance,
+    webauthnTimeoutMs: s.webauthnTimeoutMs,
   };
 }
 
@@ -37,6 +38,8 @@ export const tenantsApi = {
       acceptedFormats: ['none', 'packed'],
       requireUserVerification: true,
       mdsRequired: false,
+      attestationConveyance: 'NONE',
+      webauthnTimeoutMs: 60000,
     };
     const server = await api.post<TenantView>('/admin/api/tenants', body);
     return adaptTenant(server);
