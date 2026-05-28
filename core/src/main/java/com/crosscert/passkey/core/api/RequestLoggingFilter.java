@@ -9,8 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -24,14 +22,20 @@ import java.util.Set;
  * <p>Order is just after {@link TraceIdFilter} so {@code traceId} MDC is
  * already populated by the time this filter runs and emits its log line.
  *
- * <p>{@code actorEmail} MDC is populated in the finally block (after
- * Spring Security's filter chain has placed the {@code Authentication} in
- * the {@link SecurityContextHolder}) and removed immediately after the
- * log statement. This keeps the MDC visible to the request log line
- * itself but prevents leaking authenticated context into unrelated work
- * later on the same thread. {@link SecurityContextHolder} is on the core
- * classpath (spring-security-core); apps without form login (passkey-app)
- * simply observe {@code auth == null} and skip the MDC put.
+ * <p>{@code actorEmail} MDC is populated in the finally block from the
+ * request attribute {@link #ACTOR_EMAIL_ATTR} (set by an in-Spring-Security
+ * filter — see {@code AdminMdcFilter} in admin-app), not directly from
+ * {@link SecurityContextHolder}. By the time this filter's finally block
+ * runs, Spring Security's outermost filter has already cleared the
+ * {@link SecurityContextHolder}, so reading it here would always see
+ * {@code null}. Request attributes survive into the finally because they
+ * are attached to {@code HttpServletRequest}, not a thread-local.
+ *
+ * <p>This indirection keeps core decoupled from {@code spring-security-config}
+ * (which would be required to register a filter inside the security chain)
+ * while still letting the log pattern include {@code actorEmail}. Apps
+ * without authenticated sessions (passkey-app, sample-rp's public pages)
+ * simply do not set the attribute, and the MDC slot stays empty.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10) // after TraceIdFilter (HIGHEST_PRECEDENCE)
@@ -40,6 +44,13 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
     private static final String MDC_ACTOR_EMAIL = "actorEmail";
+
+    /**
+     * Request attribute carrying the authenticated principal's name (set
+     * by an in-security-chain filter in each app). Public so app-side
+     * filters can use the same key without copy-paste of the constant.
+     */
+    public static final String ACTOR_EMAIL_ATTR = "com.crosscert.passkey.actorEmail";
 
     private static final Set<String> EXCLUDED_PATHS = Set.of(
             "/actuator/health",
@@ -61,7 +72,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             long durMs = (System.nanoTime() - startNs) / 1_000_000L;
             String method = req.getMethod();
             int status = res.getStatus();
-            boolean actorPut = populateActorEmailMdc();
+            boolean actorPut = populateActorEmailMdc(req);
             try {
                 String msg = String.format("request: method=%s path=%s status=%d durMs=%d",
                         method, path, status, durMs);
@@ -81,28 +92,26 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Read the current authenticated principal from Spring Security and
-     * push its name onto MDC under {@code actorEmail}. Returns {@code true}
-     * when MDC was modified so the caller can remove it on the same path.
+     * Pull the actorEmail from the request attribute (set by an
+     * in-security-chain filter) and push it onto MDC for the duration of
+     * the request log statement. Returns true if MDC was modified.
      *
-     * <p>Defensive: any failure (no Spring Security on classpath in a future
-     * downstream module, ClassCastException on a strange principal, etc.)
-     * is swallowed — request logging must never throw.
+     * <p>Defensive: any failure is swallowed — request logging must never
+     * throw because of an unexpected attribute type.
      */
-    private boolean populateActorEmailMdc() {
+    private boolean populateActorEmailMdc(HttpServletRequest req) {
         try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated()) {
+            Object v = req.getAttribute(ACTOR_EMAIL_ATTR);
+            if (v == null) {
                 return false;
             }
-            String name = auth.getName();
-            if (name == null || name.isBlank() || "anonymousUser".equals(name)) {
+            String name = v.toString();
+            if (name.isBlank()) {
                 return false;
             }
             MDC.put(MDC_ACTOR_EMAIL, name);
             return true;
         } catch (Throwable t) {
-            // Spring Security absent or principal unreadable — ignore.
             return false;
         }
     }

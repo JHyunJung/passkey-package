@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -92,7 +93,15 @@ public class AdminSecurityConfig {
             // form login). The SPA checks /api/me on startup and expects
             // a 401 to know it must navigate to the login page.
             .exceptionHandling(ex -> ex
-                .authenticationEntryPoint(spaEntryPoint()));
+                .authenticationEntryPoint(spaEntryPoint()))
+            // Stash the authenticated principal name onto a request
+            // attribute inside the Spring Security chain. The outermost
+            // RequestLoggingFilter (in core) reads that attribute in its
+            // finally block — by then SecurityContextHolder is already
+            // cleared, but the request attribute survives. addFilterAfter
+            // (AuthorizationFilter) runs once the security chain has
+            // fully populated SecurityContextHolder.
+            .addFilterAfter(new AdminMdcFilter(), AuthorizationFilter.class);
         return http.build();
     }
 

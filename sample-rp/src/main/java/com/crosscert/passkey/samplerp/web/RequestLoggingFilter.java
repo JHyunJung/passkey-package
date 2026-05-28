@@ -9,8 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -21,7 +19,7 @@ import java.util.Set;
  * sample-rp local twin of core's {@code RequestLoggingFilter}. sample-rp
  * does not depend on core (separate webapp), so the logic is duplicated.
  *
- * <p>Drift check: keep status-mapping + format + actorEmail MDC handling
+ * <p>Drift check: keep status-mapping + format + actorEmail handling
  * identical to core. Intentional diffs only in excluded-paths set
  * (sample-rp does not expose {@code /.well-known/jwks.json}).
  *
@@ -30,6 +28,10 @@ import java.util.Set;
  * before this filter logs. When sample-rp calls passkey-app via the SDK,
  * {@code TraceIdPropagationInterceptor} carries the same {@code X-Trace-Id}
  * forward so the two servers' logs share one trace.
+ *
+ * <p>actorEmail is read from a request attribute set by an in-security-chain
+ * filter (sample-rp does not yet have one — all routes are permitAll —
+ * so this slot stays empty, matching the demo's no-auth posture).
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
@@ -38,6 +40,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
     private static final String MDC_ACTOR_EMAIL = "actorEmail";
+
+    /** Mirror of core's RequestLoggingFilter.ACTOR_EMAIL_ATTR. */
+    public static final String ACTOR_EMAIL_ATTR = "com.crosscert.passkey.actorEmail";
 
     private static final Set<String> EXCLUDED_PATHS = Set.of("/actuator/health");
 
@@ -55,7 +60,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         } finally {
             long durMs = (System.nanoTime() - startNs) / 1_000_000L;
             int status = res.getStatus();
-            boolean actorPut = populateActorEmailMdc();
+            boolean actorPut = populateActorEmailMdc(req);
             try {
                 String msg = String.format("request: method=%s path=%s status=%d durMs=%d",
                         req.getMethod(), path, status, durMs);
@@ -74,14 +79,14 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    private boolean populateActorEmailMdc() {
+    private boolean populateActorEmailMdc(HttpServletRequest req) {
         try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated()) {
+            Object v = req.getAttribute(ACTOR_EMAIL_ATTR);
+            if (v == null) {
                 return false;
             }
-            String name = auth.getName();
-            if (name == null || name.isBlank() || "anonymousUser".equals(name)) {
+            String name = v.toString();
+            if (name.isBlank()) {
                 return false;
             }
             MDC.put(MDC_ACTOR_EMAIL, name);
