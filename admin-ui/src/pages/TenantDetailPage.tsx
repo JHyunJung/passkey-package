@@ -12,6 +12,7 @@ import AaguidPolicyTab from '@/pages/tenant/AaguidPolicyTab';
 import ApiKeysTab from '@/pages/tenant/ApiKeysTab';
 import CredentialsTab from '@/pages/tenant/CredentialsTab';
 import AuditTab from '@/pages/tenant/AuditTab';
+import FunnelTab from '@/pages/tenant/FunnelTab';
 
 // ── Local util (mirrors design pages-2.jsx global fmtDateTime) ───────────────
 
@@ -52,7 +53,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me }: Tenant
         {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} />}
         {currentTab === 'credentials' && <CredentialsTab tenant={tenant} />}
         {currentTab === 'audit' && <AuditTab tenant={tenant} isPlatformOperator={me.role === 'PLATFORM_OPERATOR'} />}
-        {currentTab === 'funnel' && <div className="card"><div className="card__body">Funnel — Task 10</div></div>}
+        {currentTab === 'funnel' && <FunnelTab />}
       </div>
     </div>
   );
