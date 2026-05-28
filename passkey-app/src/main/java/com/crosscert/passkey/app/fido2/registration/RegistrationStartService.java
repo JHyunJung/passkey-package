@@ -20,6 +20,9 @@ import java.util.UUID;
 @Service
 public class RegistrationStartService {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(RegistrationStartService.class);
+
     private final TenantRepository tenants;
     private final ChallengeIssuer challenges;
     private final ChallengeStore store;
@@ -39,6 +42,9 @@ public class RegistrationStartService {
     }
 
     public RegistrationStartResponse start(RegistrationStartRequest req) {
+        log.info("event=registration/start phase=entry usernamePresent={} displayNameLen={}",
+                req.username() != null,
+                req.displayName() == null ? 0 : req.displayName().length());
         UUID tenantUuid = TenantContextHolder.get();
         if (tenantUuid == null) {
             throw new IllegalStateException(
@@ -76,7 +82,17 @@ public class RegistrationStartService {
         sel.put("userVerification", "required");
         sel.put("residentKey", "preferred");
 
+        log.info("event=registration/start phase=issued tokenTail={} timeoutMs={}",
+                tokenTail(token), 60000);
         return new RegistrationStartResponse(token, options);
+    }
+
+    /** Returns the last 8 chars of the token for correlation only — never the full secret. */
+    private static String tokenTail(String token) {
+        if (token == null || token.length() <= 8) {
+            return "***";
+        }
+        return token.substring(token.length() - 8);
     }
 
     private static String b64url(byte[] b) {

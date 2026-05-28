@@ -35,6 +35,9 @@ import java.util.UUID;
 @Service
 public class AuthenticationStartService {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(AuthenticationStartService.class);
+
     private final TenantRepository tenants;
     private final CredentialRepository credentials;
     private final ChallengeIssuer challenges;
@@ -58,6 +61,8 @@ public class AuthenticationStartService {
 
     @Transactional(readOnly = true)
     public AuthenticationStartResponse start(AuthenticationStartRequest req) {
+        log.info("event=authentication/start phase=entry userHandlePresent={}",
+                req.userHandle() != null);
         UUID tenantUuid = TenantContextHolder.get();
         if (tenantUuid == null) {
             throw new IllegalStateException(
@@ -102,10 +107,20 @@ public class AuthenticationStartService {
             entry.put("type", "public-key");
             entry.put("id", b64url(c.getCredentialId()));
         }
+        log.info("event=authentication/start phase=issued tokenTail={} allowCount={} timeoutMs={}",
+                tokenTail(token), userCreds.size(), 60000);
         return new AuthenticationStartResponse(token, options);
     }
 
     private static String b64url(byte[] b) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
+    }
+
+    /** Returns the last 8 chars of the token for correlation only — never the full secret. */
+    private static String tokenTail(String token) {
+        if (token == null || token.length() <= 8) {
+            return "***";
+        }
+        return token.substring(token.length() - 8);
     }
 }
