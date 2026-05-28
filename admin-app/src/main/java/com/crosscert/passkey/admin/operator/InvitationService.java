@@ -4,6 +4,8 @@ import com.crosscert.passkey.core.entity.AdminUserInvitation;
 import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,9 +22,19 @@ import java.util.UUID;
 @Service
 public class InvitationService {
 
+    private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
+
     private static final Duration TOKEN_TTL = Duration.ofDays(7);
     private static final SecureRandom RNG = new SecureRandom();
     private static final String URL_PREFIX = "/accept-invite?token=";
+
+    /** Mask email — first letter + *** + domain. Mirrors AdminSecurityConfig.maskEmail. */
+    private static String maskEmail(String email) {
+        if (email == null || email.isBlank()) return "(unknown)";
+        int at = email.indexOf('@');
+        if (at <= 0) return "***";
+        return email.charAt(0) + "***" + email.substring(at);
+    }
 
     private final AdminUserInvitationRepository invitationRepo;
     private final AdminUserRepository userRepo;
@@ -84,14 +96,30 @@ public class InvitationService {
         user.setBcryptHash(passwordEncoder.encode(password));
         user.setStatus("ACTIVE");
         inv.accept();
+        log.info("invitation accepted: email={} tokenPrefix={}",
+                maskEmail(user.getEmail()), inv.getTokenPrefix());
     }
 
     private AdminUserInvitation lookupValid(String plaintext) {
         String hash = sha256Hex(plaintext);
         var inv = invitationRepo.findByTokenHash(hash)
-                .orElseThrow(() -> new IllegalStateException("Invalid token"));
-        if (inv.isExpired()) throw new IllegalStateException("Token expired");
-        if (inv.isAccepted()) throw new IllegalStateException("Token already used");
+                .orElseThrow(() -> {
+                    // tokenPrefix is the first 8 chars of plaintext (matches
+                    // the persisted prefix shape); never logs the full token.
+                    String tp = plaintext == null || plaintext.length() < 8
+                            ? "(short)"
+                            : plaintext.substring(0, 8);
+                    log.warn("invitation lookup failed: tokenPrefix={} reason=not-found", tp);
+                    return new IllegalStateException("Invalid token");
+                });
+        if (inv.isExpired()) {
+            log.warn("invitation expired: tokenPrefix={}", inv.getTokenPrefix());
+            throw new IllegalStateException("Token expired");
+        }
+        if (inv.isAccepted()) {
+            log.warn("invitation used: tokenPrefix={}", inv.getTokenPrefix());
+            throw new IllegalStateException("Token already used");
+        }
         return inv;
     }
 

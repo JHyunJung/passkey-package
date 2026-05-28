@@ -13,14 +13,19 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.Instant;
 
 public final class PasskeyClient {
+    private static final Logger log = LoggerFactory.getLogger(PasskeyClient.class);
+
     private final RestClient http;
     private final IdTokenVerifier idTokenVerifier;
     private final ObjectMapper objectMapper;
@@ -86,22 +91,44 @@ public final class PasskeyClient {
     }
 
     private <T> T post(String path, Object body, TypeReference<ApiResponseEnvelope<T>> typeRef) {
-        byte[] bytes = http.post()
-                .uri(path)
-                .body(body)
-                .retrieve()
-                .body(byte[].class);
+        Instant started = Instant.now();
+        byte[] bytes;
+        try {
+            bytes = http.post()
+                    .uri(path)
+                    .body(body)
+                    .retrieve()
+                    .body(byte[].class);
+        } catch (PasskeyApiException e) {
+            // PasskeyResponseErrorHandler converts 4xx/5xx → PasskeyApiException
+            // with the server's envelope code. Logged here so SDK callers see
+            // the failure even if they swallow the exception.
+            long durMs = Duration.between(started, Instant.now()).toMillis();
+            log.warn("sdk call: POST {} status={} code={} durMs={}",
+                    path, e.getHttpStatus(), e.getCode(), durMs);
+            throw e;
+        }
         try {
             ApiResponseEnvelope<T> env = objectMapper.readValue(bytes, objectMapper.getTypeFactory()
                     .constructType(typeRef.getType()));
+            long durMs = Duration.between(started, Instant.now()).toMillis();
             if (!env.success()) {
+                // HTTP 200 with success=false (envelope-level failure).
+                log.warn("sdk call: POST {} status=200 code={} durMs={}",
+                        path, env.code(), durMs);
                 throw new PasskeyApiException(200, env.code(), env.message(), env.traceId(),
                         env.error() == null ? null : env.error().fieldErrors());
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("sdk call: POST {} status=200 durMs={}", path, durMs);
             }
             return env.data();
         } catch (PasskeyApiException e) {
             throw e;
         } catch (Exception e) {
+            long durMs = Duration.between(started, Instant.now()).toMillis();
+            log.warn("sdk call: POST {} envelope-parse-failure durMs={} cause={}",
+                    path, durMs, e.toString());
             throw new PasskeyApiException(0, "C999", "Envelope parse failure: " + e.getMessage(),
                     null, null);
         }

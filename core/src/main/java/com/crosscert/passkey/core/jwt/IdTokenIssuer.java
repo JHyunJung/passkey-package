@@ -6,6 +6,8 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +23,8 @@ import java.util.UUID;
 
 @Component
 public class IdTokenIssuer {
+
+    private static final Logger log = LoggerFactory.getLogger(IdTokenIssuer.class);
 
     private final SigningKeyProvider signingKeys;
     private final String issuerBase;
@@ -63,6 +67,13 @@ public class IdTokenIssuer {
             jwt.sign(new RSASSASigner(signingKeys.signingKey()));
         } catch (JOSEException e) {
             throw new IllegalStateException("Failed to sign ID Token", e);
+        }
+        if (log.isDebugEnabled()) {
+            // Metadata only — no JWT body, no subject, no userHandle.
+            // sub/aud are already INFO-logged at the call site
+            // (AuthenticationFinishService) per Phase G2.
+            log.debug("id-token issued: kid={} alg=RS256",
+                    signingKeys.signingKey().getKeyID());
         }
         return jwt.serialize();
     }
