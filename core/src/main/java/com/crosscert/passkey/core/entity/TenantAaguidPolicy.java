@@ -29,7 +29,7 @@ public class TenantAaguidPolicy {
     private UUID tenantId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "MODE", length = 16, nullable = false)
+    @Column(name = "POLICY_MODE", length = 16, nullable = false)
     private Mode mode = Mode.ANY;
 
     @Column(name = "MDS_STRICT", columnDefinition = "CHAR(1)", nullable = false)
