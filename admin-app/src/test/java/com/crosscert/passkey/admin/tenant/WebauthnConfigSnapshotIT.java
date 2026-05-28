@@ -145,7 +145,8 @@ class WebauthnConfigSnapshotIT {
                 "snap-it", "Snapshot IT Tenant", initialRpId, "Snapshot IT RP",
                 List.of("http://localhost:9090"),
                 Set.of("none"),
-                true, false);
+                true, false,
+                "NONE", 60000);
         TenantAdminDto.TenantView tenant = tenantAdminService.create(createReq, ACTOR_ID, ACTOR_EMAIL);
         UUID tenantId = tenant.id();
 
@@ -168,7 +169,8 @@ class WebauthnConfigSnapshotIT {
                 "Snapshot IT RP Updated",       // rpName 변경
                 List.of("http://localhost:9090"),
                 Set.of("none"),
-                true, false);
+                true, false,
+                "NONE", 60000);
         tenantAdminService.update("snap-it", updateReq, ACTOR_ID, ACTOR_EMAIL);
 
         // ── 3. snapshot 2건 검증 ──────────────────────────────────────

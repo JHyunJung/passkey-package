@@ -17,6 +17,11 @@ export interface TenantView {
   mdsRequired: boolean;             // was inside attestationPolicyJson
   createdAt: string;
   updatedAt: string;
+  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
+  webauthnTimeoutMs: number;
+  credentials: number;
+  apiKeys: number;
+  lastEventAt: string | null;
 }
 
 export interface TenantCreateRequest {
@@ -28,6 +33,8 @@ export interface TenantCreateRequest {
   acceptedFormats: string[];
   requireUserVerification: boolean;
   mdsRequired: boolean;
+  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
+  webauthnTimeoutMs: number;
 }
 
 export interface ApiKeyView {
@@ -176,6 +183,8 @@ export interface TenantUpdateRequest {
   acceptedFormats: string[];
   requireUserVerification: boolean;
   mdsRequired: boolean;
+  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
+  webauthnTimeoutMs: number;
 }
 
 export interface CredentialView {

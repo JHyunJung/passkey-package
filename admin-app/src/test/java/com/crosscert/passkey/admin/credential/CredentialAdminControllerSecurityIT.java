@@ -270,7 +270,9 @@ class CredentialAdminControllerSecurityIT {
                 "allowedOrigins", List.of("http://localhost:9090"),
                 "acceptedFormats", List.of("none", "packed"),
                 "requireUserVerification", true,
-                "mdsRequired", false);
+                "mdsRequired", false,
+                "attestationConveyance", "NONE",
+                "webauthnTimeoutMs", 60000);
         ResponseEntity<JsonNode> res = rest.exchange(
                 url("/admin/api/tenants"),
                 HttpMethod.POST,

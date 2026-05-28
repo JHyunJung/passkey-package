@@ -20,7 +20,9 @@ public final class TenantAdminDto {
             @NotEmpty List<@NotBlank @Size(max = 512) String> allowedOrigins,
             @NotEmpty Set<@NotBlank @Size(max = 32) String> acceptedFormats,
             @NotNull Boolean requireUserVerification,
-            @NotNull Boolean mdsRequired
+            @NotNull Boolean mdsRequired,
+            @NotBlank @Pattern(regexp = "^(NONE|INDIRECT|DIRECT|ENTERPRISE)$") String attestationConveyance,
+            @Min(1000) @Max(600000) int webauthnTimeoutMs
     ) {}
 
     public record TenantUpdateRequest(
@@ -30,7 +32,9 @@ public final class TenantAdminDto {
             @NotEmpty List<@NotBlank @Size(max = 512) String> allowedOrigins,
             @NotEmpty Set<@NotBlank @Size(max = 32) String> acceptedFormats,
             @NotNull Boolean requireUserVerification,
-            @NotNull Boolean mdsRequired
+            @NotNull Boolean mdsRequired,
+            @NotBlank @Pattern(regexp = "^(NONE|INDIRECT|DIRECT|ENTERPRISE)$") String attestationConveyance,
+            @Min(1000) @Max(600000) int webauthnTimeoutMs
     ) {}
 
     public record TenantView(
@@ -44,10 +48,15 @@ public final class TenantAdminDto {
             Set<String> acceptedFormats,
             boolean requireUserVerification,
             boolean mdsRequired,
+            String attestationConveyance,
+            int webauthnTimeoutMs,
+            long credentials,
+            long apiKeys,
+            Instant lastEventAt,
             Instant createdAt,
             Instant updatedAt
     ) {
-        public static TenantView from(Tenant t) {
+        public static TenantView from(Tenant t, long credentials, long apiKeys, Instant lastEventAt) {
             return new TenantView(
                     t.getId(), t.getSlug(), t.getDisplayName(), t.getStatus(),
                     t.getRpId(), t.getRpName(),
@@ -55,6 +64,9 @@ public final class TenantAdminDto {
                     t.getAcceptedFormatValues(),
                     t.isRequireUserVerification(),
                     t.isMdsRequired(),
+                    t.getAttestationConveyance(),
+                    t.getWebauthnTimeoutMs(),
+                    credentials, apiKeys, lastEventAt,
                     t.getCreatedAt(), t.getUpdatedAt());
         }
     }

@@ -18,7 +18,9 @@ public record TenantSnapshot(
         Set<String> allowedOrigins,
         Set<String> acceptedFormats,
         boolean requireUserVerification,
-        boolean mdsRequired
+        boolean mdsRequired,
+        String attestationConveyance,
+        int webauthnTimeoutMs
 ) {
 
     public static TenantSnapshot of(Tenant t) {
@@ -28,7 +30,9 @@ public record TenantSnapshot(
                 new TreeSet<>(t.getAllowedOriginValues()),
                 new TreeSet<>(t.getAcceptedFormatValues()),
                 t.isRequireUserVerification(),
-                t.isMdsRequired());
+                t.isMdsRequired(),
+                t.getAttestationConveyance(),
+                t.getWebauthnTimeoutMs());
     }
 
     /**
@@ -43,6 +47,8 @@ public record TenantSnapshot(
         if (!Objects.equals(this.acceptedFormats, other.acceptedFormats)) changed.add("acceptedFormats");
         if (this.requireUserVerification != other.requireUserVerification) changed.add("requireUserVerification");
         if (this.mdsRequired != other.mdsRequired)                         changed.add("mdsRequired");
+        if (!Objects.equals(this.attestationConveyance, other.attestationConveyance)) changed.add("attestationConveyance");
+        if (this.webauthnTimeoutMs != other.webauthnTimeoutMs)             changed.add("webauthnTimeoutMs");
         return changed;
     }
 }

@@ -11,6 +11,9 @@ export type Tenant = {
   apiKeys: number;
   lastEventAt: string | null;
   createdAt: string;
+  userVerification: 'REQUIRED' | 'PREFERRED';
+  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
+  webauthnTimeoutMs: number;
 };
 
 export type ApiKey = {
@@ -51,7 +54,7 @@ export type WebauthnConfig = {
   origins: string[];
   formats: string[];
   userVerification: 'REQUIRED' | 'PREFERRED' | 'DISCOURAGED';
-  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT';
+  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
   timeoutMs: number;
 };
 

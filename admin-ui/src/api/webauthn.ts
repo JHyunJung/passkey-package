@@ -14,8 +14,8 @@ function adaptConfig(t: TenantView): ConfigWithMds {
     origins: t.allowedOrigins,
     formats: t.acceptedFormats,
     userVerification: t.requireUserVerification ? 'REQUIRED' : 'PREFERRED',
-    attestationConveyance: 'NONE',   // 서버에 없음 — fixture default
-    timeoutMs: 60000,                 // 서버에 없음 — fixture default
+    attestationConveyance: t.attestationConveyance,
+    timeoutMs: t.webauthnTimeoutMs,
     _mdsRequired: t.mdsRequired,     // preserved, not user-editable in this tab
   };
 }
@@ -65,6 +65,8 @@ export const webauthnApi = {
       acceptedFormats: body.formats,
       requireUserVerification: body.userVerification === 'REQUIRED',
       mdsRequired,                  // preserve server value, not forced false
+      attestationConveyance: body.attestationConveyance,
+      webauthnTimeoutMs: body.timeoutMs,
     };
     const t = await api.put<TenantView>(`/admin/api/tenants/${tenantId}`, updateReq);
     return adaptConfig(t);

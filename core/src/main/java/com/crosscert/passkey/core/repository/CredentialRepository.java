@@ -15,6 +15,14 @@ import java.util.UUID;
 public interface CredentialRepository extends JpaRepository<Credential, UUID> {
 
     /**
+     * Phase F2 — TenantAdminService.toView() 의 KPI 집계용.
+     * Spring Data derived query: SELECT COUNT(*) FROM credential WHERE tenant_id = :tenantId.
+     * VPD 가 활성화된 세션에서는 자동으로 tenant 격리되지만, 명시적으로 tenantId 를
+     * 받아 PLATFORM_OPERATOR (cross-tenant listing) 케이스에도 동작하도록 한다.
+     */
+    long countByTenantId(UUID tenantId);
+
+    /**
      * Pessimistic-locked lookup used by /authentication/finish to
      * serialize the read-check-update of signCount. Without the lock,
      * two concurrent finish calls for the same credential could both

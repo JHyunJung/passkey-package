@@ -242,7 +242,9 @@ class RpAdminBoundaryIT {
                 "allowedOrigins", List.of("http://localhost:9090"),
                 "acceptedFormats", List.of("none", "packed"),
                 "requireUserVerification", true,
-                "mdsRequired", false);
+                "mdsRequired", false,
+                "attestationConveyance", "NONE",
+                "webauthnTimeoutMs", 60000);
         ResponseEntity<JsonNode> res = rest.exchange(
                 url("/admin/api/tenants"),
                 HttpMethod.POST,
@@ -326,7 +328,9 @@ class RpAdminBoundaryIT {
                 "allowedOrigins", List.of("http://localhost:9090"),
                 "acceptedFormats", List.of("none", "packed"),
                 "requireUserVerification", true,
-                "mdsRequired", false);
+                "mdsRequired", false,
+                "attestationConveyance", "NONE",
+                "webauthnTimeoutMs", 60000);
         ResponseEntity<JsonNode> putMy = http.exchange(
                 url("/admin/api/tenants/" + myTenantId), HttpMethod.PUT,
                 new HttpEntity<>(om.writeValueAsString(updateBody), bobAuth),
@@ -364,7 +368,9 @@ class RpAdminBoundaryIT {
                 "allowedOrigins", List.of("http://localhost:9090"),
                 "acceptedFormats", List.of("none"),
                 "requireUserVerification", true,
-                "mdsRequired", false);
+                "mdsRequired", false,
+                "attestationConveyance", "NONE",
+                "webauthnTimeoutMs", 60000);
         String newTenantJson = om.writeValueAsString(newTenant);
         assertForbidden(() -> http.exchange(
                 url("/admin/api/tenants"), HttpMethod.POST,

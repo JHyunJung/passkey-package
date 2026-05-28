@@ -30,6 +30,12 @@ public class Tenant extends BaseEntity {
     @Column(name = "MDS_REQUIRED", columnDefinition = "CHAR(1)", nullable = false)
     private String mdsRequiredFlag = "N";
 
+    @Column(name = "ATTESTATION_CONVEYANCE", length = 16, nullable = false)
+    private String attestationConveyance = "NONE";
+
+    @Column(name = "WEBAUTHN_TIMEOUT_MS", nullable = false)
+    private int webauthnTimeoutMs = 60000;
+
     @OneToMany(mappedBy = "tenant", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("sortOrder ASC")
     private List<TenantAllowedOrigin> allowedOrigins = new ArrayList<>();
@@ -90,4 +96,10 @@ public class Tenant extends BaseEntity {
 
     public List<TenantAllowedOrigin> getAllowedOrigins() { return allowedOrigins; }
     public Set<TenantAcceptedFormat> getAcceptedFormats() { return acceptedFormats; }
+
+    public String getAttestationConveyance() { return attestationConveyance; }
+    public void setAttestationConveyance(String v) { this.attestationConveyance = v; }
+
+    public int getWebauthnTimeoutMs() { return webauthnTimeoutMs; }
+    public void setWebauthnTimeoutMs(int v) { this.webauthnTimeoutMs = v; }
 }
