@@ -3,7 +3,6 @@ import { Icons } from '@/icons/Icons';
 import { adminUsersApi, type AdminUserView, type InvitationInfo } from '@/api/adminUsers';
 import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
-import { getMfa } from '@/fixtures/adminMfa';
 import { useToast } from '@/shell/ToastHost';
 import { StatusBadge } from '@/shell/StatusBadge';
 import { Dialog } from '@/shell/Dialog';
@@ -203,7 +202,7 @@ export default function AdminUsersTab() {
                   )}
                 </td>
                 <td>
-                  {getMfa(u.id) ? (
+                  {u.mfaEnabled ? (
                     <span className="badge badge--success" style={{ fontSize: 10 }}>
                       <Icons.Check size={10} /> ON
                     </span>
