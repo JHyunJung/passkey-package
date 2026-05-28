@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import type { Tenant } from '@/api/designTypes';
 import { auditChainApi, type TenantChainVerify } from '@/api/auditChain';
 import { funnelApi, type FunnelData } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
+import { useToast } from '@/shell/ToastHost';
 import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
 
 // ── Local utilities (mirrors design globals) ────────────────────────────────
@@ -79,7 +81,15 @@ function EventDot({ type }: { type: string }) {
 
 // ── ChainStatusCard ────────────────────────────────────────────────────────
 
-function ChainStatusCard({ state }: { state: TenantChainVerify | null }) {
+function ChainStatusCard({
+  state,
+  onManualVerify,
+  onMonthlyReport,
+}: {
+  state: TenantChainVerify | null;
+  onManualVerify: () => void;
+  onMonthlyReport: () => void;
+}) {
   if (!state) {
     return (
       <div className="card" style={{ background: "linear-gradient(135deg, var(--surface-2), transparent 60%)" }}>
@@ -113,8 +123,8 @@ function ChainStatusCard({ state }: { state: TenantChainVerify | null }) {
             </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>마지막 자동 검증 · {timeAgo(state.verifiedAt)} · 위변조 0건</div>
           </div>
-          <button className="btn btn--sm"><Icons.Hash size={12} /> 수동 검증</button>
-          <button className="btn btn--sm"><Icons.Download size={12} /> 월간 보고서</button>
+          <button className="btn btn--sm" onClick={onManualVerify}><Icons.Hash size={12} /> 수동 검증</button>
+          <button className="btn btn--sm" onClick={onMonthlyReport}><Icons.Download size={12} /> 월간 보고서</button>
         </div>
       </div>
     );
@@ -135,8 +145,8 @@ function ChainStatusCard({ state }: { state: TenantChainVerify | null }) {
             마지막 검증 · {timeAgo(state.verifiedAt)}{state.tamperedEntryId ? ` · 위변조 항목: ${tail(state.tamperedEntryId, 8)}` : ''}
           </div>
         </div>
-        <button className="btn btn--sm"><Icons.Hash size={12} /> 수동 검증</button>
-        <button className="btn btn--sm"><Icons.Download size={12} /> 월간 보고서</button>
+        <button className="btn btn--sm" onClick={onManualVerify}><Icons.Hash size={12} /> 수동 검증</button>
+        <button className="btn btn--sm" onClick={onMonthlyReport}><Icons.Download size={12} /> 월간 보고서</button>
       </div>
     </div>
   );
@@ -145,9 +155,30 @@ function ChainStatusCard({ state }: { state: TenantChainVerify | null }) {
 // ── TenantOverview ─────────────────────────────────────────────────────────
 
 export default function TenantOverview({ tenant }: { tenant: Tenant }) {
+  const navigate = useNavigate();
+  const toast = useToast();
   const [chainState, setChainState] = useState<TenantChainVerify | null>(null);
   const [funnel, setFunnel] = useState<FunnelData | null>(null);
   const [recentEvents, setRecentEvents] = useState<RecentActivityEvent[]>([]);
+
+  async function handleManualVerify() {
+    try {
+      const result = await auditChainApi.verifyTenant(tenant.id);
+      setChainState(result);
+      toast({
+        kind: result.intact ? 'ok' : 'warn',
+        title: '수동 검증 완료',
+        message: result.intact ? '체인 무결' : '위변조 감지',
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ kind: 'err', title: '수동 검증 실패', message: msg });
+    }
+  }
+
+  function handleMonthlyReport() {
+    navigate('/audit-chain');
+  }
 
   useEffect(() => {
     auditChainApi.verifyTenant(tenant.id)
@@ -197,7 +228,7 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
 
       <div className="grid-2">
         <div className="card">
-          <div className="card__head"><h3 className="card__title">WebAuthn 요약</h3><button className="btn btn--sm">편집 <Icons.ChevronRight size={12} /></button></div>
+          <div className="card__head"><h3 className="card__title">WebAuthn 요약</h3><button className="btn btn--sm" onClick={() => navigate(`/tenants/${tenant.id}?tab=webauthn`)}>편집 <Icons.ChevronRight size={12} /></button></div>
           <div className="card__body stack-3">
             <KV k="rpId" v={<span className="mono">{tenant.rpId}</span>} />
             <KV k="rpName" v={tenant.name} />
@@ -213,7 +244,7 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
         </div>
 
         <div className="card">
-          <div className="card__head"><h3 className="card__title">최근 활동</h3><button className="btn btn--sm">전체 보기 <Icons.ChevronRight size={12} /></button></div>
+          <div className="card__head"><h3 className="card__title">최근 활동</h3><button className="btn btn--sm" onClick={() => navigate(`/activity?tenantId=${tenant.id}`)}>전체 보기 <Icons.ChevronRight size={12} /></button></div>
           <div style={{ padding: "0" }}>
             {recentEvents.length === 0 ? (
               <div className="muted" style={{ padding: "20px", fontSize: 13, textAlign: "center" }}>최근 활동 없음</div>
@@ -233,7 +264,7 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
         </div>
       </div>
 
-      <ChainStatusCard state={chainState} />
+      <ChainStatusCard state={chainState} onManualVerify={handleManualVerify} onMonthlyReport={handleMonthlyReport} />
     </div>
   );
 }

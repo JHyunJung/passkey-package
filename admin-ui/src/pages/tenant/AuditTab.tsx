@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { Dialog } from '@/shell/Dialog';
 import { useToast } from '@/shell/ToastHost';
 import { auditApi } from '@/api/audit';
+import { downloadCsv } from '@/lib/csvExport';
 import type { Tenant, AuditEvent, ChainVerifyResult } from '@/api/designTypes';
 
 // ── Local utilities (mirrors design globals) ──────────────────────────────────
@@ -83,6 +85,7 @@ function ChainVerifyCard({
   onOpen: () => void;
   result: ChainVerifyResult | null;
 }) {
+  const navigate = useNavigate();
   return (
     <div className="card">
       <div className="card__body" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -127,7 +130,7 @@ function ChainVerifyCard({
           <Icons.Hash size={12} /> 검증 실행
         </button>
         {result && result.intact && (
-          <button className="btn btn--sm">
+          <button className="btn btn--sm" onClick={() => navigate('/audit-chain')}>
             <Icons.Download size={12} /> 보고서
           </button>
         )}
@@ -344,6 +347,7 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
   const [page] = useState(0);
   const [size] = useState(50);
   const [filter, setFilter] = useState<Set<string>>(new Set());
+  const [windowHours, setWindowHours] = useState<24 | 168 | 720>(24);
   const [loading, setLoading] = useState(true);
   const [verifyResult, setVerifyResult] = useState<ChainVerifyResult | null>(null);
   const [showVerify, setShowVerify] = useState(false);
@@ -373,7 +377,15 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
   }, [tenant.id, page, size]);
 
   const types = useMemo(() => Array.from(new Set(items.map((e) => e.eventType))), [items]);
-  const filtered = filter.size === 0 ? items : items.filter((e) => filter.has(e.eventType));
+  const filtered = useMemo(() => {
+    const cutoff = Date.now() - windowHours * 3600 * 1000;
+    return items.filter((e) => {
+      if (filter.size > 0 && !filter.has(e.eventType)) return false;
+      const t = e.ts ? new Date(e.ts).getTime() : NaN;
+      if (!isNaN(t) && t < cutoff) return false;
+      return true;
+    });
+  }, [items, filter, windowHours]);
 
   async function handleVerifyRun(from: string, to: string) {
     try {
@@ -422,10 +434,34 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
             )}
           </div>
           <div className="row">
-            <button className="btn btn--sm">
-              <Icons.Calendar size={12} /> 최근 24시간 ▾
+            <button
+              className="btn btn--sm"
+              onClick={() => {
+                setWindowHours((w) => (w === 24 ? 168 : w === 168 ? 720 : 24));
+              }}
+            >
+              <Icons.Calendar size={12} />{' '}
+              {windowHours === 24 ? '최근 24시간' : windowHours === 168 ? '최근 7일' : '최근 30일'} ▾
             </button>
-            <button className="btn btn--sm">
+            <button
+              className="btn btn--sm"
+              onClick={() => {
+                if (!filtered || filtered.length === 0) return;
+                downloadCsv(
+                  `audit-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+                  ['ts', 'eventType', 'actorType', 'actorId', 'subjectType', 'subjectId', 'payload'],
+                  filtered.map((e) => [
+                    e.ts,
+                    e.eventType,
+                    e.actorType,
+                    e.actorId ?? '',
+                    e.subjectType ?? '',
+                    e.subjectId ?? '',
+                    JSON.stringify(e.payload ?? {}),
+                  ]),
+                );
+              }}
+            >
               <Icons.Download size={12} /> 내보내기
             </button>
           </div>

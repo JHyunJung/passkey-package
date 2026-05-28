@@ -12,10 +12,17 @@ import { api } from './client';
 import type { ActivityView, ActivityCategory } from './types';
 
 export const activityApi = {
-  fetch: (sinceId?: string | null, category?: ActivityCategory): Promise<ActivityView> => {
+  fetch: (
+    sinceId?: string | null,
+    category?: ActivityCategory,
+    before?: string,
+    tenantId?: string,
+  ): Promise<ActivityView> => {
     const q = new URLSearchParams();
     if (sinceId) q.set('sinceId', sinceId);
     if (category && category !== 'all') q.set('category', category);
+    if (before) q.set('before', before);
+    if (tenantId) q.set('tenantId', tenantId);
     const qs = q.toString();
     return api.get<ActivityView>(`/admin/api/activity${qs ? `?${qs}` : ''}`);
   },
