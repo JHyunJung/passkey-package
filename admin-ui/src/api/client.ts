@@ -85,9 +85,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   get:     <T>(path: string)               => request<T>('GET',    path),
+  getRaw:  <T>(path: string)               => rawRequest<T>('GET',  path),
   post:    <T>(path: string, body: unknown) => request<T>('POST',   path, body),
   postRaw: <T>(path: string, body: unknown) => rawRequest<T>('POST', path, body),
   put:     <T>(path: string, body: unknown) => request<T>('PUT',    path, body),
+  putRaw:  <T>(path: string, body: unknown) => rawRequest<T>('PUT',  path, body),
   delete:  <T>(path: string)               => request<T>('DELETE', path),
   loginForm: async (email: string, password: string) => {
     const csrf = getCookie('XSRF-TOKEN');
