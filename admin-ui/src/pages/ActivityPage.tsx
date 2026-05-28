@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { activityApi } from '@/api/activity';
 import { activityFixture } from '@/fixtures/activity';
 import { useToast } from '@/shell/ToastHost';
+import { downloadCsv } from '@/lib/csvExport';
 import type { ActivityView, ActivityCategory } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 
@@ -153,6 +154,8 @@ function MetricCard({
 export default function ActivityPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
+  const tenantFilter = searchParams.get('tenantId') ?? undefined;
 
   // null = not yet loaded from server; undefined = server error (show empty state)
   const [events, setEvents] = useState<DisplayEvent[] | null>(null);
@@ -173,7 +176,7 @@ export default function ActivityPage() {
 
     async function fetchOnce() {
       try {
-        const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter);
+        const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, tenantFilter);
         if (cancelledRef.current) return;
         const adapted = adaptServerView(view);
         hasServerDataRef.current = true;
@@ -202,7 +205,7 @@ export default function ActivityPage() {
       cancelledRef.current = true;
       clearInterval(id);
     };
-  }, [categoryFilter]);
+  }, [categoryFilter, tenantFilter]);
 
   // Filtered events for the feed panel
   // Use e.category (server classification) for ops/security filter;
@@ -225,7 +228,7 @@ export default function ActivityPage() {
 
   function handleRefresh() {
     activityApi
-      .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter)
+      .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, tenantFilter)
       .then((view) => {
         if (cancelledRef.current) return;
         const adapted = adaptServerView(view);
@@ -287,7 +290,17 @@ export default function ActivityPage() {
           <button className="btn btn--sm" onClick={handleRefresh}>
             <Icons.Refresh size={12} /> 새로고침
           </button>
-          <button className="btn btn--sm">
+          <button className="btn btn--sm" onClick={() => {
+            if (!events || events.length === 0) {
+              toast({ kind: 'warn', title: '내보낼 데이터 없음' });
+              return;
+            }
+            downloadCsv(
+              `activity-${new Date().toISOString().slice(0, 10)}.csv`,
+              ['timestamp', 'tenant', 'type', 'category', 'actor', 'subject'],
+              events.map((e) => [e.ts, e.tenantSlug ?? e.tenantId ?? '', e.type, e.category, e.actorId ?? '', e.subjectId]),
+            );
+          }}>
             <Icons.Download size={12} /> 내보내기
           </button>
         </div>
@@ -378,7 +391,9 @@ export default function ActivityPage() {
                     actor {tail(e.actorId, 10)} → subject {tail(e.subjectId, 12)}
                   </div>
                 </div>
-                <button className="btn btn--ghost btn--xs">
+                <button className="btn btn--ghost btn--xs" onClick={() => {
+                  toast({ kind: 'ok', title: e.type, message: `id: ${e.id} · subject: ${e.subjectId}` });
+                }}>
                   <Icons.ChevronRight size={12} />
                 </button>
               </div>
@@ -391,7 +406,23 @@ export default function ActivityPage() {
               borderTop: '1px solid var(--border)',
             }}
           >
-            <button className="btn btn--sm">이전 24시간 더 보기</button>
+            <button className="btn btn--sm" onClick={async () => {
+              if (!events || events.length === 0) return;
+              const oldest = events[events.length - 1].ts;
+              try {
+                const more = await activityApi.fetch(
+                  null,
+                  categoryFilter === 'all' ? undefined : categoryFilter,
+                  oldest,
+                  tenantFilter,
+                );
+                const adapted = adaptServerView(more);
+                setEvents([...events, ...adapted.events]);
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                toast({ kind: 'err', title: '추가 로드 실패', message: msg });
+              }
+            }}>이전 24시간 더 보기</button>
           </div>
         </div>
 
