@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TenantsListPage from '@/pages/TenantsListPage';
+import TenantDetailRoute from '@/pages/TenantDetailPage';
 import { ToastHost } from '@/shell/ToastHost';
 import { Sidebar } from '@/shell/Sidebar';
 import { Header } from '@/shell/Header';
@@ -149,7 +150,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
         <main style={{ padding: 24 }}>
           <Routes>
             <Route path="/tenants" element={<TenantsListPage />} />
-            <Route path="/tenants/:id" element={<div style={{ padding: 24 }}>Tenant detail — Phase E2.3</div>} />
+            <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
             <Route path="/activity" element={<div style={{ padding: 24 }}>Activity — Phase E2.4</div>} />
             <Route path="/audit-chain" element={<div style={{ padding: 24 }}>Audit Chain Monitor — Phase E2.5</div>} />
             <Route path="/settings" element={<div style={{ padding: 24 }}>Settings — Phase E2.6</div>} />
