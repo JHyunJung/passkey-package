@@ -37,13 +37,17 @@ EXCEPTION
 END;
 /
 
-DECLARE
-  e_already_exists EXCEPTION;
-  PRAGMA EXCEPTION_INIT(e_already_exists, -1408);
+-- CREATE INDEX idempotency: re-run can raise either
+--   ORA-00955 (name already used by another object — same index name)  OR
+--   ORA-01408 (such column list already indexed — different name, same column set).
+-- Catch both via SQLCODE so the migration is safe to replay (matches V25 pattern).
 BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_mds_sync_history_started_at ON mds_sync_history (started_at DESC)';
 EXCEPTION
-  WHEN e_already_exists THEN NULL;
+  WHEN OTHERS THEN
+    IF SQLCODE = -955 OR SQLCODE = -1408 THEN NULL;
+    ELSE RAISE;
+    END IF;
 END;
 /
 
