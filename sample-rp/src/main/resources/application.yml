@@ -25,7 +25,8 @@ spring:
 
 logging:
   level:
-    com.crosscert.passkey.sdk: DEBUG   # 운영 환경에서는 INFO 이하 (spec § 9 logging redaction)
+    root: INFO
+    com.crosscert.passkey: INFO
+    com.crosscert.passkey.sdk: INFO
     com.crosscert.passkey.samplerp: INFO
-  pattern:
-    console: "%d{HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+    org.springframework.web: WARN

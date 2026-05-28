@@ -11,3 +11,8 @@
 spring:
   config:
     import: classpath:application-local.yml
+
+logging:
+  level:
+    com.crosscert.passkey: DEBUG
+    org.hibernate.SQL: DEBUG

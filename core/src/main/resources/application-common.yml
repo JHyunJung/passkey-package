@@ -32,3 +32,16 @@ spring:
 management:
   endpoint.health.show-details: always
   endpoints.web.exposure.include: health,info
+
+logging:
+  level:
+    root: INFO
+    com.crosscert.passkey: INFO
+    com.crosscert.passkey.sdk: INFO
+    org.springframework.web: WARN
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.connections: WARN
+    com.zaxxer.hikari: WARN
+    org.apache.tomcat: WARN
+    io.lettuce: WARN
