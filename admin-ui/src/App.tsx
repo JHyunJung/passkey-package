@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import TenantsListPage from '@/pages/TenantsListPage';
 import { ToastHost } from '@/shell/ToastHost';
 import { Sidebar } from '@/shell/Sidebar';
 import { Header } from '@/shell/Header';
@@ -146,16 +147,14 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
           onOpenPalette={() => setPaletteOpen(true)}
         />
         <main style={{ padding: 24 }}>
-          <div className="card">
-            <div className="card__body">
-              <div className="card__title">
-                현재 라우트: <code>{location.pathname}{location.search}</code>
-              </div>
-              <div className="muted" style={{ marginTop: 8 }}>
-                페이지 구현은 Phase E2 에서 진행됩니다.
-              </div>
-            </div>
-          </div>
+          <Routes>
+            <Route path="/tenants" element={<TenantsListPage />} />
+            <Route path="/tenants/:id" element={<div style={{ padding: 24 }}>Tenant detail — Phase E2.3</div>} />
+            <Route path="/activity" element={<div style={{ padding: 24 }}>Activity — Phase E2.4</div>} />
+            <Route path="/audit-chain" element={<div style={{ padding: 24 }}>Audit Chain Monitor — Phase E2.5</div>} />
+            <Route path="/settings" element={<div style={{ padding: 24 }}>Settings — Phase E2.6</div>} />
+            <Route path="*" element={<Navigate to="/tenants" replace />} />
+          </Routes>
         </main>
       </div>
 
