@@ -186,9 +186,9 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
                 <span className="chip mono">https://{tenant.rpId}</span>
               </div>
             } />
-            <KV k="userVerification" v={<span className="badge badge--accent">REQUIRED</span>} />
-            <KV k="attestation" v={<span className="badge">DIRECT</span>} />
-            <KV k="timeout" v="60s" />
+            <KV k="userVerification" v={<span className="badge badge--accent">{tenant.userVerification}</span>} />
+            <KV k="attestation" v={<span className="badge">{tenant.attestationConveyance}</span>} />
+            <KV k="timeout" v={`${tenant.webauthnTimeoutMs / 1000}s`} />
           </div>
         </div>
 
