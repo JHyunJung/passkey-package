@@ -15,3 +15,8 @@ spring:
     import: classpath:application-local.yml
   flyway:
     locations: classpath:db/migration,classpath:db/dev
+
+logging:
+  level:
+    com.crosscert.passkey: DEBUG
+    org.hibernate.SQL: DEBUG
