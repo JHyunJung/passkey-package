@@ -4,9 +4,11 @@
 
 **Goal:** Close the two Critical gaps from `docs/superpowers/specs/2026-05-28-admin-ui-feature-gap-audit-design.md` — make SecurityPolicy save actually persist to DB, and make AdminUsers' MFA column reflect real DB state. **admin-ui design must not change.**
 
-**Architecture:** New `policy/SecurityPolicy*` backend (Controller + Service + Repository + Entity + Migration V30), and column extension to `admin_user` (Migration V31) for `mfa_enabled`. Frontend swaps fixture usage for real adapter calls; no JSX/className/structural changes.
+**Architecture:** New `policy/SecurityPolicy*` backend (Controller + Service + Repository + Entity + Migration V31), and column extension to `admin_user` (Migration V32) for `mfa_enabled`. Frontend swaps fixture usage for real adapter calls; no JSX/className/structural changes.
 
-**Tech Stack:** Spring Boot (admin-app), JPA/Hibernate (Oracle), Flyway (V30/V31 migrations), React + TypeScript (admin-ui), Jackson, JUnit 5 + Testcontainers (existing IT pattern).
+**Tech Stack:** Spring Boot (admin-app), JPA/Hibernate (Oracle), Flyway (V31/V32 migrations — Flyway runs at admin-app boot, not via gradle task), React + TypeScript (admin-ui), Jackson, JUnit 5 + Testcontainers (existing IT pattern).
+
+> **NOTE (post-Task 1 correction):** V30 slot was already taken by `V30__admin_user_invitation_runtime_grants.sql` (discovered during Task 1 execution). F1's two migrations shift to V31 (security_policy) and V32 (admin_user MFA). Subsequent phases F2/F4 numbering shifts accordingly.
 
 **Spec reference:** `docs/superpowers/specs/2026-05-28-admin-ui-server-gap-fill-design.md` § Phase F1.
 
@@ -29,7 +31,7 @@
 ### Backend — F1.1 SecurityPolicy
 
 ```
-core/src/main/resources/db/migration/V30__security_policy.sql      # new — table + seed row + grants
+core/src/main/resources/db/migration/V31__security_policy.sql      # new — table + seed row + grants
 core/src/main/java/com/crosscert/passkey/core/entity/SecurityPolicy.java       # new — @Entity, single row id=1
 core/src/main/java/com/crosscert/passkey/core/repository/SecurityPolicyRepository.java  # new
 admin-app/src/main/java/com/crosscert/passkey/admin/policy/SecurityPolicyDto.java       # new — View, UpdateRequest
@@ -41,7 +43,7 @@ admin-app/src/test/java/com/crosscert/passkey/admin/policy/SecurityPolicyIT.java
 ### Backend — F1.2 AdminMFA
 
 ```
-core/src/main/resources/db/migration/V31__admin_user_mfa.sql       # new — ADD COLUMN + UPDATE seed
+core/src/main/resources/db/migration/V32__admin_user_mfa.sql       # new — ADD COLUMN + UPDATE seed
 core/src/main/java/com/crosscert/passkey/core/entity/AdminUser.java          # modify — add mfaEnabled/mfaSecret
 admin-app/src/main/java/com/crosscert/passkey/admin/operator/AdminUserDto.java  # modify — add mfaEnabled to View
 admin-app/src/main/java/com/crosscert/passkey/admin/operator/AdminUserService.java # modify — populate mfaEnabled
@@ -73,19 +75,21 @@ Tests use existing IT scaffold (Testcontainers + Oracle, profile `test`).
 
 ---
 
-## Task 1: V30 SecurityPolicy migration (table + seed + grants)
+## Task 1: V31 SecurityPolicy migration (table + seed + grants)
+
+> Slot V30 was already taken (`V30__admin_user_invitation_runtime_grants.sql`); see note in plan header.
 
 **Files:**
-- Create: `core/src/main/resources/db/migration/V30__security_policy.sql`
+- Create: `core/src/main/resources/db/migration/V31__security_policy.sql`
 
 - [ ] **Step 1: Write the migration**
 
 ```sql
 -- ============================================================
--- V30 — security_policy (platform-wide singleton row, id = 1)
+-- V31 — security_policy (platform-wide singleton row, id = 1)
 --
 -- 목적: SecurityPolicyTab 저장 영속화 (Gap #20).
--- Single row, id=1 always. Idempotent — re-running V30 must succeed.
+-- Single row, id=1 always. Idempotent — re-running V31 must succeed.
 --
 -- Patterns:
 --   - CREATE wrapped in EXCEPTION (ORA-00955 = table exists)
@@ -129,24 +133,43 @@ GRANT SELECT ON security_policy TO APP_ADMIN;
 GRANT UPDATE ON security_policy TO APP_ADMIN;
 ```
 
-- [ ] **Step 2: Run Flyway to apply migration**
+- [ ] **Step 2: Apply migration**
 
-Run: `./gradlew :core:flywayMigrate`
-Expected: `Successfully applied 1 migration to schema "APP", now at version v30`
+There is no `:core:flywayMigrate` gradle task in this project — Flyway runs automatically on admin-app boot. Two ways to apply during development:
 
-- [ ] **Step 3: Verify schema with sqlplus or DBeaver**
+**Option A (preferred): restart admin-app**
+```bash
+# kill any running admin-app on :8081 then
+./gradlew :admin-app:bootRun
+```
+Boot log should show: `Migrating schema "APP" to version "31 - security policy"`.
 
-Run (via your DB client connected as APP_ADMIN):
-```sql
+**Option B (faster, when admin-app is already running elsewhere): apply via sqlplus**
+```bash
+docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 < core/src/main/resources/db/migration/V31__security_policy.sql
+```
+Then verify Flyway records the version on next admin-app boot (idempotent guards ensure no duplicate execution error).
+
+- [ ] **Step 3: Verify schema**
+
+```bash
+docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
+SET PAGESIZE 50
+SET LINESIZE 200
 SELECT id, session_idle_timeout_minutes, password_min_length, mfa_required FROM security_policy;
+SQL
 ```
 Expected: one row — `(1, 30, 12, 'Y')`
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Per-task codex review + commit**
 
+Stage and codex-review before commit (per Execution policy §2):
 ```bash
-git add core/src/main/resources/db/migration/V30__security_policy.sql
-git commit -m "feat(core): V30 security_policy singleton table (Gap #20 prep)"
+git add core/src/main/resources/db/migration/V31__security_policy.sql
+```
+Dispatch codex review via the `codex:codex-rescue` subagent on the staged diff. If must-fix issues are raised, fix and re-stage. Then:
+```bash
+git commit -m "feat(core): V31 security_policy singleton table (Gap #20 prep)"
 ```
 
 ---
@@ -810,16 +833,16 @@ git commit -m "chore(admin-ui): delete fixtures/securityPolicy.ts (Gap #20)"
 
 ---
 
-## Task 10: V31 admin_user MFA columns + seed update
+## Task 10: V32 admin_user MFA columns + seed update
 
 **Files:**
-- Create: `core/src/main/resources/db/migration/V31__admin_user_mfa.sql`
+- Create: `core/src/main/resources/db/migration/V32__admin_user_mfa.sql`
 
 - [ ] **Step 1: Write the migration**
 
 ```sql
 -- ============================================================
--- V31 — admin_user MFA columns
+-- V32 — admin_user MFA columns
 --
 -- 목적: AdminUsersTab MFA 컬럼 실데이터화 (Gap #15).
 -- Adds mfa_enabled (CHAR Y/N, default 'N') + mfa_secret (nullable VARCHAR2(64)).
@@ -864,24 +887,24 @@ UPDATE admin_user SET mfa_enabled = 'N' WHERE email = 'bob@crosscert.com';
 COMMIT;
 ```
 
-- [ ] **Step 2: Run Flyway**
+- [ ] **Step 2: Apply migration**
 
-Run: `./gradlew :core:flywayMigrate`
-Expected: `Successfully applied 1 migration … now at version v31`
+Same two options as Task 1 Step 2 (admin-app boot or direct sqlplus). On admin-app boot, log shows `Migrating schema "APP" to version "32 - admin user mfa"`.
 
 - [ ] **Step 3: Verify**
 
-Run:
-```sql
+```bash
+docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
 SELECT email, mfa_enabled FROM admin_user ORDER BY email;
+SQL
 ```
 Expected: `alice@crosscert.com → Y`, `bob@crosscert.com → N`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add core/src/main/resources/db/migration/V31__admin_user_mfa.sql
-git commit -m "feat(core): V31 admin_user.mfa_enabled + mfa_secret columns (Gap #15)"
+git add core/src/main/resources/db/migration/V32__admin_user_mfa.sql
+git commit -m "feat(core): V32 admin_user.mfa_enabled + mfa_secret columns (Gap #15)"
 ```
 
 ---
