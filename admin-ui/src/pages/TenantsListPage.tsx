@@ -106,6 +106,7 @@ export default function TenantsListPage() {
           <h1 className="page__title">Tenants</h1>
           <div className="page__sub">RP 회사별 격리된 Passkey 환경. 모든 데이터는 tenant_id로 row-level 분리되어 있습니다.</div>
         </div>
+        {/* TODO(E-later): hide for RP_ADMIN role — POST /admin/api/tenants is PLATFORM_OPERATOR only */}
         <button className="btn btn--primary" onClick={() => setShowNew(true)}>
           <Icons.Plus size={14} /> 신규 tenant
         </button>

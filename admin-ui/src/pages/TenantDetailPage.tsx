@@ -6,6 +6,7 @@ import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import type { Me } from '@/api/types';
 import { useToast } from '@/shell/ToastHost';
+import TenantOverview from '@/pages/tenant/TenantOverview';
 
 // ── Local util (mirrors design pages-2.jsx global fmtDateTime) ───────────────
 
@@ -40,7 +41,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange }: TenantDeta
       <TenantHeader tenant={tenant} />
       <TenantTabs current={currentTab} onChange={onTabChange} />
       <div className="stack-4">
-        {currentTab === 'overview' && <div className="card"><div className="card__body">Overview — Task 4</div></div>}
+        {currentTab === 'overview' && <TenantOverview tenant={tenant} />}
         {currentTab === 'webauthn' && <div className="card"><div className="card__body">WebAuthn — Task 5</div></div>}
         {currentTab === 'aaguid' && <div className="card"><div className="card__body">AAGUID — Task 6</div></div>}
         {currentTab === 'apikeys' && <div className="card"><div className="card__body">API Keys — Task 7</div></div>}
@@ -125,6 +126,7 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
       .catch((e: unknown) => {
         const msg = e instanceof Error ? e.message : String(e);
         toast({ kind: 'err', title: 'Tenant 로드 실패', message: msg });
+        setTenant(null);
       })
       .finally(() => setLoading(false));
   }, [id]);
