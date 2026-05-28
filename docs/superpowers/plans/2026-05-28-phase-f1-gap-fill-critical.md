@@ -12,6 +12,18 @@
 
 ---
 
+## Execution policy (user-defined, applies to every task)
+
+1. **Tests are minimal — development speed first.** Per-task tests are limited to:
+   - Compile/typecheck (must pass)
+   - One smoke test only when the task introduces a new endpoint or persistence path
+   - Existing test suite must still pass at Task 17 (full regression gate)
+   - **No exhaustive unit tests, no edge-case test sweeps.** Trust the framework + manual smoke at Task 17.
+2. **Per-task codex review.** Every task ends with a `/codex:review` step on the staged diff before commit. If codex flags must-fix issues, apply the fix and re-stage. Then commit. (Memory rule `feedback_codex_review_before_commit.md`.)
+3. **Autonomous decisions during execution.** No clarifying questions during the task loop — pick the recommended option, surface non-obvious choices in the commit message, codex review is the safety net. (Memory rule `feedback_autonomous_decisions.md`.)
+
+---
+
 ## File Structure (locked-in decomposition)
 
 ### Backend — F1.1 SecurityPolicy
@@ -458,7 +470,9 @@ git commit -m "feat(admin-app): SecurityPolicyController GET/PUT + audit append 
 
 ---
 
-## Task 6: SecurityPolicy integration test
+## Task 6: SecurityPolicy smoke IT (1 happy-path test only)
+
+> Per execution policy §1, only ONE smoke test is written here — the GET-after-PUT round-trip. RBAC (403) and other branches are validated by manual smoke at Task 17 and by codex review of the controller code.
 
 **Files:**
 - Create: `admin-app/src/test/java/com/crosscert/passkey/admin/policy/SecurityPolicyIT.java`
@@ -522,59 +536,35 @@ class SecurityPolicyIT {
     }
 
     @Test
-    void getReturnsSeededDefaults() {
-        HttpHeaders auth = loginAs("alice@crosscert.com", "alice-temp-pw");
-        ResponseEntity<JsonNode> res = rest.exchange(
-                "http://localhost:" + port + "/admin/api/security-policy",
-                HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
-        assertThat(res.getStatusCode().value()).isEqualTo(200);
-        JsonNode body = res.getBody();
-        assertThat(body.get("sessionIdleTimeoutMinutes").asInt()).isEqualTo(30);
-        assertThat(body.get("passwordMinLength").asInt()).isEqualTo(12);
-        assertThat(body.get("mfaRequired").asBoolean()).isTrue();
-        assertThat(body.get("corsAllowlist")).isEmpty();
-    }
-
-    @Test
-    void putPersistsAndReadbackReflects() {
+    void getThenPutThenGetRoundtrip() {
         HttpHeaders auth = loginAs("alice@crosscert.com", "alice-temp-pw");
         auth.setContentType(MediaType.APPLICATION_JSON);
+
+        // 1. GET — seeded defaults
+        ResponseEntity<JsonNode> initial = rest.exchange(
+                "http://localhost:" + port + "/admin/api/security-policy",
+                HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
+        assertThat(initial.getStatusCode().value()).isEqualTo(200);
+        assertThat(initial.getBody().get("sessionIdleTimeoutMinutes").asInt()).isEqualTo(30);
+
+        // 2. PUT — new values
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sessionIdleTimeoutMinutes", 15);
         body.put("passwordMinLength", 16);
         body.put("mfaRequired", false);
-        body.put("corsAllowlist", List.of("https://a.example.com", "https://b.example.com"));
-
+        body.put("corsAllowlist", List.of("https://a.example.com"));
         ResponseEntity<JsonNode> putRes = rest.exchange(
                 "http://localhost:" + port + "/admin/api/security-policy",
                 HttpMethod.PUT, new HttpEntity<>(body, auth), JsonNode.class);
         assertThat(putRes.getStatusCode().value()).isEqualTo(200);
-        assertThat(putRes.getBody().get("sessionIdleTimeoutMinutes").asInt()).isEqualTo(15);
 
-        ResponseEntity<JsonNode> getRes = rest.exchange(
+        // 3. GET — values are persisted
+        ResponseEntity<JsonNode> readback = rest.exchange(
                 "http://localhost:" + port + "/admin/api/security-policy",
                 HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
-        assertThat(getRes.getBody().get("passwordMinLength").asInt()).isEqualTo(16);
-        assertThat(getRes.getBody().get("mfaRequired").asBoolean()).isFalse();
-    }
-
-    @Test
-    void putAsRpAdminReturns403() {
-        // V11 seed gives bob VIEWER role; for a true RP_ADMIN, AdminFlowIT creates one
-        // via the invitation flow. To keep this IT focused, log in as bob (VIEWER) —
-        // his role also lacks PLATFORM_OPERATOR, so @PreAuthorize must reject the PUT.
-        HttpHeaders auth = loginAs("bob@crosscert.com", "bob-temp-pw");
-        auth.setContentType(MediaType.APPLICATION_JSON);
-        Map<String, Object> body = Map.of(
-                "sessionIdleTimeoutMinutes", 1,
-                "passwordMinLength", 1,
-                "mfaRequired", false,
-                "corsAllowlist", List.of());
-
-        ResponseEntity<String> res = rest.exchange(
-                "http://localhost:" + port + "/admin/api/security-policy",
-                HttpMethod.PUT, new HttpEntity<>(body, auth), String.class);
-        assertThat(res.getStatusCode().value()).isEqualTo(403);
+        assertThat(readback.getBody().get("sessionIdleTimeoutMinutes").asInt()).isEqualTo(15);
+        assertThat(readback.getBody().get("passwordMinLength").asInt()).isEqualTo(16);
+        assertThat(readback.getBody().get("mfaRequired").asBoolean()).isFalse();
     }
 }
 ```
@@ -1185,6 +1175,8 @@ Expected: BUILD SUCCESSFUL, all tests pass.
 
 Run: `cd admin-ui && npx tsc --noEmit && npm run lint`
 Expected: no errors.
+
+> **Per-task codex review reminder (applies retroactively).** Each of Tasks 1-16 should have had a `/codex:review` step run on the staged diff before that task's commit. If any task was committed without a codex pass, run codex review now against the cumulative diff (`git diff main..HEAD`) and apply any must-fix corrections as a follow-up commit before proceeding.
 
 - [ ] **Step 3: Manual smoke verify F1 Acceptance criteria from spec**
 
