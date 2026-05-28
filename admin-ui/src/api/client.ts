@@ -16,6 +16,32 @@ function getCookie(name: string): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+// Used for endpoints that return raw JSON (no ApiResponse envelope),
+// e.g. POST /admin/api/tenants/{id}/webauthn-config/diff
+async function rawRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (method !== 'GET' && method !== 'HEAD') {
+    const csrf = getCookie('XSRF-TOKEN');
+    if (csrf) headers['X-XSRF-TOKEN'] = csrf;
+  }
+  const res = await fetch(path, {
+    method,
+    headers,
+    credentials: 'include',
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (res.status === 401) {
+    window.location.href = '/admin/login';
+    throw new ApiError(401, 'A001', 'Authentication required');
+  }
+  try {
+    return (await res.json()) as T;
+  } catch {
+    throw new ApiError(res.status, 'C999', `Non-JSON response (status ${res.status})`);
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -58,10 +84,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  get:    <T>(path: string)               => request<T>('GET',    path),
-  post:   <T>(path: string, body: unknown) => request<T>('POST',   path, body),
-  put:    <T>(path: string, body: unknown) => request<T>('PUT',    path, body),
-  delete: <T>(path: string)               => request<T>('DELETE', path),
+  get:     <T>(path: string)               => request<T>('GET',    path),
+  getRaw:  <T>(path: string)               => rawRequest<T>('GET',  path),
+  post:    <T>(path: string, body: unknown) => request<T>('POST',   path, body),
+  postRaw: <T>(path: string, body: unknown) => rawRequest<T>('POST', path, body),
+  put:     <T>(path: string, body: unknown) => request<T>('PUT',    path, body),
+  putRaw:  <T>(path: string, body: unknown) => rawRequest<T>('PUT',  path, body),
+  delete:  <T>(path: string)               => request<T>('DELETE', path),
   loginForm: async (email: string, password: string) => {
     const csrf = getCookie('XSRF-TOKEN');
     const form = new URLSearchParams();
