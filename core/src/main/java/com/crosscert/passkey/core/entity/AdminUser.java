@@ -13,7 +13,7 @@ public class AdminUser extends BaseEntity {
     @Column(name = "EMAIL", length = 255, nullable = false)
     private String email;
 
-    @Column(name = "BCRYPT_HASH", length = 72, nullable = false)
+    @Column(name = "BCRYPT_HASH", length = 72)
     private String bcryptHash;
 
     @Column(name = "ROLE", length = 16, nullable = false)
@@ -29,6 +29,18 @@ public class AdminUser extends BaseEntity {
     @Column(name = "LAST_LOGIN_AT")
     private Instant lastLoginAt;
 
+    @Column(name = "STATUS", length = 16, nullable = false)
+    private String status = "ACTIVE";
+
+    @Column(name = "CREATED_BY", length = 255)
+    private String createdBy;
+
+    @Column(name = "SUSPENDED_AT")
+    private Instant suspendedAt;
+
+    @Column(name = "SUSPENDED_BY", length = 255)
+    private String suspendedBy;
+
     protected AdminUser() {}
 
     public AdminUser(String email, String bcryptHash, String role) {
@@ -36,6 +48,7 @@ public class AdminUser extends BaseEntity {
         this.bcryptHash = bcryptHash;
         this.role = role;
         this.enabledFlag = "Y";
+        this.status = "ACTIVE";
     }
 
     public String getEmail() { return email; }
@@ -53,4 +66,16 @@ public class AdminUser extends BaseEntity {
 
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+
+    public Instant getSuspendedAt() { return suspendedAt; }
+    public void setSuspendedAt(Instant suspendedAt) { this.suspendedAt = suspendedAt; }
+
+    public String getSuspendedBy() { return suspendedBy; }
+    public void setSuspendedBy(String suspendedBy) { this.suspendedBy = suspendedBy; }
 }
