@@ -99,4 +99,43 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
                           @Param("from") Instant from,
                           @Param("to") Instant to,
                           Pageable page);
+
+    /**
+     * Phase F3 — FunnelService stage attempt/success counters.
+     * Spring Data derived query: select count(*) from audit_log
+     *   where tenant_id = ? and action = ? and created_at > ?.
+     */
+    long countByTenantIdAndActionAndCreatedAtAfter(UUID tenantId, String action, Instant since);
+
+    /**
+     * Phase F3 — FunnelService daily series.
+     * Native query: groups by TRUNC(created_at) (day bucket, UTC server tz) and action.
+     * Returns [day TIMESTAMP, action VARCHAR, count NUMBER] rows.
+     * Native because JPQL has no portable TRUNC(date) and Oracle dialect varies.
+     * Hibernate's @JdbcTypeCode(SqlTypes.UUID) on AuditLog.tenantId handles RAW(16) ↔ UUID binding.
+     */
+    @Query(value = "SELECT TRUNC(created_at), action, COUNT(*) "
+                 + "FROM {h-schema}audit_log "
+                 + "WHERE tenant_id = :tenantId AND action IN (:actions) AND created_at >= :since "
+                 + "GROUP BY TRUNC(created_at), action",
+           nativeQuery = true)
+    List<Object[]> aggregateDailyByTenantAndActions(
+            @Param("tenantId") UUID tenantId,
+            @Param("actions") List<String> actions,
+            @Param("since") Instant since);
+
+    /**
+     * Phase F3 — FunnelService by-event-type breakdown.
+     * Native query: groups by action.
+     * Returns [action VARCHAR, count NUMBER] rows.
+     */
+    @Query(value = "SELECT action, COUNT(*) "
+                 + "FROM {h-schema}audit_log "
+                 + "WHERE tenant_id = :tenantId AND action IN (:actions) AND created_at >= :since "
+                 + "GROUP BY action",
+           nativeQuery = true)
+    List<Object[]> aggregateByTenantAndActionsGrouped(
+            @Param("tenantId") UUID tenantId,
+            @Param("actions") List<String> actions,
+            @Param("since") Instant since);
 }

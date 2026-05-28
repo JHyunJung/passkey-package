@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { funnelApi } from '@/api/funnel';
-import type { FunnelData, FunnelSeries, FunnelByEventType } from '@/fixtures/funnel';
+import type { FunnelData, FunnelSeries, FunnelByEventType } from '@/api/funnel';
 import type { Tenant } from '@/api/designTypes';
 
 // ── Local util ────────────────────────────────────────────────────────────────
@@ -73,6 +73,8 @@ function Funnel({ f }: { f: FunnelData }) {
     { label: '인증 성공', value: auth.success, color: 'var(--success)', ratio: auth.ratio },
   ];
   const max = Math.max(...steps.map((s) => s.value));
+  // Guard against all-zero (empty DB / clean Testcontainers boot) — avoid 0/0 → NaN%.
+  const safeMax = max > 0 ? max : 1;
   return (
     <div className="stack-3">
       {steps.map((s) => (
@@ -86,7 +88,7 @@ function Funnel({ f }: { f: FunnelData }) {
             <div className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{fmt(s.value)}</div>
           </div>
           <div style={{ height: 8, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${(s.value / max) * 100}%`, background: s.color, borderRadius: 999, transition: 'width 600ms ease' }} />
+            <div style={{ height: '100%', width: `${(s.value / safeMax) * 100}%`, background: s.color, borderRadius: 999, transition: 'width 600ms ease' }} />
           </div>
         </div>
       ))}
@@ -98,14 +100,16 @@ function Funnel({ f }: { f: FunnelData }) {
 
 function BarChart({ data }: { data: FunnelSeries[] }) {
   const max = Math.max(...data.map((d) => d.attempts));
+  // Guard against all-zero series (empty DB) — avoid 0/0 → NaN%.
+  const safeMax = max > 0 ? max : 1;
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.length}, 1fr)`, alignItems: 'flex-end', gap: 14, height: 160, padding: '0 4px' }}>
         {data.map((d) => (
           <div key={d.day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: 32, height: 130, display: 'flex', alignItems: 'flex-end' }}>
-              <div style={{ width: '100%', height: `${(d.attempts / max) * 100}%`, background: 'var(--accent-soft-2)', borderRadius: '4px 4px 0 0', position: 'relative' }}>
-                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${(d.success / d.attempts) * 100}%`, background: 'var(--accent)', borderRadius: '4px 4px 0 0' }} />
+              <div style={{ width: '100%', height: `${(d.attempts / safeMax) * 100}%`, background: 'var(--accent-soft-2)', borderRadius: '4px 4px 0 0', position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${d.attempts > 0 ? (d.success / d.attempts) * 100 : 0}%`, background: 'var(--accent)', borderRadius: '4px 4px 0 0' }} />
               </div>
             </div>
             <div className="muted" style={{ fontSize: 11 }}>{d.day}</div>
@@ -124,12 +128,14 @@ function BarChart({ data }: { data: FunnelSeries[] }) {
 
 function EventDistribution({ data }: { data: FunnelByEventType[] }) {
   const total = data.reduce((a, b) => a + b.n, 0);
+  // Guard against empty distribution (no ceremony events yet) — avoid 0/0 → NaN%.
+  const safeTotal = total > 0 ? total : 1;
   const palette = ['var(--info)', 'var(--accent)', 'var(--violet)', 'var(--success)', 'var(--warning)', 'var(--danger)'];
   return (
     <div className="stack-3">
       <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden' }}>
         {data.map((d, i) => (
-          <div key={d.type} style={{ flexBasis: `${(d.n / total) * 100}%`, background: palette[i % palette.length] }} title={`${d.type}: ${d.n}`} />
+          <div key={d.type} style={{ flexBasis: `${(d.n / safeTotal) * 100}%`, background: palette[i % palette.length] }} title={`${d.type}: ${d.n}`} />
         ))}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>

@@ -5,6 +5,7 @@ import { activityApi } from '@/api/activity';
 import { activityFixture } from '@/fixtures/activity';
 import { useToast } from '@/shell/ToastHost';
 import type { ActivityView, ActivityCategory } from '@/api/types';
+import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,37 +34,14 @@ function fmt(n: number | null | undefined): string {
 // Server feed items use { action, actorEmail, category, createdAt, tenantSlug }
 // Design expects  { type, actorType, actorId, ts, tenantName, tenantSlug }
 
-type DisplayEvent = {
-  id: string;
-  ts: string;
-  tenantId: string | null;
-  tenantName: string;
-  tenantSlug: string | null;
-  type: string;
-  actorType: 'ADMIN' | 'RP_SERVICE' | string;
-  actorId: string | null;
-  subjectId: string;
-  category: 'ops' | 'security' | 'system';
-};
+type DisplayEvent = RecentActivityEvent;
 
 function adaptServerView(view: ActivityView): {
   events: DisplayEvent[];
   kpi: { events24h: number; ops24h: number; security24h: number; p95Ms: number | null };
   topTenants: { tenantId: string; tenantName: string; tenantSlug: string; count: number }[];
 } {
-  const events: DisplayEvent[] = view.feed.map((e) => ({
-    id: e.id,
-    ts: e.createdAt,
-    tenantId: e.tenantId,
-    // server doesn't carry displayName; fall back to slug or fixture
-    tenantName: e.tenantSlug ?? e.tenantId ?? '—',
-    tenantSlug: e.tenantSlug,
-    type: e.action,
-    actorType: e.actorEmail ? 'ADMIN' : 'RP_SERVICE',
-    actorId: e.actorEmail ?? null,
-    subjectId: e.targetId ?? '—',
-    category: e.category,
-  }));
+  const events = adaptFeedItems(view);
 
   const topTenants = view.top5.map((t) => ({
     tenantId: t.tenantId,
