@@ -62,6 +62,8 @@ class MdsAdminControllerSecurityTest {
     @Autowired MockMvc mvc;
     @MockBean JdbcTemplate jdbc;
     @MockBean MdsSchedulerService scheduler;
+    @MockBean MdsHistoryService historyService;
+    @MockBean org.springframework.data.redis.core.StringRedisTemplate redis;
     @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
