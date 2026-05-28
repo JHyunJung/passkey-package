@@ -32,7 +32,11 @@ async function rawRequest<T>(method: string, path: string, body?: unknown): Prom
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) {
-    window.location.href = '/admin/login';
+    // 401 시 redirect 는 SPA 가 이미 LoginPage 가 아닐 때만 — 그렇지 않으면 무한 reload.
+    // LoginPage 위에서는 호출자(App.tsx 의 /me catch) 가 me=null 로 처리.
+    if (typeof window !== 'undefined' && !window.location.pathname.endsWith('/admin/login')) {
+      window.location.href = '/admin/login';
+    }
     throw new ApiError(401, 'A001', 'Authentication required');
   }
   try {
@@ -56,7 +60,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) {
-    window.location.href = '/admin/login';
+    // 401 시 redirect 는 SPA 가 이미 LoginPage 가 아닐 때만 — 그렇지 않으면 무한 reload.
+    // LoginPage 위에서는 호출자(App.tsx 의 /me catch) 가 me=null 로 처리.
+    if (typeof window !== 'undefined' && !window.location.pathname.endsWith('/admin/login')) {
+      window.location.href = '/admin/login';
+    }
     throw new ApiError(401, 'A001', 'Authentication required');
   }
   // 204 historically meant "void success"; Phase 4 admin DELETE returns 200
