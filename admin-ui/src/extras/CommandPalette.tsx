@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icons } from '@/icons/Icons';
+import { searchAll, type SearchResult } from '@/lib/search';
 
 export type CommandPaletteProps = {
   open: boolean;
@@ -11,11 +12,29 @@ export type CommandPaletteProps = {
 
 export function CommandPalette({ open, onClose, me, onNavigate, onAction }: CommandPaletteProps) {
   const [q, setQ] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) { setQ(""); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQ(""); setSearchResults([]); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
+
+  // navigate adapter: path like "/tenants/:id?tab=overview" → onNavigate route object
+  function navigateFromPath(path: string) {
+    const tenantMatch = path.match(/^\/tenants\/([^?]+)/);
+    if (tenantMatch) {
+      const tabMatch = path.match(/[?&]tab=([^&]+)/);
+      onNavigate({ name: 'tenant', tenantId: tenantMatch[1], tab: tabMatch?.[1] });
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!q.trim()) { setSearchResults([]); return; }
+    searchAll(q, navigateFromPath).then((r) => { if (!cancelled) setSearchResults(r); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   const isPlatform = me?.role === "PLATFORM_OPERATOR";
   const allCommands = useMemo(() => {
@@ -36,14 +55,8 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
       items.push({ group: "이동", icon: "Cog", label: "설정", hint: "Admin · MDS · 시스템", action: () => onNavigate({ name: "settings" }) });
     }
 
-    // Tenants — only platform sees all
-    if (isPlatform) {
-      // Phase E3 에서 fixture 연결 예정
-      const tenants: any[] = [];
-      tenants.forEach((t) => {
-        items.push({ group: "Tenant", icon: "Building", label: t.name, hint: `${t.slug} · ${t.id.slice(-8)}`, action: () => onNavigate({ name: "tenant", tenantId: t.id, tab: "overview" }) });
-      });
-    } else if (me?.tenantId) {
+    // Tenants — only platform sees all (populated from searchResults below)
+    if (!isPlatform && me?.tenantId) {
       // RP_ADMIN sees only their tenant tabs
       const tabs = [
         { id: "overview", label: "개요", icon: "Activity" },
@@ -67,10 +80,29 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
   }, [isPlatform, me, onNavigate, onAction]);
 
   const filtered = useMemo(() => {
-    if (!q) return allCommands;
-    const qq = q.toLowerCase();
-    return allCommands.filter((c) => c.label.toLowerCase().includes(qq) || (c.hint || "").toLowerCase().includes(qq) || c.group.toLowerCase().includes(qq));
-  }, [q, allCommands]);
+    // Base: filter static commands
+    const baseList = (() => {
+      if (!q) return allCommands;
+      const qq = q.toLowerCase();
+      return allCommands.filter((c) => c.label.toLowerCase().includes(qq) || (c.hint || "").toLowerCase().includes(qq) || c.group.toLowerCase().includes(qq));
+    })();
+
+    // Merge platform tenant search results (only when query is active)
+    if (isPlatform && q.trim() && searchResults.length > 0) {
+      const tenantItems = searchResults
+        .filter((r) => r.type === 'tenant')
+        .map((r) => ({
+          group: "Tenant",
+          icon: "Building",
+          label: r.label,
+          hint: r.sub ? `${r.sub} · ${r.id.slice(-8)}` : r.id.slice(-8),
+          action: () => r.onSelect(),
+          disabled: false,
+        }));
+      return [...baseList, ...tenantItems];
+    }
+    return baseList;
+  }, [q, allCommands, isPlatform, searchResults]);
 
   const [selIdx, setSelIdx] = useState(0);
   useEffect(() => { setSelIdx(0); }, [q]);

@@ -1,5 +1,15 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Icons } from '@/icons/Icons';
+import { auditChainMonitorApi, type ChainOverview } from '@/api/auditChainMonitor';
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return '방금';
+  if (mins < 60) return `${mins}분 전`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}시간 전`;
+}
 
 // ===== Nav items =====
 const NAV_PLATFORM = [
@@ -63,6 +73,20 @@ type SidebarProps = {
 
 export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'labels' }: SidebarProps) {
   const isPlatform = me.role === 'PLATFORM_OPERATOR';
+  const [chain, setChain] = useState<ChainOverview | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchChain() {
+      try {
+        const o = await auditChainMonitorApi.overview(24);
+        if (!cancelled) setChain(o);
+      } catch { /* 실패 시 carousel 정적 표시 유지 */ }
+    }
+    fetchChain();
+    const id = setInterval(fetchChain, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
   // Build a contextual nav: when inside a tenant, show tenant-tab nav under the tenant name.
   return (
     <aside style={{
@@ -114,16 +138,34 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
         )}
       </nav>
 
-      {/* Footer: audit chain status (v1.1 sneak peek) */}
+      {/* Footer: audit chain status */}
       {sidebarMode === 'labels' && (
         <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}>
-          <div className="stack-1" style={{ padding: '8px 10px', background: 'var(--success-soft)', borderRadius: 8, border: '1px solid color-mix(in oklab, var(--success) 20%, transparent)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
-              <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', boxShadow: '0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent)' }}></span>
-              AUDIT CHAIN OK
+          {chain === null ? (
+            <div className="stack-1" style={{ padding: '8px 10px', background: 'var(--success-soft)', borderRadius: 8, border: '1px solid color-mix(in oklab, var(--success) 20%, transparent)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', boxShadow: '0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent)' }}></span>
+                AUDIT CHAIN
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>확인 중…</div>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>마지막 검증 · 2분 전 · 1,284,920 행</div>
-          </div>
+          ) : chain.totals.tenantsTampered > 0 ? (
+            <div className="stack-1" style={{ padding: '8px 10px', background: 'var(--danger-soft, #fff0f0)', borderRadius: 8, border: '1px solid color-mix(in oklab, var(--danger, red) 20%, transparent)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--danger, red)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--danger, red)', boxShadow: '0 0 0 3px color-mix(in oklab, var(--danger, red) 25%, transparent)' }}></span>
+                위변조 의심
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--danger, red)' }}>{chain.totals.tenantsTampered}/{chain.totals.tenantsTotal} tenant</div>
+            </div>
+          ) : (
+            <div className="stack-1" style={{ padding: '8px 10px', background: 'var(--success-soft)', borderRadius: 8, border: '1px solid color-mix(in oklab, var(--success) 20%, transparent)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', boxShadow: '0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent)' }}></span>
+                AUDIT CHAIN OK
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>마지막 검증 · {timeAgo(chain.verifiedAt)} · {chain.totals.verifiedRows.toLocaleString()} 행</div>
+            </div>
+          )}
         </div>
       )}
     </aside>
