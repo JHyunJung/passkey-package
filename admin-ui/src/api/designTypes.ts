@@ -54,7 +54,7 @@ export type WebauthnConfig = {
   origins: string[];
   formats: string[];
   userVerification: 'REQUIRED' | 'PREFERRED' | 'DISCOURAGED';
-  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT';
+  attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
   timeoutMs: number;
 };
 
