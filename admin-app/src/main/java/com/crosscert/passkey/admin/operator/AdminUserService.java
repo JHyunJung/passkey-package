@@ -112,6 +112,6 @@ public class AdminUserService {
                 u.getStatus() != null ? u.getStatus() : "ACTIVE",
                 u.getTenantId(),
                 u.getCreatedAt(), u.getLastLoginAt(),
-                u.getSuspendedAt(), u.getCreatedBy());
+                u.getSuspendedAt(), u.getCreatedBy(), u.isMfaEnabled());
     }
 }

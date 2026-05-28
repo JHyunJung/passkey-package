@@ -13,7 +13,7 @@ public final class AdminUserDto {
     public record View(
             UUID id, String email, String role, String status,
             UUID tenantId, Instant createdAt, Instant lastLoginAt,
-            Instant suspendedAt, String createdBy
+            Instant suspendedAt, String createdBy, boolean mfaEnabled
     ) {}
 
     public record InviteRequest(
