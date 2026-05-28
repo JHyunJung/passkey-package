@@ -8,19 +8,28 @@ import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
@@ -31,8 +40,25 @@ import java.util.Map;
 @EnableMethodSecurity
 public class AdminSecurityConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminSecurityConfig.class);
+
     /** Maximum email length that the ACTOR_EMAIL column (VARCHAR2 255) accepts. */
     private static final int MAX_EMAIL_LEN = 255;
+
+    /**
+     * Mask an email so logs surface enough for incident correlation
+     * (domain + first letter) without echoing the full identifier.
+     * Null/blank → "(unknown)". Inline implementation keeps this self-
+     * contained — no helper class import needed.
+     */
+    static String maskEmail(String email) {
+        if (email == null || email.isBlank()) return "(unknown)";
+        int at = email.indexOf('@');
+        if (at <= 0) return "***";
+        String local = email.substring(0, at);
+        String domain = email.substring(at);
+        return local.charAt(0) + "***" + domain;
+    }
 
     @Bean
     public DaoAuthenticationProvider adminAuthProvider(AdminUserDetailsService uds,
@@ -40,13 +66,22 @@ public class AdminSecurityConfig {
         DaoAuthenticationProvider p = new DaoAuthenticationProvider();
         p.setUserDetailsService(uds);
         p.setPasswordEncoder(encoder);
+        // Surface UsernameNotFoundException to the failure handler so we
+        // can classify unknown-user vs bad-password in audit + log. The
+        // default behavior wraps UNF in BadCredentialsException to avoid
+        // user enumeration via timing; we already perform credential-spray
+        // rate limiting upstream, and admin-app is an internal surface
+        // where operators need this distinction for incident response.
+        p.setHideUserNotFoundExceptions(false);
         return p;
     }
 
     @Bean
     public SecurityFilterChain adminFilterChain(HttpSecurity http,
                                                 AuthenticationSuccessHandler ok,
-                                                AuthenticationFailureHandler fail) throws Exception {
+                                                AuthenticationFailureHandler fail,
+                                                LogoutSuccessHandler logoutOk,
+                                                AccessDeniedHandler accessDenied) throws Exception {
         // CookieCsrfTokenRepository.withHttpOnlyFalse() lets the SPA
         // read the XSRF-TOKEN cookie via document.cookie and echo it
         // back in X-XSRF-TOKEN. Path=/admin scopes the cookie.
@@ -77,7 +112,7 @@ public class AdminSecurityConfig {
                 .failureHandler(fail))
             .logout(logout -> logout
                 .logoutUrl("/admin/logout")
-                .logoutSuccessUrl("/admin/login")
+                .logoutSuccessHandler(logoutOk)
                 .deleteCookies("SPRING_SESSION", "XSRF-TOKEN"))
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfRepo)
@@ -93,7 +128,8 @@ public class AdminSecurityConfig {
             // form login). The SPA checks /api/me on startup and expects
             // a 401 to know it must navigate to the login page.
             .exceptionHandling(ex -> ex
-                .authenticationEntryPoint(spaEntryPoint()))
+                .authenticationEntryPoint(spaEntryPoint())
+                .accessDeniedHandler(accessDenied))
             // Stash the authenticated principal name onto a request
             // attribute inside the Spring Security chain. The outermost
             // RequestLoggingFilter (in core) reads that attribute in its
@@ -133,6 +169,7 @@ public class AdminSecurityConfig {
                     null,
                     Map.of("ip", req.getRemoteAddr(),
                            "ua", req.getHeader("User-Agent") == null ? "" : req.getHeader("User-Agent"))));
+            log.info("admin login success: email={} role={}", maskEmail(email), u.getRole());
             res.setStatus(HttpServletResponse.SC_OK);
             res.setContentType("application/json");
             // Use Jackson to avoid malformed JSON if email ever contains quotes/backslashes.
@@ -148,15 +185,48 @@ public class AdminSecurityConfig {
             // when an attacker submits an oversized email in a credential spray.
             String email = raw == null ? "(unknown)"
                     : raw.length() > MAX_EMAIL_LEN ? raw.substring(0, MAX_EMAIL_LEN) : raw;
+            String reason = (ex instanceof BadCredentialsException) ? "bad-password"
+                    : (ex instanceof DisabledException) ? "user-disabled"
+                    : (ex instanceof LockedException) ? "user-locked"
+                    : (ex instanceof UsernameNotFoundException) ? "unknown-user"
+                    : "other";
             audit.append(new AuditAppendRequest(
                     null, email,
                     "ADMIN_LOGIN_FAILED", null, null,
                     null,
                     Map.of("ip", req.getRemoteAddr(),
-                           "reason", ex.getClass().getSimpleName())));
+                           "reason", reason)));
+            log.warn("admin login failed: email={} reason={}", maskEmail(email), reason);
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             res.setContentType("application/json");
             res.getWriter().write("{\"error\":\"unauthorized\"}");
+        };
+    }
+
+    @Bean
+    public LogoutSuccessHandler adminLogoutSuccessHandler() {
+        return (HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
+            // /admin/logout is permitAll, so an unauthenticated request can
+            // reach here with auth == null. Log either way so operators
+            // see logout activity (including stray probes / replay attempts).
+            String emailMasked = (auth == null) ? "anonymous" : maskEmail(auth.getName());
+            log.info("admin logout: email={}", emailMasked);
+            // Preserve prior default: redirect to /admin/login on logout success.
+            res.setStatus(HttpServletResponse.SC_OK);
+            res.sendRedirect("/admin/login");
+        };
+    }
+
+    @Bean
+    public AccessDeniedHandler adminAccessDeniedHandler() {
+        return (HttpServletRequest req, HttpServletResponse res, org.springframework.security.access.AccessDeniedException ex) -> {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String emailMasked = (auth == null) ? "anonymous" : maskEmail(auth.getName());
+            log.warn("admin access denied: email={} method={} path={} cause={}",
+                    emailMasked, req.getMethod(), req.getRequestURI(), ex.getClass().getSimpleName());
+            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            res.setContentType("application/json");
+            res.getWriter().write("{\"error\":\"forbidden\"}");
         };
     }
 }
