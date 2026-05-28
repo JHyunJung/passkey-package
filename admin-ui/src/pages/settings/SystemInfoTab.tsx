@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Icons } from '@/icons/Icons';
-import { systemInfoFixture, type ComponentInfo } from '@/fixtures/systemInfo';
+import { systemInfoApi, type SystemInfoData, type SystemInfoComponent } from '@/api/systemInfo';
 
 // ── KvLine ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ function MetricCard({ label, value, sub }: { label: string; value: React.ReactNo
 
 // ── ComponentRow ──────────────────────────────────────────────────────────────
 
-function ComponentRow({ name, version, status, instances, note }: ComponentInfo) {
+function ComponentRow({ name, version, status, instances, note }: SystemInfoComponent) {
   return (
     <div className="row" style={{ justifyContent: 'space-between' }}>
       <div>
@@ -45,13 +46,33 @@ function ComponentRow({ name, version, status, instances, note }: ComponentInfo)
 // ── SystemInfoTab ─────────────────────────────────────────────────────────────
 
 export default function SystemInfoTab() {
-  const info = systemInfoFixture;
+  const [info, setInfo] = useState<SystemInfoData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    systemInfoApi.get()
+      .then((d) => { if (!cancelled) setInfo(d); })
+      .catch(() => { if (!cancelled) setInfo(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading || !info) {
+    return (
+      <div className="page">
+        <div style={{ padding: 40, color: 'var(--text-mute)' }}>System Info 로딩 중…</div>
+      </div>
+    );
+  }
+
   return (
     <div className="stack-4">
       <div className="grid-3">
         <MetricCard label="Server 버전" value={info.serverVersion} sub={`${info.deployedAt.slice(0, 10)} 배포`} />
-        <MetricCard label="API 응답 (p95)" value={`${info.apiP95Ms}ms`} sub={`평균 ${info.apiAvgMs}ms · p99 ${info.apiP99Ms}ms`} />
-        <MetricCard label="Uptime" value={`${info.uptimePercent}%`} sub={`${info.uptimeDays}d · ${info.uptimeIncidentMinutes}분 incident`} />
+        <MetricCard label="API 응답 (p95)" value={info.apiP95Ms != null ? `${info.apiP95Ms}ms` : '—'} sub={`평균 ${info.apiAvgMs ?? '—'}${info.apiAvgMs != null ? 'ms' : ''} · p99 ${info.apiP99Ms ?? '—'}${info.apiP99Ms != null ? 'ms' : ''}`} />
+        <MetricCard label="Uptime" value={info.uptimePercent != null ? `${info.uptimePercent}%` : '—'} sub={`${info.uptimeDays}d · ${info.uptimeIncidentMinutes ?? '—'}${info.uptimeIncidentMinutes != null ? '분 incident' : ''}`} />
       </div>
 
       <div className="grid-2">

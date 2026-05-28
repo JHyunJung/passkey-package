@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.lang.management.ManagementFactory;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +37,7 @@ public class MdsSchedulerService {
     private final MdsBlobStore store;
     private final StringRedisTemplate redis;
     private final AuditLogService audit;
+    private final MdsHistoryService historyService;
     private final Clock clock;
     private final String holder;
 
@@ -44,6 +46,7 @@ public class MdsSchedulerService {
                                MdsBlobStore store,
                                StringRedisTemplate redis,
                                AuditLogService audit,
+                               MdsHistoryService historyService,
                                Clock clock,
                                @Value("${passkey.mds.lease-holder:default}")
                                String configuredHolder) {
@@ -52,6 +55,7 @@ public class MdsSchedulerService {
         this.store = store;
         this.redis = redis;
         this.audit = audit;
+        this.historyService = historyService;
         this.clock = clock;
         // Default holder = PID@host (ManagementFactory), unique per JVM.
         this.holder = "default".equals(configuredHolder)
@@ -62,8 +66,13 @@ public class MdsSchedulerService {
     public SyncResult runOnce() {
         if (!leases.tryAcquire(LEASE_NAME, holder, Duration.ofMinutes(5))) {
             log.info("MDS sync skipped — another instance holds the lease");
+            // SKIPPED: peer instance owns the lease and will record its own
+            // history row. Recording here would double-count cycles.
             return SyncResult.skipped();
         }
+        // Capture start BEFORE any work so duration covers fetch + persist + cache.
+        Instant started = Instant.now();
+        SyncResult result;
         try {
             MetadataBLOB blob = client.fetch();
             // Phase 3: raw JWT bytes not surfaced by webauthn4j parsed
@@ -114,10 +123,29 @@ public class MdsSchedulerService {
                     payload));
 
             log.info("MDS sync complete — version={}", version);
-            return SyncResult.synced(version);
+            result = SyncResult.synced(version);
         } catch (RuntimeException e) {
             log.warn("MDS sync failed: {}", e.toString());
-            return SyncResult.failed(e.getMessage());
+            result = SyncResult.failed(e.getMessage());
+        }
+        // Best-effort history append; never disrupts the sync result.
+        // Pulls status/version/error from SyncResult so SYNCED + FAILED
+        // paths share the same code (correct field order: version, status, error).
+        safeRecord(started, result.version(), result.status(), null, result.error());
+        return result;
+    }
+
+    private void safeRecord(Instant startedAt, Long version, String status,
+                            String changeSummary, String errorMessage) {
+        try {
+            Instant finishedAt = Instant.now();
+            long durMs = Duration.between(startedAt, finishedAt).toMillis();
+            Integer durationMs = durMs > Integer.MAX_VALUE ? null : (int) durMs;
+            historyService.append(startedAt, finishedAt, version, status, changeSummary,
+                    durationMs, errorMessage);
+        } catch (Exception logFailure) {
+            // History append must not break sync; log and continue.
+            log.warn("mds_sync_history append failed: {}", logFailure.toString());
         }
     }
 

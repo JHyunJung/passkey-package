@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { auditChainMonitorApi, type ChainOverview } from '@/api/auditChainMonitor';
+import { monthlyReportApi } from '@/api/monthlyReport';
 import { useToast } from '@/shell/ToastHost';
 import { Dialog } from '@/shell/Dialog';
 
@@ -90,11 +91,24 @@ function MonthlyReportDialog({ open, onClose, overview }: {
 }) {
   const [from, setFrom] = useState('2026-04-01');
   const [to, setTo] = useState('2026-04-30');
+  const toast = useToast();
 
-  function handleGenerate() {
-    // PDF generation placeholder — window.print or future API integration
-    window.alert('PDF 생성 기능은 준비 중입니다 (v1.1). 생성에 약 30초 소요 예정.');
-    onClose();
+  async function handleGenerate() {
+    try {
+      const blob = await monthlyReportApi.download(from, to);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-chain-monthly-${from}-to-${to}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      onClose();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ kind: 'err', title: 'PDF 생성 실패', message: msg });
+    }
   }
 
   return (

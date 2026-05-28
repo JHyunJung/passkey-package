@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
-import { mdsStatusApi, type MdsStatus } from '@/api/mdsStatus';
+import { mdsStatusApi, type MdsStatus, type MdsHistoryRow } from '@/api/mdsStatus';
 import { useToast } from '@/shell/ToastHost';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -29,16 +29,6 @@ function fmtDateTime(iso: string | null | undefined): string {
   });
 }
 
-// ── Fixture sync history (server has no history endpoint) ─────────────────────
-
-const syncHistoryFixture = [
-  { ts: '2026-05-16T03:00:00Z', ver: '9 · 2026-05', changes: '+2 / -0 / ~1', ok: true, ms: 412 },
-  { ts: '2026-05-15T03:00:00Z', ver: '9 · 2026-05', changes: '변경 없음',    ok: true, ms: 388 },
-  { ts: '2026-05-14T03:00:00Z', ver: '9 · 2026-04', changes: '+1 / -0 / ~0', ok: true, ms: 401 },
-  { ts: '2026-05-13T03:00:00Z', ver: '9 · 2026-04', changes: '변경 없음',    ok: true, ms: 372 },
-  { ts: '2026-05-12T03:00:00Z', ver: '9 · 2026-04', changes: '변경 없음',    ok: true, ms: 421 },
-];
-
 // ── KvLine ────────────────────────────────────────────────────────────────────
 
 function KvLine({ k, v }: { k: string; v: React.ReactNode }) {
@@ -66,6 +56,7 @@ function MetricCard({ label, value, sub }: { label: string; value: React.ReactNo
 
 export default function MdsStatusTab() {
   const [status, setStatus] = useState<MdsStatus | null>(null);
+  const [history, setHistory] = useState<MdsHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const toast = useToast();
@@ -105,8 +96,16 @@ export default function MdsStatusTab() {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    let cancelled = false;
+    mdsStatusApi.history(5)
+      .then((rows) => { if (!cancelled) setHistory(rows); })
+      .catch(() => { if (!cancelled) setHistory([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   const version = status?.version != null ? `${status.version} · MDS` : '—';
-  const trustAnchors = 287; // fixture — server status endpoint does not include this
+  const trustAnchors = status?.trustAnchorCount ?? 0;
   const lastFetch = status?.fetchedAt ?? null;
 
   if (loading) {
@@ -144,8 +143,12 @@ export default function MdsStatusTab() {
         <div className="card__body stack-3">
           <KvLine k="endpoint" v={<code className="mono" style={{ background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 4, fontSize: 12 }}>https://mds3.fidoalliance.org/</code>} />
           <KvLine k="next 갱신 예정" v={status?.nextUpdate ? `${status.nextUpdate} 03:00 KST` : '알 수 없음'} />
-          <KvLine k="동기화 성공률 (30d)" v={<><span style={{ fontWeight: 600 }}>30 / 30</span> · <span className="badge badge--success">100%</span></>} />
-          <KvLine k="현재 사용 중인 신뢰 모드" v={<span className="badge badge--info">MDS_STRICT_OPTIONAL</span>} />
+          <KvLine k="동기화 성공률 (30d)" v={(() => {
+            const rate = status?.successRate30d ?? { ok: 0, total: 0 };
+            const pct = rate.total > 0 ? Math.round((rate.ok / rate.total) * 100) : 0;
+            return (<><span style={{ fontWeight: 600 }}>{rate.ok} / {rate.total}</span> · <span className="badge badge--success">{pct}%</span></>);
+          })()} />
+          <KvLine k="현재 사용 중인 신뢰 모드" v={<span className="badge badge--info">{status?.trustMode ?? 'MDS_STRICT_OPTIONAL'}</span>} />
         </div>
       </div>
 
@@ -164,13 +167,13 @@ export default function MdsStatusTab() {
             </tr>
           </thead>
           <tbody>
-            {syncHistoryFixture.map((r, i) => (
-              <tr key={i}>
-                <td><span className="muted">{fmtDateTime(r.ts)}</span></td>
-                <td className="mono" style={{ fontSize: 12 }}>{r.ver}</td>
-                <td>{r.changes}</td>
-                <td>{r.ok ? <span className="badge badge--success badge--dot">OK</span> : <span className="badge badge--danger badge--dot">FAIL</span>}</td>
-                <td className="mono muted" style={{ fontSize: 12 }}>{r.ms}ms</td>
+            {history.map((r) => (
+              <tr key={r.id}>
+                <td><span className="muted">{fmtDateTime(r.startedAt)}</span></td>
+                <td className="mono" style={{ fontSize: 12 }}>{r.version != null ? `${r.version} · MDS` : '—'}</td>
+                <td>{r.changeSummary ?? '—'}</td>
+                <td>{r.status === 'SYNCED' ? <span className="badge badge--success badge--dot">OK</span> : <span className="badge badge--danger badge--dot">FAIL</span>}</td>
+                <td className="mono muted" style={{ fontSize: 12 }}>{r.durationMs != null ? `${r.durationMs}ms` : '—'}</td>
               </tr>
             ))}
           </tbody>

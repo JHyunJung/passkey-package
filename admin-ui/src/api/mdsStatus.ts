@@ -1,25 +1,39 @@
 import { api } from './client';
 
-// Server: MdsAdminController returns ApiResponse<MdsStatusView> envelope
-// MdsStatusView record: { version: long, nextUpdate: String, fetchedAt: String }
-export type MdsStatus = {
-  version: number | null;
-  nextUpdate: string | null;
-  fetchedAt: string | null;
+export type MdsSuccessRate = {
+  ok: number;
+  total: number;
 };
 
-// Server: POST /admin/api/mds/sync returns ApiResponse<SyncResult>
-// SyncResult record: { status, version, error }
+export type MdsStatus = {
+  version: number;
+  nextUpdate: string | null;
+  fetchedAt: string | null;
+  trustAnchorCount: number;
+  trustMode: string;
+  successRate30d: MdsSuccessRate;
+};
+
 export type MdsSyncResult = {
   status: 'SYNCED' | 'SKIPPED' | 'FAILED';
   version: number | null;
   error: string | null;
 };
 
-export const mdsStatusApi = {
-  get: (): Promise<MdsStatus> =>
-    api.get<MdsStatus>('/admin/api/mds/status'),
+export type MdsHistoryRow = {
+  id: number;
+  startedAt: string;
+  finishedAt: string | null;
+  version: number | null;
+  status: 'SYNCED' | 'SKIPPED' | 'FAILED';
+  changeSummary: string | null;
+  durationMs: number | null;
+  errorMessage: string | null;
+};
 
-  sync: (): Promise<MdsSyncResult> =>
-    api.post<MdsSyncResult>('/admin/api/mds/sync', {}),
+export const mdsStatusApi = {
+  get: (): Promise<MdsStatus> => api.get<MdsStatus>('/admin/api/mds/status'),
+  sync: (): Promise<MdsSyncResult> => api.post<MdsSyncResult>('/admin/api/mds/sync', {}),
+  history: (limit = 5): Promise<MdsHistoryRow[]> =>
+    api.get<MdsHistoryRow[]>(`/admin/api/mds/history?limit=${limit}`),
 };
