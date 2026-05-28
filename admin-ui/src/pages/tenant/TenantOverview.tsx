@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import type { Tenant } from '@/api/designTypes';
 import { auditChainApi, type TenantChainVerify } from '@/api/auditChain';
+import { funnelApi, type FunnelData } from '@/api/funnel';
+import { activityApi } from '@/api/activity';
+import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
 
 // ── Local utilities (mirrors design globals) ────────────────────────────────
 
@@ -141,30 +144,47 @@ function ChainStatusCard({ state }: { state: TenantChainVerify | null }) {
 
 // ── TenantOverview ─────────────────────────────────────────────────────────
 
-// Phase E3 에서 실 데이터 연결. 현재는 fixture/빈 배열 사용.
-type AuditEventFixture = {
-  type: string;
-  subjectId: string;
-  ts: string;
-};
-
-const EMPTY_EVENTS: AuditEventFixture[] = [];
-
-// Funnel fixture — Phase E3 에서 실 연결
-const FUNNEL_FIXTURE = {
-  registration: { ratio: 0, success: 0, attempts: 0 },
-  authentication: { ratio: 0, success: 0, attempts: 0 },
-};
-
 export default function TenantOverview({ tenant }: { tenant: Tenant }) {
   const [chainState, setChainState] = useState<TenantChainVerify | null>(null);
-  const f = FUNNEL_FIXTURE;
+  const [funnel, setFunnel] = useState<FunnelData | null>(null);
+  const [recentEvents, setRecentEvents] = useState<RecentActivityEvent[]>([]);
 
   useEffect(() => {
     auditChainApi.verifyTenant(tenant.id)
       .then(setChainState)
       .catch(() => setChainState(null));
   }, [tenant.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    funnelApi.get(tenant.id, 7)
+      .then((data) => { if (!cancelled) setFunnel(data); })
+      .catch(() => { if (!cancelled) setFunnel(null); });
+    return () => { cancelled = true; };
+  }, [tenant.id]);
+
+  useEffect(() => {
+    // activityApi.fetch signature is (sinceId, category) — there is no
+    // server-side tenantId filter, so fetch latest feed and filter client-side.
+    let cancelled = false;
+    activityApi
+      .fetch(null, undefined)
+      .then((view) => {
+        if (cancelled) return;
+        setRecentEvents(
+          adaptFeedItems(view)
+            .filter((e) => e.tenantId === tenant.id)
+            .slice(0, 5)
+        );
+      })
+      .catch(() => { if (!cancelled) setRecentEvents([]); });
+    return () => { cancelled = true; };
+  }, [tenant.id]);
+
+  const f = funnel ?? {
+    registration: { attempts: 0, success: 0, ratio: 0 },
+    authentication: { attempts: 0, success: 0, ratio: 0 },
+  };
 
   return (
     <div className="stack-4">
@@ -195,10 +215,10 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
         <div className="card">
           <div className="card__head"><h3 className="card__title">최근 활동</h3><button className="btn btn--sm">전체 보기 <Icons.ChevronRight size={12} /></button></div>
           <div style={{ padding: "0" }}>
-            {EMPTY_EVENTS.length === 0 ? (
-              <div className="muted" style={{ padding: "20px", fontSize: 13, textAlign: "center" }}>최근 활동 없음 — Phase E3 에서 연결 예정</div>
+            {recentEvents.length === 0 ? (
+              <div className="muted" style={{ padding: "20px", fontSize: 13, textAlign: "center" }}>최근 활동 없음</div>
             ) : (
-              EMPTY_EVENTS.slice(0, 5).map((e, i) => (
+              recentEvents.slice(0, 5).map((e, i) => (
                 <div key={i} style={{ display: "flex", gap: 10, padding: "10px 20px", borderBottom: i === 4 ? 0 : "1px solid var(--border)", alignItems: "flex-start" }}>
                   <EventDot type={e.type} />
                   <div style={{ flex: 1, minWidth: 0 }}>
