@@ -4,6 +4,7 @@ import { Dialog } from '@/shell/Dialog';
 import { StatusBadge } from '@/shell/StatusBadge';
 import { useToast } from '@/shell/ToastHost';
 import { credentialsApi } from '@/api/credentials';
+import { downloadCsv } from '@/lib/csvExport';
 import type { Tenant, Credential } from '@/api/designTypes';
 
 // ── Local utilities (mirrors design globals) ──────────────────────────────────
@@ -59,6 +60,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   const [page, setPage] = useState(0);
   const size = 50;
   const [q, setQ] = useState('');
+  const [searchMode, setSearchMode] = useState<'keyword' | 'aaguid' | 'status'>('keyword');
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<Credential | null>(null);
   const toast = useToast();
@@ -99,14 +101,20 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
 
   // 클라이언트 사이드 검색 (디자인 패턴 그대로)
   const filtered = useMemo(() => {
-    if (!q) return items;
-    return items.filter(
-      (c) =>
-        c.externalUserId.includes(q) ||
-        (c.nickname ?? '').toLowerCase().includes(q.toLowerCase()) ||
-        c.credentialId.includes(q),
-    );
-  }, [q, items]);
+    const ql = q.toLowerCase();
+    if (!ql) return items;
+    return items.filter((c) => {
+      if (searchMode === 'aaguid') {
+        return c.aaguid?.toLowerCase().includes(ql) ?? false;
+      }
+      if (searchMode === 'status') {
+        return c.status.toLowerCase().includes(ql);
+      }
+      return c.externalUserId.toLowerCase().includes(ql)
+          || (c.nickname?.toLowerCase().includes(ql) ?? false)
+          || c.credentialId.toLowerCase().includes(ql);
+    });
+  }, [items, q, searchMode]);
 
   const totalPages = Math.max(1, Math.ceil(total / size));
 
@@ -136,17 +144,44 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
               <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-mute)' }}><Icons.Search size={13} /></span>
               <input
                 className="input"
-                placeholder="externalUserId · nickname · credentialId 검색"
+                placeholder={
+                  searchMode === 'aaguid' ? 'aaguid 검색 (예: ea9b8d66)'
+                  : searchMode === 'status' ? 'status: ACTIVE 또는 REVOKED'
+                  : 'externalUserId · nickname · credentialId 검색'
+                }
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 style={{ paddingLeft: 28, height: 30 }}
               />
             </div>
-            <button className="btn btn--sm"><Icons.Filter size={12} /> aaguid · status</button>
+            <button className="btn btn--sm" onClick={() => {
+              setSearchMode((m) => m === 'keyword' ? 'aaguid' : m === 'aaguid' ? 'status' : 'keyword');
+            }}>
+              <Icons.Filter size={12} /> aaguid · status
+            </button>
             <span className="muted" style={{ fontSize: 12 }}>{filtered.length}건</span>
           </div>
           <div className="row">
-            <button className="btn btn--sm"><Icons.Download size={12} /> CSV</button>
+            <button className="btn btn--sm" onClick={() => {
+              if (!filtered || filtered.length === 0) return;
+              downloadCsv(
+                `credentials-${tenant.slug}-${new Date().toISOString().slice(0,10)}.csv`,
+                ['credentialId', 'externalUserId', 'nickname', 'status', 'aaguid', 'transports', 'signatureCounter', 'lastUsedAt', 'createdAt'],
+                filtered.map((c) => [
+                  c.credentialId,
+                  c.externalUserId,
+                  c.nickname ?? '',
+                  c.status,
+                  c.aaguid ?? '',
+                  c.transports.join('|'),
+                  c.signatureCounter,
+                  c.lastUsedAt ?? '',
+                  c.createdAt,
+                ]),
+              );
+            }}>
+              <Icons.Download size={12} /> CSV
+            </button>
           </div>
         </div>
         {loading ? (
