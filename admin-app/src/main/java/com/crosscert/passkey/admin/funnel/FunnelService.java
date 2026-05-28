@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.funnel;
 
+import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,13 +33,17 @@ public class FunnelService {
     static final String AUTHENTICATION_SUCCESS = "AUTHENTICATION_FINISH_OK";
 
     private final AuditLogRepository repo;
+    private final TenantBoundary tenantBoundary;
 
-    public FunnelService(AuditLogRepository repo) {
+    public FunnelService(AuditLogRepository repo, TenantBoundary tenantBoundary) {
         this.repo = repo;
+        this.tenantBoundary = tenantBoundary;
     }
 
     @Transactional(readOnly = true)
     public FunnelDto.View compute(UUID tenantId, int windowDays) {
+        // RP_ADMIN must not query other tenants' funnels. PLATFORM_OPERATOR is unrestricted.
+        tenantBoundary.assertCanAccessTenant(tenantId);
         Instant since = Instant.now().minus(windowDays, ChronoUnit.DAYS);
 
         long regAttempts  = repo.countByTenantIdAndActionAndCreatedAtAfter(tenantId, REGISTRATION_BEGIN, since);
