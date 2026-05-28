@@ -13,6 +13,7 @@ import type { Tweaks } from '@/tweaks/useTweaks';
 import LoginPage from '@/pages/LoginPage';
 import ActivityPage from '@/pages/ActivityPage';
 import AuditChainPage from '@/pages/AuditChainPage';
+import SettingsPage from '@/pages/SettingsPage';
 import { api } from '@/api/client';
 import type { Me } from '@/api/types';
 
@@ -155,7 +156,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
             <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/audit-chain" element={<AuditChainPage />} />
-            <Route path="/settings" element={<div style={{ padding: 24 }}>Settings — Phase E2.6</div>} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/tenants" replace />} />
           </Routes>
         </main>
