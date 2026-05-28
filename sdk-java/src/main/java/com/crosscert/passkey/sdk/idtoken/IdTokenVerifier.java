@@ -55,7 +55,8 @@ public class IdTokenVerifier {
             // short prefix so logs don't leak the full identifier across
             // RPs while still being join-able to backend logs.
             String subShort = truncate(c.getSubject(), 8);
-            log.info("id-token verified: iss={} sub={} durMs={}", c.getIssuer(), subShort, durMs);
+            log.info("id-token verified: reason=success iss={} sub={} durMs={}",
+                    c.getIssuer(), subShort, durMs);
             return new IdTokenClaims(
                     c.getIssuer(),
                     c.getSubject(),

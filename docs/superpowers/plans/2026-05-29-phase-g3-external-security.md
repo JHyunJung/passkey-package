@@ -375,3 +375,36 @@ git merge --no-ff worktree-logging-g3 -m "Merge Phase G3 — External calls + se
 ~25 신규 log statement across 10 files. 신규 파일 0. 의존성 0. admin-ui 영향 0.
 
 **Next phase:** G4 — Redaction 강화 + 운영 가이드.
+
+---
+
+## Execution notes (autonomous decisions)
+
+- **Task 2 IdTokenVerifier — iss-mismatch / aud-mismatch omitted.**
+  Current `IdTokenVerifier.verify` does NOT validate `iss`/`aud`; it
+  only extracts them into `IdTokenClaims`. Logging non-existent branches
+  would be misleading. Replaced with: `success`, `unknown-kid`,
+  `signature`, `expired`, `parse` (5 reasons). When iss/aud validation
+  is introduced (Phase H?), add matching WARNs alongside the new throw sites.
+
+- **Task 4 KeyRotationService — no-op skip.**
+  Rotation in KeyRotationService is admin-triggered (not time-gated). The
+  "key expired + no rotation triggered" branch the plan envisaged does not
+  exist as a distinct flow. G2's `key expired` WARN in
+  `KeyExpirationJob.runOnce()` already covers the expiry observability.
+
+- **Task 1 MdsBlobClient — size→entries substitution.**
+  `FidoMDS3MetadataBLOBProvider.provide()` does not surface raw blob byte
+  size. Logged `entries` count + `durMs` as a more actionable surrogate
+  for operators.
+
+- **Task 5 AdminSecurityConfig — DaoAuthenticationProvider
+  setHideUserNotFoundExceptions(false).** Required to make `unknown-user`
+  classification reachable; without it Spring wraps UNF in
+  BadCredentialsException and every unknown-user attempt is mis-classified
+  as bad-password.
+
+- **RedactingRequestInterceptor (sdk-java internal) — out of scope.**
+  Pre-existing G0 component that DEBUG-logs SDK request bodies with
+  partial redaction of `idToken` and authenticator response fields.
+  Tightening (full redaction) deferred to Phase G4 redaction hardening.
