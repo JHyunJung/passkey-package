@@ -9,6 +9,7 @@ import { useToast } from '@/shell/ToastHost';
 import TenantOverview from '@/pages/tenant/TenantOverview';
 import WebauthnConfigTab from '@/pages/tenant/WebauthnConfigTab';
 import AaguidPolicyTab from '@/pages/tenant/AaguidPolicyTab';
+import ApiKeysTab from '@/pages/tenant/ApiKeysTab';
 
 // ── Local util (mirrors design pages-2.jsx global fmtDateTime) ───────────────
 
@@ -46,7 +47,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange }: TenantDeta
         {currentTab === 'overview' && <TenantOverview tenant={tenant} />}
         {currentTab === 'webauthn' && <WebauthnConfigTab tenant={tenant} />}
         {currentTab === 'aaguid' && <AaguidPolicyTab tenant={tenant} />}
-        {currentTab === 'apikeys' && <div className="card"><div className="card__body">API Keys — Task 7</div></div>}
+        {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} />}
         {currentTab === 'credentials' && <div className="card"><div className="card__body">Credentials — Task 8</div></div>}
         {currentTab === 'audit' && <div className="card"><div className="card__body">Audit — Task 9</div></div>}
         {currentTab === 'funnel' && <div className="card"><div className="card__body">Funnel — Task 10</div></div>}
