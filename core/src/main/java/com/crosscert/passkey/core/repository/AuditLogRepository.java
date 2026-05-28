@@ -115,7 +115,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * Hibernate's @JdbcTypeCode(SqlTypes.UUID) on AuditLog.tenantId handles RAW(16) ↔ UUID binding.
      */
     @Query(value = "SELECT TRUNC(created_at), action, COUNT(*) "
-                 + "FROM audit_log "
+                 + "FROM {h-schema}audit_log "
                  + "WHERE tenant_id = :tenantId AND action IN (:actions) AND created_at >= :since "
                  + "GROUP BY TRUNC(created_at), action",
            nativeQuery = true)
@@ -130,7 +130,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * Returns [action VARCHAR, count NUMBER] rows.
      */
     @Query(value = "SELECT action, COUNT(*) "
-                 + "FROM audit_log "
+                 + "FROM {h-schema}audit_log "
                  + "WHERE tenant_id = :tenantId AND action IN (:actions) AND created_at >= :since "
                  + "GROUP BY action",
            nativeQuery = true)
