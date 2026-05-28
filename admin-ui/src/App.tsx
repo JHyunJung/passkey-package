@@ -12,6 +12,7 @@ import { useTweaks } from '@/tweaks/useTweaks';
 import type { Tweaks } from '@/tweaks/useTweaks';
 import LoginPage from '@/pages/LoginPage';
 import ActivityPage from '@/pages/ActivityPage';
+import AuditChainPage from '@/pages/AuditChainPage';
 import { api } from '@/api/client';
 import type { Me } from '@/api/types';
 
@@ -153,7 +154,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
             <Route path="/tenants" element={<TenantsListPage />} />
             <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
             <Route path="/activity" element={<ActivityPage />} />
-            <Route path="/audit-chain" element={<div style={{ padding: 24 }}>Audit Chain Monitor — Phase E2.5</div>} />
+            <Route path="/audit-chain" element={<AuditChainPage />} />
             <Route path="/settings" element={<div style={{ padding: 24 }}>Settings — Phase E2.6</div>} />
             <Route path="*" element={<Navigate to="/tenants" replace />} />
           </Routes>
