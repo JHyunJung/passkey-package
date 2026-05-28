@@ -8,6 +8,7 @@ import com.crosscert.passkey.sdk.idtoken.IdTokenVerifier;
 import com.crosscert.passkey.sdk.idtoken.JwksCache;
 import com.crosscert.passkey.sdk.internal.PasskeyResponseErrorHandler;
 import com.crosscert.passkey.sdk.internal.RedactingRequestInterceptor;
+import com.crosscert.passkey.sdk.internal.TraceIdPropagationInterceptor;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -42,6 +43,10 @@ public final class PasskeyClient {
         this.http = RestClient.builder()
                 .baseUrl(config.baseUrl().toString())
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                // Order matters: TraceIdPropagation runs first so X-Trace-Id is
+                // on the outgoing request when RedactingRequestInterceptor logs
+                // its DEBUG line.
+                .requestInterceptor(new TraceIdPropagationInterceptor(config))
                 .requestInterceptor(new RedactingRequestInterceptor(config))
                 .requestFactory(rf)
                 .defaultStatusHandler(new PasskeyResponseErrorHandler(objectMapper))

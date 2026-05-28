@@ -19,10 +19,8 @@ public class RedactingRequestInterceptor implements ClientHttpRequestInterceptor
     private static final Logger log = LoggerFactory.getLogger(RedactingRequestInterceptor.class);
 
     private final String apiKey;
-    private final PasskeyClientConfig config;
 
     public RedactingRequestInterceptor(PasskeyClientConfig config) {
-        this.config = config;
         this.apiKey = config.apiKey();
     }
 
@@ -30,10 +28,9 @@ public class RedactingRequestInterceptor implements ClientHttpRequestInterceptor
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution exec)
             throws IOException {
         request.getHeaders().set("X-API-Key", apiKey);
-        String traceId = config.traceIdProvider().get();
-        if (traceId != null && !traceId.isBlank()) {
-            request.getHeaders().set("X-Trace-Id", traceId);
-        }
+        // X-Trace-Id is set upstream by TraceIdPropagationInterceptor so it
+        // is already present on the outgoing request when this interceptor
+        // runs — see PasskeyClient interceptor chain ordering.
         if (log.isDebugEnabled()) {
             log.debug("→ {} {} body={}",
                     request.getMethod(), request.getURI(),
