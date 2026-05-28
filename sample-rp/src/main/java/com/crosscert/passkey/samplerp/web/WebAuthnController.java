@@ -60,7 +60,7 @@ public class WebAuthnController {
     @PostMapping("/register/complete")
     public ApiResponse<RegistrationFinishResponse> registerComplete(@Valid @RequestBody RegisterCompleteReq req,
                                                                     HttpSession s) {
-        log.info("register/complete entry:");
+        log.info("register/complete entry: sessionId={}", idTail(s.getId()));
         String token  = (String) s.getAttribute(SessionKeys.PENDING_REG_TOKEN);
         String handle = (String) s.getAttribute(SessionKeys.PENDING_USER_HANDLE);
         if (token == null) {
@@ -105,7 +105,7 @@ public class WebAuthnController {
 
     @PostMapping("/login/complete")
     public ApiResponse<Void> loginComplete(@Valid @RequestBody LoginCompleteReq req, HttpSession s) {
-        log.info("login/complete entry:");
+        log.info("login/complete entry: sessionId={}", idTail(s.getId()));
         String token = (String) s.getAttribute(SessionKeys.PENDING_AUTH_TOKEN);
         if (token == null) {
             log.warn("login/complete failed: reason=pending-token-missing");
