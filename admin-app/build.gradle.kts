@@ -6,6 +6,11 @@ plugins {
 dependencies {
     implementation(project(":core"))
     implementation("org.springframework.boot:spring-boot-starter-security")
+    // F4 Task 6 — Monthly Audit Chain Report PDF generation.
+    // openhtmltopdf 1.0.10 is the current stable LTS release; pulls in
+    // pdfbox 2.0.x transitively.
+    implementation("com.openhtmltopdf:openhtmltopdf-core:1.0.10")
+    implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
 
     testImplementation("org.springframework.security:spring-security-test")
     // T24 AdminFlowIT (Phase 2 acceptance gate) brings up a Testcontainers
