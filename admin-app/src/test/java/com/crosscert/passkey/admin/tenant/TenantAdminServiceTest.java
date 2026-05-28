@@ -6,7 +6,10 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.admin.auth.TenantBoundary;
+import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +32,8 @@ class TenantAdminServiceTest {
     private AuditLogService audit;
     private EntityManager em;
     private TenantBoundary boundary;
+    private TenantAaguidPolicyRepository aaguidPolicyRepo;
+    private TenantWebauthnSnapshotRepository snapshotRepo;
     private TenantAdminService service;
 
     @BeforeEach
@@ -37,7 +42,10 @@ class TenantAdminServiceTest {
         audit = mock(AuditLogService.class);
         em = mock(EntityManager.class);
         boundary = mock(TenantBoundary.class);
-        service = new TenantAdminService(repo, audit, em, boundary);
+        aaguidPolicyRepo = mock(TenantAaguidPolicyRepository.class);
+        snapshotRepo = mock(TenantWebauthnSnapshotRepository.class);
+        service = new TenantAdminService(repo, audit, em, boundary,
+                aaguidPolicyRepo, snapshotRepo, new ObjectMapper());
     }
 
     @Test

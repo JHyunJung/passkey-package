@@ -6,13 +6,19 @@ import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
+import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
+import com.crosscert.passkey.core.entity.TenantWebauthnSnapshot;
+import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,15 +35,24 @@ public class TenantAdminService {
     private final AuditLogService audit;
     private final EntityManager em;
     private final TenantBoundary tenantBoundary;
+    private final TenantAaguidPolicyRepository aaguidPolicyRepo;
+    private final TenantWebauthnSnapshotRepository snapshotRepo;
+    private final ObjectMapper objectMapper;
 
     public TenantAdminService(TenantRepository tenants,
                               AuditLogService audit,
                               EntityManager em,
-                              TenantBoundary tenantBoundary) {
+                              TenantBoundary tenantBoundary,
+                              TenantAaguidPolicyRepository aaguidPolicyRepo,
+                              TenantWebauthnSnapshotRepository snapshotRepo,
+                              ObjectMapper objectMapper) {
         this.tenants = tenants;
         this.audit = audit;
         this.em = em;
         this.tenantBoundary = tenantBoundary;
+        this.aaguidPolicyRepo = aaguidPolicyRepo;
+        this.snapshotRepo = snapshotRepo;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -80,6 +95,29 @@ public class TenantAdminService {
 
         tenants.saveAndFlush(t);
 
+        // AAGUID Policy 기본값 (ANY, mdsStrict=false) 자동 INSERT
+        aaguidPolicyRepo.save(new TenantAaguidPolicy(
+                t.getId(),
+                TenantAaguidPolicy.Mode.ANY,
+                false,
+                "system:create"
+        ));
+
+        // 초기 WebAuthn snapshot
+        try {
+            String originsJson = objectMapper.writeValueAsString(t.getAllowedOriginValues());
+            String formatsJson = objectMapper.writeValueAsString(new ArrayList<>(t.getAcceptedFormatValues()));
+            snapshotRepo.save(new TenantWebauthnSnapshot(
+                    t.getId(),
+                    t.getRpId(), t.getRpName(),
+                    originsJson, formatsJson,
+                    t.isRequireUserVerification(), t.isMdsRequired(),
+                    "system:create"
+            ));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to snapshot on tenant create", e);
+        }
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("slug", req.slug());
         payload.put("displayName", req.displayName());
@@ -101,6 +139,20 @@ public class TenantAdminService {
         Tenant t = lookup(idOrSlug);
         tenantBoundary.assertCanAccessTenant(t.getId());
         TenantSnapshot before = TenantSnapshot.of(t);
+
+        // 변경 직전 값을 snapshot 으로 보존
+        try {
+            snapshotRepo.save(new TenantWebauthnSnapshot(
+                    t.getId(),
+                    t.getRpId(), t.getRpName(),
+                    objectMapper.writeValueAsString(t.getAllowedOriginValues()),
+                    objectMapper.writeValueAsString(new ArrayList<>(t.getAcceptedFormatValues())),
+                    t.isRequireUserVerification(), t.isMdsRequired(),
+                    actorEmail
+            ));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to snapshot before update", e);
+        }
 
         // rpId / slug 는 silent ignore (별도 워크플로우 필요 — spec § 6.1)
         if (req.rpId() != null && !req.rpId().equals(t.getRpId())) {

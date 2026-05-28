@@ -230,3 +230,42 @@ export type BackfillResponse = {
   rowsUpdated: number;
   rowsSkipped: number;
 };
+
+export type AaguidPolicyMode = 'ANY' | 'ALLOWLIST' | 'DENYLIST';
+
+export type AaguidPolicyEntry = {
+  aaguid: string;
+  note: string | null;
+  mdsName: string | null;
+};
+
+export type AaguidPolicyView = {
+  tenantId: string;
+  mode: AaguidPolicyMode;
+  mdsStrict: boolean;
+  entries: AaguidPolicyEntry[];
+  updatedAt: string;
+  updatedBy: string | null;
+};
+
+export type AaguidPolicyUpdateRequest = {
+  mode: AaguidPolicyMode;
+  mdsStrict: boolean;
+  entries: { aaguid: string; note: string | null }[];
+};
+
+export type WebauthnDiffRequest = {
+  rpId?: string | null;
+  rpName?: string | null;
+  allowedOrigins?: string[] | null;
+  acceptedFormats?: string[] | null;
+  requireUserVerification?: boolean | null;
+  mdsRequired?: boolean | null;
+};
+
+export type WebauthnConfigDiff = {
+  current: { rpId: string; rpName: string; origins: string[]; formats: string[]; requireUserVerification: boolean; mdsRequired: boolean };
+  proposed: { rpId: string; rpName: string; origins: string[]; formats: string[]; requireUserVerification: boolean; mdsRequired: boolean };
+  changes: { field: string; from: unknown; to: unknown; added: string[] | null; removed: string[] | null }[];
+  warnings: string[];
+};
