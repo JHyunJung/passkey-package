@@ -43,6 +43,14 @@ public class AdminUser extends BaseEntity {
 
     protected AdminUser() {}
 
+    /** No-arg constructor for programmatic creation via setters (e.g. invite flow). */
+    public static AdminUser create() {
+        AdminUser u = new AdminUser();
+        u.enabledFlag = "Y";
+        u.status = "ACTIVE";
+        return u;
+    }
+
     public AdminUser(String email, String bcryptHash, String role) {
         this.email = email;
         this.bcryptHash = bcryptHash;
@@ -52,9 +60,17 @@ public class AdminUser extends BaseEntity {
     }
 
     public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
     public String getBcryptHash() { return bcryptHash; }
+    public void setBcryptHash(String bcryptHash) { this.bcryptHash = bcryptHash; }
+
     public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+
     public boolean isEnabled() { return "Y".equals(enabledFlag); }
+    public void setEnabled(boolean enabled) { this.enabledFlag = enabled ? "Y" : "N"; }
+
     public Instant getLastLoginAt() { return lastLoginAt; }
 
     public void recordLogin(Instant now) {
