@@ -73,6 +73,7 @@ export type AdminUserView = {
   lastLoginAt: string | null;
   suspendedAt: string | null;
   createdBy: string | null;
+  mfaEnabled: boolean;
 };
 
 export type InvitationInfo = {
