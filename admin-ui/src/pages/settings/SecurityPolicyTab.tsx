@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
-import { securityPolicyFixture } from '@/fixtures/securityPolicy';
+import { securityPolicyApi, type SecurityPolicyView } from '@/api/securityPolicy';
 import { useToast } from '@/shell/ToastHost';
 
 // ── Field ─────────────────────────────────────────────────────────────────────
@@ -72,11 +72,60 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 // ── SecurityPolicyTab ─────────────────────────────────────────────────────────
 
 export default function SecurityPolicyTab() {
-  const [sessionMin, setSessionMin] = useState(securityPolicyFixture.sessionIdleTimeoutMinutes);
-  const [pwMin, setPwMin] = useState(securityPolicyFixture.passwordMinLength);
-  const [reqMfa, setReqMfa] = useState(securityPolicyFixture.mfaRequired);
-  const [corsAllowlist] = useState(securityPolicyFixture.corsAllowlist);
+  const [sessionMin, setSessionMin] = useState(30);
+  const [pwMin, setPwMin] = useState(12);
+  const [reqMfa, setReqMfa] = useState(true);
+  const [corsAllowlist, setCorsAllowlist] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const toast = useToast();
+
+  function applyView(v: SecurityPolicyView) {
+    setSessionMin(v.sessionIdleTimeoutMinutes);
+    setPwMin(v.passwordMinLength);
+    setReqMfa(v.mfaRequired);
+    setCorsAllowlist(v.corsAllowlist);
+  }
+
+  useEffect(() => {
+    setLoading(true);
+    securityPolicyApi.get()
+      .then(applyView)
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        toast({ kind: 'err', title: '보안 정책 로드 실패', message: msg });
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const v = await securityPolicyApi.update({
+        sessionIdleTimeoutMinutes: sessionMin,
+        passwordMinLength: pwMin,
+        mfaRequired: reqMfa,
+        corsAllowlist,
+      });
+      applyView(v);
+      toast({ kind: 'ok', title: '보안 정책 저장됨', traceId: 'tr_sec_001' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ kind: 'err', title: '보안 정책 저장 실패', message: msg });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCancel() {
+    try {
+      const v = await securityPolicyApi.get();
+      applyView(v);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ kind: 'err', title: '되돌리기 실패', message: msg });
+    }
+  }
 
   return (
     <div className="stack-4">
@@ -107,10 +156,11 @@ export default function SecurityPolicyTab() {
           </Field>
         </div>
         <div className="card__head" style={{ borderTop: '1px solid var(--border)', borderBottom: 0, justifyContent: 'flex-end' }}>
-          <button className="btn">취소</button>
+          <button className="btn" onClick={handleCancel} disabled={saving || loading}>취소</button>
           <button
             className="btn btn--primary"
-            onClick={() => toast({ kind: 'ok', title: '보안 정책 저장됨', traceId: 'tr_sec_001' })}
+            onClick={handleSave}
+            disabled={saving || loading}
           >
             저장
           </button>
