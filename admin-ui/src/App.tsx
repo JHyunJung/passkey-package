@@ -133,7 +133,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
   return (
     <div
       className="app"
-      style={{ display: 'grid', gridTemplateColumns: '232px 1fr', minHeight: '100vh' }}
+      style={{ gridTemplateAreas: '"sidebar content"' }}
     >
       <Sidebar
         me={me as any}
@@ -142,7 +142,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
         tenant={tenant}
         sidebarMode={t.sidebarMode}
       />
-      <div className="content" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className="content" style={{ gridArea: 'content' }}>
         <Header
           me={me as any}
           onLogout={onLogout}
