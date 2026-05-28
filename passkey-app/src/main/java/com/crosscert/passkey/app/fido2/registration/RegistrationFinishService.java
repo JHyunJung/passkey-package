@@ -198,7 +198,7 @@ public class RegistrationFinishService {
         credentials.saveAndFlush(cred);
 
         String credentialIdB64 = b64url(credentialId);
-        log.info("event=registration/finish phase=ok credentialIdTail={} aaguid={} format={}",
+        log.info("registration/finish ok: credentialIdTail={} aaguid={} format={}",
                 idTail(credentialIdB64), aaguidUuid, fmt);
 
         return new RegistrationFinishResponse(

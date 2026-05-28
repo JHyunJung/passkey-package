@@ -42,7 +42,7 @@ public class RegistrationStartService {
     }
 
     public RegistrationStartResponse start(RegistrationStartRequest req) {
-        log.info("event=registration/start phase=entry usernamePresent={} displayNameLen={}",
+        log.info("registration/start entry: usernamePresent={} displayNameLen={}",
                 req.username() != null,
                 req.displayName() == null ? 0 : req.displayName().length());
         UUID tenantUuid = TenantContextHolder.get();
@@ -82,7 +82,7 @@ public class RegistrationStartService {
         sel.put("userVerification", "required");
         sel.put("residentKey", "preferred");
 
-        log.info("event=registration/start phase=issued tokenTail={} timeoutMs={}",
+        log.info("registration/start issued: tokenTail={} timeoutMs={}",
                 tokenTail(token), 60000);
         return new RegistrationStartResponse(token, options);
     }

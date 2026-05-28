@@ -61,7 +61,7 @@ public class AuthenticationStartService {
 
     @Transactional(readOnly = true)
     public AuthenticationStartResponse start(AuthenticationStartRequest req) {
-        log.info("event=authentication/start phase=entry userHandlePresent={}",
+        log.info("authentication/start entry: userHandlePresent={}",
                 req.userHandle() != null);
         UUID tenantUuid = TenantContextHolder.get();
         if (tenantUuid == null) {
@@ -107,7 +107,7 @@ public class AuthenticationStartService {
             entry.put("type", "public-key");
             entry.put("id", b64url(c.getCredentialId()));
         }
-        log.info("event=authentication/start phase=issued tokenTail={} allowCount={} timeoutMs={}",
+        log.info("authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
                 tokenTail(token), userCreds.size(), 60000);
         return new AuthenticationStartResponse(token, options);
     }

@@ -215,7 +215,7 @@ public class AuthenticationFinishService {
         credentials.saveAndFlush(cred);
 
         String credentialIdB64 = b64url(credentialId);
-        log.info("event=authentication/finish phase=ok credentialIdTail={} counter={}",
+        log.info("authentication/finish ok: credentialIdTail={} counter={}",
                 idTail(credentialIdB64), newCounter);
 
         String jwt = idTokens.issue(
@@ -225,7 +225,7 @@ public class AuthenticationFinishService {
                 cred.getAaguid());
         // id-token claims meta only — never the JWT body itself
         String subTail = idTail(b64url(cred.getUserHandle()));
-        log.info("event=id-token/issued subTail={} aud={} ttlSec={}",
+        log.info("id-token issued: subTail={} aud={} ttlSec={}",
                 subTail, ch.tenantId(), 900);
 
         return new AuthenticationFinishResponse(jwt, "Bearer", 900);
