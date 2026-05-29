@@ -69,4 +69,12 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     Page<Credential> searchByTenantId(@Param("tid") UUID tid,
                                        @Param("q") String hexQ,
                                        Pageable p);
+
+    /**
+     * P0-3: registration/start 가 excludeCredentials 를 채우기 위해 사용.
+     * 같은 userHandle 의 기존 credentialId 들을 반환 → 동일 authenticator 중복 등록 방지.
+     * VPD 가 tenant 로 필터하므로 tenant 격리는 세션 컨텍스트가 담당.
+     */
+    @Query("select c.credentialId from Credential c where c.userHandle = :userHandle")
+    java.util.List<byte[]> findCredentialIdsByUserHandle(@Param("userHandle") byte[] userHandle);
 }

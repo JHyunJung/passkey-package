@@ -6,6 +6,7 @@ import com.crosscert.passkey.app.fido2.challenge.ChallengeIssuer;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
 import com.crosscert.passkey.core.entity.Tenant;
+import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,17 +25,20 @@ public class RegistrationStartService {
             org.slf4j.LoggerFactory.getLogger(RegistrationStartService.class);
 
     private final TenantRepository tenants;
+    private final CredentialRepository credentials;
     private final ChallengeIssuer challenges;
     private final ChallengeStore store;
     private final ObjectMapper mapper;
     private final Clock clock;
 
     public RegistrationStartService(TenantRepository tenants,
+                                    CredentialRepository credentials,
                                     ChallengeIssuer challenges,
                                     ChallengeStore store,
                                     ObjectMapper mapper,
                                     Clock clock) {
         this.tenants = tenants;
+        this.credentials = credentials;
         this.challenges = challenges;
         this.store = store;
         this.mapper = mapper;
@@ -78,6 +82,12 @@ public class RegistrationStartService {
         params.addObject().put("type", "public-key").put("alg", -257);  // RS256
         options.put("timeout", 60000);
         options.put("attestation", "indirect");
+        ArrayNode excludeArr = options.putArray("excludeCredentials");
+        for (byte[] existingId : credentials.findCredentialIdsByUserHandle(userHandle)) {
+            ObjectNode entry = excludeArr.addObject();
+            entry.put("type", "public-key");
+            entry.put("id", b64url(existingId));
+        }
         ObjectNode sel = options.putObject("authenticatorSelection");
         sel.put("userVerification", "required");
         sel.put("residentKey", "preferred");
