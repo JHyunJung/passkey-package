@@ -20,10 +20,16 @@ public class FeatureGateAspect {
 
     @Around("@annotation(com.crosscert.passkey.core.license.RequiresFeature)")
     public Object enforce(ProceedingJoinPoint pjp) throws Throwable {
+        // Refresh state — feature gate must respect DEAD even between heartbeats
+        stateMachine.recompute();
+        LicenseStateMachine.Snapshot snap = stateMachine.snapshot();
+        if (snap.state() == LicenseState.DEAD) {
+            throw new FeatureNotLicensedException("license-dead");
+        }
         MethodSignature sig = (MethodSignature) pjp.getSignature();
         RequiresFeature ann = sig.getMethod().getAnnotation(RequiresFeature.class);
         String feature = ann.value();
-        if (!stateMachine.token().hasFeature(feature)) {
+        if (!snap.token().hasFeature(feature)) {
             throw new FeatureNotLicensedException(feature);
         }
         return pjp.proceed();
