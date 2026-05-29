@@ -51,6 +51,12 @@ docker ps  # passkey-oracle (1521) + passkey-redis (6379) 가 healthy
 
 ## 2. dev profile 이 제공하는 것
 
+> **2026-05 변경**: 기존 `local` / `local-shared` 프로필이 dev 로 흡수되어
+> 제거됐다. `SPRING_PROFILES_ACTIVE=local` 또는 `local,dev` 를 쓰던 명령은
+> `SPRING_PROFILES_ACTIVE=dev` 단독으로 변경. dev 가 datasource URL,
+> credential, Redis host, dev key-envelope master 를 모두 self-contained
+> 로 제공한다.
+
 **`SPRING_PROFILES_ACTIVE=dev`** 로 admin-app 을 부팅하면 Flyway repeatable migration
 `core/src/main/resources/db/dev/R__dev_seed.sql` 가 자동 적용되어 다음 시드 데이터가
 DB 에 들어간다.
