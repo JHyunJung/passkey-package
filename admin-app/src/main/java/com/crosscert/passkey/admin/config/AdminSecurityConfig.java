@@ -82,7 +82,8 @@ public class AdminSecurityConfig {
                                                 AuthenticationSuccessHandler ok,
                                                 AuthenticationFailureHandler fail,
                                                 LogoutSuccessHandler logoutOk,
-                                                AccessDeniedHandler accessDenied) throws Exception {
+                                                AccessDeniedHandler accessDenied,
+                                                com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource) throws Exception {
         // CookieCsrfTokenRepository.withHttpOnlyFalse() lets the SPA
         // read the XSRF-TOKEN cookie via document.cookie and echo it
         // back in X-XSRF-TOKEN. Path=/admin scopes the cookie.
@@ -92,6 +93,9 @@ public class AdminSecurityConfig {
         csrfHandler.setCsrfRequestAttributeName(null); // emit token on every response
 
         http
+            // P0-6: security_policy.cors_allowlist 를 동적으로 적용. allowlist 가 비어
+            // 있으면 corsSource 가 null 을 반환 → CORS 헤더 미발급(same-origin 만 허용).
+            .cors(cors -> cors.configurationSource(corsSource))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
                 .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/", "/admin", "/admin/favicon.ico", "/favicon.ico").permitAll()

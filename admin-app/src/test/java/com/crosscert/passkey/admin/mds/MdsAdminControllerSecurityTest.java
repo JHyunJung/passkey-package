@@ -52,6 +52,7 @@ class MdsAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
     @MockBean java.time.Clock clock;
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     @Test
     void anonymousGetStatusIsUnauthorized() throws Exception {

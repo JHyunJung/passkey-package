@@ -54,6 +54,7 @@ class ApiKeyAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockBean java.time.Clock clock;
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static final UUID TENANT_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 

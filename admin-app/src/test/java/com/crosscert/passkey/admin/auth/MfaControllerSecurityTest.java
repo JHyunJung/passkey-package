@@ -73,6 +73,7 @@ class MfaControllerSecurityTest {
     @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static AdminUser adminUserWithUuid() {
         var u = new AdminUser("alice@example.com", "x", "ADMIN");

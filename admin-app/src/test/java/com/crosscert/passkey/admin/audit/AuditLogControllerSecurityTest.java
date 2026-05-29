@@ -49,6 +49,7 @@ class AuditLogControllerSecurityTest {
     @MockBean java.time.Clock clock;
     @MockBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
     @MockBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     @Test
     void anonymousGetListIsUnauthorized() throws Exception {

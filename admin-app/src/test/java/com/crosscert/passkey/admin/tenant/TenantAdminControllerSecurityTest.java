@@ -58,6 +58,7 @@ class TenantAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockBean java.time.Clock clock;
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static final String BODY = """
             {"slug":"tenant-a","displayName":"Tenant A","rpId":"localhost","rpName":"Tenant A",
