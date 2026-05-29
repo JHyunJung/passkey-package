@@ -97,11 +97,11 @@ public class RuntimeDsHelper {
     /**
      * COUNT rows in the given table as APP_RUNTIME_USER with no tenant context.
      *
-     * <p>Used to verify that admin-scoped child tables
-     * ({@code tenant_allowed_origin}, {@code tenant_accepted_format}) are NOT
-     * VPD-protected: all rows should be visible regardless of context.
-     * Contrast with {@code credential}, which is VPD-protected and returns 0
-     * when no context is set.
+     * <p>Used to verify VPD behavior for a session with no tenant context.
+     * As of P0-1 (V35) the tenant child config tables
+     * ({@code tenant_allowed_origin}, {@code tenant_accepted_format}, ...) ARE
+     * VPD-protected, so — like {@code credential} — they return 0 rows when no
+     * context is set.
      *
      * @param qualifiedTable fully-qualified table name, e.g. {@code APP_OWNER.tenant_allowed_origin}
      */
