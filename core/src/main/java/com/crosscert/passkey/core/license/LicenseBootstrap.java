@@ -3,6 +3,7 @@ package com.crosscert.passkey.core.license;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +32,7 @@ public class LicenseBootstrap {
     private static final Logger log = LoggerFactory.getLogger(LicenseBootstrap.class);
 
     @Bean
+    @ConditionalOnMissingBean(LicenseStateMachine.class)
     public LicenseStateMachine licenseStateMachine(LicenseLoader loader,
                                                    LicenseVerifier verifier,
                                                    LicenseCache cache,
