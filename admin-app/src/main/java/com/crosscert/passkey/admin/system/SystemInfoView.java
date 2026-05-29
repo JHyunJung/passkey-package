@@ -19,7 +19,8 @@ public record SystemInfoView(
             String adminConsole,
             String region,
             String environment,
-            String deployMethod
+            String deployMethod,
+            String deploymentMode
     ) {}
 
     public record Component(
