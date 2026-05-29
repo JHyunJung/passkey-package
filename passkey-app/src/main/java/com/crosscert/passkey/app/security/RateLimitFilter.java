@@ -67,6 +67,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/v1/rp/authentication/finish",
             tokenBucket(300, Duration.ofMinutes(1)));
 
+    /**
+     * P0-4: self-service credential endpoints live under path variables
+     * ({@code /credentials/{credentialId}...}), so exact-match {@link #LIMITS}
+     * cannot reach them. They are matched by prefix + HTTP method instead:
+     * <ul>
+     *   <li>{@code DELETE /api/v1/rp/credentials/{id}} — 20/min (destructive,
+     *       lower cap to bound hard-delete enumeration with a stolen key).</li>
+     *   <li>everything else under the prefix (GET list, POST label) — 60/min.</li>
+     * </ul>
+     */
+    private static final String CREDENTIALS_PREFIX = "/api/v1/rp/credentials";
+    private static final BucketConfiguration CREDENTIALS_DELETE_LIMIT =
+            tokenBucket(20, Duration.ofMinutes(1));
+    private static final BucketConfiguration CREDENTIALS_DEFAULT_LIMIT =
+            tokenBucket(60, Duration.ofMinutes(1));
+
     private final ProxyManager<String> proxy;
 
     public RateLimitFilter(ProxyManager<String> proxy) {
@@ -81,16 +97,47 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // include that prefix and miss the LIMITS keys entirely,
         // silently disabling the limiter.
         String path = request.getServletPath();
-        return path == null || !LIMITS.containsKey(path);
+        return resolve(path, request.getMethod()) == null;
     }
+
+    /**
+     * Resolve the rate-limit tier for a request, or {@code null} if the path
+     * isn't limited. Exact-match {@link #LIMITS} is checked first so the
+     * ceremony endpoints keep their existing behavior unchanged; only paths
+     * that miss exact-match fall through to the credentials prefix rule. The
+     * returned {@code scope} is used in the bucket key in place of the raw URI
+     * so path-variable URIs ({@code /credentials/{id}}) collapse onto one
+     * stable bucket per tier instead of spawning a bucket per credentialId.
+     */
+    private static RateTier resolve(String path, String method) {
+        if (path == null) {
+            return null;
+        }
+        BucketConfiguration exact = LIMITS.get(path);
+        if (exact != null) {
+            return new RateTier(path, exact);
+        }
+        if (path.equals(CREDENTIALS_PREFIX) || path.startsWith(CREDENTIALS_PREFIX + "/")) {
+            if ("DELETE".equalsIgnoreCase(method)) {
+                return new RateTier(CREDENTIALS_PREFIX + ":DELETE", CREDENTIALS_DELETE_LIMIT);
+            }
+            return new RateTier(CREDENTIALS_PREFIX, CREDENTIALS_DEFAULT_LIMIT);
+        }
+        return null;
+    }
+
+    /** A resolved limit: {@code scope} keys the bucket, {@code config} sizes it. */
+    private record RateTier(String scope, BucketConfiguration config) {}
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,
                                     HttpServletResponse res,
                                     FilterChain chain) throws ServletException, IOException {
         long startNs = System.nanoTime();
-        String uri = req.getServletPath();
-        BucketConfiguration config = LIMITS.get(uri);
+        // shouldNotFilter already guaranteed resolve(...) != null.
+        RateTier tier = resolve(req.getServletPath(), req.getMethod());
+        String uri = tier.scope();
+        BucketConfiguration config = tier.config();
 
         // IP bucket — fired on EVERY request. Attackers spraying prefixes
         // get capped here before the key bucket can be circumvented.

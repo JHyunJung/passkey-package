@@ -67,4 +67,14 @@ class CredentialSelfServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ENTITY_NOT_FOUND);
     }
+
+    @Test
+    void rename_throwsWhenNotOwned() {
+        when(creds.findOwnedForUpdate(any(), any())).thenReturn(Optional.empty());
+        CredentialSelfService svc = new CredentialSelfService(creds);
+        assertThatThrownBy(() -> svc.rename(new byte[]{1}, new byte[]{2}, "iPhone"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ENTITY_NOT_FOUND);
+    }
 }

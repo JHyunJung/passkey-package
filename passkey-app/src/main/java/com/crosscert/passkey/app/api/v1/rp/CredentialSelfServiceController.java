@@ -5,7 +5,10 @@ import com.crosscert.passkey.app.fido2.credential.CredentialSelfService;
 import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Base64;
@@ -17,9 +20,16 @@ import java.util.List;
  *
  * <p>응답은 다른 RP 컨트롤러(RegistrationController 등)와 동일하게
  * {@link ApiResponse} envelope 로 감싼다.
+ *
+ * <p>{@link Validated} (클래스 레벨) 는 {@code @RequestParam @NotBlank} 같은
+ * method-parameter 제약을 활성화한다 — 없으면 무시된다. body 검증은
+ * {@code @Valid @RequestBody} 가 담당. 검증 실패는 GlobalExceptionHandler 가
+ * 400 (INVALID_INPUT) 으로 매핑 (ConstraintViolationException /
+ * MethodArgumentNotValidException).
  */
 @RestController
 @RequestMapping("/api/v1/rp/credentials")
+@Validated
 public class CredentialSelfServiceController {
 
     private final CredentialSelfService service;
@@ -33,10 +43,12 @@ public class CredentialSelfServiceController {
         return ApiResponse.ok(service.list(decode(userHandle)));
     }
 
-    public record RenameRequest(@NotBlank String userHandle, @NotBlank String label) {}
+    public record RenameRequest(
+            @NotBlank String userHandle,
+            @NotBlank @Size(max = 128) String label) {}
 
     @PostMapping("/{credentialId}/label")
-    public ApiResponse<Void> rename(@PathVariable String credentialId, @RequestBody RenameRequest req) {
+    public ApiResponse<Void> rename(@PathVariable String credentialId, @Valid @RequestBody RenameRequest req) {
         service.rename(decode(req.userHandle()), decode(credentialId), req.label());
         return ApiResponse.ok();
     }
