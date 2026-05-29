@@ -115,4 +115,30 @@ public class RuntimeDsHelper {
             TenantContextHolder.clear();
         }
     }
+
+    /**
+     * COUNT rows in the given table as APP_RUNTIME_USER WITH the given tenant
+     * set as APP_CTX (the positive VPD path).
+     *
+     * <p>Mirrors {@link #countAsRuntimeNoContext(String)} but sets the tenant
+     * context first, so the V35 predicate evaluates to
+     * {@code tenant_id = HEXTORAW(SYS_CONTEXT('APP_CTX','TENANT_ID'))} rather
+     * than {@code 1=0}. Used to prove the predicate actually MATCHES rows for
+     * the session tenant — not just that it hides everything when no context
+     * is set. Without this positive assertion the negative ("0 rows when no
+     * context") could pass for a table that is simply empty, proving nothing.
+     *
+     * @param qualifiedTable fully-qualified table name, e.g. {@code APP_OWNER.tenant_aaguid_policy}
+     * @param tenantId       tenant UUID to set as APP_CTX before the count
+     */
+    public long countAsRuntimeWithContext(String qualifiedTable, UUID tenantId) {
+        TenantContextHolder.set(tenantId);
+        try {
+            Long count = runtimeJdbc.queryForObject(
+                    "SELECT COUNT(*) FROM " + qualifiedTable, Long.class);
+            return count == null ? 0L : count;
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
 }
