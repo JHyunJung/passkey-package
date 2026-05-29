@@ -6,6 +6,7 @@ testcontainers = "1.20.4"
 flyway = "10.20.1"
 webauthn4j = "0.31.5.RELEASE"
 nimbus-jose-jwt = "9.40"
+tink = "1.13.0"
 bucket4j = "8.18.0"
 node-gradle = "7.0.2"
 wiremock = "3.10.0"
@@ -21,6 +22,7 @@ webauthn4j-core = { module = "com.webauthn4j:webauthn4j-core", version.ref = "we
 webauthn4j-test = { module = "com.webauthn4j:webauthn4j-test", version.ref = "webauthn4j" }
 webauthn4j-metadata = { module = "com.webauthn4j:webauthn4j-metadata", version.ref = "webauthn4j" }
 nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbus-jose-jwt" }
+tink = { module = "com.google.crypto.tink:tink", version.ref = "tink" }
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
 bucket4j-redis = { module = "com.bucket4j:bucket4j_jdk17-lettuce", version.ref = "bucket4j" }
 spring-security-crypto = { module = "org.springframework.security:spring-security-crypto" }

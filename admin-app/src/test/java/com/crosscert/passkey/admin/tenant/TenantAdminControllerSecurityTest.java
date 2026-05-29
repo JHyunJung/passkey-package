@@ -80,6 +80,10 @@ class TenantAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
     @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
+    @MockBean com.crosscert.passkey.core.repository.AdminUserInvitationRepository invitationRepository;
+    @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
+    @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
+    @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
 
     private static final String BODY = """
             {"slug":"tenant-a","displayName":"Tenant A","rpId":"localhost","rpName":"Tenant A",

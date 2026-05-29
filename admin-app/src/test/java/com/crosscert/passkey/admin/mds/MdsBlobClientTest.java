@@ -18,7 +18,7 @@ class MdsBlobClientTest {
     @BeforeEach
     void setUp() {
         underlying = mock(MetadataBLOBProvider.class);
-        client = new MdsBlobClient(underlying);
+        client = new MdsBlobClient(underlying, "https://mds3.fidoalliance.org/");
     }
 
     @Test

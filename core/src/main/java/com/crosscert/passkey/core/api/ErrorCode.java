@@ -34,7 +34,11 @@ public enum ErrorCode {
     REGISTRATION_FAILED(HttpStatus.BAD_REQUEST, "F002", "Registration verification failed"),
     AUTHENTICATION_FAILED(HttpStatus.UNAUTHORIZED, "F003", "Authentication verification failed"),
     ATTESTATION_REJECTED(HttpStatus.FORBIDDEN, "F004", "Attestation rejected by policy"),
-    AAGUID_REVOKED(HttpStatus.FORBIDDEN, "F005", "Authenticator revoked");
+    AAGUID_REVOKED(HttpStatus.FORBIDDEN, "F005", "Authenticator revoked"),
+
+    // License (L)
+    LICENSE_EXPIRED(HttpStatus.SERVICE_UNAVAILABLE, "L001", "License expired or not yet valid"),
+    FEATURE_NOT_LICENSED(HttpStatus.FORBIDDEN, "L002", "Feature not included in license");
 
     private final HttpStatus status;
     private final String code;

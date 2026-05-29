@@ -38,7 +38,8 @@ public class SystemInfoService {
                 env.getProperty("passkey.host.admin-console", "admin.passkey.example.com"),
                 env.getProperty("passkey.host.region", "ap-northeast-2 (Seoul)"),
                 env.getProperty("spring.profiles.active", "development"),
-                env.getProperty("passkey.host.deploy-method", "local")
+                env.getProperty("passkey.host.deploy-method", "local"),
+                env.getProperty("passkey.deployment.mode", "saas")
         );
 
         List<SystemInfoView.Component> components = new ArrayList<>();

@@ -121,4 +121,48 @@ prod 에서 root 가 INFO 라 DEBUG 는 출력 안 됨.
 | dev (`application-dev.yml`) | INFO | DEBUG | `hibernate.SQL=DEBUG` 도 활성. 로컬 디버깅용. |
 | prod (override 없음) | INFO | INFO | DEBUG/TRACE 출력 안 됨. |
 
+## License (on-prem 전용)
+
+### 상태 전이 추적
+
+```bash
+grep "license state transition" passkey-app.log admin-app.log
+```
+
+기대: `VALID -> WARNING`, `WARNING -> NETWORK_GRACE`, `NETWORK_GRACE -> DEAD` 등.
+
+### Heartbeat 실패 사유 집계
+
+```bash
+grep "license heartbeat failed" admin-app.log | \
+  sed -E 's/.*reason=([^ ]+).*/\1/' | sort | uniq -c
+```
+
+흔한 사유:
+- `http: ResourceAccessException` — 네트워크 단절
+- `status=revoked` — 라이센스 서버가 revoke 알림
+- `verify: License signature invalid` — 발급자 키 불일치 (재발급 필요)
+
+### DEAD 상태에서 차단된 요청
+
+```bash
+grep "LICENSE_EXPIRED" passkey-app.log admin-app.log
+```
+
+### 의심스러운 라이센스 토큰 노출
+
+```bash
+grep "<jws-redacted>" *.log
+```
+
+`<jws-redacted>` 가 등장하면, 그 라인을 발생시킨 소스 위치를 확인하고 raw 토큰을 로그에 흘리는 코드 경로를 수정한다. SecretMaskingConverter 가 후방 방어로 가린 상태.
+
+### 부팅 라이센스 컨텍스트
+
+```bash
+grep -E "license loaded from disk|license state initialized|onprem mode: pinned VPD" admin-app.log | head
+```
+
+서비스 시작 시 한 줄씩 나타나야 정상. 부팅 실패면 stderr 에 `LicenseVerificationException` 메시지.
+
 prod 에서 일시적으로 DEBUG 필요 시: 환경 변수 `LOGGING_LEVEL_COM_CROSSCERT_PASSKEY=DEBUG` 로 재기동.

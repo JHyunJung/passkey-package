@@ -15,6 +15,10 @@ WebAuthn / FIDO2 패스키 인증 플랫폼. **Passkey 서버** 가 RP(Relying P
                                                               └──────────────┘
 ```
 
+## 배포 모드
+
+SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱글테넌트는 `passkey.deployment.mode=onprem` — 자세한 절차는 [docs/onprem-deployment.md](docs/onprem-deployment.md).
+
 ## 모듈 구성
 
 | Module | Port | 역할 |

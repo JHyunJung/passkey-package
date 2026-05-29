@@ -28,6 +28,10 @@ public class SecretMaskingConverter extends MessageConverter {
     private static final Pattern API_KEY_HEADER = Pattern.compile("(?i)(X-API-Key:\\s*)(pk_[A-Za-z0-9_-]{8})[A-Za-z0-9_-]+");
     // Bearer eyJ… JWT — keep "Bearer ", strip rest
     private static final Pattern JWT_BEARER = Pattern.compile("(?i)(Bearer\\s+)eyJ[A-Za-z0-9_-]{2,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+");
+    // Standalone JWS (eyJ header.payload.signature) without "Bearer " prefix —
+    // catches license tokens and any other raw JWS accidentally logged.
+    private static final Pattern JWS_STANDALONE = Pattern.compile(
+            "(?<![A-Za-z0-9_/-])eyJ[A-Za-z0-9_-]{2,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+");
     // pk_ + 8 base64url + tail → keep prefix (11 chars), strip secret tail
     private static final Pattern API_KEY = Pattern.compile("pk_[A-Za-z0-9_-]{8}[A-Za-z0-9_-]+");
     // password="xxx" or password=xxx
@@ -44,6 +48,7 @@ public class SecretMaskingConverter extends MessageConverter {
         // then standalone pk_, then password and bcrypt.
         msg = API_KEY_HEADER.matcher(msg).replaceAll("$1$2<redacted>");
         msg = JWT_BEARER.matcher(msg).replaceAll("$1<redacted>");
+        msg = JWS_STANDALONE.matcher(msg).replaceAll("<jws-redacted>");
         msg = API_KEY.matcher(msg).replaceAll(m -> {
             String full = m.group();
             return full.substring(0, 11) + "<redacted>";  // pk_ + 8 + <redacted>

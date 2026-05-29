@@ -45,3 +45,14 @@ logging:
     com.zaxxer.hikari: WARN
     org.apache.tomcat: WARN
     io.lettuce: WARN
+
+passkey:
+  deployment:
+    mode: saas
+  license:
+    path: /etc/passkey/license.jwt
+    cache-path: /var/lib/passkey/license-cache.jwt
+    issuer: license.crosscert.com
+    audience: passkey-onprem
+    heartbeat-url: https://license.crosscert.com/v1/license
+    heartbeat-interval: PT1H

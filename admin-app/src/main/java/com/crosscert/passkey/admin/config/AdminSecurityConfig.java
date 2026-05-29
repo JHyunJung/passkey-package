@@ -33,8 +33,11 @@ import org.springframework.security.web.authentication.logout.LogoutSuccessHandl
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
+import com.crosscert.passkey.core.license.LicenseGuardFilter;
+
 import java.time.Clock;
 import java.util.Map;
+import java.util.Optional;
 
 @Configuration
 @EnableMethodSecurity
@@ -81,7 +84,8 @@ public class AdminSecurityConfig {
                                                 AuthenticationSuccessHandler ok,
                                                 AuthenticationFailureHandler fail,
                                                 LogoutSuccessHandler logoutOk,
-                                                AccessDeniedHandler accessDenied) throws Exception {
+                                                AccessDeniedHandler accessDenied,
+                                                Optional<LicenseGuardFilter> licenseGuard) throws Exception {
         // CookieCsrfTokenRepository.withHttpOnlyFalse() lets the SPA
         // read the XSRF-TOKEN cookie via document.cookie and echo it
         // back in X-XSRF-TOKEN. Path=/admin scopes the cookie.
@@ -98,7 +102,8 @@ public class AdminSecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 // /admin/api/profile 은 active profile 만 노출. Login.tsx 가 미인증 상태에서
                 // local 여부를 알아 테스트 계정 prefill 을 결정하는 데 쓴다.
-                .requestMatchers("/admin/api/profile").permitAll()
+                // /admin/api/license 는 DEAD 상태에서도 운영자가 라이선스 진단에 접근할 수 있어야 한다.
+                .requestMatchers("/admin/api/profile", "/admin/api/license").permitAll()
                 // Invitation token check (GET) and accept (POST) are unauthenticated —
                 // the invited user has no session yet.
                 .requestMatchers("/admin/api/invitations/**").permitAll()
@@ -120,8 +125,14 @@ public class AdminSecurityConfig {
                 // Invitation accept is a one-time POST from an unauthenticated context
                 // (no session, no XSRF-TOKEN cookie). Exempt the entire path so that
                 // the SPA can call it without a prior GET to seed the CSRF cookie.
-                .ignoringRequestMatchers("/admin/api/invitations/**"))
-            .sessionManagement(s -> s
+                .ignoringRequestMatchers("/admin/api/invitations/**"));
+
+        // onprem 모드에서만 존재하는 빈 — Optional 주입으로 SaaS 모드에서 absent.
+        // SecurityContextHolderFilter 전에 삽입해 인증 처리 이전에 라이선스를 검사한다.
+        licenseGuard.ifPresent(filter ->
+                http.addFilterBefore(filter, org.springframework.security.web.context.SecurityContextHolderFilter.class));
+
+        http.sessionManagement(s -> s
                 .maximumSessions(5))    // 5 parallel browsers per operator
             // Return 401 JSON for unauthenticated API requests instead of
             // redirecting to the login page (default Spring behavior with

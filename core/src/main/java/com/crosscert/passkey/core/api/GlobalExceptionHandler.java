@@ -106,6 +106,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ErrorCode.INVALID_INPUT, e.getMessage()));
     }
 
+    @ExceptionHandler(com.crosscert.passkey.core.license.FeatureNotLicensedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFeatureNotLicensed(
+            com.crosscert.passkey.core.license.FeatureNotLicensedException ex) {
+        return ResponseEntity
+                .status(ErrorCode.FEATURE_NOT_LICENSED.getStatus())
+                .body(ApiResponse.error(ErrorCode.FEATURE_NOT_LICENSED,
+                        "Feature not included in license: " + ex.feature()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e, HttpServletRequest req) {
         log.error("[Unhandled] {} {}", req.getMethod(), req.getRequestURI(), e);
