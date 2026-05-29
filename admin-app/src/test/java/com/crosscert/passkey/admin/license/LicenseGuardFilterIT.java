@@ -2,13 +2,14 @@ package com.crosscert.passkey.admin.license;
 
 import com.crosscert.passkey.admin.tenant.TenantAdminController;
 import com.crosscert.passkey.core.license.LicenseLimits;
+import com.crosscert.passkey.core.license.LicenseProperties;
 import com.crosscert.passkey.core.license.LicenseState;
 import com.crosscert.passkey.core.license.LicenseStateMachine;
 import com.crosscert.passkey.core.license.LicenseToken;
 import com.crosscert.passkey.core.license.LicenseGuardFilter;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.Metamodel;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -25,6 +26,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+
+import static org.mockito.Mockito.when;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -45,7 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * </ol>
  */
 @WebMvcTest(
-        controllers = TenantAdminController.class,
+        controllers = {TenantAdminController.class, LicenseController.class},
         excludeAutoConfiguration = {
                 org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
                 org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,
@@ -72,6 +75,11 @@ class LicenseGuardFilterIT {
      */
     @TestConfiguration
     static class DeadStateConfig {
+
+        @Bean
+        LicenseProperties licenseProperties() {
+            return new LicenseProperties(null, null, null, null, null, null);
+        }
 
         @Bean
         @Primary
@@ -116,6 +124,11 @@ class LicenseGuardFilterIT {
 
     @Autowired
     MockMvc mvc;
+
+    @BeforeEach
+    void setUpClock() {
+        when(clock.instant()).thenReturn(Instant.now());
+    }
 
     // ----------------------------------------------------------------
     // Mocked beans required by AdminSecurityConfig + TenantAdminController
@@ -164,7 +177,6 @@ class LicenseGuardFilterIT {
      * L4.1 에서 enable.
      */
     @Test
-    @Disabled("LicenseController is added in L4.1 — re-enable after L4.1 merge")
     void deadState_allowsLicenseEndpoint() throws Exception {
         mvc.perform(get("/admin/api/license"))
                 .andExpect(status().isOk());
