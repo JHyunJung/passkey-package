@@ -1,0 +1,29 @@
+# qa profile — 내부 QA / 통합 테스트 환경
+#
+# 활성화: SPRING_PROFILES_ACTIVE=qa
+#
+# 모든 시크릿과 환경 특화 값은 환경변수로 주입.
+
+spring:
+  datasource:
+    url:               ${SPRING_DATASOURCE_URL:}
+    driver-class-name: oracle.jdbc.OracleDriver
+    username:          ${SPRING_DATASOURCE_USERNAME:}
+    password:          ${SPRING_DATASOURCE_PASSWORD:}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+passkey:
+  key-envelope:
+    master-key: ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}
+  id-token:
+    issuer-base: ${PASSKEY_ID_TOKEN_ISSUER_BASE:}
+
+logging:
+  level:
+    com.crosscert.passkey: INFO
