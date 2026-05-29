@@ -78,4 +78,13 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
      */
     @Query("select c.credentialId from Credential c where c.userHandle = :userHandle")
     List<byte[]> findCredentialIdsByUserHandle(@Param("userHandle") byte[] userHandle);
+
+    /** P0-4: self-service — 특정 userHandle 의 모든 credential (VPD 가 tenant 격리). */
+    List<Credential> findByUserHandle(byte[] userHandle);
+
+    /** P0-4: self-service 삭제/수정 — credentialId + userHandle 동시 일치 (소유권 확인). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Credential c where c.credentialId = :credentialId and c.userHandle = :userHandle")
+    Optional<Credential> findOwnedForUpdate(@Param("credentialId") byte[] credentialId,
+                                            @Param("userHandle") byte[] userHandle);
 }
