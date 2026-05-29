@@ -18,8 +18,8 @@ import java.util.UUID;
  *   3. Reconcile with the cache (use whichever has the later exp)
  *   4. Construct LicenseStateMachine
  *   5. Pin TenantContextHolder to the licensed tenantId for the
- *      JVM (booting thread; per-request inheritance depends on
- *      TenantContextHolder's thread-local semantics — see comment below)
+ *      booting thread (per-request pinning is handled by
+ *      OnpremTenantPinFilter)
  *
  * Bootstrap failure -> Spring application context fails to start
  * (intentional: an onprem server with no valid license must not run).
@@ -59,22 +59,11 @@ public class LicenseBootstrap {
             }
         }
 
-        // Pin tenant for VPD context on the booting thread.
-        //
-        // WARNING: TenantContextHolder uses a ThreadLocal<UUID>. Setting it here
-        // only affects the Spring bootstrap thread. Per-request VPD isolation
-        // requires a request filter/interceptor to call TenantContextHolder.set()
-        // on each incoming thread. In onprem (single-tenant) mode the licensed
-        // tenantId must be injected on every request thread — this is a follow-on
-        // task (e.g. OnpremTenantPinFilter or similar). The boot-thread pin below
-        // ensures any startup-time DB calls (schema init, liquibase, etc.) flow
-        // through the correct VPD context.
-        //
-        // See: DONE_WITH_CONCERNS — per-request pinning is not yet wired.
+        // Pin tenant for the booting thread (Liquibase, schema validation, etc.).
+        // Per-request pinning is handled by OnpremTenantPinFilter so request
+        // threads see the same tenant context.
         TenantContextHolder.set(UUID.fromString(effective.tenantId()));
-        log.warn("onprem mode: VPD tenant pinned on boot thread to {} — " +
-                "per-request pinning requires a request filter that calls " +
-                "TenantContextHolder.set() on each thread; not yet implemented",
+        log.info("onprem mode: pinned VPD tenant to {} (per-request pinning via OnpremTenantPinFilter)",
                 effective.tenantId());
 
         return new LicenseStateMachine(effective, verifiedAt, clock::instant);
