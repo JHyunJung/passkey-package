@@ -87,7 +87,15 @@ public class MfaController {
     @PostMapping("/enroll")
     public ResponseEntity<?> enroll(Authentication auth) {
         String email = auth.getName();
-        AdminUser u = users.findByEmail(email).orElseThrow();
+        // Graceful, non-500 handling consistent with verify(): an authenticated
+        // principal whose backing row is gone (concurrent delete / stale session)
+        // gets 401 rather than a bare NoSuchElementException → 500.
+        AdminUser u = users.findByEmail(email).orElse(null);
+        if (u == null) {
+            log.warn("admin mfa enroll: no user row for authenticated principal email={}", mask(email));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "unauthorized"));
+        }
         String secret = totp.newSecretBase32();
         u.setMfaSecret(secret);
         u.setMfaEnabled(true);
