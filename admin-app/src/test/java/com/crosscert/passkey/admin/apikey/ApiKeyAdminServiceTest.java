@@ -4,7 +4,9 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.entity.ApiKey;
+import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
+import com.crosscert.passkey.core.repository.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,6 +36,7 @@ class ApiKeyAdminServiceTest {
     private AuditLogService audit;
     private PasswordEncoder encoder;
     private TenantBoundary boundary;
+    private TenantRepository tenants;
     private ApiKeyAdminService service;
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -43,7 +46,13 @@ class ApiKeyAdminServiceTest {
         audit = mock(AuditLogService.class);
         encoder = new BCryptPasswordEncoder(4); // fast for tests
         boundary = mock(TenantBoundary.class);
-        service = new ApiKeyAdminService(repo, audit, encoder, new SecureRandom(), clock, boundary);
+        tenants = mock(TenantRepository.class);
+        // Default: target tenant is active so existing issue() tests pass the
+        // P0-2 suspended-tenant guard. suspended cases override this stub.
+        Tenant active = mock(Tenant.class);
+        when(active.isSuspended()).thenReturn(false);
+        when(tenants.findById(any())).thenReturn(Optional.of(active));
+        service = new ApiKeyAdminService(repo, audit, encoder, new SecureRandom(), clock, boundary, tenants);
         // @UuidGenerator sets id during JPA persist. In unit tests we must
         // set it reflectively so getId() is non-null after repo.save() mock.
         // The service uses saveAndFlush for issue() and save() for revoke().
@@ -115,6 +124,26 @@ class ApiKeyAdminServiceTest {
                         TENANT_UUID, "primary", java.util.Set.of("registration")),
                 ACTOR_UUID, "alice@example.com");
         assertThat(resp.prefix()).startsWith("pk_");
+    }
+
+    @Test
+    void issueRejectsSuspendedTenant_withTenantSuspendedError() {
+        Tenant suspended = mock(Tenant.class);
+        when(suspended.isSuspended()).thenReturn(true);
+        when(tenants.findById(TENANT_UUID)).thenReturn(Optional.of(suspended));
+
+        ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
+                TENANT_UUID, "primary", java.util.Set.of("registration"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.issue(req, ACTOR_UUID, "alice@example.com"))
+                .isInstanceOf(com.crosscert.passkey.core.api.BusinessException.class)
+                .extracting(e -> ((com.crosscert.passkey.core.api.BusinessException) e).getErrorCode())
+                .isEqualTo(com.crosscert.passkey.core.api.ErrorCode.TENANT_SUSPENDED);
+
+        // No key persisted, no audit appended on the rejection path.
+        org.mockito.Mockito.verify(repo, org.mockito.Mockito.never()).saveAndFlush(any());
+        org.mockito.Mockito.verify(audit, org.mockito.Mockito.never()).append(any());
     }
 
     @Test

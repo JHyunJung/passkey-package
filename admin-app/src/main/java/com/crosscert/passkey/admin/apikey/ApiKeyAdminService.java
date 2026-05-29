@@ -6,7 +6,9 @@ import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.ApiKey;
+import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
+import com.crosscert.passkey.core.repository.TenantRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,19 +38,22 @@ public class ApiKeyAdminService {
     private final SecureRandom random;
     private final Clock clock;
     private final TenantBoundary tenantBoundary;
+    private final TenantRepository tenants;
 
     public ApiKeyAdminService(ApiKeyRepository repo,
                               AuditLogService audit,
                               PasswordEncoder encoder,
                               SecureRandom random,
                               Clock clock,
-                              TenantBoundary tenantBoundary) {
+                              TenantBoundary tenantBoundary,
+                              TenantRepository tenants) {
         this.repo = repo;
         this.audit = audit;
         this.encoder = encoder;
         this.random = random;
         this.clock = clock;
         this.tenantBoundary = tenantBoundary;
+        this.tenants = tenants;
     }
 
     @Transactional(readOnly = true)
@@ -69,6 +74,17 @@ public class ApiKeyAdminService {
     public ApiKeyAdminDto.ApiKeyCreateResponse issue(ApiKeyAdminDto.ApiKeyCreateRequest req,
                                                      UUID actorId, String actorEmail) {
         tenantBoundary.assertCanAccessTenant(req.tenantId());
+
+        // P0-2 seam: suspended 테넌트엔 어떤 경로로도 새 키가 살아남으면 안 됨.
+        // suspend() 가 기존 키를 일괄 revoke 하고 ceremony start 가 거부하더라도,
+        // 운영자가 정지 상태에서 새 키를 발급하면 그 키로 finish/self-service 가 동작한다.
+        Tenant tenant = tenants.findById(req.tenantId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
+        if (tenant.isSuspended()) {
+            throw new BusinessException(ErrorCode.TENANT_SUSPENDED,
+                    "cannot issue api key for suspended tenant: " + req.tenantId());
+        }
+
         String prefix = generateUniquePrefix();
         String secret = b64url(SECRET_RANDOM_BYTES);
         String hash = encoder.encode(secret);
