@@ -10,6 +10,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DynamicCorsConfigurationSourceTest {
@@ -62,5 +64,20 @@ class DynamicCorsConfigurationSourceTest {
         SecurityPolicy p = policyWithCors("not-json");
         when(repo.findById(1L)).thenReturn(Optional.of(p));
         assertThat(source.getCorsConfiguration(null)).isNull();
+    }
+
+    @Test
+    void repeatedCallsWithinTtl_hitCache_singleDbRead() {
+        SecurityPolicy p = policyWithCors("[\"https://app.example.com\"]");
+        when(repo.findById(1L)).thenReturn(Optional.of(p));
+
+        // Many calls (CorsFilter fires on every request) inside the 10s TTL window
+        // must collapse to a single DB read.
+        for (int i = 0; i < 50; i++) {
+            CorsConfiguration cfg = source.getCorsConfiguration(null);
+            assertThat(cfg).isNotNull();
+            assertThat(cfg.getAllowedOrigins()).contains("https://app.example.com");
+        }
+        verify(repo, times(1)).findById(1L);
     }
 }

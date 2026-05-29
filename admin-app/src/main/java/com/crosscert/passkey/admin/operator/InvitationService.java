@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.operator;
 
+import com.crosscert.passkey.admin.policy.PasswordPolicyValidator;
 import com.crosscert.passkey.core.entity.AdminUserInvitation;
 import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
@@ -40,7 +41,7 @@ public class InvitationService {
     private final AdminUserRepository userRepo;
     private final MailSender mailSender;
     private final PasswordEncoder passwordEncoder;
-    private final com.crosscert.passkey.admin.policy.PasswordPolicyValidator passwordPolicyValidator;
+    private final PasswordPolicyValidator passwordPolicyValidator;
 
     @Value("${admin.invite.base-url:http://localhost:5173}")
     private String baseUrl;
@@ -49,7 +50,7 @@ public class InvitationService {
                              AdminUserRepository userRepo,
                              MailSender mailSender,
                              PasswordEncoder passwordEncoder,
-                             com.crosscert.passkey.admin.policy.PasswordPolicyValidator passwordPolicyValidator) {
+                             PasswordPolicyValidator passwordPolicyValidator) {
         this.invitationRepo = invitationRepo;
         this.userRepo = userRepo;
         this.mailSender = mailSender;

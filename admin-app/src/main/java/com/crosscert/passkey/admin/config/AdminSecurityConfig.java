@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService;
 import com.crosscert.passkey.admin.auth.MfaPendingFilter;
+import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -83,7 +84,7 @@ public class AdminSecurityConfig {
                                                 AuthenticationFailureHandler fail,
                                                 LogoutSuccessHandler logoutOk,
                                                 AccessDeniedHandler accessDenied,
-                                                com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource) throws Exception {
+                                                DynamicCorsConfigurationSource corsSource) throws Exception {
         // CookieCsrfTokenRepository.withHttpOnlyFalse() lets the SPA
         // read the XSRF-TOKEN cookie via document.cookie and echo it
         // back in X-XSRF-TOKEN. Path=/admin scopes the cookie.
