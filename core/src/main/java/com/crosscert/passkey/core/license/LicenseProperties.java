@@ -25,6 +25,7 @@ public record LicenseProperties(
         if (cachePath == null) cachePath = Path.of("/var/lib/passkey/license-cache.jwt");
         if (issuer == null) issuer = "license.crosscert.com";
         if (audience == null) audience = "passkey-onprem";
+        if (heartbeatUrl == null) heartbeatUrl = "https://license.crosscert.com/v1/license";
         if (heartbeatInterval == null) heartbeatInterval = Duration.ofHours(1);
     }
 }
