@@ -1,20 +1,30 @@
-# dev profile — local profile 의 superset
+# dev profile — 로컬 개발자 환경
 #
-# 목적: 앱 개발자 (RP 측) 가 register / authenticate 테스트를 빠르게 시작할 수
-# 있도록 admin-ui 에서 사전 준비한 tenant + API key 시드를 미리 제공.
+# 활성화: SPRING_PROFILES_ACTIVE=dev
 #
-# 활성화: `SPRING_PROFILES_ACTIVE=dev,local ./gradlew :admin-app:bootRun`
-#         또는 단독 `SPRING_PROFILES_ACTIVE=dev` (이 파일이 datasource credential
-#         과 redis host 를 local-shared 에서 받으므로 local 같이 켜는 게 권장).
+# 포함: localhost Oracle/Redis + APP_ADMIN_USER credential + dev key-envelope
+#       master + DEBUG 로깅 + db/dev 시드 (R__dev_seed.sql)
 #
-# Flyway: 기본 db/migration 위에 db/dev (R__dev_seed.sql) 를 추가 — 반복 가능
-# (repeatable). 시드 데이터가 이미 있으면 INSERT 가 NOT EXISTS 가드로 skip.
+# 기존 local / local-shared 가 흡수됨 — 더 이상 spring.config.import chain 사용 안 함.
 
 spring:
-  config:
-    import: classpath:application-local.yml
+  datasource:
+    url: jdbc:oracle:thin:@localhost:1521/XEPDB1
+    driver-class-name: oracle.jdbc.OracleDriver
+    username: APP_ADMIN_USER
+    password: admin_pw
+  data:
+    redis:
+      host: localhost
+      port: 6379
   flyway:
     locations: classpath:db/migration,classpath:db/dev
+
+passkey:
+  key-envelope:
+    # Local dev only — 32 zero bytes base64.
+    # Production sets PASSKEY_KEY_ENVELOPE_MASTER_KEY environment variable.
+    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 logging:
   level:

@@ -1,16 +1,29 @@
-# dev profile — passkey-app 측 (local 의 superset)
+# dev profile — 로컬 개발자 환경
 #
-# passkey-app 은 Flyway 비활성 (admin-app 이 schema migration 책임). dev profile
-# 의 시드도 admin-app 의 `db/dev/R__dev_seed.sql` 가 실제 INSERT 를 수행.
-# 이 파일은 단지 passkey-app 이 같은 datasource (APP_RUNTIME_USER) + redis 로
-# 부팅하도록 local 을 import 만 한다. 추가 설정은 없음.
+# 활성화: SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
+#         --args="--passkey.id-token.issuer-base=http://localhost:8080"
 #
-# 활성화: `SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun
-#         --args="--passkey.id-token.issuer-base=http://localhost:8080"`
+# 포함: localhost Oracle/Redis + APP_RUNTIME_USER credential + dev key-envelope
+#       master + DEBUG 로깅
+#
+# 기존 local / local-shared 가 흡수됨 — 더 이상 spring.config.import chain 사용 안 함.
 
 spring:
-  config:
-    import: classpath:application-local.yml
+  datasource:
+    url: jdbc:oracle:thin:@localhost:1521/XEPDB1
+    driver-class-name: oracle.jdbc.OracleDriver
+    username: APP_RUNTIME_USER
+    password: runtime_pw
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+passkey:
+  key-envelope:
+    # Local dev only — 32 zero bytes base64.
+    # Production sets PASSKEY_KEY_ENVELOPE_MASTER_KEY environment variable.
+    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 logging:
   level:
