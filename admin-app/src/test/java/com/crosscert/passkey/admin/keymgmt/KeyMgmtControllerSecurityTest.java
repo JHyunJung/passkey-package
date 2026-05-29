@@ -1,24 +1,20 @@
 package com.crosscert.passkey.admin.keymgmt;
 
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.metamodel.Metamodel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -26,40 +22,28 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-        controllers = KeyMgmtController.class,
-        excludeAutoConfiguration = {
-                org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.data.web.SpringDataWebAutoConfiguration.class
-        }
-)
+@WebMvcTest(controllers = KeyMgmtController.class)
 @Import({
         com.crosscert.passkey.admin.config.AdminSecurityConfig.class,
-        KeyMgmtControllerSecurityTest.JpaStubs.class
+        com.crosscert.passkey.core.api.GlobalExceptionHandler.class
 })
 class KeyMgmtControllerSecurityTest {
 
     /**
-     * AdminApplication carries @EnableJpaRepositories which registers
-     * jpaSharedEM_entityManagerFactory even in @WebMvcTest slices.
-     * We provide a stub EMF with a real (empty) Metamodel so the
-     * JPA wiring succeeds without a real DataSource.
+     * The real {@code AdminApplication} carries {@code @EnableJpaRepositories}, which
+     * eagerly bootstraps every Spring Data JPA repository factory — and that blows up in
+     * a web slice that has no real {@code EntityManagerFactory}/{@code Metamodel}
+     * ("The given domain class can not be found in the given Metamodel"). Declaring this
+     * nested {@code @SpringBootConfiguration} short-circuits {@code @WebMvcTest}'s upward
+     * search for the primary config, so {@code AdminApplication} (and its JPA wiring) is
+     * never loaded. The controller-under-test is supplied via {@code @Import} (rather
+     * than a {@code @ComponentScan}, which would also pull in unrelated {@code @Component}
+     * jobs in the same package); every collaborator is a {@code @MockBean}.
      */
-    @TestConfiguration
-    static class JpaStubs {
-        @Bean
-        EntityManagerFactory entityManagerFactory() {
-            Metamodel metamodel = mock(Metamodel.class);
-            org.mockito.Mockito.when(metamodel.getEntities()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getManagedTypes()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getEmbeddables()).thenReturn(Set.of());
-
-            EntityManagerFactory emf = mock(EntityManagerFactory.class);
-            org.mockito.Mockito.when(emf.getMetamodel()).thenReturn(metamodel);
-            return emf;
-        }
+    @SpringBootConfiguration
+    @EnableAutoConfiguration
+    @Import(KeyMgmtController.class)
+    static class SliceConfig {
     }
 
     @Autowired MockMvc mvc;
@@ -69,21 +53,12 @@ class KeyMgmtControllerSecurityTest {
     @MockBean KeyRotationService rotation;
     @MockBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
 
-    // Beans required by AdminSecurityConfig / AdminApplication context
+    // Beans required by AdminSecurityConfig
     @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockBean JdbcTemplate jdbc;
     @MockBean java.time.Clock clock;
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-
-    // Prevent @EnableJpaRepositories from wiring real Spring Data repos
-    @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
-    @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
-    @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
-    @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
-    @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
-    @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
 
     @Test
     void anonymousListIsUnauthorized() throws Exception {
