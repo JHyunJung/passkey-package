@@ -22,7 +22,7 @@ spring:
 
 passkey:
   key-envelope:
-    # Test profile master key (32 zero bytes b64). Matches local-shared
+    # Test profile master key (32 zero bytes b64). Matches the dev profile
     # default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
     master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
   # Disable @Scheduled auto-fire during short ITs. AdminFlowIT and any
