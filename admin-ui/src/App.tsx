@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
+import { LicenseBanner } from '@/components/LicenseBanner';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TenantsListPage from '@/pages/TenantsListPage';
 import TenantDetailRoute from '@/pages/TenantDetailPage';
@@ -131,10 +132,12 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
   }
 
   return (
-    <div
-      className="app"
-      style={{ gridTemplateAreas: '"sidebar content"' }}
-    >
+    <Fragment>
+      <LicenseBanner />
+      <div
+        className="app"
+        style={{ gridTemplateAreas: '"sidebar content"' }}
+      >
       <Sidebar
         me={me as any}
         currentRoute={route as any}
@@ -209,7 +212,8 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
           options={[{ value: 'labels', label: '라벨' }, { value: 'icons', label: '아이콘만' }]}
         />
       </TweaksPanel>
-    </div>
+      </div>
+    </Fragment>
   );
 }
 
