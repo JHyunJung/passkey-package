@@ -136,7 +136,9 @@ class PlatformOperatorUnrestrictedIT {
                 INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
                 """);
-        // Ensure alice is PLATFORM_OPERATOR with no tenant
+        // Ensure alice is PLATFORM_OPERATOR with no tenant. (MFA is disabled
+        // for the seed users by the test-only migration V9000 so logins here
+        // are not gated by MfaPendingFilter; see db/testfix.)
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
                    SET role = 'PLATFORM_OPERATOR',

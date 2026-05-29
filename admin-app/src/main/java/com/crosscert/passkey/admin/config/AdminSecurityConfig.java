@@ -3,6 +3,7 @@ package com.crosscert.passkey.admin.config;
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService;
+import com.crosscert.passkey.admin.auth.MfaPendingFilter;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -137,7 +138,14 @@ public class AdminSecurityConfig {
             // cleared, but the request attribute survives. addFilterAfter
             // (AuthorizationFilter) runs once the security chain has
             // fully populated SecurityContextHolder.
-            .addFilterAfter(new AdminMdcFilter(), AuthorizationFilter.class);
+            .addFilterAfter(new AdminMdcFilter(), AuthorizationFilter.class)
+            // Second-factor gate. Runs AFTER AuthorizationFilter so the
+            // SecurityContext is populated and the session is resolved; blocks
+            // MFA-pending sessions from every /admin/api/** path except the
+            // MFA endpoints + logout. The pending state is held server-side in
+            // the HttpSession (set by adminLoginSuccessHandler), so it cannot
+            // be spoofed by a client header.
+            .addFilterAfter(new MfaPendingFilter(), AuthorizationFilter.class);
         return http.build();
     }
 
@@ -169,11 +177,21 @@ public class AdminSecurityConfig {
                     null,
                     Map.of("ip", req.getRemoteAddr(),
                            "ua", req.getHeader("User-Agent") == null ? "" : req.getHeader("User-Agent"))));
-            log.info("admin login success: email={} role={}", maskEmail(email), u.getRole());
+            // For MFA-enabled operators, stamp the session as second-factor
+            // pending. MfaPendingFilter then blocks /admin/api/** (except the
+            // MFA endpoints + logout) until /admin/api/mfa/verify clears it.
+            // Operators without MFA are unaffected — behavior is unchanged.
+            boolean mfaRequired = u.isMfaEnabled();
+            if (mfaRequired) {
+                req.getSession().setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, Boolean.TRUE);
+            }
+            log.info("admin login success: email={} role={} mfaRequired={}",
+                    maskEmail(email), u.getRole(), mfaRequired);
             res.setStatus(HttpServletResponse.SC_OK);
             res.setContentType("application/json");
             // Use Jackson to avoid malformed JSON if email ever contains quotes/backslashes.
-            res.getWriter().write(mapper.writeValueAsString(Map.of("email", email, "role", u.getRole())));
+            res.getWriter().write(mapper.writeValueAsString(
+                    Map.of("email", email, "role", u.getRole(), "mfaRequired", mfaRequired)));
         };
     }
 

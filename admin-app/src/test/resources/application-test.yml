@@ -4,7 +4,11 @@ spring:
   application.name: admin-app-it
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # db/testfix carries test-only fixups applied AFTER the real migrations
+    # (e.g. V9000 disables the V32 alice MFA seed so the many role/tenant ITs
+    # that log in as alice are not gated by MfaPendingFilter). This location
+    # exists only under src/test/resources, so it never ships to prod.
+    locations: classpath:db/migration,classpath:db/testfix
     schemas: APP_OWNER
     default-schema: APP_OWNER
     baseline-on-migrate: true
