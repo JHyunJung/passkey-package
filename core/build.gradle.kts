@@ -34,6 +34,9 @@ dependencies {
     testImplementation(rootProject.libs.testcontainers.oracle)
     testImplementation(rootProject.libs.testcontainers.junit)
     testImplementation(rootProject.libs.webauthn4j.test)
+    // Ed25519Signer (used by LicenseTestFixtures) requires Google Tink at runtime.
+    // Tink is an optional dependency of nimbus-jose-jwt — add it explicitly for tests.
+    testImplementation(rootProject.libs.tink)
 }
 
 tasks.named<Test>("test") {
