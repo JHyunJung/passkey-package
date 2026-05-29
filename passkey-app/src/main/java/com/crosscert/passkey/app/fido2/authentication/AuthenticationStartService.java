@@ -72,6 +72,9 @@ public class AuthenticationStartService {
         Tenant tenant = tenants.findById(tenantUuid)
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + tenantId + " not found"));
+        if (tenant.isSuspended()) {
+            throw new IllegalStateException("tenant suspended: " + tenantId);
+        }
 
         byte[] userHandle = (req.userHandle() == null)
                 ? null

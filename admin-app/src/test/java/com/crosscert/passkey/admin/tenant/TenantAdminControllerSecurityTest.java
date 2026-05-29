@@ -66,6 +66,7 @@ class TenantAdminControllerSecurityTest {
     @Autowired MockMvc mvc;
     @MockBean TenantAdminService service;
     @MockBean WebauthnDiffService webauthnDiffService;
+    @MockBean TenantLifecycleService lifecycle;
     @MockBean AdminUserRepository admins;
     @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;

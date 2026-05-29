@@ -90,6 +90,9 @@ public class Tenant extends BaseEntity {
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
     public String getStatus() { return status; }
+    public void suspend() { this.status = "suspended"; }
+    public void activate() { this.status = "active"; }
+    public boolean isSuspended() { return "suspended".equals(status); }
     public String getRpId() { return rpId; }
     public String getRpName() { return rpName; }
     public void setRpName(String rpName) { this.rpName = rpName; }

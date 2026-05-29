@@ -59,6 +59,9 @@ public class RegistrationStartService {
         Tenant tenant = tenants.findById(tenantUuid)
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + tenantId + " not found"));
+        if (tenant.isSuspended()) {
+            throw new IllegalStateException("tenant suspended: " + tenantId);
+        }
 
         byte[] userHandle = Base64.getUrlDecoder().decode(req.userHandle());
         byte[] challenge = challenges.newChallengeBytes();
