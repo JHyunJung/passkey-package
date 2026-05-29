@@ -22,8 +22,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RegistrationStartServiceExcludeTest {
@@ -51,7 +52,9 @@ class RegistrationStartServiceExcludeTest {
 
         byte[] existing = new byte[]{1, 2, 3, 4};
         byte[] userHandle = new byte[]{9, 9};
-        when(credentials.findCredentialIdsByUserHandle(any())).thenReturn(List.of(existing));
+        // eq(userHandle): start() must hand the repo the *decoded* userHandle bytes,
+        // not the base64url string — eq() catches a regression that passes the wrong bytes.
+        when(credentials.findCredentialIdsByUserHandle(eq(userHandle))).thenReturn(List.of(existing));
 
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock);
@@ -61,6 +64,7 @@ class RegistrationStartServiceExcludeTest {
 
         RegistrationStartResponse resp = svc.start(req);
 
+        verify(credentials).findCredentialIdsByUserHandle(eq(userHandle));
         JsonNode exclude = resp.publicKeyCredentialCreationOptions().get("excludeCredentials");
         assertThat(exclude).isNotNull();
         assertThat(exclude.isArray()).isTrue();
@@ -68,6 +72,43 @@ class RegistrationStartServiceExcludeTest {
         assertThat(exclude.get(0).get("type").asText()).isEqualTo("public-key");
         String expectedId = Base64.getUrlEncoder().withoutPadding().encodeToString(existing);
         assertThat(exclude.get(0).get("id").asText()).isEqualTo(expectedId);
+    }
+
+    @Test
+    void start_includesAllExcludeCredentials_whenUserHasMultipleCredentials() {
+        UUID tenantId = UUID.randomUUID();
+        TenantContextHolder.set(tenantId);
+        Tenant t = mock(Tenant.class);
+        when(t.getRpId()).thenReturn("example.com");
+        when(t.getRpName()).thenReturn("Example");
+        when(tenants.findById(tenantId)).thenReturn(Optional.of(t));
+        when(challenges.newChallengeBytes()).thenReturn(new byte[32]);
+        when(challenges.newToken()).thenReturn("tok_test_token_value");
+
+        byte[] first = new byte[]{1, 2, 3, 4};
+        byte[] second = new byte[]{5, 6, 7, 8, 9};
+        byte[] userHandle = new byte[]{9, 9};
+        when(credentials.findCredentialIdsByUserHandle(eq(userHandle)))
+                .thenReturn(List.of(first, second));
+
+        RegistrationStartService svc = new RegistrationStartService(
+                tenants, credentials, challenges, store, mapper, clock);
+        RegistrationStartRequest req = new RegistrationStartRequest(
+                Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
+                "Disp", "alice");
+
+        RegistrationStartResponse resp = svc.start(req);
+
+        verify(credentials).findCredentialIdsByUserHandle(eq(userHandle));
+        JsonNode exclude = resp.publicKeyCredentialCreationOptions().get("excludeCredentials");
+        assertThat(exclude).isNotNull();
+        assertThat(exclude.isArray()).isTrue();
+        assertThat(exclude).hasSize(2);
+        Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
+        assertThat(exclude.get(0).get("type").asText()).isEqualTo("public-key");
+        assertThat(exclude.get(0).get("id").asText()).isEqualTo(enc.encodeToString(first));
+        assertThat(exclude.get(1).get("type").asText()).isEqualTo("public-key");
+        assertThat(exclude.get(1).get("id").asText()).isEqualTo(enc.encodeToString(second));
     }
 
     @Test
@@ -80,15 +121,17 @@ class RegistrationStartServiceExcludeTest {
         when(tenants.findById(tenantId)).thenReturn(Optional.of(t));
         when(challenges.newChallengeBytes()).thenReturn(new byte[32]);
         when(challenges.newToken()).thenReturn("tok_test_token_value");
-        when(credentials.findCredentialIdsByUserHandle(any())).thenReturn(List.of());
+        byte[] userHandle = new byte[]{9, 9};
+        when(credentials.findCredentialIdsByUserHandle(eq(userHandle))).thenReturn(List.of());
 
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock);
         RegistrationStartRequest req = new RegistrationStartRequest(
-                Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[]{9, 9}),
+                Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
 
         RegistrationStartResponse resp = svc.start(req);
+        verify(credentials).findCredentialIdsByUserHandle(eq(userHandle));
         JsonNode exclude = resp.publicKeyCredentialCreationOptions().get("excludeCredentials");
         assertThat(exclude).isNotNull();
         assertThat(exclude.isArray()).isTrue();

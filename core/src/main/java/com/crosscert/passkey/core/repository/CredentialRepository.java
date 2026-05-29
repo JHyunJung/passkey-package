@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -76,5 +77,5 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
      * VPD 가 tenant 로 필터하므로 tenant 격리는 세션 컨텍스트가 담당.
      */
     @Query("select c.credentialId from Credential c where c.userHandle = :userHandle")
-    java.util.List<byte[]> findCredentialIdsByUserHandle(@Param("userHandle") byte[] userHandle);
+    List<byte[]> findCredentialIdsByUserHandle(@Param("userHandle") byte[] userHandle);
 }
