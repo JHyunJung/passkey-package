@@ -5,6 +5,8 @@ import com.crosscert.passkey.app.api.v1.rp.dto.RegistrationStartResponse;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeIssuer;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
@@ -60,7 +62,7 @@ public class RegistrationStartService {
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + tenantId + " not found"));
         if (tenant.isSuspended()) {
-            throw new IllegalStateException("tenant suspended: " + tenantId);
+            throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
         }
 
         byte[] userHandle = Base64.getUrlDecoder().decode(req.userHandle());

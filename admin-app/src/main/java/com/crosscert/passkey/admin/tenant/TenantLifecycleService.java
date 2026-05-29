@@ -2,6 +2,8 @@ package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.ApiKey;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
@@ -40,7 +42,7 @@ public class TenantLifecycleService {
     @Transactional
     public void suspend(UUID tenantId, UUID actorId, String actorEmail) {
         Tenant t = tenants.findById(tenantId)
-                .orElseThrow(() -> new IllegalArgumentException("tenant not found: " + tenantId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
         t.suspend();
         tenants.save(t);
         List<ApiKey> active = apiKeys.findActiveByTenantId(tenantId);
@@ -58,7 +60,7 @@ public class TenantLifecycleService {
     @Transactional
     public void activate(UUID tenantId, UUID actorId, String actorEmail) {
         Tenant t = tenants.findById(tenantId)
-                .orElseThrow(() -> new IllegalArgumentException("tenant not found: " + tenantId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
         t.activate();
         tenants.save(t);
         audit.append(new AuditAppendRequest(actorId, actorEmail, "TENANT_ACTIVATE",

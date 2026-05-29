@@ -21,7 +21,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -136,5 +140,25 @@ class RegistrationStartServiceExcludeTest {
         assertThat(exclude).isNotNull();
         assertThat(exclude.isArray()).isTrue();
         assertThat(exclude).isEmpty();
+    }
+
+    @Test
+    void start_rejectsSuspendedTenant_withTenantSuspendedError() {
+        UUID tenantId = UUID.randomUUID();
+        TenantContextHolder.set(tenantId);
+        Tenant t = mock(Tenant.class);
+        when(t.isSuspended()).thenReturn(true);
+        when(tenants.findById(tenantId)).thenReturn(Optional.of(t));
+
+        RegistrationStartService svc = new RegistrationStartService(
+                tenants, credentials, challenges, store, mapper, clock);
+        RegistrationStartRequest req = new RegistrationStartRequest(
+                Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[]{9, 9}),
+                "Disp", "alice");
+
+        assertThatThrownBy(() -> svc.start(req))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.TENANT_SUSPENDED);
     }
 }
