@@ -79,6 +79,10 @@ class ApiKeyAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
     @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
+    @MockBean com.crosscert.passkey.core.repository.AdminUserInvitationRepository invitationRepository;
+    @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
+    @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
+    @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
 
     private static final UUID TENANT_UUID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
