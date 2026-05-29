@@ -14,6 +14,7 @@ dependencies {
     implementation("org.apache.commons:commons-pool2")
     api("org.springframework.boot:spring-boot-starter-actuator")
     api("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
 
     api(rootProject.libs.oracle.jdbc)
     api(rootProject.libs.flyway.core)
