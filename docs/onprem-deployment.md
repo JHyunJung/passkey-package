@@ -13,8 +13,8 @@
 
 | 환경변수 | 의미 | 기본값 |
 |---|---|---|
-| `SPRING_PROFILES_ACTIVE` | `prod,onprem` 권장 | — |
-| `PASSKEY_DEPLOYMENT_MODE` | `saas` 또는 `onprem` | `saas` |
+| `SPRING_PROFILES_ACTIVE` | `prod` (필수, 신규 정의됨) | — |
+| `PASSKEY_DEPLOYMENT_MODE` | `onprem` (이 가이드 적용 시) | `saas` |
 | `PASSKEY_LICENSE_PATH` | 라이센스 JWS 파일 절대경로 | `/etc/passkey/license.jwt` |
 | `PASSKEY_LICENSE_CACHE_PATH` | 캐시 파일 절대경로 (heartbeat 결과 저장) | `/var/lib/passkey/license-cache.jwt` |
 | `PASSKEY_LICENSE_ISSUER` | 라이센스 발급자 식별자 | `license.crosscert.com` |

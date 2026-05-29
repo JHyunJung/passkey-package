@@ -44,7 +44,7 @@ passkey:
     ttl: PT15M
   key-envelope:
     # Test profile master key (32 zero bytes b64). Matches the
-    # local-shared default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
+    # dev profile default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
     master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 

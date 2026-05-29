@@ -59,6 +59,19 @@ docker compose up -d
 docker exec -i passkey-oracle sqlplus -s / as sysdba < scripts/bootstrap-vpd.sql
 ```
 
+### 프로필
+
+플랫폼 운영을 위해 세 가지 Spring 프로필이 정의되어 있다:
+
+| Profile | 용도 | 시크릿 |
+|---|---|---|
+| `dev` | 로컬 개발 (localhost Oracle/Redis + 시드 데이터) | yml 하드코딩 (dev 전용) |
+| `qa` | 내부 QA / 통합 테스트 | 환경변수 필수 |
+| `prod` | 프로덕션 (SaaS 또는 on-prem) | 환경변수 필수 + Flyway 안전장치 |
+
+`deployment.mode` (saas/onprem) 는 프로필과 독립적인 별도 옵션
+(`PASSKEY_DEPLOYMENT_MODE` 환경변수, [docs/onprem-deployment.md](docs/onprem-deployment.md) 참고).
+
 ### 2) 3 서버 기동 (dev profile)
 
 ```bash

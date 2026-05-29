@@ -1,0 +1,33 @@
+# qa profile — 내부 QA / 통합 테스트 환경
+#
+# 활성화: SPRING_PROFILES_ACTIVE=qa
+#
+# 모든 시크릿과 환경 특화 값은 환경변수로 주입. 빈 default (${VAR:}) 는
+# 운영자가 반드시 값을 설정해야 함을 표시 (미설정 시 부팅 실패).
+
+spring:
+  datasource:
+    url:               ${SPRING_DATASOURCE_URL:}
+    driver-class-name: oracle.jdbc.OracleDriver
+    username:          ${SPRING_DATASOURCE_USERNAME:}
+    password:          ${SPRING_DATASOURCE_PASSWORD:}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  flyway:
+    # qa 도 baseline-on-migrate 는 base 의 true 그대로 — 일부 qa 환경에서
+    # 새 schema 로 시작 가능해야 함.
+    locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:8081}
+
+passkey:
+  key-envelope:
+    # qa 는 dev 의 zero-bytes 와 달리 실제 키 주입 필수.
+    master-key: ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}
+
+logging:
+  level:
+    com.crosscert.passkey: INFO
