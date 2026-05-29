@@ -90,6 +90,14 @@ public class LicenseVerifier {
         Set<String> features = filterKnown(rawFeatures(claims));
         LicenseLimits limits = readLimits(claims);
         String tenantId = (String) claims.getClaim("tenantId");
+        if (tenantId == null) {
+            throw new LicenseVerificationException("License missing required claim: tenantId");
+        }
+        try {
+            java.util.UUID.fromString(tenantId);
+        } catch (IllegalArgumentException e) {
+            throw new LicenseVerificationException("License tenantId is not a valid UUID: " + tenantId);
+        }
 
         return new LicenseToken(
                 claims.getSubject(),
