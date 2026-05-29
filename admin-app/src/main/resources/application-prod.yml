@@ -1,0 +1,40 @@
+# prod profile — 프로덕션 환경 (SaaS 또는 on-prem)
+#
+# 활성화: SPRING_PROFILES_ACTIVE=prod
+#         deployment.mode 와는 독립 — onprem 배포라면
+#         + PASSKEY_DEPLOYMENT_MODE=onprem 추가
+#
+# 모든 시크릿과 환경 특화 값은 환경변수로 주입.
+
+spring:
+  datasource:
+    url:               ${SPRING_DATASOURCE_URL:}
+    driver-class-name: oracle.jdbc.OracleDriver
+    username:          ${SPRING_DATASOURCE_USERNAME:}
+    password:          ${SPRING_DATASOURCE_PASSWORD:}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  flyway:
+    locations: classpath:db/migration
+    # prod 에서는 baseline 자동 생성 비활성 — schema 가 비정상이면 부팅
+    # 실패가 정답 (의도된 fail-fast). 정상 prod schema 라면 V1+ 가 이미
+    # 적용돼 있어야 한다.
+    baseline-on-migrate: false
+    # 이미 적용된 마이그레이션 파일의 checksum 사후 수정 차단.
+    validate-on-migrate: true
+    # `flyway clean` 호출 차단 — prod schema 전체 drop 사고 방지.
+    clean-disabled: true
+
+server:
+  port: ${SERVER_PORT:8081}
+
+passkey:
+  key-envelope:
+    master-key: ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}
+
+logging:
+  level:
+    root: WARN
+    com.crosscert.passkey: INFO
