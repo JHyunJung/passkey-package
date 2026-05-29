@@ -15,6 +15,7 @@ import LoginPage from '@/pages/LoginPage';
 import ActivityPage from '@/pages/ActivityPage';
 import AuditChainPage from '@/pages/AuditChainPage';
 import SettingsPage from '@/pages/SettingsPage';
+import LicensePage from '@/pages/LicensePage';
 import { api } from '@/api/client';
 import type { Me } from '@/api/types';
 
@@ -25,7 +26,8 @@ type AppRoute =
   | { name: 'tenant'; tenantId: string; tab: string }
   | { name: 'activity' }
   | { name: 'audit-chain' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'license' };
 
 function urlToRoute(pathname: string, search: URLSearchParams): AppRoute {
   if (pathname.startsWith('/tenants/')) {
@@ -35,6 +37,7 @@ function urlToRoute(pathname: string, search: URLSearchParams): AppRoute {
   if (pathname === '/activity') return { name: 'activity' };
   if (pathname === '/audit-chain') return { name: 'audit-chain' };
   if (pathname === '/settings') return { name: 'settings' };
+  if (pathname === '/license') return { name: 'license' };
   return { name: 'tenants' };
 }
 
@@ -43,6 +46,7 @@ function routeToUrl(r: AppRoute): string {
   if (r.name === 'tenant') return `/tenants/${r.tenantId}?tab=${r.tab}`;
   if (r.name === 'activity') return '/activity';
   if (r.name === 'audit-chain') return '/audit-chain';
+  if (r.name === 'license') return '/license';
   return '/settings';
 }
 
@@ -84,6 +88,8 @@ function buildBreadcrumb(
     items.push({ label: 'Audit Chain Monitor' });
   } else if (route.name === 'settings') {
     items.push({ label: '설정' });
+  } else if (route.name === 'license') {
+    items.push({ label: 'License' });
   }
 
   return items;
@@ -160,6 +166,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/audit-chain" element={<AuditChainPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/license" element={<LicensePage />} />
             <Route path="*" element={<Navigate to="/tenants" replace />} />
           </Routes>
         </main>

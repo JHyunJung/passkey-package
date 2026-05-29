@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Icons } from '@/icons/Icons';
 import { auditChainMonitorApi, type ChainOverview } from '@/api/auditChainMonitor';
+import { licenseApi } from '@/api/license';
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -18,6 +19,8 @@ const NAV_PLATFORM = [
   { id: 'audit-chain', label: 'Audit Chain', icon: 'Hash' },
   { id: 'settings', label: '설정', icon: 'Cog' },
 ];
+
+const NAV_LICENSE = { id: 'license', label: 'License', icon: 'Key' };
 
 const NAV_RP = [
   { id: 'overview', label: '개요', icon: 'Activity' },
@@ -74,6 +77,21 @@ type SidebarProps = {
 export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'labels' }: SidebarProps) {
   const isPlatform = me.role === 'PLATFORM_OPERATOR';
   const [chain, setChain] = useState<ChainOverview | null>(null);
+  const [deploymentMode, setDeploymentMode] = useState<'saas' | 'onprem' | null>(null);
+
+  useEffect(() => {
+    licenseApi.get()
+      .then(v => setDeploymentMode(v.deploymentMode))
+      .catch(() => setDeploymentMode('saas'));
+  }, []);
+
+  const navItems = useMemo(() => {
+    if (deploymentMode === 'onprem') {
+      // Insert License between Audit Chain and Settings
+      return [...NAV_PLATFORM.slice(0, -1), NAV_LICENSE, NAV_PLATFORM[NAV_PLATFORM.length - 1]];
+    }
+    return NAV_PLATFORM;
+  }, [deploymentMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +152,7 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
         {tenant ? (
           NAV_RP.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.tab === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: 'tenant', tenantId: tenant.id, tab: item.id })} />)
         ) : (
-          NAV_PLATFORM.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.name === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: item.id })} />)
+          navItems.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.name === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: item.id })} />)
         )}
       </nav>
 
