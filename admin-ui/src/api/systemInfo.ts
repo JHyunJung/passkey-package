@@ -14,6 +14,7 @@ export type SystemInfoHost = {
   region: string;
   environment: string;
   deployMethod: string;
+  deploymentMode: 'saas' | 'onprem';   // L4.4 백엔드 일치
 };
 
 export type SystemInfoData = {
