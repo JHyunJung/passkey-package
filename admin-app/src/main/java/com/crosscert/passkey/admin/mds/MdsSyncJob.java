@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.crosscert.passkey.core.license.RequiresFeature;
 
 /**
  * Fires MdsSchedulerService.runOnce() every 6 hours. Initial delay
@@ -20,6 +21,7 @@ public class MdsSyncJob {
         this.scheduler = scheduler;
     }
 
+    @RequiresFeature("mds")
     @Scheduled(
             fixedDelayString = "${passkey.mds.fixed-delay:PT6H}",
             initialDelayString = "${passkey.mds.initial-delay:PT30S}")
