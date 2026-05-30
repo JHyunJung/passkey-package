@@ -44,7 +44,8 @@ public class AdminUser extends BaseEntity {
     @Column(name = "MFA_ENABLED", columnDefinition = "CHAR(1)", nullable = false)
     private String mfaEnabledFlag = "N";
 
-    @Column(name = "MFA_SECRET", length = 64)
+    // length=255 matches V37 (sealed "enc:v1:"+base64 secret ≈ 87 chars exceeds 64).
+    @Column(name = "MFA_SECRET", length = 255)
     private String mfaSecret;
 
     @Column(name = "FAILED_LOGIN_COUNT", nullable = false)
