@@ -39,6 +39,18 @@ async function rawRequest<T>(method: string, path: string, body?: unknown): Prom
     }
     throw new ApiError(401, 'A001', 'Authentication required');
   }
+  if (!res.ok) {
+    // 비-2xx (403 등) — 본문이 에러 envelope({success:false,code,message})일 수 있으나
+    // raw 호출자도 실패를 throw 로 받도록 통일. envelope code/message 있으면 보존.
+    // res.json() 은 한 번만 읽을 수 있으므로 여기서 throw → 아래 정상 return 엔 도달 안 함.
+    let code = 'C999', message = `HTTP ${res.status}`;
+    try {
+      const body = await res.json() as { code?: string; message?: string; error?: string };
+      code = body.code ?? body.error ?? code;
+      message = body.message ?? body.error ?? message;
+    } catch { /* 비-JSON 본문 */ }
+    throw new ApiError(res.status, code, message);
+  }
   try {
     return (await res.json()) as T;
   } catch {

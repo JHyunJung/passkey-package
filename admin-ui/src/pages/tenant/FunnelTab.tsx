@@ -20,7 +20,7 @@ export default function FunnelTab({ tenant }: FunnelTabProps) {
   const [data, setData] = useState<FunnelData | null>(null);
 
   useEffect(() => {
-    funnelApi.get(tenant.id, windowDays).then(setData);
+    funnelApi.get(tenant.id, windowDays).then(setData).catch(() => setData(null));
   }, [tenant.id, windowDays]);
 
   if (!data) return null;
