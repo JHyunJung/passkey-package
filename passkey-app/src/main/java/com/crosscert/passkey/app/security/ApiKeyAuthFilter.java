@@ -1,5 +1,6 @@
 package com.crosscert.passkey.app.security;
 
+import com.crosscert.passkey.core.repository.ApiKeyScopeRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -68,11 +69,17 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private final ApiKeyLookupService lookup;
     private final PasswordEncoder encoder;
+    private final ApiKeyScopeRepository scopeRepo;
+    private final ApiKeyScopeResolver scopeResolver;
 
     public ApiKeyAuthFilter(ApiKeyLookupService lookup,
-                            PasswordEncoder encoder) {
+                            PasswordEncoder encoder,
+                            ApiKeyScopeRepository scopeRepo,
+                            ApiKeyScopeResolver scopeResolver) {
         this.lookup = lookup;
         this.encoder = encoder;
+        this.scopeRepo = scopeRepo;
+        this.scopeResolver = scopeResolver;
     }
 
     @Override
@@ -127,6 +134,24 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
 
         TenantContextHolder.set(row.tenantId());
+
+        // P1-5: 경로가 scope 를 요구하면 키 보유 scope 와 대조. 키는 유효하나
+        // 권한 부족이면 403(401 과 구분). 매핑 없는 경로는 scope 검사 생략.
+        // 검사는 TenantContextHolder 가 설정된 상태에서 수행 — VPD-scoped 조회가
+        // 해당 키의 테넌트를 본다. getServletPath() 는 shouldNotFilter 의 인증
+        // 게이트와 동일 기준이라 context-path 우회 위험이 없다.
+        Optional<String> required = scopeResolver.requiredScope(req.getServletPath());
+        if (required.isPresent()) {
+            java.util.Set<String> held = scopeRepo.findScopeValuesByApiKeyId(row.id());
+            if (!held.contains(required.get())) {
+                TenantContextHolder.clear();
+                log.warn("api-key scope denied: prefix={} required={} held={}",
+                        prefix, required.get(), held);
+                forbidden(res);
+                return;
+            }
+        }
+
         MDC.put(MDC_API_KEY_PREFIX, prefix);
         MDC.put(MDC_TENANT_ID, row.tenantId().toString());
         try {
@@ -151,5 +176,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         res.setContentType("application/problem+json");
         res.getWriter().write(
                 "{\"type\":\"about:blank\",\"status\":401,\"title\":\"Unauthorized\"}");
+    }
+
+    /** 403 — 키는 유효하나 요청 경로 scope 미보유. */
+    private void forbidden(HttpServletResponse res) throws IOException {
+        res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        res.setContentType("application/problem+json");
+        res.getWriter().write(
+                "{\"type\":\"about:blank\",\"status\":403,\"title\":\"Forbidden\",\"error\":\"insufficient_scope\"}");
     }
 }

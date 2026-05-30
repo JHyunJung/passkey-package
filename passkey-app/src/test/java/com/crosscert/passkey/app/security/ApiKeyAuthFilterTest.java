@@ -32,13 +32,15 @@ class ApiKeyAuthFilterTest {
 
     private ApiKeyLookupService lookup;
     private PasswordEncoder encoder;
+    private com.crosscert.passkey.core.repository.ApiKeyScopeRepository scopeRepo;
     private ApiKeyAuthFilter filter;
 
     @BeforeEach
     void setup() {
         lookup = mock(ApiKeyLookupService.class);
         encoder = new BCryptPasswordEncoder(4); // low cost for test speed
-        filter = new ApiKeyAuthFilter(lookup, encoder);
+        scopeRepo = mock(com.crosscert.passkey.core.repository.ApiKeyScopeRepository.class);
+        filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, new ApiKeyScopeResolver());
     }
 
     @AfterEach
