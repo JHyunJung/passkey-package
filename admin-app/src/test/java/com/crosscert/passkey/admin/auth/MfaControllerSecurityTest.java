@@ -131,6 +131,8 @@ class MfaControllerSecurityTest {
                 .andExpect(jsonPath("$.verified").value(true));
 
         assertThat(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isNull();
+        // Security invariant: a valid TOTP must NEVER consume a recovery code.
+        verify(recoveryCodes, never()).consume(any(), any());
     }
 
     @Test
