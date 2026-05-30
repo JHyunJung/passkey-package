@@ -5,6 +5,8 @@ import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationStartResponse;
 import com.crosscert.passkey.app.fido2.challenge.AuthenticationChallenge;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeIssuer;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
@@ -72,6 +74,9 @@ public class AuthenticationStartService {
         Tenant tenant = tenants.findById(tenantUuid)
                 .orElseThrow(() -> new IllegalStateException(
                         "tenant " + tenantId + " not found"));
+        if (tenant.isSuspended()) {
+            throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
+        }
 
         byte[] userHandle = (req.userHandle() == null)
                 ? null

@@ -66,11 +66,14 @@ class TenantAdminControllerSecurityTest {
     @Autowired MockMvc mvc;
     @MockBean TenantAdminService service;
     @MockBean WebauthnDiffService webauthnDiffService;
+    @MockBean TenantLifecycleService lifecycle;
     @MockBean AdminUserRepository admins;
     @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockBean java.time.Clock clock;
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    // AdminSecurityConfig now wires a DynamicCorsConfigurationSource constructor param.
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
     // Prevent @EnableJpaRepositories from wiring real Spring Data repos
     @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
@@ -161,6 +164,31 @@ class TenantAdminControllerSecurityTest {
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.code").value("T001"))
             .andExpect(jsonPath("$.error.errorCode").value("T001"));
+    }
+
+    @Test
+    @WithMockUser(roles = "RP_ADMIN")
+    void viewerCannotSuspend() throws Exception {
+        mvc.perform(post("/admin/api/tenants/acme/suspend").with(csrf()))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void operatorCanSuspend() throws Exception {
+        java.util.UUID tenantId = java.util.UUID.randomUUID();
+        when(admins.findByEmail(anyString()))
+                .thenReturn(java.util.Optional.of(adminUserWithUuid()));
+        when(service.get("acme")).thenReturn(new TenantAdminDto.TenantView(
+                tenantId, "acme", "Acme", "active",
+                "localhost", "Acme",
+                List.of("http://localhost"), Set.of("none"),
+                true, false, "NONE", 60000,
+                0L, 0L, null,
+                java.time.Instant.now(), java.time.Instant.now()));
+        mvc.perform(post("/admin/api/tenants/acme/suspend").with(csrf()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
     }
 
     private static com.crosscert.passkey.core.entity.AdminUser adminUserWithUuid() {

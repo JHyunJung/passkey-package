@@ -142,6 +142,54 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void credentialsDeleteUsesLowerTierBucketAndRejectsWith429() throws Exception {
+        // P0-4: DELETE /credentials/{id} is rate-limited via the prefix rule,
+        // keyed on the ":DELETE" scope (not the raw path-variable URI). When
+        // its key bucket is exhausted the request is rejected with 429.
+        String ipKey = "ratelimit:/api/v1/rp/credentials:DELETE:ip:127.0.0.1";
+        String keyKey = "ratelimit:/api/v1/rp/credentials:DELETE:key:pk_abcd1234";
+        stubBucket(ipKey, true);
+        stubBucket(keyKey, false);
+
+        MockHttpServletRequest req = new MockHttpServletRequest("DELETE",
+                "/api/v1/rp/credentials/AAEC");
+        req.setServletPath("/api/v1/rp/credentials/AAEC");
+        req.setRemoteAddr("127.0.0.1");
+        req.addHeader("X-API-Key", "pk_abcd1234SECRETSECRETSECRET");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(req, res, chain);
+
+        assertThat(res.getStatus()).isEqualTo(429);
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    void credentialsListIsRateLimitedAndPassesWhenBucketsAllow() throws Exception {
+        // P0-4: GET /credentials (list) is matched by the prefix rule on the
+        // default ":/api/v1/rp/credentials" scope (not the ":DELETE" tier) and
+        // passes when both buckets have tokens.
+        String ipKey = "ratelimit:/api/v1/rp/credentials:ip:127.0.0.1";
+        String keyKey = "ratelimit:/api/v1/rp/credentials:key:pk_abcd1234";
+        stubBucket(ipKey, true);
+        stubBucket(keyKey, true);
+
+        MockHttpServletRequest req = new MockHttpServletRequest("GET",
+                "/api/v1/rp/credentials");
+        req.setServletPath("/api/v1/rp/credentials");
+        req.setRemoteAddr("127.0.0.1");
+        req.addHeader("X-API-Key", "pk_abcd1234SECRETSECRETSECRET");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(req, res, chain);
+
+        verify(chain).doFilter(req, res);
+        assertThat(res.getStatus()).isEqualTo(200);
+    }
+
+    @Test
     void doesNotFilterUnknownPath() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET",
                 "/.well-known/jwks.json");

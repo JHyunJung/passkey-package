@@ -179,6 +179,20 @@ class VpdIsolationIT {
                 "cred_b".getBytes(),
                 "pk_b".getBytes(),
                 null));
+
+        // Seed one tenant_aaguid_policy row for tenant A so scenario 6's
+        // positive in-context assertion has a real row to find. V26 gives
+        // this table PK = tenant_id (1 row per tenant), so a single INSERT
+        // suffices. APP_ADMIN holds EXEMPT ACCESS POLICY, so this write is
+        // not blocked by the V35 policy. resetState() DELETEs from tenant,
+        // and fk_tenant_aaguid_policy_tenant cascades, so no extra cleanup.
+        // Only tenant A is seeded → no-context APP_RUNTIME must see 0,
+        // in-context (APP_CTX=T_A) must see exactly 1.
+        jdbc.update(
+                "INSERT INTO APP_OWNER.tenant_aaguid_policy "
+                        + "(tenant_id, policy_mode, mds_strict, created_at, updated_at, updated_by) "
+                        + "VALUES (HEXTORAW(?), 'ANY', 'N', SYSTIMESTAMP, SYSTIMESTAMP, 'vpd-it-seed')",
+                savedTenantAId.toString().replace("-", "").toUpperCase());
     }
 
     @AfterEach
@@ -279,36 +293,69 @@ class VpdIsolationIT {
     }
 
     /**
-     * Scenario 6 (Phase 7): child tables tenant_allowed_origin and
-     * tenant_accepted_format are NOT VPD-protected — they are admin-scoped
-     * tables accessible to APP_RUNTIME_USER even when no tenant context is set.
-     * Contrast with credential, which IS VPD-protected (returns 0 without context).
+     * Scenario 6 (P0-1): tenant child config tables are now VPD-protected by
+     * V35 (TENANT_*_ISOLATION policies reusing APP_OWNER.tenant_predicate).
      *
-     * <p>Queries run through {@link RuntimeDsHelper#countAsRuntimeNoContext} which
-     * uses the APP_RUNTIME_USER pool with TenantContextHolder cleared, so if VPD
-     * were accidentally applied to these tables they would return 0 just like
-     * credential does — proving the assertion actually validates the absence of VPD.
+     * <p>Originally (Phase 7) tenant_allowed_origin and tenant_accepted_format
+     * were admin-scoped tables left intentionally outside VPD — see git
+     * history of this test. P0-1 reverses that: cross-tenant isolation for the
+     * WebAuthn config tables is now enforced at the DB layer for APP_RUNTIME.
+     *
+     * <p>For each table the predicate is proven on BOTH paths so neither is
+     * vacuous:
+     * <ul>
+     *   <li><b>Positive (in-context):</b> APP_CTX=T_A → the predicate
+     *       {@code tenant_id = HEXTORAW(...)} matches T_A's seeded row, so the
+     *       count is positive. This proves the predicate actually selects
+     *       rows, not just that the table is empty.</li>
+     *   <li><b>Negative (no-context):</b> no APP_CTX → predicate {@code 1=0}
+     *       → zero rows. The safe default that blocks leakage.</li>
+     * </ul>
+     *
+     * <p>tenant_aaguid_policy is seeded for tenant A ONLY in {@link #seed()}
+     * (1 row, PK = tenant_id). It was previously unverified; a bare
+     * {@code isEqualTo(0L)} on it would have been vacuous (empty table → 0
+     * regardless of VPD). The in-context positive assertion below removes that
+     * hole.
      */
     @Test
-    void tenantChildTablesAreNotVpdProtected() {
-        // Child tables (tenant_allowed_origin, tenant_accepted_format) are granted
-        // SELECT to APP_RUNTIME but are NOT VPD-scoped. A runtime session with no
-        // tenant context must still see all rows.
-        long origins = runtime.countAsRuntimeNoContext("APP_OWNER.tenant_allowed_origin");
-        assertThat(origins)
-                .as("tenant_allowed_origin must be visible to APP_RUNTIME without VPD restriction "
-                        + "(not VPD-protected: no context → all rows visible)")
-                .isGreaterThanOrEqualTo(2L); // T_A + T_B each seeded 1 origin
+    void tenantChildTablesAreVpdProtected() {
+        // ── Negative path: no APP_CTX → predicate "1=0" → zero rows. ──
+        assertThat(runtime.countAsRuntimeNoContext("APP_OWNER.tenant_allowed_origin"))
+                .as("tenant_allowed_origin VPD (V35): no context → 0 rows for APP_RUNTIME")
+                .isEqualTo(0L);
+        assertThat(runtime.countAsRuntimeNoContext("APP_OWNER.tenant_accepted_format"))
+                .as("tenant_accepted_format VPD (V35): no context → 0 rows for APP_RUNTIME")
+                .isEqualTo(0L);
+        assertThat(runtime.countAsRuntimeNoContext("APP_OWNER.tenant_aaguid_policy"))
+                .as("tenant_aaguid_policy VPD (V35): no context → 0 rows for APP_RUNTIME")
+                .isEqualTo(0L);
+        // Parity: credential has always been VPD-protected.
+        assertThat(runtime.countAsRuntimeNoContext("APP_OWNER.credential"))
+                .as("credential VPD: no context → 0 rows for APP_RUNTIME")
+                .isEqualTo(0L);
 
-        long formats = runtime.countAsRuntimeNoContext("APP_OWNER.tenant_accepted_format");
-        assertThat(formats)
-                .as("tenant_accepted_format must be visible to APP_RUNTIME without VPD restriction")
-                .isGreaterThanOrEqualTo(2L); // T_A + T_B each seeded 1 format
+        // ── Positive path: APP_CTX=T_A → predicate matches T_A rows only. ──
+        // T_A seeds exactly 1 allowed_origin, 1 accepted_format,
+        // 1 aaguid_policy (PK = tenant_id) and 1 credential.
+        assertThat(runtime.countAsRuntimeWithContext("APP_OWNER.tenant_allowed_origin", savedTenantAId))
+                .as("tenant_allowed_origin VPD (V35): APP_CTX=T_A → sees only T_A's seeded origin")
+                .isEqualTo(1L);
+        assertThat(runtime.countAsRuntimeWithContext("APP_OWNER.tenant_accepted_format", savedTenantAId))
+                .as("tenant_accepted_format VPD (V35): APP_CTX=T_A → sees only T_A's seeded format")
+                .isEqualTo(1L);
+        assertThat(runtime.countAsRuntimeWithContext("APP_OWNER.tenant_aaguid_policy", savedTenantAId))
+                .as("tenant_aaguid_policy VPD (V35): APP_CTX=T_A → sees its own policy row (predicate MATCHES, not vacuous)")
+                .isEqualTo(1L);
+        assertThat(runtime.countAsRuntimeWithContext("APP_OWNER.credential", savedTenantAId))
+                .as("credential VPD: APP_CTX=T_A → sees only T_A's credential")
+                .isEqualTo(1L);
 
-        // Contrast: credential IS VPD-protected. APP_RUNTIME with no context sees 0 rows.
-        long creds = runtime.countAsRuntimeNoContext("APP_OWNER.credential");
-        assertThat(creds)
-                .as("credential IS VPD-protected: no context → 0 rows visible to APP_RUNTIME")
+        // ── Cross-tenant isolation: APP_CTX=T_B never sees T_A's aaguid_policy. ──
+        // Only T_A was seeded for aaguid_policy, so T_B must see 0 — proving
+        // the predicate isolates by tenant, not merely "non-empty when set".
+        assertThat(runtime.countAsRuntimeWithContext("APP_OWNER.tenant_aaguid_policy", savedTenantBId))
+                .as("tenant_aaguid_policy VPD (V35): APP_CTX=T_B → 0 rows (T_A's policy is isolated)")
                 .isEqualTo(0L);
     }
 }

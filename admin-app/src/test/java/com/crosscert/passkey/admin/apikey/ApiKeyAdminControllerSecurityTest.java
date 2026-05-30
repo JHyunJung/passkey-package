@@ -70,6 +70,8 @@ class ApiKeyAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockBean java.time.Clock clock;
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    // AdminSecurityConfig now wires a DynamicCorsConfigurationSource constructor param.
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
     // Prevent @EnableJpaRepositories from wiring real Spring Data repos
     @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;

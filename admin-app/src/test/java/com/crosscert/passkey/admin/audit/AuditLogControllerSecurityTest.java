@@ -77,6 +77,8 @@ class AuditLogControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
     @MockBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
+    // AdminSecurityConfig now wires a DynamicCorsConfigurationSource constructor param.
+    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     @Test
     void anonymousGetListIsUnauthorized() throws Exception {

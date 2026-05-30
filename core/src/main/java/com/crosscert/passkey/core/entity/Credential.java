@@ -44,6 +44,9 @@ public class Credential extends BaseEntity {
     @Column(name = "LAST_USED_AT")
     private Instant lastUsedAt;
 
+    @Column(name = "LABEL", length = 128)
+    private String label;
+
     protected Credential() {}
 
     public Credential(UUID tenantId, byte[] userHandle, byte[] credentialId,
@@ -64,6 +67,8 @@ public class Credential extends BaseEntity {
     public String getTransports() { return transports; }
     public String getAttestationFmt() { return attestationFmt; }
     public Instant getLastUsedAt() { return lastUsedAt; }
+    public String getLabel() { return label; }
+    public void setLabel(String label) { this.label = label; }
     public byte[] getCredentialRecordBytes() { return publicKey; } // BLOB now holds CBOR CredentialRecord — see followups doc
 
     /**

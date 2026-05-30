@@ -18,6 +18,7 @@ public enum ErrorCode {
     // Tenant (T)
     TENANT_NOT_FOUND(HttpStatus.NOT_FOUND, "T001", "Tenant not found"),
     TENANT_DUPLICATE(HttpStatus.CONFLICT, "T002", "Tenant code already exists"),
+    TENANT_SUSPENDED(HttpStatus.FORBIDDEN, "T003", "Tenant is suspended"),
 
     // API Key (K)
     API_KEY_NOT_FOUND(HttpStatus.NOT_FOUND, "K001", "API key not found"),

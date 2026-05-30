@@ -18,13 +18,16 @@ public class TenantAdminController {
     private final TenantAdminService service;
     private final AdminUserRepository admins;
     private final WebauthnDiffService webauthnDiffService;
+    private final TenantLifecycleService lifecycle;
 
     public TenantAdminController(TenantAdminService service,
                                  AdminUserRepository admins,
-                                 WebauthnDiffService webauthnDiffService) {
+                                 WebauthnDiffService webauthnDiffService,
+                                 TenantLifecycleService lifecycle) {
         this.service = service;
         this.admins = admins;
         this.webauthnDiffService = webauthnDiffService;
+        this.lifecycle = lifecycle;
     }
 
     @GetMapping
@@ -65,5 +68,23 @@ public class TenantAdminController {
                                    @RequestBody WebauthnDiffRequest proposed) {
         UUID tenantId = service.get(idOrSlug).id();
         return webauthnDiffService.diff(tenantId, proposed);
+    }
+
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
+    @PostMapping("/{idOrSlug}/suspend")
+    public ApiResponse<Void> suspend(@PathVariable String idOrSlug, Authentication auth) {
+        UUID tenantId = service.get(idOrSlug).id();
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+        lifecycle.suspend(tenantId, actorId, auth.getName());
+        return ApiResponse.ok();
+    }
+
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
+    @PostMapping("/{idOrSlug}/activate")
+    public ApiResponse<Void> activate(@PathVariable String idOrSlug, Authentication auth) {
+        UUID tenantId = service.get(idOrSlug).id();
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+        lifecycle.activate(tenantId, actorId, auth.getName());
+        return ApiResponse.ok();
     }
 }

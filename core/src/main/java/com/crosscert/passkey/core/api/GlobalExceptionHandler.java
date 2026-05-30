@@ -1,6 +1,7 @@
 package com.crosscert.passkey.core.api;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +38,19 @@ public class GlobalExceptionHandler {
         // (passwords, tokens) back in the error body. Constraint messages are sufficient.
         List<FieldError> errors = e.getBindingResult().getFieldErrors().stream()
                 .map(fe -> new FieldError(fe.getField(), null, fe.getDefaultMessage()))
+                .toList();
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(ErrorCode.INVALID_INPUT, errors));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException e) {
+        // Thrown by method-level validation on @Validated controllers, e.g. a
+        // @RequestParam @NotBlank that fails. Without this handler it would fall
+        // through to the generic Exception handler and surface as 500; map to 400.
+        // Field paths/messages only — never echo the rejected value (may be a token).
+        List<FieldError> errors = e.getConstraintViolations().stream()
+                .map(v -> new FieldError(v.getPropertyPath().toString(), null, v.getMessage()))
                 .toList();
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(ErrorCode.INVALID_INPUT, errors));
