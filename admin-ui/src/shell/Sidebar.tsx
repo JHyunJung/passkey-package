@@ -159,7 +159,7 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
       {/* Footer: audit chain status */}
       {sidebarMode === 'labels' && (
         <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}>
-          {chain === null ? (
+          {!chain?.totals ? (
             <div className="stack-1" style={{ padding: '8px 10px', background: 'var(--success-soft)', borderRadius: 8, border: '1px solid color-mix(in oklab, var(--success) 20%, transparent)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
                 <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', boxShadow: '0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent)' }}></span>
