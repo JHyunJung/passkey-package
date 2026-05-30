@@ -98,7 +98,7 @@ function buildBreadcrumb(
 
 // ── Authenticated shell ──────────────────────────────────────────────────────
 
-function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
+function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () => void; onMeChange: (m: Me) => void }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -166,7 +166,7 @@ function AuthenticatedApp({ me, onLogout }: { me: Me; onLogout: () => void }) {
             <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/audit-chain" element={<AuditChainPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={<SettingsPage me={me} onMeChange={onMeChange} />} />
             <Route path="/license" element={<LicensePage />} />
             <Route path="*" element={<Navigate to="/tenants" replace />} />
           </Routes>
@@ -271,7 +271,7 @@ function App() {
   return (
     <ToastHost>
       <Routes>
-        <Route path="*" element={<AuthenticatedApp me={me} onLogout={handleLogout} />} />
+        <Route path="*" element={<AuthenticatedApp me={me} onLogout={handleLogout} onMeChange={setMe} />} />
       </Routes>
     </ToastHost>
   );
