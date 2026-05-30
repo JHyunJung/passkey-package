@@ -84,4 +84,9 @@ public class ApiKey extends BaseEntity {
     public void revoke(Instant now) {
         this.revokedAt = now;
     }
+
+    /** P1-5 rotation: 구 키에 grace 만료 시각을 설정해 자동 만료시킨다. */
+    public void expireAt(Instant when) {
+        this.expiresAt = when;
+    }
 }

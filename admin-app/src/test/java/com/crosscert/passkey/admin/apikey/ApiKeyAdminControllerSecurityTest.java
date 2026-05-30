@@ -76,6 +76,7 @@ class ApiKeyAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
+    @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
@@ -135,6 +136,25 @@ class ApiKeyAdminControllerSecurityTest {
         mvc.perform(delete("/admin/api/api-keys/" + UUID.randomUUID()).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void adminCanRotate() throws Exception {
+        org.mockito.Mockito.when(admins.findByEmail(anyString()))
+                .thenReturn(java.util.Optional.of(adminUserWithUuid()));
+        org.mockito.Mockito.when(service.rotate(any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(new ApiKeyAdminDto.ApiKeyRotateResponse(
+                        UUID.randomUUID(), "pk_new12345SECRET", "pk_new12345",
+                        java.util.Set.of("registration"),
+                        java.time.Instant.parse("2026-06-02T00:00:00Z")));
+        mvc.perform(post("/admin/api/api-keys/" + UUID.randomUUID() + "/rotate").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("API key rotated"))
+                .andExpect(jsonPath("$.data.plaintextKey").exists())
+                .andExpect(jsonPath("$.data.prefix").value("pk_new12345"))
+                .andExpect(jsonPath("$.data.oldKeyExpiresAt").exists());
     }
 
     @Test

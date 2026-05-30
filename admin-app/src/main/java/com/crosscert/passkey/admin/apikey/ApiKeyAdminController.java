@@ -41,6 +41,14 @@ public class ApiKeyAdminController {
     }
 
     @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
+    @PostMapping("/{id}/rotate")
+    public ApiResponse<ApiKeyAdminDto.ApiKeyRotateResponse> rotate(
+            @PathVariable UUID id, Authentication auth) {
+        UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();
+        return ApiResponse.ok("API key rotated", service.rotate(id, actorId, auth.getName()));
+    }
+
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> revoke(@PathVariable UUID id, Authentication auth) {
         UUID actorId = admins.findByEmail(auth.getName()).orElseThrow().getId();

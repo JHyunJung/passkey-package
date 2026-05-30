@@ -75,6 +75,7 @@ class MdsAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
+    @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeys;
     @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;

@@ -127,6 +127,43 @@ class ApiKeyAdminServiceTest {
     }
 
     @Test
+    void issueNormalizesScopeCaseBeforePersisting() {
+        when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
+
+        ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
+                TENANT_UUID, "primary", java.util.Set.of("Registration", "AUTHENTICATION"));
+        ApiKeyAdminDto.ApiKeyCreateResponse resp =
+                service.issue(req, ACTOR_UUID, "alice@example.com");
+
+        // response reflects the normalized (lowercased) scopes
+        assertThat(resp.scopes()).containsExactlyInAnyOrder("registration", "authentication");
+
+        // persisted key carries the normalized scopes, not the verbatim request
+        ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
+        verify(repo).saveAndFlush(keyCaptor.capture());
+        assertThat(keyCaptor.getValue().getScopeValues())
+                .containsExactlyInAnyOrder("registration", "authentication");
+    }
+
+    @Test
+    void issueRejectsUnknownScope_withInvalidInputError() {
+        when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
+
+        ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
+                TENANT_UUID, "primary", java.util.Set.of("registration", "bogus"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.issue(req, ACTOR_UUID, "alice@example.com"))
+                .isInstanceOf(com.crosscert.passkey.core.api.BusinessException.class)
+                .extracting(e -> ((com.crosscert.passkey.core.api.BusinessException) e).getErrorCode())
+                .isEqualTo(com.crosscert.passkey.core.api.ErrorCode.INVALID_INPUT);
+
+        // unknown scope rejected before any persistence / audit side effect
+        org.mockito.Mockito.verify(repo, org.mockito.Mockito.never()).saveAndFlush(any());
+        org.mockito.Mockito.verify(audit, org.mockito.Mockito.never()).append(any());
+    }
+
+    @Test
     void issueRejectsSuspendedTenant_withTenantSuspendedError() {
         Tenant suspended = mock(Tenant.class);
         when(suspended.isSuspended()).thenReturn(true);

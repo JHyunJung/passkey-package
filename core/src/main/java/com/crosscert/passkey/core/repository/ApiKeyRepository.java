@@ -41,7 +41,13 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
             """)
     long countActiveByTenantId(@Param("tenantId") UUID tenantId, @Param("now") Instant now);
 
-    /** P0-2: suspend 시 일괄 revoke 대상 — 아직 revoke 되지 않은 tenant 의 키들. */
-    @Query("select k from ApiKey k where k.tenantId = :tenantId and k.revokedAt is null")
-    java.util.List<com.crosscert.passkey.core.entity.ApiKey> findActiveByTenantId(@Param("tenantId") UUID tenantId);
+    /** active = 미revoke AND 미만료. suspend 일괄 revoke·KPI 와 동일 정의. */
+    @Query("""
+            select k from ApiKey k
+            where k.tenantId = :tenantId
+              and k.revokedAt is null
+              and (k.expiresAt is null or k.expiresAt > :now)
+            """)
+    java.util.List<com.crosscert.passkey.core.entity.ApiKey> findActiveByTenantId(
+            @Param("tenantId") UUID tenantId, @Param("now") java.time.Instant now);
 }
