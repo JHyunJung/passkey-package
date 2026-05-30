@@ -71,4 +71,14 @@ class PasswordResetControllerTest {
                 .andExpect(status().isOk());
         verify(service).confirm(eq("t"), eq("NewPassw0rd!"));
     }
+
+    @Test
+    void confirm_invalid_token_returns_400() throws Exception {
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("invalid token"))
+            .when(service).confirm(eq("bad"), org.mockito.ArgumentMatchers.anyString());
+        mvc.perform(post("/admin/api/password-reset/confirm").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"bad\",\"newPassword\":\"NewPassw0rd!\"}"))
+            .andExpect(status().isBadRequest());
+    }
 }

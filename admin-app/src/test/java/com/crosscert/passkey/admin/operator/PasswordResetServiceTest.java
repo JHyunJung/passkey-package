@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -62,6 +63,9 @@ class PasswordResetServiceTest {
     void confirm_valid_token_resets_password_and_lockout() {
         AdminUser u = new AdminUser("op@crosscert.com", "old", "PLATFORM_OPERATOR");
         UUID uid = u.getId();
+        // lockout 을 실제로 걸어 단언을 load-bearing 하게 (maxAttempts=1 → 첫 호출에 즉시 lock).
+        u.recordFailedLogin(clock.instant(), 1, Duration.ofMinutes(15));
+        assertThat(u.getLockedUntil()).isNotNull();  // 사전조건
         AdminPasswordResetToken tok = new AdminPasswordResetToken(
                 uid, service.hashForTest("plain-token"), "plain-to",
                 clock.instant().plusSeconds(3600), clock.instant());
@@ -74,7 +78,7 @@ class PasswordResetServiceTest {
         verify(policy).validate("NewPassw0rd!");
         assertThat(u.getBcryptHash()).isEqualTo("newhash");
         assertThat(tok.isConsumed()).isTrue();
-        assertThat(u.getLockedUntil()).isNull();
+        assertThat(u.getLockedUntil()).isNull();     // 이제 reset 이 실제로 해제했음을 증명
     }
 
     @Test

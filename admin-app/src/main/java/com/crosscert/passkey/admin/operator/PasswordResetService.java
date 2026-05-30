@@ -102,6 +102,9 @@ public class PasswordResetService {
         policy.validate(newPassword);
         user.setBcryptHash(encoder.encode(newPassword));
         user.recordSuccessfulLogin();
+        // 동시 confirm race 는 의도적으로 용인: 토큰은 설계상 1회용이고 operator 가
+        // 직접 시작하며, double-spend 시 최악이 last-writer-wins 비밀번호 재설정(가치 누출 없음).
+        // recovery code(consume)와 달리 conditional update 를 쓰지 않는 이유.
         tok.consume(now);
         log.info("password reset confirmed: email={} tokenPrefix={}",
                 maskEmail(user.getEmail()), tok.getTokenPrefix());
