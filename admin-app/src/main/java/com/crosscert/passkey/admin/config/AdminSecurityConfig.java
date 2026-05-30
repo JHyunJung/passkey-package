@@ -113,6 +113,9 @@ public class AdminSecurityConfig {
                 // Invitation token check (GET) and accept (POST) are unauthenticated —
                 // the invited user has no session yet.
                 .requestMatchers("/admin/api/invitations/**").permitAll()
+                // Self-service password reset (request + confirm) is unauthenticated —
+                // the operator has no session (they forgot their password).
+                .requestMatchers("/admin/api/password-reset/**").permitAll()
                 .requestMatchers("/admin/api/**").authenticated()
                 .anyRequest().denyAll())
             .formLogin(form -> form
@@ -131,7 +134,7 @@ public class AdminSecurityConfig {
                 // Invitation accept is a one-time POST from an unauthenticated context
                 // (no session, no XSRF-TOKEN cookie). Exempt the entire path so that
                 // the SPA can call it without a prior GET to seed the CSRF cookie.
-                .ignoringRequestMatchers("/admin/api/invitations/**"));
+                .ignoringRequestMatchers("/admin/api/invitations/**", "/admin/api/password-reset/**"));
 
         // onprem 모드에서만 존재하는 빈 — Optional 주입으로 SaaS 모드에서 absent.
         // SecurityContextHolderFilter 전에 삽입해 인증 처리 이전에 라이선스를 검사한다.
@@ -186,6 +189,7 @@ public class AdminSecurityConfig {
             String email = auth.getName();
             AdminUser u = users.findByEmail(email).orElseThrow();
             u.recordLogin(clock.instant());
+            u.recordSuccessfulLogin();
             users.save(u);
             audit.append(new AuditAppendRequest(
                     u.getId(), email, "ADMIN_LOGIN",
@@ -212,7 +216,10 @@ public class AdminSecurityConfig {
     }
 
     @Bean
-    public AuthenticationFailureHandler adminLoginFailureHandler(AuditLogService audit) {
+    public AuthenticationFailureHandler adminLoginFailureHandler(
+            AuditLogService audit, AdminUserRepository users, Clock clock,
+            @org.springframework.beans.factory.annotation.Value("${passkey.admin.lockout.max-attempts:5}") int maxAttempts,
+            @org.springframework.beans.factory.annotation.Value("${passkey.admin.lockout.duration:PT15M}") java.time.Duration lockDuration) {
         return (HttpServletRequest req, HttpServletResponse res, AuthenticationException ex) -> {
             String raw = req.getParameter("email");
             // Truncate to column limit (VARCHAR2 255) to prevent audit insert failures
@@ -224,6 +231,17 @@ public class AdminSecurityConfig {
                     : (ex instanceof LockedException) ? "user-locked"
                     : (ex instanceof UsernameNotFoundException) ? "unknown-user"
                     : "other";
+            // Count consecutive bad-password failures toward the lockout
+            // threshold. recordFailedLogin auto-locks (and resets the counter)
+            // once maxAttempts is reached; on the next attempt the
+            // DaoAuthenticationProvider throws LockedException (audited as
+            // "user-locked") without any extra wiring here.
+            if (ex instanceof BadCredentialsException && raw != null) {
+                users.findByEmail(raw).ifPresent(u -> {
+                    u.recordFailedLogin(clock.instant(), maxAttempts, lockDuration);
+                    users.save(u);
+                });
+            }
             audit.append(new AuditAppendRequest(
                     null, email,
                     "ADMIN_LOGIN_FAILED", null, null,

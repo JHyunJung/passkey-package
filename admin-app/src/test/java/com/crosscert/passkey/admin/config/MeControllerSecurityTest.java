@@ -76,6 +76,8 @@ class MeControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
     @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
     @MockBean com.crosscert.passkey.core.repository.AdminUserInvitationRepository invitationRepository;
+    @MockBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
+    @MockBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
@@ -83,7 +85,7 @@ class MeControllerSecurityTest {
     private Authentication operator() {
         AdminUserDetails principal = new AdminUserDetails(
                 UUID.randomUUID(), "alice@example.com", "x",
-                "PLATFORM_OPERATOR", null, true);
+                "PLATFORM_OPERATOR", null, true, null, java.time.Clock.systemUTC());
         return new UsernamePasswordAuthenticationToken(
                 principal, "x", principal.getAuthorities());
     }

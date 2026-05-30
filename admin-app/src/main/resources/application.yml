@@ -37,3 +37,7 @@ passkey:
     expiration-job:
       fixed-delay: PT1M
       initial-delay: PT45S
+  admin:
+    lockout:
+      max-attempts: 5      # 연속 실패 N회 시 계정 잠금
+      duration: PT15M      # 잠금 지속 시간(ISO-8601); 경과 후 자동 해제

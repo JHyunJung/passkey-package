@@ -23,15 +23,20 @@ public final class AdminUserDetails implements UserDetails {
     private final String role;          // "PLATFORM_OPERATOR" | "RP_ADMIN"
     private final UUID tenantId;        // RP_ADMIN 은 non-null
     private final boolean enabled;
+    private final java.time.Instant lockedUntil;
+    private final java.time.Clock clock;
 
     public AdminUserDetails(UUID id, String email, String passwordHash,
-                            String role, UUID tenantId, boolean enabled) {
+                            String role, UUID tenantId, boolean enabled,
+                            java.time.Instant lockedUntil, java.time.Clock clock) {
         this.id = Objects.requireNonNull(id);
         this.email = Objects.requireNonNull(email);
         this.passwordHash = Objects.requireNonNull(passwordHash);
         this.role = Objects.requireNonNull(role);
         this.tenantId = tenantId;
         this.enabled = enabled;
+        this.lockedUntil = lockedUntil;
+        this.clock = Objects.requireNonNull(clock);
     }
 
     public UUID getId()       { return id; }
@@ -47,7 +52,9 @@ public final class AdminUserDetails implements UserDetails {
     @Override public String getPassword()              { return passwordHash; }
     @Override public String getUsername()              { return email; }
     @Override public boolean isAccountNonExpired()     { return true; }
-    @Override public boolean isAccountNonLocked()      { return true; }
+    @Override public boolean isAccountNonLocked() {
+        return lockedUntil == null || clock.instant().isAfter(lockedUntil);
+    }
     @Override public boolean isCredentialsNonExpired() { return true; }
     @Override public boolean isEnabled()               { return enabled; }
 }

@@ -10,9 +10,11 @@ import org.springframework.stereotype.Service;
 public class AdminUserDetailsService implements UserDetailsService {
 
     private final AdminUserRepository repo;
+    private final java.time.Clock clock;
 
-    public AdminUserDetailsService(AdminUserRepository repo) {
+    public AdminUserDetailsService(AdminUserRepository repo, java.time.Clock clock) {
         this.repo = repo;
+        this.clock = clock;
     }
 
     @Override
@@ -25,7 +27,9 @@ public class AdminUserDetailsService implements UserDetailsService {
                 u.getBcryptHash(),
                 u.getRole(),
                 u.getTenantId(),
-                u.isEnabled()
+                u.isEnabled(),
+                u.getLockedUntil(),
+                clock
         );
     }
 }

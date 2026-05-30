@@ -120,7 +120,7 @@ class WebauthnConfigSnapshotIT {
         // Inject PLATFORM_OPERATOR into SecurityContext so TenantBoundary passes
         AdminUserDetails operator = new AdminUserDetails(
                 ACTOR_ID, ACTOR_EMAIL, "{noop}unused",
-                "PLATFORM_OPERATOR", null, true);
+                "PLATFORM_OPERATOR", null, true, null, java.time.Clock.systemUTC());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(operator, null, operator.getAuthorities()));
 

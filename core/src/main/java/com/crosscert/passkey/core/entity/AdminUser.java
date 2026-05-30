@@ -44,8 +44,15 @@ public class AdminUser extends BaseEntity {
     @Column(name = "MFA_ENABLED", columnDefinition = "CHAR(1)", nullable = false)
     private String mfaEnabledFlag = "N";
 
-    @Column(name = "MFA_SECRET", length = 64)
+    // length=255 matches V37 (sealed "enc:v1:"+base64 secret ≈ 87 chars exceeds 64).
+    @Column(name = "MFA_SECRET", length = 255)
     private String mfaSecret;
+
+    @Column(name = "FAILED_LOGIN_COUNT", nullable = false)
+    private int failedLoginCount = 0;
+
+    @Column(name = "LOCKED_UNTIL")
+    private Instant lockedUntil;
 
     protected AdminUser() {}
 
@@ -106,4 +113,24 @@ public class AdminUser extends BaseEntity {
 
     public String getMfaSecret() { return mfaSecret; }
     public void setMfaSecret(String v) { this.mfaSecret = v; }
+
+    public Instant getLockedUntil() { return lockedUntil; }
+
+    /** 테스트 전용 lock 판정. 실제 로그인 게이트는 AdminUserDetails.isAccountNonLocked. */
+    public boolean isLocked(Instant now) {
+        return lockedUntil != null && now.isBefore(lockedUntil);
+    }
+
+    public void recordFailedLogin(Instant now, int maxAttempts, java.time.Duration lockDuration) {
+        this.failedLoginCount++;
+        if (this.failedLoginCount >= maxAttempts) {
+            this.lockedUntil = now.plus(lockDuration);
+            this.failedLoginCount = 0;
+        }
+    }
+
+    public void recordSuccessfulLogin() {
+        this.failedLoginCount = 0;
+        this.lockedUntil = null;
+    }
 }
