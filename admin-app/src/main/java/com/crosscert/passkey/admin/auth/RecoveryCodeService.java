@@ -1,0 +1,94 @@
+package com.crosscert.passkey.admin.auth;
+
+import com.crosscert.passkey.core.entity.AdminUserRecoveryCode;
+import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Admin MFA 1회용 recovery code 발급/소비 (P0 잔여 A).
+ *
+ * <p>발급(generate): 기존 코드 전량 폐기 후 N 개 평문 생성 → sha-256 hash 만 저장 →
+ * 평문 List 를 1회 반환(이후 평문 복구 불가). 소비(consume): 미사용 매칭 코드 1개를
+ * used_at 마킹(one-shot). 평문은 Base32 4-4 형식("xxxx-xxxx")으로 입력 편의 제공.
+ */
+@Service
+public class RecoveryCodeService {
+
+    static final int CODE_COUNT = 10;
+    private static final int GROUP_LEN = 4; // "xxxx-xxxx"
+    private static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 혼동 문자 제외
+    private static final SecureRandom RNG = new SecureRandom();
+
+    private final AdminUserRecoveryCodeRepository repo;
+    private final Clock clock;
+
+    public RecoveryCodeService(AdminUserRecoveryCodeRepository repo, Clock clock) {
+        this.repo = repo;
+        this.clock = clock;
+    }
+
+    @Transactional
+    public List<String> generate(UUID adminUserId) {
+        repo.deleteByAdminUserId(adminUserId);
+        List<String> plaintext = new ArrayList<>(CODE_COUNT);
+        for (int i = 0; i < CODE_COUNT; i++) {
+            String code = randomCode();
+            plaintext.add(code);
+            repo.save(new AdminUserRecoveryCode(adminUserId, sha256Hex(code)));
+        }
+        return plaintext;
+    }
+
+    @Transactional
+    public boolean consume(UUID adminUserId, String code) {
+        if (code == null || code.isBlank()) return false;
+        String hash = sha256Hex(normalize(code));
+        Optional<AdminUserRecoveryCode> match =
+                repo.findByAdminUserIdAndCodeHashAndUsedAtIsNull(adminUserId, hash);
+        if (match.isEmpty()) return false;
+        AdminUserRecoveryCode rec = match.get();
+        rec.markUsed(clock.instant());
+        repo.save(rec);
+        return true;
+    }
+
+    @Transactional(readOnly = true)
+    public long remaining(UUID adminUserId) {
+        return repo.countByAdminUserIdAndUsedAtIsNull(adminUserId);
+    }
+
+    private static String normalize(String code) {
+        return code.trim().toUpperCase(java.util.Locale.ROOT).replace(" ", "");
+    }
+
+    private static String randomCode() {
+        StringBuilder sb = new StringBuilder(GROUP_LEN * 2 + 1);
+        for (int i = 0; i < GROUP_LEN * 2; i++) {
+            if (i == GROUP_LEN) sb.append('-');
+            sb.append(ALPHABET.charAt(RNG.nextInt(ALPHABET.length())));
+        }
+        return sb.toString();
+    }
+
+    private static String sha256Hex(String s) {
+        try {
+            byte[] h = MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(h.length * 2);
+            for (byte b : h) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+}
