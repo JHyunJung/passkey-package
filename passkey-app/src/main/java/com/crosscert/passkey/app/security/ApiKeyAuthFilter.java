@@ -18,6 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Filters every {@code /api/v1/rp/**} request. Parses {@code X-API-Key},
@@ -134,38 +135,41 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
 
         TenantContextHolder.set(row.tenantId());
-
-        // P1-5: 경로가 scope 를 요구하면 키 보유 scope 와 대조. 키는 유효하나
-        // 권한 부족이면 403(401 과 구분). 매핑 없는 경로는 scope 검사 생략.
-        // 검사는 TenantContextHolder 가 설정된 상태에서 수행 — VPD-scoped 조회가
-        // 해당 키의 테넌트를 본다. getServletPath() 는 shouldNotFilter 의 인증
-        // 게이트와 동일 기준이라 context-path 우회 위험이 없다.
-        Optional<String> required = scopeResolver.requiredScope(req.getServletPath());
-        if (required.isPresent()) {
-            java.util.Set<String> held = scopeRepo.findScopeValuesByApiKeyId(row.id());
-            if (!held.contains(required.get())) {
-                TenantContextHolder.clear();
-                log.warn("api-key scope denied: prefix={} required={} held={}",
-                        prefix, required.get(), held);
-                forbidden(res);
-                return;
-            }
-        }
-
-        MDC.put(MDC_API_KEY_PREFIX, prefix);
-        MDC.put(MDC_TENANT_ID, row.tenantId().toString());
         try {
-            // touchLastUsed runs WITH tenant context active so the
-            // V8 package's WHERE tenant_id = SYS_CONTEXT predicate
-            // matches the calling tenant exactly.
-            lookup.touchLastUsed(row.id(), now);
-            if (log.isDebugEnabled()) {
-                log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());
+            // P1-5: 경로가 scope 를 요구하면 키 보유 scope 와 대조. 키는 유효하나
+            // 권한 부족이면 403(401 과 구분). 매핑 없는 경로는 scope 검사 생략.
+            // 검사는 TenantContextHolder 가 설정된 상태에서 수행 — VPD-scoped 조회가
+            // 해당 키의 테넌트를 본다. getServletPath() 는 shouldNotFilter 의 인증
+            // 게이트와 동일 기준이라 context-path 우회 위험이 없다.
+            Optional<String> required = scopeResolver.requiredScope(req.getServletPath());
+            if (required.isPresent()) {
+                // scope 쿼리 예외는 fail-closed(전파→접근 거부)가 의도 —
+                // touchLastUsed 와 달리 swallow 금지. 바깥 finally 가 context clear 보장.
+                Set<String> held = scopeRepo.findScopeValuesByApiKeyId(row.id());
+                if (!held.contains(required.get())) {
+                    log.warn("api-key scope denied: prefix={} required={} held={}",
+                            prefix, required.get(), held);
+                    forbidden(res);
+                    return; // 바깥 finally 가 TenantContextHolder.clear() 보장
+                }
             }
-            chain.doFilter(req, res);
+
+            MDC.put(MDC_API_KEY_PREFIX, prefix);
+            MDC.put(MDC_TENANT_ID, row.tenantId().toString());
+            try {
+                // touchLastUsed runs WITH tenant context active so the
+                // V8 package's WHERE tenant_id = SYS_CONTEXT predicate
+                // matches the calling tenant exactly.
+                lookup.touchLastUsed(row.id(), now);
+                if (log.isDebugEnabled()) {
+                    log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());
+                }
+                chain.doFilter(req, res);
+            } finally {
+                MDC.remove(MDC_API_KEY_PREFIX);
+                MDC.remove(MDC_TENANT_ID);
+            }
         } finally {
-            MDC.remove(MDC_API_KEY_PREFIX);
-            MDC.remove(MDC_TENANT_ID);
             TenantContextHolder.clear();
         }
     }

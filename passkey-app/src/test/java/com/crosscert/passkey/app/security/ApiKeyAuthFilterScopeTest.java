@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -110,5 +111,33 @@ class ApiKeyAuthFilterScopeTest {
 
         verify(chain).doFilter(any(), any());
         verify(scopeRepo, never()).findScopeValuesByApiKeyId(any());
+    }
+
+    @Test
+    void clears_tenant_context_even_when_scope_query_throws() {
+        when(scopeRepo.findScopeValuesByApiKeyId(keyId)).thenThrow(new RuntimeException("db"));
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        assertThatThrownBy(() -> filter.doFilter(req("/api/v1/rp/registration/start"), res, chain))
+                .isInstanceOf(Exception.class);
+        // scope 쿼리 예외가 전파돼도 바깥 finally 가 context 를 비워 cross-request 오염 방지.
+        assertThat(TenantContextHolder.get()).isNull();
+    }
+
+    @Test
+    void uses_servlet_path_not_request_uri_for_scope() throws Exception {
+        when(scopeRepo.findScopeValuesByApiKeyId(keyId)).thenReturn(Set.of("registration"));
+        MockHttpServletRequest r =
+                new MockHttpServletRequest("POST", "/passkey/api/v1/rp/registration/start");
+        r.setRequestURI("/passkey/api/v1/rp/registration/start"); // context-path 포함
+        r.setServletPath("/api/v1/rp/registration/start");        // context-path 제거됨
+        r.addHeader("X-API-Key", prefix + secret);
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(r, res, chain);
+
+        verify(chain).doFilter(any(), any()); // servletPath 로 scope 매칭돼 통과
     }
 }
