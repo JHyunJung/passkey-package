@@ -41,4 +41,17 @@ class AdminUserLockoutTest {
         assertThat(u.isLocked(NOW)).isFalse();
         assertThat(u.getLockedUntil()).isNull();
     }
+
+    @Test
+    void relocks_after_autounlock_requires_fresh_maxAttempts() {
+        AdminUser u = user();
+        for (int i = 0; i < MAX; i++) u.recordFailedLogin(NOW, MAX, LOCK);
+        Instant afterUnlock = NOW.plus(LOCK).plusSeconds(1);
+        assertThat(u.isLocked(afterUnlock)).isFalse();
+        // 자동 해제 후 한 번 실패로는 즉시 재잠금되지 않음
+        u.recordFailedLogin(afterUnlock, MAX, LOCK);
+        assertThat(u.isLocked(afterUnlock)).isFalse();
+        for (int i = 0; i < MAX - 1; i++) u.recordFailedLogin(afterUnlock, MAX, LOCK);
+        assertThat(u.isLocked(afterUnlock)).isTrue();
+    }
 }

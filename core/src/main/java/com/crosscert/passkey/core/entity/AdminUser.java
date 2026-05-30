@@ -115,6 +115,7 @@ public class AdminUser extends BaseEntity {
 
     public Instant getLockedUntil() { return lockedUntil; }
 
+    /** 테스트 전용 lock 판정. 실제 로그인 게이트는 AdminUserDetails.isAccountNonLocked. */
     public boolean isLocked(Instant now) {
         return lockedUntil != null && now.isBefore(lockedUntil);
     }
