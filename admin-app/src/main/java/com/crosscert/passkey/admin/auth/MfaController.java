@@ -73,16 +73,17 @@ public class MfaController {
     }
 
     /**
-     * Generate + store a fresh TOTP secret for the current operator and enable
-     * MFA. Returns the Base32 secret so the operator can add it to an
-     * authenticator app.
+     * Generate + store a fresh TOTP secret for the current operator, but leave
+     * MFA <b>disabled</b> until {@link #confirm} verifies the operator's app
+     * produces a matching code. Returns the Base32 {@code secret} plus an
+     * {@code otpauthUri} for QR provisioning.
      *
-     * <p><b>Does NOT lock the current session.</b> Enrollment only sets the
-     * stored secret + {@code mfa_enabled=Y}; it does not set {@code MFA_PENDING}
-     * for the already-authenticated session. The second-factor gate engages on
-     * the operator's NEXT login. This avoids locking an operator out of the
-     * very session they used to enroll (before they have confirmed the secret
-     * works in their app).
+     * <p><b>Does NOT enable MFA and does NOT lock the current session.</b>
+     * Setting {@code mfa_enabled=N} here is deliberate: an operator who
+     * re-enrolls (overwriting their old secret) but abandons the flow before
+     * confirming would otherwise have a fresh secret with {@code enabled=Y} —
+     * their next login could no longer pass with the old authenticator entry.
+     * Keeping enrollment disabled-until-confirmed closes that lock-out window.
      */
     @PostMapping("/enroll")
     public ResponseEntity<?> enroll(Authentication auth) {
@@ -98,13 +99,71 @@ public class MfaController {
         }
         String secret = totp.newSecretBase32();
         u.setMfaSecret(secret);
+        u.setMfaEnabled(false); // not enabled until confirm() verifies a code
+        users.save(u);
+        String issuer = "Passkey Admin";
+        String otpauthUri = "otpauth://totp/" + enc(issuer) + ":" + enc(email)
+                + "?secret=" + secret + "&issuer=" + enc(issuer);
+        log.info("admin mfa enroll (pending confirm): email={}", mask(email));
+        return ResponseEntity.ok(Map.of("secret", secret, "otpauthUri", otpauthUri));
+    }
+
+    /**
+     * Confirm enrollment: verify a TOTP code against the stored secret and, on
+     * success, set {@code mfa_enabled=Y}. Returns {@code 401 {"error":"invalid_code"}}
+     * on any failure (no secret, wrong/absent code), mirroring {@link #verify}.
+     */
+    @PostMapping("/confirm")
+    public ResponseEntity<?> confirm(@RequestBody VerifyRequest body, Authentication auth) {
+        String email = auth.getName();
+        AdminUser u = users.findByEmail(email).orElse(null);
+        String code = body == null ? null : body.code();
+        boolean ok = u != null
+                && u.getMfaSecret() != null
+                && code != null
+                && totp.verifyAt(u.getMfaSecret(), code, clock.millis());
+        if (!ok) {
+            log.warn("admin mfa confirm failed: email={}", mask(email));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "invalid_code"));
+        }
         u.setMfaEnabled(true);
         users.save(u);
-        log.info("admin mfa enrolled: email={}", mask(email));
-        return ResponseEntity.ok(Map.of("secret", secret));
+        log.info("admin mfa confirmed: email={}", mask(email));
+        return ResponseEntity.ok(Map.of("confirmed", true));
+    }
+
+    /**
+     * Disable MFA: verify a TOTP code against the stored secret and, on success,
+     * set {@code mfa_enabled=N} and clear the stored secret. Returns
+     * {@code 401 {"error":"invalid_code"}} on any failure.
+     */
+    @PostMapping("/disable")
+    public ResponseEntity<?> disable(@RequestBody VerifyRequest body, Authentication auth) {
+        String email = auth.getName();
+        AdminUser u = users.findByEmail(email).orElse(null);
+        String code = body == null ? null : body.code();
+        boolean ok = u != null
+                && u.getMfaSecret() != null
+                && code != null
+                && totp.verifyAt(u.getMfaSecret(), code, clock.millis());
+        if (!ok) {
+            log.warn("admin mfa disable failed: email={}", mask(email));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "invalid_code"));
+        }
+        u.setMfaEnabled(false);
+        u.setMfaSecret(null);
+        users.save(u);
+        log.info("admin mfa disabled: email={}", mask(email));
+        return ResponseEntity.ok(Map.of("disabled", true));
     }
 
     public record VerifyRequest(String code) {}
+
+    private static String enc(String s) {
+        return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+    }
 
     private static String mask(String email) {
         if (email == null || email.isBlank()) return "(unknown)";
