@@ -5,6 +5,7 @@ import TenantsListPage from '@/pages/TenantsListPage';
 import TenantDetailRoute from '@/pages/TenantDetailPage';
 import { ToastHost } from '@/shell/ToastHost';
 import { Sidebar } from '@/shell/Sidebar';
+import { ErrorBoundary } from '@/shell/ErrorBoundary';
 import { Header } from '@/shell/Header';
 import { IdleSessionModal } from '@/extras/IdleSessionModal';
 import { CommandPalette } from '@/extras/CommandPalette';
@@ -145,13 +146,15 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
         className="app"
         style={{ gridTemplateAreas: '"sidebar content"' }}
       >
-      <Sidebar
-        me={me as any}
-        currentRoute={route as any}
-        onNavigate={setRoute as any}
-        tenant={tenant}
-        sidebarMode={t.sidebarMode}
-      />
+      <ErrorBoundary fallback={null}>
+        <Sidebar
+          me={me as any}
+          currentRoute={route as any}
+          onNavigate={setRoute as any}
+          tenant={tenant}
+          sidebarMode={t.sidebarMode}
+        />
+      </ErrorBoundary>
       <div className="content" style={{ gridArea: 'content' }}>
         <Header
           me={me as any}
@@ -161,6 +164,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
           onOpenPalette={() => setPaletteOpen(true)}
         />
         <main style={{ padding: 24 }}>
+          <ErrorBoundary>
           <Routes>
             <Route path="/tenants" element={<TenantsListPage />} />
             <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
@@ -170,6 +174,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
             <Route path="/license" element={<LicensePage />} />
             <Route path="*" element={<Navigate to="/tenants" replace />} />
           </Routes>
+          </ErrorBoundary>
         </main>
       </div>
 
