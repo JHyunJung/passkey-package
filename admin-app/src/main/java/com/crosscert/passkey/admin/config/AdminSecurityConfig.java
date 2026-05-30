@@ -113,6 +113,9 @@ public class AdminSecurityConfig {
                 // Invitation token check (GET) and accept (POST) are unauthenticated —
                 // the invited user has no session yet.
                 .requestMatchers("/admin/api/invitations/**").permitAll()
+                // Self-service password reset (request + confirm) is unauthenticated —
+                // the operator has no session (they forgot their password).
+                .requestMatchers("/admin/api/password-reset/**").permitAll()
                 .requestMatchers("/admin/api/**").authenticated()
                 .anyRequest().denyAll())
             .formLogin(form -> form
@@ -131,7 +134,7 @@ public class AdminSecurityConfig {
                 // Invitation accept is a one-time POST from an unauthenticated context
                 // (no session, no XSRF-TOKEN cookie). Exempt the entire path so that
                 // the SPA can call it without a prior GET to seed the CSRF cookie.
-                .ignoringRequestMatchers("/admin/api/invitations/**"));
+                .ignoringRequestMatchers("/admin/api/invitations/**", "/admin/api/password-reset/**"));
 
         // onprem 모드에서만 존재하는 빈 — Optional 주입으로 SaaS 모드에서 absent.
         // SecurityContextHolderFilter 전에 삽입해 인증 처리 이전에 라이선스를 검사한다.
