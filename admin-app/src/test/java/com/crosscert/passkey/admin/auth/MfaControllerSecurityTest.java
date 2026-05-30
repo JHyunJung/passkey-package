@@ -22,6 +22,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -167,7 +169,12 @@ class MfaControllerSecurityTest {
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.secret").isNotEmpty())
-                .andExpect(jsonPath("$.otpauthUri").value(startsWith("otpauth://totp/")));
+                .andExpect(jsonPath("$.otpauthUri").value(startsWith("otpauth://totp/")))
+                // Spaces in the issuer/label must be percent-encoded (%20), not
+                // '+' as application/x-www-form-urlencoded would emit, so QR apps
+                // parse "Passkey Admin" correctly.
+                .andExpect(jsonPath("$.otpauthUri").value(containsString("Passkey%20Admin")))
+                .andExpect(jsonPath("$.otpauthUri").value(not(containsString("Passkey+Admin"))));
 
         ArgumentCaptor<AdminUser> saved = ArgumentCaptor.forClass(AdminUser.class);
         verify(admins).save(saved.capture());
@@ -235,6 +242,23 @@ class MfaControllerSecurityTest {
         verify(admins, never()).save(any());
     }
 
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void confirm_noSecretEnrolled_is401_andDoesNotSave() throws Exception {
+        AdminUser u = adminUserWithUuid(); // mfaSecret == null (never enrolled)
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        mvc.perform(post("/admin/api/mfa/confirm")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"123456\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("invalid_code"));
+
+        assertThat(u.isMfaEnabled()).isFalse();
+        verify(admins, never()).save(any());
+    }
+
     // ---- disable --------------------------------------------------------
 
     @Test
@@ -276,5 +300,21 @@ class MfaControllerSecurityTest {
                         .content("{\"code\":\"000000\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("invalid_code"));
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void disable_noSecretEnrolled_is401_andDoesNotSave() throws Exception {
+        AdminUser u = adminUserWithUuid(); // mfaSecret == null (never enrolled)
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        mvc.perform(post("/admin/api/mfa/disable")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"123456\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("invalid_code"));
+
+        verify(admins, never()).save(any());
     }
 }

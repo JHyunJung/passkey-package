@@ -55,11 +55,7 @@ public class MfaController {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
-        boolean ok = u != null
-                && u.getMfaSecret() != null
-                && code != null
-                && totp.verifyAt(u.getMfaSecret(), code, clock.millis());
-        if (!ok) {
+        if (!validCode(u, code)) {
             log.warn("admin mfa verify failed: email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
@@ -118,11 +114,7 @@ public class MfaController {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
-        boolean ok = u != null
-                && u.getMfaSecret() != null
-                && code != null
-                && totp.verifyAt(u.getMfaSecret(), code, clock.millis());
-        if (!ok) {
+        if (!validCode(u, code)) {
             log.warn("admin mfa confirm failed: email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
@@ -143,11 +135,7 @@ public class MfaController {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
-        boolean ok = u != null
-                && u.getMfaSecret() != null
-                && code != null
-                && totp.verifyAt(u.getMfaSecret(), code, clock.millis());
-        if (!ok) {
+        if (!validCode(u, code)) {
             log.warn("admin mfa disable failed: email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
@@ -161,8 +149,22 @@ public class MfaController {
 
     public record VerifyRequest(String code) {}
 
+    /**
+     * Shared TOTP gate for verify/confirm/disable: true only when the user row
+     * exists, has an enrolled secret, a code was supplied, and the code matches
+     * the current time window. Centralised so the security-critical predicate
+     * cannot drift between the three call sites.
+     */
+    private boolean validCode(AdminUser u, String code) {
+        return u != null && u.getMfaSecret() != null && code != null
+                && totp.verifyAt(u.getMfaSecret(), code, clock.millis());
+    }
+
     private static String enc(String s) {
-        return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+        // otpauth URIs use percent-encoding; URLEncoder emits '+' for spaces
+        // (application/x-www-form-urlencoded), so normalise '+' to %20.
+        return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20");
     }
 
     private static String mask(String email) {
