@@ -41,3 +41,6 @@ passkey:
     lockout:
       max-attempts: 5      # 연속 실패 N회 시 계정 잠금
       duration: PT15M      # 잠금 지속 시간(ISO-8601); 경과 후 자동 해제
+  api-key:
+    rotation:
+      grace: PT24H         # rotate 시 구 키 유예 만료(ISO-8601); 이 기간 구·신 키 병존 후 구 키 자동 만료
