@@ -12,6 +12,7 @@ import { TweaksPanel, TweakSection, TweakRadio, TweakColor } from '@/tweaks/Twea
 import { useTweaks } from '@/tweaks/useTweaks';
 import type { Tweaks } from '@/tweaks/useTweaks';
 import LoginPage from '@/pages/LoginPage';
+import MfaChallenge from '@/pages/MfaChallenge';
 import ActivityPage from '@/pages/ActivityPage';
 import AuditChainPage from '@/pages/AuditChainPage';
 import SettingsPage from '@/pages/SettingsPage';
@@ -242,6 +243,11 @@ function App() {
     setMe(null);
   }
 
+  async function reloadMe() {
+    try { setMe(await api.get<Me>('/admin/api/me')); }
+    catch { setMe(null); }
+  }
+
   if (loading) {
     return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
   }
@@ -250,6 +256,14 @@ function App() {
     return (
       <ToastHost>
         <LoginPage onLogin={setMe} />
+      </ToastHost>
+    );
+  }
+
+  if (me.mfaRequired) {
+    return (
+      <ToastHost>
+        <MfaChallenge onVerified={reloadMe} onLogout={handleLogout} />
       </ToastHost>
     );
   }
