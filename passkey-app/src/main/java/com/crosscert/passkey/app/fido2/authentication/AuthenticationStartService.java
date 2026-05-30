@@ -19,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -82,19 +81,12 @@ public class AuthenticationStartService {
                 ? null
                 : Base64.getUrlDecoder().decode(req.userHandle());
 
-        // VPD filters to this tenant. Phase 2 will add a derived
-        // findByUserHandle query for efficiency.
-        List<Credential> userCreds = credentials.findAll();
-        if (userHandle != null) {
-            final byte[] uh = userHandle;
-            userCreds = userCreds.stream()
-                    .filter(c -> Arrays.equals(c.getUserHandle(), uh))
-                    .toList();
-        } else {
-            // Usernameless flow: server cannot know which credentials
-            // to advertise. Return empty allowCredentials per WebAuthn.
-            userCreds = List.of();
-        }
+        // VPD filters to this tenant; derived query avoids the findAll scan.
+        // Usernameless flow (userHandle == null): server cannot know which
+        // credentials to advertise → empty allowCredentials per WebAuthn.
+        List<Credential> userCreds = (userHandle == null)
+                ? List.of()                                  // usernameless: advertise nothing
+                : credentials.findByUserHandle(userHandle);
 
         byte[] challenge = challenges.newChallengeBytes();
         String token = challenges.newToken();
@@ -104,8 +96,8 @@ public class AuthenticationStartService {
         ObjectNode options = mapper.createObjectNode();
         options.put("challenge", b64url(challenge));
         options.put("rpId", tenant.getRpId());
-        options.put("timeout", 60000);
-        options.put("userVerification", "required");
+        options.put("timeout", tenant.getWebauthnTimeoutMs());
+        options.put("userVerification", tenant.isRequireUserVerification() ? "required" : "preferred");
         ArrayNode allow = options.putArray("allowCredentials");
         for (Credential c : userCreds) {
             ObjectNode entry = allow.addObject();
@@ -113,7 +105,7 @@ public class AuthenticationStartService {
             entry.put("id", b64url(c.getCredentialId()));
         }
         log.info("authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
-                tokenTail(token), userCreds.size(), 60000);
+                tokenTail(token), userCreds.size(), tenant.getWebauthnTimeoutMs());
         return new AuthenticationStartResponse(token, options);
     }
 
