@@ -13,14 +13,21 @@
 -- ------------------------------------------------------------
 -- 1. admin_user.mfa_secret 확장: VARCHAR2(64) → VARCHAR2(255)
 --
---   MODIFY 는 재실행해도 동일 길이 지정이 단순 no-op (에러 없음) 이지만,
---   방어적으로 OTHERS 로 감싸 재실행을 무해화한다 (테이블 부재 등 환경차 대비).
+--   widening 은 자연 멱등 — 재실행 시 동일 길이 지정이라 단순 no-op (에러 없음).
+--   benign 한 변형만 삼키고 그 외 진짜 실패(오타 컬럼, 락, ORA-01441 향후
+--   width 축소 등)는 RAISE 로 표면화한다 (다른 블록들과 동일한 SQLCODE 가드).
+--     ORA-01430(-1430): column being added already exists
+--     ORA-01442(-1442): column already NOT NULL (MODIFY 변형)
+--     ORA-01451(-1451): column already NULL (MODIFY 변형)
 --   컬럼 폭을 줄이지 않고 늘리기만 하므로 기존 데이터 손실 없음.
 -- ------------------------------------------------------------
 BEGIN
   EXECUTE IMMEDIATE 'ALTER TABLE admin_user MODIFY (mfa_secret VARCHAR2(255))';
 EXCEPTION
-  WHEN OTHERS THEN NULL;
+  WHEN OTHERS THEN
+    IF SQLCODE IN (-1430, -1442, -1451) THEN NULL;  -- benign no-op variants
+    ELSE RAISE;
+    END IF;
 END;
 /
 
@@ -62,7 +69,7 @@ DECLARE
   e_already_exists EXCEPTION;
   PRAGMA EXCEPTION_INIT(e_already_exists, -955);  -- ORA-00955: name already used
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE SEQUENCE admin_password_reset_token_seq START WITH 1 INCREMENT BY 1 NOCACHE';
+  EXECUTE IMMEDIATE 'CREATE SEQUENCE admin_password_reset_token_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE';
 EXCEPTION
   WHEN e_already_exists THEN NULL;
 END;
