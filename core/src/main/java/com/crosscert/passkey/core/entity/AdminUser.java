@@ -47,6 +47,12 @@ public class AdminUser extends BaseEntity {
     @Column(name = "MFA_SECRET", length = 64)
     private String mfaSecret;
 
+    @Column(name = "FAILED_LOGIN_COUNT", nullable = false)
+    private int failedLoginCount = 0;
+
+    @Column(name = "LOCKED_UNTIL")
+    private Instant lockedUntil;
+
     protected AdminUser() {}
 
     /** No-arg constructor for programmatic creation via setters (e.g. invite flow). */
@@ -106,4 +112,23 @@ public class AdminUser extends BaseEntity {
 
     public String getMfaSecret() { return mfaSecret; }
     public void setMfaSecret(String v) { this.mfaSecret = v; }
+
+    public Instant getLockedUntil() { return lockedUntil; }
+
+    public boolean isLocked(Instant now) {
+        return lockedUntil != null && now.isBefore(lockedUntil);
+    }
+
+    public void recordFailedLogin(Instant now, int maxAttempts, java.time.Duration lockDuration) {
+        this.failedLoginCount++;
+        if (this.failedLoginCount >= maxAttempts) {
+            this.lockedUntil = now.plus(lockDuration);
+            this.failedLoginCount = 0;
+        }
+    }
+
+    public void recordSuccessfulLogin() {
+        this.failedLoginCount = 0;
+        this.lockedUntil = null;
+    }
 }

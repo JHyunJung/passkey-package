@@ -83,7 +83,7 @@ class MeControllerSecurityTest {
     private Authentication operator() {
         AdminUserDetails principal = new AdminUserDetails(
                 UUID.randomUUID(), "alice@example.com", "x",
-                "PLATFORM_OPERATOR", null, true);
+                "PLATFORM_OPERATOR", null, true, null, java.time.Clock.systemUTC());
         return new UsernamePasswordAuthenticationToken(
                 principal, "x", principal.getAuthorities());
     }

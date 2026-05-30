@@ -186,6 +186,7 @@ public class AdminSecurityConfig {
             String email = auth.getName();
             AdminUser u = users.findByEmail(email).orElseThrow();
             u.recordLogin(clock.instant());
+            u.recordSuccessfulLogin();
             users.save(u);
             audit.append(new AuditAppendRequest(
                     u.getId(), email, "ADMIN_LOGIN",
@@ -212,7 +213,10 @@ public class AdminSecurityConfig {
     }
 
     @Bean
-    public AuthenticationFailureHandler adminLoginFailureHandler(AuditLogService audit) {
+    public AuthenticationFailureHandler adminLoginFailureHandler(
+            AuditLogService audit, AdminUserRepository users, Clock clock,
+            @org.springframework.beans.factory.annotation.Value("${passkey.admin.lockout.max-attempts:5}") int maxAttempts,
+            @org.springframework.beans.factory.annotation.Value("${passkey.admin.lockout.duration:PT15M}") java.time.Duration lockDuration) {
         return (HttpServletRequest req, HttpServletResponse res, AuthenticationException ex) -> {
             String raw = req.getParameter("email");
             // Truncate to column limit (VARCHAR2 255) to prevent audit insert failures
@@ -224,6 +228,17 @@ public class AdminSecurityConfig {
                     : (ex instanceof LockedException) ? "user-locked"
                     : (ex instanceof UsernameNotFoundException) ? "unknown-user"
                     : "other";
+            // Count consecutive bad-password failures toward the lockout
+            // threshold. recordFailedLogin auto-locks (and resets the counter)
+            // once maxAttempts is reached; on the next attempt the
+            // DaoAuthenticationProvider throws LockedException (audited as
+            // "user-locked") without any extra wiring here.
+            if (ex instanceof BadCredentialsException && raw != null) {
+                users.findByEmail(raw).ifPresent(u -> {
+                    u.recordFailedLogin(clock.instant(), maxAttempts, lockDuration);
+                    users.save(u);
+                });
+            }
             audit.append(new AuditAppendRequest(
                     null, email,
                     "ADMIN_LOGIN_FAILED", null, null,
