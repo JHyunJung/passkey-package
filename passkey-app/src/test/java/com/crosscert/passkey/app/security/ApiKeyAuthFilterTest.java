@@ -116,9 +116,11 @@ class ApiKeyAuthFilterTest {
         String hash = encoder.encode(secret);
         when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
                 new ApiKeyLookupService.ApiKeyAuthRow(KEY_ID_7, TENANT_A, hash, null, null)));
+        // mapped scope 경로 + 키가 해당 scope 보유 → fail-closed 통과(이 테스트는 인증/테넌트 컨텍스트 검증 목적).
+        when(scopeRepo.findScopeValuesByApiKeyId(KEY_ID_7)).thenReturn(java.util.Set.of("registration"));
 
-        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/rp/x");
-        req.setServletPath("/api/v1/rp/x");
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/rp/registration/start");
+        req.setServletPath("/api/v1/rp/registration/start");
         req.addHeader("X-API-Key", fullKey);
         MockHttpServletResponse res = new MockHttpServletResponse();
         UUID[] tenantSeenInChain = new UUID[1];

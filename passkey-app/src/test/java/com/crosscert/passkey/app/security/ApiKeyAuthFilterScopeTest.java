@@ -103,14 +103,18 @@ class ApiKeyAuthFilterScopeTest {
     }
 
     @Test
-    void allows_unmapped_path_without_scope_lookup() throws Exception {
+    void forbids_unmapped_rp_path_fail_closed() throws Exception {
+        // fail-closed: /api/v1/rp 하위인데 scope 매핑 없는 경로는 sentinel scope 요구 →
+        // 어떤 키도 보유 불가 → 403. (이전 fail-open: 매핑 없으면 통과시켰음)
+        when(scopeRepo.findScopeValuesByApiKeyId(keyId)).thenReturn(Set.of("registration"));
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
         filter.doFilter(req("/api/v1/rp/other"), res, chain);
 
-        verify(chain).doFilter(any(), any());
-        verify(scopeRepo, never()).findScopeValuesByApiKeyId(any());
+        assertThat(res.getStatus()).isEqualTo(403);
+        verify(chain, never()).doFilter(any(), any());
+        assertThat(TenantContextHolder.get()).isNull();
     }
 
     @Test
