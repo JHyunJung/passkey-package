@@ -24,4 +24,10 @@ class TenantConveyanceTest {
         assertThat(tenant(null).getAttestationConveyanceLowercase()).isEqualTo("none");
         assertThat(tenant("bogus").getAttestationConveyanceLowercase()).isEqualTo("none");
     }
+
+    @Test
+    void trims_and_lowercases_and_blank_falls_back() {
+        assertThat(tenant("  DiReCt  ").getAttestationConveyanceLowercase()).isEqualTo("direct");
+        assertThat(tenant("").getAttestationConveyanceLowercase()).isEqualTo("none"); // 빈 문자열(컬럼 present but blank)
+    }
 }

@@ -110,7 +110,7 @@ public class Tenant extends BaseEntity {
      */
     public String getAttestationConveyanceLowercase() {
         if (attestationConveyance == null) return "none";
-        String v = attestationConveyance.trim().toLowerCase(java.util.Locale.ROOT);
+        String v = attestationConveyance.trim().toLowerCase(Locale.ROOT);
         return switch (v) {
             case "none", "indirect", "direct", "enterprise" -> v;
             default -> "none";
