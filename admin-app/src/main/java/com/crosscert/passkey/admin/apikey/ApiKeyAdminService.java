@@ -22,8 +22,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -34,6 +37,9 @@ public class ApiKeyAdminService {
     private static final String PREFIX_HEADER = "pk_";
     private static final int PREFIX_RANDOM_BYTES = 6;   // 6 bytes → 8 b64url chars → 11-char prefix
     private static final int SECRET_RANDOM_BYTES = 32;  // 32 bytes → 43 b64url chars
+
+    /** api_key_scope V21 CHECK 제약과 동일한 허용 scope 집합. */
+    private static final Set<String> ALLOWED_SCOPES = Set.of("registration", "authentication", "admin");
 
     private final ApiKeyRepository repo;
     private final AuditLogService audit;
@@ -96,8 +102,16 @@ public class ApiKeyAdminService {
         String secret = b64url(SECRET_RANDOM_BYTES);
         String hash = encoder.encode(secret);
 
-        ApiKey key = new ApiKey(req.tenantId(), prefix, hash, req.name());
+        // P1-5 enforcement seam: scope 를 whitelist 검증 + 소문자 정규화한다.
+        // 필터가 exact match("registration") 로 enforce 하므로 "Registration"·오타가
+        // verbatim 저장되면 200 받지만 모든 RP 호출이 403 인 silent dead key 가 된다.
+        Set<String> normalized = new LinkedHashSet<>();
         for (String scope : req.scopes()) {
+            normalized.add(normalizeScope(scope));
+        }
+
+        ApiKey key = new ApiKey(req.tenantId(), prefix, hash, req.name());
+        for (String scope : normalized) {
             key.addScope(scope);
         }
         ApiKey saved = repo.saveAndFlush(key);
@@ -107,7 +121,7 @@ public class ApiKeyAdminService {
         payload.put("prefix", prefix);
         payload.put("tenantId", req.tenantId().toString());
         payload.put("name", req.name());
-        payload.put("scopes", req.scopes());
+        payload.put("scopes", normalized);
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "API_KEY_ISSUE",
                 "API_KEY", saved.getId().toString(),
@@ -115,10 +129,10 @@ public class ApiKeyAdminService {
                 payload));
 
         log.info("api-key issued: prefix={} name={} tenantId={} scopes={}",
-                prefix, req.name(), req.tenantId(), req.scopes());
+                prefix, req.name(), req.tenantId(), normalized);
 
         return new ApiKeyAdminDto.ApiKeyCreateResponse(
-                saved.getId(), prefix + secret, prefix, req.scopes());
+                saved.getId(), prefix + secret, prefix, normalized);
     }
 
     @Transactional
@@ -194,6 +208,15 @@ public class ApiKeyAdminService {
 
         return new ApiKeyAdminDto.ApiKeyRotateResponse(
                 savedNew.getId(), prefix + secret, prefix, fresh.getScopeValues(), oldExpiry);
+    }
+
+    /** scope 를 소문자 정규화 + whitelist 검증. 알 수 없는 값이면 BusinessException(400). */
+    private static String normalizeScope(String raw) {
+        String s = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
+        if (!ALLOWED_SCOPES.contains(s)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "unknown api key scope: " + raw);
+        }
+        return s;
     }
 
     private String generateUniquePrefix() {
