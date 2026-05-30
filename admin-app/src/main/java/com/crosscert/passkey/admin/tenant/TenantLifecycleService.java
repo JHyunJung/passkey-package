@@ -45,7 +45,7 @@ public class TenantLifecycleService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
         t.suspend();
         tenants.save(t);
-        List<ApiKey> active = apiKeys.findActiveByTenantId(tenantId);
+        List<ApiKey> active = apiKeys.findActiveByTenantId(tenantId, clock.instant());
         for (ApiKey k : active) {
             k.revoke(clock.instant());
         }

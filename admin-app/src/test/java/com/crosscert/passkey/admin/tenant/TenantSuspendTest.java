@@ -32,7 +32,7 @@ class TenantSuspendTest {
         when(tenants.findById(tenantId)).thenReturn(Optional.of(t));
         ApiKey k1 = mock(ApiKey.class);
         ApiKey k2 = mock(ApiKey.class);
-        when(apiKeys.findActiveByTenantId(tenantId)).thenReturn(List.of(k1, k2));
+        when(apiKeys.findActiveByTenantId(eq(tenantId), any())).thenReturn(List.of(k1, k2));
 
         TenantLifecycleService svc = new TenantLifecycleService(tenants, apiKeys, audit, clock);
         svc.suspend(tenantId, UUID.randomUUID(), "alice@crosscert.com");

@@ -27,6 +27,15 @@ public final class ApiKeyAdminDto {
             Set<String> scopes
     ) {}
 
+    /** P1-5 rotation 응답 — plaintextKey 는 ONE-TIME, oldKeyExpiresAt 는 구 키 grace 만료 시각. */
+    public record ApiKeyRotateResponse(
+            UUID id,
+            String plaintextKey,       // ONE-TIME — only returned at rotate
+            String prefix,
+            Set<String> scopes,
+            Instant oldKeyExpiresAt
+    ) {}
+
     public record ApiKeyView(
             UUID id,
             UUID tenantId,

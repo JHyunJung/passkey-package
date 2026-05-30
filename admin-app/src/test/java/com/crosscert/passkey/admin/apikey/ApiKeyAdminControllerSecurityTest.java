@@ -140,6 +140,25 @@ class ApiKeyAdminControllerSecurityTest {
 
     @Test
     @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void adminCanRotate() throws Exception {
+        org.mockito.Mockito.when(admins.findByEmail(anyString()))
+                .thenReturn(java.util.Optional.of(adminUserWithUuid()));
+        org.mockito.Mockito.when(service.rotate(any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(new ApiKeyAdminDto.ApiKeyRotateResponse(
+                        UUID.randomUUID(), "pk_new12345SECRET", "pk_new12345",
+                        java.util.Set.of("registration"),
+                        java.time.Instant.parse("2026-06-02T00:00:00Z")));
+        mvc.perform(post("/admin/api/api-keys/" + UUID.randomUUID() + "/rotate").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("API key rotated"))
+                .andExpect(jsonPath("$.data.plaintextKey").exists())
+                .andExpect(jsonPath("$.data.prefix").value("pk_new12345"))
+                .andExpect(jsonPath("$.data.oldKeyExpiresAt").exists());
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void revokeReturnsApiErrorWhenNotFound() throws Exception {
         UUID missingId = UUID.randomUUID();
         org.mockito.Mockito.when(admins.findByEmail(anyString()))
