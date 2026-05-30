@@ -39,3 +39,7 @@ admin-app/src/main/resources/static/admin/
 admin-ui/vite.config.js
 admin-ui/vite.config.d.ts
 .superpowers/
+
+# dogfooding 산출물 (브라우저 검증 스크린샷)
+dogfood-*.png
+.playwright-mcp/
