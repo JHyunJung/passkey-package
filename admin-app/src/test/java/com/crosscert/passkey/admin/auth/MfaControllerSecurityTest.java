@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,6 +74,11 @@ class MfaControllerSecurityTest {
     @Autowired MockMvc mvc;
     @Autowired TotpService totp;
 
+    // New collaborators introduced by the recovery-code / secret-seal wiring.
+    // secretCipher.open(...) is stubbed as identity in @BeforeEach so these tests
+    // (which store PLAINTEXT secrets) keep exercising validCode exactly as before.
+    @MockBean MfaSecretCipher secretCipher;
+    @MockBean RecoveryCodeService recoveryCodes;
     @MockBean AdminUserRepository admins;
     // AdminSecurityConfig collaborators that are not otherwise supplied by the slice.
     @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
@@ -88,6 +94,15 @@ class MfaControllerSecurityTest {
             f.set(u, UUID.randomUUID());
         } catch (Exception e) { throw new RuntimeException(e); }
         return u;
+    }
+
+    @BeforeEach
+    void stubCipherIdentity() {
+        // These tests store PLAINTEXT secrets, so seal/open must pass through
+        // unchanged for validCode (which now opens the stored value) to keep
+        // verifying against the same Base32 secret the test generated.
+        when(secretCipher.seal(anyString())).thenAnswer(inv -> inv.getArgument(0));
+        when(secretCipher.open(anyString())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     // ---- verify ---------------------------------------------------------

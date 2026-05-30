@@ -35,11 +35,16 @@ public class MfaController {
     private final TotpService totp;
     private final AdminUserRepository users;
     private final Clock clock;
+    private final RecoveryCodeService recoveryCodes;
+    private final MfaSecretCipher secretCipher;
 
-    public MfaController(TotpService totp, AdminUserRepository users, Clock clock) {
+    public MfaController(TotpService totp, AdminUserRepository users, Clock clock,
+                         RecoveryCodeService recoveryCodes, MfaSecretCipher secretCipher) {
         this.totp = totp;
         this.users = users;
         this.clock = clock;
+        this.recoveryCodes = recoveryCodes;
+        this.secretCipher = secretCipher;
     }
 
     /**
@@ -55,7 +60,12 @@ public class MfaController {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
-        if (!validCode(u, code)) {
+        boolean totpOk = validCode(u, code);
+        boolean recoveryOk = false;
+        if (!totpOk && u != null) {
+            recoveryOk = recoveryCodes.consume(u.getId(), code);
+        }
+        if (!totpOk && !recoveryOk) {
             log.warn("admin mfa verify failed: email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
@@ -63,6 +73,11 @@ public class MfaController {
         var session = req.getSession(false);
         if (session != null) {
             session.removeAttribute(MfaPendingFilter.MFA_PENDING_ATTR);
+        }
+        if (recoveryOk) {
+            long left = recoveryCodes.remaining(u.getId());
+            log.warn("admin mfa verify via recovery code: email={} remaining={}", mask(email), left);
+            return ResponseEntity.ok(Map.of("verified", true, "usedRecoveryCode", true, "remaining", left));
         }
         log.info("admin mfa verify success: email={}", mask(email));
         return ResponseEntity.ok(Map.of("verified", true));
@@ -94,7 +109,7 @@ public class MfaController {
                     .body(Map.of("error", "unauthorized"));
         }
         String secret = totp.newSecretBase32();
-        u.setMfaSecret(secret);
+        u.setMfaSecret(secretCipher.seal(secret));
         u.setMfaEnabled(false); // not enabled until confirm() verifies a code
         users.save(u);
         String issuer = "Passkey Admin";
@@ -122,7 +137,8 @@ public class MfaController {
         u.setMfaEnabled(true);
         users.save(u);
         log.info("admin mfa confirmed: email={}", mask(email));
-        return ResponseEntity.ok(Map.of("confirmed", true));
+        var codes = recoveryCodes.generate(u.getId());
+        return ResponseEntity.ok(Map.of("confirmed", true, "recoveryCodes", codes));
     }
 
     /**
@@ -156,8 +172,9 @@ public class MfaController {
      * cannot drift between the three call sites.
      */
     private boolean validCode(AdminUser u, String code) {
-        return u != null && u.getMfaSecret() != null && code != null
-                && totp.verifyAt(u.getMfaSecret(), code, clock.millis());
+        if (u == null || u.getMfaSecret() == null || code == null) return false;
+        String plain = secretCipher.open(u.getMfaSecret());
+        return totp.verifyAt(plain, code, clock.millis());
     }
 
     private static String enc(String s) {
