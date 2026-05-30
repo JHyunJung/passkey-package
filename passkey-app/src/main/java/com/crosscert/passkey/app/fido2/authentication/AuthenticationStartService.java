@@ -85,7 +85,7 @@ public class AuthenticationStartService {
         // Usernameless flow (userHandle == null): server cannot know which
         // credentials to advertise → empty allowCredentials per WebAuthn.
         List<Credential> userCreds = (userHandle == null)
-                ? List.of()                                  // usernameless: advertise nothing
+                ? List.of()
                 : credentials.findByUserHandle(userHandle);
 
         byte[] challenge = challenges.newChallengeBytes();
