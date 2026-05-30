@@ -44,4 +44,8 @@ export const tenantsApi = {
     const server = await api.post<TenantView>('/admin/api/tenants', body);
     return adaptTenant(server);
   },
+  suspend: (id: string): Promise<void> =>
+    api.post<void>(`/admin/api/tenants/${id}/suspend`, {}),
+  activate: (id: string): Promise<void> =>
+    api.post<void>(`/admin/api/tenants/${id}/activate`, {}),
 };
