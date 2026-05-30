@@ -39,6 +39,8 @@ public class MfaSecretCipher {
     public String open(String stored) {
         if (stored == null) return null;
         if (!stored.startsWith(PREFIX)) return stored; // legacy 평문
+        // NOTE: "enc:v2:" 추가 시 이 검사 BEFORE 에서 버전 분기할 것 —
+        // v2 값은 PREFIX 와 불일치해 평문으로 오인된다.
         try {
             byte[] sealed = Base64.getDecoder().decode(stored.substring(PREFIX.length()));
             return new String(envelope.open(sealed), StandardCharsets.UTF_8);

@@ -38,4 +38,14 @@ class MfaSecretCipherTest {
     void open_null_returns_null() {
         assertThat(cipher().open(null)).isNull();
     }
+
+    @Test
+    void open_corrupt_ciphertext_fails_generically() {
+        MfaSecretCipher c = cipher();
+        String corrupt = "enc:v1:" + java.util.Base64.getEncoder().encodeToString(new byte[]{1, 2, 3});
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> c.open(corrupt))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("mfa secret open failed")
+                .hasNoCause();
+    }
 }
