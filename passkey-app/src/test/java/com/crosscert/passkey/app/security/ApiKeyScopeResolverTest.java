@@ -30,5 +30,8 @@ class ApiKeyScopeResolverTest {
         assertThat(resolver.requiredScope("/api/v1/rp/other")).isEmpty();
         assertThat(resolver.requiredScope("/actuator/health")).isEmpty();
         assertThat(resolver.requiredScope(null)).isEmpty();
+        // segment 경계 매칭: registration 의 prefix 이지만 다른 라우트는 매칭 안 됨
+        assertThat(resolver.requiredScope("/api/v1/rp/registrationXYZ")).isEmpty();
+        assertThat(resolver.requiredScope("/api/v1/rp/authentication-config")).isEmpty();
     }
 }
