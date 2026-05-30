@@ -84,6 +84,21 @@ class MfaPendingFilterTest {
     }
 
     @Test
+    void pending_mePath_passesThrough() throws Exception {
+        // The SPA must read /admin/api/me even while MFA-pending so it can
+        // discover it needs to show the MFA challenge.
+        authenticate();
+        HttpServletRequest req = requestWithSession("/admin/api/me", true);
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(req, res, chain);
+
+        verify(chain, times(1)).doFilter(req, res);
+        assertThat(res.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
+    }
+
+    @Test
     void notPending_passesThrough() throws Exception {
         authenticate();
         HttpServletRequest req = requestWithSession("/admin/api/tenants", false);

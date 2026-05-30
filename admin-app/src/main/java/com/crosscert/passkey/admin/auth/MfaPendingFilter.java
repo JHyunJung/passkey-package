@@ -24,6 +24,8 @@ import java.io.IOException;
  * <p>Allow-listed while pending so the user can complete the second factor:
  * <ul>
  *   <li>{@code /admin/api/mfa/**} — verify / enroll endpoints.</li>
+ *   <li>{@code /admin/api/me} — so the SPA can read its own session state
+ *       (notably {@code mfaRequired}) and decide to show the MFA challenge.</li>
  *   <li>{@code /admin/logout} — let the operator abandon the half-finished login.</li>
  * </ul>
  *
@@ -73,6 +75,7 @@ public class MfaPendingFilter extends OncePerRequestFilter {
         if (uri == null) return false;
         return uri.startsWith("/admin/api/mfa/")
                 || uri.equals("/admin/api/mfa")
+                || uri.equals("/admin/api/me")
                 || uri.equals("/admin/logout");
     }
 }

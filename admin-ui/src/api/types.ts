@@ -2,6 +2,8 @@ export interface Me {
   email: string;
   role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
   tenantId: string | null;
+  mfaEnabled: boolean;
+  mfaRequired: boolean;
 }
 
 export interface TenantView {

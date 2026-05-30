@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import AccountTab from './settings/AccountTab';
 import AdminUsersTab from './settings/AdminUsersTab';
 import MdsStatusTab from './settings/MdsStatusTab';
 import SystemInfoTab from './settings/SystemInfoTab';
 import SecurityPolicyTab from './settings/SecurityPolicyTab';
+import type { Me } from '@/api/types';
 
-type SettingsTab = 'admins' | 'mds' | 'system' | 'security';
+type SettingsTab = 'account' | 'admins' | 'mds' | 'system' | 'security';
 
-export default function SettingsPage() {
-  const [tab, setTab] = useState<SettingsTab>('admins');
+export default function SettingsPage({ me, onMeChange }: { me: Me; onMeChange: (m: Me) => void }) {
+  const [tab, setTab] = useState<SettingsTab>('account');
 
   return (
     <div className="page">
@@ -19,6 +21,12 @@ export default function SettingsPage() {
       </div>
 
       <div className="tabs">
+        <button
+          className={`tabs__btn ${tab === 'account' ? 'tabs__btn--active' : ''}`}
+          onClick={() => setTab('account')}
+        >
+          내 계정
+        </button>
         <button
           className={`tabs__btn ${tab === 'admins' ? 'tabs__btn--active' : ''}`}
           onClick={() => setTab('admins')}
@@ -45,6 +53,7 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {tab === 'account' && <AccountTab me={me} onMeChange={onMeChange} />}
       {tab === 'admins' && <AdminUsersTab />}
       {tab === 'mds' && <MdsStatusTab />}
       {tab === 'system' && <SystemInfoTab />}

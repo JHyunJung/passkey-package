@@ -22,7 +22,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.startsWith;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -155,7 +160,7 @@ class MfaControllerSecurityTest {
 
     @Test
     @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
-    void enroll_is200_returnsSecret_andEnablesMfa() throws Exception {
+    void enroll_is200_returnsSecretAndUri_andDoesNotEnableMfaYet() throws Exception {
         AdminUser u = adminUserWithUuid();
         assertThat(u.isMfaEnabled()).isFalse(); // precondition
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
@@ -163,11 +168,19 @@ class MfaControllerSecurityTest {
         mvc.perform(post("/admin/api/mfa/enroll")
                         .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.secret").isNotEmpty());
+                .andExpect(jsonPath("$.secret").isNotEmpty())
+                .andExpect(jsonPath("$.otpauthUri").value(startsWith("otpauth://totp/")))
+                // Spaces in the issuer/label must be percent-encoded (%20), not
+                // '+' as application/x-www-form-urlencoded would emit, so QR apps
+                // parse "Passkey Admin" correctly.
+                .andExpect(jsonPath("$.otpauthUri").value(containsString("Passkey%20Admin")))
+                .andExpect(jsonPath("$.otpauthUri").value(not(containsString("Passkey+Admin"))));
 
         ArgumentCaptor<AdminUser> saved = ArgumentCaptor.forClass(AdminUser.class);
         verify(admins).save(saved.capture());
-        assertThat(saved.getValue().isMfaEnabled()).isTrue();
+        // Enroll stores the secret but leaves MFA DISABLED until confirm() succeeds,
+        // so an abandoned re-enroll cannot lock the operator out on next login.
+        assertThat(saved.getValue().isMfaEnabled()).isFalse();
         assertThat(saved.getValue().getMfaSecret()).isNotBlank();
         // Returned secret must round-trip through Base32 to >= 20 bytes (160-bit).
         assertThat(totp.decodeSecretForTest(saved.getValue().getMfaSecret()).length)
@@ -183,5 +196,125 @@ class MfaControllerSecurityTest {
                         .with(csrf()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("unauthorized"));
+    }
+
+    // ---- confirm --------------------------------------------------------
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void confirm_validCode_is200_andEnablesMfa() throws Exception {
+        String secret = totp.newSecretBase32();
+        AdminUser u = adminUserWithUuid();
+        u.setMfaSecret(secret); // enrolled but not yet enabled
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        String validCode = totp.generate(secret, FIXED_MILLIS);
+
+        mvc.perform(post("/admin/api/mfa/confirm")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + validCode + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmed").value(true));
+
+        ArgumentCaptor<AdminUser> saved = ArgumentCaptor.forClass(AdminUser.class);
+        verify(admins).save(saved.capture());
+        assertThat(saved.getValue().isMfaEnabled()).isTrue();
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void confirm_wrongCode_is401_andDoesNotEnableMfa() throws Exception {
+        String secret = totp.newSecretBase32();
+        AdminUser u = adminUserWithUuid();
+        u.setMfaSecret(secret);
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        mvc.perform(post("/admin/api/mfa/confirm")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"000000\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("invalid_code"));
+
+        // A failed confirm must not enable MFA nor persist the row.
+        assertThat(u.isMfaEnabled()).isFalse();
+        verify(admins, never()).save(any());
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void confirm_noSecretEnrolled_is401_andDoesNotSave() throws Exception {
+        AdminUser u = adminUserWithUuid(); // mfaSecret == null (never enrolled)
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        mvc.perform(post("/admin/api/mfa/confirm")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"123456\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("invalid_code"));
+
+        assertThat(u.isMfaEnabled()).isFalse();
+        verify(admins, never()).save(any());
+    }
+
+    // ---- disable --------------------------------------------------------
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void disable_validCode_is200_andDisablesMfa_andClearsSecret() throws Exception {
+        String secret = totp.newSecretBase32();
+        AdminUser u = adminUserWithUuid();
+        u.setMfaSecret(secret);
+        u.setMfaEnabled(true);
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        String validCode = totp.generate(secret, FIXED_MILLIS);
+
+        mvc.perform(post("/admin/api/mfa/disable")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"" + validCode + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disabled").value(true));
+
+        ArgumentCaptor<AdminUser> saved = ArgumentCaptor.forClass(AdminUser.class);
+        verify(admins).save(saved.capture());
+        assertThat(saved.getValue().isMfaEnabled()).isFalse();
+        assertThat(saved.getValue().getMfaSecret()).isNull();
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void disable_wrongCode_is401() throws Exception {
+        String secret = totp.newSecretBase32();
+        AdminUser u = adminUserWithUuid();
+        u.setMfaSecret(secret);
+        u.setMfaEnabled(true);
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        mvc.perform(post("/admin/api/mfa/disable")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"000000\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("invalid_code"));
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void disable_noSecretEnrolled_is401_andDoesNotSave() throws Exception {
+        AdminUser u = adminUserWithUuid(); // mfaSecret == null (never enrolled)
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
+
+        mvc.perform(post("/admin/api/mfa/disable")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"code\":\"123456\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("invalid_code"));
+
+        verify(admins, never()).save(any());
     }
 }
