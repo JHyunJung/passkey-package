@@ -9,6 +9,14 @@ P1-1(per-tenant WebAuthn ceremony 반영) + P1-5(API key scope 검증 + rotation
 
 ---
 
+## 0. 최종 통합 리뷰에서 닫은 보안 seam (2건, 반영 완료)
+
+최종 cross-task 리뷰가 발견한 두 seam을 머지 전 닫았다:
+- **scope 발급 whitelist + 정규화** (`9b714fc`): 발급 시 scope를 `{registration,authentication,admin}`(api_key_scope V21 CHECK와 동일)로 검증 + 소문자 정규화. 이전엔 `"Registration"`/오타 scope가 200으로 발급되나 enforcement(exact match)에서 모든 RP 호출 403 = "silent dead key". 이제 unknown scope는 발급 시 `BusinessException(INVALID_INPUT, 400)`로 차단, 응답·audit도 정규화값 반영(truthful).
+- **resolver fail-closed** (`05a0d38`): `/api/v1/rp/` 하위인데 세 prefix에 미매핑인 경로는 sentinel scope `"__unmapped_rp__"`(enum에 없어 어떤 키도 보유 불가)를 요구해 403. 미래 RP 엔드포인트가 scope 매핑 없이 추가돼도 fail-open 안 됨(매핑을 명시 추가해야 동작). `/api/v1/rp` 밖(jwks, actuator)은 그대로 scope 불요.
+
+---
+
 ## 1. self-service credential scope 정책 — delete 분리 여지 (보안 정책 결정)
 
 `ApiKeyScopeResolver`가 `/api/v1/rp/credentials/**`(목록/이름변경/**삭제**)를 전부 `registration` scope로 매핑한다. P0-4 self-service credential이 등록 계열이라는 판단. **단, DELETE(기존 패스키 삭제)는 파괴적 작업**이라 `registration` 키가 사용자의 기존 credential을 삭제할 수 있다.
