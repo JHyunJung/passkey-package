@@ -85,8 +85,8 @@ public class RegistrationStartService {
         ArrayNode params = options.putArray("pubKeyCredParams");
         params.addObject().put("type", "public-key").put("alg", -7);    // ES256
         params.addObject().put("type", "public-key").put("alg", -257);  // RS256
-        options.put("timeout", 60000);
-        options.put("attestation", "indirect");
+        options.put("timeout", tenant.getWebauthnTimeoutMs());
+        options.put("attestation", tenant.getAttestationConveyanceLowercase());
         ArrayNode excludeArr = options.putArray("excludeCredentials");
         for (byte[] existingId : credentials.findCredentialIdsByUserHandle(userHandle)) {
             ObjectNode entry = excludeArr.addObject();
@@ -94,11 +94,11 @@ public class RegistrationStartService {
             entry.put("id", b64url(existingId));
         }
         ObjectNode sel = options.putObject("authenticatorSelection");
-        sel.put("userVerification", "required");
+        sel.put("userVerification", tenant.isRequireUserVerification() ? "required" : "preferred");
         sel.put("residentKey", "preferred");
 
         log.info("registration/start issued: tokenTail={} timeoutMs={}",
-                tokenTail(token), 60000);
+                tokenTail(token), tenant.getWebauthnTimeoutMs());
         return new RegistrationStartResponse(token, options);
     }
 

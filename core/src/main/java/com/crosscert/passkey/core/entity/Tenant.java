@@ -103,6 +103,20 @@ public class Tenant extends BaseEntity {
     public String getAttestationConveyance() { return attestationConveyance; }
     public void setAttestationConveyance(String v) { this.attestationConveyance = v; }
 
+    /**
+     * WebAuthn options 의 attestation 값(소문자)으로 변환. DB 는 대문자 enum
+     * (NONE/INDIRECT/DIRECT/ENTERPRISE, V33 CHECK 제약)을 저장하지만 WebAuthn
+     * 표준 conveyance preference 는 소문자다. 알 수 없는/누락 값은 안전 기본 "none".
+     */
+    public String getAttestationConveyanceLowercase() {
+        if (attestationConveyance == null) return "none";
+        String v = attestationConveyance.trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (v) {
+            case "none", "indirect", "direct", "enterprise" -> v;
+            default -> "none";
+        };
+    }
+
     public int getWebauthnTimeoutMs() { return webauthnTimeoutMs; }
     public void setWebauthnTimeoutMs(int v) { this.webauthnTimeoutMs = v; }
 }
