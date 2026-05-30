@@ -14,7 +14,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,22 +53,18 @@ class RecoveryCodeServiceTest {
         UUID uid = UUID.randomUUID();
         String plain = "abcd-efgh";
         String normalizedHash = sha256Hex("ABCD-EFGH"); // service.normalize 결과 기준
-        AdminUserRecoveryCode rec = new AdminUserRecoveryCode(uid, normalizedHash);
-        when(repo.findByAdminUserIdAndCodeHashAndUsedAtIsNull(eq(uid), eq(normalizedHash)))
-                .thenReturn(Optional.of(rec));
+        when(repo.markUsed(eq(uid), eq(normalizedHash), eq(clock.instant())))
+                .thenReturn(1);
 
         boolean ok = service.consume(uid, plain);
 
         assertThat(ok).isTrue();
-        assertThat(rec.getUsedAt()).isEqualTo(clock.instant());
-        verify(repo).save(rec);
     }
 
     @Test
     void consume_returns_false_when_no_match() {
         UUID uid = UUID.randomUUID();
-        when(repo.findByAdminUserIdAndCodeHashAndUsedAtIsNull(any(), any()))
-                .thenReturn(Optional.empty());
+        when(repo.markUsed(any(), any(), any())).thenReturn(0);
         assertThat(service.consume(uid, "nope-nope")).isFalse();
     }
 

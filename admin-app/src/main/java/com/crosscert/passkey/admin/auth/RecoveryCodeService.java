@@ -11,8 +11,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -41,26 +42,21 @@ public class RecoveryCodeService {
     @Transactional
     public List<String> generate(UUID adminUserId) {
         repo.deleteByAdminUserId(adminUserId);
-        List<String> plaintext = new ArrayList<>(CODE_COUNT);
-        for (int i = 0; i < CODE_COUNT; i++) {
-            String code = randomCode();
-            plaintext.add(code);
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        while (codes.size() < CODE_COUNT) {
+            codes.add(randomCode());
+        }
+        for (String code : codes) {
             repo.save(new AdminUserRecoveryCode(adminUserId, sha256Hex(code)));
         }
-        return plaintext;
+        return new ArrayList<>(codes);
     }
 
     @Transactional
     public boolean consume(UUID adminUserId, String code) {
         if (code == null || code.isBlank()) return false;
         String hash = sha256Hex(normalize(code));
-        Optional<AdminUserRecoveryCode> match =
-                repo.findByAdminUserIdAndCodeHashAndUsedAtIsNull(adminUserId, hash);
-        if (match.isEmpty()) return false;
-        AdminUserRecoveryCode rec = match.get();
-        rec.markUsed(clock.instant());
-        repo.save(rec);
-        return true;
+        return repo.markUsed(adminUserId, hash, clock.instant()) == 1;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +65,7 @@ public class RecoveryCodeService {
     }
 
     private static String normalize(String code) {
-        return code.trim().toUpperCase(java.util.Locale.ROOT).replace(" ", "");
+        return code.trim().toUpperCase(Locale.ROOT).replace(" ", "");
     }
 
     private static String randomCode() {
