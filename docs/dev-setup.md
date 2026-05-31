@@ -88,14 +88,14 @@ scope: `registration` + `authentication` (양쪽 다 허용).
 > ⚠️ **dev/local 전용 시드.** 위 plaintext 가 git 에 commit 되어 있다.
 > 절대 prod 활성화 금지.
 
-### 2.3 시드 관리자 계정 (V11 + V23 시드 — local profile 에서도 동일)
+### 2.3 시드 관리자 계정 (V11 + V23 시드)
 
 | email | password | role | tenant |
 |---|---|---|---|
 | `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) |
 | `bob@crosscert.com` | `bob-temp-pw` | RP_ADMIN | demo-rp |
 
-`local` profile 의 admin-ui 로그인 화면은 alice 계정을 자동 prefill 한다.
+`dev` profile 의 admin-ui 로그인 화면은 alice 계정을 자동 prefill 한다.
 
 ---
 
@@ -224,7 +224,7 @@ curl -X POST http://localhost:8080/api/v1/rp/registration/start \
 
 ### 5.1 `Schema-validation: missing column [...]`
 
-admin-app 을 먼저 `dev` 또는 `local` profile 로 띄워서 Flyway 가 V0~V24 +
+admin-app 을 먼저 `dev` profile 로 띄워서 Flyway 가 V1~V38 +
 R__dev_seed 까지 모두 적용하게 한다. 그 다음 passkey-app 을 띄운다.
 
 ### 5.2 `Detected failed repeatable migration: dev seed`
