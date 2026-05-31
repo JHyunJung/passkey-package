@@ -206,17 +206,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     /** Single generic 401 — no detail leaks. */
     private void unauthorized(HttpServletResponse res) throws IOException {
-        res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        res.setContentType("application/problem+json");
-        res.getWriter().write(
-                "{\"type\":\"about:blank\",\"status\":401,\"title\":\"Unauthorized\"}");
+        ProblemJson.write(res, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
     }
 
     /** 403 — 키는 유효하나 요청 경로 scope 미보유. */
     private void forbidden(HttpServletResponse res) throws IOException {
-        res.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        res.setContentType("application/problem+json");
-        res.getWriter().write(
-                "{\"type\":\"about:blank\",\"status\":403,\"title\":\"Forbidden\",\"error\":\"insufficient_scope\"}");
+        ProblemJson.write(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "insufficient_scope");
     }
 }

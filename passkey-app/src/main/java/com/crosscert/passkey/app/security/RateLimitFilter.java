@@ -176,11 +176,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private void tooManyRequests(HttpServletResponse res) throws IOException {
-        res.setStatus(429);
         res.setHeader("Retry-After", "60");
-        res.setContentType("application/problem+json");
-        res.getWriter().write(
-                "{\"type\":\"about:blank\",\"status\":429,\"title\":\"Too Many Requests\"}");
+        ProblemJson.write(res, 429, "Too Many Requests");
     }
 
     /**
