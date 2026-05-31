@@ -17,9 +17,14 @@ public interface TenantWebauthnSnapshotRepository extends JpaRepository<TenantWe
 
     /**
      * P1-4 retention: taken_at 이 cutoff 이전인 스냅샷 삭제(append-only 이력 정리).
+     *
+     * <p>Batched: ROWNUM 캡(AdminUserInvitationRepository 참고). nativeQuery + 실제 컬럼명.
      */
     @Modifying(clearAutomatically = true)
     @Transactional
-    @Query("delete from TenantWebauthnSnapshot s where s.takenAt < :cutoff")
-    int deleteTakenBefore(@Param("cutoff") Instant cutoff);
+    @Query(value = "DELETE FROM {h-schema}tenant_webauthn_snapshot WHERE id IN ("
+         + "SELECT id FROM {h-schema}tenant_webauthn_snapshot WHERE "
+         + "taken_at < :cutoff "
+         + "AND ROWNUM <= :batchSize)", nativeQuery = true)
+    int deleteTakenBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 }

@@ -64,12 +64,15 @@ public class MdsHistoryService {
     /**
      * P1-4 retention: started_at 이 cutoff 이전인 sync 이력 삭제. 삭제 건수 반환.
      * recent()/append() 와 동일하게 APP_OWNER. 스키마 prefix 명시(JdbcTemplate raw SQL).
+     *
+     * <p>Batched: ROWNUM 으로 한 트랜잭션 삭제 행 수를 batchSize 로 캡한다(첫 prod 실행 시
+     * 수개월 누적분 unbounded DELETE 방지). 호출측(RetentionPurgeService)이 0 행 될 때까지 반복.
      */
     @Transactional
-    public int purgeStartedBefore(Instant cutoff) {
+    public int purgeStartedBefore(Instant cutoff, int batchSize) {
         return jdbc.update(
-                "DELETE FROM APP_OWNER.mds_sync_history WHERE started_at < ?",
-                java.sql.Timestamp.from(cutoff));
+                "DELETE FROM APP_OWNER.mds_sync_history WHERE started_at < ? AND ROWNUM <= ?",
+                java.sql.Timestamp.from(cutoff), batchSize);
     }
 
     @Transactional(readOnly = true)

@@ -64,6 +64,56 @@ class RetentionPurgeJobTest {
         verify(audit).append(cap.capture());
         assertThat(cap.getValue().action()).isEqualTo("RETENTION_PURGE");
         assertThat(cap.getValue().payload().get("invitationsPurged")).isEqualTo(2);
+        // sentinel 제거: 실패한 테이블은 count 키 자체가 없다(합산 오염 방지).
+        assertThat(cap.getValue().payload()).doesNotContainKey("resetTokensPurged");
         assertThat(cap.getValue().payload().get("failed").toString()).contains("resetTokens");
+        // lease 는 정상·예외 어느 경로든 즉시 반환.
+        verify(leases).release(anyString(), anyString());
+    }
+
+    @Test
+    void all_success_audits_every_count_and_empty_failed() {
+        when(leases.tryAcquire(anyString(), anyString(), any(Duration.class))).thenReturn(true);
+        when(service.purgeInvitations(any())).thenReturn(5);
+        when(service.purgeResetTokens(any())).thenReturn(3);
+        when(service.purgeRecoveryCodes(any())).thenReturn(0);
+        when(service.purgeSnapshots(any())).thenReturn(7);
+        when(service.purgeMdsHistory(any())).thenReturn(2);
+
+        job.runOnce();
+
+        ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
+        verify(audit).append(cap.capture());
+        var payload = cap.getValue().payload();
+        assertThat(payload.get("invitationsPurged")).isEqualTo(5);
+        assertThat(payload.get("resetTokensPurged")).isEqualTo(3);
+        assertThat(payload.get("recoveryCodesPurged")).isEqualTo(0);
+        assertThat(payload.get("snapshotsPurged")).isEqualTo(7);
+        assertThat(payload.get("mdsHistoryPurged")).isEqualTo(2);
+        assertThat((java.util.List<?>) payload.get("failed")).isEmpty();
+        verify(leases).release(anyString(), anyString());
+    }
+
+    @Test
+    void all_zero_still_audits_with_zero_counts_and_empty_failed() {
+        when(leases.tryAcquire(anyString(), anyString(), any(Duration.class))).thenReturn(true);
+        when(service.purgeInvitations(any())).thenReturn(0);
+        when(service.purgeResetTokens(any())).thenReturn(0);
+        when(service.purgeRecoveryCodes(any())).thenReturn(0);
+        when(service.purgeSnapshots(any())).thenReturn(0);
+        when(service.purgeMdsHistory(any())).thenReturn(0);
+
+        job.runOnce();
+
+        ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
+        verify(audit).append(cap.capture());
+        var payload = cap.getValue().payload();
+        assertThat(payload.get("invitationsPurged")).isEqualTo(0);
+        assertThat(payload.get("resetTokensPurged")).isEqualTo(0);
+        assertThat(payload.get("recoveryCodesPurged")).isEqualTo(0);
+        assertThat(payload.get("snapshotsPurged")).isEqualTo(0);
+        assertThat(payload.get("mdsHistoryPurged")).isEqualTo(0);
+        assertThat((java.util.List<?>) payload.get("failed")).isEmpty();
+        verify(leases).release(anyString(), anyString());
     }
 }

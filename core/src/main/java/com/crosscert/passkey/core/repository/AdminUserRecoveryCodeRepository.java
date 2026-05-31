@@ -35,9 +35,14 @@ public interface AdminUserRecoveryCodeRepository extends JpaRepository<AdminUser
     /**
      * P1-4 retention: 사용된 recovery code 중 used_at 이 cutoff 이전인 것 삭제.
      * 미사용 코드(used_at is null)는 MFA 백업이므로 보존.
+     *
+     * <p>Batched: ROWNUM 캡(AdminUserInvitationRepository 참고). nativeQuery + 실제 컬럼명.
      */
     @Modifying(clearAutomatically = true)
     @Transactional
-    @Query("delete from AdminUserRecoveryCode r where r.usedAt is not null and r.usedAt < :cutoff")
-    int deleteUsedBefore(@Param("cutoff") Instant cutoff);
+    @Query(value = "DELETE FROM {h-schema}admin_user_recovery_code WHERE id IN ("
+         + "SELECT id FROM {h-schema}admin_user_recovery_code WHERE "
+         + "used_at IS NOT NULL AND used_at < :cutoff "
+         + "AND ROWNUM <= :batchSize)", nativeQuery = true)
+    int deleteUsedBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 }
