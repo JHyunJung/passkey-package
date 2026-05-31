@@ -14,6 +14,7 @@ import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -32,22 +33,26 @@ public class RegistrationStartService {
     private final ChallengeStore store;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
     public RegistrationStartService(TenantRepository tenants,
                                     CredentialRepository credentials,
                                     ChallengeIssuer challenges,
                                     ChallengeStore store,
                                     ObjectMapper mapper,
-                                    Clock clock) {
+                                    Clock clock,
+                                    MeterRegistry meterRegistry) {
         this.tenants = tenants;
         this.credentials = credentials;
         this.challenges = challenges;
         this.store = store;
         this.mapper = mapper;
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     public RegistrationStartResponse start(RegistrationStartRequest req) {
+      try {
         log.info("registration/start entry: usernamePresent={} displayNameLen={}",
                 req.username() != null,
                 req.displayName() == null ? 0 : req.displayName().length());
@@ -99,7 +104,15 @@ public class RegistrationStartService {
 
         log.info("registration/start issued: tokenTail={} timeoutMs={}",
                 tokenTail(token), tenant.getWebauthnTimeoutMs());
-        return new RegistrationStartResponse(token, options);
+        RegistrationStartResponse response = new RegistrationStartResponse(token, options);
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "registration", "phase", "start", "result", "success").increment();
+        return response;
+      } catch (RuntimeException e) {
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "registration", "phase", "start", "result", "failure").increment();
+        throw e;
+      }
     }
 
     /** Returns the last 8 chars of the token for correlation only — never the full secret. */

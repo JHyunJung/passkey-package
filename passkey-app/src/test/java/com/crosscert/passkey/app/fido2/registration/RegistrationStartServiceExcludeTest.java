@@ -61,7 +61,8 @@ class RegistrationStartServiceExcludeTest {
         when(credentials.findCredentialIdsByUserHandle(eq(userHandle))).thenReturn(List.of(existing));
 
         RegistrationStartService svc = new RegistrationStartService(
-                tenants, credentials, challenges, store, mapper, clock);
+                tenants, credentials, challenges, store, mapper, clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -96,7 +97,8 @@ class RegistrationStartServiceExcludeTest {
                 .thenReturn(List.of(first, second));
 
         RegistrationStartService svc = new RegistrationStartService(
-                tenants, credentials, challenges, store, mapper, clock);
+                tenants, credentials, challenges, store, mapper, clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -129,7 +131,8 @@ class RegistrationStartServiceExcludeTest {
         when(credentials.findCredentialIdsByUserHandle(eq(userHandle))).thenReturn(List.of());
 
         RegistrationStartService svc = new RegistrationStartService(
-                tenants, credentials, challenges, store, mapper, clock);
+                tenants, credentials, challenges, store, mapper, clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -151,7 +154,8 @@ class RegistrationStartServiceExcludeTest {
         when(tenants.findById(tenantId)).thenReturn(Optional.of(t));
 
         RegistrationStartService svc = new RegistrationStartService(
-                tenants, credentials, challenges, store, mapper, clock);
+                tenants, credentials, challenges, store, mapper, clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[]{9, 9}),
                 "Disp", "alice");

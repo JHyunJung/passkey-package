@@ -15,6 +15,7 @@ import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,23 +46,27 @@ public class AuthenticationStartService {
     private final ChallengeStore store;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
     public AuthenticationStartService(TenantRepository tenants,
                                       CredentialRepository credentials,
                                       ChallengeIssuer challenges,
                                       ChallengeStore store,
                                       ObjectMapper mapper,
-                                      Clock clock) {
+                                      Clock clock,
+                                      MeterRegistry meterRegistry) {
         this.tenants = tenants;
         this.credentials = credentials;
         this.challenges = challenges;
         this.store = store;
         this.mapper = mapper;
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional(readOnly = true)
     public AuthenticationStartResponse start(AuthenticationStartRequest req) {
+      try {
         log.info("authentication/start entry: userHandlePresent={}",
                 req.userHandle() != null);
         UUID tenantUuid = TenantContextHolder.get();
@@ -106,7 +111,15 @@ public class AuthenticationStartService {
         }
         log.info("authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
                 tokenTail(token), userCreds.size(), tenant.getWebauthnTimeoutMs());
-        return new AuthenticationStartResponse(token, options);
+        AuthenticationStartResponse response = new AuthenticationStartResponse(token, options);
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "authentication", "phase", "start", "result", "success").increment();
+        return response;
+      } catch (RuntimeException e) {
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "authentication", "phase", "start", "result", "failure").increment();
+        throw e;
+      }
     }
 
     private static String b64url(byte[] b) {

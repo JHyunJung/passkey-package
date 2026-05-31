@@ -29,6 +29,7 @@ import com.webauthn4j.data.client.challenge.DefaultChallenge;
 import com.webauthn4j.data.extension.client.AuthenticationExtensionsClientOutputs;
 import com.webauthn4j.data.extension.client.RegistrationExtensionClientOutput;
 import com.webauthn4j.server.ServerProperty;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -56,6 +57,7 @@ public class AuthenticationFinishService {
     private final ObjectMapper mapper;
     private final ObjectConverter objectConverter;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
     public AuthenticationFinishService(ChallengeStore store,
                                        WebAuthnManager manager,
@@ -63,7 +65,8 @@ public class AuthenticationFinishService {
                                        CredentialRepository credentials,
                                        IdTokenIssuer idTokens,
                                        ObjectMapper mapper,
-                                       Clock clock) {
+                                       Clock clock,
+                                       MeterRegistry meterRegistry) {
         this.store = store;
         this.manager = manager;
         this.tenants = tenants;
@@ -72,10 +75,12 @@ public class AuthenticationFinishService {
         this.mapper = mapper;
         this.objectConverter = new ObjectConverter();
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
     public AuthenticationFinishResponse finish(AuthenticationFinishRequest req) {
+      try {
         AuthenticationChallenge ch = store.takeAuthentication(req.authenticationToken())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "authentication token missing or expired"));
@@ -228,7 +233,15 @@ public class AuthenticationFinishService {
         log.info("id-token issued: subTail={} aud={} ttlSec={}",
                 subTail, ch.tenantId(), 900);
 
-        return new AuthenticationFinishResponse(jwt, "Bearer", 900);
+        AuthenticationFinishResponse response = new AuthenticationFinishResponse(jwt, "Bearer", 900);
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "authentication", "phase", "finish", "result", "success").increment();
+        return response;
+      } catch (RuntimeException e) {
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "authentication", "phase", "finish", "result", "failure").increment();
+        throw e;
+      }
     }
 
     private static String b64url(byte[] b) {

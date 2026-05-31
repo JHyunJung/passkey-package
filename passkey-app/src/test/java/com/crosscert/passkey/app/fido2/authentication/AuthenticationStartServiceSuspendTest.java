@@ -51,7 +51,8 @@ class AuthenticationStartServiceSuspendTest {
         when(tenants.findById(tenantId)).thenReturn(Optional.of(t));
 
         AuthenticationStartService svc = new AuthenticationStartService(
-                tenants, credentials, challenges, store, mapper, clock);
+                tenants, credentials, challenges, store, mapper, clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         AuthenticationStartRequest req = new AuthenticationStartRequest(null);
 
         assertThatThrownBy(() -> svc.start(req))
@@ -81,7 +82,8 @@ class AuthenticationStartServiceSuspendTest {
         when(credentials.findByUserHandle(eq(userHandle))).thenReturn(List.of(cred));
 
         AuthenticationStartService svc = new AuthenticationStartService(
-                tenants, credentials, challenges, store, mapper, clock);
+                tenants, credentials, challenges, store, mapper, clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         AuthenticationStartRequest req = new AuthenticationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle));
 
@@ -120,7 +122,8 @@ class AuthenticationStartServiceSuspendTest {
         when(credentials.findByUserHandle(eq(userHandle))).thenReturn(List.of(cred));
 
         AuthenticationStartService svc = new AuthenticationStartService(
-                tenants, credentials, challenges, store, mapper, clock);
+                tenants, credentials, challenges, store, mapper, clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         AuthenticationStartRequest req = new AuthenticationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle));
 

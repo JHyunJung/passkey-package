@@ -28,6 +28,7 @@ import com.webauthn4j.data.attestation.statement.COSEAlgorithmIdentifier;
 import com.webauthn4j.data.client.Origin;
 import com.webauthn4j.data.client.challenge.DefaultChallenge;
 import com.webauthn4j.server.ServerProperty;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -69,6 +70,7 @@ public class RegistrationFinishService {
     private final ObjectMapper mapper;
     private final ObjectConverter objectConverter;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
     public RegistrationFinishService(ChallengeStore store,
                                      WebAuthnManager manager,
@@ -77,7 +79,8 @@ public class RegistrationFinishService {
                                      MdsVerifier mds,
                                      AaguidPolicyChecker aaguidPolicyChecker,
                                      ObjectMapper mapper,
-                                     Clock clock) {
+                                     Clock clock,
+                                     MeterRegistry meterRegistry) {
         this.store = store;
         this.manager = manager;
         this.tenants = tenants;
@@ -87,10 +90,12 @@ public class RegistrationFinishService {
         this.mapper = mapper;
         this.objectConverter = new ObjectConverter();
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
     public RegistrationFinishResponse finish(RegistrationFinishRequest req) {
+      try {
         RegistrationChallenge ch = store.takeRegistration(req.registrationToken())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "registration token missing or expired"));
@@ -201,11 +206,19 @@ public class RegistrationFinishService {
         log.info("registration/finish ok: credentialIdTail={} aaguid={} format={}",
                 idTail(credentialIdB64), aaguidUuid, fmt);
 
-        return new RegistrationFinishResponse(
+        RegistrationFinishResponse response = new RegistrationFinishResponse(
                 credentialIdB64,
                 aaguid == null ? null : HexFormat.of().formatHex(aaguid),
                 fmt,
                 clock.instant());
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "registration", "phase", "finish", "result", "success").increment();
+        return response;
+      } catch (RuntimeException e) {
+        meterRegistry.counter("passkey_ceremony_total",
+                "type", "registration", "phase", "finish", "result", "failure").increment();
+        throw e;
+      }
     }
 
     /** Last 12 chars of a base64url id for correlation — never the full credential id.
