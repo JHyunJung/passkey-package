@@ -66,14 +66,22 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
+// ── Scope options ─────────────────────────────────────────────────────────────
+
+const SCOPE_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'registration', label: 'registration', desc: '패스키 등록 + self-service credential 관리' },
+  { value: 'authentication', label: 'authentication', desc: '패스키 인증(로그인)' },
+];
+
 // ── ApiKeysTab ────────────────────────────────────────────────────────────────
 
 export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [issued, setIssued] = useState<{ key: ApiKey; plaintext: string } | null>(null);
+  const [issued, setIssued] = useState<{ key: ApiKey; plaintext: string; oldKeyExpiresAt?: string } | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
+  const [rotating, setRotating] = useState<ApiKey | null>(null);
   const toast = useToast();
 
   async function reload() {
@@ -91,9 +99,9 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
 
   useEffect(() => { reload(); }, [tenant.id]);
 
-  async function handleIssue(name: string) {
+  async function handleIssue(name: string, scopes: string[]) {
     try {
-      const result = await apiKeysApi.create(tenant.id, name);
+      const result = await apiKeysApi.create(tenant.id, name, scopes);
       setShowNew(false);
       setIssued(result);
       await reload();
@@ -112,6 +120,22 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast({ kind: 'err', title: '회수 실패', message: msg });
+    }
+  }
+
+  async function handleRotate(k: ApiKey) {
+    try {
+      const res = await apiKeysApi.rotate(k.id);
+      setRotating(null);
+      setIssued({
+        key: { ...k, prefix: res.prefix, scopes: res.scopes },
+        plaintext: res.plaintextKey,
+        oldKeyExpiresAt: res.oldKeyExpiresAt,
+      });
+      await reload();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ kind: 'err', title: '회전 실패', message: msg });
     }
   }
 
@@ -164,9 +188,14 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
                 <td><span className="muted">{fmtDateTime(k.createdAt)}</span></td>
                 <td style={{ textAlign: 'right' }}>
                   {k.status === 'ACTIVE' && (
-                    <button className="btn btn--xs" onClick={() => setRevoking(k)} style={{ color: 'var(--danger)', borderColor: 'color-mix(in oklab, var(--danger) 30%, var(--border))' }}>
-                      <Icons.Trash size={12} /> 회수
-                    </button>
+                    <span style={{ display: 'inline-flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="btn btn--xs" onClick={() => setRotating(k)}>
+                        <Icons.Refresh size={12} /> 회전
+                      </button>
+                      <button className="btn btn--xs" onClick={() => setRevoking(k)} style={{ color: 'var(--danger)', borderColor: 'color-mix(in oklab, var(--danger) 30%, var(--border))' }}>
+                        <Icons.Trash size={12} /> 회수
+                      </button>
+                    </span>
                   )}
                 </td>
               </tr>
@@ -177,6 +206,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
 
       <NewKeyDialog open={showNew} onClose={() => setShowNew(false)} onIssue={handleIssue} />
       <IssuedKeyModal issued={issued} onClose={() => { setIssued(null); }} />
+      <RotateKeyDialog k={rotating} onClose={() => setRotating(null)} onConfirm={handleRotate} />
       <RevokeKeyDialog k={revoking} onClose={() => setRevoking(null)} onConfirm={handleRevoke} />
     </div>
   );
@@ -187,24 +217,45 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
 function NewKeyDialog({ open, onClose, onIssue }: {
   open: boolean;
   onClose: () => void;
-  onIssue: (name: string) => void;
+  onIssue: (name: string, scopes: string[]) => void;
 }) {
   const [name, setName] = useState('');
-  function submit() { if (!name) return; onIssue(name); setName(''); }
+  const [scopes, setScopes] = useState<string[]>(['registration', 'authentication']);
+
+  function toggle(v: string) {
+    setScopes((prev) => prev.includes(v) ? prev.filter((s) => s !== v) : [...prev, v]);
+  }
+  function submit() {
+    if (!name || scopes.length === 0) return;
+    onIssue(name, scopes);
+    setName('');
+    setScopes(['registration', 'authentication']);
+  }
+
   return (
     <Dialog open={open} onClose={onClose} title="새 API key 발급"
       sub="발급 후 plaintext는 단 한 번만 노출됩니다. 안전한 장소에 즉시 보관하세요."
       footer={<>
         <button className="btn" onClick={onClose}>취소</button>
-        <button className="btn btn--primary" disabled={!name} onClick={submit}>발급</button>
+        <button className="btn btn--primary" disabled={!name || scopes.length === 0} onClick={submit}>발급</button>
       </>}
     >
       <Field label="용도 (이름)" hint="배포 환경이나 용도를 짧게. 예: production, staging, mobile-app">
         <input autoFocus className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="production" />
       </Field>
-      <div style={{ marginTop: 12, padding: 10, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
-        <Icons.Info size={14} />
-        <span>발급된 key는 Crosscert이 평문을 보관하지 않습니다. 분실 시 회수 후 재발급만 가능합니다.</span>
+      <div style={{ marginTop: 14 }}>
+        <label className="label">권한 범위 (scope) — 하나 이상</label>
+        <div className="stack-2" style={{ marginTop: 6 }}>
+          {SCOPE_OPTIONS.map((o) => (
+            <label key={o.value} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', background: scopes.includes(o.value) ? 'var(--accent-soft)' : 'transparent' }}>
+              <input type="checkbox" checked={scopes.includes(o.value)} onChange={() => toggle(o.value)} style={{ marginTop: 3 }} />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{o.label}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{o.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
       </div>
     </Dialog>
   );
@@ -213,7 +264,7 @@ function NewKeyDialog({ open, onClose, onIssue }: {
 // ── IssuedKeyModal ────────────────────────────────────────────────────────────
 
 function IssuedKeyModal({ issued, onClose }: {
-  issued: { key: ApiKey; plaintext: string } | null;
+  issued: { key: ApiKey; plaintext: string; oldKeyExpiresAt?: string } | null;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -232,6 +283,12 @@ function IssuedKeyModal({ issued, onClose }: {
       </>}
     >
       <div className="stack-3">
+        {issued.oldKeyExpiresAt && (
+          <div style={{ padding: '8px 10px', background: 'var(--warning-soft)', color: 'var(--warning)', borderRadius: 8, fontSize: 12, display: 'flex', gap: 8 }}>
+            <Icons.Alert size={14} />
+            <span>구 키는 <b>{fmtDateTime(issued.oldKeyExpiresAt)}</b>에 만료됩니다. 그 전에 RP 서버를 새 키로 교체하세요.</span>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span className="badge badge--success">발급 완료</span>
           <div style={{ flex: 1 }}>
@@ -305,6 +362,36 @@ function RevokeKeyDialog({ k, onClose, onConfirm }: {
       <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
         <Icons.Alert size={14} />
         <span>이 작업은 되돌릴 수 없습니다. RP 서비스에 새 키가 배포되어 있는지 확인하세요.</span>
+      </div>
+    </Dialog>
+  );
+}
+
+// ── RotateKeyDialog ───────────────────────────────────────────────────────────
+
+function RotateKeyDialog({ k, onClose, onConfirm }: {
+  k: ApiKey | null;
+  onClose: () => void;
+  onConfirm: (k: ApiKey) => void;
+}) {
+  if (!k) return null;
+  return (
+    <Dialog open onClose={onClose} title="API key를 회전하시겠습니까?"
+      sub="같은 권한의 새 키가 즉시 발급됩니다. 구 키는 24시간 후 만료됩니다."
+      footer={<>
+        <button className="btn" onClick={onClose}>취소</button>
+        <button className="btn btn--primary" onClick={() => onConfirm(k)}>회전 실행</button>
+      </>}
+    >
+      <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 8, fontSize: 13 }}>
+          <div className="muted">prefix</div><div className="mono">{k.prefix}</div>
+          <div className="muted">이름</div><div>{k.name}</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 12, padding: 10, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
+        <Icons.Info size={14} />
+        <span>새 키는 발급 직후 이 화면에서 한 번만 표시됩니다. RP 서버를 24시간 안에 교체하세요.</span>
       </div>
     </Dialog>
   );

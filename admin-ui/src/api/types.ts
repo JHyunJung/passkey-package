@@ -65,6 +65,14 @@ export interface ApiKeyCreateResponse {
   scopes: string[];
 }
 
+export interface ApiKeyRotateResponse {
+  id: string;
+  plaintextKey: string;   // ONE-TIME
+  prefix: string;
+  scopes: string[];
+  oldKeyExpiresAt: string; // ISO instant
+}
+
 export interface AuditLogView {
   id: number;
   actorId: number;
@@ -174,6 +182,11 @@ export class ApiError extends Error {
   ) {
     super(`[${code}] ${serverMessage}`);
     this.name = 'ApiError';
+  }
+
+  /** HTTP status alias — callers/tests reference `.status`. */
+  get status(): number {
+    return this.httpStatus;
   }
 }
 

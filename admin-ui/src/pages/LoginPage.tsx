@@ -137,7 +137,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <label className="label">비밀번호</label>
-                <a href="#" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>관리자에게 재설정 요청</a>
+                <a href="/admin/forgot-password" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>비밀번호를 잊으셨나요?</a>
               </div>
               <input
                 className="input"

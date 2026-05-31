@@ -5,6 +5,7 @@ import { useToast } from '@/shell/ToastHost';
 import { Dialog } from '@/shell/Dialog';
 import { getMe } from '@/api/client';
 import { ApiError, type Me } from '@/api/types';
+import { RecoveryCodesModal } from './RecoveryCodesModal';
 
 function sanitizeCode(v: string): string {
   return v.replace(/\D/g, '').slice(0, 6);
@@ -18,6 +19,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
   const [enrollCode, setEnrollCode] = useState('');
   const [enrolling, setEnrolling] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
   // disable flow state
   const [disableOpen, setDisableOpen] = useState(false);
@@ -46,11 +48,14 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
   async function confirmEnroll() {
     setConfirming(true);
     try {
-      await mfaApi.confirm(enrollCode);
+      const res = await mfaApi.confirm(enrollCode);
       setEnroll(null);
       setEnrollCode('');
       onMeChange(await getMe());
       toast({ kind: 'ok', title: '2단계 인증이 켜졌습니다.' });
+      if (res.recoveryCodes && res.recoveryCodes.length > 0) {
+        setRecoveryCodes(res.recoveryCodes);
+      }
     } catch (e: unknown) {
       setEnrollCode('');
       if (e instanceof ApiError) {
@@ -194,6 +199,10 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
           />
         </div>
       </Dialog>
+
+      {recoveryCodes && (
+        <RecoveryCodesModal codes={recoveryCodes} onClose={() => setRecoveryCodes(null)} />
+      )}
     </div>
   );
 }

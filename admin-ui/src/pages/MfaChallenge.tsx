@@ -3,23 +3,34 @@ import { mfaApi } from '@/api/mfa';
 import { useToast } from '@/shell/ToastHost';
 
 export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () => void; onLogout: () => void }) {
+  const [mode, setMode] = useState<'totp' | 'recovery'>('totp');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
 
+  const ready = mode === 'totp' ? code.length === 6 : code.trim().length > 0;
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting || code.length !== 6) return;
+    if (submitting || !ready) return;
     setSubmitting(true);
     try {
-      await mfaApi.verify(code);
+      const res = await mfaApi.verify(code.trim());
+      if (res.usedRecoveryCode && typeof res.remaining === 'number') {
+        toast({ kind: 'warn', title: '복구 코드를 사용했습니다.', message: `남은 복구 코드: ${res.remaining}개` });
+      }
       onVerified();
     } catch {
-      toast({ kind: 'err', title: '인증 실패', message: '코드가 올바르지 않습니다.' });
+      toast({ kind: 'err', title: '인증 실패', message: mode === 'totp' ? '코드가 올바르지 않습니다.' : '복구 코드가 올바르지 않습니다.' });
       setCode('');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function switchMode(next: 'totp' | 'recovery') {
+    setMode(next);
+    setCode('');
   }
 
   return (
@@ -27,20 +38,41 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
       <form onSubmit={submit} style={{ width: 360, padding: 28, border: '1px solid var(--border)', borderRadius: 14, background: 'var(--surface)' }}>
         <h2 style={{ marginTop: 0, fontSize: 18 }}>2단계 인증</h2>
         <div style={{ fontSize: 13, color: 'var(--text-mute)', marginBottom: 18 }}>
-          authenticator 앱에 표시된 6자리 코드를 입력하세요.
+          {mode === 'totp'
+            ? 'authenticator 앱에 표시된 6자리 코드를 입력하세요.'
+            : '복구 코드(xxxx-xxxx)를 입력하세요. 1회용입니다.'}
         </div>
-        <input
-          className="input"
-          inputMode="numeric"
-          autoFocus
-          maxLength={6}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="000000"
-          style={{ width: '100%', fontFamily: 'monospace', letterSpacing: 4, textAlign: 'center', fontSize: 18 }}
-        />
-        <button type="submit" className="btn btn--primary" disabled={submitting || code.length !== 6} style={{ width: '100%', marginTop: 16 }}>
+        {mode === 'totp' ? (
+          <input
+            className="input"
+            inputMode="numeric"
+            autoFocus
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="000000"
+            style={{ width: '100%', fontFamily: 'monospace', letterSpacing: 4, textAlign: 'center', fontSize: 18 }}
+          />
+        ) : (
+          <input
+            className="input mono"
+            autoFocus
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="3f9a-2b71"
+            style={{ width: '100%', fontFamily: 'monospace', textAlign: 'center', fontSize: 16 }}
+          />
+        )}
+        <button type="submit" className="btn btn--primary" disabled={submitting || !ready} style={{ width: '100%', marginTop: 16 }}>
           {submitting ? '확인 중…' : '확인'}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => switchMode(mode === 'totp' ? 'recovery' : 'totp')}
+          style={{ width: '100%', marginTop: 8 }}
+        >
+          {mode === 'totp' ? '기기를 잃으셨나요? 복구 코드로 로그인' : '← authenticator 코드로 돌아가기'}
         </button>
         <button type="button" className="btn btn--ghost btn--sm" onClick={onLogout} style={{ width: '100%', marginTop: 8 }}>
           로그아웃
