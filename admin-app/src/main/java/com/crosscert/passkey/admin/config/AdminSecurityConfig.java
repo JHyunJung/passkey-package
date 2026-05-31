@@ -8,6 +8,7 @@ import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -50,21 +51,6 @@ public class AdminSecurityConfig {
 
     /** Maximum email length that the ACTOR_EMAIL column (VARCHAR2 255) accepts. */
     private static final int MAX_EMAIL_LEN = 255;
-
-    /**
-     * Mask an email so logs surface enough for incident correlation
-     * (domain + first letter) without echoing the full identifier.
-     * Null/blank → "(unknown)". Inline implementation keeps this self-
-     * contained — no helper class import needed.
-     */
-    static String maskEmail(String email) {
-        if (email == null || email.isBlank()) return "(unknown)";
-        int at = email.indexOf('@');
-        if (at <= 0) return "***";
-        String local = email.substring(0, at);
-        String domain = email.substring(at);
-        return local.charAt(0) + "***" + domain;
-    }
 
     @Bean
     public DaoAuthenticationProvider adminAuthProvider(AdminUserDetailsService uds,
@@ -207,7 +193,7 @@ public class AdminSecurityConfig {
                 req.getSession().setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, Boolean.TRUE);
             }
             log.info("admin login success: email={} role={} mfaRequired={}",
-                    maskEmail(email), u.getRole(), mfaRequired);
+                    CryptoUtils.maskEmail(email), u.getRole(), mfaRequired);
             res.setStatus(HttpServletResponse.SC_OK);
             res.setContentType("application/json");
             // Use Jackson to avoid malformed JSON if email ever contains quotes/backslashes.
@@ -250,12 +236,12 @@ public class AdminSecurityConfig {
                     null,
                     Map.of("ip", req.getRemoteAddr(),
                            "reason", reason)));
-            log.warn("admin login failed: email={} reason={}", maskEmail(email), reason);
+            log.warn("admin login failed: email={} reason={}", CryptoUtils.maskEmail(email), reason);
             events.publishEvent(new SecurityAlertEvent(
                     SecurityAlertEvent.AlertType.ADMIN_LOGIN_FAILURE,
                     SecurityAlertEvent.Severity.MEDIUM,
                     "admin login failed",
-                    Map.of("email", maskEmail(email), "reason", reason)));
+                    Map.of("email", CryptoUtils.maskEmail(email), "reason", reason)));
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             res.setContentType("application/json");
             res.getWriter().write("{\"error\":\"unauthorized\"}");
@@ -268,7 +254,7 @@ public class AdminSecurityConfig {
             // /admin/logout is permitAll, so an unauthenticated request can
             // reach here with auth == null. Log either way so operators
             // see logout activity (including stray probes / replay attempts).
-            String emailMasked = (auth == null) ? "anonymous" : maskEmail(auth.getName());
+            String emailMasked = (auth == null) ? "anonymous" : CryptoUtils.maskEmail(auth.getName());
             log.info("admin logout: email={}", emailMasked);
             // Preserve prior default: redirect to /admin/login on logout success.
             res.setStatus(HttpServletResponse.SC_OK);
@@ -280,7 +266,7 @@ public class AdminSecurityConfig {
     public AccessDeniedHandler adminAccessDeniedHandler() {
         return (HttpServletRequest req, HttpServletResponse res, org.springframework.security.access.AccessDeniedException ex) -> {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            String emailMasked = (auth == null) ? "anonymous" : maskEmail(auth.getName());
+            String emailMasked = (auth == null) ? "anonymous" : CryptoUtils.maskEmail(auth.getName());
             log.warn("admin access denied: email={} method={} path={} cause={}",
                     emailMasked, req.getMethod(), req.getRequestURI(), ex.getClass().getSimpleName());
             res.setStatus(HttpServletResponse.SC_FORBIDDEN);

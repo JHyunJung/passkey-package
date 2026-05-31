@@ -2,12 +2,10 @@ package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.core.entity.AdminUserRecoveryCode;
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -47,7 +45,7 @@ public class RecoveryCodeService {
             codes.add(randomCode());
         }
         for (String code : codes) {
-            repo.save(new AdminUserRecoveryCode(adminUserId, sha256Hex(code)));
+            repo.save(new AdminUserRecoveryCode(adminUserId, CryptoUtils.sha256Hex(code)));
         }
         return new ArrayList<>(codes);
     }
@@ -55,7 +53,7 @@ public class RecoveryCodeService {
     @Transactional
     public boolean consume(UUID adminUserId, String code) {
         if (code == null || code.isBlank()) return false;
-        String hash = sha256Hex(normalize(code));
+        String hash = CryptoUtils.sha256Hex(normalize(code));
         return repo.markUsed(adminUserId, hash, clock.instant()) == 1;
     }
 
@@ -75,16 +73,5 @@ public class RecoveryCodeService {
             sb.append(ALPHABET.charAt(RNG.nextInt(ALPHABET.length())));
         }
         return sb.toString();
-    }
-
-    private static String sha256Hex(String s) {
-        try {
-            byte[] h = MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(h.length * 2);
-            for (byte b : h) sb.append(String.format("%02x", b));
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }
