@@ -26,9 +26,10 @@ spring:
 
 passkey:
   key-envelope:
-    # Test profile master key (32 zero bytes b64). Matches the dev profile
-    # default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
-    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    # NON-SECRET, dev only — 공개 상수이지만 '0키' 신호를 제거해 실수로
+    # prod 에서 약한 키가 쓰이는 것을 식별하기 쉽게 한다. prod 는 환경변수로 주입.
+    # Matches the dev profile default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
+    master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
   # Disable @Scheduled auto-fire during short ITs. AdminFlowIT and any
   # test that boots the full admin context should not have MdsSyncJob
   # or KeyExpirationJob racing against the test's own state setup.
