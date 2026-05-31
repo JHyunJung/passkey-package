@@ -1,5 +1,6 @@
 package com.crosscert.passkey.app.security;
 
+import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.repository.ApiKeyScopeRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -10,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -76,17 +78,20 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final ApiKeyScopeRepository scopeRepo;
     private final ApiKeyScopeResolver scopeResolver;
     private final MeterRegistry meterRegistry;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ApiKeyAuthFilter(ApiKeyLookupService lookup,
                             PasswordEncoder encoder,
                             ApiKeyScopeRepository scopeRepo,
                             ApiKeyScopeResolver scopeResolver,
-                            MeterRegistry meterRegistry) {
+                            MeterRegistry meterRegistry,
+                            ApplicationEventPublisher eventPublisher) {
         this.lookup = lookup;
         this.encoder = encoder;
         this.scopeRepo = scopeRepo;
         this.scopeResolver = scopeResolver;
         this.meterRegistry = meterRegistry;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -139,6 +144,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         if (!encoder.matches(secret, row.keyHash())) {
             log.warn("api-key auth failed: reason=bad-secret prefix={}", prefix);
             meterRegistry.counter(AUTH_COUNTER, "result", "bad_secret").increment();
+            eventPublisher.publishEvent(new SecurityAlertEvent(
+                    SecurityAlertEvent.AlertType.API_KEY_BRUTE_FORCE,
+                    SecurityAlertEvent.Severity.MEDIUM,
+                    "api key auth failed (bad secret)",
+                    java.util.Map.of("prefix", prefix)));
             unauthorized(res);
             return;
         }

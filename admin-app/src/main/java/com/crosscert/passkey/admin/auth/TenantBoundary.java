@@ -1,13 +1,16 @@
 package com.crosscert.passkey.admin.auth;
 
+import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +27,22 @@ public class TenantBoundary {
 
     private static final Logger log = LoggerFactory.getLogger(TenantBoundary.class);
 
+    private final ApplicationEventPublisher eventPublisher;
+
+    public TenantBoundary(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
+    }
+
+    /** Builds + publishes a TENANT_BOUNDARY_VIOLATION/CRITICAL alert.
+     *  ctx must contain only masked/identifier values (masked actor email, role, tenant UUIDs). */
+    private void publishViolation(Map<String, String> ctx) {
+        eventPublisher.publishEvent(new SecurityAlertEvent(
+                SecurityAlertEvent.AlertType.TENANT_BOUNDARY_VIOLATION,
+                SecurityAlertEvent.Severity.CRITICAL,
+                "tenant boundary violation",
+                ctx));
+    }
+
     /** First letter + *** + domain. Same shape as AdminSecurityConfig.maskEmail. */
     private static String maskEmail(String email) {
         if (email == null || email.isBlank()) return "(unknown)";
@@ -39,6 +58,11 @@ public class TenantBoundary {
             if (!me.getTenantId().equals(tenantId)) {
                 log.warn("tenant boundary violation: actor={} role={} requested={} allowed={}",
                         maskEmail(me.getUsername()), me.getRole(), tenantId, me.getTenantId());
+                publishViolation(Map.of(
+                        "actor", maskEmail(me.getUsername()),
+                        "role", String.valueOf(me.getRole()),
+                        "requested", String.valueOf(tenantId),
+                        "allowed", String.valueOf(me.getTenantId())));
                 throw new BusinessException(ErrorCode.ACCESS_DENIED,
                         "RP_ADMIN cannot access tenant " + tenantId);
             }
@@ -46,6 +70,11 @@ public class TenantBoundary {
         }
         log.warn("tenant boundary violation: actor={} role={} requested={} allowed=none",
                 maskEmail(me.getUsername()), me.getRole(), tenantId);
+        publishViolation(Map.of(
+                "actor", maskEmail(me.getUsername()),
+                "role", String.valueOf(me.getRole()),
+                "requested", String.valueOf(tenantId),
+                "allowed", "none"));
         throw new BusinessException(ErrorCode.ACCESS_DENIED, "unknown role: " + me.getRole());
     }
 
@@ -58,6 +87,11 @@ public class TenantBoundary {
         if (me.isRpAdmin())          return Optional.of(me.getTenantId());
         log.warn("tenant boundary violation: actor={} role={} scope=list allowed=none",
                 maskEmail(me.getUsername()), me.getRole());
+        publishViolation(Map.of(
+                "actor", maskEmail(me.getUsername()),
+                "role", String.valueOf(me.getRole()),
+                "scope", "list",
+                "allowed", "none"));
         throw new BusinessException(ErrorCode.ACCESS_DENIED, "unknown role: " + me.getRole());
     }
 
@@ -69,6 +103,10 @@ public class TenantBoundary {
         if (!me.isPlatformOperator()) {
             log.warn("tenant boundary violation: actor={} role={} required=PLATFORM_OPERATOR",
                     maskEmail(me.getUsername()), me.getRole());
+            publishViolation(Map.of(
+                    "actor", maskEmail(me.getUsername()),
+                    "role", String.valueOf(me.getRole()),
+                    "required", "PLATFORM_OPERATOR"));
             throw new BusinessException(ErrorCode.ACCESS_DENIED,
                     "platform-only operation");
         }

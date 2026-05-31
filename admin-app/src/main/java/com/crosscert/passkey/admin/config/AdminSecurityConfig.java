@@ -5,6 +5,7 @@ import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService;
 import com.crosscert.passkey.admin.auth.MfaPendingFilter;
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource;
+import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -218,6 +219,7 @@ public class AdminSecurityConfig {
     @Bean
     public AuthenticationFailureHandler adminLoginFailureHandler(
             AuditLogService audit, AdminUserRepository users, Clock clock,
+            org.springframework.context.ApplicationEventPublisher events,
             @org.springframework.beans.factory.annotation.Value("${passkey.admin.lockout.max-attempts:5}") int maxAttempts,
             @org.springframework.beans.factory.annotation.Value("${passkey.admin.lockout.duration:PT15M}") java.time.Duration lockDuration) {
         return (HttpServletRequest req, HttpServletResponse res, AuthenticationException ex) -> {
@@ -249,6 +251,11 @@ public class AdminSecurityConfig {
                     Map.of("ip", req.getRemoteAddr(),
                            "reason", reason)));
             log.warn("admin login failed: email={} reason={}", maskEmail(email), reason);
+            events.publishEvent(new SecurityAlertEvent(
+                    SecurityAlertEvent.AlertType.ADMIN_LOGIN_FAILURE,
+                    SecurityAlertEvent.Severity.MEDIUM,
+                    "admin login failed",
+                    java.util.Map.of("email", maskEmail(email), "reason", reason)));
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             res.setContentType("application/json");
             res.getWriter().write("{\"error\":\"unauthorized\"}");

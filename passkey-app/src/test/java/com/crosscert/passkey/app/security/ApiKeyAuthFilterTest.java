@@ -41,7 +41,8 @@ class ApiKeyAuthFilterTest {
         encoder = new BCryptPasswordEncoder(4); // low cost for test speed
         scopeRepo = mock(com.crosscert.passkey.core.repository.ApiKeyScopeRepository.class);
         filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, new ApiKeyScopeResolver(),
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     @AfterEach

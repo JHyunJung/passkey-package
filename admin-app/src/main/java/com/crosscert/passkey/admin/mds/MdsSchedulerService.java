@@ -3,11 +3,13 @@ package com.crosscert.passkey.admin.mds;
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
+import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.webauthn4j.metadata.data.MetadataBLOB;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -42,6 +44,7 @@ public class MdsSchedulerService {
     private final MdsHistoryService historyService;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
+    private final ApplicationEventPublisher eventPublisher;
     private final String holder;
 
     public MdsSchedulerService(SchedulerLeaseService leases,
@@ -52,6 +55,7 @@ public class MdsSchedulerService {
                                MdsHistoryService historyService,
                                Clock clock,
                                MeterRegistry meterRegistry,
+                               ApplicationEventPublisher eventPublisher,
                                @Value("${passkey.mds.lease-holder:default}")
                                String configuredHolder) {
         this.leases = leases;
@@ -62,6 +66,7 @@ public class MdsSchedulerService {
         this.historyService = historyService;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
+        this.eventPublisher = eventPublisher;
         // Default holder = PID@host (ManagementFactory), unique per JVM.
         this.holder = "default".equals(configuredHolder)
                 ? ManagementFactory.getRuntimeMXBean().getName()
@@ -149,6 +154,11 @@ public class MdsSchedulerService {
         } catch (RuntimeException e) {
             log.error("mds sync failed: cause={}", e.toString(), e);
             meterRegistry.counter(SYNC_COUNTER, "result", "failure").increment();
+            eventPublisher.publishEvent(new SecurityAlertEvent(
+                    SecurityAlertEvent.AlertType.MDS_SYNC_FAILURE,
+                    SecurityAlertEvent.Severity.HIGH,
+                    "mds sync failed",
+                    java.util.Map.of("cause", e.toString())));
             result = SyncResult.failed(e.getMessage());
         }
         // Best-effort history append; never disrupts the sync result.

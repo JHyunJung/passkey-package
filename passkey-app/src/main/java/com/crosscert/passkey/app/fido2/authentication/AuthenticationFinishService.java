@@ -30,8 +30,10 @@ import com.webauthn4j.data.extension.client.AuthenticationExtensionsClientOutput
 import com.webauthn4j.data.extension.client.RegistrationExtensionClientOutput;
 import com.webauthn4j.server.ServerProperty;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
+import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +60,7 @@ public class AuthenticationFinishService {
     private final ObjectConverter objectConverter;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AuthenticationFinishService(ChallengeStore store,
                                        WebAuthnManager manager,
@@ -66,7 +69,8 @@ public class AuthenticationFinishService {
                                        IdTokenIssuer idTokens,
                                        ObjectMapper mapper,
                                        Clock clock,
-                                       CeremonyMetrics ceremonyMetrics) {
+                                       CeremonyMetrics ceremonyMetrics,
+                                       ApplicationEventPublisher eventPublisher) {
         this.store = store;
         this.manager = manager;
         this.tenants = tenants;
@@ -76,6 +80,7 @@ public class AuthenticationFinishService {
         this.objectConverter = new ObjectConverter();
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -203,6 +208,13 @@ public class AuthenticationFinishService {
             if (!counterless && newCounter <= storedCounter) {
                 log.warn("signCount did not advance for credential {} on tenant {} (was {}, got {})",
                         cred.getId(), ch.tenantId(), storedCounter, newCounter);
+                eventPublisher.publishEvent(new SecurityAlertEvent(
+                        SecurityAlertEvent.AlertType.COUNTER_REGRESSION,
+                        SecurityAlertEvent.Severity.HIGH,
+                        "signCount did not advance (possible cloned authenticator)",
+                        java.util.Map.of(
+                                "credentialId", String.valueOf(cred.getId()),
+                                "tenantId", String.valueOf(ch.tenantId()))));
                 throw new IllegalArgumentException("signCount replay detected");
             }
 

@@ -47,7 +47,8 @@ class ApiKeyAuthFilterScopeTest {
 
     @BeforeEach
     void setUp() {
-        filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, resolver, meterRegistry);
+        filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, resolver, meterRegistry,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
         when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
                 new ApiKeyLookupService.ApiKeyAuthRow(keyId, tenantId, HASH, null, null)));
         when(encoder.matches(secret, HASH)).thenReturn(true);
