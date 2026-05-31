@@ -20,6 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -148,7 +149,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                     SecurityAlertEvent.AlertType.API_KEY_BRUTE_FORCE,
                     SecurityAlertEvent.Severity.MEDIUM,
                     "api key auth failed (bad secret)",
-                    java.util.Map.of("prefix", prefix)));
+                    Map.of("prefix", prefix)));
             unauthorized(res);
             return;
         }

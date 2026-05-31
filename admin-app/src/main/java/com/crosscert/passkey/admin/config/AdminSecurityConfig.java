@@ -255,7 +255,7 @@ public class AdminSecurityConfig {
                     SecurityAlertEvent.AlertType.ADMIN_LOGIN_FAILURE,
                     SecurityAlertEvent.Severity.MEDIUM,
                     "admin login failed",
-                    java.util.Map.of("email", maskEmail(email), "reason", reason)));
+                    Map.of("email", maskEmail(email), "reason", reason)));
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             res.setContentType("application/json");
             res.getWriter().write("{\"error\":\"unauthorized\"}");

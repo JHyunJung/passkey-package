@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -212,7 +213,7 @@ public class AuthenticationFinishService {
                         SecurityAlertEvent.AlertType.COUNTER_REGRESSION,
                         SecurityAlertEvent.Severity.HIGH,
                         "signCount did not advance (possible cloned authenticator)",
-                        java.util.Map.of(
+                        Map.of(
                                 "credentialId", String.valueOf(cred.getId()),
                                 "tenantId", String.valueOf(ch.tenantId()))));
                 throw new IllegalArgumentException("signCount replay detected");

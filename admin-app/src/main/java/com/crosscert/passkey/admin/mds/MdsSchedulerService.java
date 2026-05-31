@@ -158,7 +158,7 @@ public class MdsSchedulerService {
                     SecurityAlertEvent.AlertType.MDS_SYNC_FAILURE,
                     SecurityAlertEvent.Severity.HIGH,
                     "mds sync failed",
-                    java.util.Map.of("cause", e.toString())));
+                    Map.of("cause", e.toString())));
             result = SyncResult.failed(e.getMessage());
         }
         // Best-effort history append; never disrupts the sync result.
