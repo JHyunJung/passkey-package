@@ -69,6 +69,9 @@ public class RegistrationFinishService {
     private final AaguidPolicyChecker aaguidPolicyChecker;
     private final ObjectMapper mapper;
     private final ObjectConverter objectConverter;
+    private final AttestationObjectConverter attestationObjectConverter;
+    private final CollectedClientDataConverter collectedClientDataConverter;
+    private final AuthenticationExtensionsClientOutputsConverter extensionsConverter;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
 
@@ -79,6 +82,7 @@ public class RegistrationFinishService {
                                      MdsVerifier mds,
                                      AaguidPolicyChecker aaguidPolicyChecker,
                                      ObjectMapper mapper,
+                                     ObjectConverter objectConverter,
                                      Clock clock,
                                      CeremonyMetrics ceremonyMetrics) {
         this.store = store;
@@ -88,7 +92,10 @@ public class RegistrationFinishService {
         this.mds = mds;
         this.aaguidPolicyChecker = aaguidPolicyChecker;
         this.mapper = mapper;
-        this.objectConverter = new ObjectConverter();
+        this.objectConverter = objectConverter;
+        this.attestationObjectConverter = new AttestationObjectConverter(objectConverter);
+        this.collectedClientDataConverter = new CollectedClientDataConverter(objectConverter);
+        this.extensionsConverter = new AuthenticationExtensionsClientOutputsConverter(objectConverter);
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
     }
@@ -229,14 +236,9 @@ public class RegistrationFinishService {
 
     private byte[] serializeCredentialRecordEnvelope(RegistrationData data) {
         try {
-            AttestationObjectConverter aoConv = new AttestationObjectConverter(objectConverter);
-            CollectedClientDataConverter cdConv = new CollectedClientDataConverter(objectConverter);
-            AuthenticationExtensionsClientOutputsConverter ceConv =
-                    new AuthenticationExtensionsClientOutputsConverter(objectConverter);
-
-            byte[] aoBytes = aoConv.convertToBytes(data.getAttestationObject());
-            byte[] cdBytes = cdConv.convertToBytes(data.getCollectedClientData());
-            String ceJson = ceConv.convertToString(data.getClientExtensions());
+            byte[] aoBytes = attestationObjectConverter.convertToBytes(data.getAttestationObject());
+            byte[] cdBytes = collectedClientDataConverter.convertToBytes(data.getCollectedClientData());
+            String ceJson = extensionsConverter.convertToString(data.getClientExtensions());
 
             ObjectNode envelope = mapper.createObjectNode();
             envelope.put("ao", b64url(aoBytes));
