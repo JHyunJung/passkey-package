@@ -1,6 +1,7 @@
 package com.crosscert.passkey.sdk.idtoken;
 
 import com.crosscert.passkey.sdk.exception.PasskeyIdTokenException;
+import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.JWK;
@@ -30,6 +31,15 @@ public class IdTokenVerifier {
         Instant started = clock.instant();
         try {
             SignedJWT jwt = SignedJWT.parse(compactJwt);
+            // Pin alg to RS256 — the issuer signs exclusively with RS256, so this
+            // rejects alg-confusion / "none" / HS* downgrade attempts without
+            // affecting any legitimate token (sec-idtoken-alg-not-pinned).
+            if (!JWSAlgorithm.RS256.equals(jwt.getHeader().getAlgorithm())) {
+                log.warn("id-token verify failed: reason=unexpected-alg alg={}",
+                        jwt.getHeader().getAlgorithm());
+                throw new PasskeyIdTokenException(
+                        "Unexpected JWS algorithm: " + jwt.getHeader().getAlgorithm());
+            }
             String kid = jwt.getHeader().getKeyID();
             JWK key = jwks.get().getKeyByKeyId(kid);
             if (key == null || !(key instanceof RSAKey rsa)) {
