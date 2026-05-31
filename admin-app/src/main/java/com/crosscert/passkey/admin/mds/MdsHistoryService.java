@@ -61,6 +61,17 @@ public class MdsHistoryService {
                 version, status, changeSummary, durationMs, errorMessage);
     }
 
+    /**
+     * P1-4 retention: started_at 이 cutoff 이전인 sync 이력 삭제. 삭제 건수 반환.
+     * recent()/append() 와 동일하게 APP_OWNER. 스키마 prefix 명시(JdbcTemplate raw SQL).
+     */
+    @Transactional
+    public int purgeStartedBefore(java.time.Instant cutoff) {
+        return jdbc.update(
+                "DELETE FROM APP_OWNER.mds_sync_history WHERE started_at < ?",
+                java.sql.Timestamp.from(cutoff));
+    }
+
     @Transactional(readOnly = true)
     public int successRate30dCountOk() {
         Instant since = Instant.now().minus(Duration.ofDays(30));
