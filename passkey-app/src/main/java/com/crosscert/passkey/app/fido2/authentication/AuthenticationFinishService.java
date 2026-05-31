@@ -236,7 +236,7 @@ public class AuthenticationFinishService {
             // Pessimistic lock (above) + the @Transactional boundary make
             // this read-check-update sequence safe under concurrency.
             record.setCounter(newCounter);
-            cred.recordAuthentication(newCounter, cred.getCredentialRecordBytes(), clock.instant());
+            cred.recordAuthentication(newCounter, clock.instant());
             credentials.saveAndFlush(cred);
 
             String credentialIdB64 = b64url(credentialId);

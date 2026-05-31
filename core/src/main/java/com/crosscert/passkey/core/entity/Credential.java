@@ -74,11 +74,13 @@ public class Credential extends BaseEntity {
     /**
      * Atomic state mutation after a successful authentication. signCount
      * must be strictly increasing (replay defense); callers verify that
-     * before calling this.
+     * before calling this. The stored CBOR CredentialRecord BLOB is
+     * immutable here — the prior signature took a byte[] that callers
+     * only ever passed back unchanged (self-assign no-op), so it was
+     * removed.
      */
-    public void recordAuthentication(long newSignCount, byte[] newCredentialRecordBytes, Instant now) {
+    public void recordAuthentication(long newSignCount, Instant now) {
         this.signCount = newSignCount;
-        this.publicKey = newCredentialRecordBytes;
         this.lastUsedAt = now;
     }
 }
