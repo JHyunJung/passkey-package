@@ -22,7 +22,7 @@ public class SecurityPolicyController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     public SecurityPolicyDto.View get() {
         return service.get();
     }
