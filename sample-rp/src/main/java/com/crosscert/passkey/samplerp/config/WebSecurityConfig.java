@@ -14,7 +14,7 @@ public class WebSecurityConfig {
         http
             .authorizeHttpRequests(a -> a
                     .requestMatchers("/", "/register", "/login", "/logout",
-                                     "/webauthn/**", "/css/**", "/js/**").permitAll()
+                                     "/passkey/**", "/css/**", "/js/**").permitAll()
                     .anyRequest().permitAll())   // 데모용 — 보호 리소스 없음
             .csrf(c -> c.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
             .formLogin(f -> f.disable())

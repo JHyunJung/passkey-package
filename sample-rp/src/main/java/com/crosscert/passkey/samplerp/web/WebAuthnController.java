@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/webauthn")
+@RequestMapping("/passkey")
 public class WebAuthnController {
 
     private static final Logger log = LoggerFactory.getLogger(WebAuthnController.class);
@@ -38,7 +38,7 @@ public class WebAuthnController {
 
     // ── Registration ─────────────────────────────────────────────
 
-    @PostMapping("/register/options")
+    @PostMapping("/register/begin")
     public ApiResponse<RegisterOptionsResp> registerOptions(@Valid @RequestBody RegisterStartReq req,
                                                             HttpSession s) {
         log.info("register/options entry: usernamePresent={}", req.username() != null);
@@ -57,7 +57,7 @@ public class WebAuthnController {
         return ApiResponse.ok(new RegisterOptionsResp(sdkResp.publicKeyCredentialCreationOptions()));
     }
 
-    @PostMapping("/register/complete")
+    @PostMapping("/register/finish")
     public ApiResponse<RegistrationFinishResponse> registerComplete(@Valid @RequestBody RegisterCompleteReq req,
                                                                     HttpSession s) {
         log.info("register/complete entry: sessionId={}", idTail(s.getId()));
@@ -85,7 +85,7 @@ public class WebAuthnController {
 
     // ── Login ────────────────────────────────────────────────────
 
-    @PostMapping("/login/options")
+    @PostMapping("/authenticate/begin")
     public ApiResponse<LoginOptionsResp> loginOptions(@RequestBody LoginStartReq req, HttpSession s) {
         log.info("login/options entry: flow={}",
                 req.username() == null ? "discoverable" : "typed");
@@ -103,7 +103,7 @@ public class WebAuthnController {
         return ApiResponse.ok(new LoginOptionsResp(sdkResp.publicKeyCredentialRequestOptions()));
     }
 
-    @PostMapping("/login/complete")
+    @PostMapping("/authenticate/finish")
     public ApiResponse<Void> loginComplete(@Valid @RequestBody LoginCompleteReq req, HttpSession s) {
         log.info("login/complete entry: sessionId={}", idTail(s.getId()));
         String token = (String) s.getAttribute(SessionKeys.PENDING_AUTH_TOKEN);

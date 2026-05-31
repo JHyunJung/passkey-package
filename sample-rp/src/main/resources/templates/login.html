@@ -23,11 +23,11 @@
     error.textContent = '';
     try {
       const username = document.getElementById('username').value || null;
-      const start = await postJson('/webauthn/login/options', { username });
+      const start = await postJson('/passkey/authenticate/begin', { username });
       const assertion = await navigator.credentials.get({
         publicKey: decodeRequestOptions(start.publicKeyCredentialRequestOptions)
       });
-      await postJson('/webauthn/login/complete', {
+      await postJson('/passkey/authenticate/finish', {
         publicKeyCredential: encodeAssertionCredential(assertion)
       });
       window.location = '/';

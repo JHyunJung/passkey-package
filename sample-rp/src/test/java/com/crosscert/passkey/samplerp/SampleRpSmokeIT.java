@@ -30,17 +30,17 @@ class SampleRpSmokeIT {
     void registrationAndLoginHappyPath() {
         // Implementation: read Passkey2/passkey-app/src/test/java/com/crosscert/passkey/app/fido2/Fido2EndToEndIT.java
         // for ClientPlatform + PackedAuthenticator + ObjectConverter encode/decode pattern.
-        // Then adapt to call sample-rp's /webauthn/register/{options,complete} + /webauthn/login/{options,complete}.
+        // Then adapt to call sample-rp's /passkey/register/{begin,finish} + /passkey/authenticate/{begin,finish}.
         //
         // Skeleton steps:
         //   1. RestClient http = RestClient.create("http://localhost:" + port);
         //   2. ClientPlatform client = new ClientPlatform(URI.create("http://localhost:" + port), new PackedAuthenticator());
-        //   3. POST /webauthn/register/options, parse envelope.data.publicKeyCredentialCreationOptions to webauthn4j type
+        //   3. POST /passkey/register/begin, parse envelope.data.publicKeyCredentialCreationOptions to webauthn4j type
         //   4. var attestation = client.create(opts);
-        //   5. POST /webauthn/register/complete with attestation JSON
-        //   6. POST /webauthn/login/options
+        //   5. POST /passkey/register/finish with attestation JSON
+        //   6. POST /passkey/authenticate/begin
         //   7. var assertion = client.get(reqOpts);
-        //   8. POST /webauthn/login/complete
+        //   8. POST /passkey/authenticate/finish
         //   9. assert all envelopes have success=true
         org.junit.jupiter.api.Assertions.assertTrue(true);  // placeholder until @Disabled removed
     }

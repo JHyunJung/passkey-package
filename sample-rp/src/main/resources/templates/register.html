@@ -29,11 +29,11 @@
       const username    = document.getElementById('username').value;
       const displayName = document.getElementById('displayName').value;
 
-      const start = await postJson('/webauthn/register/options', { username, displayName });
+      const start = await postJson('/passkey/register/begin', { username, displayName });
       const cred = await navigator.credentials.create({
         publicKey: decodeCreationOptions(start.publicKeyCredentialCreationOptions)
       });
-      const fin = await postJson('/webauthn/register/complete', {
+      const fin = await postJson('/passkey/register/finish', {
         publicKeyCredential: encodeAttestationCredential(cred)
       });
       result.textContent = 'Passkey registered:\n' + JSON.stringify(fin, null, 2);

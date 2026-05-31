@@ -1,9 +1,9 @@
 # RP 서버 API 명세서 (클라이언트 → RP 서버)
 
-클라이언트(웹/앱)가 **RP 서버**에 패스키 등록·로그인을 요청하는 API 명세서입니다. sample-rp의 실제 구현(`/webauthn/**`)을 기준으로 작성했습니다.
+클라이언트(웹/앱)가 **RP 서버**에 패스키 등록·인증을 요청하는 API 명세서입니다. sample-rp의 실제 구현(`/passkey/**`)을 기준으로 작성했습니다.
 
 - **호출 관계**: 클라이언트(브라우저 JS / 모바일 앱) → **RP 서버**(당신이 구현하는 서버). RP 서버는 내부적으로 Passkey 서버를 호출하지만, 그 부분은 클라이언트에 노출되지 않습니다.
-- **범위**: 패스키 등록(`/webauthn/register/**`)과 로그인(`/webauthn/login/**`)입니다.
+- **범위**: 패스키 등록(`/passkey/register/**`)과 인증(`/passkey/authenticate/**`)입니다.
 - **기준 포트**: sample-rp는 `9090`에서 동작합니다(`http://localhost:9090`).
 
 ---
@@ -29,7 +29,7 @@ RP 서버는 클라이언트와 패스키 ceremony를 주고받습니다. 각 ce
 - **`userHandle`은 RP 서버가 내부에서 만듭니다.** 클라이언트는 `username`·`displayName`만 보냅니다. userHandle 생성·Passkey 서버 호출·ID Token 검증은 모두 RP 서버가 처리하며 클라이언트에는 보이지 않습니다.
 - **세션 기반입니다.** `options` 단계에서 RP 서버가 진행 상태(pending token)를 **세션에 저장**하고, `complete` 단계에서 같은 세션으로 이어받습니다. 클라이언트는 세션 쿠키(`credentials: 'same-origin'`)를 유지해야 합니다.
 - **CSRF 보호가 적용됩니다.** 모든 POST 요청에 CSRF 토큰을 헤더(`X-XSRF-TOKEN`)로 보내야 합니다(§2).
-- 로그인 성공(`login/complete`) 시 RP 서버가 ID Token을 검증한 뒤 **자체 세션을 확립**합니다. 클라이언트는 별도 토큰을 받지 않고 세션 쿠키로 인증됩니다.
+- 인증 성공(`authenticate/finish`) 시 RP 서버가 ID Token을 검증한 뒤 **자체 세션을 확립**합니다. 클라이언트는 별도 토큰을 받지 않고 세션 쿠키로 인증됩니다.
 
 ---
 
@@ -152,7 +152,7 @@ export function encodeAssertionCredential(cred) {
 
 ## 4. 엔드포인트 레퍼런스
 
-### 4.1 `POST /webauthn/register/options`
+### 4.1 `POST /passkey/register/begin`
 
 패스키 등록을 시작하고 creation options를 받습니다. RP 서버가 내부에서 `userHandle`을 만들고 pending 상태를 세션에 저장합니다.
 
@@ -186,7 +186,7 @@ export function encodeAssertionCredential(cred) {
 - **Request**:
 
 ```http
-POST /webauthn/register/options
+POST /passkey/register/begin
 Content-Type: application/json
 X-XSRF-TOKEN: <CSRF 토큰>
 
@@ -218,7 +218,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
 }
 ```
 
-### 4.2 `POST /webauthn/register/complete`
+### 4.2 `POST /passkey/register/finish`
 
 브라우저 등록 결과를 보내 검증·저장을 완료합니다. `options`와 같은 세션이어야 합니다(pending token).
 
@@ -240,7 +240,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
 - **Request**:
 
 ```http
-POST /webauthn/register/complete
+POST /passkey/register/finish
 Content-Type: application/json
 X-XSRF-TOKEN: <CSRF 토큰>
 
@@ -277,7 +277,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
 }
 ```
 
-### 4.3 `POST /webauthn/login/options`
+### 4.3 `POST /passkey/authenticate/begin`
 
 패스키 로그인을 시작하고 request options를 받습니다.
 
@@ -306,7 +306,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
 - **Request**:
 
 ```http
-POST /webauthn/login/options
+POST /passkey/authenticate/begin
 Content-Type: application/json
 X-XSRF-TOKEN: <CSRF 토큰>
 
@@ -335,7 +335,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
 }
 ```
 
-### 4.4 `POST /webauthn/login/complete`
+### 4.4 `POST /passkey/authenticate/finish`
 
 브라우저 로그인 결과를 보냅니다. RP 서버가 ID Token을 검증하고 **세션을 확립**합니다.
 
@@ -350,7 +350,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
 - **Request**:
 
 ```http
-POST /webauthn/login/complete
+POST /passkey/authenticate/finish
 Content-Type: application/json
 X-XSRF-TOKEN: <CSRF 토큰>
 
@@ -395,11 +395,11 @@ sample-rp의 실제 등록·로그인 흐름입니다.
 ```js
 import { decodeCreationOptions, encodeAttestationCredential, postJson } from '/js/helpers.js';
 
-const start = await postJson('/webauthn/register/options', { username, displayName });
+const start = await postJson('/passkey/register/begin', { username, displayName });
 const cred = await navigator.credentials.create({
   publicKey: decodeCreationOptions(start.publicKeyCredentialCreationOptions)
 });
-const fin = await postJson('/webauthn/register/complete', {
+const fin = await postJson('/passkey/register/finish', {
   publicKeyCredential: encodeAttestationCredential(cred)
 });
 // fin.credentialId 등록 완료
@@ -410,11 +410,11 @@ const fin = await postJson('/webauthn/register/complete', {
 ```js
 import { decodeRequestOptions, encodeAssertionCredential, postJson } from '/js/helpers.js';
 
-const start = await postJson('/webauthn/login/options', { username });   // username 생략 가능
+const start = await postJson('/passkey/authenticate/begin', { username });   // username 생략 가능
 const assertion = await navigator.credentials.get({
   publicKey: decodeRequestOptions(start.publicKeyCredentialRequestOptions)
 });
-await postJson('/webauthn/login/complete', {
+await postJson('/passkey/authenticate/finish', {
   publicKeyCredential: encodeAssertionCredential(assertion)
 });
 window.location = '/';   // 세션 확립됨
