@@ -49,3 +49,8 @@ passkey:
   api-key:
     rotation:
       grace: PT24H         # rotate 시 구 키 유예 만료(ISO-8601); 이 기간 구·신 키 병존 후 구 키 자동 만료
+  alert:
+    mail:
+      enabled: false        # true 면 MailAlertChannel 등록, ops 메일 발송
+      to:                   # 알림 수신 운영자 주소
+      min-severity: HIGH    # 이 severity 이상만 메일(LOW/MEDIUM/HIGH/CRITICAL). 기본 LogAlertChannel 은 전 severity 로깅
