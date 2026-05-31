@@ -95,9 +95,18 @@ export default function TenantsListPage() {
     [q, tenants],
   );
 
-  const totalCredentials = tenants.reduce((a, t) => a + t.credentials, 0);
-  const totalKeys = tenants.reduce((a, t) => a + t.apiKeys, 0);
-  const totalActive = tenants.filter((t) => t.status === 'ACTIVE').length;
+  const totalCredentials = useMemo(
+    () => tenants.reduce((a, t) => a + t.credentials, 0),
+    [tenants],
+  );
+  const totalKeys = useMemo(
+    () => tenants.reduce((a, t) => a + t.apiKeys, 0),
+    [tenants],
+  );
+  const totalActive = useMemo(
+    () => tenants.filter((t) => t.status === 'ACTIVE').length,
+    [tenants],
+  );
 
   return (
     <div className="page">
