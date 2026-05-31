@@ -20,6 +20,8 @@ import SettingsPage from '@/pages/SettingsPage';
 import LicensePage from '@/pages/LicensePage';
 import { api } from '@/api/client';
 import type { Me } from '@/api/types';
+import { RequirePlatform } from '@/me/RequirePlatform';
+import { rpTenantId } from '@/me/roles';
 
 // ── Route type (mirrors design app.jsx shape) ────────────────────────────────
 
@@ -166,13 +168,13 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
         <main style={{ padding: 24 }}>
           <ErrorBoundary>
           <Routes>
-            <Route path="/tenants" element={<TenantsListPage />} />
+            <Route path="/tenants" element={<RequirePlatform me={me}><TenantsListPage /></RequirePlatform>} />
             <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
-            <Route path="/activity" element={<ActivityPage />} />
-            <Route path="/audit-chain" element={<AuditChainPage />} />
+            <Route path="/activity" element={<RequirePlatform me={me}><ActivityPage /></RequirePlatform>} />
+            <Route path="/audit-chain" element={<RequirePlatform me={me}><AuditChainPage /></RequirePlatform>} />
             <Route path="/settings" element={<SettingsPage me={me} onMeChange={onMeChange} />} />
-            <Route path="/license" element={<LicensePage />} />
-            <Route path="*" element={<Navigate to="/tenants" replace />} />
+            <Route path="/license" element={<RequirePlatform me={me}><LicensePage /></RequirePlatform>} />
+            <Route path="*" element={<Navigate to={rpTenantId(me) ? `/tenants/${rpTenantId(me)}` : '/tenants'} replace />} />
           </Routes>
           </ErrorBoundary>
         </main>
