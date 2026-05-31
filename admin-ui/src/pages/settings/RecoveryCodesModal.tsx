@@ -14,6 +14,7 @@ export function RecoveryCodesModal({ codes, onClose }: { codes: string[]; onClos
   function copy() {
     navigator.clipboard?.writeText(text);
     setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
   function download() {
     const blob = new Blob([text + '\n'], { type: 'text/plain' });
@@ -38,7 +39,7 @@ export function RecoveryCodesModal({ codes, onClose }: { codes: string[]; onClos
       sub="인증 기기를 잃었을 때 로그인하는 유일한 방법입니다. 안전한 곳에 보관하세요."
       footer={
         <button className="btn btn--primary" disabled={!checked} onClick={onClose}>
-          {checked ? '닫기' : '확인'}
+          {checked ? '닫기' : '체크 필요'}
         </button>
       }
     >

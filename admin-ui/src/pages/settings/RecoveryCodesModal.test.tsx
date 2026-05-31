@@ -14,7 +14,7 @@ describe('RecoveryCodesModal', () => {
   it('close button is disabled until saved-checkbox is checked', () => {
     const onClose = vi.fn();
     render(<RecoveryCodesModal codes={CODES} onClose={onClose} />);
-    const closeBtn = screen.getByRole('button', { name: /닫기|확인/ });
+    const closeBtn = screen.getByRole('button', { name: /닫기|체크/ });
     expect(closeBtn).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox'));
     expect(closeBtn).not.toBeDisabled();
