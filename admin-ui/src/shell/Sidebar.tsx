@@ -107,6 +107,10 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
   }, [deploymentMode, platform]);
 
   useEffect(() => {
+    // audit-chain overview 는 PLATFORM 전용 엔드포인트.
+    // RP_ADMIN 은 footer(AUDIT CHAIN)를 보지 않으므로 폴링하지 않는다
+    // (RP 가 폴링하면 30초마다 403 — 외관엔 영향 없지만 불필요 요청).
+    if (!platform) return;
     let cancelled = false;
     async function fetchChain() {
       try {
@@ -117,7 +121,7 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
     fetchChain();
     const id = setInterval(fetchChain, 30_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, []);
+  }, [platform]);
   // Build a contextual nav: when inside a tenant, show tenant-tab nav under the tenant name.
   return (
     <aside style={{
