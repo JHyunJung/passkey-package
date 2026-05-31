@@ -83,6 +83,16 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
+    // Pre-resolved result-tagged counters. Micrometer returns the same
+    // Counter for a given name+tags, so hoisting the lookup out of the
+    // hot path yields the identical metric series.
+    private final io.micrometer.core.instrument.Counter cSuccess;
+    private final io.micrometer.core.instrument.Counter cUnknownPrefix;
+    private final io.micrometer.core.instrument.Counter cRevoked;
+    private final io.micrometer.core.instrument.Counter cExpired;
+    private final io.micrometer.core.instrument.Counter cBadSecret;
+    private final io.micrometer.core.instrument.Counter cInsufficientScope;
+
     public ApiKeyAuthFilter(ApiKeyLookupService lookup,
                             PasswordEncoder encoder,
                             ApiKeyScopeRepository scopeRepo,
@@ -97,6 +107,12 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         this.meterRegistry = meterRegistry;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.cSuccess = meterRegistry.counter(AUTH_COUNTER, "result", "success");
+        this.cUnknownPrefix = meterRegistry.counter(AUTH_COUNTER, "result", "unknown_prefix");
+        this.cRevoked = meterRegistry.counter(AUTH_COUNTER, "result", "revoked");
+        this.cExpired = meterRegistry.counter(AUTH_COUNTER, "result", "expired");
+        this.cBadSecret = meterRegistry.counter(AUTH_COUNTER, "result", "bad_secret");
+        this.cInsufficientScope = meterRegistry.counter(AUTH_COUNTER, "result", "insufficient_scope");
     }
 
     @Override
@@ -138,7 +154,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             // the timing of known-prefix-wrong-secret.
             encoder.matches(secret, DUMMY_HASH);
             log.warn("api-key auth failed: reason=unknown-prefix prefix={}", prefix);
-            meterRegistry.counter(AUTH_COUNTER, "result", "unknown_prefix").increment();
+            cUnknownPrefix.increment();
             unauthorized(res);
             return;
         }
@@ -150,13 +166,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             encoder.matches(secret, DUMMY_HASH);
             String reason = row.revokedAt() != null ? "revoked" : "expired";
             log.warn("api-key auth failed: reason={} prefix={}", reason, prefix);
-            meterRegistry.counter(AUTH_COUNTER, "result", reason).increment();
+            (row.revokedAt() != null ? cRevoked : cExpired).increment();
             unauthorized(res);
             return;
         }
         if (!encoder.matches(secret, row.keyHash())) {
             log.warn("api-key auth failed: reason=bad-secret prefix={}", prefix);
-            meterRegistry.counter(AUTH_COUNTER, "result", "bad_secret").increment();
+            cBadSecret.increment();
             eventPublisher.publishEvent(new SecurityAlertEvent(
                     SecurityAlertEvent.AlertType.API_KEY_BRUTE_FORCE,
                     SecurityAlertEvent.Severity.MEDIUM,
@@ -181,7 +197,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 if (!held.contains(required.get())) {
                     log.warn("api-key scope denied: prefix={} required={} held={}",
                             prefix, required.get(), held);
-                    meterRegistry.counter(AUTH_COUNTER, "result", "insufficient_scope").increment();
+                    cInsufficientScope.increment();
                     forbidden(res);
                     return; // 바깥 finally 가 TenantContextHolder.clear() 보장
                 }
@@ -197,7 +213,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 if (log.isDebugEnabled()) {
                     log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());
                 }
-                meterRegistry.counter(AUTH_COUNTER, "result", "success").increment();
+                cSuccess.increment();
                 chain.doFilter(req, res);
             } finally {
                 MDC.remove(MDC_API_KEY_PREFIX);
