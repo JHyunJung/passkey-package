@@ -85,6 +85,18 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      */
     Optional<AuditLog> findFirstByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
+    /**
+     * Phase QW-3 — TenantAdminService.list() N+1 제거용 배치 집계.
+     * findFirstByTenantIdOrderByCreatedAtDesc(tenantId) 는 tenant 의 최신 audit row 를
+     * 반환하고 toView 는 거기서 createdAt 만 읽는다. 따라서 배치 등가물은 tenant_id 별
+     * MAX(createdAt). 결과는 Object[]{UUID tenantId, Instant maxCreatedAt}. audit row 가
+     * 없는 tenant 는 결과 행이 없으므로 호출부에서 null 처리(기존 .orElse(null) 와 동일).
+     * tenant_id IS NULL 인 PLATFORM row 는 group key 가 null 이라 tenant lookup 에서
+     * 자연히 무시된다.
+     */
+    @Query("select a.tenantId, max(a.createdAt) from AuditLog a where a.tenantId is not null group by a.tenantId")
+    java.util.List<Object[]> findLatestCreatedAtGroupedByTenantId();
+
     /** Read API for the audit-log page. Filters are all optional. */
     @Query("select a from AuditLog a " +
            "where (:action is null or a.action = :action) " +

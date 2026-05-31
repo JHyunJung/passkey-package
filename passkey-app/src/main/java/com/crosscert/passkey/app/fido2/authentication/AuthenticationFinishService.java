@@ -59,6 +59,9 @@ public class AuthenticationFinishService {
     private final IdTokenIssuer idTokens;
     private final ObjectMapper mapper;
     private final ObjectConverter objectConverter;
+    private final AttestationObjectConverter attestationObjectConverter;
+    private final CollectedClientDataConverter collectedClientDataConverter;
+    private final AuthenticationExtensionsClientOutputsConverter extensionsConverter;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
     private final ApplicationEventPublisher eventPublisher;
@@ -69,6 +72,7 @@ public class AuthenticationFinishService {
                                        CredentialRepository credentials,
                                        IdTokenIssuer idTokens,
                                        ObjectMapper mapper,
+                                       ObjectConverter objectConverter,
                                        Clock clock,
                                        CeremonyMetrics ceremonyMetrics,
                                        ApplicationEventPublisher eventPublisher) {
@@ -78,7 +82,10 @@ public class AuthenticationFinishService {
         this.credentials = credentials;
         this.idTokens = idTokens;
         this.mapper = mapper;
-        this.objectConverter = new ObjectConverter();
+        this.objectConverter = objectConverter;
+        this.attestationObjectConverter = new AttestationObjectConverter(objectConverter);
+        this.collectedClientDataConverter = new CollectedClientDataConverter(objectConverter);
+        this.extensionsConverter = new AuthenticationExtensionsClientOutputsConverter(objectConverter);
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
         this.eventPublisher = eventPublisher;
@@ -229,7 +236,7 @@ public class AuthenticationFinishService {
             // Pessimistic lock (above) + the @Transactional boundary make
             // this read-check-update sequence safe under concurrency.
             record.setCounter(newCounter);
-            cred.recordAuthentication(newCounter, cred.getCredentialRecordBytes(), clock.instant());
+            cred.recordAuthentication(newCounter, clock.instant());
             credentials.saveAndFlush(cred);
 
             String credentialIdB64 = b64url(credentialId);
@@ -276,15 +283,10 @@ public class AuthenticationFinishService {
         String ceJson = ceNode == null || ceNode.isNull() ? "{}" : ceNode.asText();
         JsonNode trNode = env.get("tr");
 
-        AttestationObjectConverter aoConv = new AttestationObjectConverter(objectConverter);
-        CollectedClientDataConverter cdConv = new CollectedClientDataConverter(objectConverter);
-        AuthenticationExtensionsClientOutputsConverter ceConv =
-                new AuthenticationExtensionsClientOutputsConverter(objectConverter);
-
-        AttestationObject attestationObject = aoConv.convert(ao);
-        CollectedClientData clientData = cdConv.convert(cd);
+        AttestationObject attestationObject = attestationObjectConverter.convert(ao);
+        CollectedClientData clientData = collectedClientDataConverter.convert(cd);
         AuthenticationExtensionsClientOutputs<RegistrationExtensionClientOutput> clientExtensions =
-                ceConv.convert(ceJson);
+                extensionsConverter.convert(ceJson);
 
         Set<AuthenticatorTransport> transports = new LinkedHashSet<>();
         if (trNode != null && trNode.isArray()) {

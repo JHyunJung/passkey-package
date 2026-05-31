@@ -24,6 +24,16 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     long countByTenantId(UUID tenantId);
 
     /**
+     * Phase QW-3 — TenantAdminService.list() N+1 제거용 배치 집계.
+     * countByTenantId(UUID) 와 동일한 의미를 tenant 전체에 대해 한 번에 계산한다:
+     * 각 tenant_id 별 credential row 수. 결과는 Object[]{UUID tenantId, Long count}.
+     * credential row 가 없는 tenant 는 결과에 포함되지 않으므로(0 행) 호출부에서
+     * 기본값 0 으로 처리한다 — countByTenantId 가 0 을 반환하는 것과 동일.
+     */
+    @Query("select c.tenantId, count(c) from Credential c group by c.tenantId")
+    List<Object[]> countGroupedByTenantId();
+
+    /**
      * Pessimistic-locked lookup used by /authentication/finish to
      * serialize the read-check-update of signCount. Without the lock,
      * two concurrent finish calls for the same credential could both

@@ -1,0 +1,219 @@
+[
+  {
+    "phase": "QW-2:rpadmin-gating",
+    "items": [
+      {
+        "target": "SecurityPolicyController.get() @PreAuthorize (QW-2 핵심 변경 대상)",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/policy/SecurityPolicyController.java:24-28",
+        "currentCode": "@GetMapping\n@PreAuthorize(\"hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')\")\npublic SecurityPolicyDto.View get() {\n    return service.get();\n}",
+        "note": "QW-2 게이팅: get()은 현재 RP_ADMIN도 허용. RP_ADMIN을 빼고 hasRole('PLATFORM_OPERATOR')로 좁히는 것이 변경 대상. 반환 타입은 ApiResponse 래핑이 아니라 raw SecurityPolicyDto.View (PUT update와 동일). service: SecurityPolicyService.get() -> SecurityPolicyDto.View (signature: admin-app/.../policy/SecurityPolicyService.java:32). View record fields(테스트 mock 생성용): View(int sessionIdleTimeoutMinutes, int passwordMinLength, boolean mfaRequired, List<String> corsAllowlist, Instant updatedAt, String updatedBy) — SecurityPolicyDto.java:14-21."
+      },
+      {
+        "target": "SecurityPolicyController.update() @PreAuthorize (이미 좁혀짐 — 변경 불필요, 참조용)",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/policy/SecurityPolicyController.java:30-50",
+        "currentCode": "@PutMapping\n@PreAuthorize(\"hasRole('PLATFORM_OPERATOR')\")\npublic SecurityPolicyDto.View update(@Valid @RequestBody SecurityPolicyDto.UpdateRequest req,\n                                     Authentication auth) {",
+        "note": "PUT/update는 이미 hasRole('PLATFORM_OPERATOR')로 PLATFORM 전용 → 변경 불필요. get()만 update와 동일 레벨로 맞추는 것이 QW-2 의도일 가능성. update는 auditService.append 호출하고 auth.getName()으로 actor 추출. UpdateRequest record: UpdateRequest(int sessionIdleTimeoutMinutes, int passwordMinLength, Boolean mfaRequired, List<String> corsAllowlist) (SecurityPolicyDto.java:27)."
+      },
+      {
+        "target": "SystemInfoController.get() @PreAuthorize (QW-2 핵심 변경 대상)",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/system/SystemInfoController.java:17-21",
+        "currentCode": "@PreAuthorize(\"hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')\")\n@GetMapping\npublic ApiResponse<SystemInfoView> get() {\n    return ApiResponse.ok(service.get());\n}",
+        "note": "QW-2 게이팅: get()이 현재 RP_ADMIN도 허용. PLATFORM 전용으로 좁히려면 hasRole('PLATFORM_OPERATOR')로 변경. 주의: 반환 타입은 ApiResponse<SystemInfoView> 래핑(SecurityPolicyController.get()과 달리 ApiResponse.ok). service.get() -> SystemInfoView (SystemInfoService.java:28). SystemInfoView record는 중첩 record(Host, Component) 포함하므로 테스트에서 200 검증 시 mock 반환값 생성 비용 큼 — jsonPath($.success) 정도만 보거나 빈 컴포넌트로 최소 생성 권장. SystemInfoView 시그니처: SystemInfoView(String serverVersion, String deployedAt, Integer apiP95Ms, Integer apiAvgMs, Integer apiP99Ms, Double uptimePercent, Long uptimeDays, Long uptimeIncidentMinutes, Host host, List<Component> components) (SystemInfoView.java:5-16)."
+      },
+      {
+        "target": "TenantAdminController.list() / get() @PreAuthorize 유무",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/tenant/TenantAdminController.java:33-41",
+        "currentCode": "@GetMapping\npublic ApiResponse<List<TenantAdminDto.TenantView>> list() {\n    return ApiResponse.ok(service.list());\n}\n\n@GetMapping(\"/{idOrSlug}\")\npublic ApiResponse<TenantAdminDto.TenantView> get(@PathVariable String idOrSlug) {\n    return ApiResponse.ok(service.get(idOrSlug));\n}",
+        "note": "list()와 get(idOrSlug) 둘 다 @PreAuthorize 없음 → 메서드 시큐리티 미적용, AdminSecurityConfig의 .requestMatchers(\"/admin/api/**\").authenticated() 만 적용되어 인증된 모든 role(RP_ADMIN 포함)이 접근 가능. 즉 read는 RP_ADMIN 허용이 의도된 패턴(기존 테스트 viewerCanGet가 RP_ADMIN으로 200 기대). QW-2가 SecurityPolicy/SystemInfo의 get을 PLATFORM 전용으로 좁히면 TenantAdmin read 패턴과는 다른 정책이 됨 — 의도 확인 필요. write 계열(create/suspend/activate)은 hasRole('PLATFORM_OPERATOR'), update/diff는 hasAnyRole(PLATFORM_OPERATOR,RP_ADMIN)."
+      },
+      {
+        "target": "ApiKeyAdminController.list() @PreAuthorize 유무",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/apikey/ApiKeyAdminController.java:27-31",
+        "currentCode": "@GetMapping\npublic ApiResponse<List<ApiKeyAdminDto.ApiKeyView>> list(\n        @RequestParam(required = false) String tenantId) {\n    return ApiResponse.ok(service.list(tenantId));\n}",
+        "note": "list()는 @PreAuthorize 없음 → TenantAdmin.list()와 동일하게 authenticated()만 적용, RP_ADMIN 접근 가능(기존 테스트 viewerCanList가 RP_ADMIN으로 200 기대). write 계열(issue/rotate/revoke)은 모두 hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN'). 즉 ApiKey는 RP_ADMIN이 write까지 허용된 상태 — QW-2 게이팅 정책과 일관성 검토 필요."
+      },
+      {
+        "target": "보안 테스트 패턴 — @WebMvcTest 슬라이스 + RP_ADMIN 403 / PLATFORM 200 (SecurityPolicy/SystemInfo 신규 테스트 재사용 템플릿)",
+        "file": "admin-app/src/test/java/com/crosscert/passkey/admin/tenant/TenantAdminControllerSecurityTest.java:30-128",
+        "currentCode": "@WebMvcTest(\n    controllers = TenantAdminController.class,\n    excludeAutoConfiguration = {\n        org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,\n        org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,\n        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,\n        org.springframework.boot.autoconfigure.data.web.SpringDataWebAutoConfiguration.class\n    }\n)\n@Import({\n    com.crosscert.passkey.admin.config.AdminSecurityConfig.class,\n    TenantAdminControllerSecurityTest.JpaStubs.class\n})\nclass TenantAdminControllerSecurityTest {",
+        "note": "신규 테스트(SecurityPolicyControllerSecurityTest / SystemInfoControllerSecurityTest)는 이 패턴 그대로 복제. 핵심: (1) @WebMvcTest(controllers=대상Controller.class, excludeAutoConfiguration={Hibernate/JpaRepositories/DataSource/SpringDataWeb}) (2) @Import({AdminSecurityConfig.class, <Test>.JpaStubs.class}) — AdminSecurityConfig는 @EnableMethodSecurity(AdminSecurityConfig.java:47) 보유하므로 @PreAuthorize가 슬라이스에서 적용됨. (3) JpaStubs static @TestConfiguration: EntityManagerFactory @Bean (mock Metamodel, getEntities/getManagedTypes/getEmbeddables -> Set.of()) — @EnableJpaRepositories가 jpaSharedEM_entityManagerFactory를 요구하기 때문. (4) @MockBean 묶음: 대상Service + AdminUserRepository admins + AuditLogService audit + AdminUserDetailsService uds + Clock clock + PasswordEncoder encoder + DynamicCorsConfigurationSource corsSource + 다수 core repository(TenantRepository, AuditLogRepository, ApiKeyRepository, ApiKeyScopeRepository, CredentialRepository, SigningKeyRepository, MdsBlobCacheRepository, SchedulerLeaseRepository, ActivityRepository, AdminUserInvitationRepository, AdminPasswordResetTokenRepository, AdminUserRecoveryCodeRepository, TenantAaguidPolicyRepository, SecurityPolicyRepository, TenantWebauthnSnapshotRepository) — AdminSecurityConfig 와 @EnableJpaRepositories 때문에 전부 필요. SecurityPolicy 신규 테스트는 SecurityPolicyService를 @MockBean으로, SystemInfo 신규 테스트는 SystemInfoService를 @MockBean으로 교체."
+      },
+      {
+        "target": "보안 테스트 — 403/200/401 검증 메서드 패턴 (어노테이션/헬퍼/import)",
+        "file": "admin-app/src/test/java/com/crosscert/passkey/admin/tenant/TenantAdminControllerSecurityTest.java:104-128",
+        "currentCode": "@Test\nvoid anonymousGetIsUnauthorized() throws Exception {\n    mvc.perform(get(\"/admin/api/tenants\")).andExpect(status().isUnauthorized());\n}\n\n@Test\n@WithMockUser(roles = \"RP_ADMIN\")\nvoid viewerCanGet() throws Exception {\n    when(service.list()).thenReturn(java.util.List.of());\n    mvc.perform(get(\"/admin/api/tenants\"))\n        .andExpect(status().isOk());\n}\n\n@Test\n@WithMockUser(roles = \"RP_ADMIN\")\nvoid viewerCannotPost() throws Exception {\n    mvc.perform(post(\"/admin/api/tenants\")\n            .with(csrf())\n            .contentType(\"application/json\")\n            .content(BODY))\n        .andExpect(status().isForbidden());\n}",
+        "note": "핵심 검증 헬퍼/어노테이션: @WithMockUser(roles=\"RP_ADMIN\")는 ROLE_RP_ADMIN 부여, @WithMockUser(username=\"alice@example.com\", roles=\"PLATFORM_OPERATOR\")는 PLATFORM. 403 기대 = status().isForbidden(), 200 = status().isOk(), 401(미인증) = status().isUnauthorized(). 변경(POST/PUT) 요청은 .with(csrf()) 필수(CSRF 활성). GET은 csrf 불필요. 필수 static imports: org.springframework.security.test.context.support.WithMockUser; SecurityMockMvcRequestPostProcessors.csrf; MockMvcRequestBuilders.get/post; MockMvcResultMatchers.status/jsonPath; org.mockito.Mockito.when. 신규 테스트 매핑: SecurityPolicy get은 GET /admin/api/security-policy (RP_ADMIN -> QW-2 후 isForbidden 기대, PLATFORM_OPERATOR -> isOk; service.get() stub 필요). SystemInfo get은 GET /admin/api/system/info (동일). 미인증 -> isUnauthorized. PLATFORM 200 케이스에서 SystemInfoView는 중첩 record라 빈 components(List.of())로 최소 생성하거나 service.get() mock 반환을 단순화."
+      }
+    ]
+  },
+  {
+    "phase": "QW-1:archunit-boundary",
+    "items": [
+      {
+        "target": "ApiKeyAuthFilter.doFilterInternal 진입부 + TenantContextHolder import/사용 (QW-1 입력 1)",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java:110",
+        "currentCode": "import com.crosscert.passkey.core.vpd.TenantContextHolder;  // line 5\n\n@Override\nprotected void doFilterInternal(HttpServletRequest req,\n                                HttpServletResponse res,\n                                FilterChain chain) throws ServletException, IOException {\n    String header = req.getHeader(HEADER);\n    if (header == null || header.length() <= PREFIX_LEN\n            || !header.startsWith(KEY_PREFIX)) {\n        unauthorized(res);\n        return;\n    }\n    ...\n    // line 157, set AFTER full BCrypt verification:\n    TenantContextHolder.set(row.tenantId());\n    try {\n        ... scope check + chain.doFilter ...\n    } finally {\n        TenantContextHolder.clear();   // line 195\n    }\n}",
+        "note": "핵심 비대칭 발견: ApiKeyAuthFilter 는 DevTenantHeaderFilter 와 달리 진입부에서 방어적 TenantContextHolder.clear() 를 호출하지 않는다. set() 은 BCrypt 검증 성공 후 line 157 에서만. 실패 경로(unknown-prefix line 116/130, revoked/expired line 143, bad-secret line 153, scope-denied line 174)는 set 전에 return 하므로 스레드에 이전 tenant 가 남아있으면 leak 가능 — 단 그 경로들은 chain.doFilter 를 호출하지 않아 다운스트림 비즈로직엔 안 닿음. QW-1 회귀방지 대상이라면 doFilterInternal 첫 줄에 DevTenantHeaderFilter line 59 와 동일한 방어적 clear 추가가 자연스러운 대칭 패턴. clear() 는 내부적으로 CURRENT.remove() (TenantContextHolder.java:29-31). 필터 Order=HIGHEST_PRECEDENCE+5, shouldNotFilter 는 getServletPath().startsWith('/api/v1/rp/') 만 처리(line 99-107)."
+      },
+      {
+        "target": "DevTenantHeaderFilter 방어적 clear 패턴 (주석 포함) — 정확 인용 (QW-1 입력 1)",
+        "file": "core/src/main/java/com/crosscert/passkey/core/vpd/DevTenantHeaderFilter.java:55",
+        "currentCode": "    protected void doFilterInternal(HttpServletRequest req,\n                                    HttpServletResponse res,\n                                    FilterChain chain) throws ServletException, IOException {\n        // Defense-in-depth: clear any stale ThreadLocal value before we\n        // read the request. Reuse of a Tomcat worker thread that exited\n        // a prior request via an unusual path should never leak the\n        // previous tenant into this one.\n        TenantContextHolder.clear();",
+        "note": "이 패턴(line 55-59)이 QW-1 가 ApiKeyAuthFilter 에 복제하려는 표준 방어 패턴. DevTenantHeaderFilter 는 @Profile({local,dev,test}) 한정, Order=HIGHEST_PRECEDENCE+10 (ApiKeyAuthFilter 보다 뒤). shouldNotFilter 가 /api/v1/rp/** 를 skip 하므로(line 43-49) RP API 경로에선 이 필터가 아예 안 돌고 ApiKeyAuthFilter 의 context 를 보존. finally 에서도 clear (line 79). TenantContextHolder.set(null) 은 내부적으로 remove() (TenantContextHolder.java:17-23)."
+      },
+      {
+        "target": "TenantBoundary.assertCanAccessTenant(UUID) / currentTenantScope() 시그니처 (QW-1 입력 2)",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/auth/TenantBoundary.java:47",
+        "currentCode": "public void assertCanAccessTenant(UUID tenantId)        // line 47, void, throws BusinessException(ErrorCode.ACCESS_DENIED) on violation\n\npublic Optional<UUID> currentTenantScope()              // line 77, PLATFORM_OPERATOR→Optional.empty(), RP_ADMIN→Optional.of(tenantId)\n\npublic void assertPlatformOperator()                    // line 94, bonus 3rd boundary method",
+        "note": "@Component (생성자 주입 ApplicationEventPublisher). 두 메서드 모두 currentPrincipal() (line 108) 으로 SecurityContextHolder 에서 AdminUserDetails 를 꺼내고, 미인증 시 BusinessException(ErrorCode.UNAUTHORIZED). 위반 시 SecurityAlertEvent(TENANT_BOUNDARY_VIOLATION, CRITICAL) publish (line 39-45) + CryptoUtils.maskEmail 로 마스킹 로그. ArchUnit 규칙이 메서드명으로 매칭한다면 정확히 'assertCanAccessTenant','currentTenantScope','assertPlatformOperator' 3개가 boundary 진입점. 패키지: com.crosscert.passkey.admin.auth.TenantBoundary."
+      },
+      {
+        "target": "admin-app build.gradle.kts ArchUnit 의존성 (QW-1 입력 3)",
+        "file": "admin-app/build.gradle.kts:15",
+        "currentCode": "    testImplementation(\"org.springframework.security:spring-security-test\")\n    testImplementation(rootProject.libs.testcontainers.oracle)\n    testImplementation(rootProject.libs.testcontainers.junit)\n    testImplementation(rootProject.libs.wiremock.standalone)",
+        "note": "ArchUnit 의존성 없음 — 추가 필요. 전체 리포(.toml/.kts) grep 결과 archunit 0건. 추가 패턴 2안: (A) 빠르게 리터럴 testImplementation(\"com.tngtech.archunit:archunit-junit5:1.3.0\") 를 이 블록(line 15-24)에 추가, 또는 (B) gradle/libs.versions.toml [versions]/[libraries] 에 등록 후 rootProject.libs.archunit.junit5 참조(기존 testcontainers/wiremock 와 동일 catalog 패턴이 line 19/24 에서 사용 중 — 일관성 위해 B 권장). 루트 build.gradle.kts subprojects 블록은 ArchUnit 미주입이므로 admin-app 모듈에 국한 추가. JUnit5 platform 사용 중(루트 build.gradle.kts:54 useJUnitPlatform()), archunit-junit5 호환. Java toolchain 17."
+      },
+      {
+        "target": "RP_ADMIN 도달가능 tenant-scoped 서비스의 boundary 호출 현재 패턴 (ArchUnit 규칙 설계용) (QW-1 입력 4)",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/credential/CredentialAdminService.java:48",
+        "currentCode": "// 예시1 CredentialAdminService.list (line 48-50) — 메서드 첫 줄 assert:\n@Transactional(readOnly = true)\npublic PageView<CredentialView> list(UUID tenantId, int page, int size, String q) {\n    tenantBoundary.assertCanAccessTenant(tenantId);\n    ...\n\n// 예시2 ApiKeyAdminService.list (line 72-74) — list 분기는 currentTenantScope:\n@Transactional(readOnly = true)\npublic List<ApiKeyAdminDto.ApiKeyView> list(String tenantId) {\n    UUID scopeTid = tenantBoundary.currentTenantScope().orElse(null);\n    ...\n\n// 예시3 ApiKeyAdminService.issue/revoke/rotate (line 89/142/168) — 엔티티 조회 후 그 tenantId 로 assert:\n//   tenantBoundary.assertCanAccessTenant(req.tenantId());  / k.getTenantId() / old.getTenantId()\n\n// 예시4 FunnelService.compute (line 46) / TenantAdminService.get|update (line 87/178): 동일 첫줄 assert 패턴",
+        "note": "ArchUnit 규칙 설계의 핵심 함정(false-positive 리스크): 강제 지점이 균일하지 않음. (1) 다수 서비스(CredentialAdminService, FunnelService, TenantAdminService.get/update, ApiKeyAdminService.issue/revoke/rotate)는 메서드 내부 첫 줄에서 assertCanAccessTenant 호출. (2) list 계열은 assert 대신 currentTenantScope() 로 필터링(TenantAdminService.list line 74, ApiKeyAdminService.list line 74, AuditLogController line 44). (3) **WebauthnDiffService.diff(UUID tenantId, ...) (WebauthnDiffService.java:20) 는 boundary 를 전혀 호출하지 않음** — 대신 TenantAdminController.diff (TenantAdminController.java:67-70) 가 service.get(idOrSlug) 로 tenantId 를 boundary-검증된 경로로 먼저 해석한 뒤 그 UUID 를 넘김. 따라서 '모든 (UUID tenantId 인자) 서비스 메서드는 assertCanAccessTenant 를 호출해야 한다'식 단순 규칙은 WebauthnDiffService 에서 즉시 위반 처리됨. ArchUnit 규칙은 (a) controller 레이어 PreAuthorize 와 조합하거나 (b) WebauthnDiffService 를 명시적 예외(allowlist)로 두거나 (c) '서비스가 직접 assert 하거나, 호출 controller 가 boundary-검증된 tenantId 만 전달'을 보장하는 더 약한 불변식으로 설계해야 함. CredentialAdminService.revoke 는 VPD 비활성 환경에서 c.getTenantId().equals(tenantId) 2차 검증도 수행(line 84-89) — 'cross-tenant 누출 방어의 단일 layer' 라는 주석이 admin-app VPD-off 전제를 명시. 모든 boundary-호출 서비스는 @Component TenantBoundary 를 생성자 주입(필드명 tenantBoundary)."
+      }
+    ]
+  },
+  {
+    "phase": "QW-3:db-perf",
+    "items": [
+      {
+        "target": "Idempotent Flyway CREATE INDEX pattern (V24/V25 reference) + latest migration number",
+        "file": "core/src/main/resources/db/migration/V24__audit_log_tenant_id.sql:25-34",
+        "currentCode": "-- 2. 인덱스: tenant_id + created_at — ORA-00955 (name already used) swallow\nBEGIN\n  EXECUTE IMMEDIATE 'CREATE INDEX audit_log_tenant_ix ON audit_log (tenant_id, created_at)';\nEXCEPTION\n  WHEN OTHERS THEN\n    IF SQLCODE = -955 THEN NULL; -- index already exists\n    ELSE RAISE;\n    END IF;\nEND;\n/",
+        "note": "정확한 멱등 패턴: EXECUTE IMMEDIATE 'CREATE INDEX ...' 를 BEGIN/EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END; / 로 감쌈. 각 블록은 Oracle 슬래시(/) 종결자로 끝남. V25:42-51 도 동일 패턴(audit_log_tenant_seq_ix on (tenant_id, id)). ALTER ADD 컬럼은 -1430 swallow. V36:56-59 도 ix_recovery_admin_user 에 동일 멱등 패턴 사용. 최신 마이그레이션은 V37(V37__admin_account_security.sql) — QW-3 신규 파일은 V38__... 로 작성. core/src/main/resources/db/migration/ 디렉토리에 위치, V1~V37 빈틈 없음."
+      },
+      {
+        "target": "api_key 테이블 정의 + tenant_id 컬럼 + 인덱스 유무 (QW-3 핵심: tenant_id 인덱스 추가 대상)",
+        "file": "core/src/main/resources/db/migration/V19__uuid_migration.sql:229-249",
+        "currentCode": "CREATE TABLE api_key (\n  id              RAW(16)                  NOT NULL,\n  tenant_id       RAW(16)                  NOT NULL,\n  key_prefix      VARCHAR2(16)             NOT NULL,\n  key_hash        VARCHAR2(255)            NOT NULL,\n  name            VARCHAR2(256)            NOT NULL,\n  scopes          CLOB                     NOT NULL,\n  ...\n  CONSTRAINT pk_api_key        PRIMARY KEY (id),\n  CONSTRAINT uq_api_key_prefix UNIQUE (key_prefix),\n  CONSTRAINT fk_api_key_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),\n  CONSTRAINT ck_api_key_scopes_json CHECK (scopes IS JSON)\n);",
+        "note": "api_key.tenant_id 의 CURRENT 정의 = RAW(16) NOT NULL (V7 에서는 VARCHAR2(64) 였으나 V19 UUID 마이그레이션에서 RAW(16) 로 재생성됨 — 현재 유효한 정의는 V19). fk_api_key_tenant FK 는 있지만 tenant_id 단독 인덱스는 전체 마이그레이션(V1~V37) 어디에도 없음 — Oracle 은 FK 에 자동 인덱스를 만들지 않으므로 countActiveByTenantId 쿼리가 tenant_id 로 필터 시 인덱스 부재. 유일한 api_key 관련 인덱스는 V21:73 ix_aks_api_key ON api_key_scope(api_key_id) (자식 테이블). 참고로 V21:60-61 에서 scopes CLOB 컬럼은 DROP 되고 api_key_scope 자식 테이블로 정규화됨. => QW-3 에서 'CREATE INDEX ix_api_key_tenant ON api_key (tenant_id)' (또는 active 필터용 복합 (tenant_id, revoked_at, expires_at)) 추가가 타당. credential 은 이미 V19:274 ix_credential_tenant_user ON credential(tenant_id, user_handle) 보유 → countByTenantId 커버됨. audit_log 는 V24:27 audit_log_tenant_ix ON (tenant_id, created_at) 보유 → findFirstByTenantIdOrderByCreatedAtDesc 커버됨. 즉 인덱스 신규 필요한 것은 api_key.tenant_id 하나만."
+      },
+      {
+        "target": "TenantAdminService.toView() — 테넌트당 3개 추가 쿼리 (N+1)",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/tenant/TenantAdminService.java:100-108",
+        "currentCode": "    private TenantAdminDto.TenantView toView(Tenant t) {\n        long credentials = credentialRepository.countByTenantId(t.getId());\n        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), Instant.now());\n        Instant lastEventAt = auditLogRepository\n                .findFirstByTenantIdOrderByCreatedAtDesc(t.getId())\n                .map(AuditLog::getCreatedAt)\n                .orElse(null);\n        return TenantAdminDto.TenantView.from(t, credentials, apiKeys, lastEventAt);\n    }",
+        "note": "list() (line 72-82) 는 tenants.findAll() 결과를 .map(this::toView) 로 스트리밍 → 테넌트 N개당 3N개 추가 쿼리(N+1). 호출 repository 메서드: (1) CredentialRepository.countByTenantId(UUID) [CredentialRepository.java:24, derived query] (2) ApiKeyRepository.countActiveByTenantId(@Param UUID tenantId, @Param Instant now) [ApiKeyRepository.java:36-42, @Query: count(k) where tenantId AND revokedAt is null AND (expiresAt is null or expiresAt > :now)] (3) AuditLogRepository.findFirstByTenantIdOrderByCreatedAtDesc(UUID) [AuditLogRepository.java:86, derived query → fetch first 1 row only]. line 95-98 에 이미 N+1 인지 주석 있음(현재 ≤4 tenant 라 허용, '단일 GROUP BY 쿼리로 묶거나 dashboard 캐싱 필요 — 후속 Task' 라고 명시). 시그니처는 모두 UUID tenantId 받음. create()(169)·update()(232) 도 toView 호출하나 단건이라 N+1 무관. QW-3 가 인덱스만 추가(쿼리 구조 유지)할지, projection/GROUP BY 로 묶을지 plan 에서 결정 필요 — 인덱스 추가 쪽이 minimal-impact."
+      },
+      {
+        "target": "application-common.yml spring.jpa.properties (batch_size 추가 위치)",
+        "file": "core/src/main/resources/application-common.yml:8-19",
+        "currentCode": "  jpa:\n    open-in-view: false\n    properties:\n      hibernate.dialect: org.hibernate.dialect.OracleDialect\n      hibernate.jdbc.time_zone: UTC\n      # ... (default_schema 주석) ...\n      hibernate.default_schema: APP_OWNER\n    hibernate.ddl-auto: validate",
+        "note": "spring.jpa.properties 는 line 10-18 (dot-key 평면 스타일: hibernate.dialect / hibernate.jdbc.time_zone / hibernate.default_schema). batch_size 추가 시 properties: 블록 안에 'hibernate.jdbc.batch_size: 30', 'hibernate.order_inserts: true', 'hibernate.order_updates: true' 를 hibernate.default_schema(line 18) 다음 줄에 동일 들여쓰기(6 spaces)로 추가. 주의: line 19 'hibernate.ddl-auto: validate' 는 properties 블록 밖(spring.jpa 직속, 4 spaces 들여쓰기) — Spring Boot 표준 키라 properties 안이 아님. batch_size 는 반드시 properties: 하위(6 spaces)에 둘 것. 현재 batch_size/order_inserts/order_updates 키 없음. open-in-view: false 이미 설정됨. 이 yml 은 core 모듈 공통이며 admin-app/api 양쪽에서 import(admin-app 은 별도 application.yml 에 Flyway default-schema 설정 있다고 주석 언급)."
+      }
+    ]
+  },
+  {
+    "phase": "QW-4:backend-hygiene",
+    "items": [
+      {
+        "target": "CryptoUtils.hex(byte[]) — String.format(\"%02x\") loop → HexFormat 교체",
+        "file": "core/src/main/java/com/crosscert/passkey/core/util/CryptoUtils.java:29-35",
+        "currentCode": "public static String hex(byte[] bytes) {\n    StringBuilder s = new StringBuilder(bytes.length * 2);\n    for (byte b : bytes) {\n        s.append(String.format(\"%02x\", b));\n    }\n    return s.toString();\n}",
+        "note": "JDK17 HexFormat.of().formatHex(bytes) 로 1:1 대체. 소문자 hex 동일 출력. 시그니처/public 유지 필수. 내부 callers: sha256Hex(L21), randomToken(L49). 외부 caller 1곳뿐: admin-app AuditLogService.java:169 (CryptoUtils.hex(prevHash)) — audit-chain 해시 canonical input 이므로 출력 포맷 절대 불변이어야 함. 테스트 존재: core/src/test/.../CryptoUtilsTest.java:23 가 new byte[]{0x00,0xff,0x0a} → \"00ff0a\" 기대. HexFormat 은 동일 결과(소문자, 패딩) 보장. import java.util.HexFormat 추가, java.security.* 임포트는 그대로."
+      },
+      {
+        "target": "RSA RS256 keygen 중복 — SigningKeyProvider.generate() vs KeyRotationService.generateFreshActive() 공통 추출",
+        "file": "core/src/main/java/com/crosscert/passkey/core/jwt/SigningKeyProvider.java:149-168",
+        "currentCode": "private SigningKey generate() {\n    try {\n        KeyPairGenerator gen = KeyPairGenerator.getInstance(\"RSA\");\n        gen.initialize(2048);\n        KeyPair pair = gen.generateKeyPair();\n\n        RSAKey withoutKid = new RSAKey.Builder((RSAPublicKey) pair.getPublic())\n                .privateKey((RSAPrivateKey) pair.getPrivate())\n                .keyUse(KeyUse.SIGNATURE)\n                .algorithm(JWSAlgorithm.RS256)\n                .build();\n        String kid = withoutKid.computeThumbprint().toString();\n        RSAKey rsa = new RSAKey.Builder(withoutKid).keyID(kid).build();\n        String publicJwk = rsa.toPublicJWK().toJSONString();\n        byte[] sealed = envelope.seal(pair.getPrivate().getEncoded());\n        return new SigningKey(kid, \"RS256\", publicJwk, sealed);\n    } catch (Exception e) {\n        throw new IllegalStateException(\"initial signing key generation failed\", e);\n    }\n}",
+        "note": "두 메서드의 keygen 본문이 거의 동일. 차이점: (1) 예외 메시지 문자열만 다름(\"initial signing key generation failed\" vs \"rotation key generation failed\"), (2) admin 버전은 publicJwk 추출을 인라인(rsa.toPublicJWK().toJSONString()), (3) 둘 다 envelope.seal(pair.getPrivate().getEncoded()) 동일. 추출 대상: 'RSA-2048 + RS256 + thumbprint-kid → SigningKey(kid,\"RS256\",publicJwk,sealed)' 로직. 의존성: KeyEnvelope.seal(byte[]) (생성자 주입). 추출 위치 후보 — core 의 SigningKey 엔티티 인근 또는 신규 core util(예: SigningKeyFactory) 에 static SigningKey newRsaSigningKey(KeyEnvelope envelope). 두 클래스 모두 import 공유: com.nimbusds.jose.{JWSAlgorithm}, jwk.{KeyUse,RSAKey}, java.security.{KeyPair,KeyPairGenerator}, interfaces.{RSAPrivateKey,RSAPublicKey}. SigningKey 생성자 시그니처: new SigningKey(String kid, String alg, String publicJwk, byte[] sealedPkcs8). 리스크: 거의 없음 — 순수 함수 추출. KeyEnvelope 는 core 패키지(com.crosscert.passkey.core.jwt)라 admin/core 양쪽 접근 가능."
+      },
+      {
+        "target": "RSA keygen 중복(쌍) — KeyRotationService.generateFreshActive()",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/keymgmt/KeyRotationService.java:144-161",
+        "currentCode": "private SigningKey generateFreshActive() {\n    try {\n        KeyPairGenerator gen = KeyPairGenerator.getInstance(\"RSA\");\n        gen.initialize(2048);\n        KeyPair pair = gen.generateKeyPair();\n        RSAKey withoutKid = new RSAKey.Builder((RSAPublicKey) pair.getPublic())\n                .privateKey((RSAPrivateKey) pair.getPrivate())\n                .keyUse(KeyUse.SIGNATURE)\n                .algorithm(JWSAlgorithm.RS256)\n                .build();\n        String kid = withoutKid.computeThumbprint().toString();\n        RSAKey rsa = new RSAKey.Builder(withoutKid).keyID(kid).build();\n        return new SigningKey(kid, \"RS256\", rsa.toPublicJWK().toJSONString(),\n                envelope.seal(pair.getPrivate().getEncoded()));\n    } catch (Exception e) {\n        throw new IllegalStateException(\"rotation key generation failed\", e);\n    }\n}",
+        "note": "SigningKeyProvider.generate() 와 동일 로직(위 항목과 짝). 추출 후 이 메서드는 SigningKeyFactory.newRsaSigningKey(envelope) 호출로 대체. envelope 는 KeyEnvelope (생성자 L67,74 주입). 호출부 L105: SigningKey fresh = generateFreshActive(); → fresh = SigningKeyFactory.newRsaSigningKey(envelope). 주의: admin 은 import com.crosscert.passkey.core.entity.SigningKey, core.jwt.KeyEnvelope 이미 보유. 예외 메시지 통합 시 양쪽 의미(\"initial\" vs \"rotation\")가 합쳐지므로 일반 메시지(\"signing key generation failed\")로 통일 — 호출부 컨텍스트는 로그로 구분됨."
+      },
+      {
+        "target": "ProblemJson 헬퍼 추출 — ApiKeyAuthFilter unauthorized()/forbidden() problem+json 리터럴",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java:200-213",
+        "currentCode": "private void unauthorized(HttpServletResponse res) throws IOException {\n    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);\n    res.setContentType(\"application/problem+json\");\n    res.getWriter().write(\n            \"{\\\"type\\\":\\\"about:blank\\\",\\\"status\\\":401,\\\"title\\\":\\\"Unauthorized\\\"}\");\n}\n\nprivate void forbidden(HttpServletResponse res) throws IOException {\n    res.setStatus(HttpServletResponse.SC_FORBIDDEN);\n    res.setContentType(\"application/problem+json\");\n    res.getWriter().write(\n            \"{\\\"type\\\":\\\"about:blank\\\",\\\"status\\\":403,\\\"title\\\":\\\"Forbidden\\\",\\\"error\\\":\\\"insufficient_scope\\\"}\");\n}",
+        "note": "3개 리터럴 패턴 공통: type=about:blank, status, title. forbidden 만 추가 \"error\":\"insufficient_scope\" 필드 보유 — 헬퍼 설계 시 옵션 필드(error) 수용 필요. 추출 후보: passkey-app security 패키지 신규 final class ProblemJson { static void write(HttpServletResponse res, int status, String title) / overload with error }. 모든 본문은 res.setStatus + setContentType(\"application/problem+json\") + getWriter().write(...) 3-스텝 동일. JSON 문자열 수동 조립(라이브러리 미사용) — title/error 는 모두 하드코딩 리터럴이라 인젝션 위험 없음. 단 헬퍼화하며 사용자 입력을 끼우지 말 것(현 코드도 안 끼움). RateLimitFilter 의 429 도 동일 패턴이라 같은 헬퍼로 흡수 가능."
+      },
+      {
+        "target": "ProblemJson 헬퍼 추출(쌍) — RateLimitFilter.tooManyRequests() 429 problem+json + Retry-After",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/security/RateLimitFilter.java:178-184",
+        "currentCode": "private void tooManyRequests(HttpServletResponse res) throws IOException {\n    res.setStatus(429);\n    res.setHeader(\"Retry-After\", \"60\");\n    res.setContentType(\"application/problem+json\");\n    res.getWriter().write(\n            \"{\\\"type\\\":\\\"about:blank\\\",\\\"status\\\":429,\\\"title\\\":\\\"Too Many Requests\\\"}\");\n}",
+        "note": "ApiKeyAuthFilter 의 401/403 과 동일 problem+json 골격이나 추가로 setHeader(\"Retry-After\",\"60\") 가 있음 — 헬퍼가 헤더까지 다루려면 별도 시그니처/오버로드 필요. 가장 단순한 추출: 본문 직렬화+contentType+status 만 공통 헬퍼로, Retry-After 는 호출부에 남김. status 코드가 429 정수 리터럴(다른 두 곳은 SC_* 상수) — 헬퍼는 int status 받아 통일. 주의: 헬퍼를 core 가 아닌 passkey-app/security 에 두는 게 안전(HttpServletResponse 의존, admin-app 은 problem+json 미사용 — grep 결과 admin 0건). sdk-java 의 PasskeyResponseErrorHandler 는 클라이언트 측 파서라 무관(재사용 대상 아님)."
+      },
+      {
+        "target": "ApiKeyLookupService.touchLastUsed catch 블록 (silent swallow — Phase2 metric TODO)",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyLookupService.java:87-90",
+        "currentCode": "} catch (DataAccessException e) {\n    // Phase 2 may emit a metric here. For Phase 1, silent swallow\n    // is acceptable; last_used_at stays stale by at most one tx.\n}",
+        "note": "best-effort touch — 실패해도 인증 200 유지(의도적). QW-4 위생 후보: 완전 무로그 swallow → 최소 log.debug/warn 또는 MeterRegistry counter 추가. 단 ApiKeyLookupService 는 현재 MeterRegistry 미주입(생성자 L42: DataSource 만), Logger 도 없음 — 메트릭 추가하려면 의존성 신규 주입 필요(영향 범위 ↑). 보수적 옵션: SLF4J Logger 추가 후 log.debug(\"touch_last_used failed (best-effort): {}\", e.toString()) 만. 호출부 ApiKeyAuthFilter.java:184 (lookup.touchLastUsed(row.id(), now)) 는 이미 tenant context+MDC 설정된 상태라 로그에 prefix/tenantId MDC 자동 포함됨. 리스크: 낮음. 시그니처 불변 유지."
+      },
+      {
+        "target": "AuthenticationFinishService — new ObjectConverter() 필드 인스턴스화 (재사용 대상)",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/fido2/authentication/AuthenticationFinishService.java:81",
+        "currentCode": "this.objectConverter = new ObjectConverter();",
+        "note": "생성자에서 매 빈마다 new ObjectConverter() (필드 L61). 사용처: deserializeCredentialRecordEnvelope(L279-282) 에서 AttestationObjectConverter/CollectedClientDataConverter/AuthenticationExtensionsClientOutputsConverter 생성에 전달. webauthn4j 의 ObjectConverter 는 Jackson ObjectMapper(JSON+CBOR) 래퍼로 thread-safe(내부 ObjectMapper 재사용 가능). WebAuthnManager 빈(Webauthn4jConfig)도 내부적으로 ObjectConverter 를 보유하나 0.31.5 에서 getter 노출 여부 불확실 — 안전한 추출안은 Webauthn4jConfig 에 @Bean ObjectConverter objectConverter() 신규 추가 후 두 finish 서비스에 생성자 주입(현 new 제거). 두 서비스 모두 manager(WebAuthnManager) 이미 주입받음. Converter 들(AttestationObjectConverter 등)은 매 호출 new 지만 경량이라 그대로 둬도 무방 — 핵심은 ObjectConverter 1개 공유."
+      },
+      {
+        "target": "RegistrationFinishService — new ObjectConverter() 필드 인스턴스화 (재사용 대상, 쌍)",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/fido2/registration/RegistrationFinishService.java:91",
+        "currentCode": "this.objectConverter = new ObjectConverter();",
+        "note": "AuthenticationFinishService 와 동일 패턴(필드 L71). 사용처: serializeCredentialRecordEnvelope(L232-235). HexFormat 도 이 파일에서 이미 사용 중(import L39, L211 HexFormat.of().formatHex(aaguid)) — HexFormat 패턴이 코드베이스에 이미 정착했다는 근거(IdTokenIssuer/CredentialAdminService/CredentialSelfService 도 사용). ObjectConverter 빈 추출 시 두 서비스 생성자에 ObjectConverter 파라미터 추가. 주의: admin-app MdsBlobClient.java:84 도 new ObjectConverter() 쓰지만 admin 모듈이라 별개(passkey-app Webauthn4jConfig 빈을 공유 못함) — 스코프를 passkey-app 두 finish 서비스로 한정 권장."
+      },
+      {
+        "target": "Webauthn4jConfig — WebAuthnManager 빈만 등록, ObjectConverter 빈 부재",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/fido2/Webauthn4jConfig.java:10-13",
+        "currentCode": "@Bean\npublic WebAuthnManager webAuthnManager() {\n    return WebAuthnManager.createNonStrictWebAuthnManager();\n}",
+        "note": "현재 @Configuration 에 WebAuthnManager 빈 1개만. ObjectConverter 빈 없음 → 두 finish 서비스가 각자 new 함. QW-4 추출 위치: 여기에 @Bean public ObjectConverter objectConverter() { return new ObjectConverter(); } 추가가 가장 자연스러움(이미 fido2 패키지의 webauthn4j 설정 거점). import com.webauthn4j.converter.util.ObjectConverter 추가 필요. WebAuthnManager.createNonStrictWebAuthnManager() 는 내부적으로 자체 ObjectConverter 를 만들지만 외부 공유 빈과 별개여도 기능상 문제 없음(직렬화 호환). thread-safety: ObjectConverter 는 stateless 래퍼라 싱글톤 빈 안전."
+      },
+      {
+        "target": "TenantAdminService.toView — Instant.now() 직접 호출 (Clock 미주입)",
+        "file": "admin-app/src/main/java/com/crosscert/passkey/admin/tenant/TenantAdminService.java:102",
+        "currentCode": "long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), Instant.now());",
+        "note": "이 클래스는 Clock 미주입(생성자 L50-70 에 Clock 없음). QW-4 위생: Clock 주입 후 clock.instant() 로 교체. 주입 패턴 예시(같은 admin 모듈): KeyRotationService L68/L75 (private final Clock clock; 생성자 끝 파라미터), TenantLifecycleService L31/L34, ActivityService L43/L47, RecoveryCodeService L33/L35 모두 'Clock clock' 을 생성자 마지막 파라미터로 받아 필드 저장. 빈 출처: core/config/CoreClockConfig.java:11 @Bean Clock clock(){ return Clock.systemUTC(); } (전역 단일 빈). 주의: TenantAdminService 생성자는 이미 파라미터 10개 — Clock 추가 시 끝에 append. 테스트가 이 생성자 호출하면 Clock 인자 추가 필요(영향 확인). import java.time.Clock 추가, java.time.Instant 는 유지(clock.instant() 반환형)."
+      },
+      {
+        "target": "ApiKeyAuthFilter.doFilterInternal — Instant.now() 직접 호출 (Clock 미주입)",
+        "file": "passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java:135",
+        "currentCode": "Instant now = Instant.now();",
+        "note": "now 는 (1) row.isActive(now) 만료체크 L136, (2) lookup.touchLastUsed(row.id(), now) L184 두 곳에 사용. 이 필터는 Clock 미주입(생성자 L84-96: lookup/encoder/scopeRepo/scopeResolver/meterRegistry/eventPublisher). QW-4 위생: Clock 주입 후 clock.instant(). 단 passkey-app 모듈에 Clock 빈 존재 확인 필요 — CoreClockConfig 는 core 모듈 @Configuration 이므로 passkey-app 의 컴포넌트 스캔/임포트에 core config 가 포함되는지 검증 필수(미포함 시 NoSuchBeanDefinition). 검증 방법: passkey-app 의 @SpringBootApplication scanBasePackages 또는 @Import 확인. FIDO finish 서비스들(AuthenticationFinishService L73, RegistrationFinishService L83)은 이미 Clock 주입받아 정상 동작 중 → passkey-app 에 Clock 빈이 이미 available 하다는 강한 단서. 따라서 ApiKeyAuthFilter 도 동일 주입 안전. 생성자 끝에 Clock 파라미터 append, 필드 저장, import java.time.Clock 추가."
+      }
+    ]
+  },
+  {
+    "phase": "QW-5:admin-ui-hygiene",
+    "items": [
+      {
+        "target": "ActivityPage filtered/failureCount/mutationCount → useMemo",
+        "file": "admin-ui/src/pages/ActivityPage.tsx:219-227",
+        "currentCode": "const displayEvents = events ?? [];\n  const filtered = displayEvents.filter((e) => {\n    if (filter === 'mutations') return e.category === 'ops';\n    if (filter === 'failures') return e.category === 'security';\n    return true;\n  });\n\n  const failureCount = displayEvents.filter((e) => e.category === 'security').length;\n  const mutationCount = displayEvents.filter((e) => e.category === 'ops').length;",
+        "note": "ActivityPage.tsx line 1 import is `import { useState, useEffect, useRef } from 'react';` — useMemo is NOT imported yet, MUST add it to the import. `filtered` deps = [displayEvents, filter]; failureCount/mutationCount deps = [displayEvents]. `filter` is a state var (failures/mutations/all toggle). `displayEvents = events ?? []` where `events` is state (RecentActivityEvent[] | null) updated by a 5s setInterval poll. Wrapping all three in useMemo is the QW-5 hygiene fix. Low risk — pure derivations, no side effects."
+      },
+      {
+        "target": "TenantsListPage totalCredentials/totalKeys/totalActive → useMemo",
+        "file": "admin-ui/src/pages/TenantsListPage.tsx:98-100",
+        "currentCode": "const totalCredentials = tenants.reduce((a, t) => a + t.credentials, 0);\n  const totalKeys = tenants.reduce((a, t) => a + t.apiKeys, 0);\n  const totalActive = tenants.filter((t) => t.status === 'ACTIVE').length;",
+        "note": "useMemo IS already imported (line 1: `import { useState, useEffect, useMemo } from 'react';`) and already used for `filtered` at line 86-96. These 3 aggregates over `tenants` (state) can be wrapped in one or three useMemo with deps [tenants]. t.credentials/t.apiKeys are numbers, t.status compared to 'ACTIVE'. Type is Tenant from '@/api/designTypes'. Trivial, no risk."
+      },
+      {
+        "target": "MeContext.tsx dead code deletion",
+        "file": "admin-ui/src/me/MeContext.tsx:1-37",
+        "currentCode": "import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';\nimport { getMe } from '../api/client';\nimport type { Me } from '../api/types';\n\ninterface MeContextValue { ... }\nconst MeContext = createContext<MeContextValue>({ ... });\nexport function MeProvider({ children }: { children: ReactNode }) { ... }\nexport const useMe = () => useContext(MeContext);",
+        "note": "CONFIRMED DEAD: grep for MeContext|MeProvider|useMe across all src/*.ts(x) returns ZERO references outside MeContext.tsx itself. App provides `me` independently via api.get<Me>('/admin/api/me') at App.tsx:218 and :234 — NOT via MeProvider. Safe to delete the whole file. NOTE: it imports `getMe` from '../api/client' — verify whether getMe has other consumers before assuming getMe is also dead (separate check; only delete MeContext.tsx file, do not touch client.ts). Deleting the file breaks nothing."
+      },
+      {
+        "target": "Sidebar audit-chain overview polling → add isPlatform/platform guard",
+        "file": "admin-ui/src/shell/Sidebar.tsx:109-120",
+        "currentCode": "useEffect(() => {\n    let cancelled = false;\n    async function fetchChain() {\n      try {\n        const o = await auditChainMonitorApi.overview(24);\n        if (!cancelled) setChain(o);\n      } catch { /* 실패 시 carousel 정적 표시 유지 */ }\n    }\n    fetchChain();\n    const id = setInterval(fetchChain, 30_000);\n    return () => { cancelled = true; clearInterval(id); };\n  }, []);",
+        "note": "isPlatform IS already imported (line 5: `import { isPlatform } from '@/me/roles';`) and `const platform = isPlatform(me);` already computed at line 85. To gate: wrap fetchChain()+setInterval in `if (!platform) return;` (early-return inside effect, after declaring cancelled) AND add `platform` to the deps array `[]` → `[platform]`. Rationale: RP_ADMIN gets only the '설정' nav (line 99-101) and the audit-chain footer (line 173-201, gated by sidebarMode==='labels') but auditChainMonitorApi.overview is a PLATFORM endpoint → RP_ADMIN poll likely 403s every 30s. The footer at line 175 already handles `!chain?.totals` (shows '확인 중…'), so chain staying null for non-platform is visually fine. RISK: the footer block (line 173) is NOT itself platform-gated — confirm whether RP_ADMIN should even see the AUDIT CHAIN footer; if not, plan may also gate the footer render with `platform &&`. Current behavior leaves footer showing perpetual '확인 중…' for RP after guarding the poll — acceptable but worth a plan note."
+      },
+      {
+        "target": "package.json scripts/devDeps — add eslint; tsconfig noUnusedLocals/noUnusedParameters",
+        "file": "admin-ui/package.json:6-30",
+        "currentCode": "\"scripts\": {\n    \"dev\": \"vite\",\n    \"build\": \"tsc -b && vite build\",\n    \"preview\": \"vite preview\",\n    \"test\": \"vitest run\"\n  },\n  \"devDependencies\": { ... typescript ^5.4.5, vite ^5.4.6, vitest ^2.1.1, @vitejs/plugin-react ^4.3.1, @types/react ^18.3.3 ... }",
+        "note": "NO eslint anywhere: no `lint` script, no eslint/typescript-eslint in devDependencies, and NO eslint config file exists (.eslintrc* / eslint.config.* both absent — verified). Adding ESLint = new `\"lint\"` script + add eslint + typescript-eslint + eslint-plugin-react-hooks (+ globals) to devDependencies + create eslint.config.js (flat config, since `\"type\":\"module\"` at package.json:5 → must be flat-config ESM). SEPARATELY in tsconfig.json (admin-ui/tsconfig.json:16-17): currently `\"noUnusedLocals\": false` and `\"noUnusedParameters\": false`. Flipping these to true is the cheaper hygiene win that runs in existing `tsc -b` build (package.json:8) — but will FAIL the build if any unused locals/params currently exist, so plan must include a pass to clean them first (e.g. the MeContext deletion removes one such risk). Recommend plan sequence: delete dead code + wrap memos → flip tsconfig flags → run `tsc -b` to find remaining unused → fix → optionally add ESLint as the heavier follow-up."
+      }
+    ]
+  }
+]

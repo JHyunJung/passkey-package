@@ -25,6 +25,18 @@ class CryptoUtilsTest {
     }
 
     @Test
+    void hexMatchesHexFormatForAllByteValuesAndIsLowercasePadded() {
+        byte[] all = new byte[256];
+        for (int i = 0; i < 256; i++) all[i] = (byte) i;
+        String out = CryptoUtils.hex(all);
+        assertThat(out).isEqualTo(java.util.HexFormat.of().formatHex(all));
+        assertThat(out).hasSize(512);
+        assertThat(out).isEqualTo(out.toLowerCase());
+        assertThat(out).startsWith("000102");
+        assertThat(out).endsWith("fdfeff");
+    }
+
+    @Test
     void maskEmailMasksLocalPart() {
         assertThat(CryptoUtils.maskEmail("john@example.com")).isEqualTo("j***@example.com");
     }

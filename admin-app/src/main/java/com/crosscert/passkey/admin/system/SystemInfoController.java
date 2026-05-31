@@ -14,7 +14,7 @@ public class SystemInfoController {
         this.service = service;
     }
 
-    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @GetMapping
     public ApiResponse<SystemInfoView> get() {
         return ApiResponse.ok(service.get());

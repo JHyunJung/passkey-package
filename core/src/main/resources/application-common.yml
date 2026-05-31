@@ -16,6 +16,18 @@ spring:
       # user's default schema. This mirrors Flyway's default-schema
       # setting (admin-app application.yml).
       hibernate.default_schema: APP_OWNER
+      # Phase QW-3: JDBC 배치 + 배치 페치 사이징.
+      # batch_size: 같은 flush 에 쌓인 동종 INSERT/UPDATE 를 30개 단위로 한 번에
+      #   JDBC 전송 — 라운드트립만 줄고 DML 결과는 불변.
+      # default_batch_fetch_size: LAZY 연관(예: Tenant.allowedOrigins/acceptedFormats)
+      #   접근 시 N개 부모를 IN(...) 16개 묶음으로 페치 — 결과 동일, 쿼리 횟수만 감소.
+      # order_inserts/order_updates 는 의도적으로 제외: flush DML 순서를 전역
+      #   재배열하면 TenantAdminService.replaceAllowedOrigins/replaceAcceptedFormats
+      #   가 의존하는 "DELETE 먼저 flush 후 INSERT"(Oracle unique 제약 회피, em.flush()
+      #   로 명시 제어 중인 경로) 등 미감사 write 경로의 순서 제약을 깰 위험 → risk=low
+      #   별도 판단 항목으로 유보.
+      hibernate.jdbc.batch_size: 30
+      hibernate.default_batch_fetch_size: 16
     hibernate.ddl-auto: validate
   datasource:
     hikari:

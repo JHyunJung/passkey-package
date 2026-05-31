@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import com.crosscert.passkey.admin.auth.TenantBoundary;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,13 +12,23 @@ import java.util.*;
 public class WebauthnDiffService {
 
     private final TenantRepository tenantRepo;
+    private final TenantBoundary tenantBoundary;
 
-    public WebauthnDiffService(TenantRepository tenantRepo) {
+    public WebauthnDiffService(TenantRepository tenantRepo, TenantBoundary tenantBoundary) {
         this.tenantRepo = tenantRepo;
+        this.tenantBoundary = tenantBoundary;
     }
 
     @Transactional(readOnly = true)
     public WebauthnConfigDiff diff(UUID tenantId, WebauthnDiffRequest proposed) {
+        // Self-guard (sec-webauthndiff-no-boundary-fragile): this method must
+        // enforce tenant isolation itself, not rely on the controller having
+        // resolved tenantId via a boundary-checked path. Current sole caller
+        // (TenantAdminController.diff → service.get()) already passes a
+        // boundary-checked UUID, so this is a no-op for the normal flow and
+        // only blocks future callers that pass an arbitrary tenantId.
+        tenantBoundary.assertCanAccessTenant(tenantId);
+
         Tenant t = tenantRepo.findById(tenantId)
                 .orElseThrow(() -> new IllegalStateException("tenant not found " + tenantId));
 

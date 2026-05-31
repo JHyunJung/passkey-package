@@ -58,17 +58,20 @@ public class DevTenantHeaderFilter extends OncePerRequestFilter {
         // previous tenant into this one.
         TenantContextHolder.clear();
 
-        // Phase 6: X-Tenant-Id must be a UUID string for dev/test use.
-        // Slug → UUID resolution is deferred to T13/T14 (TenantRepository
-        // findBySlug). For now, operators pass the UUID directly.
-        // TODO T13/T14: add slug fallback via TenantRepository.findBySlug.
+        // X-Tenant-Id is a UUID string only. This dev/test-only filter
+        // (@Profile local/dev/test) deliberately does NOT resolve slugs:
+        // production traffic authenticates via X-API-Key (ApiKeyAuthFilter),
+        // which sets tenant context from the verified key, so a slug
+        // fallback here would be dead code. Non-UUID values are rejected
+        // with a warning below.
         String headerValue = req.getHeader(HEADER);
         UUID tenantId = null;
         if (headerValue != null && !headerValue.isBlank()) {
             try {
                 tenantId = UUID.fromString(headerValue);
             } catch (IllegalArgumentException e) {
-                // Slug resolution deferred to T13/T14. For now reject invalid UUID.
+                // Reject non-UUID X-Tenant-Id (slug resolution intentionally
+                // unsupported in this dev-only filter — see header note).
                 LOG.warning("X-Tenant-Id is not a valid UUID: " + headerValue);
             }
         }

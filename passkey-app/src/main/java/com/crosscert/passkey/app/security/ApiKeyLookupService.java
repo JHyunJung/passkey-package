@@ -1,5 +1,7 @@
 package com.crosscert.passkey.app.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,6 +38,8 @@ import java.util.UUID;
  */
 @Service
 public class ApiKeyLookupService {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiKeyLookupService.class);
 
     private final JdbcTemplate jdbc;
 
@@ -85,8 +89,10 @@ public class ApiKeyLookupService {
                 }
             });
         } catch (DataAccessException e) {
-            // Phase 2 may emit a metric here. For Phase 1, silent swallow
-            // is acceptable; last_used_at stays stale by at most one tx.
+            // Best-effort: do NOT fail a valid auth. last_used_at stays
+            // stale by at most one tx. Log so a persistent touch failure
+            // (which silently degrades stale-key detection) is visible.
+            log.warn("api-key touch_last_used failed (best-effort): {}", e.toString());
         }
     }
 

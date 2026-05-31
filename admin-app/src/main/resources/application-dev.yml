@@ -22,9 +22,10 @@ spring:
 
 passkey:
   key-envelope:
-    # Local dev only — 32 zero bytes base64.
+    # NON-SECRET, dev only — 공개 상수이지만 '0키' 신호를 제거해 실수로
+    # prod 에서 약한 키가 쓰이는 것을 식별하기 쉽게 한다. prod 는 환경변수로 주입.
     # Production sets PASSKEY_KEY_ENVELOPE_MASTER_KEY environment variable.
-    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
 
 logging:
   level:

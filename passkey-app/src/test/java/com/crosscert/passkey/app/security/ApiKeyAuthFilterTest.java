@@ -42,7 +42,8 @@ class ApiKeyAuthFilterTest {
         scopeRepo = mock(com.crosscert.passkey.core.repository.ApiKeyScopeRepository.class);
         filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, new ApiKeyScopeResolver(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
-                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
+                java.time.Clock.systemUTC());
     }
 
     @AfterEach

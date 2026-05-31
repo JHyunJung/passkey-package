@@ -95,9 +95,18 @@ export default function TenantsListPage() {
     [q, tenants],
   );
 
-  const totalCredentials = tenants.reduce((a, t) => a + t.credentials, 0);
-  const totalKeys = tenants.reduce((a, t) => a + t.apiKeys, 0);
-  const totalActive = tenants.filter((t) => t.status === 'ACTIVE').length;
+  const totalCredentials = useMemo(
+    () => tenants.reduce((a, t) => a + t.credentials, 0),
+    [tenants],
+  );
+  const totalKeys = useMemo(
+    () => tenants.reduce((a, t) => a + t.apiKeys, 0),
+    [tenants],
+  );
+  const totalActive = useMemo(
+    () => tenants.filter((t) => t.status === 'ACTIVE').length,
+    [tenants],
+  );
 
   return (
     <div className="page">
@@ -155,7 +164,19 @@ export default function TenantsListPage() {
             </thead>
             <tbody>
               {filtered.map((t) => (
-                <tr key={t.id} onClick={() => onOpen(t.id)} style={{ cursor: 'pointer' }}>
+                <tr
+                  key={t.id}
+                  onClick={() => onOpen(t.id)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      onOpen(t.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td>
                     <div className="row">
                       <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 11, flex: 'none' }}>

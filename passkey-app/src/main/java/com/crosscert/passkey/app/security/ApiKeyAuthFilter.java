@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -80,19 +81,38 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final ApiKeyScopeResolver scopeResolver;
     private final MeterRegistry meterRegistry;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
+
+    // Pre-resolved result-tagged counters. Micrometer returns the same
+    // Counter for a given name+tags, so hoisting the lookup out of the
+    // hot path yields the identical metric series.
+    private final io.micrometer.core.instrument.Counter cSuccess;
+    private final io.micrometer.core.instrument.Counter cUnknownPrefix;
+    private final io.micrometer.core.instrument.Counter cRevoked;
+    private final io.micrometer.core.instrument.Counter cExpired;
+    private final io.micrometer.core.instrument.Counter cBadSecret;
+    private final io.micrometer.core.instrument.Counter cInsufficientScope;
 
     public ApiKeyAuthFilter(ApiKeyLookupService lookup,
                             PasswordEncoder encoder,
                             ApiKeyScopeRepository scopeRepo,
                             ApiKeyScopeResolver scopeResolver,
                             MeterRegistry meterRegistry,
-                            ApplicationEventPublisher eventPublisher) {
+                            ApplicationEventPublisher eventPublisher,
+                            Clock clock) {
         this.lookup = lookup;
         this.encoder = encoder;
         this.scopeRepo = scopeRepo;
         this.scopeResolver = scopeResolver;
         this.meterRegistry = meterRegistry;
         this.eventPublisher = eventPublisher;
+        this.clock = clock;
+        this.cSuccess = meterRegistry.counter(AUTH_COUNTER, "result", "success");
+        this.cUnknownPrefix = meterRegistry.counter(AUTH_COUNTER, "result", "unknown_prefix");
+        this.cRevoked = meterRegistry.counter(AUTH_COUNTER, "result", "revoked");
+        this.cExpired = meterRegistry.counter(AUTH_COUNTER, "result", "expired");
+        this.cBadSecret = meterRegistry.counter(AUTH_COUNTER, "result", "bad_secret");
+        this.cInsufficientScope = meterRegistry.counter(AUTH_COUNTER, "result", "insufficient_scope");
     }
 
     @Override
@@ -110,6 +130,14 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req,
                                     HttpServletResponse res,
                                     FilterChain chain) throws ServletException, IOException {
+        // Defense-in-depth (sec-apikeyfilter-no-defensive-clear): clear any
+        // stale ThreadLocal value before we read the request. Reuse of a
+        // Tomcat worker thread that exited a prior request via an unusual
+        // path should never leak the previous tenant into this one. Mirrors
+        // DevTenantHeaderFilter's entry-point clear. The success path still
+        // set()s the real tenant (line below) and the finally clears it.
+        TenantContextHolder.clear();
+
         String header = req.getHeader(HEADER);
         if (header == null || header.length() <= PREFIX_LEN
                 || !header.startsWith(KEY_PREFIX)) {
@@ -126,25 +154,25 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             // the timing of known-prefix-wrong-secret.
             encoder.matches(secret, DUMMY_HASH);
             log.warn("api-key auth failed: reason=unknown-prefix prefix={}", prefix);
-            meterRegistry.counter(AUTH_COUNTER, "result", "unknown_prefix").increment();
+            cUnknownPrefix.increment();
             unauthorized(res);
             return;
         }
         ApiKeyLookupService.ApiKeyAuthRow row = opt.get();
 
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         if (!row.isActive(now)) {
             // Same timing equalization for revoked/expired keys.
             encoder.matches(secret, DUMMY_HASH);
             String reason = row.revokedAt() != null ? "revoked" : "expired";
             log.warn("api-key auth failed: reason={} prefix={}", reason, prefix);
-            meterRegistry.counter(AUTH_COUNTER, "result", reason).increment();
+            (row.revokedAt() != null ? cRevoked : cExpired).increment();
             unauthorized(res);
             return;
         }
         if (!encoder.matches(secret, row.keyHash())) {
             log.warn("api-key auth failed: reason=bad-secret prefix={}", prefix);
-            meterRegistry.counter(AUTH_COUNTER, "result", "bad_secret").increment();
+            cBadSecret.increment();
             eventPublisher.publishEvent(new SecurityAlertEvent(
                     SecurityAlertEvent.AlertType.API_KEY_BRUTE_FORCE,
                     SecurityAlertEvent.Severity.MEDIUM,
@@ -169,7 +197,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 if (!held.contains(required.get())) {
                     log.warn("api-key scope denied: prefix={} required={} held={}",
                             prefix, required.get(), held);
-                    meterRegistry.counter(AUTH_COUNTER, "result", "insufficient_scope").increment();
+                    cInsufficientScope.increment();
                     forbidden(res);
                     return; // 바깥 finally 가 TenantContextHolder.clear() 보장
                 }
@@ -185,7 +213,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 if (log.isDebugEnabled()) {
                     log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());
                 }
-                meterRegistry.counter(AUTH_COUNTER, "result", "success").increment();
+                cSuccess.increment();
                 chain.doFilter(req, res);
             } finally {
                 MDC.remove(MDC_API_KEY_PREFIX);
@@ -198,17 +226,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     /** Single generic 401 — no detail leaks. */
     private void unauthorized(HttpServletResponse res) throws IOException {
-        res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        res.setContentType("application/problem+json");
-        res.getWriter().write(
-                "{\"type\":\"about:blank\",\"status\":401,\"title\":\"Unauthorized\"}");
+        ProblemJson.write(res, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
     }
 
     /** 403 — 키는 유효하나 요청 경로 scope 미보유. */
     private void forbidden(HttpServletResponse res) throws IOException {
-        res.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        res.setContentType("application/problem+json");
-        res.getWriter().write(
-                "{\"type\":\"about:blank\",\"status\":403,\"title\":\"Forbidden\",\"error\":\"insufficient_scope\"}");
+        ProblemJson.write(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "insufficient_scope");
     }
 }

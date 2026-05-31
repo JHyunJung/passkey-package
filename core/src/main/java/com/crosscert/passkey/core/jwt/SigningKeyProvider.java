@@ -15,8 +15,6 @@ import org.springframework.stereotype.Component;
 import java.sql.Types;
 
 import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -147,24 +145,7 @@ public class SigningKeyProvider {
     }
 
     private SigningKey generate() {
-        try {
-            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-            gen.initialize(2048);
-            KeyPair pair = gen.generateKeyPair();
-
-            RSAKey withoutKid = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
-                    .privateKey((RSAPrivateKey) pair.getPrivate())
-                    .keyUse(KeyUse.SIGNATURE)
-                    .algorithm(JWSAlgorithm.RS256)
-                    .build();
-            String kid = withoutKid.computeThumbprint().toString();
-            RSAKey rsa = new RSAKey.Builder(withoutKid).keyID(kid).build();
-            String publicJwk = rsa.toPublicJWK().toJSONString();
-            byte[] sealed = envelope.seal(pair.getPrivate().getEncoded());
-            return new SigningKey(kid, "RS256", publicJwk, sealed);
-        } catch (Exception e) {
-            throw new IllegalStateException("initial signing key generation failed", e);
-        }
+        return SigningKeyFactory.newRsaSigningKey(envelope);
     }
 
     /**

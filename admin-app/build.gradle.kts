@@ -22,6 +22,11 @@ dependencies {
     // IT runs offline and exercises the real FidoMDS3MetadataBLOBProvider
     // chain against a controlled BLOB + test root CA.
     testImplementation(rootProject.libs.wiremock.standalone)
+    // QW-1 (sec-admin-vpd-exempt-sole-layer): ArchUnit enforces that
+    // tenant-scoped admin services reference TenantBoundary, so a future
+    // refactor that drops the isolation check fails the build (admin-app
+    // runs VPD-EXEMPT — TenantBoundary is the sole isolation layer).
+    testImplementation(rootProject.libs.archunit.junit5)
 }
 
 springBoot {

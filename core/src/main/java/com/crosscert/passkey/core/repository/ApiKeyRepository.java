@@ -41,6 +41,22 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
             """)
     long countActiveByTenantId(@Param("tenantId") UUID tenantId, @Param("now") Instant now);
 
+    /**
+     * Phase QW-3 — TenantAdminService.list() N+1 제거용 배치 집계.
+     * countActiveByTenantId(tenantId, now) 와 **동일한 active 판정**을 tenant 전체에
+     * 대해 한 번에 계산한다. where 절은 countActiveByTenantId 와 바이트 단위로 같아야
+     * 한다(revokedAt IS NULL AND (expiresAt IS NULL OR expiresAt > :now)). 결과는
+     * Object[]{UUID tenantId, Long activeCount}. active key 가 없는 tenant 는 결과
+     * 행이 없으므로 호출부에서 0 으로 처리(countActiveByTenantId 가 0 반환과 동일).
+     */
+    @Query("""
+            select k.tenantId, count(k) from ApiKey k
+            where k.revokedAt is null
+              and (k.expiresAt is null or k.expiresAt > :now)
+            group by k.tenantId
+            """)
+    java.util.List<Object[]> countActiveGroupedByTenantId(@Param("now") Instant now);
+
     /** active = 미revoke AND 미만료. suspend 일괄 revoke·KPI 와 동일 정의. */
     @Query("""
             select k from ApiKey k
