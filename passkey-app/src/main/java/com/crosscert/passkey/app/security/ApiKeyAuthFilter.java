@@ -132,7 +132,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             encoder.matches(secret, DUMMY_HASH);
             String reason = row.revokedAt() != null ? "revoked" : "expired";
             log.warn("api-key auth failed: reason={} prefix={}", reason, prefix);
-            meterRegistry.counter(AUTH_COUNTER, "result", reason.replace("-", "_")).increment();
+            meterRegistry.counter(AUTH_COUNTER, "result", reason).increment();
             unauthorized(res);
             return;
         }
