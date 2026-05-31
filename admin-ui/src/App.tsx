@@ -150,7 +150,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
       >
       <ErrorBoundary fallback={null}>
         <Sidebar
-          me={me as any}
+          me={me}
           currentRoute={route as any}
           onNavigate={setRoute as any}
           tenant={tenant}

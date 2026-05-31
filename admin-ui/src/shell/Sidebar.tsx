@@ -88,14 +88,15 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
   }, []);
 
   const navItems = useMemo(() => {
-    // RP_ADMIN 은 PLATFORM 전용 전역 nav(Tenants/Activity/Audit Chain)를 보지 않는다.
-    // 로그인 시 자기 테넌트로 직행해 NAV_RP 를 사용한다.
+    const settingsItem = NAV_PLATFORM[NAV_PLATFORM.length - 1]; // '설정'
+    // RP_ADMIN 은 PLATFORM 전역 nav(Tenants/Activity/Audit Chain)를 보지 않지만,
+    // 자기 계정(MFA 등)을 위해 '설정' 진입점은 유지한다(/settings 는 RP 도 접근 가능).
     if (!platform) {
-      return [] as typeof NAV_PLATFORM;
+      return [settingsItem] as typeof NAV_PLATFORM;
     }
     if (deploymentMode === 'onprem') {
       // Insert License between Audit Chain and Settings
-      return [...NAV_PLATFORM.slice(0, -1), NAV_LICENSE, NAV_PLATFORM[NAV_PLATFORM.length - 1]];
+      return [...NAV_PLATFORM.slice(0, -1), NAV_LICENSE, settingsItem];
     }
     return NAV_PLATFORM;
   }, [deploymentMode, platform]);
