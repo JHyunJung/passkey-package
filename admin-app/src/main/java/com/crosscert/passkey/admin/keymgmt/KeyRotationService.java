@@ -7,11 +7,9 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.jwt.KeyEnvelope;
+import com.crosscert.passkey.core.jwt.SigningKeyFactory;
 import com.crosscert.passkey.core.jwt.SigningKeyProvider;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.jwk.KeyUse;
-import com.nimbusds.jose.jwk.RSAKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -20,10 +18,6 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.management.ManagementFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -102,7 +96,7 @@ public class KeyRotationService {
         old.rotate(clock.instant());
         repo.saveAndFlush(old);
 
-        SigningKey fresh = generateFreshActive();
+        SigningKey fresh = SigningKeyFactory.newRsaSigningKey(envelope);
         repo.save(fresh);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -138,25 +132,6 @@ public class KeyRotationService {
             // No active TX (tests / unmanaged callers). Reload inline so
             // unit-test verification still observes the call.
             provider.reload();
-        }
-    }
-
-    private SigningKey generateFreshActive() {
-        try {
-            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-            gen.initialize(2048);
-            KeyPair pair = gen.generateKeyPair();
-            RSAKey withoutKid = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
-                    .privateKey((RSAPrivateKey) pair.getPrivate())
-                    .keyUse(KeyUse.SIGNATURE)
-                    .algorithm(JWSAlgorithm.RS256)
-                    .build();
-            String kid = withoutKid.computeThumbprint().toString();
-            RSAKey rsa = new RSAKey.Builder(withoutKid).keyID(kid).build();
-            return new SigningKey(kid, "RS256", rsa.toPublicJWK().toJSONString(),
-                    envelope.seal(pair.getPrivate().getEncoded()));
-        } catch (Exception e) {
-            throw new IllegalStateException("rotation key generation failed", e);
         }
     }
 
