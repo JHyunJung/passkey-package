@@ -18,7 +18,7 @@ public interface AdminPasswordResetTokenRepository extends JpaRepository<AdminPa
      * P1-4 retention: 소비 또는 만료된 reset 토큰 중 그 시점이 cutoff 이전인 것 삭제.
      * 미소비·미만료 토큰은 보존.
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("delete from AdminPasswordResetToken t where "
          + "(t.consumedAt is not null and t.consumedAt < :cutoff) "

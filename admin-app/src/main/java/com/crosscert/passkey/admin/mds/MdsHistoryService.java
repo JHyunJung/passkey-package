@@ -66,7 +66,7 @@ public class MdsHistoryService {
      * recent()/append() 와 동일하게 APP_OWNER. 스키마 prefix 명시(JdbcTemplate raw SQL).
      */
     @Transactional
-    public int purgeStartedBefore(java.time.Instant cutoff) {
+    public int purgeStartedBefore(Instant cutoff) {
         return jdbc.update(
                 "DELETE FROM APP_OWNER.mds_sync_history WHERE started_at < ?",
                 java.sql.Timestamp.from(cutoff));

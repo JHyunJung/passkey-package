@@ -20,7 +20,7 @@ public interface AdminUserInvitationRepository extends JpaRepository<AdminUserIn
      * P1-4 retention: 완료(수락) 또는 만료된 invitation 중 그 시점이 cutoff 이전인 것 삭제.
      * pending(미수락·미만료)은 쿼리 조건상 절대 매칭 안 됨(활성 보존).
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("delete from AdminUserInvitation i where "
          + "(i.acceptedAt is not null and i.acceptedAt < :cutoff) "

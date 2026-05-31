@@ -18,7 +18,7 @@ public interface TenantWebauthnSnapshotRepository extends JpaRepository<TenantWe
     /**
      * P1-4 retention: taken_at 이 cutoff 이전인 스냅샷 삭제(append-only 이력 정리).
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("delete from TenantWebauthnSnapshot s where s.takenAt < :cutoff")
     int deleteTakenBefore(@Param("cutoff") Instant cutoff);
