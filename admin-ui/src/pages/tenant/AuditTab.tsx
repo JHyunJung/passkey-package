@@ -484,7 +484,19 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
             </thead>
             <tbody>
               {filtered.map((e, i) => (
-                <tr key={i} onClick={() => setOpen(e)} style={{ cursor: 'pointer' }}>
+                <tr
+                  key={i}
+                  onClick={() => setOpen(e)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      setOpen(e);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td>
                     <div className="stack-1">
                       <div style={{ fontWeight: 500, fontSize: 12 }}>{fmtDateTime(e.ts)}</div>
