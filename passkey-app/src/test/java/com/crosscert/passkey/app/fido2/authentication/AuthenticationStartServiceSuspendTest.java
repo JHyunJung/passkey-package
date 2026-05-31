@@ -10,8 +10,10 @@ import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +54,7 @@ class AuthenticationStartServiceSuspendTest {
 
         AuthenticationStartService svc = new AuthenticationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new CeremonyMetrics(new SimpleMeterRegistry()));
         AuthenticationStartRequest req = new AuthenticationStartRequest(null);
 
         assertThatThrownBy(() -> svc.start(req))
@@ -83,7 +85,7 @@ class AuthenticationStartServiceSuspendTest {
 
         AuthenticationStartService svc = new AuthenticationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new CeremonyMetrics(new SimpleMeterRegistry()));
         AuthenticationStartRequest req = new AuthenticationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle));
 
@@ -123,7 +125,7 @@ class AuthenticationStartServiceSuspendTest {
 
         AuthenticationStartService svc = new AuthenticationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new CeremonyMetrics(new SimpleMeterRegistry()));
         AuthenticationStartRequest req = new AuthenticationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle));
 

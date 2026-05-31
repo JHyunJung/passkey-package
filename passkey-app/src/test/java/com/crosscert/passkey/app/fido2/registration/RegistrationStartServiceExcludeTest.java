@@ -8,8 +8,10 @@ import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -60,9 +62,12 @@ class RegistrationStartServiceExcludeTest {
         // not the base64url string — eq() catches a regression that passes the wrong bytes.
         when(credentials.findCredentialIdsByUserHandle(eq(userHandle))).thenReturn(List.of(existing));
 
+        // Named registry so we can assert the *production* counter name/tags fire
+        // on the success path — guards against tag-string drift in CeremonyMetrics.
+        SimpleMeterRegistry reg = new SimpleMeterRegistry();
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new CeremonyMetrics(reg));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -77,6 +82,11 @@ class RegistrationStartServiceExcludeTest {
         assertThat(exclude.get(0).get("type").asText()).isEqualTo("public-key");
         String expectedId = Base64.getUrlEncoder().withoutPadding().encodeToString(existing);
         assertThat(exclude.get(0).get("id").asText()).isEqualTo(expectedId);
+
+        double success = reg.find("passkey_ceremony_total")
+                .tags("type", "registration", "phase", "start", "result", "success")
+                .counter().count();
+        assertThat(success).isEqualTo(1.0);
     }
 
     @Test
@@ -98,7 +108,7 @@ class RegistrationStartServiceExcludeTest {
 
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new CeremonyMetrics(new SimpleMeterRegistry()));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -132,7 +142,7 @@ class RegistrationStartServiceExcludeTest {
 
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new CeremonyMetrics(new SimpleMeterRegistry()));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -153,9 +163,12 @@ class RegistrationStartServiceExcludeTest {
         when(t.isSuspended()).thenReturn(true);
         when(tenants.findById(tenantId)).thenReturn(Optional.of(t));
 
+        // Named registry to assert the failure-path counter (result=failure)
+        // fires with the production tags when the service throws.
+        SimpleMeterRegistry reg = new SimpleMeterRegistry();
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+                new CeremonyMetrics(reg));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[]{9, 9}),
                 "Disp", "alice");
@@ -164,5 +177,10 @@ class RegistrationStartServiceExcludeTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.TENANT_SUSPENDED);
+
+        double failure = reg.find("passkey_ceremony_total")
+                .tags("type", "registration", "phase", "start", "result", "failure")
+                .counter().count();
+        assertThat(failure).isEqualTo(1.0);
     }
 }

@@ -14,7 +14,7 @@ import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.micrometer.core.instrument.MeterRegistry;
+import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -33,7 +33,7 @@ public class RegistrationStartService {
     private final ChallengeStore store;
     private final ObjectMapper mapper;
     private final Clock clock;
-    private final MeterRegistry meterRegistry;
+    private final CeremonyMetrics ceremonyMetrics;
 
     public RegistrationStartService(TenantRepository tenants,
                                     CredentialRepository credentials,
@@ -41,78 +41,76 @@ public class RegistrationStartService {
                                     ChallengeStore store,
                                     ObjectMapper mapper,
                                     Clock clock,
-                                    MeterRegistry meterRegistry) {
+                                    CeremonyMetrics ceremonyMetrics) {
         this.tenants = tenants;
         this.credentials = credentials;
         this.challenges = challenges;
         this.store = store;
         this.mapper = mapper;
         this.clock = clock;
-        this.meterRegistry = meterRegistry;
+        this.ceremonyMetrics = ceremonyMetrics;
     }
 
     public RegistrationStartResponse start(RegistrationStartRequest req) {
-      try {
-        log.info("registration/start entry: usernamePresent={} displayNameLen={}",
-                req.username() != null,
-                req.displayName() == null ? 0 : req.displayName().length());
-        UUID tenantUuid = TenantContextHolder.get();
-        if (tenantUuid == null) {
-            throw new IllegalStateException(
-                    "registration/start invoked without tenant context — ApiKeyAuthFilter "
-                            + "must have set it");
+        try {
+            log.info("registration/start entry: usernamePresent={} displayNameLen={}",
+                    req.username() != null,
+                    req.displayName() == null ? 0 : req.displayName().length());
+            UUID tenantUuid = TenantContextHolder.get();
+            if (tenantUuid == null) {
+                throw new IllegalStateException(
+                        "registration/start invoked without tenant context — ApiKeyAuthFilter "
+                                + "must have set it");
+            }
+            String tenantId = tenantUuid.toString();
+            Tenant tenant = tenants.findById(tenantUuid)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "tenant " + tenantId + " not found"));
+            if (tenant.isSuspended()) {
+                throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
+            }
+
+            byte[] userHandle = Base64.getUrlDecoder().decode(req.userHandle());
+            byte[] challenge = challenges.newChallengeBytes();
+            String token = challenges.newToken();
+
+            store.putRegistration(token, new RegistrationChallenge(
+                    tenantId, challenge, userHandle, req.displayName(), req.username(),
+                    clock.instant()));
+
+            ObjectNode options = mapper.createObjectNode();
+            options.put("challenge", b64url(challenge));
+            ObjectNode rp = options.putObject("rp");
+            rp.put("id", tenant.getRpId());
+            rp.put("name", tenant.getRpName());
+            ObjectNode user = options.putObject("user");
+            user.put("id", req.userHandle());
+            user.put("displayName", req.displayName());
+            user.put("name", req.username());
+            ArrayNode params = options.putArray("pubKeyCredParams");
+            params.addObject().put("type", "public-key").put("alg", -7);    // ES256
+            params.addObject().put("type", "public-key").put("alg", -257);  // RS256
+            options.put("timeout", tenant.getWebauthnTimeoutMs());
+            options.put("attestation", tenant.getAttestationConveyanceLowercase());
+            ArrayNode excludeArr = options.putArray("excludeCredentials");
+            for (byte[] existingId : credentials.findCredentialIdsByUserHandle(userHandle)) {
+                ObjectNode entry = excludeArr.addObject();
+                entry.put("type", "public-key");
+                entry.put("id", b64url(existingId));
+            }
+            ObjectNode sel = options.putObject("authenticatorSelection");
+            sel.put("userVerification", tenant.isRequireUserVerification() ? "required" : "preferred");
+            sel.put("residentKey", "preferred");
+
+            log.info("registration/start issued: tokenTail={} timeoutMs={}",
+                    tokenTail(token), tenant.getWebauthnTimeoutMs());
+            RegistrationStartResponse response = new RegistrationStartResponse(token, options);
+            ceremonyMetrics.recordSuccess("registration", "start");
+            return response;
+        } catch (RuntimeException e) {
+            ceremonyMetrics.recordFailure("registration", "start");
+            throw e;
         }
-        String tenantId = tenantUuid.toString();
-        Tenant tenant = tenants.findById(tenantUuid)
-                .orElseThrow(() -> new IllegalStateException(
-                        "tenant " + tenantId + " not found"));
-        if (tenant.isSuspended()) {
-            throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
-        }
-
-        byte[] userHandle = Base64.getUrlDecoder().decode(req.userHandle());
-        byte[] challenge = challenges.newChallengeBytes();
-        String token = challenges.newToken();
-
-        store.putRegistration(token, new RegistrationChallenge(
-                tenantId, challenge, userHandle, req.displayName(), req.username(),
-                clock.instant()));
-
-        ObjectNode options = mapper.createObjectNode();
-        options.put("challenge", b64url(challenge));
-        ObjectNode rp = options.putObject("rp");
-        rp.put("id", tenant.getRpId());
-        rp.put("name", tenant.getRpName());
-        ObjectNode user = options.putObject("user");
-        user.put("id", req.userHandle());
-        user.put("displayName", req.displayName());
-        user.put("name", req.username());
-        ArrayNode params = options.putArray("pubKeyCredParams");
-        params.addObject().put("type", "public-key").put("alg", -7);    // ES256
-        params.addObject().put("type", "public-key").put("alg", -257);  // RS256
-        options.put("timeout", tenant.getWebauthnTimeoutMs());
-        options.put("attestation", tenant.getAttestationConveyanceLowercase());
-        ArrayNode excludeArr = options.putArray("excludeCredentials");
-        for (byte[] existingId : credentials.findCredentialIdsByUserHandle(userHandle)) {
-            ObjectNode entry = excludeArr.addObject();
-            entry.put("type", "public-key");
-            entry.put("id", b64url(existingId));
-        }
-        ObjectNode sel = options.putObject("authenticatorSelection");
-        sel.put("userVerification", tenant.isRequireUserVerification() ? "required" : "preferred");
-        sel.put("residentKey", "preferred");
-
-        log.info("registration/start issued: tokenTail={} timeoutMs={}",
-                tokenTail(token), tenant.getWebauthnTimeoutMs());
-        RegistrationStartResponse response = new RegistrationStartResponse(token, options);
-        meterRegistry.counter("passkey_ceremony_total",
-                "type", "registration", "phase", "start", "result", "success").increment();
-        return response;
-      } catch (RuntimeException e) {
-        meterRegistry.counter("passkey_ceremony_total",
-                "type", "registration", "phase", "start", "result", "failure").increment();
-        throw e;
-      }
     }
 
     /** Returns the last 8 chars of the token for correlation only — never the full secret. */

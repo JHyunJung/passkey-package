@@ -15,7 +15,7 @@ import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.micrometer.core.instrument.MeterRegistry;
+import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +46,7 @@ public class AuthenticationStartService {
     private final ChallengeStore store;
     private final ObjectMapper mapper;
     private final Clock clock;
-    private final MeterRegistry meterRegistry;
+    private final CeremonyMetrics ceremonyMetrics;
 
     public AuthenticationStartService(TenantRepository tenants,
                                       CredentialRepository credentials,
@@ -54,72 +54,70 @@ public class AuthenticationStartService {
                                       ChallengeStore store,
                                       ObjectMapper mapper,
                                       Clock clock,
-                                      MeterRegistry meterRegistry) {
+                                      CeremonyMetrics ceremonyMetrics) {
         this.tenants = tenants;
         this.credentials = credentials;
         this.challenges = challenges;
         this.store = store;
         this.mapper = mapper;
         this.clock = clock;
-        this.meterRegistry = meterRegistry;
+        this.ceremonyMetrics = ceremonyMetrics;
     }
 
     @Transactional(readOnly = true)
     public AuthenticationStartResponse start(AuthenticationStartRequest req) {
-      try {
-        log.info("authentication/start entry: userHandlePresent={}",
-                req.userHandle() != null);
-        UUID tenantUuid = TenantContextHolder.get();
-        if (tenantUuid == null) {
-            throw new IllegalStateException(
-                    "authentication/start invoked without tenant context");
+        try {
+            log.info("authentication/start entry: userHandlePresent={}",
+                    req.userHandle() != null);
+            UUID tenantUuid = TenantContextHolder.get();
+            if (tenantUuid == null) {
+                throw new IllegalStateException(
+                        "authentication/start invoked without tenant context");
+            }
+            String tenantId = tenantUuid.toString();
+            Tenant tenant = tenants.findById(tenantUuid)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "tenant " + tenantId + " not found"));
+            if (tenant.isSuspended()) {
+                throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
+            }
+
+            byte[] userHandle = (req.userHandle() == null)
+                    ? null
+                    : Base64.getUrlDecoder().decode(req.userHandle());
+
+            // VPD filters to this tenant; derived query avoids the findAll scan.
+            // Usernameless flow (userHandle == null): server cannot know which
+            // credentials to advertise → empty allowCredentials per WebAuthn.
+            List<Credential> userCreds = (userHandle == null)
+                    ? List.of()
+                    : credentials.findByUserHandle(userHandle);
+
+            byte[] challenge = challenges.newChallengeBytes();
+            String token = challenges.newToken();
+            store.putAuthentication(token, new AuthenticationChallenge(
+                    tenantId, challenge, userHandle, clock.instant()));
+
+            ObjectNode options = mapper.createObjectNode();
+            options.put("challenge", b64url(challenge));
+            options.put("rpId", tenant.getRpId());
+            options.put("timeout", tenant.getWebauthnTimeoutMs());
+            options.put("userVerification", tenant.isRequireUserVerification() ? "required" : "preferred");
+            ArrayNode allow = options.putArray("allowCredentials");
+            for (Credential c : userCreds) {
+                ObjectNode entry = allow.addObject();
+                entry.put("type", "public-key");
+                entry.put("id", b64url(c.getCredentialId()));
+            }
+            log.info("authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
+                    tokenTail(token), userCreds.size(), tenant.getWebauthnTimeoutMs());
+            AuthenticationStartResponse response = new AuthenticationStartResponse(token, options);
+            ceremonyMetrics.recordSuccess("authentication", "start");
+            return response;
+        } catch (RuntimeException e) {
+            ceremonyMetrics.recordFailure("authentication", "start");
+            throw e;
         }
-        String tenantId = tenantUuid.toString();
-        Tenant tenant = tenants.findById(tenantUuid)
-                .orElseThrow(() -> new IllegalStateException(
-                        "tenant " + tenantId + " not found"));
-        if (tenant.isSuspended()) {
-            throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
-        }
-
-        byte[] userHandle = (req.userHandle() == null)
-                ? null
-                : Base64.getUrlDecoder().decode(req.userHandle());
-
-        // VPD filters to this tenant; derived query avoids the findAll scan.
-        // Usernameless flow (userHandle == null): server cannot know which
-        // credentials to advertise → empty allowCredentials per WebAuthn.
-        List<Credential> userCreds = (userHandle == null)
-                ? List.of()
-                : credentials.findByUserHandle(userHandle);
-
-        byte[] challenge = challenges.newChallengeBytes();
-        String token = challenges.newToken();
-        store.putAuthentication(token, new AuthenticationChallenge(
-                tenantId, challenge, userHandle, clock.instant()));
-
-        ObjectNode options = mapper.createObjectNode();
-        options.put("challenge", b64url(challenge));
-        options.put("rpId", tenant.getRpId());
-        options.put("timeout", tenant.getWebauthnTimeoutMs());
-        options.put("userVerification", tenant.isRequireUserVerification() ? "required" : "preferred");
-        ArrayNode allow = options.putArray("allowCredentials");
-        for (Credential c : userCreds) {
-            ObjectNode entry = allow.addObject();
-            entry.put("type", "public-key");
-            entry.put("id", b64url(c.getCredentialId()));
-        }
-        log.info("authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
-                tokenTail(token), userCreds.size(), tenant.getWebauthnTimeoutMs());
-        AuthenticationStartResponse response = new AuthenticationStartResponse(token, options);
-        meterRegistry.counter("passkey_ceremony_total",
-                "type", "authentication", "phase", "start", "result", "success").increment();
-        return response;
-      } catch (RuntimeException e) {
-        meterRegistry.counter("passkey_ceremony_total",
-                "type", "authentication", "phase", "start", "result", "failure").increment();
-        throw e;
-      }
     }
 
     private static String b64url(byte[] b) {
