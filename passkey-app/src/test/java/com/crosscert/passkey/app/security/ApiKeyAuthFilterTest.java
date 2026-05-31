@@ -40,7 +40,8 @@ class ApiKeyAuthFilterTest {
         lookup = mock(ApiKeyLookupService.class);
         encoder = new BCryptPasswordEncoder(4); // low cost for test speed
         scopeRepo = mock(com.crosscert.passkey.core.repository.ApiKeyScopeRepository.class);
-        filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, new ApiKeyScopeResolver());
+        filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, new ApiKeyScopeResolver(),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
     @AfterEach

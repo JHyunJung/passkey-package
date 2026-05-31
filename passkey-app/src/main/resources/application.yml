@@ -4,3 +4,8 @@ spring:
   flyway.enabled: false
 
 server.port: 8080
+
+management:
+  metrics:
+    tags:
+      application: passkey-app

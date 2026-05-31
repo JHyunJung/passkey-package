@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
 import com.webauthn4j.metadata.data.MetadataBLOB;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +32,7 @@ public class MdsSchedulerService {
 
     private static final Logger log = LoggerFactory.getLogger(MdsSchedulerService.class);
     private static final String LEASE_NAME = "mds-sync";
+    private static final String SYNC_COUNTER = "passkey_mds_sync_total";
 
     private final SchedulerLeaseService leases;
     private final MdsBlobClient client;
@@ -39,6 +41,7 @@ public class MdsSchedulerService {
     private final AuditLogService audit;
     private final MdsHistoryService historyService;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
     private final String holder;
 
     public MdsSchedulerService(SchedulerLeaseService leases,
@@ -48,6 +51,7 @@ public class MdsSchedulerService {
                                AuditLogService audit,
                                MdsHistoryService historyService,
                                Clock clock,
+                               MeterRegistry meterRegistry,
                                @Value("${passkey.mds.lease-holder:default}")
                                String configuredHolder) {
         this.leases = leases;
@@ -57,6 +61,7 @@ public class MdsSchedulerService {
         this.audit = audit;
         this.historyService = historyService;
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
         // Default holder = PID@host (ManagementFactory), unique per JVM.
         this.holder = "default".equals(configuredHolder)
                 ? ManagementFactory.getRuntimeMXBean().getName()
@@ -139,9 +144,11 @@ public class MdsSchedulerService {
 
             long durMs = Duration.between(started, Instant.now()).toMillis();
             log.info("mds sync ok: version={} durMs={}", version, durMs);
+            meterRegistry.counter(SYNC_COUNTER, "result", "success").increment();
             result = SyncResult.synced(version);
         } catch (RuntimeException e) {
             log.error("mds sync failed: cause={}", e.toString(), e);
+            meterRegistry.counter(SYNC_COUNTER, "result", "failure").increment();
             result = SyncResult.failed(e.getMessage());
         }
         // Best-effort history append; never disrupts the sync result.
