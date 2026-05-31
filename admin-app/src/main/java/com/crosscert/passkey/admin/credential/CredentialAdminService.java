@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,11 +48,13 @@ public class CredentialAdminService {
     public PageView<CredentialView> list(UUID tenantId, int page, int size, String q) {
         tenantBoundary.assertCanAccessTenant(tenantId);
         int cappedSize = Math.min(Math.max(size, 1), 200);
-        // Sort 는 findAllByTenantId 의 @Query ORDER BY 절에서 처리 (NULLS LAST 포함).
-        // searchByTenantId native query 는 Pageable sort 미적용 — 필요 시 쿼리 내 ORDER BY 추가.
-        Pageable pageReq = PageRequest.of(Math.max(page, 0), cappedSize,
-                Sort.by(Sort.Order.desc("lastUsedAt"))
-                    .and(Sort.by(Sort.Order.desc("id"))));
+        // Ordering is owned by the @Query ORDER BY of findAllByTenantId
+        // (lastUsedAt desc nulls last, id desc). searchByTenantId is a
+        // native query with no ORDER BY and Spring Data does not push
+        // Pageable Sort into native SQL — so passing Sort here was a no-op
+        // there and a duplicate for the JPQL path. Removing it keeps the
+        // JPQL ordering authoritative and avoids the duplicate ORDER BY.
+        Pageable pageReq = PageRequest.of(Math.max(page, 0), cappedSize);
 
         Page<Credential> rows = (q == null || q.isBlank())
                 ? creds.findAllByTenantId(tenantId, pageReq)
