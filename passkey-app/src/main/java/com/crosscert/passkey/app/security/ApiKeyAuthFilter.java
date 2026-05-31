@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -80,19 +81,22 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final ApiKeyScopeResolver scopeResolver;
     private final MeterRegistry meterRegistry;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     public ApiKeyAuthFilter(ApiKeyLookupService lookup,
                             PasswordEncoder encoder,
                             ApiKeyScopeRepository scopeRepo,
                             ApiKeyScopeResolver scopeResolver,
                             MeterRegistry meterRegistry,
-                            ApplicationEventPublisher eventPublisher) {
+                            ApplicationEventPublisher eventPublisher,
+                            Clock clock) {
         this.lookup = lookup;
         this.encoder = encoder;
         this.scopeRepo = scopeRepo;
         this.scopeResolver = scopeResolver;
         this.meterRegistry = meterRegistry;
         this.eventPublisher = eventPublisher;
+        this.clock = clock;
     }
 
     @Override
@@ -140,7 +144,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
         ApiKeyLookupService.ApiKeyAuthRow row = opt.get();
 
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         if (!row.isActive(now)) {
             // Same timing equalization for revoked/expired keys.
             encoder.matches(secret, DUMMY_HASH);

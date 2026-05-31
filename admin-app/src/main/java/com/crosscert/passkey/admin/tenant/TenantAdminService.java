@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,6 +47,7 @@ public class TenantAdminService {
     private final ApiKeyRepository apiKeyRepository;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final Clock clock;
 
     public TenantAdminService(TenantRepository tenants,
                               AuditLogService audit,
@@ -56,7 +58,8 @@ public class TenantAdminService {
                               CredentialRepository credentialRepository,
                               ApiKeyRepository apiKeyRepository,
                               AuditLogRepository auditLogRepository,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              Clock clock) {
         this.tenants = tenants;
         this.audit = audit;
         this.em = em;
@@ -67,6 +70,7 @@ public class TenantAdminService {
         this.apiKeyRepository = apiKeyRepository;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -88,7 +92,7 @@ public class TenantAdminService {
         Map<UUID, Long> credByTenant =
                 toCountMap(credentialRepository.countGroupedByTenantId());
         Map<UUID, Long> activeKeysByTenant =
-                toCountMap(apiKeyRepository.countActiveGroupedByTenantId(Instant.now()));
+                toCountMap(apiKeyRepository.countActiveGroupedByTenantId(clock.instant()));
         Map<UUID, Instant> lastEventByTenant =
                 toInstantMap(auditLogRepository.findLatestCreatedAtGroupedByTenantId());
 
@@ -129,7 +133,7 @@ public class TenantAdminService {
      */
     private TenantAdminDto.TenantView toView(Tenant t) {
         long credentials = credentialRepository.countByTenantId(t.getId());
-        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), Instant.now());
+        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), clock.instant());
         Instant lastEventAt = auditLogRepository
                 .findFirstByTenantIdOrderByCreatedAtDesc(t.getId())
                 .map(AuditLog::getCreatedAt)

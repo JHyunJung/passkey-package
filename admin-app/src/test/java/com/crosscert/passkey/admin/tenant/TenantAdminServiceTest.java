@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -55,7 +56,7 @@ class TenantAdminServiceTest {
         service = new TenantAdminService(repo, audit, em, boundary,
                 aaguidPolicyRepo, snapshotRepo,
                 credentialRepository, apiKeyRepository, auditLogRepository,
-                new ObjectMapper());
+                new ObjectMapper(), Clock.systemUTC());
     }
 
     @Test
