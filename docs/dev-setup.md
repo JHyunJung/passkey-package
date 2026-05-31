@@ -272,6 +272,7 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun
 
 ## 7. 참고
 
+- **RP 서버 API 명세서**: [rp-server-api.md](rp-server-api.md) — RP 백엔드가 `/api/v1/rp/**` 를 직접 호출하기 위한 정식 레퍼런스(인증/scope/DTO/ID Token/에러/rate limit)
 - dev profile 추가: `feat(dev): dev profile + R__dev_seed` commit
 - monorepo 통합: `Merge feature/monorepo-merge` commit
 - 시드 SQL: [`core/src/main/resources/db/dev/R__dev_seed.sql`](../core/src/main/resources/db/dev/R__dev_seed.sql)
