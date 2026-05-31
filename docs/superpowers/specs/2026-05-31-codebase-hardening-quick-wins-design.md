@@ -27,6 +27,7 @@
 | **QW-3** DB/JPA 성능 + 의존성 검증 | performance | api_key 인덱스, N+1 집계, Hibernate batch, CVE 검증 | core, admin-app, gradle |
 | **QW-4** 백엔드 순수 위생 | perf+quality | HexFormat, RSA keygen 통합, Converter 재사용, Clock, ProblemJson, 로깅 | core, passkey-app, admin-app |
 | **QW-5** admin-ui 코드 위생 | perf+quality | useMemo, dead code 제거, ESLint, 폴링 가드 | admin-ui |
+| **QW-6** 잔여 위생 묶음 | security+quality | SDK alg 핀, dev 키 위생, sample-rp echo, gradle SHA 핀, API 패턴 통일 | sdk-java, admin-app, sample-rp, gradle, admin-ui |
 
 ## 3. QW-1 — Cross-tenant 회귀 방지 (security)
 
@@ -105,6 +106,18 @@ admin-app은 VPD-EXEMPT(`APP_ADMIN_USER`)로 접속하므로 cross-tenant 격리
 - **`cq-a11y-clickable-rows`** (선택, 외관 불변 한정): 클릭 가능 `<tr>`/카드에 키보드 핸들러·`role`·`aria` 추가. **시각적 변화 없이** 키보드 접근성만 보강. 외관 바뀌면 보류.
 - **`perf-sidebar-not-memoized-inline-props`**, **`perf-audittab-payload-stringify-per-row`** (선택): memo/useMemo로 리렌더·반복 stringify 감소. 표시값 동일.
 - **검증**: vitest 22 tests green 유지, `tsc -b` + `vite build` EXIT 0, 표시값 육안 동일(스냅샷/단위).
+
+## 7.5 QW-6 — 잔여 위생 묶음 (security + quality)
+
+감사 risk=none 중 §3-7에 들어가지 않은 효과 있는 5건. 전부 동작·UI·응답 불변.
+
+- **`sec-idtoken-alg-not-pinned`** (SDK, security low): `sdk-java/.../idtoken/IdTokenVerifier.verify()` 시작부에 `JWSAlgorithm.RS256` 단언 추가(`jwt.getHeader().getAlgorithm()` 비교). 발급 측이 RS256 단일이라 정상 토큰 검증 동작 불변, alg confusion 표면만 제거. 신규 단위 테스트로 RS256 통과 + 비-RS256 거부 검증.
+- **`sec-dev-master-key-all-zero`** (security low): `application-dev.yml`/`application-test.yml`(admin-app)의 `key-envelope.master-key`가 전부 0바이트(`AAAA...=`). **0이 아닌 무작위 32바이트 공개 상수**로 교체 + `# NON-SECRET, dev only` 주석. dev/test 전용이라 prod 무영향. (prod×약한키 부팅 가드는 risk=low라 별도 — 본 항목은 키 교체만.)
+- **`sec-samplerp-validation-rejected-value-echo`** (security low): `sample-rp/.../GlobalExceptionHandler.java:41`이 `fe.getRejectedValue()`를 응답에 echo → core 핸들러처럼 `null`로. sample-rp는 데모라 필드명+메시지로 충분. **불변식**: sample-rp 데모 동작/응답 형태 유지(rejectedValue 필드만 null).
+- **`qual-gradle-wrapper-no-sha-pin`** (quality low): `gradle/wrapper/gradle-wrapper.properties`에 Gradle 8.10 공식 `distributionSha256Sum` 추가(공개 체크섬을 신뢰 출처에서 확인 후). 빌드 무결성 강화, 동작/UI 무관. **주의**: 잘못된 체크섬은 빌드를 깨므로 공식 값을 정확히 확인하는 Step 필수.
+- **`cq-inconsistent-api-pattern`** (quality low, 가장 약함): `LoginPage.tsx`의 `api.get<Me>('/admin/api/me')` 직접 호출을 기존 `getMe()` 헬퍼로 통일(line 54). `/admin/api/profile`은 전용 헬퍼가 없어 그대로 두거나 최소 헬퍼 추가는 선택. 응답·동작 불변. **이 항목은 가치가 낮아 시간 들면 생략 가능**(plan에서 마지막 Task, 생략 허용 명시).
+
+**검증**: sdk-java/sample-rp 컴파일 + 신규 단위 테스트, admin-ui tsc+vitest+build, gradle wrapper 검증(`./gradlew --version`이 핀 후에도 동작).
 
 ## 8. 검증 전략 (전체)
 
