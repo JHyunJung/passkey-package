@@ -18,6 +18,8 @@ import ActivityPage from '@/pages/ActivityPage';
 import AuditChainPage from '@/pages/AuditChainPage';
 import SettingsPage from '@/pages/SettingsPage';
 import LicensePage from '@/pages/LicensePage';
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import { api } from '@/api/client';
 import type { Me } from '@/api/types';
 import { RequirePlatform } from '@/me/RequirePlatform';
@@ -237,6 +239,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     api.get<Me>('/admin/api/me')
@@ -244,6 +247,10 @@ function App() {
       .catch(() => { /* 인증 안됨 — LoginPage 표시 */ })
       .finally(() => setLoading(false));
   }, []);
+
+  // public 경로 — me 로딩과 무관하게 즉시 렌더
+  if (location.pathname === '/forgot-password') return <ForgotPasswordPage />;
+  if (location.pathname === '/reset-password') return <ResetPasswordPage />;
 
   async function handleLogout() {
     try { await api.post<void>('/admin/logout', {}); } catch { /* ignore */ }
