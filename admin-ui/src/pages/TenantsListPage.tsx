@@ -106,7 +106,9 @@ export default function TenantsListPage() {
           <h1 className="page__title">Tenants</h1>
           <div className="page__sub">RP 회사별 격리된 Passkey 환경. 모든 데이터는 tenant_id로 row-level 분리되어 있습니다.</div>
         </div>
-        {/* TODO(E-later): hide for RP_ADMIN role — POST /admin/api/tenants is PLATFORM_OPERATOR only */}
+        {/* '신규 tenant'(POST /admin/api/tenants)는 PLATFORM_OPERATOR 전용. 이 페이지(/tenants)
+            자체가 App.tsx 의 RequirePlatform 으로 감싸져 있어 RP_ADMIN 은 진입 시 자기 테넌트로
+            redirect 된다 — 따라서 여기서 별도 버튼 게이팅은 불필요(가드가 단일 진입점). */}
         <button className="btn btn--primary" onClick={() => setShowNew(true)}>
           <Icons.Plus size={14} /> 신규 tenant
         </button>

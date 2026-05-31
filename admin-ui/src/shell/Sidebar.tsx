@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Icons } from '@/icons/Icons';
 import { auditChainMonitorApi, type ChainOverview } from '@/api/auditChainMonitor';
 import { licenseApi } from '@/api/license';
+import { isPlatform } from '@/me/roles';
+import type { Me } from '@/api/types';
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -67,7 +69,7 @@ function NavBtn({ item, active, onClick, mode }: NavBtnProps) {
 
 // ===== Sidebar =====
 type SidebarProps = {
-  me: { role: string; tenantId?: string | null; email: string; displayName?: string };
+  me: Me;
   currentRoute: { name: string; tenantId?: string; tab?: string };
   onNavigate: (route: { name: string; tenantId?: string; tab?: string }) => void;
   tenant?: { id: string; name: string; slug: string } | null;
@@ -75,7 +77,7 @@ type SidebarProps = {
 };
 
 export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'labels' }: SidebarProps) {
-  const isPlatform = me.role === 'PLATFORM_OPERATOR';
+  const platform = isPlatform(me);
   const [chain, setChain] = useState<ChainOverview | null>(null);
   const [deploymentMode, setDeploymentMode] = useState<'saas' | 'onprem' | null>(null);
 
@@ -86,12 +88,18 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
   }, []);
 
   const navItems = useMemo(() => {
+    const settingsItem = NAV_PLATFORM[NAV_PLATFORM.length - 1]; // '설정'
+    // RP_ADMIN 은 PLATFORM 전역 nav(Tenants/Activity/Audit Chain)를 보지 않지만,
+    // 자기 계정(MFA 등)을 위해 '설정' 진입점은 유지한다(/settings 는 RP 도 접근 가능).
+    if (!platform) {
+      return [settingsItem] as typeof NAV_PLATFORM;
+    }
     if (deploymentMode === 'onprem') {
       // Insert License between Audit Chain and Settings
-      return [...NAV_PLATFORM.slice(0, -1), NAV_LICENSE, NAV_PLATFORM[NAV_PLATFORM.length - 1]];
+      return [...NAV_PLATFORM.slice(0, -1), NAV_LICENSE, settingsItem];
     }
     return NAV_PLATFORM;
-  }, [deploymentMode]);
+  }, [deploymentMode, platform]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +139,7 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
       {/* Tenant context block */}
       {tenant && sidebarMode === 'labels' && (
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-          {isPlatform && (
+          {platform && (
             <button className="btn btn--ghost btn--xs" onClick={() => onNavigate({ name: 'tenants' })} style={{ marginBottom: 6, padding: '2px 4px', color: 'var(--text-mute)' }}>
               <Icons.ChevronLeft size={12} /> Tenants
             </button>
