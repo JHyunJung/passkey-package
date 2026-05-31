@@ -110,6 +110,14 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req,
                                     HttpServletResponse res,
                                     FilterChain chain) throws ServletException, IOException {
+        // Defense-in-depth (sec-apikeyfilter-no-defensive-clear): clear any
+        // stale ThreadLocal value before we read the request. Reuse of a
+        // Tomcat worker thread that exited a prior request via an unusual
+        // path should never leak the previous tenant into this one. Mirrors
+        // DevTenantHeaderFilter's entry-point clear. The success path still
+        // set()s the real tenant (line below) and the finally clears it.
+        TenantContextHolder.clear();
+
         String header = req.getHeader(HEADER);
         if (header == null || header.length() <= PREFIX_LEN
                 || !header.startsWith(KEY_PREFIX)) {
