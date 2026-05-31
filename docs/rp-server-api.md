@@ -3,7 +3,7 @@
 RP(Relying Party) 백엔드 개발자가 **Crosscert Passkey 서버**(`passkey-app`)를 직접 호출해 패스키(WebAuthn/FIDO2) 등록·인증을 구현하기 위한 API 레퍼런스.
 
 - **대상**: SDK 없이 raw HTTP로 통합하는 RP 백엔드. (Java라면 [`sdk-java`](../sdk-java/)를 쓰면 ID Token 검증·재시도·redaction이 내장 — 이 문서는 SDK 내부가 호출하는 계약이기도 하다.)
-- **범위**: `/api/v1/rp/**` (registration / authentication / credentials) + JWKS. admin 콘솔 API와 sample-rp 데모 자체 구현(`/users`, `/passkey/register/begin` 등 — `rp-client-api-quickref.md` 참조)은 범위 밖.
+- **범위**: 패스키 등록·인증 ceremony(`/api/v1/rp/registration/**`, `/api/v1/rp/authentication/**`) + ID Token 검증용 JWKS. self-service credential 관리·admin 콘솔 API·sample-rp 데모 자체 구현은 범위 밖.
 - **작성일**: 2026-05-31 (Flyway V38 / 하드닝 머지 `8d4a403` 기준)
 
 ---
@@ -56,9 +56,8 @@ X-API-Key: pk_<11자 prefix 까지 포함><secret>
 |---|---|
 | `/api/v1/rp/registration/**` | `registration` |
 | `/api/v1/rp/authentication/**` | `authentication` |
-| `/api/v1/rp/credentials/**` | `registration` |
 
-> 등록 ceremony와 self-service credential 관리(목록/이름변경/삭제)는 모두 `registration` scope다. 등록·인증 양쪽을 쓰려면 키에 두 scope를 모두 부여한다(콘솔 발급 시 선택).
+> 등록·인증 양쪽을 쓰려면 키에 두 scope를 모두 부여한다(콘솔 발급 시 선택).
 
 ### 인증 실패 응답 — `application/problem+json` (envelope 아님)
 
@@ -383,101 +382,7 @@ Content-Type: application/json
 
 > RP는 `idToken`을 검증(§5)해 사용자 신원을 확인하고, 자체 세션/토큰을 발급한다.
 
-### 4.5 self-service credential 관리
-
-사용자가 자신의 패스키를 조회·이름변경·삭제. 모두 scope `registration`.
-
-#### `GET /api/v1/rp/credentials?userHandle=<base64url>`
-
-- **query**: `userHandle` (string, 필수)
-- **응답 `data`**: `CredentialView[]`
-
-  | 필드 | 타입 | 설명 |
-  |---|---|---|
-  | `credentialId` | string | credential ID(base64url) |
-  | `label` | string | 사용자 지정 라벨 |
-  | `aaguidHex` | string | authenticator AAGUID(hex) |
-  | `lastUsedAt` | string(ISO instant) | 마지막 사용 시각 |
-
-- **Request**:
-
-```http
-GET /api/v1/rp/credentials?userHandle=ZGV2LXVzZXItMDAx
-X-API-Key: <발급받은 X-API-Key>
-```
-
-- **Response** `200 OK`:
-
-```jsonc
-{
-  "success": true, "code": "OK", "message": "Success",
-  "data": [
-    {
-      "credentialId": "AbCd...Ef",
-      "label": "iPhone Touch ID",
-      "aaguidHex": "08987058cadc4b81b6e130de50dcbe96",
-      "lastUsedAt": "2026-05-31T12:05:02Z"
-    }
-  ],
-  "error": null, "traceId": "c3d4e5f6", "timestamp": "2026-05-31T12:10:00Z"
-}
-```
-
-#### `POST /api/v1/rp/credentials/{credentialId}/label`
-
-- **요청 body** (`RenameRequest`):
-
-  | 필드 | 타입 | 필수 | 설명 |
-  |---|---|---|---|
-  | `userHandle` | string | ✅ | 소유자 식별자 |
-  | `label` | string | ✅ | 새 라벨(최대 128자) |
-
-- **응답 `data`**: `null` (성공 envelope)
-
-- **Request**:
-
-```http
-POST /api/v1/rp/credentials/AbCd...Ef/label
-X-API-Key: <발급받은 X-API-Key>
-Content-Type: application/json
-
-{ "userHandle": "ZGV2LXVzZXItMDAx", "label": "내 아이폰" }
-```
-
-- **Response** `200 OK`:
-
-```jsonc
-{
-  "success": true, "code": "OK", "message": "Success",
-  "data": null,
-  "error": null, "traceId": "c3d4e5f6", "timestamp": "2026-05-31T12:11:00Z"
-}
-```
-
-#### `DELETE /api/v1/rp/credentials/{credentialId}?userHandle=<base64url>`
-
-- **query**: `userHandle` (string, 필수)
-- **응답 `data`**: `null`
-- ⚠️ 파괴적 작업. rate limit이 가장 엄격(20/min, §7).
-
-- **Request**:
-
-```http
-DELETE /api/v1/rp/credentials/AbCd...Ef?userHandle=ZGV2LXVzZXItMDAx
-X-API-Key: <발급받은 X-API-Key>
-```
-
-- **Response** `200 OK`:
-
-```jsonc
-{
-  "success": true, "code": "OK", "message": "Success",
-  "data": null,
-  "error": null, "traceId": "c3d4e5f6", "timestamp": "2026-05-31T12:12:00Z"
-}
-```
-
-### 4.6 `GET /.well-known/jwks.json` (public)
+### 4.5 `GET /.well-known/jwks.json` (public)
 
 ID Token 서명 검증용 공개키 집합. **인증 불필요.** 응답은 envelope이 아닌 **RFC 7517 raw JSON**.
 
@@ -592,8 +497,6 @@ Content-Type: application/problem+json
 |---|---|
 | `POST /registration/start`, `/registration/finish` | 60 |
 | `POST /authentication/start`, `/authentication/finish` | 300 |
-| `GET /credentials`, `POST /credentials/{id}/label` | 60 |
-| `DELETE /credentials/{id}` | 20 |
 
 ---
 
