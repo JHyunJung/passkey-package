@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { activityApi } from '@/api/activity';
@@ -216,15 +216,25 @@ export default function ActivityPage() {
   // Use e.category (server classification) for ops/security filter;
   // type-name sets are only for dot/badge color on fixture events where
   // category is pre-computed from the same sets.
-  const displayEvents = events ?? [];
-  const filtered = displayEvents.filter((e) => {
-    if (filter === 'mutations') return e.category === 'ops';
-    if (filter === 'failures') return e.category === 'security';
-    return true;
-  });
+  const displayEvents = useMemo(() => events ?? [], [events]);
+  const filtered = useMemo(
+    () =>
+      displayEvents.filter((e) => {
+        if (filter === 'mutations') return e.category === 'ops';
+        if (filter === 'failures') return e.category === 'security';
+        return true;
+      }),
+    [displayEvents, filter],
+  );
 
-  const failureCount = displayEvents.filter((e) => e.category === 'security').length;
-  const mutationCount = displayEvents.filter((e) => e.category === 'ops').length;
+  const failureCount = useMemo(
+    () => displayEvents.filter((e) => e.category === 'security').length,
+    [displayEvents],
+  );
+  const mutationCount = useMemo(
+    () => displayEvents.filter((e) => e.category === 'ops').length,
+    [displayEvents],
+  );
 
   function handleOpenTenant(tenantId: string | null) {
     if (!tenantId) return;
