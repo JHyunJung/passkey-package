@@ -175,6 +175,11 @@ export class ApiError extends Error {
     super(`[${code}] ${serverMessage}`);
     this.name = 'ApiError';
   }
+
+  /** HTTP status alias — callers/tests reference `.status`. */
+  get status(): number {
+    return this.httpStatus;
+  }
 }
 
 export interface TenantUpdateRequest {
