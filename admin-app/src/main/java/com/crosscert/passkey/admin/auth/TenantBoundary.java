@@ -3,6 +3,7 @@ package com.crosscert.passkey.admin.auth;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,23 +44,15 @@ public class TenantBoundary {
                 ctx));
     }
 
-    /** First letter + *** + domain. Same shape as AdminSecurityConfig.maskEmail. */
-    private static String maskEmail(String email) {
-        if (email == null || email.isBlank()) return "(unknown)";
-        int at = email.indexOf('@');
-        if (at <= 0) return "***";
-        return email.charAt(0) + "***" + email.substring(at);
-    }
-
     public void assertCanAccessTenant(UUID tenantId) {
         AdminUserDetails me = currentPrincipal();
         if (me.isPlatformOperator()) return;
         if (me.isRpAdmin()) {
             if (!me.getTenantId().equals(tenantId)) {
                 log.warn("tenant boundary violation: actor={} role={} requested={} allowed={}",
-                        maskEmail(me.getUsername()), me.getRole(), tenantId, me.getTenantId());
+                        CryptoUtils.maskEmail(me.getUsername()), me.getRole(), tenantId, me.getTenantId());
                 publishViolation(Map.of(
-                        "actor", maskEmail(me.getUsername()),
+                        "actor", CryptoUtils.maskEmail(me.getUsername()),
                         "role", String.valueOf(me.getRole()),
                         "requested", String.valueOf(tenantId),
                         "allowed", String.valueOf(me.getTenantId())));
@@ -69,9 +62,9 @@ public class TenantBoundary {
             return;
         }
         log.warn("tenant boundary violation: actor={} role={} requested={} allowed=none",
-                maskEmail(me.getUsername()), me.getRole(), tenantId);
+                CryptoUtils.maskEmail(me.getUsername()), me.getRole(), tenantId);
         publishViolation(Map.of(
-                "actor", maskEmail(me.getUsername()),
+                "actor", CryptoUtils.maskEmail(me.getUsername()),
                 "role", String.valueOf(me.getRole()),
                 "requested", String.valueOf(tenantId),
                 "allowed", "none"));
@@ -86,9 +79,9 @@ public class TenantBoundary {
         if (me.isPlatformOperator()) return Optional.empty();
         if (me.isRpAdmin())          return Optional.of(me.getTenantId());
         log.warn("tenant boundary violation: actor={} role={} scope=list allowed=none",
-                maskEmail(me.getUsername()), me.getRole());
+                CryptoUtils.maskEmail(me.getUsername()), me.getRole());
         publishViolation(Map.of(
-                "actor", maskEmail(me.getUsername()),
+                "actor", CryptoUtils.maskEmail(me.getUsername()),
                 "role", String.valueOf(me.getRole()),
                 "scope", "list",
                 "allowed", "none"));
@@ -102,9 +95,9 @@ public class TenantBoundary {
         AdminUserDetails me = currentPrincipal();
         if (!me.isPlatformOperator()) {
             log.warn("tenant boundary violation: actor={} role={} required=PLATFORM_OPERATOR",
-                    maskEmail(me.getUsername()), me.getRole());
+                    CryptoUtils.maskEmail(me.getUsername()), me.getRole());
             publishViolation(Map.of(
-                    "actor", maskEmail(me.getUsername()),
+                    "actor", CryptoUtils.maskEmail(me.getUsername()),
                     "role", String.valueOf(me.getRole()),
                     "required", "PLATFORM_OPERATOR"));
             throw new BusinessException(ErrorCode.ACCESS_DENIED,

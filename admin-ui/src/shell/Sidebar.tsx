@@ -4,6 +4,7 @@ import { auditChainMonitorApi, type ChainOverview } from '@/api/auditChainMonito
 import { licenseApi } from '@/api/license';
 import { isPlatform } from '@/me/roles';
 import type { Me } from '@/api/types';
+import type { AppRoute } from '@/appRoute';
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -15,14 +16,18 @@ function timeAgo(iso: string): string {
 }
 
 // ===== Nav items =====
-const NAV_PLATFORM = [
+// Top-level route names (AppRoute members with no extra fields). Typed so that
+// `onNavigate({ name: item.id })` produces a valid AppRoute.
+type TopLevelRouteName = 'tenants' | 'activity' | 'audit-chain' | 'settings' | 'license';
+
+const NAV_PLATFORM: { id: TopLevelRouteName; label: string; icon: string }[] = [
   { id: 'tenants', label: 'Tenants', icon: 'Building' },
   { id: 'activity', label: 'Activity', icon: 'Activity' },
   { id: 'audit-chain', label: 'Audit Chain', icon: 'Hash' },
   { id: 'settings', label: '설정', icon: 'Cog' },
 ];
 
-const NAV_LICENSE = { id: 'license', label: 'License', icon: 'Key' };
+const NAV_LICENSE: { id: TopLevelRouteName; label: string; icon: string } = { id: 'license', label: 'License', icon: 'Key' };
 
 const NAV_RP = [
   { id: 'overview', label: '개요', icon: 'Activity' },
@@ -70,8 +75,8 @@ function NavBtn({ item, active, onClick, mode }: NavBtnProps) {
 // ===== Sidebar =====
 type SidebarProps = {
   me: Me;
-  currentRoute: { name: string; tenantId?: string; tab?: string };
-  onNavigate: (route: { name: string; tenantId?: string; tab?: string }) => void;
+  currentRoute: AppRoute;
+  onNavigate: (route: AppRoute) => void;
   tenant?: { id: string; name: string; slug: string } | null;
   sidebarMode?: 'labels' | 'icons' | 'collapsed';
 };
@@ -158,7 +163,7 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
 
       <nav style={{ padding: '10px 8px', flex: 1, overflow: 'auto' }}>
         {tenant ? (
-          NAV_RP.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.tab === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: 'tenant', tenantId: tenant.id, tab: item.id })} />)
+          NAV_RP.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.name === 'tenant' && currentRoute.tab === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: 'tenant', tenantId: tenant.id, tab: item.id })} />)
         ) : (
           navItems.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.name === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: item.id })} />)
         )}

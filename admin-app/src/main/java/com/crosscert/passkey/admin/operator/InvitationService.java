@@ -5,6 +5,7 @@ import com.crosscert.passkey.core.entity.AdminUserInvitation;
 import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,10 +13,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -26,16 +23,7 @@ public class InvitationService {
     private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
 
     private static final Duration TOKEN_TTL = Duration.ofDays(7);
-    private static final SecureRandom RNG = new SecureRandom();
     private static final String URL_PREFIX = "/accept-invite?token=";
-
-    /** Mask email — first letter + *** + domain. Mirrors AdminSecurityConfig.maskEmail. */
-    private static String maskEmail(String email) {
-        if (email == null || email.isBlank()) return "(unknown)";
-        int at = email.indexOf('@');
-        if (at <= 0) return "***";
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 
     private final AdminUserInvitationRepository invitationRepo;
     private final AdminUserRepository userRepo;
@@ -60,10 +48,8 @@ public class InvitationService {
 
     @Transactional
     public AdminUserDto.InvitationInfo createInvitation(UUID adminUserId, String invitedBy, String email) {
-        byte[] tokenBytes = new byte[32];
-        RNG.nextBytes(tokenBytes);
-        String plaintext = "inv_" + hex(tokenBytes);
-        String tokenHash = sha256Hex(plaintext);
+        String plaintext = CryptoUtils.randomToken("inv_");
+        String tokenHash = CryptoUtils.sha256Hex(plaintext);
         String prefix = plaintext.substring(0, 8);
 
         Instant expiresAt = Instant.now().plus(TOKEN_TTL);
@@ -102,11 +88,11 @@ public class InvitationService {
         user.setStatus("ACTIVE");
         inv.accept();
         log.info("invitation accepted: email={} tokenPrefix={}",
-                maskEmail(user.getEmail()), inv.getTokenPrefix());
+                CryptoUtils.maskEmail(user.getEmail()), inv.getTokenPrefix());
     }
 
     private AdminUserInvitation lookupValid(String plaintext) {
-        String hash = sha256Hex(plaintext);
+        String hash = CryptoUtils.sha256Hex(plaintext);
         var inv = invitationRepo.findByTokenHash(hash)
                 .orElseThrow(() -> {
                     // tokenPrefix is the first 8 chars of plaintext (matches
@@ -126,21 +112,5 @@ public class InvitationService {
             throw new IllegalStateException("Token already used");
         }
         return inv;
-    }
-
-    private static String hex(byte[] b) {
-        StringBuilder s = new StringBuilder(b.length * 2);
-        for (byte x : b) s.append(String.format("%02x", x));
-        return s.toString();
-    }
-
-    private static String sha256Hex(String s) {
-        try {
-            byte[] hash = MessageDigest.getInstance("SHA-256")
-                    .digest(s.getBytes(StandardCharsets.UTF_8));
-            return hex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

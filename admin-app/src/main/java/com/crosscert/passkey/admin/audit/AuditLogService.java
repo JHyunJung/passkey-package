@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.audit;
 
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import jakarta.persistence.EntityManager;
@@ -165,7 +166,7 @@ public class AuditLogService {
     static byte[] computeHash(byte[] prevHash, AuditAppendRequest req,
                               String payloadJson, Instant now) {
         StringBuilder input = new StringBuilder();
-        input.append(prevHash == null ? "" : hex(prevHash));
+        input.append(prevHash == null ? "" : CryptoUtils.hex(prevHash));
         input.append('|');
         // Null actorId (system/unknown actor) collapses to empty string,
         // matching the null-collapse convention for targetType/targetId.
@@ -186,11 +187,5 @@ public class AuditLogService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 unavailable", e);
         }
-    }
-
-    private static String hex(byte[] b) {
-        StringBuilder s = new StringBuilder(b.length * 2);
-        for (byte x : b) s.append(String.format("%02x", x));
-        return s.toString();
     }
 }
