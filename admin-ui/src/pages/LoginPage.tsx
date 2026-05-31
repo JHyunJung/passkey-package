@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Icons, BrandMark } from '@/icons/Icons';
-import { api } from '@/api/client';
+import { api, getMe } from '@/api/client';
 import type { Me } from '@/api/types';
 import { useToast } from '@/shell/ToastHost';
 
@@ -51,7 +51,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         toast({ kind: 'err', title: '로그인 실패', message: msg });
         return;
       }
-      const me = await api.get<Me>('/admin/api/me');
+      const me = await getMe();
       onLogin(me);
     } catch (err: unknown) {
       const e = err as { code?: string; serverMessage?: string; message?: string };
