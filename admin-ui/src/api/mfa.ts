@@ -32,7 +32,9 @@ export interface EnrollResponse {
 
 export const mfaApi = {
   enroll: () => mfaPost<EnrollResponse>('/admin/api/mfa/enroll', {}),
-  confirm: (code: string) => mfaPost<{ confirmed: boolean }>('/admin/api/mfa/confirm', { code }),
-  verify: (code: string) => mfaPost<{ verified: boolean }>('/admin/api/mfa/verify', { code }),
+  confirm: (code: string) =>
+    mfaPost<{ confirmed: boolean; recoveryCodes: string[] }>('/admin/api/mfa/confirm', { code }),
+  verify: (code: string) =>
+    mfaPost<{ verified: boolean; usedRecoveryCode?: boolean; remaining?: number }>('/admin/api/mfa/verify', { code }),
   disable: (code: string) => mfaPost<{ disabled: boolean }>('/admin/api/mfa/disable', { code }),
 };
