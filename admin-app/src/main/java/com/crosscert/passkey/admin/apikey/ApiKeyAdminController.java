@@ -24,6 +24,7 @@ public class ApiKeyAdminController {
         this.admins = admins;
     }
 
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @GetMapping
     public ApiResponse<List<ApiKeyAdminDto.ApiKeyView>> list(
             @RequestParam(required = false) String tenantId) {

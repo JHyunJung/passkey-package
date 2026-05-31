@@ -30,11 +30,13 @@ public class TenantAdminController {
         this.lifecycle = lifecycle;
     }
 
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @GetMapping
     public ApiResponse<List<TenantAdminDto.TenantView>> list() {
         return ApiResponse.ok(service.list());
     }
 
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @GetMapping("/{idOrSlug}")
     public ApiResponse<TenantAdminDto.TenantView> get(@PathVariable String idOrSlug) {
         return ApiResponse.ok(service.get(idOrSlug));
