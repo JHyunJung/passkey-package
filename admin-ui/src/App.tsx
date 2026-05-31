@@ -240,13 +240,15 @@ function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const location = useLocation();
+  const isPublicPath = location.pathname === '/forgot-password' || location.pathname === '/reset-password';
 
   useEffect(() => {
+    if (isPublicPath) { setLoading(false); return; }
     api.get<Me>('/admin/api/me')
       .then(setMe)
       .catch(() => { /* 인증 안됨 — LoginPage 표시 */ })
       .finally(() => setLoading(false));
-  }, []);
+  }, [isPublicPath]);
 
   // public 경로 — me 로딩과 무관하게 즉시 렌더
   if (location.pathname === '/forgot-password') return <ForgotPasswordPage />;

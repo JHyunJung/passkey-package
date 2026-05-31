@@ -28,7 +28,7 @@ export default function ResetPasswordPage() {
       await passwordResetApi.confirm(token!, pw);
       setDone(true);
     } catch (err: unknown) {
-      const msg = err instanceof ApiError ? err.message : '비밀번호 변경에 실패했습니다.';
+      const msg = err instanceof ApiError ? err.serverMessage : '비밀번호 변경에 실패했습니다.';
       setError(msg);
     } finally {
       setSubmitting(false);
