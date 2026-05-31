@@ -38,7 +38,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
         List<FieldError> errors = e.getBindingResult().getFieldErrors().stream()
-                .map(fe -> new FieldError(fe.getField(), fe.getRejectedValue(), fe.getDefaultMessage()))
+                // rejectedValue 를 echo 하지 않는다(core GlobalExceptionHandler 와 동일) —
+                // 필드명 + 메시지로 충분하고, 입력값 반사를 피한다.
+                .map(fe -> new FieldError(fe.getField(), null, fe.getDefaultMessage()))
                 .toList();
         return ResponseEntity.badRequest().body(ApiResponse.error(ErrorCode.INVALID_INPUT, errors));
     }
