@@ -4,3 +4,15 @@ spring:
   flyway.enabled: false
 
 server.port: 8080
+
+management:
+  metrics:
+    tags:
+      application: passkey-app
+
+passkey:
+  alert:
+    mail:
+      enabled: false        # true 면 MailAlertChannel 등록, ops 메일 발송
+      to:                   # 알림 수신 운영자 주소
+      min-severity: HIGH    # 이 severity 이상만 메일(LOW/MEDIUM/HIGH/CRITICAL). 기본 LogAlertChannel 은 전 severity 로깅

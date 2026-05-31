@@ -1,7 +1,9 @@
 package com.crosscert.passkey.app.security;
 
+import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.repository.ApiKeyScopeRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,6 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -68,19 +72,27 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String DUMMY_HASH =
             "$2a$12$KIXxA7B0NQI8YzCq0RZ.7eN5lUucl0wH0G3jWvSEqcD9QYxIqUyqK";
 
+    private static final String AUTH_COUNTER = "passkey_apikey_auth_total";
+
     private final ApiKeyLookupService lookup;
     private final PasswordEncoder encoder;
     private final ApiKeyScopeRepository scopeRepo;
     private final ApiKeyScopeResolver scopeResolver;
+    private final MeterRegistry meterRegistry;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ApiKeyAuthFilter(ApiKeyLookupService lookup,
                             PasswordEncoder encoder,
                             ApiKeyScopeRepository scopeRepo,
-                            ApiKeyScopeResolver scopeResolver) {
+                            ApiKeyScopeResolver scopeResolver,
+                            MeterRegistry meterRegistry,
+                            ApplicationEventPublisher eventPublisher) {
         this.lookup = lookup;
         this.encoder = encoder;
         this.scopeRepo = scopeRepo;
         this.scopeResolver = scopeResolver;
+        this.meterRegistry = meterRegistry;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -114,6 +126,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             // the timing of known-prefix-wrong-secret.
             encoder.matches(secret, DUMMY_HASH);
             log.warn("api-key auth failed: reason=unknown-prefix prefix={}", prefix);
+            meterRegistry.counter(AUTH_COUNTER, "result", "unknown_prefix").increment();
             unauthorized(res);
             return;
         }
@@ -125,11 +138,18 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             encoder.matches(secret, DUMMY_HASH);
             String reason = row.revokedAt() != null ? "revoked" : "expired";
             log.warn("api-key auth failed: reason={} prefix={}", reason, prefix);
+            meterRegistry.counter(AUTH_COUNTER, "result", reason).increment();
             unauthorized(res);
             return;
         }
         if (!encoder.matches(secret, row.keyHash())) {
             log.warn("api-key auth failed: reason=bad-secret prefix={}", prefix);
+            meterRegistry.counter(AUTH_COUNTER, "result", "bad_secret").increment();
+            eventPublisher.publishEvent(new SecurityAlertEvent(
+                    SecurityAlertEvent.AlertType.API_KEY_BRUTE_FORCE,
+                    SecurityAlertEvent.Severity.MEDIUM,
+                    "api key auth failed (bad secret)",
+                    Map.of("prefix", prefix)));
             unauthorized(res);
             return;
         }
@@ -149,6 +169,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 if (!held.contains(required.get())) {
                     log.warn("api-key scope denied: prefix={} required={} held={}",
                             prefix, required.get(), held);
+                    meterRegistry.counter(AUTH_COUNTER, "result", "insufficient_scope").increment();
                     forbidden(res);
                     return; // 바깥 finally 가 TenantContextHolder.clear() 보장
                 }
@@ -164,6 +185,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 if (log.isDebugEnabled()) {
                     log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());
                 }
+                meterRegistry.counter(AUTH_COUNTER, "result", "success").increment();
                 chain.doFilter(req, res);
             } finally {
                 MDC.remove(MDC_API_KEY_PREFIX);

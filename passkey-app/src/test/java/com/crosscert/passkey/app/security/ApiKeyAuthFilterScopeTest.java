@@ -33,6 +33,8 @@ class ApiKeyAuthFilterScopeTest {
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);
     private final ApiKeyScopeRepository scopeRepo = mock(ApiKeyScopeRepository.class);
     private final ApiKeyScopeResolver resolver = new ApiKeyScopeResolver();
+    private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meterRegistry =
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
     private ApiKeyAuthFilter filter;
 
     private final UUID keyId = UUID.randomUUID();
@@ -45,7 +47,8 @@ class ApiKeyAuthFilterScopeTest {
 
     @BeforeEach
     void setUp() {
-        filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, resolver);
+        filter = new ApiKeyAuthFilter(lookup, encoder, scopeRepo, resolver, meterRegistry,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
         when(lookup.findByPrefix(prefix)).thenReturn(Optional.of(
                 new ApiKeyLookupService.ApiKeyAuthRow(keyId, tenantId, HASH, null, null)));
         when(encoder.matches(secret, HASH)).thenReturn(true);
@@ -87,6 +90,9 @@ class ApiKeyAuthFilterScopeTest {
         assertThat(res.getStatus()).isEqualTo(403);
         verify(chain, never()).doFilter(any(), any());
         assertThat(TenantContextHolder.get()).isNull();
+        // P1-2: insufficient_scope 결과 메트릭이 1회 기록됐는지 대표 검증.
+        assertThat(meterRegistry.counter("passkey_apikey_auth_total", "result", "insufficient_scope")
+                .count()).isEqualTo(1.0);
     }
 
     @Test

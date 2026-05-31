@@ -13,6 +13,7 @@ dependencies {
     // implementation (not api) — app code does not compile against pool2 types.
     implementation("org.apache.commons:commons-pool2")
     api("org.springframework.boot:spring-boot-starter-actuator")
+    api("io.micrometer:micrometer-registry-prometheus")
     api("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-aop")
 
