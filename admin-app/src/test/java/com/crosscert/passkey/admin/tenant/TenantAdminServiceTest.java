@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -84,6 +86,60 @@ class TenantAdminServiceTest {
         verify(audit).append(auditCaptor.capture());
         assertThat(auditCaptor.getValue().action()).isEqualTo("TENANT_CREATE");
         assertThat(auditCaptor.getValue().targetId()).isEqualTo("T_A");
+    }
+
+    @Test
+    void listUsesBatchAggregatesNotPerTenantQueries() {
+        // two ACTIVE tenants. BaseEntity.id is assigned by @UuidGenerator at persist
+        // time, so a freshly-constructed entity has a null id in a pure unit test —
+        // assign deterministic ids reflectively (same helper pattern as
+        // ApiKeyRotateServiceTest#setId) so the aggregate Map lookups have stable keys.
+        Tenant a = new Tenant("T_A", "Tenant A", "a.example", "Tenant A");
+        Tenant b = new Tenant("T_B", "Tenant B", "b.example", "Tenant B");
+        UUID idA = UUID.randomUUID();
+        UUID idB = UUID.randomUUID();
+        setId(a, idA);
+        setId(b, idB);
+        Instant eventA = Instant.parse("2026-05-01T00:00:00Z");
+
+        when(boundary.currentTenantScope()).thenReturn(java.util.Optional.empty());
+        when(repo.findAll()).thenReturn(List.of(a, b));
+
+        // batch aggregate stubs — Object[]{tenantId(UUID), count/maxCreatedAt}
+        when(credentialRepository.countGroupedByTenantId())
+                .thenReturn(List.<Object[]>of(new Object[]{idA, 5L}, new Object[]{idB, 0L}));
+        when(apiKeyRepository.countActiveGroupedByTenantId(any()))
+                .thenReturn(List.<Object[]>of(new Object[]{idA, 2L})); // idB absent => 0
+        when(auditLogRepository.findLatestCreatedAtGroupedByTenantId())
+                .thenReturn(List.<Object[]>of(new Object[]{idA, eventA})); // idB absent => null
+
+        List<TenantAdminDto.TenantView> views = service.list();
+
+        assertThat(views).hasSize(2);
+        TenantAdminDto.TenantView va = views.stream().filter(v -> v.id().equals(idA)).findFirst().orElseThrow();
+        TenantAdminDto.TenantView vb = views.stream().filter(v -> v.id().equals(idB)).findFirst().orElseThrow();
+        assertThat(va.credentials()).isEqualTo(5L);
+        assertThat(va.apiKeys()).isEqualTo(2L);
+        assertThat(va.lastEventAt()).isEqualTo(eventA);
+        assertThat(vb.credentials()).isEqualTo(0L);
+        assertThat(vb.apiKeys()).isEqualTo(0L); // tenant absent from active-key aggregate => 0
+        assertThat(vb.lastEventAt()).isNull();   // tenant absent from event aggregate => null
+
+        // invariant: list() must NOT use the per-tenant N+1 methods anymore
+        verify(credentialRepository, never()).countByTenantId(any());
+        verify(apiKeyRepository, never()).countActiveByTenantId(any(), any());
+        verify(auditLogRepository, never()).findFirstByTenantIdOrderByCreatedAtDesc(any());
+    }
+
+    /** Assigns BaseEntity.id on an un-persisted entity (mirrors ApiKeyRotateServiceTest#setId). */
+    private static void setId(Tenant t, UUID id) {
+        try {
+            var f = Tenant.class.getSuperclass().getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(t, id);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test

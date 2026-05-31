@@ -76,9 +76,44 @@ public class TenantAdminService {
                         .map(this::toView)
                         .map(java.util.List::of)
                         .orElseGet(java.util.List::of))
-                .orElseGet(() -> tenants.findAll().stream()
-                        .map(this::toView)
-                        .toList());
+                .orElseGet(this::listAllWithBatchAggregates);
+    }
+
+    /**
+     * PLATFORM_OPERATOR cross-tenant 목록. KPI 3종(credentials/apiKeys/lastEventAt)을
+     * tenant 당 3쿼리(N+1) 대신 GROUP BY 배치 집계 3쿼리로 모은 뒤 toView 에서 lookup.
+     * 반환 숫자/필드는 per-tenant 경로와 동일 — UI 표시값 불변.
+     */
+    private List<TenantAdminDto.TenantView> listAllWithBatchAggregates() {
+        Map<UUID, Long> credByTenant =
+                toCountMap(credentialRepository.countGroupedByTenantId());
+        Map<UUID, Long> activeKeysByTenant =
+                toCountMap(apiKeyRepository.countActiveGroupedByTenantId(Instant.now()));
+        Map<UUID, Instant> lastEventByTenant =
+                toInstantMap(auditLogRepository.findLatestCreatedAtGroupedByTenantId());
+
+        return tenants.findAll().stream()
+                .map(t -> toView(t,
+                        credByTenant.getOrDefault(t.getId(), 0L),
+                        activeKeysByTenant.getOrDefault(t.getId(), 0L),
+                        lastEventByTenant.get(t.getId())))
+                .toList();
+    }
+
+    private static Map<UUID, Long> toCountMap(List<Object[]> rows) {
+        Map<UUID, Long> m = new HashMap<>();
+        for (Object[] r : rows) {
+            m.put((UUID) r[0], ((Number) r[1]).longValue());
+        }
+        return m;
+    }
+
+    private static Map<UUID, Instant> toInstantMap(List<Object[]> rows) {
+        Map<UUID, Instant> m = new HashMap<>();
+        for (Object[] r : rows) {
+            m.put((UUID) r[0], (Instant) r[1]);
+        }
+        return m;
     }
 
     @Transactional(readOnly = true)
@@ -89,13 +124,8 @@ public class TenantAdminService {
     }
 
     /**
-     * Phase F2 — TenantView 변환을 한 곳에서 처리. KPI 3종 (credentials/apiKeys/
-     * lastEventAt) 을 per-tenant 로 집계한다.
-     *
-     * <p>NOTE: list() 호출 시 N+1 — tenant 수만큼 3개의 추가 쿼리가 나간다. 현재
-     * 시드된 tenant 수는 ≤4 (demo-rp + IT seeds) 이므로 허용 가능. 향후 cross-tenant
-     * 환경에서 tenant 수가 늘면 단일 GROUP BY 쿼리로 묶거나 별도 dashboard 캐싱이
-     * 필요하다 — 후속 Task 에서 처리.
+     * 단건 경로(get/create/update)용 — per-tenant 쿼리 3개로 KPI 집계.
+     * list() 는 listAllWithBatchAggregates() 가 배치 집계 후 아래 오버로드를 직접 호출.
      */
     private TenantAdminDto.TenantView toView(Tenant t) {
         long credentials = credentialRepository.countByTenantId(t.getId());
@@ -104,6 +134,10 @@ public class TenantAdminService {
                 .findFirstByTenantIdOrderByCreatedAtDesc(t.getId())
                 .map(AuditLog::getCreatedAt)
                 .orElse(null);
+        return toView(t, credentials, apiKeys, lastEventAt);
+    }
+
+    private TenantAdminDto.TenantView toView(Tenant t, long credentials, long apiKeys, Instant lastEventAt) {
         return TenantAdminDto.TenantView.from(t, credentials, apiKeys, lastEventAt);
     }
 
