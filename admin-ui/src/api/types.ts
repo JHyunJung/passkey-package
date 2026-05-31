@@ -65,6 +65,14 @@ export interface ApiKeyCreateResponse {
   scopes: string[];
 }
 
+export interface ApiKeyRotateResponse {
+  id: string;
+  plaintextKey: string;   // ONE-TIME
+  prefix: string;
+  scopes: string[];
+  oldKeyExpiresAt: string; // ISO instant
+}
+
 export interface AuditLogView {
   id: number;
   actorId: number;

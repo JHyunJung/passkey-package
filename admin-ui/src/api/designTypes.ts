@@ -23,6 +23,7 @@ export type ApiKey = {
   status: 'ACTIVE' | 'REVOKED';
   createdAt: string;
   lastUsedAt: string | null;
+  scopes: string[];
 };
 
 export type Credential = {
