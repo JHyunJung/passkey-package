@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icons } from '@/icons/Icons';
 import { searchAll, type SearchResult } from '@/lib/search';
+import type { AppRoute } from '@/appRoute';
 
 export type CommandPaletteProps = {
   open: boolean;
   onClose: () => void;
   me: { role: string; tenantId?: string | null; email: string; displayName?: string };
-  onNavigate: (route: { name: string; tenantId?: string; tab?: string }) => void;
+  onNavigate: (route: AppRoute) => void;
   onAction: (kind: string) => void;
 };
 
@@ -24,7 +25,8 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
     const tenantMatch = path.match(/^\/tenants\/([^?]+)/);
     if (tenantMatch) {
       const tabMatch = path.match(/[?&]tab=([^&]+)/);
-      onNavigate({ name: 'tenant', tenantId: tenantMatch[1], tab: tabMatch?.[1] });
+      // AppRoute.tab is required; mirror urlToRoute's 'overview' default when absent.
+      onNavigate({ name: 'tenant', tenantId: tenantMatch[1], tab: tabMatch?.[1] ?? 'overview' });
     }
   }
 

@@ -22,39 +22,10 @@ import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import { api } from '@/api/client';
 import type { Me } from '@/api/types';
+import type { AppRoute } from '@/appRoute';
+import { urlToRoute, routeToUrl } from '@/appRoute';
 import { RequirePlatform } from '@/me/RequirePlatform';
 import { rpTenantId } from '@/me/roles';
-
-// ── Route type (mirrors design app.jsx shape) ────────────────────────────────
-
-type AppRoute =
-  | { name: 'tenants' }
-  | { name: 'tenant'; tenantId: string; tab: string }
-  | { name: 'activity' }
-  | { name: 'audit-chain' }
-  | { name: 'settings' }
-  | { name: 'license' };
-
-function urlToRoute(pathname: string, search: URLSearchParams): AppRoute {
-  if (pathname.startsWith('/tenants/')) {
-    const id = pathname.split('/')[2];
-    return { name: 'tenant', tenantId: id, tab: search.get('tab') || 'overview' };
-  }
-  if (pathname === '/activity') return { name: 'activity' };
-  if (pathname === '/audit-chain') return { name: 'audit-chain' };
-  if (pathname === '/settings') return { name: 'settings' };
-  if (pathname === '/license') return { name: 'license' };
-  return { name: 'tenants' };
-}
-
-function routeToUrl(r: AppRoute): string {
-  if (r.name === 'tenants') return '/tenants';
-  if (r.name === 'tenant') return `/tenants/${r.tenantId}?tab=${r.tab}`;
-  if (r.name === 'activity') return '/activity';
-  if (r.name === 'audit-chain') return '/audit-chain';
-  if (r.name === 'license') return '/license';
-  return '/settings';
-}
 
 // ── Breadcrumb builder ───────────────────────────────────────────────────────
 
@@ -153,15 +124,15 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
       <ErrorBoundary fallback={null}>
         <Sidebar
           me={me}
-          currentRoute={route as any}
-          onNavigate={setRoute as any}
+          currentRoute={route}
+          onNavigate={setRoute}
           tenant={tenant}
           sidebarMode={t.sidebarMode}
         />
       </ErrorBoundary>
       <div className="content" style={{ gridArea: 'content' }}>
         <Header
-          me={me as any}
+          me={me}
           onLogout={onLogout}
           onSwitchRole={handleSwitchRole}
           breadcrumb={breadcrumb}
@@ -185,8 +156,8 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        me={me as any}
-        onNavigate={setRoute as any}
+        me={me}
+        onNavigate={setRoute}
         onAction={paletteAction}
       />
       <IdleSessionModal onExtend={() => { /* refresh /me — Phase E3 */ }} onLogout={onLogout} />
