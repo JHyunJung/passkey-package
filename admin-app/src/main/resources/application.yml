@@ -54,3 +54,11 @@ passkey:
       enabled: false        # true 면 MailAlertChannel 등록, ops 메일 발송
       to:                   # 알림 수신 운영자 주소
       min-severity: HIGH    # 이 severity 이상만 메일(LOW/MEDIUM/HIGH/CRITICAL). 기본 LogAlertChannel 은 전 severity 로깅
+  retention:
+    fixed-delay: P1D            # 하루 1회 실행
+    initial-delay: PT5M         # 부팅 후 5분
+    invitation: P90D            # 만료/수락 후 90일
+    password-reset-token: P30D  # 만료/소비 후 30일
+    recovery-code: P180D        # 사용 후 180일
+    webauthn-snapshot: P365D    # 스냅샷 1년
+    mds-sync-history: P90D      # sync 이력 90일
