@@ -27,7 +27,12 @@ public class MailAlertChannel implements AlertChannel {
         String to = props.mail().to();
         if (to == null || to.isBlank()) return;
         String subject = "[보안 알림] " + event.type() + " (" + event.severity() + ")";
-        String body = event.summary() + "<br>context: " + event.context();
+        String body = esc(event.summary()) + "<br>context: " + esc(String.valueOf(event.context()));
         mailSender.send(to, subject, body);
+    }
+
+    private static String esc(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

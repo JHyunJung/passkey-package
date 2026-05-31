@@ -6,7 +6,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "passkey.alert")
 public record AlertProperties(Mail mail) {
 
-    public record Mail(boolean enabled, String to, SecurityAlertEvent.Severity minSeverity) {}
+    public record Mail(boolean enabled, String to, SecurityAlertEvent.Severity minSeverity) {
+        public Mail {
+            if (minSeverity == null) {
+                minSeverity = SecurityAlertEvent.Severity.HIGH;
+            }
+        }
+    }
 
     public AlertProperties {
         if (mail == null) {

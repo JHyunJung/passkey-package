@@ -20,6 +20,7 @@ public class LogAlertChannel implements AlertChannel {
 
     @Override
     public void send(SecurityAlertEvent event) {
+        // SECURITY_ALERT 마커로 operational 로그와 분리 라우팅 의도.
         String msg = "security alert: type={} severity={} summary={} context={}";
         if (event.severity().atLeast(SecurityAlertEvent.Severity.HIGH)) {
             log.error(ALERT, msg, event.type(), event.severity(), event.summary(), event.context());

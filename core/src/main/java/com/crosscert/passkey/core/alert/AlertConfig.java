@@ -14,11 +14,15 @@ public class AlertConfig {
     @Bean("alertExecutor")
     public TaskExecutor alertExecutor() {
         ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
-        ex.setCorePoolSize(1);
+        ex.setCorePoolSize(2);
         ex.setMaxPoolSize(2);
         ex.setQueueCapacity(100);
         ex.setThreadNamePrefix("alert-");
-        ex.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
+        ex.setRejectedExecutionHandler((r, executor) -> {
+            // 큐 포화 시 조용히 버리되, 드롭 자체는 반드시 관측되게(공격 중 가시성 보존).
+            org.slf4j.LoggerFactory.getLogger(AlertConfig.class)
+                .error("alert dropped: executor queue saturated (queueCapacity={})", executor.getQueue().size());
+        });
         ex.initialize();
         return ex;
     }
