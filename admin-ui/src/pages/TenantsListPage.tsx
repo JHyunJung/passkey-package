@@ -297,12 +297,12 @@ function NewTenantDialog({ open, onClose, onCreate }: {
           <input className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => { setName(e.target.value); if (!slug) generate(e.target.value); }} />
         </div>
         <div>
-          <label className="label">Slug (URL-safe ID)</label>
+          <label className="label">Slug (영문 식별자)</label>
           <input className="input mono" placeholder="acme-corp" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} />
           <div className="hint">
             {touched && slug && !slugOk
-              ? <span style={{ color: 'var(--danger)' }}>형식 오류: 소문자/숫자/하이픈, 첫 글자는 영문, 2~63자</span>
-              : <>패턴 <code style={{ background: 'var(--surface-3)', padding: '1px 4px', borderRadius: 3 }}>^[a-z][a-z0-9-]{'{1,62}'}$</code>. 한 번 생성되면 변경 불가합니다.</>}
+              ? <span style={{ color: 'var(--danger)' }}>영문 소문자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.</span>
+              : <>테넌트를 구분하는 영문 식별자입니다. 영문 소문자로 시작하고, 영문 소문자·숫자·하이픈(-)만 쓸 수 있습니다(2~63자). 띄어쓰기·대문자·한글은 사용할 수 없습니다. <strong>생성 후에는 변경할 수 없습니다.</strong></>}
           </div>
         </div>
         <div>

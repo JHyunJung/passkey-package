@@ -10,10 +10,6 @@ type ConfigWithMds = WebauthnConfig & { _mdsRequired: boolean };
 
 // ── util ──────────────────────────────────────────────────────────────────────
 
-function fmt(n: number): string {
-  return n.toLocaleString('ko-KR');
-}
-
 function diffObjects(
   a: WebauthnConfig,
   b: WebauthnConfig,
@@ -72,7 +68,6 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
 
   const dirty = cfg !== null && draft !== null && JSON.stringify(cfg) !== JSON.stringify(draft);
   const localChanges = cfg && draft ? diffObjects(cfg, draft) : [];
-  const hasRpIdChange = localChanges.some((c) => c.key === 'rpId');
 
   async function handlePreview() {
     if (!draft) return;
@@ -129,8 +124,24 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
         <div className="card__body">
           <div className="grid-2" style={{ gap: 24 }}>
             <div className="stack-3">
-              <Field label="rpId" hint="Relying Party의 hostname. 변경 시 기존 credential이 무효화될 수 있습니다.">
-                <input className="input mono" value={draft.rpId} onChange={(e) => setDraft({ ...draft, rpId: e.target.value })} />
+              <Field
+                label={<>rpId <span className="chip" style={{ fontSize: 10, padding: '1px 6px', gap: 3, background: 'var(--surface-3)', color: 'var(--text-mute)', verticalAlign: 'middle' }}><Icons.Lock size={10} /> 변경 불가</span></>}
+                hint="Relying Party의 hostname. 패스키가 묶이는 신뢰 경계라 생성 후에는 변경할 수 없습니다. 바꾸려면 새 테넌트를 만들어야 합니다."
+              >
+                <div style={{ position: 'relative' }}>
+                  <input
+                    className="input mono"
+                    value={draft.rpId}
+                    readOnly
+                    aria-readonly="true"
+                    tabIndex={-1}
+                    title="rpId는 생성 후 변경할 수 없습니다"
+                    style={{ background: 'var(--surface-3)', color: 'var(--text-mute)', cursor: 'not-allowed', paddingRight: 32 }}
+                  />
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-mute)', pointerEvents: 'none', display: 'inline-flex' }}>
+                    <Icons.Lock size={13} />
+                  </span>
+                </div>
               </Field>
               <Field label="rpName" hint="UA 선택 화면에 표시되는 표시 이름.">
                 <input className="input" value={draft.rpName} onChange={(e) => setDraft({ ...draft, rpName: e.target.value })} />
@@ -168,18 +179,6 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
         </div>
       </div>
 
-      {hasRpIdChange && (
-        <div className="card" style={{ borderColor: 'var(--danger)', background: 'var(--danger-soft)' }}>
-          <div className="card__body" style={{ display: 'flex', gap: 10, padding: 16 }}>
-            <Icons.Alert size={18} />
-            <div>
-              <div style={{ fontWeight: 600, color: 'var(--danger)' }}>rpId가 변경됩니다.</div>
-              <div style={{ fontSize: 13, marginTop: 4, color: 'var(--text)' }}>이 tenant의 모든 기존 credential ({fmt(tenant.credentials)}건)이 다음 ceremony부터 인증에 실패할 수 있습니다. 사용자에게 재등록 안내가 필요합니다.</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <DiffDialog
         open={showDiff}
         onClose={() => setShowDiff(false)}
@@ -193,7 +192,7 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
 
 // ── Field ─────────────────────────────────────────────────────────────────────
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: React.ReactNode; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="label">{label}</label>

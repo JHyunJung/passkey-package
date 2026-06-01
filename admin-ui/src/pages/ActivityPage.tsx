@@ -54,37 +54,60 @@ function adaptServerView(view: ActivityView): {
   return { events, kpi: view.kpi, topTenants };
 }
 
-// ── Mutation / Security event type sets ──────────────────────────────────────
+// ── Event 분류 → 색상 ─────────────────────────────────────────────────────────
+// 서버가 분류한 category(ops/security/system)를 1차 기준으로, 이름이 *_FAILED/
+// *_FAIL 인 실패 이벤트는 보안 실패로 격상해 한눈에 빨갛게 보이도록 한다.
+// 토큰: danger=보안실패, warning=운영변경, info=인증성공, teal=시스템자동.
 
-const MUTATION_TYPES = new Set([
-  'API_KEY_ISSUED',
-  'API_KEY_REVOKED',
-  'CREDENTIAL_REVOKED',
-  'WEBAUTHN_CONFIG_UPDATED',
-  'ATTESTATION_POLICY_UPDATED',
-  'TENANT_CREATED',
-]);
+type EventTone = 'danger' | 'warning' | 'info' | 'teal';
 
 const FAILURE_TYPES = new Set([
   'SIGNATURE_COUNTER_REGRESSION',
   'ATTESTATION_TRUST_FAILED',
+  'ADMIN_LOGIN_FAILED',
 ]);
+
+const AUTH_TYPES = new Set([
+  'ADMIN_LOGIN',
+]);
+
+function eventTone(type: string, category: string): EventTone {
+  // 실패(이름 기준) 또는 보안 카테고리 → 빨강
+  if (FAILURE_TYPES.has(type) || /_(FAILED|FAIL|REGRESSION)$/.test(type) || category === 'security') {
+    return 'danger';
+  }
+  // 인증 성공 → 파랑
+  if (AUTH_TYPES.has(type)) return 'info';
+  // 운영 액션(테넌트/키 mutation) → 주황
+  if (category === 'ops') return 'warning';
+  // 시스템 자동(MDS sync, retention purge 등) → 청록
+  return 'teal';
+}
+
+const TONE_VAR: Record<EventTone, string> = {
+  danger: 'var(--danger)',
+  warning: 'var(--warning)',
+  info: 'var(--info)',
+  teal: 'var(--teal)',
+};
+
+const TONE_BADGE: Record<EventTone, string> = {
+  danger: 'badge badge--danger',
+  warning: 'badge badge--warning',
+  info: 'badge badge--info',
+  teal: 'badge badge--teal',
+};
 
 // ── EventDot ─────────────────────────────────────────────────────────────────
 
-function EventDot({ type }: { type: string }) {
-  const color = FAILURE_TYPES.has(type)
-    ? 'var(--err, #ef4444)'
-    : MUTATION_TYPES.has(type)
-    ? 'var(--warn, #f59e0b)'
-    : 'var(--accent, #4f46e5)';
+function EventDot({ type, category }: { type: string; category: string }) {
   return (
     <div
       style={{
         width: 7,
         height: 7,
         borderRadius: '50%',
-        background: color,
+        background: TONE_VAR[eventTone(type, category)],
         flex: 'none',
       }}
     />
@@ -93,13 +116,19 @@ function EventDot({ type }: { type: string }) {
 
 // ── EventTypeBadge ────────────────────────────────────────────────────────────
 
-function EventTypeBadge({ type }: { type: string }) {
-  const cls = FAILURE_TYPES.has(type)
-    ? 'badge badge--err'
-    : MUTATION_TYPES.has(type)
-    ? 'badge badge--warn'
-    : 'badge';
-  return <span className={cls} style={{ fontSize: 10 }}>{type}</span>;
+function EventTypeBadge({ type, category }: { type: string; category: string }) {
+  return <span className={TONE_BADGE[eventTone(type, category)]} style={{ fontSize: 10 }}>{type}</span>;
+}
+
+// ── LegendDot — 피드 색상 범례 ─────────────────────────────────────────────────
+
+function LegendDot({ tone, label }: { tone: EventTone; label: string }) {
+  return (
+    <span className="row" style={{ gap: 5, fontSize: 11, color: 'var(--text-mute)' }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: TONE_VAR[tone], flex: 'none' }} />
+      {label}
+    </span>
+  );
 }
 
 // ── ChipTab ───────────────────────────────────────────────────────────────────
@@ -372,6 +401,12 @@ export default function ActivityPage() {
               </ChipTab>
             </div>
           </div>
+          <div className="row" style={{ gap: 14, flexWrap: 'wrap', padding: '8px 20px', borderBottom: '1px solid var(--border)' }}>
+            <LegendDot tone="danger" label="보안 실패" />
+            <LegendDot tone="warning" label="운영 변경" />
+            <LegendDot tone="info" label="인증" />
+            <LegendDot tone="teal" label="시스템" />
+          </div>
           <div>
             {filtered.slice(0, visibleCount).map((e, i) => (
               <div
@@ -387,10 +422,10 @@ export default function ActivityPage() {
                   alignItems: 'center',
                 }}
               >
-                <EventDot type={e.type} />
+                <EventDot type={e.type} category={e.category} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="row" style={{ gap: 8 }}>
-                    <EventTypeBadge type={e.type} />
+                    <EventTypeBadge type={e.type} category={e.category} />
                     <button
                       onClick={() => handleOpenTenant(e.tenantId)}
                       className="btn btn--ghost btn--xs"
