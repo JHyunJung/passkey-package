@@ -17,24 +17,23 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const toast = useToast();
 
-  // dev profile 감지 — /admin/api/profile 가 { active: ['dev'] } 응답하면 데모 prefill 가능
+  // dev/local profile 감지 — 데모 prefill + 데모 카드 노출 게이팅
   useEffect(() => {
-    api.get<{ active: string[] }>('/admin/api/profile')
-      .then((p) => { if (p.active?.includes('dev')) setDevProfile(true); })
+    api.get<{ active: string[]; local?: boolean }>('/admin/api/profile')
+      .then((p) => {
+        if (p.active?.includes('dev') || p.active?.includes('local') || p.local) {
+          setDevProfile(true);
+        }
+      })
       .catch(() => { /* prod 등 — 무시 */ });
   }, []);
 
-  // 데모 role 카드 클릭 → 자동 prefill (dev profile 일 때만)
+  // 데모 role 카드 클릭 → 자동 prefill (dev/local 일 때만)
   function selectDemo(role: 'PLATFORM_OPERATOR' | 'RP_ADMIN') {
     setDemoRole(role);
-    if (devProfile) {
-      if (role === 'PLATFORM_OPERATOR') {
-        setEmail('alice@crosscert.com');
-        setPassword('alice-temp-pw');
-      } else {
-        setEmail('bob@crosscert.com');
-        setPassword('bob-temp-pw');
-      }
+    if (devProfile && role === 'PLATFORM_OPERATOR') {
+      setEmail('alice@crosscert.com');
+      setPassword('alice-temp-pw');
     }
   }
 
@@ -148,34 +147,35 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               />
             </div>
 
-            {/* Role switcher — demo prefill */}
-            <div>
-              <label className="label">데모: 어떤 role로 로그인할까요?</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {([
-                  { v: 'PLATFORM_OPERATOR' as const, t: 'Platform Operator', s: 'Crosscert 사내' },
-                  { v: 'RP_ADMIN' as const, t: 'RP Admin', s: 'Acme Corp' },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.v}
-                    type="button"
-                    onClick={() => selectDemo(opt.v)}
-                    style={{
-                      padding: '8px 10px',
-                      borderRadius: 8,
-                      border: `1px solid ${demoRole === opt.v ? 'var(--accent)' : 'var(--border)'}`,
-                      background: demoRole === opt.v ? 'var(--accent-soft)' : 'var(--surface)',
-                      color: demoRole === opt.v ? 'var(--accent)' : 'var(--text)',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{opt.t}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-mute)', marginTop: 2 }}>{opt.s}</div>
-                  </button>
-                ))}
+            {/* Role switcher — demo prefill (dev/local 만) */}
+            {devProfile && (
+              <div>
+                <label className="label">데모 계정으로 로그인</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                  {([
+                    { v: 'PLATFORM_OPERATOR' as const, t: 'Platform Operator', s: 'alice@crosscert.com' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => selectDemo(opt.v)}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        border: `1px solid ${demoRole === opt.v ? 'var(--accent)' : 'var(--border)'}`,
+                        background: demoRole === opt.v ? 'var(--accent-soft)' : 'var(--surface)',
+                        color: demoRole === opt.v ? 'var(--accent)' : 'var(--text)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>{opt.t}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-mute)', marginTop: 2 }}>{opt.s}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {error && (
               <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 8, fontSize: 12 }}>
