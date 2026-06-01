@@ -133,7 +133,7 @@ function TenantHeader({ tenant, onSuspend, onActivate }: { tenant: Tenant; onSus
         </div>
       </div>
       <div className="row">
-        <button className="btn btn--sm" onClick={() => {}}><Icons.ExternalLink size={12} /> RP 사이트 열기</button>
+        <button className="btn btn--sm" onClick={() => tenant.rpId && window.open('https://' + tenant.rpId, '_blank', 'noopener,noreferrer')}><Icons.ExternalLink size={12} /> RP 사이트 열기</button>
         <button className="btn btn--sm" onClick={() => {}}><Icons.Refresh size={12} /> Refresh</button>
         <button className="btn btn--sm" onClick={() => {}}><Icons.Dots size={14} /></button>
         {tenant.status === 'ACTIVE' ? (
