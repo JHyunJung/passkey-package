@@ -6,6 +6,7 @@ import type { Tenant } from '@/api/designTypes';
 import { useToast } from '@/shell/ToastHost';
 import { StatusBadge } from '@/shell/StatusBadge';
 import { Dialog } from '@/shell/Dialog';
+import { downloadCsv } from '@/lib/csvExport';
 
 // ── local utilities (mirrors design globals) ─────────────────────────────────
 
@@ -150,7 +151,18 @@ export default function TenantsListPage() {
             <span className="muted" style={{ fontSize: 12 }}>{filtered.length} / {tenants.length}건</span>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <button className="btn btn--sm"><Icons.Download size={12} /> CSV</button>
+            <button
+              className="btn btn--sm"
+              onClick={() =>
+                downloadCsv(
+                  `tenants-${new Date().toISOString().slice(0, 10)}.csv`,
+                  ['name', 'slug', 'rpId', 'status', 'credentials', 'apiKeys', 'createdAt'],
+                  filtered.map((t) => [t.name, t.slug, t.rpId, t.status, t.credentials, t.apiKeys, t.createdAt]),
+                )
+              }
+            >
+              <Icons.Download size={12} /> CSV
+            </button>
           </div>
         </div>
 
