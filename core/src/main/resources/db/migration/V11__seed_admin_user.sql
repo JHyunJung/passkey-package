@@ -1,12 +1,9 @@
--- Seed two initial operators so AdminFlowIT and local development have
--- something to log in with. The temporary passwords ("alice-temp-pw",
--- "bob-temp-pw") are documented in followup-notes as "MUST be rotated
--- before any non-local deploy".
-
-INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, created_at)
-  VALUES (admin_user_seq.NEXTVAL, 'alice@crosscert.com', '$2a$12$jpftll2M2sOc8XRs99Zw0ODgKWBiRKQcIieK/UqUBbizW7xKI8awS', 'ADMIN', 'Y', SYSTIMESTAMP);
-
-INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, created_at)
-  VALUES (admin_user_seq.NEXTVAL, 'bob@crosscert.com',   '$2a$12$gvD5tGra6vKnSn/9cxqfQOKZOzlzp4LCg276Ddfkpwl8Kk24Zbb1G', 'VIEWER','Y', SYSTIMESTAMP);
-
-COMMIT;
+-- ============================================================
+-- V11 — (구) 운영자 계정 시드.
+--
+-- 시드 데이터는 db/seed-common/R__seed_operators.sql 로 이관됨
+-- (프로필별 분리: prod 는 운영자 자동 시드 안 함).
+-- 이 마이그레이션은 버전 이력 보존을 위해 남기되 no-op.
+-- 테스트(test 프로필)는 db/testfix 가 alice/bob 을 복원한다.
+-- ============================================================
+SELECT 1 FROM dual;
