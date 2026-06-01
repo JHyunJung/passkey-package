@@ -166,7 +166,7 @@ SAMPLE_RP_ORIGIN=http://localhost:9090 \
 | 환경변수 | 값 |
 |---|---|
 | `PASSKEY_BASE_URL` | passkey-app URL (8080) |
-| `PASSKEY_TENANT_ID` | tenant_id (RAW(16) hex, 32자) — dev seed 의 acme-corp |
+| `PASSKEY_TENANT_ID` | tenant_id — dev seed 의 acme-corp. RAW(16) hex 32자(`7F00...`) 또는 UUID 대시 형식(`7f00dead-0000-...`) 모두 가능(sample-rp 가 비교 전 UUID 로 정규화). 단 ID Token 의 `iss`/`aud` 는 UUID 형식이라, **외부 시스템에서 직접 검증한다면 UUID 형식**을 쓰는 것을 권장 |
 | `PASSKEY_API_KEY` | X-API-Key 헤더 값 (prefix + secret) |
 | `PASSKEY_ISSUER_BASE` | ID token issuer (passkey-app 의 `id-token.issuer-base` 와 동일) |
 | `SAMPLE_RP_ORIGIN` | RP 자기 origin — `allowed_origins` 에 들어 있어야 함 |

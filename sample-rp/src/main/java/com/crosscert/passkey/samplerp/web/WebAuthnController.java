@@ -127,18 +127,26 @@ public class WebAuthnController {
             throw e;
         }
 
-        // passkey-app 의 IdTokenIssuer 는 `passkey.id-token.issuer-base` (기본
-        // `https://passkey.crosscert.com`) + "/" + tenantId 를 발급한다.
-        // sample-rp 의 issuerBase 프로퍼티가 그 값과 일치해야 한다.
-        String expectedIss = props.issuerBase() + "/" + props.tenantId();
-        if (!expectedIss.equals(claims.iss())) {
-            log.warn("login/complete failed: reason=iss-mismatch expected={} got={}",
-                    expectedIss, claims.iss());
+        // passkey-app 의 IdTokenIssuer 는 issuer-base + "/" + tenantId 로 iss 를,
+        // tenantId 로 aud 를 발급한다. tenantId 는 표준 UUID(소문자+대시)로 들어가는데,
+        // 설정(PASSKEY_TENANT_ID)은 RAW(16) hex 32자로 들어올 수도 있다. 표기 차이로
+        // 인한 거짓 mismatch 를 막기 위해 비교 전 양쪽 tenantId 를 UUID 로 정규화한다.
+        String expectedTenant = normalizeTenantId(props.tenantId());
+
+        // iss = "<issuerBase>/<tenantId>" — issuerBase prefix 와 tenantId 를 분리해 검증.
+        String issPrefix = props.issuerBase().toString();
+        String tokenIss  = claims.iss();
+        boolean issOk = tokenIss != null
+                && tokenIss.startsWith(issPrefix + "/")
+                && normalizeTenantId(tokenIss.substring((issPrefix + "/").length())).equals(expectedTenant);
+        if (!issOk) {
+            log.warn("login/complete failed: reason=iss-mismatch expectedPrefix={} expectedTenant={} got={}",
+                    issPrefix, expectedTenant, tokenIss);
             throw new BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "iss mismatch");
         }
-        if (!props.tenantId().equals(claims.aud())) {
+        if (!expectedTenant.equals(normalizeTenantId(claims.aud()))) {
             log.warn("login/complete failed: reason=aud-mismatch expected={} got={}",
-                    props.tenantId(), claims.aud());
+                    expectedTenant, claims.aud());
             throw new BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "aud mismatch");
         }
 
@@ -153,6 +161,27 @@ public class WebAuthnController {
         log.info("login/complete ok: subTail={} userHandle={}",
                 idTail(claims.sub()), idTail(user.userHandle()));
         return ApiResponse.ok();
+    }
+
+    /**
+     * tenantId 를 표준 UUID 문자열(소문자+대시)로 정규화한다.
+     * 입력은 UUID 대시 형식(`7f00dead-0000-...`) 또는 RAW(16) hex 32자(`7F00DEAD...`)
+     * 모두 허용. 형식이 달라도 같은 테넌트면 같은 결과가 나오므로 iss/aud 비교가
+     * 표기 차이에 영향받지 않는다. 파싱 불가하면 입력을 그대로 반환(검증은 후속 비교에서).
+     */
+    static String normalizeTenantId(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        // 대시 없는 32자 hex → UUID 대시 형식으로
+        if (s.matches("(?i)[0-9a-f]{32}")) {
+            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-" + s.substring(12, 16)
+              + "-" + s.substring(16, 20) + "-" + s.substring(20);
+        }
+        try {
+            return java.util.UUID.fromString(s).toString();   // 항상 소문자+대시
+        } catch (IllegalArgumentException e) {
+            return raw;   // UUID 가 아니면 원본 비교에 맡김
+        }
     }
 
     /** Last 12 chars of a base64url id for correlation — never the full id.

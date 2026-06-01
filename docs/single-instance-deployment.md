@@ -140,7 +140,7 @@ SERVER_FORWARD_HEADERS_STRATEGY=NATIVE \
 |---|---|---|
 | `PASSKEY_BASE_URL` | `https://dev-passkey.crosscert.com` | Passkey 서버 호출 주소. |
 | `PASSKEY_ISSUER_BASE` | `https://dev-passkey.crosscert.com` | ID Token `iss` 검증용. passkey-app의 `PASSKEY_ID_TOKEN_ISSUER_BASE`와 **동일**해야 함. |
-| `PASSKEY_TENANT_ID` | tenantId(hex) | §4에서 만든 테넌트. |
+| `PASSKEY_TENANT_ID` | tenantId | §4에서 만든 테넌트. **UUID 대시 형식**(`7f00dead-0000-...`) 권장 — ID Token 의 `iss`/`aud` 가 이 형식이라. RAW hex 도 sample-rp 가 정규화해 받지만, 외부 검증 시스템은 UUID 형식을 기대한다. |
 | `PASSKEY_API_KEY` | `pk_...` | §4에서 발급한 키. |
 | `SERVER_FORWARD_HEADERS_STRATEGY` | `NATIVE` | nginx 뒤에서 https origin·secure 쿠키 인식. |
 
