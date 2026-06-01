@@ -6,6 +6,7 @@ import type { Tenant } from '@/api/designTypes';
 import { useToast } from '@/shell/ToastHost';
 import { StatusBadge } from '@/shell/StatusBadge';
 import { Dialog } from '@/shell/Dialog';
+import { downloadCsv } from '@/lib/csvExport';
 
 // ── local utilities (mirrors design globals) ─────────────────────────────────
 
@@ -49,6 +50,7 @@ export default function TenantsListPage() {
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED'>('ALL');
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -85,14 +87,15 @@ export default function TenantsListPage() {
 
   const filtered = useMemo(
     () =>
-      q
-        ? tenants.filter(
-            (t) =>
-              t.name.toLowerCase().includes(q.toLowerCase()) ||
-              t.slug.includes(q.toLowerCase()),
-          )
-        : tenants,
-    [q, tenants],
+      tenants.filter((t) => {
+        const matchesQ =
+          !q ||
+          t.name.toLowerCase().includes(q.toLowerCase()) ||
+          t.slug.includes(q.toLowerCase());
+        const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+        return matchesQ && matchesStatus;
+      }),
+    [q, statusFilter, tenants],
   );
 
   const totalCredentials = useMemo(
@@ -137,11 +140,29 @@ export default function TenantsListPage() {
               <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-mute)' }}><Icons.Search size={13} /></span>
               <input className="input" placeholder="name · slug 검색" value={q} onChange={(e) => setQ(e.target.value)} style={{ paddingLeft: 28, height: 30 }} />
             </div>
-            <button className="btn btn--sm"><Icons.Filter size={12} /> 필터</button>
+            <button
+              className={`btn btn--sm ${statusFilter !== 'ALL' ? 'btn--active' : ''}`}
+              onClick={() =>
+                setStatusFilter((s) => (s === 'ALL' ? 'ACTIVE' : s === 'ACTIVE' ? 'SUSPENDED' : 'ALL'))
+              }
+            >
+              <Icons.Filter size={12} /> {statusFilter === 'ALL' ? '필터' : statusFilter}
+            </button>
             <span className="muted" style={{ fontSize: 12 }}>{filtered.length} / {tenants.length}건</span>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <button className="btn btn--sm"><Icons.Download size={12} /> CSV</button>
+            <button
+              className="btn btn--sm"
+              onClick={() =>
+                downloadCsv(
+                  `tenants-${new Date().toISOString().slice(0, 10)}.csv`,
+                  ['name', 'slug', 'rpId', 'status', 'credentials', 'apiKeys', 'createdAt'],
+                  filtered.map((t) => [t.name, t.slug, t.rpId, t.status, t.credentials, t.apiKeys, t.createdAt]),
+                )
+              }
+            >
+              <Icons.Download size={12} /> CSV
+            </button>
           </div>
         </div>
 

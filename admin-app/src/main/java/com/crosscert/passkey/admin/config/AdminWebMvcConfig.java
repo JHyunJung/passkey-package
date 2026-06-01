@@ -19,6 +19,9 @@ public class AdminWebMvcConfig {
         return new WebMvcConfigurer() {
             @Override
             public void addViewControllers(ViewControllerRegistry registry) {
+                // 루트(/) 접속 시 admin 콘솔(/admin)로 자동 리다이렉트. redirect 라
+                // 브라우저 주소창이 /admin 으로 바뀐다(forward 가 아님).
+                registry.addRedirectViewController("/", "/admin");
                 registry.addViewController("/admin").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/login").setViewName("forward:/admin/index.html");
@@ -28,6 +31,12 @@ public class AdminWebMvcConfig {
                 registry.addViewController("/admin/audit").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/mds").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/keys").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/activity").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/audit-chain").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/settings").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/license").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/forgot-password").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/reset-password").setViewName("forward:/admin/index.html");
             }
         };
     }

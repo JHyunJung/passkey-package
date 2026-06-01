@@ -87,6 +87,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
     <div className="page">
       <TenantHeader
         tenant={tenant}
+        onReload={onReload}
         onSuspend={() => setSuspendOpen(true)}
         onActivate={async () => {
           if (!window.confirm('이 테넌트의 정지를 해제하시겠습니까?')) return;
@@ -111,7 +112,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
 
 // ── TenantHeader — design pages-2.jsx TenantHeader 1:1 포팅 ─────────────────
 
-function TenantHeader({ tenant, onSuspend, onActivate }: { tenant: Tenant; onSuspend: () => void; onActivate: () => void }) {
+function TenantHeader({ tenant, onSuspend, onActivate, onReload }: { tenant: Tenant; onSuspend: () => void; onActivate: () => void; onReload: () => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16 }}>
       <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
@@ -133,8 +134,8 @@ function TenantHeader({ tenant, onSuspend, onActivate }: { tenant: Tenant; onSus
         </div>
       </div>
       <div className="row">
-        <button className="btn btn--sm" onClick={() => {}}><Icons.ExternalLink size={12} /> RP 사이트 열기</button>
-        <button className="btn btn--sm" onClick={() => {}}><Icons.Refresh size={12} /> Refresh</button>
+        <button className="btn btn--sm" onClick={() => tenant.rpId && window.open('https://' + tenant.rpId, '_blank', 'noopener,noreferrer')}><Icons.ExternalLink size={12} /> RP 사이트 열기</button>
+        <button className="btn btn--sm" onClick={onReload}><Icons.Refresh size={12} /> Refresh</button>
         <button className="btn btn--sm" onClick={() => {}}><Icons.Dots size={14} /></button>
         {tenant.status === 'ACTIVE' ? (
           <button className="btn btn--sm btn--danger" onClick={onSuspend}>테넌트 정지</button>

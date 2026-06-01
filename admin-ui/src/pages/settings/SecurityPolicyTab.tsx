@@ -76,6 +76,7 @@ export default function SecurityPolicyTab() {
   const [pwMin, setPwMin] = useState(12);
   const [reqMfa, setReqMfa] = useState(true);
   const [corsAllowlist, setCorsAllowlist] = useState<string[]>([]);
+  const [originInput, setOriginInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -85,6 +86,18 @@ export default function SecurityPolicyTab() {
     setPwMin(v.passwordMinLength);
     setReqMfa(v.mfaRequired);
     setCorsAllowlist(v.corsAllowlist);
+  }
+
+  function addCorsOrigin() {
+    const v = originInput.trim();
+    if (!v) return;
+    if (corsAllowlist.includes(v)) return;
+    setCorsAllowlist([...corsAllowlist, v]);
+    setOriginInput('');
+  }
+
+  function removeCorsOrigin(o: string) {
+    setCorsAllowlist(corsAllowlist.filter((x) => x !== o));
   }
 
   useEffect(() => {
@@ -145,13 +158,19 @@ export default function SecurityPolicyTab() {
           </Field>
           <Field label="CORS Allowlist">
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
-              {corsAllowlist.map((origin, i) => (
-                <span key={i} className="chip mono" style={{ fontSize: 11 }}>
+              {corsAllowlist.map((origin) => (
+                <span key={origin} className="chip mono" style={{ fontSize: 11 }}>
                   {origin}
-                  <button className="chip__x"><Icons.X size={11} /></button>
+                  <button className="chip__x" onClick={() => removeCorsOrigin(origin)}><Icons.X size={11} /></button>
                 </span>
               ))}
-              <input placeholder="https://… 추가" style={{ border: 0, outline: 'none', fontSize: 12, padding: '2px 4px', flex: 1, minWidth: 200, background: 'transparent', color: 'var(--text)' }} />
+              <input
+                placeholder="https://… 추가 후 Enter"
+                style={{ border: 0, outline: 'none', fontSize: 12, padding: '2px 4px', flex: 1, minWidth: 200, background: 'transparent', color: 'var(--text)' }}
+                value={originInput}
+                onChange={(e) => setOriginInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCorsOrigin())}
+              />
             </div>
           </Field>
         </div>

@@ -248,7 +248,7 @@ export default function AuditChainPage() {
               </div>
             </div>
             <button className="btn" onClick={() => openTenant(tamperedTenant.tenantId)}>tenant 열기 <Icons.ChevronRight size={12} /></button>
-            <button className="btn btn--danger btn--sm"><Icons.Alert size={12} /> Incident 생성</button>
+            <button className="btn btn--danger btn--sm" disabled title="향후 지원 예정"><Icons.Alert size={12} /> Incident 생성</button>
           </div>
         </div>
       )}

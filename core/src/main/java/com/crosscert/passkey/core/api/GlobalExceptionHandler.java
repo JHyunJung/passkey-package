@@ -129,6 +129,16 @@ public class GlobalExceptionHandler {
                         "Feature not included in license: " + ex.feature()));
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResource(
+            org.springframework.web.servlet.resource.NoResourceFoundException e, HttpServletRequest req) {
+        // 정적 리소스 미존재(예: /favicon.ico)는 404 이지 500 이 아니다.
+        // 미처리 시 catch-all 이 INTERNAL_SERVER_ERROR 로 떨어뜨려 매 요청마다 5xx 로그가 쌓인다.
+        log.debug("[NoResourceFound] {} {}", req.getMethod(), req.getRequestURI());
+        return ResponseEntity.status(ErrorCode.ENTITY_NOT_FOUND.getStatus())
+                .body(ApiResponse.error(ErrorCode.ENTITY_NOT_FOUND));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e, HttpServletRequest req) {
         log.error("[Unhandled] {} {}", req.getMethod(), req.getRequestURI(), e);
