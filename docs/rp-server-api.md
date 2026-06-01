@@ -29,18 +29,23 @@ RP 서버는 클라이언트와 패스키 ceremony를 주고받습니다. 각 ce
 **핵심 사항입니다.**
 
 - **`userHandle`은 RP 서버가 내부에서 만듭니다.** 클라이언트는 `username`·`displayName`만 보냅니다. userHandle 생성·Passkey 서버 호출·ID Token 검증은 모두 RP 서버가 처리하며 클라이언트에는 보이지 않습니다.
-- **세션 기반입니다.** `begin` 단계에서 RP 서버가 진행 상태(pending token — RP 서버가 세션에 저장하는 ceremony 상태이며 클라이언트에는 노출되지 않습니다)를 **세션에 저장**하고, `finish` 단계에서 같은 세션으로 이어받습니다. 클라이언트는 세션 쿠키(같은 origin이면 `credentials: 'same-origin'`)를 유지해야 합니다.
-- **CSRF 보호가 적용됩니다.** 모든 POST 요청에 CSRF 토큰을 헤더(`X-XSRF-TOKEN`)로 보내야 합니다. **이 토큰은 첫 POST 전에 GET 요청 한 번으로 미리 받아둬야 합니다**(§2 — 모든 클라이언트의 공통 첫 단계).
+- **세션 기반입니다.** RP 서버가 `begin`에서 ceremony 진행 상태를 **세션에 저장**하고(이를 pending token이라 하며 클라이언트에는 노출되지 않습니다) `finish`에서 같은 세션으로 이어받습니다. 클라이언트는 세션 쿠키(같은 origin이면 `credentials: 'same-origin'`)를 유지해야 합니다.
+- **CSRF 보호가 적용됩니다.** 모든 POST 요청에 CSRF 토큰을 헤더(`X-XSRF-TOKEN`)로 보내야 합니다. 토큰을 얻는 법과 선행 단계는 §2에 있습니다.
 - 인증 성공(`authenticate/finish`) 시 RP 서버가 ID Token을 검증한 뒤 **자체 세션을 확립**합니다. 클라이언트는 별도 토큰을 받지 않고 세션 쿠키로 인증됩니다.
 - **`X-API-Key`는 클라이언트가 쓰지 않습니다.** 이는 RP 서버가 Passkey 서버를 호출할 때만 쓰는 서버-서버 비밀입니다. 클라이언트가 RP 서버에 보내는 인증 요소는 **세션 쿠키 + `X-XSRF-TOKEN`** 뿐입니다.
+
+> **읽는 순서 안내**
+> - **앱(iOS/Android) 개발자**: §1 전체 흐름 → §2 공통 규약 → §7 모바일 → §8.2 에러. §3(웹 base64url 변환)·§5(브라우저 JS)·§8.1(웹 에러)은 웹 전용이라 건너뛰어도 됩니다.
+> - **웹 개발자**: §2 → §3 → §4 → §5 → §8.1.
+> - **RP 서버를 직접 구현**하는 경우에만 아래 "온보딩"·"ID Token 검증"이 필요합니다. 클라이언트(웹/앱) 개발자는 이미 RP 서버가 준비됐다고 보고 §2로 넘어가세요.
 
 ### 전체 흐름 (한눈에)
 
 처음 통합하는 분은 이 순서로 전체 그림을 잡으세요. 각 단계의 상세는 괄호 안 절을 참조합니다.
 
 ```
-[온보딩 1회] 테넌트 생성 · API key 발급 · rpId/allowedOrigins 등록            (§1 온보딩)
-      │
+[온보딩 1회] 테넌트 생성 · API key 발급 · rpId/allowedOrigins 등록   (RP 서버 구현자만)
+      │       (클라 개발자는 RP 서버가 준비됐다고 보고 ↓ 부터)
       ▼
 [첫 진입]   GET / (또는 등록/로그인 페이지)  →  응답 Set-Cookie: XSRF-TOKEN    (§2 CSRF)
       │     (세션 쿠키 + CSRF 토큰을 여기서 확보 — 이후 모든 POST의 전제)
@@ -58,7 +63,9 @@ RP 서버는 클라이언트와 패스키 ceremony를 주고받습니다. 각 ce
 [로그아웃]  POST /logout → 세션 무효화(302) → 클라이언트 쿠키 폐기              (§4.5)
 ```
 
-### 시작하기 전 (온보딩)
+### 시작하기 전 (온보딩) — RP 서버 구현자용
+
+> 이 절은 RP 서버를 직접 세팅하는 분만 보면 됩니다. 클라이언트(웹/앱) 개발자는 건너뛰세요.
 
 RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
 
@@ -68,13 +75,15 @@ RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
 
 > 테넌트 생성·키 발급·도메인 등록의 구체 절차는 운영 환경에 따라 다릅니다(관리 콘솔 또는 운영팀). 로컬/단일 인스턴스 구성은 [single-instance-deployment.md](single-instance-deployment.md) §4를 참조하세요.
 
-### ID Token 검증 (RP 서버가 직접 구현할 때)
+### ID Token 검증 — RP 서버 구현자용
 
-`authenticate/finish`에서 Passkey 서버가 발급한 ID Token(RS256 JWT)을 RP 서버가 검증합니다. **Java라면 제공되는 검증 라이브러리를 쓰면 아래가 내장**되며, 직접 구현할 때 다음을 지켜야 합니다.
+> 이 절도 RP 서버를 직접 구현하는 분만 보면 됩니다. 클라이언트는 ID Token을 직접 다루지 않으며(RP 서버가 검증 후 세션을 확립), **Java라면 제공되는 검증 라이브러리에 아래가 내장**되어 있습니다. 클라이언트(웹/앱) 개발자는 건너뛰세요.
+
+`authenticate/finish`에서 Passkey 서버가 발급한 ID Token(RS256 JWT)을 RP 서버가 검증할 때 지켜야 할 사항입니다.
 
 - **서명**: JWKS(`/.well-known/jwks.json`)에서 JWT 헤더의 `kid`에 해당하는 RSA 공개키로 RS256 검증. `alg`가 `RS256`인지도 확인(alg confusion 방지).
 - **`exp`**: 만료 검증. 시계 오차를 고려해 **clock skew leeway(예: ±60초)** 를 두는 것을 권장합니다.
-- **`iss`/`aud`**: `iss = <Passkey 서버 주소>/<tenantId>`, `aud = <tenantId>`. **tenantId는 UUID 소문자 대시 형식**(`7f00dead-0000-...`)으로 옵니다. 설정값이 RAW hex 등 다른 표기면 비교 전 UUID로 정규화하세요(§6 P004).
+- **`iss`/`aud`**: `iss = <Passkey 서버 주소>/<tenantId>`, `aud = <tenantId>`. tenantId 표기 차이로 인한 검증 실패는 §6 P004를 참조하세요.
 - **JWKS 캐싱**: 매 요청마다 JWKS를 가져오지 말고 캐시합니다(권장 TTL 수 분). **키 회전 주의** — 서버가 서명키를 교체하면 캐시에 없는 새 `kid`가 올 수 있습니다. `kid`를 못 찾으면 캐시를 즉시 무효화하고 1회 재조회하도록 구현하는 것이 안전합니다(TTL만 의존하면 회전 직후 TTL 동안 검증이 실패할 수 있음).
 
 ---
@@ -91,7 +100,6 @@ RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
 ### 인증 / 세션 / CSRF
 
 - **세션 쿠키**: ceremony는 `begin` → `finish`가 같은 세션이어야 합니다. **RP 서버와 클라이언트가 같은 origin**이면 fetch에 `credentials: 'same-origin'`을 지정합니다. SPA를 **다른 도메인**에서 호스팅하는 경우(cross-origin)에는 `credentials: 'include'`를 쓰고, RP 서버가 `Access-Control-Allow-Credentials: true`와 정확한 `Access-Control-Allow-Origin`(와일드카드 `*` 불가)을 응답해야 쿠키가 오갑니다.
-- **CSRF**: 모든 POST 요청에 CSRF 토큰을 `X-XSRF-TOKEN` 헤더로 보내야 합니다(누락 시 `403 Forbidden`).
 
 #### CSRF 토큰을 얻는 방법
 
@@ -126,7 +134,7 @@ await fetch('/passkey/register/begin', {
 ### 로그아웃 / 로그인 상태
 
 - **로그아웃**: `POST /logout` — 세션을 무효화하고 `/`로 리다이렉트(`302`)합니다. CSRF 토큰이 필요합니다. 로그아웃 후 클라이언트는 보관 중인 세션 쿠키를 폐기하세요(§4.5).
-- **로그인 상태 확인**: **별도 상태 조회 엔드포인트는 없습니다.** sample-rp는 보호 리소스가 없는 데모라, 로그인 여부를 프로그래밍적으로 알려면 RP 서버에 그런 엔드포인트(예: 인증 필요 시 사용자 정보 반환, 미인증 시 `A001`(401))를 **직접 추가**해야 합니다. 그 엔드포인트를 호출해 **200이면 로그인, 401이면 미로그인**으로 판단합니다(세션 쿠키 유효성 기반). SPA는 보통 앱 부팅 시 1회 호출해 초기 인증 상태를 잡습니다.
+- **로그인 상태 확인**: 전용 상태 조회 엔드포인트는 없습니다(sample-rp 기준). 로그인 여부를 알아야 하면 RP 서버에 **인증 시 사용자 정보를 반환하고 미인증 시 `A001`(401)을 주는 엔드포인트를 추가**하세요. 클라이언트는 그 엔드포인트를 호출해 **200이면 로그인, 401이면 미로그인**으로 판단합니다. SPA·앱은 보통 부팅 시 1회 호출해 초기 인증 상태를 잡습니다.
 
 ### 응답 Envelope (`ApiResponse<T>`)
 
@@ -156,11 +164,13 @@ await fetch('/passkey/register/begin', {
 }
 ```
 
-아래 각 엔드포인트의 **응답**은 envelope의 `data` 필드 내용만 표기합니다. WebAuthn ceremony를 수행하려면 `data` 안의 `challenge`·`id` 등은 **base64url 문자열**이라 변환이 필요합니다(§3 필독).
+아래 각 엔드포인트의 **응답**은 envelope의 `data` 필드 내용만 표기합니다(웹은 `data` 안의 `challenge`·`id`를 변환해야 하며 §3에서 다룹니다).
 
 ---
 
-## 3. 클라이언트 연동 — base64url ↔ ArrayBuffer 변환 (필독)
+## 3. 클라이언트 연동 — base64url ↔ ArrayBuffer 변환 (웹 전용·필독)
+
+> 이 절은 **브라우저 웹 개발자용**입니다. iOS는 §7.2(Swift 확장), Android는 §7.3(변환 불필요)으로 가세요.
 
 > ⚠️ `begin` 응답의 options를 `navigator.credentials.create()/get()`에 **그대로 넘기면 `TypeError`로 실패합니다.** WebAuthn JS API는 `challenge`·`user.id`·`excludeCredentials[].id`·`allowCredentials[].id`를 `ArrayBuffer`로 요구하는데, 응답은 전부 **base64url 문자열**이기 때문입니다. 반대로 `finish`에 보낼 때는 브라우저가 돌려준 `ArrayBuffer` 필드들을 다시 **base64url 문자열로 인코딩**해야 합니다.
 
@@ -272,7 +282,7 @@ export function encodeAssertionCredential(cred) {
   | `pubKeyCredParams` | array | 허용 알고리즘 `[ES256(-7), RS256(-257)]`입니다. |
   | `timeout` | number | ceremony 타임아웃(ms)입니다. |
   | `attestation` | string | `none`/`indirect`/`direct`/`enterprise` 중 하나입니다. |
-  | `excludeCredentials` | array | 이미 등록한 패스키 목록 `[{type:"public-key",id:<base64url>}]`입니다(중복 등록 방지). `transports` 힌트는 **의도적으로 포함하지 않습니다**(없어도 동작하며, 등록 시점 정보라 stale 위험이 있어 생략). |
+  | `excludeCredentials` | array | 이미 등록한 패스키 목록 `[{type:"public-key",id:<base64url>}]`입니다(중복 등록 방지). `transports` 힌트는 **의도적으로 포함하지 않습니다**(없어도 동작하며, 등록 시점 정보라 stale 위험이 있어 생략 — `allowCredentials`도 동일). |
   | `authenticatorSelection` | object | `userVerification`, `residentKey` 설정입니다. |
 
 - **Request**:
@@ -325,8 +335,8 @@ X-XSRF-TOKEN: <CSRF 토큰>
   | 필드 | 타입 | 설명 |
   |---|---|---|
   | `credentialId` | string | 등록된 credential ID(base64url)입니다. |
-  | `aaguid` | string | authenticator AAGUID입니다. |
-  | `attestationFormat` | string | attestation 포맷입니다. |
+  | `aaguid` | string | authenticator AAGUID입니다(메타데이터, 클라이언트가 직접 쓸 일은 거의 없습니다). |
+  | `attestationFormat` | string | attestation 포맷입니다(메타데이터). |
   | `createdAt` | string(ISO instant) | 생성 시각입니다. |
 
 - **Request**:
@@ -393,7 +403,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
   | `rpId` | string | Relying Party ID입니다. |
   | `timeout` | number | ceremony 타임아웃(ms)입니다. |
   | `userVerification` | string | `required` 또는 `preferred`입니다. |
-  | `allowCredentials` | array | `username`이 있으면 그 사용자의 패스키 목록, 없으면 `[]`(discoverable)입니다. `transports` 힌트는 의도적으로 포함하지 않습니다(excludeCredentials와 동일 이유). |
+  | `allowCredentials` | array | `username`이 있으면 그 사용자의 패스키 목록, 없으면 `[]`(discoverable)입니다. |
 
 - **Request**:
 
@@ -431,7 +441,9 @@ X-XSRF-TOKEN: <CSRF 토큰>
 
 브라우저 로그인 결과를 보냅니다. RP 서버가 ID Token을 검증하고 **세션을 확립**합니다.
 
-> **누가 로그인했는지 식별** — discoverable(usernameless) 로그인에서는 클라이언트가 username을 안 보냈으므로, RP 서버는 검증된 ID Token의 **`sub`(= 등록 시 부여한 `userHandle`)** 로 사용자를 역매핑합니다. 즉 `sub`가 "누가 로그인했는가"의 신뢰 가능한 출처입니다. (요청 body의 `response.userHandle`은 검증 전 클라이언트 입력이므로 신뢰하지 말고, 반드시 ID Token의 `sub`를 쓰세요.)
+> **클라이언트 입장**: `finish`가 `200`이면 로그인 성공이며 세션 쿠키로 인증됩니다. "누가 로그인했는가"의 판정은 RP 서버 몫이라 클라이언트가 신경 쓸 필요 없습니다.
+>
+> **RP 서버 구현자용** — discoverable 로그인에서는 username이 없으므로, RP 서버는 검증된 ID Token의 **`sub`(= 등록 시 부여한 `userHandle`)** 로 사용자를 역매핑합니다. 요청 body의 `response.userHandle`은 검증 전 클라이언트 입력이므로 신뢰하지 말고 반드시 ID Token의 `sub`를 쓰세요.
 
 - **요청 body**:
 
@@ -538,7 +550,7 @@ await postJson('/passkey/authenticate/finish', {
 window.location = '/';   // 세션 확립됨
 ```
 
-`postJson`은 CSRF 토큰을 붙이고 envelope을 풀어 `data`를 반환하며, 실패 시 `code`/`message`/`traceId`를 담은 에러를 던집니다. 아래 구현은 **Thymeleaf `<meta name="csrf">` 전용**이므로, 메타 태그가 없는 순수 SPA는 CSRF 부분을 §2의 `csrfToken()`(쿠키 기반)으로 교체하세요.
+`postJson`은 CSRF 토큰을 붙이고 envelope을 풀어 `data`를 반환하며, 실패 시 `code`/`message`/`traceId`를 담은 에러를 던집니다. 아래 구현은 Thymeleaf `<meta>` 전용입니다(순수 SPA는 §2 참조).
 
 ```js
 export async function postJson(url, body) {
@@ -630,7 +642,7 @@ export async function postJson(url, body) {
     implementation "androidx.credentials:credentials-play-services-auth:1.2.0"
     ```
 - **세션 쿠키**: 네이티브 앱에는 브라우저 쿠키 jar가 없으므로 HTTP 클라이언트가 쿠키를 보관·재전송하도록 설정해야 합니다. iOS는 `URLSession`이 `HTTPCookieStorage`로 자동 처리하고, Android는 OkHttp에 `CookieJar`를 설정합니다. **기본 CookieJar는 메모리 전용**이라 앱 재시작 시 세션이 초기화되니, 유지가 필요하면 `PersistentCookieJar` 같은 디스크 저장 구현을 쓰세요. `begin` → `finish` 요청이 같은 세션 쿠키를 공유해야 합니다(§1).
-- **CSRF 토큰**: 첫 요청 전에 RP 서버에 GET을 한 번 보내 응답의 `Set-Cookie: XSRF-TOKEN=...`을 받아두고, 이후 POST마다 그 값을 `X-XSRF-TOKEN` 헤더에 싣습니다(§2). 쿠키 jar를 쓰면 쿠키 저장은 자동이지만, **헤더로 옮겨 싣는 것은 앱이 직접** 해야 합니다(아래 7.1.1 코드). 토큰은 세션과 함께 유지되므로 보통 앱 시작 시 1회 GET이면 충분하나, `finish`에서 `W002`/`W003`가 나면 세션이 만료된 것이니 GET부터 다시 합니다.
+- **CSRF 토큰**(§2): 첫 GET으로 `XSRF-TOKEN` 쿠키를 받아두고 이후 POST마다 `X-XSRF-TOKEN` 헤더에 싣습니다. 쿠키 jar가 쿠키 저장은 자동으로 하지만 **헤더로 옮겨 싣는 것은 앱이 직접** 해야 합니다(7.1.1 코드). 토큰은 세션과 함께 유지되므로 보통 앱 시작 시 1회 GET이면 충분하나, `finish`에서 `W002`/`W003`가 나면 세션 만료이니 GET부터 다시 합니다.
 - **도메인 연결(필수)**: 네이티브 패스키는 앱과 도메인의 소유 관계를 OS가 검증합니다. 이 설정이 없으면 OS가 ceremony를 거부합니다.
   - **iOS**: Associated Domains에 `webcredentials:<rpId>` 추가 + 서버의 `https://<rpId>/.well-known/apple-app-site-association`에 앱 App ID 등록.
   - **Android**: Digital Asset Links — 서버의 `https://<rpId>/.well-known/assetlinks.json`에 앱 패키지명·서명 지문 등록.
