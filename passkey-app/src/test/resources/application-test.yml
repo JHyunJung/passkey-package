@@ -43,9 +43,9 @@ passkey:
     issuer-base: https://passkey.test
     ttl: PT15M
   key-envelope:
-    # Test profile master key (32 zero bytes b64). Matches the
-    # dev profile default; production uses PASSKEY_KEY_ENVELOPE_MASTER_KEY.
-    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    # NON-SECRET, test only — admin-app test/dev 및 passkey-app dev 와 동일 값.
+    # production 은 PASSKEY_KEY_ENVELOPE_MASTER_KEY 환경변수로 주입.
+    master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
 
 
 # Quiet down Hibernate's startup banner & Flyway info — tests print

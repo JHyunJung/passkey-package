@@ -21,9 +21,9 @@ spring:
 
 passkey:
   key-envelope:
-    # Local dev only — 32 zero bytes base64.
-    # Production sets PASSKEY_KEY_ENVELOPE_MASTER_KEY environment variable.
-    master-key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    # NON-SECRET, dev only — admin-app 과 동일 값이어야 한다(같은 DB 의 signing key 를
+    # 양쪽이 공유하므로 master-key 불일치 시 복호화 실패). prod 는 환경변수로 주입.
+    master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
 
 logging:
   level:
