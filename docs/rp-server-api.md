@@ -31,6 +31,25 @@ RP 서버는 클라이언트와 패스키 ceremony를 주고받습니다. 각 ce
 - **CSRF 보호가 적용됩니다.** 모든 POST 요청에 CSRF 토큰을 헤더(`X-XSRF-TOKEN`)로 보내야 합니다(§2).
 - 인증 성공(`authenticate/finish`) 시 RP 서버가 ID Token을 검증한 뒤 **자체 세션을 확립**합니다. 클라이언트는 별도 토큰을 받지 않고 세션 쿠키로 인증됩니다.
 
+### 시작하기 전 (온보딩)
+
+RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
+
+1. **테넌트 생성** — 관리 콘솔에서 RP를 위한 테넌트를 만듭니다. 이때 `rpId`(RP 서버 도메인)와 `allowedOrigins`(RP 서버 origin 목록)를 등록합니다. 이 값이 패스키의 신뢰 경계가 됩니다.
+2. **API key 발급** — 그 테넌트에 `registration`·`authentication` scope를 가진 API key를 발급받습니다. 평문 키는 발급 시 1회만 표시됩니다.
+3. **tenantId 확인** — ID Token의 `iss`/`aud` 검증에 쓸 tenantId(UUID 형식)를 받아둡니다.
+
+> 테넌트 생성·키 발급·도메인 등록의 구체 절차는 운영 환경에 따라 다릅니다(관리 콘솔 또는 운영팀). 로컬/단일 인스턴스 구성은 [single-instance-deployment.md](single-instance-deployment.md) §4를 참조하세요.
+
+### ID Token 검증 (RP 서버가 직접 구현할 때)
+
+`authenticate/finish`에서 Passkey 서버가 발급한 ID Token(RS256 JWT)을 RP 서버가 검증합니다. **Java라면 제공되는 검증 라이브러리를 쓰면 아래가 내장**되며, 직접 구현할 때 다음을 지켜야 합니다.
+
+- **서명**: JWKS(`/.well-known/jwks.json`)에서 JWT 헤더의 `kid`에 해당하는 RSA 공개키로 RS256 검증. `alg`가 `RS256`인지도 확인(alg confusion 방지).
+- **`exp`**: 만료 검증. 시계 오차를 고려해 **clock skew leeway(예: ±60초)** 를 두는 것을 권장합니다.
+- **`iss`/`aud`**: `iss = <Passkey 서버 주소>/<tenantId>`, `aud = <tenantId>`. **tenantId는 UUID 소문자 대시 형식**(`7f00dead-0000-...`)으로 옵니다. 설정값이 RAW hex 등 다른 표기면 비교 전 UUID로 정규화하세요(§6 P004).
+- **JWKS 캐싱**: 매 요청마다 JWKS를 가져오지 말고 캐시합니다(권장 TTL 수 분). **키 회전 주의** — 서버가 서명키를 교체하면 캐시에 없는 새 `kid`가 올 수 있습니다. `kid`를 못 찾으면 캐시를 즉시 무효화하고 1회 재조회하도록 구현하는 것이 안전합니다(TTL만 의존하면 회전 직후 TTL 동안 검증이 실패할 수 있음).
+
 ---
 
 ## 2. 공통 규약
@@ -180,7 +199,7 @@ export function encodeAssertionCredential(cred) {
   | `pubKeyCredParams` | array | 허용 알고리즘 `[ES256(-7), RS256(-257)]`입니다. |
   | `timeout` | number | ceremony 타임아웃(ms)입니다. |
   | `attestation` | string | `none`/`indirect`/`direct`/`enterprise` 중 하나입니다. |
-  | `excludeCredentials` | array | 이미 등록한 패스키 목록입니다(중복 등록 방지). |
+  | `excludeCredentials` | array | 이미 등록한 패스키 목록 `[{type:"public-key",id:<base64url>}]`입니다(중복 등록 방지). `transports` 힌트는 **의도적으로 포함하지 않습니다**(없어도 동작하며, 등록 시점 정보라 stale 위험이 있어 생략). |
   | `authenticatorSelection` | object | `userVerification`, `residentKey` 설정입니다. |
 
 - **Request**:
@@ -301,7 +320,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
   | `rpId` | string | Relying Party ID입니다. |
   | `timeout` | number | ceremony 타임아웃(ms)입니다. |
   | `userVerification` | string | `required` 또는 `preferred`입니다. |
-  | `allowCredentials` | array | `username`이 있으면 그 사용자의 패스키 목록, 없으면 `[]`(discoverable)입니다. |
+  | `allowCredentials` | array | `username`이 있으면 그 사용자의 패스키 목록, 없으면 `[]`(discoverable)입니다. `transports` 힌트는 의도적으로 포함하지 않습니다(excludeCredentials와 동일 이유). |
 
 - **Request**:
 
@@ -338,6 +357,8 @@ X-XSRF-TOKEN: <CSRF 토큰>
 ### 4.4 `POST /passkey/authenticate/finish`
 
 브라우저 로그인 결과를 보냅니다. RP 서버가 ID Token을 검증하고 **세션을 확립**합니다.
+
+> **누가 로그인했는지 식별** — discoverable(usernameless) 로그인에서는 클라이언트가 username을 안 보냈으므로, RP 서버는 검증된 ID Token의 **`sub`(= 등록 시 부여한 `userHandle`)** 로 사용자를 역매핑합니다. 즉 `sub`가 "누가 로그인했는가"의 신뢰 가능한 출처입니다. (요청 body의 `response.userHandle`은 검증 전 클라이언트 입력이므로 신뢰하지 말고, 반드시 ID Token의 `sub`를 쓰세요.)
 
 - **요청 body**:
 
