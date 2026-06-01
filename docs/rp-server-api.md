@@ -4,7 +4,7 @@
 
 - **호출 관계**: 클라이언트(브라우저 JS / 모바일 앱) → **RP 서버**(당신이 구현하는 서버). RP 서버는 내부적으로 Passkey 서버를 호출하지만, 그 부분은 클라이언트에 노출되지 않습니다.
 - **범위**: 패스키 등록(`/passkey/register/**`)과 인증(`/passkey/authenticate/**`)입니다.
-- **기준 포트**: sample-rp는 `9090`에서 동작합니다(`http://localhost:9090`).
+- **기준 주소**: 이 문서의 예시는 RP 서버를 `https://dev-passkey.crosscert.com`으로 가정합니다(클라이언트가 요청을 보내는 대상). 로컬 개발 시에는 `http://localhost:9090`(sample-rp 기본 포트)으로 바꿔 읽으세요.
 
 ---
 
@@ -244,7 +244,7 @@ export function encodeAssertionCredential(cred) {
 
 > **envelope 위치 주의**: 위 `decodeCreationOptions(opts)`의 `opts`는 **응답 envelope 전체가 아니라 `data.publicKeyCredentialCreationOptions`(등록) / `data.publicKeyCredentialRequestOptions`(인증) 안쪽 객체**입니다. envelope을 먼저 풀어 그 객체만 꺼내 넘기세요. (§5의 `postJson`은 envelope을 풀어 `data`를 반환하므로 `start.publicKeyCredentialCreationOptions`로 접근합니다.)
 >
-> **localhost 주의**: WebAuthn은 `localhost`와 `127.0.0.1`을 별개 origin으로 취급합니다. 로컬 테스트 시 항상 `localhost`로 접근하세요.
+> **도메인·HTTPS 주의**: `rpId`는 클라이언트가 접속하는 RP 서버 도메인과 일치해야 하며(예시는 `dev-passkey.crosscert.com`), 운영에서는 HTTPS가 필수입니다. 로컬 개발 시에는 `localhost`가 안전한 컨텍스트로 예외 인정되어 HTTP로도 동작합니다(`localhost`와 `127.0.0.1`은 별개 origin이니 한쪽으로 통일하세요).
 >
 > **모바일 앱**: 네이티브 앱은 위 JS 대신 OS API를 씁니다(상세는 §7). Android는 Credential Manager가 **WebAuthn JSON을 그대로** 처리하므로 변환이 불필요하고, iOS는 AuthenticationServices에서 `challenge`/`userID`를 `Data`로 디코딩해 넘긴 뒤 결과를 base64url 인코딩해야 합니다.
 
@@ -305,7 +305,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
   "data": {
     "publicKeyCredentialCreationOptions": {
       "challenge": "k7Hd2...Qw",
-      "rp":   { "id": "localhost", "name": "Sample RP" },
+      "rp":   { "id": "dev-passkey.crosscert.com", "name": "Sample RP" },
       "user": { "id": "ZGV2LXVzZXItMDAx", "displayName": "Alice", "name": "alice" },
       "pubKeyCredParams": [ { "type": "public-key", "alg": -7 }, { "type": "public-key", "alg": -257 } ],
       "timeout": 60000,
@@ -425,7 +425,7 @@ X-XSRF-TOKEN: <CSRF 토큰>
   "data": {
     "publicKeyCredentialRequestOptions": {
       "challenge": "p9Lm3...Zx",
-      "rpId": "localhost",
+      "rpId": "dev-passkey.crosscert.com",
       "timeout": 60000,
       "userVerification": "preferred",
       "allowCredentials": [ { "type": "public-key", "id": "AbCd...Ef" } ]
