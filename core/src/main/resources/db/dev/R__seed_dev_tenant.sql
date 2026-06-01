@@ -70,19 +70,25 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE slug = 'dev-passkey')
      WHERE tenant_id = (SELECT id FROM tenant WHERE slug = 'dev-passkey')
   );
 
--- 5. webauthn_snapshot
+-- 5. webauthn_snapshot (컬럼명/구조 V27 동일)
 INSERT INTO tenant_webauthn_snapshot (
-  id, tenant_id, rp_id, rp_name, allowed_origins_json, accepted_formats_json,
-  require_user_verification, mds_required, taken_at
+  id, tenant_id, rp_id, rp_name, allowed_origins, accepted_formats,
+  require_user_verification, mds_required, taken_at, taken_by
 )
 SELECT
-  tenant_webauthn_snapshot_seq.NEXTVAL,
+  APP_OWNER.tenant_webauthn_snapshot_seq.NEXTVAL,
   t.id, t.rp_id, t.rp_name,
-  (SELECT '[' || LISTAGG('"' || o.origin || '"', ',') WITHIN GROUP (ORDER BY o.sort_order) || ']'
-     FROM tenant_allowed_origin o WHERE o.tenant_id = t.id),
-  (SELECT '[' || LISTAGG('"' || f.format || '"', ',') WITHIN GROUP (ORDER BY f.format) || ']'
-     FROM tenant_accepted_format f WHERE f.tenant_id = t.id),
-  t.require_user_verification, t.mds_required, SYSTIMESTAMP
+  NVL(
+    (SELECT '[' || LISTAGG('"' || o.origin || '"', ',') WITHIN GROUP (ORDER BY o.sort_order) || ']'
+       FROM tenant_allowed_origin o WHERE o.tenant_id = t.id),
+    '[]'
+  ),
+  NVL(
+    (SELECT '[' || LISTAGG('"' || f.format || '"', ',') WITHIN GROUP (ORDER BY f.format) || ']'
+       FROM tenant_accepted_format f WHERE f.tenant_id = t.id),
+    '[]'
+  ),
+  t.require_user_verification, t.mds_required, SYSTIMESTAMP, 'seed:dev'
 FROM tenant t
 WHERE t.slug = 'dev-passkey'
   AND NOT EXISTS (

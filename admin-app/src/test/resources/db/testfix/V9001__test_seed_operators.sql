@@ -11,18 +11,20 @@
 -- 에 의존하지 않음 — V9000 이 V9001 보다 먼저 돌아 0 rows 일 수 있으므로.)
 --
 -- plaintext: alice-temp-pw / bob-temp-pw (기존 V11 해시 재사용).
+-- id: V19 이후 admin_user.id 는 RAW(16) — 고정 RAW(alice 0x...0010, bob 0x...0011)
+--     를 재사용(admin_user_seq 안 씀).
 -- Idempotent: email NOT EXISTS 가드.
 -- ============================================================
 
 INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, mfa_enabled, created_at)
-SELECT admin_user_seq.NEXTVAL, 'alice@crosscert.com',
+SELECT HEXTORAW('00000000000000000000000000000010'), 'alice@crosscert.com',
        '$2a$12$jpftll2M2sOc8XRs99Zw0ODgKWBiRKQcIieK/UqUBbizW7xKI8awS',
        'PLATFORM_OPERATOR', 'Y', 'N', SYSTIMESTAMP
 FROM dual
 WHERE NOT EXISTS (SELECT 1 FROM admin_user WHERE email = 'alice@crosscert.com');
 
 INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, mfa_enabled, created_at)
-SELECT admin_user_seq.NEXTVAL, 'bob@crosscert.com',
+SELECT HEXTORAW('00000000000000000000000000000011'), 'bob@crosscert.com',
        '$2a$12$gvD5tGra6vKnSn/9cxqfQOKZOzlzp4LCg276Ddfkpwl8Kk24Zbb1G',
        'PLATFORM_OPERATOR', 'Y', 'N', SYSTIMESTAMP
 FROM dual
