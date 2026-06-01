@@ -331,27 +331,8 @@ WHEN NOT MATCHED THEN
           0, DATE '1970-01-01',
           TIMESTAMP '1970-01-01 00:00:00 +00:00', '{}');
 
--- 6c. admin_user seed (V11 invariant): same bcrypt hashes preserved.
---     Synthetic UUIDs: alice = 0x...0010, bob = 0x...0011.
-MERGE INTO admin_user tgt
-USING (SELECT 'alice@crosscert.com' AS email FROM dual) src
-ON (tgt.email = src.email)
-WHEN NOT MATCHED THEN
-  INSERT (id, email, bcrypt_hash, role, enabled, created_at)
-  VALUES (HEXTORAW('00000000000000000000000000000010'),
-          'alice@crosscert.com',
-          '$2a$12$jpftll2M2sOc8XRs99Zw0ODgKWBiRKQcIieK/UqUBbizW7xKI8awS',
-          'ADMIN', 'Y', SYSTIMESTAMP);
-
-MERGE INTO admin_user tgt
-USING (SELECT 'bob@crosscert.com' AS email FROM dual) src
-ON (tgt.email = src.email)
-WHEN NOT MATCHED THEN
-  INSERT (id, email, bcrypt_hash, role, enabled, created_at)
-  VALUES (HEXTORAW('00000000000000000000000000000011'),
-          'bob@crosscert.com',
-          '$2a$12$gvD5tGra6vKnSn/9cxqfQOKZOzlzp4LCg276Ddfkpwl8Kk24Zbb1G',
-          'VIEWER', 'Y', SYSTIMESTAMP);
+-- 6c. (구) admin_user seed 제거됨 — 운영자 계정은 db/seed-common/R__seed_operators.sql
+--     로 이관(프로필 분리, prod 격리). test 프로필은 db/testfix/V9001 이 복원.
 
 COMMIT;
 
