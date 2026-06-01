@@ -71,7 +71,7 @@ export default function TenantsListPage() {
     navigate(`/tenants/${id}?tab=overview`);
   }
 
-  async function handleCreate(input: { name: string; slug: string }) {
+  async function handleCreate(input: { name: string; slug: string; rpId: string }) {
     try {
       const t = await tenantsApi.create(input);
       toast({ kind: 'ok', title: 'Tenant 생성 완료', message: t.name });
@@ -244,30 +244,38 @@ function MetricCard({ label, value, sub, delta }: {
 function NewTenantDialog({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (i: { name: string; slug: string }) => void;
+  onCreate: (i: { name: string; slug: string; rpId: string }) => void;
 }) {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [rpId, setRpId] = useState('');
+  const [rpIdEdited, setRpIdEdited] = useState(false);
   const [touched, setTouched] = useState(false);
   const slugRe = /^[a-z][a-z0-9-]{1,62}$/;
   const slugOk = slugRe.test(slug);
+  // rpId 는 WebAuthn RP ID — registrable domain(hostname). 스킴/포트/경로 없이
+  // 점이 포함된 호스트명이어야 한다(예: passkey.acme.com). placeholder 그대로 저장 방지.
+  const rpIdRe = /^(?!.*\.example\.com$)([a-z0-9-]+\.)+[a-z]{2,}$/;
+  const rpIdOk = rpIdRe.test(rpId.trim());
 
   // Reset form when dialog is closed (open: true → false) so stale input
   // doesn't bleed into the next open. This also runs when a create fails and
   // the parent leaves the dialog open — state is preserved until actual close.
   useEffect(() => {
-    if (!open) { setName(''); setSlug(''); setTouched(false); }
+    if (!open) { setName(''); setSlug(''); setRpId(''); setRpIdEdited(false); setTouched(false); }
   }, [open]);
 
   function generate(n: string) {
     const s = n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
     setSlug(s);
+    // rpId 를 사용자가 아직 직접 수정하지 않았다면 slug 기반 제안값을 채운다(수정 가능).
+    if (!rpIdEdited) setRpId(s ? `${s}.crosscert.com` : '');
   }
 
   function submit() {
     setTouched(true);
-    if (!name || !slugOk) return;
-    onCreate({ name, slug });
+    if (!name || !slugOk || !rpIdOk) return;
+    onCreate({ name, slug, rpId: rpId.trim() });
     // Do NOT clear here — let the parent's handleCreate success path call
     // setShowNew(false), which triggers the useEffect above to reset state.
   }
@@ -297,13 +305,23 @@ function NewTenantDialog({ open, onClose, onCreate }: {
               : <>패턴 <code style={{ background: 'var(--surface-3)', padding: '1px 4px', borderRadius: 3 }}>^[a-z][a-z0-9-]{'{1,62}'}$</code>. 한 번 생성되면 변경 불가합니다.</>}
           </div>
         </div>
+        <div>
+          <label className="label">rpId (Relying Party ID)</label>
+          <input className="input mono" placeholder="예: passkey.acme.com" value={rpId}
+                 onChange={(e) => { setRpId(e.target.value.toLowerCase().trim()); setRpIdEdited(true); }} />
+          <div className="hint">
+            {touched && rpId && !rpIdOk
+              ? <span style={{ color: 'var(--danger)' }}>스킴·포트·경로 없이 실제 도메인 hostname을 입력하세요(예: passkey.acme.com). example.com은 placeholder라 사용할 수 없습니다.</span>
+              : <span style={{ color: 'var(--danger)' }}>생성 후에는 변경할 수 없습니다. 패스키가 묶일 실제 RP 서버 도메인을 정확히 입력하세요.</span>}
+          </div>
+        </div>
 
         <div style={{ padding: 12, background: 'var(--surface-3)', borderRadius: 8, fontSize: 12, color: 'var(--text-soft)' }}>
           <div style={{ fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icons.Info size={13} /> 다음 단계
           </div>
           <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
-            <li>WebAuthn config — rpId, origins, UV 정책 설정</li>
+            <li>WebAuthn config — origins, UV 정책 설정(rpId는 위에서 확정)</li>
             <li>AAGUID 정책 — 시작은 <code>ANY</code> 권장, 이후 ALLOWLIST로 좁힘</li>
             <li>API key 발급 — plaintext는 1회만 노출됩니다</li>
           </ol>

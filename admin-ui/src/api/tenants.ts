@@ -28,13 +28,14 @@ export const tenantsApi = {
     const server = await api.get<TenantView>(`/admin/api/tenants/${id}`);
     return adaptTenant(server);
   },
-  create: async (input: { name: string; slug: string }): Promise<Tenant> => {
+  create: async (input: { name: string; slug: string; rpId: string }): Promise<Tenant> => {
+    const rpId = input.rpId.trim();
     const body: TenantCreateRequest = {
       slug: input.slug,
       displayName: input.name,
-      rpId: input.slug + '.example.com',
+      rpId,
       rpName: input.name,
-      allowedOrigins: ['https://' + input.slug + '.example.com'],
+      allowedOrigins: ['https://' + rpId],
       acceptedFormats: ['none', 'packed'],
       requireUserVerification: true,
       mdsRequired: false,
