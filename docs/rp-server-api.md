@@ -57,7 +57,41 @@ RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
 ### 인증 / 세션 / CSRF
 
 - **세션 쿠키**: ceremony는 `options` → `complete`가 같은 세션이어야 합니다. fetch 시 `credentials: 'same-origin'`을 지정합니다.
-- **CSRF**: POST 요청에 `X-XSRF-TOKEN` 헤더가 필요합니다. 페이지의 `<meta name="csrf">`에서 토큰을 읽어 보냅니다.
+- **CSRF**: 모든 POST 요청에 CSRF 토큰을 `X-XSRF-TOKEN` 헤더로 보내야 합니다(누락 시 `403 Forbidden`).
+
+#### CSRF 토큰을 얻는 방법
+
+RP 서버는 Spring Security의 `CookieCsrfTokenRepository`를 씁니다. 토큰은 **쿠키 `XSRF-TOKEN`**으로 내려오며, 이를 읽어 **헤더 `X-XSRF-TOKEN`**에 그대로 실어 보내는 방식입니다. 클라이언트 종류별로 토큰을 얻는 방법이 다릅니다.
+
+| 클라이언트 | 토큰 출처 | 보내는 방법 |
+|---|---|---|
+| 서버 렌더링 페이지(Thymeleaf) | 페이지의 `<meta name="csrf">` | `document.querySelector('meta[name=csrf]').content`를 헤더에 실음 |
+| SPA / fetch / 모바일 웹뷰 | 쿠키 `XSRF-TOKEN` | 쿠키 값을 읽어 헤더에 실음 |
+| 모바일 네이티브 앱 | 응답의 `Set-Cookie: XSRF-TOKEN=...` | 쿠키 jar에서 값을 꺼내 헤더에 실음(§7) |
+
+쿠키는 `HttpOnly`가 **아니므로**(`withHttpOnlyFalse`) JavaScript에서 읽을 수 있습니다. SPA·모바일 웹뷰에서 쿠키로 토큰을 얻는 예시입니다.
+
+```js
+// 쿠키 XSRF-TOKEN 값을 읽어 헤더에 싣는다 (SPA / 웹뷰용)
+function csrfToken() {
+  return document.cookie.split('; ')
+    .find(c => c.startsWith('XSRF-TOKEN='))?.split('=')[1] ?? '';
+}
+
+await fetch('/passkey/register/begin', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': csrfToken() },
+  body: JSON.stringify({ username, displayName }),
+  credentials: 'same-origin'
+});
+```
+
+> **토큰 발급 시점**: 쿠키 `XSRF-TOKEN`은 RP 서버 페이지에 **GET으로 한 번 접근하면** 응답의 `Set-Cookie`로 내려옵니다. SPA·앱은 첫 POST 전에 RP 서버에 GET 요청(예: `/`)을 한 번 보내 쿠키를 받아두면 됩니다. 쿠키 값은 URL-decode가 필요할 수 있으니 헤더에 실을 때 디코딩하세요.
+
+### 로그아웃 / 로그인 상태
+
+- **로그아웃**: `POST /logout` — 세션을 무효화하고 `/`로 리다이렉트(`302`)합니다. CSRF 토큰이 필요합니다. 로그아웃 후 클라이언트는 보관 중인 세션 쿠키를 폐기하세요.
+- **로그인 상태 확인**: 별도 상태 조회 엔드포인트는 없습니다. 보호된 페이지/리소스를 호출했을 때 **인증되어 있으면 정상 응답, 아니면 `A001`(401)** 로 판단합니다(세션 쿠키 유효성 기반).
 
 ### 응답 Envelope (`ApiResponse<T>`)
 
@@ -405,6 +439,30 @@ X-XSRF-TOKEN: <CSRF 토큰>
 }
 ```
 
+### 4.5 `POST /logout`
+
+확립된 세션을 무효화합니다. Spring Security 기본 로그아웃이므로 envelope이 아닌 **`302` 리다이렉트**(`Location: /`)로 응답합니다.
+
+- **요청 body**: 없음. CSRF 토큰(`X-XSRF-TOKEN`)이 필요합니다.
+- **응답**: `302 Found`, `Location: /`. 서버 세션이 무효화되고 세션 쿠키가 만료됩니다.
+
+- **Request**:
+
+```http
+POST /logout
+X-XSRF-TOKEN: <CSRF 토큰>
+```
+
+- **Response** `302 Found`:
+
+```http
+HTTP/1.1 302 Found
+Location: /
+Set-Cookie: JSESSIONID=...; Max-Age=0
+```
+
+> fetch로 호출할 때 리다이렉트를 따라가지 않으려면 `redirect: 'manual'`을 쓰고, 응답 후 클라이언트가 보관한 세션 쿠키를 폐기하세요.
+
 ---
 
 ## 5. 전체 흐름 (브라우저 JS)
@@ -516,3 +574,184 @@ export async function postJson(url, body) {
   "timestamp": "2026-06-01T12:00:00"
 }
 ```
+
+---
+
+## 7. 모바일 네이티브 앱 연동
+
+네이티브 앱은 `navigator.credentials` 대신 OS 패스키 API를 씁니다. **RP 서버 엔드포인트(§4)와 요청/응답 형식은 동일**하며, 달라지는 것은 (1) ceremony 수행 주체가 OS API라는 점, (2) 세션·CSRF를 앱이 직접 관리한다는 점입니다.
+
+### 7.1 공통 — 세션·CSRF·도메인 연결
+
+- **세션 쿠키**: 네이티브 앱에는 브라우저 쿠키 jar가 없으므로 HTTP 클라이언트가 쿠키를 보관·재전송하도록 설정해야 합니다. iOS는 `URLSession`이 `HTTPCookieStorage`로 자동 처리하고, Android는 OkHttp에 `CookieJar`(예: `PersistentCookieJar`)를 설정합니다. `options` → `finish` 요청이 같은 세션 쿠키를 공유해야 합니다(§1).
+- **CSRF 토큰**: 첫 요청 전에 RP 서버에 GET을 한 번 보내 응답의 `Set-Cookie: XSRF-TOKEN=...`을 받아두고, 이후 POST마다 그 값을 `X-XSRF-TOKEN` 헤더에 싣습니다(§2). 쿠키 jar를 쓰면 쿠키 저장은 자동이지만, **헤더로 옮겨 싣는 것은 앱이 직접** 해야 합니다.
+- **도메인 연결(필수)**: 네이티브 패스키는 앱과 도메인의 소유 관계를 OS가 검증합니다. 이 설정이 없으면 OS가 ceremony를 거부합니다.
+  - **iOS**: Associated Domains에 `webcredentials:<rpId>` 추가 + 서버의 `https://<rpId>/.well-known/apple-app-site-association`에 앱 App ID 등록.
+  - **Android**: Digital Asset Links — 서버의 `https://<rpId>/.well-known/assetlinks.json`에 앱 패키지명·서명 지문 등록.
+  - 여기서 `<rpId>`는 `options` 응답의 `rp.id`(등록) / `rpId`(인증)와 일치해야 합니다.
+
+### 7.2 iOS (AuthenticationServices)
+
+iOS는 base64url 문자열을 **`Data`로 디코딩**해 OS API에 넘기고, 결과로 받은 `Data` 필드들을 다시 **base64url로 인코딩**해 RP 서버에 보냅니다(웹의 §3 변환과 같은 역할).
+
+**등록** — `/passkey/register/begin` 응답의 `challenge`·`user.id`를 `Data`로:
+
+```swift
+import AuthenticationServices
+
+let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
+    relyingPartyIdentifier: opts.rp.id)               // rp.id
+
+let request = provider.createCredentialRegistrationRequest(
+    challenge: Data(base64URLEncoded: opts.challenge)!,   // base64url → Data
+    name:      opts.user.name,
+    userID:    Data(base64URLEncoded: opts.user.id)!)     // userHandle
+
+let controller = ASAuthorizationController(authorizationRequests: [request])
+controller.delegate = self
+controller.performRequests()
+
+// delegate — 결과를 base64url로 인코딩해 /passkey/register/finish 로 전송
+func authorizationController(controller: ASAuthorizationController,
+        didCompleteWithAuthorization auth: ASAuthorization) {
+    let c = auth.credential as! ASAuthorizationPlatformPublicKeyCredentialRegistration
+    let body: [String: Any] = ["publicKeyCredential": [
+        "id":    c.credentialID.base64URLEncodedString(),
+        "rawId": c.credentialID.base64URLEncodedString(),
+        "type":  "public-key",
+        "response": [
+            "clientDataJSON":    c.rawClientDataJSON.base64URLEncodedString(),
+            "attestationObject": c.rawAttestationObject!.base64URLEncodedString()
+        ],
+        "clientExtensionResults": [:]
+    ]]
+    // POST /passkey/register/finish (X-XSRF-TOKEN, 세션 쿠키 포함)
+}
+```
+
+**인증** — `/passkey/authenticate/begin` 응답의 `challenge`를 `Data`로:
+
+```swift
+let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
+    relyingPartyIdentifier: opts.rpId)                // rpId
+
+let request = provider.createCredentialAssertionRequest(
+    challenge: Data(base64URLEncoded: opts.challenge)!)
+
+let controller = ASAuthorizationController(authorizationRequests: [request])
+controller.delegate = self
+controller.performRequests()
+
+// delegate — assertion 결과를 base64url 인코딩해 /passkey/authenticate/finish 로
+func authorizationController(controller: ASAuthorizationController,
+        didCompleteWithAuthorization auth: ASAuthorization) {
+    let c = auth.credential as! ASAuthorizationPlatformPublicKeyCredentialAssertion
+    let body: [String: Any] = ["publicKeyCredential": [
+        "id":    c.credentialID.base64URLEncodedString(),
+        "rawId": c.credentialID.base64URLEncodedString(),
+        "type":  "public-key",
+        "response": [
+            "clientDataJSON":    c.rawClientDataJSON.base64URLEncodedString(),
+            "authenticatorData": c.rawAuthenticatorData.base64URLEncodedString(),
+            "signature":         c.signature.base64URLEncodedString(),
+            "userHandle":        c.userID.base64URLEncodedString()
+        ],
+        "clientExtensionResults": [:]
+    ]]
+    // POST /passkey/authenticate/finish
+}
+```
+
+> `Data(base64URLEncoded:)` / `base64URLEncodedString()`는 표준 `Data` API가 아니므로(base64**url**), `-`·`_` 치환과 패딩 처리를 하는 확장을 직접 두거나 라이브러리를 쓰세요. §3의 `b64urlToBuf`/`bufToB64url`과 동일한 변환입니다.
+
+### 7.3 Android (Credential Manager)
+
+Android의 Credential Manager는 **WebAuthn JSON을 그대로** 주고받으므로 base64url 변환이 **불필요**합니다. `options` 응답 객체를 그대로 JSON 문자열로 만들어 넘기고, 결과 JSON을 그대로 RP 서버에 보냅니다.
+
+**등록** — `/passkey/register/begin` 응답의 `publicKeyCredentialCreationOptions`를 JSON 문자열로:
+
+```kotlin
+import androidx.credentials.*
+
+val credentialManager = CredentialManager.create(context)
+
+// optionsJson = publicKeyCredentialCreationOptions 를 그대로 직렬화한 JSON 문자열
+val request = CreatePublicKeyCredentialRequest(requestJson = optionsJson)
+val result = credentialManager.createCredential(context, request)
+        as CreatePublicKeyCredentialResponse
+
+// result.registrationResponseJson 을 그대로 finish 로 보냄.
+// RP 서버는 { "publicKeyCredential": <이 JSON> } 형태를 기대하므로 한 번 감싼다.
+val body = """{ "publicKeyCredential": ${result.registrationResponseJson} }"""
+// POST /passkey/register/finish (X-XSRF-TOKEN, 세션 쿠키 포함)
+```
+
+**인증** — `/passkey/authenticate/begin` 응답의 `publicKeyCredentialRequestOptions`를 JSON 문자열로:
+
+```kotlin
+val option = GetPublicKeyCredentialOption(requestJson = optionsJson)
+val request = GetCredentialRequest(listOf(option))
+val result = credentialManager.getCredential(context, request)
+
+val cred = result.credential as PublicKeyCredential
+val body = """{ "publicKeyCredential": ${cred.authenticationResponseJson} }"""
+// POST /passkey/authenticate/finish
+```
+
+> `registrationResponseJson`/`authenticationResponseJson`은 이미 §4의 `publicKeyCredential` 객체와 같은 형식(WebAuthn 표준 JSON)입니다. RP 서버 요청 body는 이를 `publicKeyCredential` 키로 한 번 감싼 형태이므로 위처럼 감싸 보내면 됩니다.
+
+---
+
+## 8. 클라이언트 측 에러 처리
+
+§6 에러 코드는 **RP 서버가 내려주는** 오류입니다. 그 외에 **OS·브라우저가 ceremony 수행 중에 던지는** 오류가 있으며, 이는 서버 응답이 아니라 `navigator.credentials.*`(웹) 또는 OS delegate/exception(앱)에서 발생합니다. 사용자에게 보여줄 메시지를 다르게 처리해야 합니다.
+
+### 8.1 웹 (`navigator.credentials`)
+
+`create()`/`get()`는 실패 시 `DOMException`을 던집니다. `err.name`으로 분기합니다.
+
+| `err.name` | 상황 | 권장 처리 |
+|---|---|---|
+| `NotAllowedError` | 사용자가 취소했거나 ceremony 타임아웃입니다(둘을 구분할 수 없음). | "취소되었거나 시간이 초과되었습니다. 다시 시도해 주세요." — 재시도 버튼 노출. 에러로 시끄럽게 알리지 마세요(정상적인 취소 포함). |
+| `InvalidStateError` | 등록 시 **이미 등록된** authenticator입니다(`excludeCredentials` 충돌). | "이미 이 기기에 패스키가 등록되어 있습니다." — 로그인으로 안내. |
+| `NotSupportedError` | 요청한 알고리즘/옵션을 authenticator가 지원하지 않습니다. | "이 기기에서 지원하지 않는 패스키입니다." |
+| `SecurityError` | `rpId`가 현재 origin과 불일치하거나 안전하지 않은 컨텍스트입니다(HTTPS/localhost 아님). | 개발/설정 오류입니다. rpId·origin·HTTPS를 점검하세요. |
+| `AbortError` | `AbortSignal`로 중단되었습니다. | 보통 무시(앱이 의도적으로 취소한 경우). |
+
+```js
+try {
+  const cred = await navigator.credentials.get({ publicKey: decodeRequestOptions(opts) });
+  // ...
+} catch (e) {
+  if (e.name === 'NotAllowedError') {
+    showRetry('취소되었거나 시간이 초과되었습니다.');
+  } else if (e.name === 'InvalidStateError') {
+    showInfo('이미 등록된 기기입니다.');
+  } else {
+    showError(`패스키 오류: ${e.name}`);
+  }
+}
+```
+
+> **"패스키 없음"(authenticator에 자격증명이 없음)** 은 별도 에러로 오지 않고, 인증 ceremony에서 사용자가 선택할 패스키가 없어 결과적으로 `NotAllowedError`(취소/타임아웃)로 귀결됩니다. 따라서 "패스키 없음"을 명시적으로 구분할 수는 없으며, 재시도/등록 안내로 처리합니다.
+
+### 8.2 모바일 네이티브
+
+- **iOS**: 실패는 delegate의 `authorizationController(controller:didCompleteWithError:)`로 옵니다. `error`를 `ASAuthorizationError`로 캐스팅해 `code`로 분기합니다.
+  - `.canceled` — 사용자가 취소했습니다. 조용히 재시도 가능 상태로 둡니다(에러 알림 금지).
+  - `.failed` / `.invalidResponse` — ceremony 실패입니다. 재시도 안내.
+  - `.notHandled` / `.unknown` — 일반 오류로 처리.
+- **Android**: `createCredential`은 `CreateCredentialException`을, `getCredential`은 `GetCredentialException`을 던집니다(하위 타입으로 분기).
+  - `CreateCredentialCancellationException` / `GetCredentialCancellationException` — 사용자가 취소했습니다(조용히 처리).
+  - `NoCredentialException`(인증 시) — **선택할 패스키가 없습니다.** 등록으로 안내할 수 있습니다(웹과 달리 Android는 이 경우를 구분할 수 있음).
+  - `GetCredentialInterruptedException` — 일시적 중단입니다. 재시도 가능.
+  - 그 외 하위 타입(`Unknown`/`ProviderConfiguration`/`Unsupported` 등) — 일반 오류로 처리.
+
+### 8.3 서버 오류와의 구분
+
+| 발생 위치 | 형태 | 예 |
+|---|---|---|
+| OS/브라우저 (ceremony) | `DOMException`(웹) / OS 예외(앱) | 사용자 취소, 타임아웃, 미지원 기기 |
+| RP 서버 | §6 envelope `code` | `W002`(세션 만료), `C001`(입력 오류), `P004`(ID Token 검증 실패) |
+
+ceremony 단계(OS/브라우저)와 `finish` 응답(RP 서버)을 각각 `try/catch`로 감싸 둘을 구분해 메시지를 다르게 보여주는 것을 권장합니다. 예: `begin`/`finish`는 서버 오류(§6)로, 그 사이 `navigator.credentials.*`는 OS 오류(§8.1)로 처리합니다.
