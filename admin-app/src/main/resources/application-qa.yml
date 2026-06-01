@@ -18,7 +18,8 @@ spring:
   flyway:
     # qa 도 baseline-on-migrate 는 base 의 true 그대로 — 일부 qa 환경에서
     # 새 schema 로 시작 가능해야 함.
-    locations: classpath:db/migration
+    # qa 는 운영자 계정(seed-common)만. 테넌트 시드는 db/qa(placeholder).
+    locations: classpath:db/migration,classpath:db/seed-common,classpath:db/qa
 
 server:
   port: ${SERVER_PORT:8081}

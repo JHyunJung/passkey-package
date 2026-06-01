@@ -1,0 +1,31 @@
+# local profile — 완전 로컬(localhost) 개발 환경
+#
+# 활성화: SPRING_PROFILES_ACTIVE=local
+#
+# dev 와 동일한 localhost Oracle/Redis + dev key-envelope master 를 쓰되,
+# flyway 는 db/local 시드(demo-rp, rpId=localhost)를 적용한다. rpId=localhost
+# 라 완전 로컬(http://localhost:9090)에서 패스키 등록/인증 ceremony 가 동작한다.
+# (dev 는 rpId=dev-passkey.crosscert.com 서버 배포용 — local 과 별개 테넌트.)
+
+spring:
+  datasource:
+    url: jdbc:oracle:thin:@localhost:1521/XEPDB1
+    driver-class-name: oracle.jdbc.OracleDriver
+    username: APP_ADMIN_USER
+    password: admin_pw
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed-common,classpath:db/local
+
+passkey:
+  key-envelope:
+    # NON-SECRET, local/dev only — dev 와 동일 키(envelope 복호화 호환).
+    master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
+
+logging:
+  level:
+    com.crosscert.passkey: DEBUG
+    org.hibernate.SQL: DEBUG

@@ -17,7 +17,8 @@ spring:
       host: ${SPRING_DATA_REDIS_HOST:}
       port: ${SPRING_DATA_REDIS_PORT:6379}
   flyway:
-    locations: classpath:db/migration
+    # prod 는 seed-common 미포함 — 운영자·테넌트 데모 시드 없음(db/prod placeholder 뿐).
+    locations: classpath:db/migration,classpath:db/prod
     # prod 에서는 baseline 자동 생성 비활성 — schema 가 비정상이면 부팅
     # 실패가 정답 (의도된 fail-fast). 정상 prod schema 라면 V1+ 가 이미
     # 적용돼 있어야 한다.
