@@ -90,8 +90,10 @@ public class AdminSecurityConfig {
             .cors(cors -> cors.configurationSource(corsSource))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
-                .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/", "/admin", "/admin/favicon.ico", "/favicon.ico").permitAll()
-                .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys").permitAll()
+                .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/", "/admin", "/admin/favicon.ico", "/admin/favicon.png", "/favicon.ico").permitAll()
+                .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
+                                 "/admin/activity", "/admin/audit-chain", "/admin/settings", "/admin/license",
+                                 "/admin/forgot-password", "/admin/reset-password").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 // /admin/api/profile 은 active profile 만 노출. Login.tsx 가 미인증 상태에서
                 // local 여부를 알아 테스트 계정 prefill 을 결정하는 데 쓴다.
@@ -156,14 +158,27 @@ public class AdminSecurityConfig {
     }
 
     /**
-     * Return 401 JSON instead of redirecting to /login for unauthenticated
-     * API requests. The SPA handles the 401 by navigating to the login page.
+     * 미인증 요청 처리:
+     *   - /admin/api/** (XHR/fetch) → 401 JSON. SPA 가 이 401 을 받아 로그인 화면으로
+     *     navigate 한다(클라이언트 측 처리).
+     *   - 그 외(페이지/루트/SPA 라우트 직접 접근) → /admin 으로 302 리다이렉트.
+     *     로그인 안 된 상태에서 / 든 /something 이든 무조건 로그인 화면(/admin)으로
+     *     보낸다. 페이지 요청에 401 JSON 을 주면 빈 화면이 되므로 리다이렉트가 맞다.
      */
     private AuthenticationEntryPoint spaEntryPoint() {
         return (HttpServletRequest req, HttpServletResponse res, AuthenticationException ex) -> {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            res.setContentType("application/json");
-            res.getWriter().write("{\"error\":\"unauthorized\"}");
+            String uri = req.getRequestURI();
+            boolean isApi = uri != null && uri.startsWith("/admin/api/");
+            // fetch/XHR 은 Accept 가 application/json 인 경우가 많아 보조 판별로도 씀.
+            String accept = req.getHeader("Accept");
+            boolean wantsJson = accept != null && accept.contains("application/json");
+            if (isApi || wantsJson) {
+                res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                res.setContentType("application/json");
+                res.getWriter().write("{\"error\":\"unauthorized\"}");
+            } else {
+                res.sendRedirect("/admin");
+            }
         };
     }
 
