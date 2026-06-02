@@ -4,6 +4,8 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService;
 import com.crosscert.passkey.admin.auth.MfaPendingFilter;
+import com.crosscert.passkey.admin.auth.TenantBoundary;
+import com.crosscert.passkey.admin.auth.TenantContextAdminFilter;
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.entity.AdminUser;
@@ -75,7 +77,8 @@ public class AdminSecurityConfig {
                                                 LogoutSuccessHandler logoutOk,
                                                 AccessDeniedHandler accessDenied,
                                                 DynamicCorsConfigurationSource corsSource,
-                                                Optional<LicenseGuardFilter> licenseGuard) throws Exception {
+                                                Optional<LicenseGuardFilter> licenseGuard,
+                                                TenantBoundary tenantBoundary) throws Exception {
         // CookieCsrfTokenRepository.withHttpOnlyFalse() lets the SPA
         // read the XSRF-TOKEN cookie via document.cookie and echo it
         // back in X-XSRF-TOKEN. Path=/admin scopes the cookie.
@@ -153,7 +156,16 @@ public class AdminSecurityConfig {
             // MFA endpoints + logout. The pending state is held server-side in
             // the HttpSession (set by adminLoginSuccessHandler), so it cannot
             // be spoofed by a client header.
-            .addFilterAfter(new MfaPendingFilter(), AuthorizationFilter.class);
+            .addFilterAfter(new MfaPendingFilter(), AuthorizationFilter.class)
+            // Defense-in-depth: for RP_ADMIN requests, set TenantContextHolder
+            // so the Hibernate @Filter (activated by TenantFilterAspect) also
+            // enforces tenant isolation at the ORM layer. PLATFORM_OPERATOR
+            // scope is empty → no set → cross-tenant queries work as intended.
+            // Placed AFTER MfaPendingFilter (which itself runs after
+            // AuthorizationFilter) so it executes only once the SecurityContext
+            // is populated AND the MFA gate has passed; cleared unconditionally
+            // in finally to prevent thread-pool context leakage.
+            .addFilterAfter(new TenantContextAdminFilter(tenantBoundary), MfaPendingFilter.class);
         return http.build();
     }
 
