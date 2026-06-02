@@ -1,6 +1,7 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -21,6 +22,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "TENANT_AAGUID_POLICY")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class TenantAaguidPolicy {
 
     @Id
@@ -44,6 +46,7 @@ public class TenantAaguidPolicy {
     @Column(name = "UPDATED_BY", length = 255)
     private String updatedBy;
 
+    // tenant isolation via parent TenantAaguidPolicy @Filter; @ElementCollection cannot carry @Filter directly
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "TENANT_AAGUID_POLICY_ENTRY",
