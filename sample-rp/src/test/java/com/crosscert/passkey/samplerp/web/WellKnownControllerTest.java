@@ -3,6 +3,7 @@ package com.crosscert.passkey.samplerp.web;
 import com.crosscert.passkey.samplerp.config.WellKnownProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 별도 Task 에서 수동 curl 로 확인한다.
  */
 @WebMvcTest(WellKnownController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class WellKnownControllerTest {
 
     @Autowired
