@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.Base64;
@@ -51,6 +52,19 @@ public class RegistrationStartService {
         this.ceremonyMetrics = ceremonyMetrics;
     }
 
+    /**
+     * VPD off(SE2) 모드에서 cross-tenant 누출을 막기 위해 {@code @Transactional} 필수.
+     * {@link com.crosscert.passkey.core.vpd.TenantFilterAspect}는 {@code @Transactional}
+     * 진입 시에만 Hibernate {@code tenantFilter}를 enable 하는데, line 96의
+     * {@code credentials.findCredentialIdsByUserHandle(userHandle)}는 tenant 조건 없이
+     * 필터/VPD에만 의존한다. 트랜잭션 경계가 없으면 필터가 켜지지 않아 다른 tenant의
+     * credentialId 가 excludeCredentials 로 누출된다.
+     *
+     * <p>JPA 접근은 모두 읽기({@code findById}, {@code findCredentialIdsByUserHandle})뿐이고
+     * {@code store.putRegistration(...)}은 Redis 쓰기(JPA 트랜잭션 밖)이므로
+     * {@code readOnly = true}로 둔다. {@code AuthenticationStartService.start()}와 동일.
+     */
+    @Transactional(readOnly = true)
     public RegistrationStartResponse start(RegistrationStartRequest req) {
         try {
             log.info("registration/start entry: usernamePresent={} displayNameLen={}",

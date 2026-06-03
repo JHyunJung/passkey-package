@@ -1,6 +1,7 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -18,6 +19,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "TENANT_WEBAUTHN_SNAPSHOT")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class TenantWebauthnSnapshot {
 
     @Id

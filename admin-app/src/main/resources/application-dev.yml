@@ -26,6 +26,8 @@ passkey:
     # prod 에서 약한 키가 쓰이는 것을 식별하기 쉽게 한다. prod 는 환경변수로 주입.
     # Production sets PASSKEY_KEY_ENVELOPE_MASTER_KEY environment variable.
     master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
+  vpd:
+    enabled: true
 
 logging:
   level:

@@ -15,6 +15,11 @@
 -- Idempotent: each ADD_POLICY is wrapped so a re-run (policy already exists,
 -- ORA-28101) does not fail the migration.
 
+-- SE2 guard: each ADD_POLICY is attempted directly; ORA-00439 (no
+-- fine-grained access control on Standard Edition 2) is swallowed inside
+-- the nested procedure's exception handler, alongside the existing
+-- ORA-28101 idempotency handling. No v$option query → no SYS dynamic-view
+-- SELECT dependency.
 DECLARE
   PROCEDURE add_tenant_policy(p_table IN VARCHAR2, p_policy IN VARCHAR2) IS
   BEGIN
@@ -29,7 +34,8 @@ DECLARE
     );
   EXCEPTION
     WHEN OTHERS THEN
-      IF SQLCODE = -28101 THEN NULL;  -- policy already exists → idempotent
+      IF SQLCODE = -439 THEN NULL;      -- ORA-00439: fine-grained access control not enabled (SE2) → skip
+      ELSIF SQLCODE = -28101 THEN NULL; -- ORA-28101: policy already exists → idempotent
       ELSE RAISE;
       END IF;
   END;

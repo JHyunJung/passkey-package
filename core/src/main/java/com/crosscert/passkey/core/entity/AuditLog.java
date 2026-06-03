@@ -33,6 +33,9 @@ public class AuditLog extends BaseEntity {
     @Column(name = "TARGET_ID", length = 64)
     private String targetId;
 
+    // tenant 격리에서 의도적 제외: tenantId nullable (PLATFORM_OPERATOR row=NULL).
+    // PLATFORM_OPERATOR가 전체 감사 로그를 봐야 하므로 @Filter 미적용.
+    // 격리는 repository 의 명시적 WHERE tenant_id 조건이 담당.
     @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "TENANT_ID", columnDefinition = "RAW(16)")
     private UUID tenantId;

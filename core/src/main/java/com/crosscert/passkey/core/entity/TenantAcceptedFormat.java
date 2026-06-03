@@ -1,12 +1,14 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 
 import java.util.Objects;
 import java.util.UUID;
 
 @Entity
 @Table(name = "TENANT_ACCEPTED_FORMAT")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class TenantAcceptedFormat extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)

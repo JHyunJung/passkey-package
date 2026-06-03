@@ -17,6 +17,11 @@ END tenant_predicate;
 -- (safe default — no leakage when tenant context is missing).
 -- update_check=TRUE makes Oracle reject INSERT/UPDATE attempts whose
 -- tenant_id does not match SYS_CONTEXT.
+-- SE2 guard: ADD_POLICY is attempted directly; on Oracle Standard Edition 2
+-- (no fine-grained access control) it fails with ORA-00439, which is
+-- swallowed so the migration still succeeds (isolation is provided by the
+-- app-level Hibernate @Filter instead). No v$option query is used, so there
+-- is no dependency on SELECT privilege over SYS dynamic views.
 BEGIN
   DBMS_RLS.ADD_POLICY(
     object_schema   => 'APP_OWNER',
@@ -27,5 +32,11 @@ BEGIN
     statement_types => 'SELECT,INSERT,UPDATE,DELETE',
     update_check    => TRUE
   );
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE = -439 THEN NULL;      -- ORA-00439: fine-grained access control not enabled (SE2) → skip
+    ELSIF SQLCODE = -28101 THEN NULL; -- ORA-28101: policy already exists (idempotent re-run)
+    ELSE RAISE;
+    END IF;
 END;
 /

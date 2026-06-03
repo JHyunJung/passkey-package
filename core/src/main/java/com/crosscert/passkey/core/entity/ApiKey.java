@@ -1,6 +1,7 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -12,6 +13,7 @@ import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "API_KEY")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class ApiKey extends BaseEntity {
 
     @Column(name = "TENANT_ID", nullable = false, columnDefinition = "RAW(16)")
