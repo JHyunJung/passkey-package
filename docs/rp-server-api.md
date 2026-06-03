@@ -648,6 +648,29 @@ export async function postJson(url, body) {
   - **Android**: Digital Asset Links — 서버의 `https://<rpId>/.well-known/assetlinks.json`에 앱 패키지명·서명 지문 등록.
   - 여기서 `<rpId>`는 `options` 응답의 `rp.id`(등록) / `rpId`(인증)와 일치해야 합니다.
 
+> **sample-rp 레퍼런스 구현**: 이 well-known 두 파일을 `sample-rp` 가 직접 호스팅합니다
+> (`WellKnownController`). 값은 `application.yml` 의 `sample-rp.well-known` 에서 주입하며,
+> 미설정 시 데모 앱(`com.crosscert.sample.passkey`) 으로 동작합니다. 고객사는 코드를 고치지 않고
+> 아래 환경변수만 자기 앱 값으로 교체하면 됩니다.
+>
+> | 환경변수 | 의미 | 예시 |
+> |---|---|---|
+> | `WK_ANDROID_PACKAGE` | Android 패키지명 | `com.yourcompany.app` |
+> | `WK_ANDROID_SHA256` | 앱 서명 SHA-256 지문 (대문자 콜론 구분) | `AB:CD:...` |
+> | `WK_IOS_APPID` | `TeamID.BundleID` | `ABCDE12345.com.yourcompany.app` |
+>
+> 지문이 여러 개(디버그/릴리즈)거나 iOS 앱이 여러 개면 `application.yml` 에서 리스트로 나열합니다.
+>
+> **운영 주의사항**
+> - **HTTPS 필수**: 검증 에이전트는 `https://<rpId>/.well-known/...` 만 신뢰합니다. (`localhost` 만 예외)
+> - **도메인별 호스팅**: well-known 은 `rpId` 도메인에 묶입니다. 고객사마다 자기 도메인의 RP 서버에서
+>   자기 앱 값으로 호스팅해야 합니다. 한 RP 인스턴스가 여러 고객 도메인을 동시에 받는 구성은 별도 설계 대상입니다.
+> - **Content-Type**: 두 응답 모두 200 + `application/json` 이어야 합니다(특히 확장자 없는
+>   apple-app-site-association). `WellKnownController` 가 `produces` 로 강제합니다.
+> - **Apple CDN 캐싱**: iOS 는 Apple CDN 이 파일을 가져가 캐싱하므로, 값 변경이 즉시 반영되지 않을 수 있습니다.
+> - **robots.txt**: 운영 RP 가 robots.txt 로 크롤러를 막는다면 `Allow: /.well-known/` 을 추가하세요.
+>   sample-rp 는 이를 위한 robots.txt 를 기본 제공합니다.
+
 #### 7.1.1 envelope 풀기 · CSRF 헤더 (양 플랫폼 공통 개념)
 
 RP 응답은 **envelope**으로 감싸여 옵니다. OS API에 넘길 때는 **envelope을 풀어 `data` 안쪽**만 써야 합니다.
