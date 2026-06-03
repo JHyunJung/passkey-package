@@ -3,6 +3,16 @@ server:
 
 sample-rp:
   origin: ${SAMPLE_RP_ORIGIN:http://localhost:9090}
+  # 네이티브 앱 패스키용 Well-Known URI 값. 미설정 시 첨부 샘플 앱(com.crosscert.sample.passkey)
+  # 으로 바로 동작한다. 고객사는 아래 환경변수만 자기 앱 값으로 교체하면 코드 수정 없이 재사용.
+  well-known:
+    android:
+      - package-name: ${WK_ANDROID_PACKAGE:com.crosscert.sample.passkey}
+        sha256-fingerprints:
+          - ${WK_ANDROID_SHA256:63:0C:F8:85:C6:9A:80:A0:87:B0:A2:72:83:61:00:29:F8:36:65:FF:EF:8E:FE:71:71:74:13:ED:34:9D:7C:54}
+    ios:
+      app-ids:
+        - ${WK_IOS_APPID:LTPC88ZFE8.com.crosscert.sample.passkey}
 
 passkey:
   base-url:    ${PASSKEY_BASE_URL:http://localhost:8080}
