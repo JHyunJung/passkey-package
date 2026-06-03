@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -45,11 +46,13 @@ class WellKnownControllerTest {
     void assetLinks_returns200_applicationJson_withConfiguredValues() throws Exception {
         mvc.perform(get("/.well-known/assetlinks.json"))
            .andExpect(status().isOk())
+           .andExpect(jsonPath("$", hasSize(1)))
            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
            .andExpect(jsonPath("$[0].relation[0]").value("delegate_permission/common.handle_all_urls"))
            .andExpect(jsonPath("$[0].relation[1]").value("delegate_permission/common.get_login_creds"))
            .andExpect(jsonPath("$[0].target.namespace").value("android_app"))
            .andExpect(jsonPath("$[0].target.package_name").value("com.example.app"))
+           .andExpect(jsonPath("$[0].target.sha256_cert_fingerprints", hasSize(2)))
            .andExpect(jsonPath("$[0].target.sha256_cert_fingerprints[0]").value("AA:BB"))
            .andExpect(jsonPath("$[0].target.sha256_cert_fingerprints[1]").value("CC:DD"));
     }
@@ -59,6 +62,7 @@ class WellKnownControllerTest {
         mvc.perform(get("/.well-known/apple-app-site-association"))
            .andExpect(status().isOk())
            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+           .andExpect(jsonPath("$.webcredentials.apps", hasSize(2)))
            .andExpect(jsonPath("$.webcredentials.apps[0]").value("TEAMID1.com.example.app"))
            .andExpect(jsonPath("$.webcredentials.apps[1]").value("TEAMID2.com.example.app"));
     }

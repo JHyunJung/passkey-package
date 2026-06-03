@@ -46,7 +46,9 @@ public class WellKnownController {
                                 "package_name", app.packageName(),
                                 "sha256_cert_fingerprints", app.sha256Fingerprints())))
                 .toList();
-        if (log.isDebugEnabled()) {
+        if (statements.isEmpty()) {
+            log.warn("assetlinks.json: Android 앱이 설정되지 않았습니다 — Android 패스키가 동작하지 않습니다 (sample-rp.well-known.android 확인)");
+        } else if (log.isDebugEnabled()) {
             log.debug("assetlinks served: androidApps={}", statements.size());
         }
         return statements;
@@ -56,7 +58,9 @@ public class WellKnownController {
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> appleAppSiteAssociation() {
         List<String> apps = props.ios().appIds();
-        if (log.isDebugEnabled()) {
+        if (apps.isEmpty()) {
+            log.warn("apple-app-site-association: iOS 앱이 설정되지 않았습니다 — iOS 패스키가 동작하지 않습니다 (sample-rp.well-known.ios.app-ids 확인)");
+        } else if (log.isDebugEnabled()) {
             log.debug("aasa served: iosApps={}", apps.size());
         }
         return Map.of("webcredentials", Map.of("apps", apps));
