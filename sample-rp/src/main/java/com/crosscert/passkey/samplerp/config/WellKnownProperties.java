@@ -29,7 +29,11 @@ public record WellKnownProperties(
 
     public record Ios(
             List<String> appIds
-    ) {}
+    ) {
+        public Ios {
+            appIds = appIds == null ? List.of() : appIds;
+        }
+    }
 
     /** android/ios 미설정 시 NPE 대신 빈 리스트로 안전하게 동작. */
     public WellKnownProperties {
