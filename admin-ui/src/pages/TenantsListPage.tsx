@@ -262,7 +262,7 @@ function MetricCard({ label, value, sub, delta }: {
 
 // ── NewTenantDialog ───────────────────────────────────────────────────────────
 
-function NewTenantDialog({ open, onClose, onCreate }: {
+export function NewTenantDialog({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
   onCreate: (i: { name: string; slug: string; rpId: string }) => void;
