@@ -7,6 +7,7 @@ import com.crosscert.passkey.admin.auth.MfaPendingFilter;
 import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.admin.auth.TenantContextAdminFilter;
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource;
+import com.crosscert.passkey.admin.policy.SecurityPolicyService;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
@@ -197,6 +198,7 @@ public class AdminSecurityConfig {
     @Bean
     public AuthenticationSuccessHandler adminLoginSuccessHandler(AuditLogService audit,
                                                                   AdminUserRepository users,
+                                                                  SecurityPolicyService policy,
                                                                   Clock clock,
                                                                   ObjectMapper mapper) {
         return (HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
@@ -215,6 +217,13 @@ public class AdminSecurityConfig {
             // pending. MfaPendingFilter then blocks /admin/api/** (except the
             // MFA endpoints + logout) until /admin/api/mfa/verify clears it.
             // Operators without MFA are unaffected — behavior is unchanged.
+            // Snapshot the operator-configured idle timeout onto this session.
+            // application.yml's session.timeout (PT30M) is only the pre-login
+            // default; from here on the session honors the SecurityPolicy value
+            // so the settings label and the front-end warning modal are truthful.
+            int idleMinutes = policy.get().sessionIdleTimeoutMinutes();
+            req.getSession().setMaxInactiveInterval(idleMinutes * 60);
+
             boolean mfaRequired = u.isMfaEnabled();
             if (mfaRequired) {
                 req.getSession().setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, Boolean.TRUE);
