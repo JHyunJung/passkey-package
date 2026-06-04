@@ -270,7 +270,6 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [rpId, setRpId] = useState('');
-  const [rpIdEdited, setRpIdEdited] = useState(false);
   const [touched, setTouched] = useState(false);
   const slugRe = /^[a-z][a-z0-9-]{1,62}$/;
   const slugOk = slugRe.test(slug);
@@ -283,15 +282,8 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
   // doesn't bleed into the next open. This also runs when a create fails and
   // the parent leaves the dialog open — state is preserved until actual close.
   useEffect(() => {
-    if (!open) { setName(''); setSlug(''); setRpId(''); setRpIdEdited(false); setTouched(false); }
+    if (!open) { setName(''); setSlug(''); setRpId(''); setTouched(false); }
   }, [open]);
-
-  function generate(n: string) {
-    const s = n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-    setSlug(s);
-    // rpId 를 사용자가 아직 직접 수정하지 않았다면 slug 기반 제안값을 채운다(수정 가능).
-    if (!rpIdEdited) setRpId(s ? `${s}.crosscert.com` : '');
-  }
 
   function submit() {
     setTouched(true);
@@ -315,7 +307,7 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
       <div className="stack-3">
         <div>
           <label className="label">표시 이름</label>
-          <input className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => { setName(e.target.value); if (!slug) generate(e.target.value); }} />
+          <input className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
           <label className="label">Slug (영문 식별자)</label>
@@ -329,7 +321,7 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
         <div>
           <label className="label">rpId (Relying Party ID)</label>
           <input className="input mono" placeholder="예: passkey.acme.com" value={rpId}
-                 onChange={(e) => { setRpId(e.target.value.toLowerCase().trim()); setRpIdEdited(true); }} />
+                 onChange={(e) => setRpId(e.target.value.toLowerCase().trim())} />
           <div className="hint">
             {touched && rpId && !rpIdOk
               ? <span style={{ color: 'var(--danger)' }}>스킴·포트·경로 없이 실제 도메인 hostname을 입력하세요(예: passkey.acme.com). example.com은 placeholder라 사용할 수 없습니다.</span>
