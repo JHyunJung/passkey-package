@@ -20,7 +20,8 @@ import SettingsPage from '@/pages/SettingsPage';
 import LicensePage from '@/pages/LicensePage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
-import { api } from '@/api/client';
+import { api, getMe } from '@/api/client';
+import { securityPolicyApi } from '@/api/securityPolicy';
 import type { Me } from '@/api/types';
 import type { AppRoute } from '@/appRoute';
 import { urlToRoute, routeToUrl } from '@/appRoute';
@@ -87,6 +88,14 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 
   const [t, setTweak] = useTweaks();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [idleTimeoutMinutes, setIdleTimeoutMinutes] = useState(30); // 정책 로드 전/실패 시 30분 폴백
+  useEffect(() => {
+    let cancelled = false;
+    securityPolicyApi.get()
+      .then((p) => { if (!cancelled) setIdleTimeoutMinutes(p.sessionIdleTimeoutMinutes); })
+      .catch(() => { /* 폴백 30분 유지 */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Cmd/Ctrl+K → open palette
   useEffect(() => {
@@ -160,7 +169,11 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
         onNavigate={setRoute}
         onAction={paletteAction}
       />
-      <IdleSessionModal onExtend={() => { /* refresh /me — Phase E3 */ }} onLogout={onLogout} />
+      <IdleSessionModal
+        idleTimeoutMinutes={idleTimeoutMinutes}
+        onExtend={() => { void getMe(); }}
+        onLogout={onLogout}
+      />
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="테마" />
