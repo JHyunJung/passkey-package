@@ -69,6 +69,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 // ── Scope options ─────────────────────────────────────────────────────────────
 
+const NAME_MAX = 64;
+
 const SCOPE_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'registration', label: 'registration', desc: '패스키 등록 + self-service credential 관리' },
   { value: 'authentication', label: 'authentication', desc: '패스키 인증(로그인)' },
@@ -241,8 +243,9 @@ function NewKeyDialog({ open, onClose, onIssue }: {
         <button className="btn btn--primary" disabled={!name || scopes.length === 0} onClick={submit}>발급</button>
       </>}
     >
-      <Field label="용도 (이름)" hint="배포 환경이나 용도를 짧게. 예: production, staging, mobile-app">
-        <input autoFocus className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="production" />
+      <Field label="용도 (이름)" hint={`배포 환경이나 용도를 짧게. 예: production, staging, mobile-app (최대 ${NAME_MAX}자)`}>
+        <input autoFocus className="input" maxLength={NAME_MAX} value={name} onChange={(e) => setName(e.target.value)} placeholder="production" />
+        <div className="muted" style={{ fontSize: 11, textAlign: 'right', marginTop: 4 }}>{name.length} / {NAME_MAX}</div>
       </Field>
       <div style={{ marginTop: 14 }}>
         <label className="label">권한 범위 (scope) — 하나 이상</label>
