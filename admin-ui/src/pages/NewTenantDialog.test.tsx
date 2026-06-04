@@ -49,11 +49,11 @@ describe('NewTenantDialog', () => {
     expect(onCreate).toHaveBeenCalledWith({ name: '크로스서트', slug: 'crosscert', rpId: 'passkey.crosscert.com' });
   });
 
-  it('does not call onCreate when slug is invalid', () => {
+  it('does not call onCreate when slug has an invalid character', () => {
     const onCreate = vi.fn();
     const { name, slug, rpId } = renderDialog(onCreate);
     fireEvent.change(name, { target: { value: 'Acme' } });
-    fireEvent.change(slug, { target: { value: 'A' } }); // 대문자 1글자 — invalid (too short + uppercase stripped by onChange to 'a' but length 1 < 2)
+    fireEvent.change(slug, { target: { value: 'a_b' } }); // 언더스코어는 slug 정규식 불허 — lowercase 후에도 invalid
     fireEvent.change(rpId, { target: { value: 'passkey.acme.com' } });
     fireEvent.click(screen.getByRole('button', { name: '생성하고 설정으로 이동' }));
     expect(onCreate).not.toHaveBeenCalled();
