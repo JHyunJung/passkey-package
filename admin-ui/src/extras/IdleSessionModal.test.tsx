@@ -29,4 +29,25 @@ describe('IdleSessionModal', () => {
     act(() => { screen.getByRole('button', { name: '세션 연장' }).click(); });
     expect(onExtend).toHaveBeenCalledTimes(1);
   });
+
+  it('logs out at the full idle time for a 1-minute policy (warn 10s + countdown 50s = 60s)', () => {
+    const onLogout = vi.fn();
+    render(<IdleSessionModal idleTimeoutMinutes={1} onExtend={vi.fn()} onLogout={onLogout} />);
+    // 1분 정책: total=60s, warnAfter=max(60-60,10)=10s, countdown=max(60-10,1)=50s.
+    act(() => { vi.advanceTimersByTime(10 * 1000); }); // 모달 표시 시점
+    expect(screen.getByText(/세션이 곧 만료됩니다/)).toBeInTheDocument();
+    expect(onLogout).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(50 * 1000); }); // 카운트다운 종료 → 총 60s
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onLogout exactly once on expiry', () => {
+    const onLogout = vi.fn();
+    render(<IdleSessionModal idleTimeoutMinutes={2} onExtend={vi.fn()} onLogout={onLogout} />);
+    // 2분 정책: warnAfter=60s, countdown=60s.
+    act(() => { vi.advanceTimersByTime(60 * 1000); }); // 모달 표시
+    expect(onLogout).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(60 * 1000); }); // 카운트다운 종료
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
 });
