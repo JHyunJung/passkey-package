@@ -162,7 +162,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
       />
       <IdleSessionModal
         idleTimeoutMinutes={me.sessionIdleTimeoutMinutes}
-        onExtend={() => { void getMe(); }}
+        onExtend={() => { getMe().catch(() => { /* 401은 client가 로그인으로 redirect 처리 */ }); }}
         onLogout={onLogout}
       />
 

@@ -216,10 +216,6 @@ public class AdminSecurityConfig {
                     null,
                     Map.of("ip", req.getRemoteAddr(),
                            "ua", req.getHeader("User-Agent") == null ? "" : req.getHeader("User-Agent"))));
-            // For MFA-enabled operators, stamp the session as second-factor
-            // pending. MfaPendingFilter then blocks /admin/api/** (except the
-            // MFA endpoints + logout) until /admin/api/mfa/verify clears it.
-            // Operators without MFA are unaffected — behavior is unchanged.
             // Snapshot the operator-configured idle timeout onto this session.
             // application.yml's session.timeout (PT30M) is only the pre-login
             // default; from here on the session honors the SecurityPolicy value
@@ -242,6 +238,10 @@ public class AdminSecurityConfig {
             }
             req.getSession().setMaxInactiveInterval(idleMinutes * 60);
 
+            // For MFA-enabled operators, stamp the session as second-factor
+            // pending. MfaPendingFilter then blocks /admin/api/** (except the
+            // MFA endpoints + logout) until /admin/api/mfa/verify clears it.
+            // Operators without MFA are unaffected — behavior is unchanged.
             boolean mfaRequired = u.isMfaEnabled();
             if (mfaRequired) {
                 req.getSession().setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, Boolean.TRUE);
