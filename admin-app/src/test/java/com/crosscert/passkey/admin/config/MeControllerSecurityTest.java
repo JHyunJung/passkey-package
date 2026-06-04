@@ -145,4 +145,16 @@ class MeControllerSecurityTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.sessionIdleTimeoutMinutes").value(15));
     }
+
+    @Test
+    void me_fallsBackToThirtyMinutes_whenSessionAbsent() throws Exception {
+        when(users.findByEmail(anyString())).thenReturn(Optional.of(adminUser(false)));
+
+        // 세션을 첨부하지 않으면 컨트롤러의 req.getSession(false) 가 null →
+        // AdminSecurityConfig.DEFAULT_IDLE_MINUTES(30) 폴백.
+        mvc.perform(get("/admin/api/me")
+                .with(authentication(operator())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.sessionIdleTimeoutMinutes").value(30));
+    }
 }

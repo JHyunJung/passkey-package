@@ -42,7 +42,7 @@ public class MeController {
         boolean mfaRequired = session != null
                 && Boolean.TRUE.equals(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR));
 
-        int idleMinutes = 30;
+        int idleMinutes = AdminSecurityConfig.DEFAULT_IDLE_MINUTES;
         if (session != null && session.getMaxInactiveInterval() > 0) {
             idleMinutes = session.getMaxInactiveInterval() / 60;
         }

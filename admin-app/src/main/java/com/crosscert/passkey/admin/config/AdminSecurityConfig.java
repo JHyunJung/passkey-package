@@ -55,8 +55,8 @@ public class AdminSecurityConfig {
     /** Maximum email length that the ACTOR_EMAIL column (VARCHAR2 255) accepts. */
     private static final int MAX_EMAIL_LEN = 255;
 
-    /** Fallback idle timeout (minutes) when the policy is unreadable or invalid — matches application.yml PT30M. */
-    private static final int DEFAULT_IDLE_MINUTES = 30;
+    /** Fallback idle timeout (minutes) when the policy is unreadable or invalid — matches application.yml PT30M. Also used by MeController as the no-session fallback. */
+    static final int DEFAULT_IDLE_MINUTES = 30;
 
     @Bean
     public DaoAuthenticationProvider adminAuthProvider(AdminUserDetailsService uds,
