@@ -262,7 +262,7 @@ function MetricCard({ label, value, sub, delta }: {
 
 // ── NewTenantDialog ───────────────────────────────────────────────────────────
 
-function NewTenantDialog({ open, onClose, onCreate }: {
+export function NewTenantDialog({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
   onCreate: (i: { name: string; slug: string; rpId: string }) => void;
@@ -270,9 +270,8 @@ function NewTenantDialog({ open, onClose, onCreate }: {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [rpId, setRpId] = useState('');
-  const [rpIdEdited, setRpIdEdited] = useState(false);
   const [touched, setTouched] = useState(false);
-  const slugRe = /^[a-z][a-z0-9-]{1,62}$/;
+  const slugRe = /^[a-z0-9][a-z0-9-]{1,62}$/;
   const slugOk = slugRe.test(slug);
   // rpId 는 WebAuthn RP ID — registrable domain(hostname). 스킴/포트/경로 없이
   // 점이 포함된 호스트명이어야 한다(예: passkey.acme.com). placeholder 그대로 저장 방지.
@@ -283,15 +282,8 @@ function NewTenantDialog({ open, onClose, onCreate }: {
   // doesn't bleed into the next open. This also runs when a create fails and
   // the parent leaves the dialog open — state is preserved until actual close.
   useEffect(() => {
-    if (!open) { setName(''); setSlug(''); setRpId(''); setRpIdEdited(false); setTouched(false); }
+    if (!open) { setName(''); setSlug(''); setRpId(''); setTouched(false); }
   }, [open]);
-
-  function generate(n: string) {
-    const s = n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-    setSlug(s);
-    // rpId 를 사용자가 아직 직접 수정하지 않았다면 slug 기반 제안값을 채운다(수정 가능).
-    if (!rpIdEdited) setRpId(s ? `${s}.crosscert.com` : '');
-  }
 
   function submit() {
     setTouched(true);
@@ -315,21 +307,21 @@ function NewTenantDialog({ open, onClose, onCreate }: {
       <div className="stack-3">
         <div>
           <label className="label">표시 이름</label>
-          <input className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => { setName(e.target.value); if (!slug) generate(e.target.value); }} />
+          <input className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
           <label className="label">Slug (영문 식별자)</label>
           <input className="input mono" placeholder="acme-corp" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} />
           <div className="hint">
             {touched && slug && !slugOk
-              ? <span style={{ color: 'var(--danger)' }}>영문 소문자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.</span>
-              : <>테넌트를 구분하는 영문 식별자입니다. 영문 소문자로 시작하고, 영문 소문자·숫자·하이픈(-)만 쓸 수 있습니다(2~63자). 띄어쓰기·대문자·한글은 사용할 수 없습니다. <strong>생성 후에는 변경할 수 없습니다.</strong></>}
+              ? <span style={{ color: 'var(--danger)' }}>영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.</span>
+              : <>테넌트를 구분하는 영문 식별자입니다. 영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 쓸 수 있습니다(2~63자). 띄어쓰기·대문자·한글은 사용할 수 없습니다. <strong>생성 후에는 변경할 수 없습니다.</strong></>}
           </div>
         </div>
         <div>
           <label className="label">rpId (Relying Party ID)</label>
           <input className="input mono" placeholder="예: passkey.acme.com" value={rpId}
-                 onChange={(e) => { setRpId(e.target.value.toLowerCase().trim()); setRpIdEdited(true); }} />
+                 onChange={(e) => setRpId(e.target.value.toLowerCase().trim())} />
           <div className="hint">
             {touched && rpId && !rpIdOk
               ? <span style={{ color: 'var(--danger)' }}>스킴·포트·경로 없이 실제 도메인 hostname을 입력하세요(예: passkey.acme.com). example.com은 placeholder라 사용할 수 없습니다.</span>
