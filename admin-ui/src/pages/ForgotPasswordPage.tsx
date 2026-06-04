@@ -33,7 +33,7 @@ export default function ForgotPasswordPage() {
             <div style={{ padding: '12px 14px', background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 8, fontSize: 13, lineHeight: 1.6 }}>
               해당 이메일이 등록돼 있다면 재설정 링크를 보냈습니다. 메일함을 확인하세요.
             </div>
-            <a href="/admin/login" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>← 로그인으로</a>
+            <a href="/admin" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>← 로그인으로</a>
           </>
         ) : (
           <form onSubmit={submit}>
@@ -53,7 +53,7 @@ export default function ForgotPasswordPage() {
             <button type="submit" className="btn btn--primary" disabled={submitting || !email.trim()} style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>
               {submitting ? '전송 중…' : '재설정 링크 보내기'}
             </button>
-            <a href="/admin/login" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 8, justifyContent: 'center' }}>← 로그인으로</a>
+            <a href="/admin" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 8, justifyContent: 'center' }}>← 로그인으로</a>
           </form>
         )}
       </div>

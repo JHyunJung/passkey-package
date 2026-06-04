@@ -43,3 +43,10 @@ admin-ui/vite.config.d.ts
 # dogfooding 산출물 (브라우저 검증 스크린샷)
 dogfood-*.png
 .playwright-mcp/
+.gstack/
+admin-login-confirmed.png
+phase5-login.png
+
+# 에이전트 작업 디렉터리
+.claude/
+.claire/

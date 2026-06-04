@@ -45,14 +45,14 @@ export default function ResetPasswordPage() {
             <div style={{ padding: '12px 14px', background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 8, fontSize: 13 }}>
               유효하지 않은 링크입니다. 재설정을 다시 요청하세요.
             </div>
-            <a href="/admin/login" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>← 로그인으로</a>
+            <a href="/admin" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>← 로그인으로</a>
           </>
         ) : done ? (
           <>
             <div style={{ padding: '12px 14px', background: 'var(--success-soft)', color: 'var(--success)', borderRadius: 8, fontSize: 13 }}>
               비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요.
             </div>
-            <a href="/admin/login" className="btn btn--primary btn--sm" style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>로그인 →</a>
+            <a href="/admin" className="btn btn--primary btn--sm" style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>로그인 →</a>
           </>
         ) : (
           <form onSubmit={submit}>

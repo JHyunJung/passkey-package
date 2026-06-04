@@ -21,6 +21,10 @@ dependencies {
     // junit-platform-launcher 는 root subprojects 가 자동 적용
 }
 
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    archiveFileName.set("sample-rp.jar")
+}
+
 tasks.named<Test>("test") {
     useJUnitPlatform()
     // Java 17 UUID reflection access (passkey-app 와 동일 패턴)

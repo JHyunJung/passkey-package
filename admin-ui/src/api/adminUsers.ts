@@ -30,7 +30,11 @@ async function adminFetch<T>(
   });
 
   if (res.status === 401) {
-    window.location.href = '/admin/login';
+    // 미인증 → 로그인 화면(/admin)으로. 로그인/공개 화면 위에서는 무한 reload 방지.
+    const p = typeof window !== 'undefined' ? window.location.pathname : '';
+    const onLogin = p === '/admin' || p === '/admin/'
+      || p.startsWith('/admin/forgot-password') || p.startsWith('/admin/reset-password');
+    if (!onLogin) window.location.href = '/admin';
     throw new ApiError(401, 'A001', 'Authentication required');
   }
 

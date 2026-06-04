@@ -16,6 +16,18 @@ function getCookie(name: string): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+// 401 redirect 를 건너뛰어야 하는 화면인지. 로그인 화면(SPA basename '/admin'
+// 의 root, 전체 경로 '/admin' 또는 '/admin/')과 비밀번호 재설정 공개 경로에서는
+// /admin 으로 다시 보내면 무한 reload 가 되므로 redirect 하지 않는다.
+function isOnLoginScreen(): boolean {
+  if (typeof window === 'undefined') return false;
+  const p = window.location.pathname;
+  return p === '/admin'
+    || p === '/admin/'
+    || p.startsWith('/admin/forgot-password')
+    || p.startsWith('/admin/reset-password');
+}
+
 // Used for endpoints that return raw JSON (no ApiResponse envelope),
 // e.g. POST /admin/api/tenants/{id}/webauthn-config/diff
 async function rawRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -32,10 +44,11 @@ async function rawRequest<T>(method: string, path: string, body?: unknown): Prom
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) {
-    // 401 시 redirect 는 SPA 가 이미 LoginPage 가 아닐 때만 — 그렇지 않으면 무한 reload.
-    // LoginPage 위에서는 호출자(App.tsx 의 /me catch) 가 me=null 로 처리.
-    if (typeof window !== 'undefined' && !window.location.pathname.endsWith('/admin/login')) {
-      window.location.href = '/admin/login';
+    // 미인증 401 → 로그인 화면(/admin)으로 리다이렉트. 로그인 화면은 SPA basename
+    // '/admin' 의 root('/') 라 전체 경로는 '/admin'(또는 '/admin/'). 이미 그 위에
+    // 있으면 무한 reload 방지로 redirect 하지 않고, App.tsx 의 /me catch 가 me=null 로 처리.
+    if (typeof window !== 'undefined' && !isOnLoginScreen()) {
+      window.location.href = '/admin';
     }
     throw new ApiError(401, 'A001', 'Authentication required');
   }
@@ -72,10 +85,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) {
-    // 401 시 redirect 는 SPA 가 이미 LoginPage 가 아닐 때만 — 그렇지 않으면 무한 reload.
-    // LoginPage 위에서는 호출자(App.tsx 의 /me catch) 가 me=null 로 처리.
-    if (typeof window !== 'undefined' && !window.location.pathname.endsWith('/admin/login')) {
-      window.location.href = '/admin/login';
+    // 미인증 401 → 로그인 화면(/admin)으로 리다이렉트. 로그인 화면은 SPA basename
+    // '/admin' 의 root('/') 라 전체 경로는 '/admin'(또는 '/admin/'). 이미 그 위에
+    // 있으면 무한 reload 방지로 redirect 하지 않고, App.tsx 의 /me catch 가 me=null 로 처리.
+    if (typeof window !== 'undefined' && !isOnLoginScreen()) {
+      window.location.href = '/admin';
     }
     throw new ApiError(401, 'A001', 'Authentication required');
   }
