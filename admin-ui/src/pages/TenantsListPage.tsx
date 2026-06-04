@@ -271,7 +271,7 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
   const [slug, setSlug] = useState('');
   const [rpId, setRpId] = useState('');
   const [touched, setTouched] = useState(false);
-  const slugRe = /^[a-z][a-z0-9-]{1,62}$/;
+  const slugRe = /^[a-z0-9][a-z0-9-]{1,62}$/;
   const slugOk = slugRe.test(slug);
   // rpId 는 WebAuthn RP ID — registrable domain(hostname). 스킴/포트/경로 없이
   // 점이 포함된 호스트명이어야 한다(예: passkey.acme.com). placeholder 그대로 저장 방지.
@@ -314,8 +314,8 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
           <input className="input mono" placeholder="acme-corp" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} />
           <div className="hint">
             {touched && slug && !slugOk
-              ? <span style={{ color: 'var(--danger)' }}>영문 소문자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.</span>
-              : <>테넌트를 구분하는 영문 식별자입니다. 영문 소문자로 시작하고, 영문 소문자·숫자·하이픈(-)만 쓸 수 있습니다(2~63자). 띄어쓰기·대문자·한글은 사용할 수 없습니다. <strong>생성 후에는 변경할 수 없습니다.</strong></>}
+              ? <span style={{ color: 'var(--danger)' }}>영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.</span>
+              : <>테넌트를 구분하는 영문 식별자입니다. 영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 쓸 수 있습니다(2~63자). 띄어쓰기·대문자·한글은 사용할 수 없습니다. <strong>생성 후에는 변경할 수 없습니다.</strong></>}
           </div>
         </div>
         <div>
