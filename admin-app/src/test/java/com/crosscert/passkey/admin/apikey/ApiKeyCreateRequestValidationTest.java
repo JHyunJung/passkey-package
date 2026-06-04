@@ -3,6 +3,8 @@ package com.crosscert.passkey.admin.apikey;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -44,12 +46,24 @@ class ApiKeyCreateRequestValidationTest {
     @Test
     void name65CharsViolatesSize() {
         var violations = validator.validate(req("a".repeat(65)));
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("name"));
+        assertThat(violations)
+                .anyMatch(v -> v.getPropertyPath().toString().equals("name")
+                        && v.getConstraintDescriptor().getAnnotation() instanceof Size);
     }
 
     @Test
     void blankNameViolatesNotBlank() {
         var violations = validator.validate(req("   "));
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("name"));
+        assertThat(violations)
+                .anyMatch(v -> v.getPropertyPath().toString().equals("name")
+                        && v.getConstraintDescriptor().getAnnotation() instanceof NotBlank);
+    }
+
+    @Test
+    void nullNameViolatesNotBlank() {
+        var violations = validator.validate(req(null));
+        assertThat(violations)
+                .anyMatch(v -> v.getPropertyPath().toString().equals("name")
+                        && v.getConstraintDescriptor().getAnnotation() instanceof NotBlank);
     }
 }
