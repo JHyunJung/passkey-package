@@ -55,6 +55,9 @@ public class AdminSecurityConfig {
     /** Maximum email length that the ACTOR_EMAIL column (VARCHAR2 255) accepts. */
     private static final int MAX_EMAIL_LEN = 255;
 
+    /** Fallback idle timeout (minutes) when the policy is unreadable or invalid — matches application.yml PT30M. */
+    private static final int DEFAULT_IDLE_MINUTES = 30;
+
     @Bean
     public DaoAuthenticationProvider adminAuthProvider(AdminUserDetailsService uds,
                                                        PasswordEncoder encoder) {
@@ -221,7 +224,22 @@ public class AdminSecurityConfig {
             // application.yml's session.timeout (PT30M) is only the pre-login
             // default; from here on the session honors the SecurityPolicy value
             // so the settings label and the front-end warning modal are truthful.
-            int idleMinutes = policy.get().sessionIdleTimeoutMinutes();
+            // Defensive: if the policy row is missing or holds a non-positive
+            // value (DB corruption), fall back to the 30-minute default rather
+            // than failing login or setting an unbounded (negative) timeout.
+            int idleMinutes = DEFAULT_IDLE_MINUTES;
+            try {
+                int configured = policy.get().sessionIdleTimeoutMinutes();
+                if (configured >= 1) {
+                    idleMinutes = configured;
+                } else {
+                    log.warn("security policy sessionIdleTimeoutMinutes={} is non-positive; using default {}min",
+                            configured, DEFAULT_IDLE_MINUTES);
+                }
+            } catch (RuntimeException ex) {
+                log.warn("could not read security policy for session timeout; using default {}min: {}",
+                        DEFAULT_IDLE_MINUTES, ex.toString());
+            }
             req.getSession().setMaxInactiveInterval(idleMinutes * 60);
 
             boolean mfaRequired = u.isMfaEnabled();
