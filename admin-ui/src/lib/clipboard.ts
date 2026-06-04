@@ -12,18 +12,18 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
   // 2) 레거시 폴백: 임시 textarea + execCommand('copy')
+  const ta = document.createElement('textarea');
   try {
-    const ta = document.createElement('textarea');
     ta.value = text;
     ta.setAttribute('readonly', '');
     ta.style.position = 'fixed';
     ta.style.left = '-9999px';
     document.body.appendChild(ta);
     ta.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(ta);
-    return ok;
+    return document.execCommand('copy');
   } catch {
     return false;
+  } finally {
+    ta.remove();
   }
 }
