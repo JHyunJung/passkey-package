@@ -27,7 +27,9 @@ passkey:
     # Production sets PASSKEY_KEY_ENVELOPE_MASTER_KEY environment variable.
     master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
   vpd:
-    enabled: true
+    # OFF — dev 는 SE2(VPD/FGAC 없음) 운영 환경을 모사한다. 테넌트 격리는 DB 커널이
+    # 아니라 앱 레벨 Hibernate @Filter(TenantFilterAspect)가 담당한다. (passkey-app dev 와 일치)
+    enabled: false
 
 logging:
   level:

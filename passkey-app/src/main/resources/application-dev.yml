@@ -25,7 +25,9 @@ passkey:
     # 양쪽이 공유하므로 master-key 불일치 시 복호화 실패). prod 는 환경변수로 주입.
     master-key: "jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM="
   vpd:
-    enabled: true
+    # OFF — dev 는 SE2(VPD/FGAC 없음) 운영 환경을 모사한다. 테넌트 격리는 DB 커널이
+    # 아니라 앱 레벨 Hibernate @Filter(TenantFilterAspect)가 담당한다. (admin-app dev 와 일치)
+    enabled: false
 
 logging:
   level:
