@@ -3,7 +3,10 @@
 // HTTP(사내 IP 등) 환경을 위해 execCommand('copy') 폴백을 둔다.
 export async function copyToClipboard(text: string): Promise<boolean> {
   // 1) 표준 Clipboard API (secure context)
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+  // 표준 Clipboard API 는 secure context(HTTPS/localhost)에서만 신뢰 가능.
+  // insecure context면 modern API를 건너뛰고 바로 폴백으로 간다.
+  const secure = typeof window === 'undefined' || window.isSecureContext;
+  if (secure && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
