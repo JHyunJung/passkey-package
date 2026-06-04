@@ -82,6 +82,10 @@ class MeControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
+    // AdminSecurityConfig 의 adminLoginSuccessHandler / adminFilterChain 가 요구하는 협력 빈
+    // (세션 정책 적용·테넌트 경계 필터 추가 시 도입됨) — 슬라이스 컨텍스트 로드를 위해 mock 등록.
+    @MockBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
 
     private Authentication operator() {
         AdminUserDetails principal = new AdminUserDetails(
@@ -126,5 +130,19 @@ class MeControllerSecurityTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.mfaEnabled").value(false))
             .andExpect(jsonPath("$.data.mfaRequired").value(false));
+    }
+
+    @Test
+    void me_exposesSessionIdleTimeoutMinutes_fromMaxInactiveInterval() throws Exception {
+        when(users.findByEmail(anyString())).thenReturn(Optional.of(adminUser(false)));
+
+        var session = new org.springframework.mock.web.MockHttpSession();
+        session.setMaxInactiveInterval(900); // 15분
+
+        mvc.perform(get("/admin/api/me")
+                .with(authentication(operator()))
+                .session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.sessionIdleTimeoutMinutes").value(15));
     }
 }

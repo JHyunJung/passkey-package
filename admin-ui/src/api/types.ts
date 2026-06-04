@@ -4,6 +4,7 @@ export interface Me {
   tenantId: string | null;
   mfaEnabled: boolean;
   mfaRequired: boolean;
+  sessionIdleTimeoutMinutes: number;
 }
 
 export interface TenantView {

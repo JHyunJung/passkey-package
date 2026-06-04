@@ -42,12 +42,18 @@ public class MeController {
         boolean mfaRequired = session != null
                 && Boolean.TRUE.equals(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR));
 
+        int idleMinutes = 30;
+        if (session != null && session.getMaxInactiveInterval() > 0) {
+            idleMinutes = session.getMaxInactiveInterval() / 60;
+        }
+
         return ApiResponse.ok(new MeView(
                 principal.getUsername(),
                 principal.getRole(),
                 principal.getTenantId(),
                 mfaEnabled,
-                mfaRequired
+                mfaRequired,
+                idleMinutes
         ));
     }
 }
