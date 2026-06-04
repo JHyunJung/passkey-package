@@ -15,8 +15,9 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
   // 2) 레거시 폴백: 임시 textarea + execCommand('copy')
-  const ta = document.createElement('textarea');
+  let ta: HTMLTextAreaElement | null = null;
   try {
+    ta = document.createElement('textarea');
     ta.value = text;
     ta.setAttribute('readonly', '');
     ta.style.position = 'fixed';
@@ -27,6 +28,6 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   } finally {
-    ta.remove();
+    ta?.remove();
   }
 }
