@@ -16,7 +16,7 @@ public final class ApiKeyAdminDto {
 
     public record ApiKeyCreateRequest(
             @NotNull UUID tenantId,
-            @NotBlank @Size(max = 256) String name,
+            @NotBlank @Size(max = 64) String name,
             @NotEmpty Set<@NotBlank @Size(max = 32) String> scopes
     ) {}
 

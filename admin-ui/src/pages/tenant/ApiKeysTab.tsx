@@ -4,6 +4,7 @@ import { Dialog } from '@/shell/Dialog';
 import { StatusBadge } from '@/shell/StatusBadge';
 import { useToast } from '@/shell/ToastHost';
 import { apiKeysApi } from '@/api/apiKeys';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { Tenant, ApiKey } from '@/api/designTypes';
 
 // ── Local utilities (mirrors design globals) ──────────────────────────────────
@@ -67,6 +68,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 // ── Scope options ─────────────────────────────────────────────────────────────
+
+const NAME_MAX = 64;
 
 const SCOPE_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'registration', label: 'registration', desc: '패스키 등록 + self-service credential 관리' },
@@ -240,8 +243,9 @@ function NewKeyDialog({ open, onClose, onIssue }: {
         <button className="btn btn--primary" disabled={!name || scopes.length === 0} onClick={submit}>발급</button>
       </>}
     >
-      <Field label="용도 (이름)" hint="배포 환경이나 용도를 짧게. 예: production, staging, mobile-app">
-        <input autoFocus className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="production" />
+      <Field label="용도 (이름)" hint={`배포 환경이나 용도를 짧게. 예: production, staging, mobile-app (최대 ${NAME_MAX}자)`}>
+        <input autoFocus className="input" maxLength={NAME_MAX} value={name} onChange={(e) => setName(e.target.value)} placeholder="production" />
+        <div className="muted" style={{ fontSize: 11, textAlign: 'right', marginTop: 4 }}>{name.length} / {NAME_MAX}</div>
       </Field>
       <div style={{ marginTop: 14 }}>
         <label className="label">권한 범위 (scope) — 하나 이상</label>
@@ -267,6 +271,7 @@ function IssuedKeyModal({ issued, onClose }: {
   issued: { key: ApiKey; plaintext: string; oldKeyExpiresAt?: string } | null;
   onClose: () => void;
 }) {
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
   const [checked, setChecked] = useState(false);
   useEffect(() => { if (issued) { setCopied(false); setChecked(false); } }, [issued]);
@@ -318,7 +323,11 @@ function IssuedKeyModal({ issued, onClose }: {
             }}>
               <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{issued.key.prefix}</span>.<span>{issued.plaintext.slice(issued.key.prefix.length + 1)}</span>
             </div>
-            <button className="btn btn--primary btn--sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={() => { navigator.clipboard?.writeText(issued.plaintext); setCopied(true); }}>
+            <button className="btn btn--primary btn--sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={async () => {
+              const ok = await copyToClipboard(issued.plaintext);
+              if (ok) setCopied(true);
+              else toast({ kind: 'warn', title: '복사 실패', message: '클립보드 복사에 실패했습니다. 키를 직접 선택해 복사하세요.' });
+            }}>
               {copied ? <><Icons.Check size={12} /> 복사됨</> : <><Icons.Copy size={12} /> 클립보드</>}
             </button>
           </div>
