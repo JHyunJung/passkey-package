@@ -4,8 +4,8 @@ import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom';
 import { RequirePlatform } from './RequirePlatform';
 import type { Me } from '@/api/types';
 
-const platform: Me = { email: 'a@x.com', role: 'PLATFORM_OPERATOR', tenantId: null, mfaEnabled: false, mfaRequired: false };
-const rp: Me = { email: 'b@x.com', role: 'RP_ADMIN', tenantId: 'tid-123', mfaEnabled: false, mfaRequired: false };
+const platform: Me = { email: 'a@x.com', role: 'PLATFORM_OPERATOR', tenantId: null, mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
+const rp: Me = { email: 'b@x.com', role: 'RP_ADMIN', tenantId: 'tid-123', mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
 
 function ShowTenantId() { return <div>tenant:{useParams().id}</div>; }
 

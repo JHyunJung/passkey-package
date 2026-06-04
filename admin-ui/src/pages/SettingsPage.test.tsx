@@ -10,8 +10,8 @@ vi.mock('./settings/AccountTab', () => ({ default: () => <div>ACCOUNT TAB</div> 
 
 import SettingsPage from './SettingsPage';
 
-const platform: Me = { email: 'a@x.com', role: 'PLATFORM_OPERATOR', tenantId: null, mfaEnabled: false, mfaRequired: false };
-const rp: Me = { email: 'b@x.com', role: 'RP_ADMIN', tenantId: 'tid-123', mfaEnabled: false, mfaRequired: false };
+const platform: Me = { email: 'a@x.com', role: 'PLATFORM_OPERATOR', tenantId: null, mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
+const rp: Me = { email: 'b@x.com', role: 'RP_ADMIN', tenantId: 'tid-123', mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
 
 describe('SettingsPage tab role filter', () => {
   it('PLATFORM_OPERATOR sees all tabs', () => {

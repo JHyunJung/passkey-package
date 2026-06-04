@@ -7,6 +7,7 @@ import com.crosscert.passkey.admin.auth.MfaPendingFilter;
 import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.admin.auth.TenantContextAdminFilter;
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource;
+import com.crosscert.passkey.admin.policy.SecurityPolicyService;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
@@ -53,6 +54,9 @@ public class AdminSecurityConfig {
 
     /** Maximum email length that the ACTOR_EMAIL column (VARCHAR2 255) accepts. */
     private static final int MAX_EMAIL_LEN = 255;
+
+    /** Fallback idle timeout (minutes) when the policy is unreadable or invalid — matches application.yml PT30M. Also used by MeController as the no-session fallback. */
+    static final int DEFAULT_IDLE_MINUTES = 30;
 
     @Bean
     public DaoAuthenticationProvider adminAuthProvider(AdminUserDetailsService uds,
@@ -197,6 +201,7 @@ public class AdminSecurityConfig {
     @Bean
     public AuthenticationSuccessHandler adminLoginSuccessHandler(AuditLogService audit,
                                                                   AdminUserRepository users,
+                                                                  SecurityPolicyService policy,
                                                                   Clock clock,
                                                                   ObjectMapper mapper) {
         return (HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
@@ -211,6 +216,28 @@ public class AdminSecurityConfig {
                     null,
                     Map.of("ip", req.getRemoteAddr(),
                            "ua", req.getHeader("User-Agent") == null ? "" : req.getHeader("User-Agent"))));
+            // Snapshot the operator-configured idle timeout onto this session.
+            // application.yml's session.timeout (PT30M) is only the pre-login
+            // default; from here on the session honors the SecurityPolicy value
+            // so the settings label and the front-end warning modal are truthful.
+            // Defensive: if the policy row is missing or holds a non-positive
+            // value (DB corruption), fall back to the 30-minute default rather
+            // than failing login or setting an unbounded (negative) timeout.
+            int idleMinutes = DEFAULT_IDLE_MINUTES;
+            try {
+                int configured = policy.get().sessionIdleTimeoutMinutes();
+                if (configured >= 1) {
+                    idleMinutes = configured;
+                } else {
+                    log.warn("security policy sessionIdleTimeoutMinutes={} is non-positive; using default {}min",
+                            configured, DEFAULT_IDLE_MINUTES);
+                }
+            } catch (RuntimeException ex) {
+                log.warn("could not read security policy for session timeout; using default {}min: {}",
+                        DEFAULT_IDLE_MINUTES, ex.toString());
+            }
+            req.getSession().setMaxInactiveInterval(idleMinutes * 60);
+
             // For MFA-enabled operators, stamp the session as second-factor
             // pending. MfaPendingFilter then blocks /admin/api/** (except the
             // MFA endpoints + logout) until /admin/api/mfa/verify clears it.

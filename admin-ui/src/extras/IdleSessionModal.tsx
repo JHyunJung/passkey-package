@@ -3,42 +3,60 @@ import { Dialog } from '@/shell/Dialog';
 import { Icons } from '@/icons/Icons';
 
 export type IdleSessionModalProps = {
+  idleTimeoutMinutes: number;
   onExtend: () => void;
   onLogout: () => void;
 };
 
-export function IdleSessionModal({ onExtend, onLogout }: IdleSessionModalProps): ReactNode {
+const WARN_LEAD_SECONDS = 60;
+
+export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: IdleSessionModalProps): ReactNode {
+  // 카운트다운 길이를 전체 idle 시간에서 파생한다.
+  // 짧은 정책(예: 1분)에서도 (모달 표시 시점 + 카운트다운)이 전체 idle과 정확히 일치하도록.
+  const totalSeconds = idleTimeoutMinutes * 60;
+  const warnAfterSeconds = Math.max(totalSeconds - WARN_LEAD_SECONDS, 10);
+  const countdownSeconds = Math.max(totalSeconds - warnAfterSeconds, 1);
+
   const [open, setOpen] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [secondsLeft, setSecondsLeft] = useState(countdownSeconds);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // 모달이 이미 열려 있는 동안에는 idle 타이머를 다시 무장하지 않는다.
+    // (그렇지 않으면 warn 타이머가 카운트다운 도중 다시 발화해 secondsLeft가 리셋됨.)
+    if (open) return;
+    const warnAfterMs = warnAfterSeconds * 1000;
     function bumpIdle() {
       clearTimeout(idleTimer.current!);
       idleTimer.current = setTimeout(() => {
-        setSecondsLeft(60);
+        setSecondsLeft(countdownSeconds);
         setOpen(true);
-      }, 90 * 1000); // 90s for demo
+      }, warnAfterMs);
     }
     bumpIdle();
-    const handler = () => { if (!open) bumpIdle(); };
+    const handler = () => bumpIdle();
     ["mousemove", "keydown", "click", "scroll"].forEach((e) => window.addEventListener(e, handler, { passive: true }));
     return () => {
       clearTimeout(idleTimer.current!);
       ["mousemove", "keydown", "click", "scroll"].forEach((e) => window.removeEventListener(e, handler));
     };
-  }, [open]);
+  }, [open, warnAfterSeconds, countdownSeconds]);
 
   useEffect(() => {
     if (!open) return;
     const tick = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) { clearInterval(tick); setOpen(false); onLogout?.(); return 0; }
-        return s - 1;
-      });
+      setSecondsLeft((s) => (s <= 1 ? 0 : s - 1));
     }, 1000);
     return () => clearInterval(tick);
-  }, [open, onLogout]);
+  }, [open]);
+
+  // 카운트다운이 0에 도달하면 로그아웃 (부작용은 updater 밖, 렌더 후 effect에서 1회만).
+  useEffect(() => {
+    if (open && secondsLeft === 0) {
+      setOpen(false);
+      onLogout?.();
+    }
+  }, [open, secondsLeft, onLogout]);
 
   if (!open) return null;
   return (
@@ -52,10 +70,10 @@ export function IdleSessionModal({ onExtend, onLogout }: IdleSessionModalProps):
     >
       <div className="stack-3">
         <p style={{ margin: 0, fontSize: 13, color: "var(--text-soft)", lineHeight: 1.6 }}>
-          보안을 위해 30분 동안 활동이 없으면 자동으로 로그아웃됩니다. 작업을 계속하려면 <strong>세션 연장</strong>을 눌러주세요.
+          보안을 위해 {idleTimeoutMinutes}분 동안 활동이 없으면 자동으로 로그아웃됩니다. 작업을 계속하려면 <strong>세션 연장</strong>을 눌러주세요.
         </p>
         <div style={{ height: 6, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
-          <div style={{ width: `${(secondsLeft / 60) * 100}%`, height: "100%", background: secondsLeft > 20 ? "var(--accent)" : "var(--danger)", transition: "width 1s linear, background 220ms" }} />
+          <div style={{ width: `${(secondsLeft / countdownSeconds) * 100}%`, height: "100%", background: secondsLeft > 20 ? "var(--accent)" : "var(--danger)", transition: "width 1s linear, background 220ms" }} />
         </div>
         <div className="muted" style={{ fontSize: 12 }}>
           모든 mutation은 audit log에 기록되어 있으므로 작업 내역은 보존됩니다.

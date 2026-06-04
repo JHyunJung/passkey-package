@@ -20,7 +20,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import LicensePage from '@/pages/LicensePage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
-import { api } from '@/api/client';
+import { api, getMe } from '@/api/client';
 import type { Me } from '@/api/types';
 import type { AppRoute } from '@/appRoute';
 import { urlToRoute, routeToUrl } from '@/appRoute';
@@ -160,7 +160,11 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
         onNavigate={setRoute}
         onAction={paletteAction}
       />
-      <IdleSessionModal onExtend={() => { /* refresh /me — Phase E3 */ }} onLogout={onLogout} />
+      <IdleSessionModal
+        idleTimeoutMinutes={me.sessionIdleTimeoutMinutes}
+        onExtend={() => { getMe().catch(() => { /* 401은 client가 로그인으로 redirect 처리 */ }); }}
+        onLogout={onLogout}
+      />
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="테마" />
