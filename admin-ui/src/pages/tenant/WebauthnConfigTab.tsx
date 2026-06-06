@@ -60,6 +60,28 @@ function OptionGuide({ guide }: { guide?: { tone: 'info' | 'ok' | 'warn'; text: 
   );
 }
 
+// ── timeoutMs → 초/분 환산 안내 ──────────────────────────────────────────────
+// 권장 범위 60000–120000ms(=60–120초). 벗어나면 warn 톤으로 주의.
+
+function timeoutGuide(ms: number): { tone: 'info' | 'ok' | 'warn'; text: string } {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return { tone: 'warn', text: '0보다 큰 값을 입력하세요. 권장 60000–120000ms(60–120초).' };
+  }
+  const totalSec = ms / 1000;
+  // 정수 초면 "60초", 소수면 "1.5초"처럼 불필요한 0 제거
+  const secLabel = Number.isInteger(totalSec) ? `${totalSec}초` : `${parseFloat(totalSec.toFixed(2))}초`;
+  // 60초 이상이면 분·초로도 풀어서 표기 (예: 90초 → 1분 30초)
+  let human = `= ${secLabel}`;
+  if (totalSec >= 60) {
+    const m = Math.floor(totalSec / 60);
+    const s = Math.round(totalSec - m * 60);
+    human = `= ${secLabel}` + (s === 0 ? ` (${m}분)` : ` (${m}분 ${s}초)`);
+  }
+  if (ms < 60000) return { tone: 'warn', text: `${human} — 권장(60초)보다 짧습니다. 너무 짧으면 사용자가 인증을 끝내기 전에 만료될 수 있습니다.` };
+  if (ms > 120000) return { tone: 'warn', text: `${human} — 권장(120초)보다 깁니다. 너무 길면 만료를 기다리는 동안 ceremony 자원이 오래 점유됩니다.` };
+  return { tone: 'ok', text: `${human} — 권장 범위(60–120초) 안입니다.` };
+}
+
 // ── WebauthnConfigTab ─────────────────────────────────────────────────────────
 
 type WebauthnConfigTabProps = { tenant: Tenant };
@@ -182,6 +204,7 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
               </Field>
               <Field label="timeoutMs" hint="ceremony 타임아웃 (밀리초). 권장 60000–120000.">
                 <input className="input mono" type="number" value={draft.timeoutMs} onChange={(e) => setDraft({ ...draft, timeoutMs: parseInt(e.target.value || '0', 10) })} />
+                <OptionGuide guide={timeoutGuide(draft.timeoutMs)} />
               </Field>
             </div>
             <div className="stack-3">
