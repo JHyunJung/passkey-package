@@ -76,9 +76,11 @@ export default function TenantsListPage() {
   async function handleCreate(input: { name: string; slug: string; rpId: string }) {
     try {
       const t = await tenantsApi.create(input);
-      toast({ kind: 'ok', title: 'Tenant 생성 완료', message: t.name });
+      toast({ kind: 'ok', title: 'Tenant 생성 완료', message: `${t.name} · WebAuthn 설정으로 이동합니다` });
       setShowNew(false);
-      await reload();
+      // 안내문("다음 단계: WebAuthn config …")과 버튼 라벨("생성하고 설정으로 이동")대로,
+      // 생성 직후 새 테넌트의 WebAuthn config 탭으로 이동시켜 온보딩 흐름을 잇는다.
+      navigate(`/tenants/${t.id}?tab=webauthn`);
     } catch (e: unknown) {
       const err = e as { message?: string };
       toast({ kind: 'err', title: '생성 실패', message: err?.message || '오류' });
