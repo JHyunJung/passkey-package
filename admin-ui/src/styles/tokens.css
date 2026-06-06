@@ -326,7 +326,11 @@ code, pre, .mono { font-family: var(--mono); }
 .page__sub { font-size: 13px; color: var(--text-mute); margin-top: 4px; }
 
 /* ===== Tabs ================================================= */
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 20px; overflow-x: auto; }
+/* tabs__btn 의 margin-bottom:-1px(active 밑줄을 컨테이너 border 와 겹치게 하는 트릭)이
+   콘텐츠를 1px 삐져나가게 해, overflow-x:auto 가 끌어올린 overflow-y 와 맞물려 불필요한
+   세로 스크롤을 만든다. padding-bottom:1px 로 음수 마진을 정확히 상쇄(scrollHeight==clientHeight)
+   하고, overflow-y:hidden 으로 한 번 더 막는다. 가로 스크롤(탭이 넘칠 때)만 유지. */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 20px; padding-bottom: 1px; overflow-x: auto; overflow-y: hidden; }
 .tabs__btn {
   background: transparent; border: 0;
   padding: 10px 14px; font-size: 13px; font-weight: 500;
