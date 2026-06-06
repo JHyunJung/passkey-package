@@ -98,6 +98,10 @@ public class AdminSecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
                 .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/", "/admin", "/admin/favicon.ico", "/admin/favicon.png", "/favicon.ico").permitAll()
+                // 브랜드 정적 에셋(Vite public/ → dist/ 루트로 복사되어 /admin/<name> 으로 서빙됨).
+                // 로그인 전 화면(LoginPage)에서 노출되므로 미인증 허용. *.png 전체가 아니라
+                // 파일명 명시 — 화이트리스트를 좁게 유지(favicon 선례와 동일).
+                .requestMatchers("/admin/crosscert-logo-transparent.png").permitAll()
                 .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
                                  "/admin/activity", "/admin/audit-chain", "/admin/settings", "/admin/license",
                                  "/admin/forgot-password", "/admin/reset-password").permitAll()

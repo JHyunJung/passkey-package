@@ -88,7 +88,7 @@
   --row-px: 14px;
   --row-font: 13px;
   --card-pad: 20px;
-  --sidebar-w: 232px;
+  --sidebar-w: 260px;
 }
 
 :root[data-density="comfortable"] {
@@ -98,7 +98,7 @@
   --card-pad: 24px;
 }
 
-:root[data-sidebar="icons"]      { --sidebar-w: 60px; }
+:root[data-sidebar="icons"]      { --sidebar-w: 64px; }
 :root[data-sidebar="collapsed"]  { --sidebar-w: 0px; }
 
 /* ── Dark · Linear-style warm-black ─────────────────────── */

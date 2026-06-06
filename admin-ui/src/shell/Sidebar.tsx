@@ -54,19 +54,19 @@ function NavBtn({ item, active, onClick, mode }: NavBtnProps) {
       onClick={onClick}
       title={mode === 'icons' ? item.label : undefined}
       style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        width: '100%', padding: mode === 'icons' ? '9px 0' : '8px 10px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        width: '100%', padding: mode === 'icons' ? '11px 0' : '10px 12px',
         justifyContent: mode === 'icons' ? 'center' : 'flex-start',
         background: active ? 'var(--accent-soft)' : 'transparent',
         color: active ? 'var(--accent)' : 'var(--text-soft)',
-        border: '0', borderRadius: 7,
-        fontSize: 13, fontWeight: active ? 600 : 500, cursor: 'pointer',
-        textAlign: 'left', marginBottom: 1,
+        border: '0', borderRadius: 8,
+        fontSize: 14, fontWeight: active ? 600 : 500, cursor: 'pointer',
+        textAlign: 'left', marginBottom: 2,
       }}
       onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--surface-3)'; }}
       onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
     >
-      <IconC size={16} />
+      <IconC size={18} />
       {mode === 'labels' && <span>{item.label}</span>}
     </button>
   );
@@ -136,12 +136,17 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
       overflow: 'hidden',
     }}>
       <div style={{ height: 52, flexShrink: 0, boxSizing: 'border-box', padding: sidebarMode === 'icons' ? '0 8px' : '0 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Icons.BrandMark size={26} />
-        {sidebarMode === 'labels' && (
-          <div className="stack-1" style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.2, letterSpacing: '-0.01em' }}>Passkey Admin</div>
-            <div style={{ fontSize: 11, color: 'var(--text-mute)', lineHeight: 1.2 }}>Crosscert · prod</div>
+        {sidebarMode === 'labels' ? (
+          <div className="stack-1" style={{ minWidth: 0, gap: 3 }}>
+            <img
+              src="/admin/crosscert-logo-transparent.png"
+              alt="CROSSCERT"
+              style={{ height: 18, width: 'auto', display: 'block' }}
+            />
+            <div style={{ fontSize: 11.5, color: 'var(--text-mute)', lineHeight: 1.2, letterSpacing: '-0.01em' }}>Passkey Admin · prod</div>
           </div>
+        ) : (
+          <Icons.BrandMark size={26} />
         )}
       </div>
 
@@ -165,7 +170,7 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
         </div>
       )}
 
-      <nav style={{ padding: '10px 8px', flex: 1, overflow: 'auto' }}>
+      <nav style={{ padding: sidebarMode === 'icons' ? '12px 8px' : '12px 12px', flex: 1, overflow: 'auto' }}>
         {tenant ? (
           NAV_RP.map((item) => <NavBtn key={item.id} item={item} active={currentRoute.name === 'tenant' && currentRoute.tab === item.id} mode={sidebarMode ?? 'labels'} onClick={() => onNavigate({ name: 'tenant', tenantId: tenant.id, tab: item.id })} />)
         ) : (
@@ -201,6 +206,18 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
               <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>마지막 검증 · {timeAgo(chain.verifiedAt)} · {chain.totals.verifiedRows.toLocaleString()} 행</div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Footer brand: 회사 CI 워드마크 */}
+      {sidebarMode === 'labels' && (
+        <div style={{ padding: '10px 14px 12px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>Powered by</span>
+          <img
+            src="/admin/crosscert-logo-transparent.png"
+            alt="CROSSCERT"
+            style={{ height: 13, width: 'auto', display: 'block', opacity: 0.85 }}
+          />
         </div>
       )}
     </aside>

@@ -117,6 +117,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       {/* Form side */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
         <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: 380 }}>
+          <img
+            src="/admin/crosscert-logo-transparent.png"
+            alt="CROSSCERT"
+            style={{ height: 28, width: 'auto', display: 'block', marginBottom: 28 }}
+          />
           <h2 style={{ fontSize: 24, fontWeight: 600, letterSpacing: '-0.01em', margin: 0 }}>관리자 로그인</h2>
           <p style={{ fontSize: 13, color: 'var(--text-mute)', marginTop: 6, marginBottom: 28 }}>
             Crosscert Passkey 콘솔에 접근하려면 운영자 계정으로 로그인하세요.
