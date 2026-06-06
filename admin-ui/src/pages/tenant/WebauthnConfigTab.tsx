@@ -26,6 +26,38 @@ function diffObjects(
   return out;
 }
 
+// origin 입력값을 검증한다. WebAuthn 스펙상 origin 의 host 는 rpId 와 같거나
+// rpId 의 서브도메인이어야 한다(rpId 는 origin host 의 등록 가능 도메인 접미사).
+//  rpId=dev-passkey.crosscert.com →
+//   ✅ dev-passkey.crosscert.com (자기 자신), sub.dev-passkey.crosscert.com (서브도메인)
+//   ❌ de-passkey.crosscert.com (다른 host), crosscert.com (상위 도메인)
+// 반환: { ok:true, value } 정규화된 origin, 또는 { ok:false, error } 사유.
+export function validateOrigin(input: string, rpId: string): { ok: true; value: string } | { ok: false; error: string } {
+  const raw = input.trim();
+  if (!raw) return { ok: false, error: 'origin 을 입력하세요.' };
+  // 스킴이 없으면 https:// 를 가정해 파싱(사용자가 host만 입력한 경우 허용).
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let url: URL;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    return { ok: false, error: `'${raw}' 는 올바른 origin 형식이 아닙니다. 예) https://${rpId}` };
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return { ok: false, error: 'origin 스킴은 https(또는 http)만 허용됩니다.' };
+  }
+  const host = url.hostname.toLowerCase();
+  const base = rpId.toLowerCase();
+  const isSelf = host === base;
+  const isSub = host.endsWith(`.${base}`);
+  if (!isSelf && !isSub) {
+    return { ok: false, error: `origin host '${host}' 는 rpId '${rpId}' 범위를 벗어납니다. rpId 자신이거나 그 서브도메인(예: sub.${rpId})만 추가할 수 있습니다.` };
+  }
+  // 정규화: scheme://host[:port] (경로·쿼리 제거). WebAuthn origin 은 path 를 갖지 않는다.
+  const normalized = `${url.protocol}//${url.host}`;
+  return { ok: true, value: normalized };
+}
+
 // ── 옵션별 설명 (선택값에 따라 동적으로 노출) ─────────────────────────────────
 // WebAuthn 스펙 기준. ceremony 동작에 직접 영향을 주므로 운영자가 선택 전후로
 // 무엇이 바뀌는지 한눈에 알 수 있게 한다.
@@ -92,6 +124,7 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
   const [cfg, setCfg] = useState<ConfigWithMds | null>(null);
   const [draft, setDraft] = useState<ConfigWithMds | null>(null);
   const [originInput, setOriginInput] = useState('');
+  const [originError, setOriginError] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
   const [diffChanges, setDiffChanges] = useState<{ key: string; from: unknown; to: unknown }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -114,9 +147,18 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
     if (!draft) return;
     const v = originInput.trim();
     if (!v) return;
-    if (draft.origins.includes(v)) return;
-    setDraft({ ...draft, origins: [...draft.origins, v] });
+    const result = validateOrigin(v, draft.rpId);
+    if (!result.ok) {
+      setOriginError(result.error);
+      return;
+    }
+    if (draft.origins.includes(result.value)) {
+      setOriginError(`'${result.value}' 는 이미 추가되어 있습니다.`);
+      return;
+    }
+    setDraft({ ...draft, origins: [...draft.origins, result.value] });
     setOriginInput('');
+    setOriginError(null);
   }
 
   function removeOrigin(o: string) {
@@ -210,8 +252,8 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
               </Field>
             </div>
             <div className="stack-3">
-              <Field label="origins" hint="ceremony가 시작될 수 있는 origin (정확히 일치)">
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 8px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', minHeight: 38 }}>
+              <Field label="origins" hint={`rpId(${draft.rpId}) 또는 그 서브도메인만 허용`}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 8px', border: `1px solid ${originError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 8, background: 'var(--surface)', minHeight: 38 }}>
                   {draft.origins.map((o) => (
                     <span key={o} className="chip mono" style={{ fontSize: 11 }}>
                       {o}
@@ -219,13 +261,19 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
                     </span>
                   ))}
                   <input
-                    placeholder="https://… 입력 후 Enter"
+                    placeholder={`https://${draft.rpId} 입력 후 Enter`}
                     style={{ border: 0, outline: 'none', fontSize: 12, padding: '2px 4px', flex: 1, minWidth: 160, background: 'transparent', color: 'var(--text)' }}
                     value={originInput}
-                    onChange={(e) => setOriginInput(e.target.value)}
+                    onChange={(e) => { setOriginInput(e.target.value); if (originError) setOriginError(null); }}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addOrigin())}
                   />
                 </div>
+                {originError && (
+                  <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--danger-soft)', borderRadius: 6, fontSize: 12, lineHeight: 1.6, color: 'var(--danger)', display: 'flex', gap: 7 }}>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}><Icons.Alert size={13} /></span>
+                    <span>{originError}</span>
+                  </div>
+                )}
               </Field>
               <Field label="userVerification" hint="사용자 확인(PIN·생체) 강제 수준">
                 <Segmented value={draft.userVerification} onChange={(v) => setDraft({ ...draft, userVerification: v as WebauthnConfig['userVerification'] })} options={['REQUIRED', 'PREFERRED', 'DISCOURAGED']} />
