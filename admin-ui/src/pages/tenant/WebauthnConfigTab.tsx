@@ -26,6 +26,40 @@ function diffObjects(
   return out;
 }
 
+// ── 옵션별 설명 (선택값에 따라 동적으로 노출) ─────────────────────────────────
+// WebAuthn 스펙 기준. ceremony 동작에 직접 영향을 주므로 운영자가 선택 전후로
+// 무엇이 바뀌는지 한눈에 알 수 있게 한다.
+
+const UV_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> = {
+  REQUIRED: { tone: 'ok', text: 'PIN·지문·얼굴 등 사용자 확인(UV)을 반드시 요구합니다. UV를 못 하는 인증기는 ceremony가 실패합니다. 2FA 수준의 보안이 필요할 때 권장.' },
+  PREFERRED: { tone: 'info', text: '가능하면 UV를 수행하되, 지원하지 않는 인증기는 UV 없이도 허용합니다. 보안과 호환성의 균형 — 대부분의 서비스 기본값.' },
+  DISCOURAGED: { tone: 'warn', text: 'UV를 요구하지 않습니다(사용자 존재 확인만). 마찰은 가장 적지만 단일 인증 요소가 되므로, 비밀번호 등 다른 요소와 함께 쓸 때만 권장.' },
+};
+
+const AT_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> = {
+  NONE: { tone: 'info', text: 'attestation을 요청하지 않습니다. 프라이버시가 가장 높고 등록이 단순해, 인증기 모델 검증이 불필요한 일반 서비스에 권장.' },
+  INDIRECT: { tone: 'info', text: 'attestation을 원하되 클라이언트가 익명화할 수 있게 허용합니다. 출처 정보를 받되 개별 기기 추적은 피하고 싶을 때.' },
+  DIRECT: { tone: 'warn', text: '인증기의 attestation을 그대로 받습니다. AAGUID·모델 확인이나 MDS 매칭으로 허용 기기를 통제하려면 필요. 등록 시 사용자 동의 프롬프트가 뜰 수 있습니다.' },
+  ENTERPRISE: { tone: 'warn', text: '기기를 개별 식별할 수 있는 attestation을 요구합니다. 사전 등록된 인증기만 쓰는 사내 환경 전용 — 일반 사용자 대상 서비스에는 부적합.' },
+};
+
+// ── OptionGuide — 선택값에 맞는 안내 박스 ────────────────────────────────────
+
+function OptionGuide({ guide }: { guide?: { tone: 'info' | 'ok' | 'warn'; text: string } }) {
+  if (!guide) return null;
+  const palette = {
+    info: { bg: 'var(--surface-3)', fg: 'var(--text-soft)', icon: 'var(--text-mute)' },
+    ok: { bg: 'var(--success-soft)', fg: 'var(--success)', icon: 'var(--success)' },
+    warn: { bg: 'var(--warning-soft)', fg: 'var(--warning)', icon: 'var(--warning)' },
+  }[guide.tone];
+  return (
+    <div style={{ marginTop: 8, padding: '8px 10px', background: palette.bg, borderRadius: 6, fontSize: 12, lineHeight: 1.6, color: palette.fg, display: 'flex', gap: 7 }}>
+      <span style={{ color: palette.icon, flexShrink: 0, marginTop: 1 }}><Icons.Info size={13} /></span>
+      <span>{guide.text}</span>
+    </div>
+  );
+}
+
 // ── WebauthnConfigTab ─────────────────────────────────────────────────────────
 
 type WebauthnConfigTabProps = { tenant: Tenant };
@@ -168,11 +202,13 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
                   />
                 </div>
               </Field>
-              <Field label="userVerification" hint="UV flag. REQUIRED 권장 — PIN/biometric 강제.">
+              <Field label="userVerification" hint="UV flag — ceremony에서 사용자 확인(PIN·생체)을 어느 수준으로 강제할지.">
                 <Segmented value={draft.userVerification} onChange={(v) => setDraft({ ...draft, userVerification: v as WebauthnConfig['userVerification'] })} options={['REQUIRED', 'PREFERRED', 'DISCOURAGED']} />
+                <OptionGuide guide={UV_GUIDE[draft.userVerification]} />
               </Field>
-              <Field label="attestationConveyance" hint="attestation 객체 전달 모드.">
+              <Field label="attestationConveyance" hint="attestation 객체 전달 모드 — 인증기 출처 증명을 어디까지 받을지.">
                 <Segmented value={draft.attestationConveyance} onChange={(v) => setDraft({ ...draft, attestationConveyance: v as WebauthnConfig['attestationConveyance'] })} options={['NONE', 'INDIRECT', 'DIRECT', 'ENTERPRISE']} />
+                <OptionGuide guide={AT_GUIDE[draft.attestationConveyance]} />
               </Field>
             </div>
           </div>
