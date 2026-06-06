@@ -248,7 +248,8 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
               </Field>
               <Field label="timeoutMs" hint="ceremony 타임아웃 (밀리초)">
                 <input className="input mono" type="number" value={draft.timeoutMs} onChange={(e) => setDraft({ ...draft, timeoutMs: parseInt(e.target.value || '0', 10) })} />
-                <OptionGuide guide={timeoutGuide(draft.timeoutMs)} />
+                {/* 초/분 환산 안내는 값을 바꿨을 때만 노출(첫 진입 시엔 숨김). */}
+                {cfg && draft.timeoutMs !== cfg.timeoutMs && <OptionGuide guide={timeoutGuide(draft.timeoutMs)} />}
               </Field>
             </div>
             <div className="stack-3">
