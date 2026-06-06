@@ -184,7 +184,7 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
             <div className="stack-3">
               <Field
                 label={<>rpId <span className="chip" style={{ fontSize: 10, padding: '1px 6px', gap: 3, background: 'var(--surface-3)', color: 'var(--text-mute)', verticalAlign: 'middle' }}><Icons.Lock size={10} /> 변경 불가</span></>}
-                hint="Relying Party의 hostname. 패스키가 묶이는 신뢰 경계라 생성 후에는 변경할 수 없습니다. 바꾸려면 새 테넌트를 만들어야 합니다."
+                hint="Relying Party hostname (생성 후 변경 불가)"
               >
                 <div style={{ position: 'relative' }}>
                   <input
@@ -201,16 +201,16 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
                   </span>
                 </div>
               </Field>
-              <Field label="rpName" hint="UA 선택 화면에 표시되는 표시 이름.">
+              <Field label="rpName" hint="UA 선택 화면에 표시되는 표시 이름">
                 <input className="input" value={draft.rpName} onChange={(e) => setDraft({ ...draft, rpName: e.target.value })} />
               </Field>
-              <Field label="timeoutMs" hint="ceremony 타임아웃 (밀리초). 권장 60000–120000.">
+              <Field label="timeoutMs" hint="ceremony 타임아웃 (밀리초)">
                 <input className="input mono" type="number" value={draft.timeoutMs} onChange={(e) => setDraft({ ...draft, timeoutMs: parseInt(e.target.value || '0', 10) })} />
                 <OptionGuide guide={timeoutGuide(draft.timeoutMs)} />
               </Field>
             </div>
             <div className="stack-3">
-              <Field label="origins" hint="ceremony가 시작될 수 있는 origin. 정확히 일치해야 함.">
+              <Field label="origins" hint="ceremony가 시작될 수 있는 origin (정확히 일치)">
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 8px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', minHeight: 38 }}>
                   {draft.origins.map((o) => (
                     <span key={o} className="chip mono" style={{ fontSize: 11 }}>
@@ -227,11 +227,11 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
                   />
                 </div>
               </Field>
-              <Field label="userVerification" hint="UV flag — ceremony에서 사용자 확인(PIN·생체)을 어느 수준으로 강제할지.">
+              <Field label="userVerification" hint="사용자 확인(PIN·생체) 강제 수준">
                 <Segmented value={draft.userVerification} onChange={(v) => setDraft({ ...draft, userVerification: v as WebauthnConfig['userVerification'] })} options={['REQUIRED', 'PREFERRED', 'DISCOURAGED']} />
                 <OptionGuide guide={UV_GUIDE[draft.userVerification]} />
               </Field>
-              <Field label="attestationConveyance" hint="attestation 객체 전달 모드 — 인증기 출처 증명을 어디까지 받을지.">
+              <Field label="attestationConveyance" hint="인증기 출처 증명 전달 모드">
                 <Segmented value={draft.attestationConveyance} onChange={(v) => setDraft({ ...draft, attestationConveyance: v as WebauthnConfig['attestationConveyance'] })} options={['NONE', 'INDIRECT', 'DIRECT', 'ENTERPRISE']} />
                 <OptionGuide guide={AT_GUIDE[draft.attestationConveyance]} />
               </Field>
@@ -256,10 +256,13 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
 function Field({ label, hint, children }: { label: React.ReactNode; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      {/* 옵션 이름을 굵게 — 값/안내문과 시각적으로 구분 (.label 기본 500 → 700 오버라이드) */}
-      <label className="label" style={{ fontWeight: 700 }}>{label}</label>
+      {/* 옵션 이름(굵게) 옆에 "- 설명"을 같은 줄에 표기. 설명은 일반 회색으로
+          이름과 톤을 구분. (.label 기본 500 → 이름만 700 오버라이드) */}
+      <label className="label" style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 700 }}>{label}</span>
+        {hint && <span style={{ fontWeight: 400, color: 'var(--text-mute)' }}>- {hint}</span>}
+      </label>
       {children}
-      {hint && <div className="hint">{hint}</div>}
     </div>
   );
 }
