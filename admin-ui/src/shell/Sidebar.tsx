@@ -135,7 +135,7 @@ export function Sidebar({ me, currentRoute, onNavigate, tenant, sidebarMode = 'l
       height: '100vh',
       overflow: 'hidden',
     }}>
-      <div style={{ padding: sidebarMode === 'icons' ? '16px 8px' : '16px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ height: 52, flexShrink: 0, boxSizing: 'border-box', padding: sidebarMode === 'icons' ? '0 8px' : '0 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <Icons.BrandMark size={26} />
         {sidebarMode === 'labels' && (
           <div className="stack-1" style={{ minWidth: 0 }}>
