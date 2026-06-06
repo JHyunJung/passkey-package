@@ -30,17 +30,19 @@ function diffObjects(
 // WebAuthn 스펙 기준. ceremony 동작에 직접 영향을 주므로 운영자가 선택 전후로
 // 무엇이 바뀌는지 한눈에 알 수 있게 한다.
 
+// UV·attestation 안내는 위험도와 무관하게 단일 색(info)으로 통일한다. 옵션 자체의
+// 의미를 설명하는 정보성 안내이므로, 톤으로 우열을 암시하지 않는다.
 const UV_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> = {
-  REQUIRED: { tone: 'ok', text: 'PIN·지문·얼굴 등 사용자 확인(UV)을 반드시 요구합니다. UV를 못 하는 인증기는 ceremony가 실패합니다. 2FA 수준의 보안이 필요할 때 권장.' },
+  REQUIRED: { tone: 'info', text: 'PIN·지문·얼굴 등 사용자 확인(UV)을 반드시 요구합니다. UV를 못 하는 인증기는 ceremony가 실패합니다. 2FA 수준의 보안이 필요할 때 권장.' },
   PREFERRED: { tone: 'info', text: '가능하면 UV를 수행하되, 지원하지 않는 인증기는 UV 없이도 허용합니다. 보안과 호환성의 균형 — 대부분의 서비스 기본값.' },
-  DISCOURAGED: { tone: 'warn', text: 'UV를 요구하지 않습니다(사용자 존재 확인만). 마찰은 가장 적지만 단일 인증 요소가 되므로, 비밀번호 등 다른 요소와 함께 쓸 때만 권장.' },
+  DISCOURAGED: { tone: 'info', text: 'UV를 요구하지 않습니다(사용자 존재 확인만). 마찰은 가장 적지만 단일 인증 요소가 되므로, 비밀번호 등 다른 요소와 함께 쓸 때만 권장.' },
 };
 
 const AT_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> = {
   NONE: { tone: 'info', text: 'attestation을 요청하지 않습니다. 프라이버시가 가장 높고 등록이 단순해, 인증기 모델 검증이 불필요한 일반 서비스에 권장.' },
   INDIRECT: { tone: 'info', text: 'attestation을 원하되 클라이언트가 익명화할 수 있게 허용합니다. 출처 정보를 받되 개별 기기 추적은 피하고 싶을 때.' },
-  DIRECT: { tone: 'warn', text: '인증기의 attestation을 그대로 받습니다. AAGUID·모델 확인이나 MDS 매칭으로 허용 기기를 통제하려면 필요. 등록 시 사용자 동의 프롬프트가 뜰 수 있습니다.' },
-  ENTERPRISE: { tone: 'warn', text: '기기를 개별 식별할 수 있는 attestation을 요구합니다. 사전 등록된 인증기만 쓰는 사내 환경 전용 — 일반 사용자 대상 서비스에는 부적합.' },
+  DIRECT: { tone: 'info', text: '인증기의 attestation을 그대로 받습니다. AAGUID·모델 확인이나 MDS 매칭으로 허용 기기를 통제하려면 필요. 등록 시 사용자 동의 프롬프트가 뜰 수 있습니다.' },
+  ENTERPRISE: { tone: 'info', text: '기기를 개별 식별할 수 있는 attestation을 요구합니다. 사전 등록된 인증기만 쓰는 사내 환경 전용 — 일반 사용자 대상 서비스에는 부적합.' },
 };
 
 // ── OptionGuide — 선택값에 맞는 안내 박스 ────────────────────────────────────
@@ -254,7 +256,8 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
 function Field({ label, hint, children }: { label: React.ReactNode; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="label">{label}</label>
+      {/* 옵션 이름을 굵게 — 값/안내문과 시각적으로 구분 (.label 기본 500 → 700 오버라이드) */}
+      <label className="label" style={{ fontWeight: 700 }}>{label}</label>
       {children}
       {hint && <div className="hint">{hint}</div>}
     </div>
