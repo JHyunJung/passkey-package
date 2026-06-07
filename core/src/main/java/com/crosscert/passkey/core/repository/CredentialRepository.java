@@ -48,6 +48,15 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     Optional<Credential> findByCredentialIdForUpdate(@Param("credentialId") byte[] credentialId);
 
     /**
+     * Lock-free read-only lookup by WebAuthn credentialId. Mirrors
+     * {@link #findByCredentialIdForUpdate(byte[])} but WITHOUT the pessimistic
+     * lock — admin read APIs (e.g. credential 인증 이벤트 조회) must not take a
+     * row lock on a read path. VPD/app-level tenant boundary still applies.
+     */
+    @Query("select c from Credential c where c.credentialId = :credentialId")
+    Optional<Credential> findByCredentialId(@Param("credentialId") byte[] credentialId);
+
+    /**
      * tenant 의 모든 credential — lastUsedAt DESC NULLS LAST, id DESC 정렬.
      * Criteria API 는 NullPrecedence 미지원이므로 JPQL @Query 로 명시.
      * admin-app 의 CredentialAdminService.list() 가 사용.

@@ -41,6 +41,7 @@ public class RetentionPurgeJob {
     private final Duration snapshotRetention;
     private final Duration mdsHistoryRetention;
     private final Duration ceremonyEventRetention;
+    private final Duration credentialAuthEventRetention;
 
     public RetentionPurgeJob(RetentionPurgeService service,
                              SchedulerLeaseService leases,
@@ -51,7 +52,8 @@ public class RetentionPurgeJob {
                              @Value("${passkey.retention.recovery-code:P180D}") Duration recoveryCodeRetention,
                              @Value("${passkey.retention.webauthn-snapshot:P365D}") Duration snapshotRetention,
                              @Value("${passkey.retention.mds-sync-history:P90D}") Duration mdsHistoryRetention,
-                             @Value("${passkey.retention.ceremony-event:P90D}") Duration ceremonyEventRetention) {
+                             @Value("${passkey.retention.ceremony-event:P90D}") Duration ceremonyEventRetention,
+                             @Value("${passkey.retention.credential-auth-event:P90D}") Duration credentialAuthEventRetention) {
         this.service = service;
         this.leases = leases;
         this.audit = audit;
@@ -62,6 +64,7 @@ public class RetentionPurgeJob {
         this.snapshotRetention = snapshotRetention;
         this.mdsHistoryRetention = mdsHistoryRetention;
         this.ceremonyEventRetention = ceremonyEventRetention;
+        this.credentialAuthEventRetention = credentialAuthEventRetention;
     }
 
     @Scheduled(
@@ -93,6 +96,8 @@ public class RetentionPurgeJob {
                     () -> service.purgeMdsHistory(now.minus(mdsHistoryRetention)));
             purgeOne(payload, failed, "ceremonyEventsPurged", "ceremonyEvents",
                     () -> service.purgeCeremonyEvents(now.minus(ceremonyEventRetention)));
+            purgeOne(payload, failed, "credentialAuthEventsPurged", "credentialAuthEvents",
+                    () -> service.purgeCredentialAuthEvents(now.minus(credentialAuthEventRetention)));
 
             payload.put("failed", failed);
             try {

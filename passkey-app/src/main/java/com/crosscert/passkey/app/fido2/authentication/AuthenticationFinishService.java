@@ -6,6 +6,9 @@ import com.crosscert.passkey.app.fido2.challenge.AuthenticationChallenge;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.core.ceremony.CeremonyAction;
 import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
+import com.crosscert.passkey.core.ceremony.CredentialAuthEventRecorder;
+import com.crosscert.passkey.core.ceremony.CredentialAuthFailureReason;
+import com.crosscert.passkey.core.ceremony.CredentialAuthResult;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.jwt.IdTokenIssuer;
@@ -68,6 +71,7 @@ public class AuthenticationFinishService {
     private final CeremonyMetrics ceremonyMetrics;
     private final CeremonyEventRecorder ceremonyEvents;
     private final ApplicationEventPublisher eventPublisher;
+    private final CredentialAuthEventRecorder authEvents;
 
     public AuthenticationFinishService(ChallengeStore store,
                                        WebAuthnManager manager,
@@ -79,7 +83,8 @@ public class AuthenticationFinishService {
                                        Clock clock,
                                        CeremonyMetrics ceremonyMetrics,
                                        ApplicationEventPublisher eventPublisher,
-                                       CeremonyEventRecorder ceremonyEvents) {
+                                       CeremonyEventRecorder ceremonyEvents,
+                                       CredentialAuthEventRecorder authEvents) {
         this.store = store;
         this.manager = manager;
         this.tenants = tenants;
@@ -94,6 +99,7 @@ public class AuthenticationFinishService {
         this.ceremonyMetrics = ceremonyMetrics;
         this.eventPublisher = eventPublisher;
         this.ceremonyEvents = ceremonyEvents;
+        this.authEvents = authEvents;
     }
 
     @Transactional
@@ -207,6 +213,13 @@ public class AuthenticationFinishService {
                 manager.verify(data, wParams);
             } catch (Exception e) {
                 log.warn("assertion verify failed for tenant {}: {}", ch.tenantId(), e.toString());
+                // spec §6.1: credential 식별 이후의 검증 실패도 기록한다. newCounter 는
+                // 아직 검증 전이라 보존된 cred.getSignCount() 를 signCount 로 남긴다.
+                // recordAfterRollback: cred 는 PESSIMISTIC_WRITE 로 락된 행이라 즉시
+                // REQUIRES_NEW INSERT 하면 FK 락 경합이 난다. outer 롤백 완료(락 해제) 후 기록.
+                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.tenantId()),
+                        CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGNATURE_INVALID,
+                        cred.getSignCount());
                 throw new IllegalArgumentException("assertion verify failed");
             }
 
@@ -228,6 +241,11 @@ public class AuthenticationFinishService {
                         Map.of(
                                 "credentialId", String.valueOf(cred.getId()),
                                 "tenantId", String.valueOf(ch.tenantId()))));
+                // recordAfterRollback: 위 verify 실패와 동일한 이유(락된 cred 행과의 FK
+                // 락 경합 회피) — outer 롤백 완료 후 기록한다.
+                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.tenantId()),
+                        CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGN_COUNT_REPLAY,
+                        newCounter);
                 throw new IllegalArgumentException("signCount replay detected");
             }
 
@@ -243,6 +261,8 @@ public class AuthenticationFinishService {
             record.setCounter(newCounter);
             cred.recordAuthentication(newCounter, clock.instant());
             credentials.saveAndFlush(cred);
+            authEvents.recordAfterCommit(cred.getId(), UUID.fromString(ch.tenantId()),
+                    CredentialAuthResult.SUCCESS, null, newCounter);
 
             String credentialIdB64 = b64url(credentialId);
             log.info("authentication/finish ok: credentialIdTail={} counter={}",

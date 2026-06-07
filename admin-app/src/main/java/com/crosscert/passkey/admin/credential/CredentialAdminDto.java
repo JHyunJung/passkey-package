@@ -18,4 +18,10 @@ public final class CredentialAdminDto {
             Instant lastUsedAt,          // null 가능
             Instant createdAt
     ) {}
+
+    public record AuthEventView(
+            String result,
+            String failureReason,
+            long signCount,
+            Instant createdAt) {}
 }
