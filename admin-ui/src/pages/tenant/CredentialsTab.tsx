@@ -6,6 +6,7 @@ import { useToast } from '@/shell/ToastHost';
 import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';
 import type { Tenant, Credential } from '@/api/designTypes';
+import CredentialDetailDialog from './CredentialDetailDialog';
 
 // ── Local utilities (mirrors design globals) ──────────────────────────────────
 
@@ -63,6 +64,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   const [searchMode, setSearchMode] = useState<'keyword' | 'aaguid' | 'status'>('keyword');
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<Credential | null>(null);
+  const [selected, setSelected] = useState<Credential | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -217,7 +219,22 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
             </thead>
             <tbody>
               {filtered.map((c) => (
-                <tr key={c.credentialId} style={{ opacity: c.status === 'REVOKED' ? 0.55 : 1 }}>
+                <tr
+                  key={c.credentialId}
+                  onClick={() => setSelected(c)}
+                  onKeyDown={(ev) => {
+                    // 행 자신에 포커스가 있을 때만 — 셀 내부 버튼(회수)에서 버블된
+                    // Enter/Space 가 상세 모달을 함께 열지 않도록 차단.
+                    if (ev.target !== ev.currentTarget) return;
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      setSelected(c);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  style={{ opacity: c.status === 'REVOKED' ? 0.55 : 1, cursor: 'pointer' }}
+                >
                   <td className="mono" style={{ fontSize: 12 }}>{tail(c.credentialId, 12)}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{c.externalUserId}</td>
                   <td>{c.nickname ?? <span className="faint">—</span>}</td>
@@ -263,7 +280,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
                     {c.status === 'ACTIVE' && (
                       <button
                         className="btn btn--xs"
-                        onClick={() => setRevoking(c)}
+                        onClick={(e) => { e.stopPropagation(); setRevoking(c); }}
                         style={{ color: 'var(--danger)' }}
                       >
                         <Icons.Trash size={12} />
@@ -314,6 +331,14 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           c={revoking}
           onClose={() => setRevoking(null)}
           onConfirm={handleRevoke}
+        />
+      )}
+
+      {selected && (
+        <CredentialDetailDialog
+          c={selected}
+          tenantId={tenant.id}
+          onClose={() => setSelected(null)}
         />
       )}
     </div>
