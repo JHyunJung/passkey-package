@@ -259,7 +259,7 @@ public class AuthenticationFinishService {
                     subTail, ch.tenantId(), 900);
 
             AuthenticationFinishResponse response = new AuthenticationFinishResponse(jwt, "Bearer", 900);
-            ceremonyEvents.record(UUID.fromString(ch.tenantId()), CeremonyAction.AUTHENTICATION_SUCCESS);
+            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId()), CeremonyAction.AUTHENTICATION_SUCCESS);
             ceremonyMetrics.recordSuccess("authentication", "finish");
             return response;
         } catch (RuntimeException e) {

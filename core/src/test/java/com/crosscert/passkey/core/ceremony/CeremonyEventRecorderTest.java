@@ -53,6 +53,15 @@ class CeremonyEventRecorderTest {
     }
 
     @Test
+    void recordAfterCommit_fallsBackToImmediateWhenNoTransaction() {
+        when(txManager.getTransaction(any())).thenReturn(mock(org.springframework.transaction.TransactionStatus.class));
+        UUID tenant = UUID.randomUUID();
+        // no active synchronization in a plain unit test → immediate path
+        recorder.recordAfterCommit(tenant, CeremonyAction.REGISTRATION_SUCCESS);
+        verify(repo, times(1)).save(any(CeremonyEvent.class));
+    }
+
+    @Test
     void record_rejectsNullArgs() {
         assertThatCode(() -> recorder.record(null, CeremonyAction.REGISTRATION_BEGIN))
                 .isInstanceOf(NullPointerException.class);

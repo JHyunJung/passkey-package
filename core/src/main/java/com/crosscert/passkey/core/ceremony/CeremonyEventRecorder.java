@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Objects;
@@ -44,6 +46,25 @@ public class CeremonyEventRecorder {
             txTemplate.executeWithoutResult(status -> repo.save(new CeremonyEvent(tenantId, action)));
         } catch (Exception e) {
             log.warn("ceremony_event 기록 실패 (무시): tenant={} action={}", tenantId, action, e);
+        }
+    }
+
+    /**
+     * 현재 트랜잭션이 성공적으로 커밋된 후에 이벤트를 기록한다. finish ceremony 처럼
+     * outer 쓰기 트랜잭션의 커밋이 확정돼야 "성공"으로 집계해야 하는 경우에 쓴다.
+     * 활성 트랜잭션 동기화가 없으면(테스트/트랜잭션 밖 호출) 즉시 기록으로 폴백한다.
+     */
+    public void recordAfterCommit(UUID tenantId, String action) {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(action, "action");
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() {
+                    record(tenantId, action);
+                }
+            });
+        } else {
+            record(tenantId, action);
         }
     }
 }

@@ -223,7 +223,7 @@ public class RegistrationFinishService {
                     aaguid == null ? null : HexFormat.of().formatHex(aaguid),
                     fmt,
                     clock.instant());
-            ceremonyEvents.record(UUID.fromString(ch.tenantId()), CeremonyAction.REGISTRATION_SUCCESS);
+            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId()), CeremonyAction.REGISTRATION_SUCCESS);
             ceremonyMetrics.recordSuccess("registration", "finish");
             return response;
         } catch (RuntimeException e) {
