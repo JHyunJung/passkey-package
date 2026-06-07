@@ -33,7 +33,8 @@ class RetentionPurgeJobTest {
     void setUp() {
         job = new RetentionPurgeJob(service, leases, audit, clock,
                 Duration.ofDays(90), Duration.ofDays(30), Duration.ofDays(180),
-                Duration.ofDays(365), Duration.ofDays(90), Duration.ofDays(90));
+                Duration.ofDays(365), Duration.ofDays(90), Duration.ofDays(90),
+                Duration.ofDays(90));
     }
 
     @Test
@@ -53,6 +54,7 @@ class RetentionPurgeJobTest {
         when(service.purgeSnapshots(any())).thenReturn(0);
         when(service.purgeMdsHistory(any())).thenReturn(4);
         when(service.purgeCeremonyEvents(any())).thenReturn(6);
+        when(service.purgeCredentialAuthEvents(any())).thenReturn(3);
 
         job.runOnce();
 
@@ -62,6 +64,7 @@ class RetentionPurgeJobTest {
         verify(service).purgeSnapshots(any());
         verify(service).purgeMdsHistory(any());
         verify(service).purgeCeremonyEvents(any());
+        verify(service).purgeCredentialAuthEvents(any());
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
         assertThat(cap.getValue().action()).isEqualTo("RETENTION_PURGE");
@@ -82,6 +85,7 @@ class RetentionPurgeJobTest {
         when(service.purgeSnapshots(any())).thenReturn(7);
         when(service.purgeMdsHistory(any())).thenReturn(2);
         when(service.purgeCeremonyEvents(any())).thenReturn(8);
+        when(service.purgeCredentialAuthEvents(any())).thenReturn(11);
 
         job.runOnce();
 
@@ -94,6 +98,7 @@ class RetentionPurgeJobTest {
         assertThat(payload.get("snapshotsPurged")).isEqualTo(7);
         assertThat(payload.get("mdsHistoryPurged")).isEqualTo(2);
         assertThat(payload.get("ceremonyEventsPurged")).isEqualTo(8);
+        assertThat(payload.get("credentialAuthEventsPurged")).isEqualTo(11);
         assertThat((java.util.List<?>) payload.get("failed")).isEmpty();
         verify(leases).release(anyString(), anyString());
     }
@@ -107,6 +112,7 @@ class RetentionPurgeJobTest {
         when(service.purgeSnapshots(any())).thenReturn(0);
         when(service.purgeMdsHistory(any())).thenReturn(0);
         when(service.purgeCeremonyEvents(any())).thenReturn(0);
+        when(service.purgeCredentialAuthEvents(any())).thenReturn(0);
 
         job.runOnce();
 
@@ -119,6 +125,7 @@ class RetentionPurgeJobTest {
         assertThat(payload.get("snapshotsPurged")).isEqualTo(0);
         assertThat(payload.get("mdsHistoryPurged")).isEqualTo(0);
         assertThat(payload.get("ceremonyEventsPurged")).isEqualTo(0);
+        assertThat(payload.get("credentialAuthEventsPurged")).isEqualTo(0);
         assertThat((java.util.List<?>) payload.get("failed")).isEmpty();
         verify(leases).release(anyString(), anyString());
     }
