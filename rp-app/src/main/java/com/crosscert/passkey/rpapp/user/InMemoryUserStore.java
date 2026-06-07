@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -72,15 +73,26 @@ public class InMemoryUserStore {
         List<RpAppUser> confirmed = byHandle.values().stream()
                 .filter(u -> u.credentialId() != null)
                 .toList();
+        Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
         try {
             Path parent = file.toAbsolutePath().getParent();
             if (parent != null) Files.createDirectories(parent);
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
             mapper.writeValue(tmp.toFile(), confirmed);
-            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            try {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException atomicUnsupported) {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);  // 비원자적 폴백
+            }
         } catch (IOException e) {
             log.error("user-store: failed to persist {} user(s) to {} — cause={}",
                     confirmed.size(), file, e.toString());
+        } finally {
+            // 성공 시엔 move 로 tmp 가 사라져 no-op. 실패 시 stale tmp 정리.
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignore) {
+                // 정리 실패는 무시.
+            }
         }
     }
 
@@ -101,9 +113,10 @@ public class InMemoryUserStore {
 
     /** registration/finish 성공 후 credentialId 채워서 확정 + 파일에 영속화. */
     public void confirmRegistration(String userHandle, String credentialId) {
-        byHandle.computeIfPresent(userHandle, (k, u) ->
+        RpAppUser updated = byHandle.computeIfPresent(userHandle, (k, u) ->
                 new RpAppUser(u.userHandle(), u.username(), u.displayName(), u.createdAt(), credentialId));
-        persist();
+        // 알 수 없는 handle 이면 변경이 없으므로 불필요한 파일 쓰기를 생략.
+        if (updated != null) persist();
     }
 
     public Optional<RpAppUser> findByUserHandle(String userHandle) {

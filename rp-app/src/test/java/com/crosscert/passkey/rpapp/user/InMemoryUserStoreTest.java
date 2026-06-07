@@ -1,9 +1,9 @@
 package com.crosscert.passkey.rpapp.user;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -12,8 +12,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class InMemoryUserStoreTest {
 
+    /** 프로덕션의 Boot ObjectMapper 와 동일 포맷(JavaTimeModule + ISO-8601 문자열). */
     private static ObjectMapper mapper() {
-        return new ObjectMapper().registerModule(new JavaTimeModule());
+        return Jackson2ObjectMapperBuilder.json().build();
     }
 
     @Test
