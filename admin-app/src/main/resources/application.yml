@@ -68,3 +68,4 @@ passkey:
     recovery-code: P180D        # 사용 후 180일
     webauthn-snapshot: P365D    # 스냅샷 1년
     mds-sync-history: P90D      # sync 이력 90일
+    ceremony-event: P90D        # funnel 지표 90일 (funnel 조회는 최대 30일)

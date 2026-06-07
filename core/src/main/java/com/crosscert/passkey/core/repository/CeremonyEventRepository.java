@@ -2,8 +2,10 @@ package com.crosscert.passkey.core.repository;
 
 import com.crosscert.passkey.core.entity.CeremonyEvent;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -40,4 +42,18 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
             @Param("tenantId") UUID tenantId,
             @Param("actions") List<String> actions,
             @Param("since") Instant since);
+
+    /**
+     * P1-4 retention: created_at 이 cutoff 이전인 ceremony 이벤트 삭제. funnel 쿼리는
+     * 최대 30일까지만 조회하므로 윈도 초과분은 안전하게 제거 가능(append-only 지표 정리).
+     *
+     * <p>Batched: ROWNUM 캡(AdminUserInvitationRepository 참고). nativeQuery + 실제 컬럼명.
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(value = "DELETE FROM {h-schema}ceremony_event WHERE id IN ("
+         + "SELECT id FROM {h-schema}ceremony_event WHERE "
+         + "created_at < :cutoff "
+         + "AND ROWNUM <= :batchSize)", nativeQuery = true)
+    int deleteCreatedBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 }

@@ -40,6 +40,7 @@ public class RetentionPurgeJob {
     private final Duration recoveryCodeRetention;
     private final Duration snapshotRetention;
     private final Duration mdsHistoryRetention;
+    private final Duration ceremonyEventRetention;
 
     public RetentionPurgeJob(RetentionPurgeService service,
                              SchedulerLeaseService leases,
@@ -49,7 +50,8 @@ public class RetentionPurgeJob {
                              @Value("${passkey.retention.password-reset-token:P30D}") Duration resetTokenRetention,
                              @Value("${passkey.retention.recovery-code:P180D}") Duration recoveryCodeRetention,
                              @Value("${passkey.retention.webauthn-snapshot:P365D}") Duration snapshotRetention,
-                             @Value("${passkey.retention.mds-sync-history:P90D}") Duration mdsHistoryRetention) {
+                             @Value("${passkey.retention.mds-sync-history:P90D}") Duration mdsHistoryRetention,
+                             @Value("${passkey.retention.ceremony-event:P90D}") Duration ceremonyEventRetention) {
         this.service = service;
         this.leases = leases;
         this.audit = audit;
@@ -59,6 +61,7 @@ public class RetentionPurgeJob {
         this.recoveryCodeRetention = recoveryCodeRetention;
         this.snapshotRetention = snapshotRetention;
         this.mdsHistoryRetention = mdsHistoryRetention;
+        this.ceremonyEventRetention = ceremonyEventRetention;
     }
 
     @Scheduled(
@@ -88,6 +91,8 @@ public class RetentionPurgeJob {
                     () -> service.purgeSnapshots(now.minus(snapshotRetention)));
             purgeOne(payload, failed, "mdsHistoryPurged", "mdsHistory",
                     () -> service.purgeMdsHistory(now.minus(mdsHistoryRetention)));
+            purgeOne(payload, failed, "ceremonyEventsPurged", "ceremonyEvents",
+                    () -> service.purgeCeremonyEvents(now.minus(ceremonyEventRetention)));
 
             payload.put("failed", failed);
             try {

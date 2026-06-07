@@ -7,6 +7,7 @@
 -- 테이블을 따로 둔다.
 --
 -- 기록자: passkey-app (APP_RUNTIME) — INSERT.  집계자: admin-app (APP_ADMIN) — SELECT.
+-- retention purge: admin-app (APP_ADMIN) — DELETE (RetentionPurgeJob 가 윈도 초과분 정리).
 -- updated_at: append-only 지만 BaseEntity 정책(모든 엔티티 created_at/updated_at NOT NULL,
 --   Phase 8)을 따른다. CeremonyEvent 엔티티가 BaseEntity 를 상속하므로 컬럼이 필요하다.
 -- 테이블 소유자는 APP_OWNER(Flyway 실행 스키마)이며 양 런타임 유저에 GRANT.
@@ -56,6 +57,6 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE 
 BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON ceremony_event TO APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /
-BEGIN EXECUTE IMMEDIATE 'GRANT SELECT, INSERT ON ceremony_event TO APP_ADMIN';
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT, INSERT, DELETE ON ceremony_event TO APP_ADMIN';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /

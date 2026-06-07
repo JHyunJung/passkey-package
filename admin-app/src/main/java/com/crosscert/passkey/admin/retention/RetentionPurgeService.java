@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.mds.MdsHistoryService;
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
+import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
 import org.springframework.stereotype.Service;
 
@@ -33,17 +34,20 @@ public class RetentionPurgeService {
     private final AdminUserRecoveryCodeRepository recoveryCodes;
     private final TenantWebauthnSnapshotRepository snapshots;
     private final MdsHistoryService mdsHistory;
+    private final CeremonyEventRepository ceremonyEvents;
 
     public RetentionPurgeService(AdminUserInvitationRepository invitations,
                                  AdminPasswordResetTokenRepository resetTokens,
                                  AdminUserRecoveryCodeRepository recoveryCodes,
                                  TenantWebauthnSnapshotRepository snapshots,
-                                 MdsHistoryService mdsHistory) {
+                                 MdsHistoryService mdsHistory,
+                                 CeremonyEventRepository ceremonyEvents) {
         this.invitations = invitations;
         this.resetTokens = resetTokens;
         this.recoveryCodes = recoveryCodes;
         this.snapshots = snapshots;
         this.mdsHistory = mdsHistory;
+        this.ceremonyEvents = ceremonyEvents;
     }
 
     public int purgeInvitations(Instant cutoff) {
@@ -86,6 +90,15 @@ public class RetentionPurgeService {
         int total = 0, n;
         do {
             n = mdsHistory.purgeStartedBefore(cutoff, BATCH);
+            total += n;
+        } while (n == BATCH);
+        return total;
+    }
+
+    public int purgeCeremonyEvents(Instant cutoff) {
+        int total = 0, n;
+        do {
+            n = ceremonyEvents.deleteCreatedBefore(cutoff, BATCH);
             total += n;
         } while (n == BATCH);
         return total;
