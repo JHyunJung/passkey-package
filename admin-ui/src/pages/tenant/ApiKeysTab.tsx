@@ -27,14 +27,13 @@ function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString('ko-KR', {
+  // yyyy.mm.dd (KST). en-CA 는 yyyy-mm-dd 를 주므로 '-' → '.' 치환.
+  return d.toLocaleDateString('en-CA', {
     timeZone: 'Asia/Seoul',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  }).replace(/-/g, '.');
 }
 
 function tail(s: string, n: number): string {
