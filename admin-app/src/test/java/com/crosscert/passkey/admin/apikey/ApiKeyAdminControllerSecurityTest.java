@@ -75,6 +75,7 @@ class ApiKeyAdminControllerSecurityTest {
     // Prevent @EnableJpaRepositories from wiring real Spring Data repos
     @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
+    @MockBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
