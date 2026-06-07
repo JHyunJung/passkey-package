@@ -78,8 +78,8 @@ public class AuthenticationFinishService {
                                        ObjectConverter objectConverter,
                                        Clock clock,
                                        CeremonyMetrics ceremonyMetrics,
-                                       CeremonyEventRecorder ceremonyEvents,
-                                       ApplicationEventPublisher eventPublisher) {
+                                       ApplicationEventPublisher eventPublisher,
+                                       CeremonyEventRecorder ceremonyEvents) {
         this.store = store;
         this.manager = manager;
         this.tenants = tenants;
@@ -92,8 +92,8 @@ public class AuthenticationFinishService {
         this.extensionsConverter = new AuthenticationExtensionsClientOutputsConverter(objectConverter);
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
-        this.ceremonyEvents = ceremonyEvents;
         this.eventPublisher = eventPublisher;
+        this.ceremonyEvents = ceremonyEvents;
     }
 
     @Transactional
