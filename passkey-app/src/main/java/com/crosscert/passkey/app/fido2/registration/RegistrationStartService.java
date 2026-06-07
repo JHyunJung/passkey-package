@@ -124,7 +124,7 @@ public class RegistrationStartService {
             log.info("registration/start issued: tokenTail={} timeoutMs={}",
                     tokenTail(token), tenant.getWebauthnTimeoutMs());
             RegistrationStartResponse response = new RegistrationStartResponse(token, options);
-            ceremonyEvents.record(tenantUuid, CeremonyAction.REGISTRATION_BEGIN);
+            ceremonyEvents.recordAfterCommit(tenantUuid, CeremonyAction.REGISTRATION_BEGIN);
             ceremonyMetrics.recordSuccess("registration", "start");
             return response;
         } catch (RuntimeException e) {

@@ -117,7 +117,7 @@ public class AuthenticationStartService {
             log.info("authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
                     tokenTail(token), userCreds.size(), tenant.getWebauthnTimeoutMs());
             AuthenticationStartResponse response = new AuthenticationStartResponse(token, options);
-            ceremonyEvents.record(tenantUuid, CeremonyAction.AUTHENTICATION_BEGIN);
+            ceremonyEvents.recordAfterCommit(tenantUuid, CeremonyAction.AUTHENTICATION_BEGIN);
             ceremonyMetrics.recordSuccess("authentication", "start");
             return response;
         } catch (RuntimeException e) {
