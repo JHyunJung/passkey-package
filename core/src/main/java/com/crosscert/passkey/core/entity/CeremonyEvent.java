@@ -20,7 +20,7 @@ public class CeremonyEvent extends BaseEntity {
     @Column(name = "TENANT_ID", columnDefinition = "RAW(16)", nullable = false)
     private UUID tenantId;
 
-    @Column(name = "ACTION", length = 32, nullable = false)
+    @Column(name = "ACTION", length = 64, nullable = false)
     private String action;
 
     protected CeremonyEvent() {}

@@ -26,7 +26,7 @@ BEGIN
   EXECUTE IMMEDIATE 'CREATE TABLE ceremony_event ('
     || 'id RAW(16) DEFAULT SYS_GUID() PRIMARY KEY, '
     || 'tenant_id RAW(16) NOT NULL, '
-    || 'action VARCHAR2(32) NOT NULL, '
+    || 'action VARCHAR2(64) NOT NULL, '
     || 'created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, '
     || 'updated_at TIMESTAMP(6) WITH TIME ZONE NOT NULL)';
 EXCEPTION
