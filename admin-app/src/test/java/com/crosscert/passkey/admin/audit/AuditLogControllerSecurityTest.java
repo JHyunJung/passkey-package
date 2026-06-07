@@ -59,6 +59,7 @@ class AuditLogControllerSecurityTest {
 
     @Autowired MockMvc mvc;
     @MockBean AuditLogRepository repo;
+    @MockBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
     @MockBean AuditChainVerifier verifier;
     @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;

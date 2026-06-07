@@ -11,6 +11,7 @@ import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
+import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -54,7 +55,7 @@ class AuthenticationStartServiceSuspendTest {
 
         AuthenticationStartService svc = new AuthenticationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new CeremonyMetrics(new SimpleMeterRegistry()));
+                new CeremonyMetrics(new SimpleMeterRegistry()), mock(CeremonyEventRecorder.class));
         AuthenticationStartRequest req = new AuthenticationStartRequest(null);
 
         assertThatThrownBy(() -> svc.start(req))
@@ -85,7 +86,7 @@ class AuthenticationStartServiceSuspendTest {
 
         AuthenticationStartService svc = new AuthenticationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new CeremonyMetrics(new SimpleMeterRegistry()));
+                new CeremonyMetrics(new SimpleMeterRegistry()), mock(CeremonyEventRecorder.class));
         AuthenticationStartRequest req = new AuthenticationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle));
 
@@ -125,7 +126,7 @@ class AuthenticationStartServiceSuspendTest {
 
         AuthenticationStartService svc = new AuthenticationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new CeremonyMetrics(new SimpleMeterRegistry()));
+                new CeremonyMetrics(new SimpleMeterRegistry()), mock(CeremonyEventRecorder.class));
         AuthenticationStartRequest req = new AuthenticationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle));
 

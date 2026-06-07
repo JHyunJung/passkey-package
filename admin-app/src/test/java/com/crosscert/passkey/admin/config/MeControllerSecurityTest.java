@@ -69,6 +69,7 @@ class MeControllerSecurityTest {
     @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
     @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
+    @MockBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;

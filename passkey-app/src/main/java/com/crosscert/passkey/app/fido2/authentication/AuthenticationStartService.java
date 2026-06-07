@@ -7,6 +7,8 @@ import com.crosscert.passkey.app.fido2.challenge.ChallengeIssuer;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
+import com.crosscert.passkey.core.ceremony.CeremonyAction;
+import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
@@ -47,6 +49,7 @@ public class AuthenticationStartService {
     private final ObjectMapper mapper;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
+    private final CeremonyEventRecorder ceremonyEvents;
 
     public AuthenticationStartService(TenantRepository tenants,
                                       CredentialRepository credentials,
@@ -54,7 +57,8 @@ public class AuthenticationStartService {
                                       ChallengeStore store,
                                       ObjectMapper mapper,
                                       Clock clock,
-                                      CeremonyMetrics ceremonyMetrics) {
+                                      CeremonyMetrics ceremonyMetrics,
+                                      CeremonyEventRecorder ceremonyEvents) {
         this.tenants = tenants;
         this.credentials = credentials;
         this.challenges = challenges;
@@ -62,6 +66,7 @@ public class AuthenticationStartService {
         this.mapper = mapper;
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
+        this.ceremonyEvents = ceremonyEvents;
     }
 
     @Transactional(readOnly = true)
@@ -112,6 +117,7 @@ public class AuthenticationStartService {
             log.info("authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
                     tokenTail(token), userCreds.size(), tenant.getWebauthnTimeoutMs());
             AuthenticationStartResponse response = new AuthenticationStartResponse(token, options);
+            ceremonyEvents.recordAfterCommit(tenantUuid, CeremonyAction.AUTHENTICATION_BEGIN);
             ceremonyMetrics.recordSuccess("authentication", "start");
             return response;
         } catch (RuntimeException e) {

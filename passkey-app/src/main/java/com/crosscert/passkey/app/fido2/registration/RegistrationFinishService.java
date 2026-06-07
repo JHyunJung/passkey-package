@@ -5,6 +5,8 @@ import com.crosscert.passkey.app.api.v1.rp.dto.RegistrationFinishResponse;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
 import com.crosscert.passkey.app.fido2.mds.MdsVerifier;
+import com.crosscert.passkey.core.ceremony.CeremonyAction;
+import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.policy.AaguidPolicyChecker;
@@ -74,6 +76,7 @@ public class RegistrationFinishService {
     private final AuthenticationExtensionsClientOutputsConverter extensionsConverter;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
+    private final CeremonyEventRecorder ceremonyEvents;
 
     public RegistrationFinishService(ChallengeStore store,
                                      WebAuthnManager manager,
@@ -84,7 +87,8 @@ public class RegistrationFinishService {
                                      ObjectMapper mapper,
                                      ObjectConverter objectConverter,
                                      Clock clock,
-                                     CeremonyMetrics ceremonyMetrics) {
+                                     CeremonyMetrics ceremonyMetrics,
+                                     CeremonyEventRecorder ceremonyEvents) {
         this.store = store;
         this.manager = manager;
         this.tenants = tenants;
@@ -98,6 +102,7 @@ public class RegistrationFinishService {
         this.extensionsConverter = new AuthenticationExtensionsClientOutputsConverter(objectConverter);
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
+        this.ceremonyEvents = ceremonyEvents;
     }
 
     @Transactional
@@ -218,6 +223,7 @@ public class RegistrationFinishService {
                     aaguid == null ? null : HexFormat.of().formatHex(aaguid),
                     fmt,
                     clock.instant());
+            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId()), CeremonyAction.REGISTRATION_SUCCESS);
             ceremonyMetrics.recordSuccess("registration", "finish");
             return response;
         } catch (RuntimeException e) {

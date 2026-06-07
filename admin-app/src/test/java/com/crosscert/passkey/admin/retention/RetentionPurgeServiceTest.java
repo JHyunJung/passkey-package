@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.mds.MdsHistoryService;
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
+import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,11 +27,13 @@ class RetentionPurgeServiceTest {
     @Mock AdminUserRecoveryCodeRepository recoveryCodes;
     @Mock TenantWebauthnSnapshotRepository snapshots;
     @Mock MdsHistoryService mdsHistory;
+    @Mock CeremonyEventRepository ceremonyEvents;
     RetentionPurgeService service;
 
     @BeforeEach
     void setUp() {
-        service = new RetentionPurgeService(invitations, resetTokens, recoveryCodes, snapshots, mdsHistory);
+        service = new RetentionPurgeService(
+                invitations, resetTokens, recoveryCodes, snapshots, mdsHistory, ceremonyEvents);
     }
 
     @Test
@@ -53,6 +56,13 @@ class RetentionPurgeServiceTest {
         Instant cutoff = Instant.parse("2026-01-01T00:00:00Z");
         when(mdsHistory.purgeStartedBefore(eq(cutoff), anyInt())).thenReturn(5);
         assertThat(service.purgeMdsHistory(cutoff)).isEqualTo(5);
+    }
+
+    @Test
+    void purgeCeremonyEvents_delegates_to_created_before() {
+        Instant cutoff = Instant.parse("2026-01-01T00:00:00Z");
+        when(ceremonyEvents.deleteCreatedBefore(eq(cutoff), anyInt())).thenReturn(9);
+        assertThat(service.purgeCeremonyEvents(cutoff)).isEqualTo(9);
     }
 
     @Test

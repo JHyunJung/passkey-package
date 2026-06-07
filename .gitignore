@@ -16,6 +16,9 @@ out/
 target/
 dist/
 node_modules/
+# Eclipse/Gradle 모듈별 컴파일 산출물(IT 실행 등이 생성) — 커밋 금지
+bin/
+*/bin/
 
 # Gradle
 .gradle/
