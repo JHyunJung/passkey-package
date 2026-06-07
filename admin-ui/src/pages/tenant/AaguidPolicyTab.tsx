@@ -131,8 +131,9 @@ export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
                   value={aaguidInput}
                   onChange={(e) => setAaguidInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && add()}
+                  style={{ flex: 1, minWidth: 0 }}
                 />
-                <button className="btn btn--primary btn--sm" disabled={!inputValid} onClick={add}>
+                <button className="btn btn--primary btn--sm" disabled={!inputValid} onClick={add} style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
                   <Icons.Plus size={12} /> 추가
                 </button>
               </div>
