@@ -1,7 +1,8 @@
 package com.crosscert.passkey.admin.funnel;
 
 import com.crosscert.passkey.admin.auth.TenantBoundary;
-import com.crosscert.passkey.core.repository.AuditLogRepository;
+import com.crosscert.passkey.core.ceremony.CeremonyAction;
+import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,25 +18,28 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Phase F3 — Aggregates audit_log rows into a registration/authentication
+ * Phase F3 — Aggregates ceremony_event rows into a registration/authentication
  * funnel view for the admin Funnel page (Gap #3/#9).
  *
- * <p>Action constants follow spec § F3.1. These are not yet emitted by
- * passkey-app (out of F3 scope) — dev DB will return 0 counts; that is
- * expected and the DTO contract handles it (ratio 0 when attempts == 0).
+ * <p>Action constants follow spec § F3.1 via {@link CeremonyAction} (single
+ * source of truth shared with passkey-app's recorder).
+ *
+ * <p>Counts come from {@code ceremony_event}, populated by passkey-app's
+ * registration/authentication ceremonies (begin/finish). Empty tenants return
+ * 0 counts and the DTO contract yields ratio 0.
  */
 @Service
 public class FunnelService {
 
-    static final String REGISTRATION_BEGIN     = "REGISTRATION_BEGIN";
-    static final String REGISTRATION_SUCCESS   = "REGISTRATION_FINISH_OK";
-    static final String AUTHENTICATION_BEGIN   = "AUTHENTICATION_BEGIN";
-    static final String AUTHENTICATION_SUCCESS = "AUTHENTICATION_FINISH_OK";
+    static final String REGISTRATION_BEGIN     = CeremonyAction.REGISTRATION_BEGIN;
+    static final String REGISTRATION_SUCCESS   = CeremonyAction.REGISTRATION_SUCCESS;
+    static final String AUTHENTICATION_BEGIN   = CeremonyAction.AUTHENTICATION_BEGIN;
+    static final String AUTHENTICATION_SUCCESS = CeremonyAction.AUTHENTICATION_SUCCESS;
 
-    private final AuditLogRepository repo;
+    private final CeremonyEventRepository repo;
     private final TenantBoundary tenantBoundary;
 
-    public FunnelService(AuditLogRepository repo, TenantBoundary tenantBoundary) {
+    public FunnelService(CeremonyEventRepository repo, TenantBoundary tenantBoundary) {
         this.repo = repo;
         this.tenantBoundary = tenantBoundary;
     }
