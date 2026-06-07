@@ -57,6 +57,7 @@ export interface ApiKeyCreateRequest {
   name: string;
   scopes: string[];        // was scopesJson: string
   expiresAt?: string;
+  expiresInMonths?: number | null;   // null/생략 = 무기한
 }
 
 export interface ApiKeyCreateResponse {
@@ -64,6 +65,7 @@ export interface ApiKeyCreateResponse {
   prefix: string;
   plainText: string;   // ONE-TIME
   scopes: string[];
+  expiresAt?: string | null;
 }
 
 export interface ApiKeyRotateResponse {

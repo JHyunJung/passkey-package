@@ -13,6 +13,7 @@ function adapt(s: ApiKeyView): ApiKey {
     createdAt: s.createdAt,
     lastUsedAt: s.lastUsedAt ?? null,
     scopes: s.scopes ?? [],
+    expiresAt: s.expiresAt ?? null,
   };
 }
 
@@ -30,8 +31,9 @@ export const apiKeysApi = {
     tenantId: string,
     name: string,
     scopes: string[],
+    expiresInMonths: number | null,
   ): Promise<{ key: ApiKey; plaintext: string }> => {
-    const body: ApiKeyCreateRequest = { tenantId, name, scopes };
+    const body: ApiKeyCreateRequest = { tenantId, name, scopes, expiresInMonths };
     const res = await api.post<ApiKeyCreateResponse>('/admin/api/api-keys', body);
     const key: ApiKey = {
       id: res.id,
@@ -41,6 +43,7 @@ export const apiKeysApi = {
       createdAt: new Date().toISOString(),
       lastUsedAt: null,
       scopes: res.scopes ?? scopes,
+      expiresAt: res.expiresAt ?? null,
     };
     return { key, plaintext: res.plainText };
   },

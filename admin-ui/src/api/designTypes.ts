@@ -24,6 +24,7 @@ export type ApiKey = {
   createdAt: string;
   lastUsedAt: string | null;
   scopes: string[];
+  expiresAt: string | null;
 };
 
 export type Credential = {
