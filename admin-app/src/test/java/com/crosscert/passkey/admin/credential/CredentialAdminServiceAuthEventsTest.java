@@ -46,7 +46,7 @@ class CredentialAdminServiceAuthEventsTest {
         when(c.getId()).thenReturn(credPk);
         when(creds.findByCredentialId(any())).thenReturn(Optional.of(c));
 
-        when(authEvents.findByCredentialIdOrderByCreatedAtDesc(eq(credPk), any()))
+        when(authEvents.findByTenantIdAndCredentialIdOrderByCreatedAtDesc(eq(tenant), eq(credPk), any()))
                 .thenReturn(new PageImpl<>(List.of(
                         new CredentialAuthEvent(credPk, tenant, CredentialAuthResult.SUCCESS, null, 3))));
 
@@ -56,6 +56,8 @@ class CredentialAdminServiceAuthEventsTest {
         assertThat(page.content().get(0).result()).isEqualTo(CredentialAuthResult.SUCCESS);
         assertThat(page.content().get(0).signCount()).isEqualTo(3);
         verify(tenantBoundary).assertCanAccessTenant(tenant);
+        // defense-in-depth: 조회 술어에 tenant_id 가 포함됐는지 검증(오염 행 cross-tenant 누출 방지).
+        verify(authEvents).findByTenantIdAndCredentialIdOrderByCreatedAtDesc(eq(tenant), eq(credPk), any());
     }
 
     @Test

@@ -91,8 +91,8 @@ public class CredentialAdminService {
 
         int cappedSize = Math.min(Math.max(size, 1), 200);
         Page<CredentialAuthEvent> rows =
-                authEvents.findByCredentialIdOrderByCreatedAtDesc(
-                        c.getId(), PageRequest.of(Math.max(page, 0), cappedSize));
+                authEvents.findByTenantIdAndCredentialIdOrderByCreatedAtDesc(
+                        tenantId, c.getId(), PageRequest.of(Math.max(page, 0), cappedSize));
         return PageView.from(rows.map(e -> new CredentialAdminDto.AuthEventView(
                 e.getResult(), e.getFailureReason(), e.getSignCount(), e.getCreatedAt())));
     }

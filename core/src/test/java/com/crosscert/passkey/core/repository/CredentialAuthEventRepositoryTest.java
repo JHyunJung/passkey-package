@@ -122,7 +122,7 @@ class CredentialAuthEventRepositoryTest {
         repo.saveAndFlush(new CredentialAuthEvent(credB, tenant, CredentialAuthResult.SUCCESS, null, 99));
 
         Page<CredentialAuthEvent> page =
-                repo.findByCredentialIdOrderByCreatedAtDesc(credA, PageRequest.of(0, 10));
+                repo.findByTenantIdAndCredentialIdOrderByCreatedAtDesc(tenant, credA, PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(3);
         assertThat(page.getContent()).allMatch(e -> e.getCredentialId().equals(credA));
@@ -133,6 +133,11 @@ class CredentialAuthEventRepositoryTest {
         // createdAt 도 단조 감소(DESC)임을 직접 확인.
         assertThat(content).isSortedAccordingTo(
                 Comparator.comparing(CredentialAuthEvent::getCreatedAt).reversed());
+
+        // defense-in-depth: 같은 credentialId 라도 다른 tenant 로 조회하면 0건이어야 한다
+        // (술어에 tenant_id 포함 — 오기록/오염 행 cross-tenant 누출 방지).
+        assertThat(repo.findByTenantIdAndCredentialIdOrderByCreatedAtDesc(
+                UUID.randomUUID(), credA, PageRequest.of(0, 10)).getTotalElements()).isZero();
     }
 
     @Test
@@ -171,9 +176,9 @@ class CredentialAuthEventRepositoryTest {
         credentials.deleteById(credA);
         credentials.flush();
 
-        assertThat(repo.findByCredentialIdOrderByCreatedAtDesc(credA, PageRequest.of(0, 10))
+        assertThat(repo.findByTenantIdAndCredentialIdOrderByCreatedAtDesc(tenant, credA, PageRequest.of(0, 10))
                 .getTotalElements()).isZero();
-        assertThat(repo.findByCredentialIdOrderByCreatedAtDesc(credB, PageRequest.of(0, 10))
+        assertThat(repo.findByTenantIdAndCredentialIdOrderByCreatedAtDesc(tenant, credB, PageRequest.of(0, 10))
                 .getTotalElements()).isEqualTo(1);
         assertThat(repo.count()).isEqualTo(1);
     }

@@ -18,8 +18,14 @@ import java.util.UUID;
  */
 public interface CredentialAuthEventRepository extends JpaRepository<CredentialAuthEvent, UUID> {
 
-    /** credential 상세 "인증 기록" 페이지 조회 — 최신순. */
-    Page<CredentialAuthEvent> findByCredentialIdOrderByCreatedAtDesc(UUID credentialId, Pageable pageable);
+    /**
+     * credential 상세 "인증 기록" 페이지 조회 — 최신순.
+     * tenant_id 를 술어에 포함한다(defense-in-depth): admin 호출부가 이미 부모 credential 의
+     * tenant 경계를 검사하지만, 이벤트 행 자체의 tenant_id 도 매칭해 오기록/오염 행이
+     * 다른 tenant 조회로 새지 않게 한다.
+     */
+    Page<CredentialAuthEvent> findByTenantIdAndCredentialIdOrderByCreatedAtDesc(
+            UUID tenantId, UUID credentialId, Pageable pageable);
 
     /** retention: created_at 이 cutoff 이전인 이벤트 batched 삭제. */
     @Modifying(clearAutomatically = true)
