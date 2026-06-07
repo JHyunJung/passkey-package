@@ -133,7 +133,7 @@ class ApiKeyAuthFilterTest {
 
         assertThat(tenantSeenInChain[0]).isEqualTo(TENANT_A);
         assertThat(TenantContextHolder.get()).isNull();
-        verify(lookup).touchLastUsed(eq(KEY_ID_7), any(Instant.class));
+        verify(lookup).touchLastUsed(eq(KEY_ID_7), eq(TENANT_A), any(Instant.class));
     }
 
     @Test

@@ -73,17 +73,22 @@ public class ApiKeyLookupService {
         });
     }
 
-    public void touchLastUsed(UUID apiKeyId, Instant now) {
+    public void touchLastUsed(UUID apiKeyId, UUID tenantId, Instant now) {
         // Best-effort: a touch failure must NOT turn a valid auth into
         // 500. Catch DataAccessException at the OUTER call site —
         // JdbcTemplate translates SQLException to DataAccessException
         // after the ConnectionCallback returns.
+        //
+        // tenantId 는 인증 단계(find_by_prefix)가 돌려준 그 키의 테넌트다.
+        // V42 부터 패키지가 SYS_CONTEXT 대신 명시 p_tenant_id 로 격리하므로
+        // VPD on/off 무관하게 정확히 동작한다(컨텍스트 의존 제거).
         try {
             jdbc.execute((ConnectionCallback<Void>) conn -> {
                 try (CallableStatement cs = conn.prepareCall(
-                        "{ call APP_OWNER.api_key_lookup_pkg.touch_last_used(?, ?) }")) {
+                        "{ call APP_OWNER.api_key_lookup_pkg.touch_last_used(?, ?, ?) }")) {
                     cs.setBytes(1, toBytes(apiKeyId));
-                    cs.setTimestamp(2, Timestamp.from(now));
+                    cs.setBytes(2, toBytes(tenantId));
+                    cs.setTimestamp(3, Timestamp.from(now));
                     cs.execute();
                     return null;
                 }

@@ -206,10 +206,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             MDC.put(MDC_API_KEY_PREFIX, prefix);
             MDC.put(MDC_TENANT_ID, row.tenantId().toString());
             try {
-                // touchLastUsed runs WITH tenant context active so the
-                // V8 package's WHERE tenant_id = SYS_CONTEXT predicate
-                // matches the calling tenant exactly.
-                lookup.touchLastUsed(row.id(), now);
+                // V42 부터 패키지는 SYS_CONTEXT 대신 명시 tenant_id 로 격리하므로
+                // 인증된 row.tenantId() 를 그대로 넘긴다(VPD on/off 무관하게 정확).
+                lookup.touchLastUsed(row.id(), row.tenantId(), now);
                 if (log.isDebugEnabled()) {
                     log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());
                 }
