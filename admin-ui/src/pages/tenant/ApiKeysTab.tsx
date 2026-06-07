@@ -85,12 +85,16 @@ const EXPIRY_OPTIONS: { months: number | null; label: string }[] = [
   { months: null, label: '무기한' },
 ];
 
-// now + N개월의 ISO 날짜(YYYY-MM-DD) 미리보기. null이면 null.
+// now + N개월의 날짜 미리보기(YYYY-MM-DD, Asia/Seoul). null이면 null.
+// 말일 보정: 1/31 + 1개월처럼 다음 달에 같은 일자가 없으면 그 달 말일로 클램프.
 function previewExpiry(months: number | null): string | null {
   if (months == null) return null;
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  const now = new Date();
+  const lastDayOfTargetMonth = new Date(now.getFullYear(), now.getMonth() + months + 1, 0).getDate();
+  const day = Math.min(now.getDate(), lastDayOfTargetMonth);
+  const target = new Date(now.getFullYear(), now.getMonth() + months, day,
+                          now.getHours(), now.getMinutes(), now.getSeconds());
+  return target.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }); // en-CA → YYYY-MM-DD
 }
 
 // 만료 상태 판정.
@@ -219,6 +223,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
                 <td><span className="muted">{fmtDateTime(k.createdAt)}</span></td>
                 <td>
                   {(() => {
+                    if (k.status === 'REVOKED') return <span className="faint">—</span>;
                     const st = expiryState(k.expiresAt);
                     if (st === 'none') return <span className="faint">무기한</span>;
                     if (st === 'expired') return (
@@ -228,7 +233,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
                       </span>
                     );
                     return (
-                      <span className={st === 'soon' ? '' : 'muted'} style={st === 'soon' ? { color: 'var(--warning)' } : undefined}>
+                      <span className={st === 'soon' ? undefined : 'muted'} style={st === 'soon' ? { color: 'var(--warning)' } : undefined}>
                         {fmtDateTime(k.expiresAt!)}
                       </span>
                     );
