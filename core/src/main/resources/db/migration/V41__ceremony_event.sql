@@ -11,6 +11,12 @@
 --   Phase 8)을 따른다. CeremonyEvent 엔티티가 BaseEntity 를 상속하므로 컬럼이 필요하다.
 -- 테이블 소유자는 APP_OWNER(Flyway 실행 스키마)이며 양 런타임 유저에 GRANT.
 --
+-- VPD: 의도적으로 VPD(DBMS_RLS) 정책을 붙이지 않는다. audit_log 와 동일한 패턴 —
+--   테넌트 격리는 DB 커널이 아니라 앱 레벨이 담당한다(admin FunnelService 의 명시적
+--   WHERE tenant_id + TenantBoundary.assertCanAccessTenant, passkey-app 은 자기
+--   ceremony 의 tenantId 로만 기록). VPD 대상은 CREDENTIAL/API_KEY 뿐이며(V3/V8/V20),
+--   ceremony_event 는 무결성 보증이 불필요한 단순 카운트 지표다.
+--
 -- Idempotency: 객체 생성은 ORA-00955(name already used)/ORA-00942 를 swallow.
 -- 패턴: V24/V25/V38(EXCEPTION 가드), V13/V28(런타임 GRANT) 와 동일.
 -- ============================================================
