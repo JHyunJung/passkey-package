@@ -182,7 +182,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
   return (
     <div className="stack-4">
       <div className="grid-3">
-        <MetricCard label="총 API Key" value={keys.length} sub={`활성 ${activeCount} · 회수 ${keys.length - activeCount}`} />
+        <MetricCard label="총 API Key" value={keys.length} sub={`활성 ${activeCount} · 만료 ${keys.filter((k) => k.status === 'EXPIRED').length} · 회수 ${keys.filter((k) => k.status === 'REVOKED').length}`} />
         <MetricCard label="최근 발급" value="1일 전" sub={`production · ${tail(keys[0]?.id || '—', 6)}`} />
         <MetricCard label="권장 rotation" value="90일" sub="다음 키 회전: 73일 후" />
       </div>
@@ -210,7 +210,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
           </thead>
           <tbody>
             {keys.map((k) => (
-              <tr key={k.id} style={{ opacity: k.status === 'REVOKED' ? 0.55 : 1 }}>
+              <tr key={k.id} style={{ opacity: (k.status === 'REVOKED' || k.status === 'EXPIRED') ? 0.55 : 1 }}>
                 <td>
                   <div className="row">
                     <Icons.Key size={13} />
@@ -227,10 +227,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
                     const st = expiryState(k.expiresAt);
                     if (st === 'none') return <span className="faint">무기한</span>;
                     if (st === 'expired') return (
-                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                        <span className="badge badge--danger">EXPIRED</span>
-                        <span className="faint" style={{ fontSize: 11 }}>{fmtDateTime(k.expiresAt!)}</span>
-                      </span>
+                      <span style={{ color: 'var(--danger)', fontSize: 12 }}>{fmtDateTime(k.expiresAt!)}</span>
                     );
                     return (
                       <span className={st === 'soon' ? undefined : 'muted'} style={st === 'soon' ? { color: 'var(--warning)' } : undefined}>

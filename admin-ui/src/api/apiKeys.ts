@@ -9,7 +9,9 @@ function adapt(s: ApiKeyView): ApiKey {
     id: s.id,
     prefix: s.keyPrefix,
     name: s.name,
-    status: s.revokedAt ? 'REVOKED' : 'ACTIVE',
+    status: s.revokedAt
+      ? 'REVOKED'
+      : (s.expiresAt && new Date(s.expiresAt).getTime() <= Date.now() ? 'EXPIRED' : 'ACTIVE'),
     createdAt: s.createdAt,
     lastUsedAt: s.lastUsedAt ?? null,
     scopes: s.scopes ?? [],
