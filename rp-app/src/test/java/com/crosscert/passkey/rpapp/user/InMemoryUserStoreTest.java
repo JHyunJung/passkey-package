@@ -73,4 +73,31 @@ class InMemoryUserStoreTest {
 
         assertThat(store.findByUsername("x")).isEmpty();
     }
+
+    @Test
+    void corruptFileIsQuarantinedNotOverwrittenOnNextConfirm(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("users.json");
+        java.nio.file.Files.writeString(file, "{bad json ][");
+
+        // load 가 손상 파일을 quarantine 하고 빈 store 로 시작
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+        assertThat(store.findByUsername("x")).isEmpty();
+
+        // 새 user 확정 → persist 발생 (손상 원본을 덮어쓰면 안 됨)
+        String handle = store.createPending("carol", "Carol");
+        store.confirmRegistration(handle, "cred-xyz");
+
+        // 손상본이 .corrupt- prefix 로 보존되어 있어야 한다
+        try (var paths = java.nio.file.Files.list(dir)) {
+            long corruptCount = paths
+                    .filter(p -> p.getFileName().toString().startsWith("users.json.corrupt-"))
+                    .count();
+            assertThat(corruptCount).isEqualTo(1);
+        }
+
+        // 새 users.json 에는 방금 확정한 user 가 들어있어야 한다 (reload 로 검증)
+        InMemoryUserStore reloaded = new InMemoryUserStore(mapper(), file.toString());
+        assertThat(reloaded.findByUsername("carol")).isPresent();
+        assertThat(reloaded.findByUsername("carol").get().credentialId()).isEqualTo("cred-xyz");
+    }
 }

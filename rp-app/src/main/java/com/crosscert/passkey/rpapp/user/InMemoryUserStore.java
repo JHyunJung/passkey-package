@@ -64,7 +64,19 @@ public class InMemoryUserStore {
             }
             log.info("user-store: loaded {} confirmed user(s) from {}", byHandle.size(), file);
         } catch (Exception e) {
-            log.warn("user-store: failed to read {} — starting empty. cause={}", file, e.toString());
+            log.warn("user-store: failed to read {} — quarantining and starting empty. cause={}", file, e.toString());
+            quarantineCorruptFile();
+        }
+    }
+
+    /** 손상된 store 파일을 .corrupt-<epochMillis> 로 옮겨 다음 persist 가 원본을 덮어쓰지 못하게 한다. */
+    private void quarantineCorruptFile() {
+        try {
+            Path dest = file.resolveSibling(file.getFileName() + ".corrupt-" + System.currentTimeMillis());
+            Files.move(file, dest, StandardCopyOption.REPLACE_EXISTING);
+            log.warn("user-store: quarantined corrupt file to {}", dest);
+        } catch (IOException ignore) {
+            // quarantine 실패는 best-effort — 그래도 기동은 계속.
         }
     }
 
