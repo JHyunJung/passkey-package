@@ -4,6 +4,24 @@ import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import type { Tenant, AaguidPolicy } from '@/api/designTypes';
 import { useToast } from '@/shell/ToastHost';
 
+// ── AAGUID 입력 자동 포맷 ─────────────────────────────────────────────────────
+// 입력값에서 16진수만 남기고(최대 32자) UUID 형식 8-4-4-4-12 위치에 하이픈을
+// 자동 삽입한다. 사용자가 하이픈을 직접 치거나 대문자를 넣어도 정규화된다.
+//  "ea9b8d664d01" → "ea9b8d66-4d01"
+//  "EA9B8D66-4D01-1D21-3CE4-B6B48CB575D4" → 동일(소문자) 결과
+export function formatAaguid(raw: string): string {
+  const hex = raw.toLowerCase().replace(/[^0-9a-f]/g, '').slice(0, 32);
+  const seg = [8, 4, 4, 4, 12];
+  const out: string[] = [];
+  let i = 0;
+  for (const len of seg) {
+    if (i >= hex.length) break;
+    out.push(hex.slice(i, i + len));
+    i += len;
+  }
+  return out.join('-');
+}
+
 // ── AaguidPolicyTab ───────────────────────────────────────────────────────────
 
 export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
@@ -129,8 +147,9 @@ export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
                   className="input mono"
                   placeholder="ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
                   value={aaguidInput}
-                  onChange={(e) => setAaguidInput(e.target.value)}
+                  onChange={(e) => setAaguidInput(formatAaguid(e.target.value))}
                   onKeyDown={(e) => e.key === 'Enter' && add()}
+                  maxLength={36}
                   style={{ flex: 1, minWidth: 0 }}
                 />
                 <button className="btn btn--primary btn--sm" disabled={!inputValid} onClick={add} style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
