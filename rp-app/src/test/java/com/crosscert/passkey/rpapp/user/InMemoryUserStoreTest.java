@@ -37,4 +37,17 @@ class InMemoryUserStoreTest {
         assertThat(second.findByUsername("alice")).isPresent();
         assertThat(second.findByUsername("alice").get().userHandle()).isEqualTo(handle);
     }
+
+    @Test
+    void pendingUserIsNotPersisted(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+
+        InMemoryUserStore first = new InMemoryUserStore(mapper(), file.toString());
+        String handle = first.createPending("bob", "Bob");   // confirm 하지 않음
+
+        InMemoryUserStore second = new InMemoryUserStore(mapper(), file.toString());
+
+        assertThat(second.findByUserHandle(handle)).isEmpty();
+        assertThat(second.findByUsername("bob")).isEmpty();
+    }
 }
