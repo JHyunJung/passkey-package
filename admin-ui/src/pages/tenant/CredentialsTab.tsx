@@ -58,7 +58,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   const [items, setItems] = useState<Credential[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
-  const size = 50;
+  const [size, setSize] = useState(50);  // 페이지당 조회 건수 (50/100/200)
   const [q, setQ] = useState('');
   const [searchMode, setSearchMode] = useState<'keyword' | 'aaguid' | 'status'>('keyword');
   const [loading, setLoading] = useState(true);
@@ -83,7 +83,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [tenant.id, page]);
+  }, [tenant.id, page, size]);
 
   async function reload() {
     setLoading(true);
@@ -162,6 +162,19 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
             <span className="muted" style={{ fontSize: 12 }}>{filtered.length}건</span>
           </div>
           <div className="row">
+            <label className="row" style={{ gap: 6, fontSize: 12, color: 'var(--text-mute)' }}>
+              페이지당
+              <select
+                className="input"
+                value={size}
+                onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}
+                style={{ height: 30, padding: '0 8px', width: 'auto' }}
+              >
+                <option value={50}>50건</option>
+                <option value={100}>100건</option>
+                <option value={200}>200건</option>
+              </select>
+            </label>
             <button className="btn btn--sm" onClick={() => {
               if (!filtered || filtered.length === 0) return;
               downloadCsv(
