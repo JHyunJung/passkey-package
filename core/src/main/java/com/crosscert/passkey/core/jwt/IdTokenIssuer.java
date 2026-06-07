@@ -32,7 +32,7 @@ public class IdTokenIssuer {
     private final Clock clock;
 
     public IdTokenIssuer(SigningKeyProvider signingKeys,
-                         @Value("${passkey.id-token.issuer-base:https://passkey.crosscert.com}")
+                         @Value("${passkey.id-token.issuer-base:https://dev-passkey.crosscert.com}")
                          String issuerBase,
                          @Value("${passkey.id-token.ttl:PT15M}")
                          Duration tokenTtl,

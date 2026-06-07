@@ -7,6 +7,15 @@
 #
 # 기존 local / local-shared 가 흡수됨 — 더 이상 spring.config.import chain 사용 안 함.
 
+server:
+  # TLS 종단을 앱에서 직접 처리할 경우 환경변수로 주입(미설정 시 SSL 비활성).
+  ssl:
+    enabled:            ${SERVER_SSL_ENABLED:false}
+    key-store:          ${SERVER_SSL_KEY_STORE:}
+    key-store-password: ${SERVER_SSL_KEY_STORE_PASSWORD:}
+    key-store-type:     ${SERVER_SSL_KEY_STORE_TYPE:}
+    key-alias:          ${SERVER_SSL_KEY_ALIAS:}
+
 spring:
   datasource:
     url: jdbc:oracle:thin:@localhost:1521/XEPDB1
