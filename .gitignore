@@ -56,3 +56,6 @@ phase5-login.png
 .claude/
 .claire/
 .serena/
+
+# rp-app 런타임 user-store 산출물
+data/
