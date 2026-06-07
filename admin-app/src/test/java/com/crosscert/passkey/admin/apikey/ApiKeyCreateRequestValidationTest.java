@@ -3,6 +3,8 @@ package com.crosscert.passkey.admin.apikey;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.junit.jupiter.api.AfterAll;
@@ -28,6 +30,14 @@ class ApiKeyCreateRequestValidationTest {
     @AfterAll
     static void tearDown() {
         factory.close();
+    }
+
+    private ApiKeyAdminDto.ApiKeyCreateRequest reqMonths(Integer months) {
+        return new ApiKeyAdminDto.ApiKeyCreateRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                "valid-name",
+                Set.of("registration"),
+                months);
     }
 
     private ApiKeyAdminDto.ApiKeyCreateRequest req(String name) {
@@ -66,5 +76,31 @@ class ApiKeyCreateRequestValidationTest {
         assertThat(violations)
                 .anyMatch(v -> v.getPropertyPath().toString().equals("name")
                         && v.getConstraintDescriptor().getAnnotation() instanceof NotBlank);
+    }
+
+    @Test
+    void nullExpiresInMonthsIsValid() {
+        assertThat(validator.validate(reqMonths(null))).isEmpty();
+    }
+
+    @Test
+    void expiresInMonths24IsValid() {
+        assertThat(validator.validate(reqMonths(24))).isEmpty();
+    }
+
+    @Test
+    void expiresInMonths0ViolatesMin() {
+        var violations = validator.validate(reqMonths(0));
+        assertThat(violations)
+                .anyMatch(v -> v.getPropertyPath().toString().equals("expiresInMonths")
+                        && v.getConstraintDescriptor().getAnnotation() instanceof Min);
+    }
+
+    @Test
+    void expiresInMonths37ViolatesMax() {
+        var violations = validator.validate(reqMonths(37));
+        assertThat(violations)
+                .anyMatch(v -> v.getPropertyPath().toString().equals("expiresInMonths")
+                        && v.getConstraintDescriptor().getAnnotation() instanceof Max);
     }
 }
