@@ -4,6 +4,8 @@ import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationFinishRequest;
 import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationFinishResponse;
 import com.crosscert.passkey.app.fido2.challenge.AuthenticationChallenge;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
+import com.crosscert.passkey.core.ceremony.CeremonyAction;
+import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.jwt.IdTokenIssuer;
@@ -64,6 +66,7 @@ public class AuthenticationFinishService {
     private final AuthenticationExtensionsClientOutputsConverter extensionsConverter;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
+    private final CeremonyEventRecorder ceremonyEvents;
     private final ApplicationEventPublisher eventPublisher;
 
     public AuthenticationFinishService(ChallengeStore store,
@@ -75,6 +78,7 @@ public class AuthenticationFinishService {
                                        ObjectConverter objectConverter,
                                        Clock clock,
                                        CeremonyMetrics ceremonyMetrics,
+                                       CeremonyEventRecorder ceremonyEvents,
                                        ApplicationEventPublisher eventPublisher) {
         this.store = store;
         this.manager = manager;
@@ -88,6 +92,7 @@ public class AuthenticationFinishService {
         this.extensionsConverter = new AuthenticationExtensionsClientOutputsConverter(objectConverter);
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
+        this.ceremonyEvents = ceremonyEvents;
         this.eventPublisher = eventPublisher;
     }
 
@@ -254,6 +259,7 @@ public class AuthenticationFinishService {
                     subTail, ch.tenantId(), 900);
 
             AuthenticationFinishResponse response = new AuthenticationFinishResponse(jwt, "Bearer", 900);
+            ceremonyEvents.record(UUID.fromString(ch.tenantId()), CeremonyAction.AUTHENTICATION_SUCCESS);
             ceremonyMetrics.recordSuccess("authentication", "finish");
             return response;
         } catch (RuntimeException e) {

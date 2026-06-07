@@ -7,6 +7,8 @@ import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
+import com.crosscert.passkey.core.ceremony.CeremonyAction;
+import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
@@ -35,6 +37,7 @@ public class RegistrationStartService {
     private final ObjectMapper mapper;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
+    private final CeremonyEventRecorder ceremonyEvents;
 
     public RegistrationStartService(TenantRepository tenants,
                                     CredentialRepository credentials,
@@ -42,7 +45,8 @@ public class RegistrationStartService {
                                     ChallengeStore store,
                                     ObjectMapper mapper,
                                     Clock clock,
-                                    CeremonyMetrics ceremonyMetrics) {
+                                    CeremonyMetrics ceremonyMetrics,
+                                    CeremonyEventRecorder ceremonyEvents) {
         this.tenants = tenants;
         this.credentials = credentials;
         this.challenges = challenges;
@@ -50,6 +54,7 @@ public class RegistrationStartService {
         this.mapper = mapper;
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
+        this.ceremonyEvents = ceremonyEvents;
     }
 
     /**
@@ -119,6 +124,7 @@ public class RegistrationStartService {
             log.info("registration/start issued: tokenTail={} timeoutMs={}",
                     tokenTail(token), tenant.getWebauthnTimeoutMs());
             RegistrationStartResponse response = new RegistrationStartResponse(token, options);
+            ceremonyEvents.record(tenantUuid, CeremonyAction.REGISTRATION_BEGIN);
             ceremonyMetrics.recordSuccess("registration", "start");
             return response;
         } catch (RuntimeException e) {

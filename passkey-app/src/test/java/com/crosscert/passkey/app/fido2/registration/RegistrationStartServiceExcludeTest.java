@@ -9,6 +9,7 @@ import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
+import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -67,7 +68,7 @@ class RegistrationStartServiceExcludeTest {
         SimpleMeterRegistry reg = new SimpleMeterRegistry();
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new CeremonyMetrics(reg));
+                new CeremonyMetrics(reg), mock(CeremonyEventRecorder.class));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -108,7 +109,7 @@ class RegistrationStartServiceExcludeTest {
 
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new CeremonyMetrics(new SimpleMeterRegistry()));
+                new CeremonyMetrics(new SimpleMeterRegistry()), mock(CeremonyEventRecorder.class));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -142,7 +143,7 @@ class RegistrationStartServiceExcludeTest {
 
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new CeremonyMetrics(new SimpleMeterRegistry()));
+                new CeremonyMetrics(new SimpleMeterRegistry()), mock(CeremonyEventRecorder.class));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(userHandle),
                 "Disp", "alice");
@@ -168,7 +169,7 @@ class RegistrationStartServiceExcludeTest {
         SimpleMeterRegistry reg = new SimpleMeterRegistry();
         RegistrationStartService svc = new RegistrationStartService(
                 tenants, credentials, challenges, store, mapper, clock,
-                new CeremonyMetrics(reg));
+                new CeremonyMetrics(reg), mock(CeremonyEventRecorder.class));
         RegistrationStartRequest req = new RegistrationStartRequest(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[]{9, 9}),
                 "Disp", "alice");
