@@ -8,7 +8,9 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.api.PageView;
 import com.crosscert.passkey.core.entity.Credential;
+import com.crosscert.passkey.core.entity.CredentialAuthEvent;
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
+import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,13 +35,13 @@ public class CredentialAdminService {
     private final MdsAaguidCache mds;
     private final AuditLogService audit;
     private final TenantBoundary tenantBoundary;
-    private final com.crosscert.passkey.core.repository.CredentialAuthEventRepository authEvents;
+    private final CredentialAuthEventRepository authEvents;
 
     public CredentialAdminService(CredentialRepository creds,
                                   MdsAaguidCache mds,
                                   AuditLogService audit,
                                   TenantBoundary tenantBoundary,
-                                  com.crosscert.passkey.core.repository.CredentialAuthEventRepository authEvents) {
+                                  CredentialAuthEventRepository authEvents) {
         this.creds = creds;
         this.mds = mds;
         this.audit = audit;
@@ -88,7 +90,7 @@ public class CredentialAdminService {
         }
 
         int cappedSize = Math.min(Math.max(size, 1), 200);
-        Page<com.crosscert.passkey.core.entity.CredentialAuthEvent> rows =
+        Page<CredentialAuthEvent> rows =
                 authEvents.findByCredentialIdOrderByCreatedAtDesc(
                         c.getId(), PageRequest.of(Math.max(page, 0), cappedSize));
         return PageView.from(rows.map(e -> new CredentialAdminDto.AuthEventView(
