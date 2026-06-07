@@ -2,13 +2,18 @@ package com.crosscert.passkey.core.ceremony;
 
 import com.crosscert.passkey.core.entity.CredentialAuthEvent;
 import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.UnexpectedRollbackException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -75,5 +80,96 @@ class CredentialAuthEventRecorderTest {
         // no active synchronization in a plain unit test → immediate path
         r.recordAfterCommit(UUID.randomUUID(), UUID.randomUUID(), CredentialAuthResult.SUCCESS, null, 7);
         verify(repo).save(any(CredentialAuthEvent.class));
+    }
+
+    @AfterEach
+    void clearSync() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    /**
+     * 실패 경로(codex P1): 인증 실패는 outer @Transactional 롤백이라 afterCommit 은
+     * 안 불린다. 대신 afterCompletion(STATUS_ROLLED_BACK) 으로 락 해제 후 기록해야
+     * PESSIMISTIC_WRITE 부모 행과 REQUIRES_NEW 자식 INSERT 의 FK 락 경합을 피한다.
+     * 활성 동기화가 있으면 즉시 record 하지 않고 콜백을 등록만 한다.
+     */
+    @Test
+    void recordAfterRollbackDefersUntilRolledBack() {
+        CredentialAuthEventRecorder r = newRecorder();
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            r.recordAfterRollback(UUID.randomUUID(), UUID.randomUUID(),
+                    CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGNATURE_INVALID, 0);
+            // 아직 트랜잭션이 끝나지 않았으므로 즉시 기록되면 안 된다.
+            verify(repo, never()).save(any(CredentialAuthEvent.class));
+
+            List<TransactionSynchronization> syncs =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertThat(syncs).hasSize(1);
+
+            // 롤백 완료를 시뮬레이션 → 이때 비로소 기록된다.
+            syncs.get(0).afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+            verify(repo).save(any(CredentialAuthEvent.class));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    /**
+     * 커밋 완료(STATUS_COMMITTED)는 실패 이벤트가 아니므로 afterCompletion 이 불려도
+     * 기록하지 않는다 — 실패 경로 전용 가드.
+     */
+    @Test
+    void recordAfterRollbackDoesNotRecordOnCommit() {
+        CredentialAuthEventRecorder r = newRecorder();
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            r.recordAfterRollback(UUID.randomUUID(), UUID.randomUUID(),
+                    CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGN_COUNT_REPLAY, 0);
+            List<TransactionSynchronization> syncs =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertThat(syncs).hasSize(1);
+
+            syncs.get(0).afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
+            verify(repo, never()).save(any(CredentialAuthEvent.class));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void recordAfterRollbackFallsBackToImmediateWhenNoTransaction() {
+        CredentialAuthEventRecorder r = newRecorder();
+        // no active synchronization in a plain unit test → immediate path
+        r.recordAfterRollback(UUID.randomUUID(), UUID.randomUUID(),
+                CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGNATURE_INVALID, 0);
+        verify(repo).save(any(CredentialAuthEvent.class));
+    }
+
+    /**
+     * codex P2: 롤백 콜백 경로에서도 best-effort 계약(예외 swallow)이 유지되는지 직접
+     * 검증한다. 콜백이 record() 에 위임하므로 간접적으로 보장되지만, 누군가 record() 를
+     * 우회하도록 바꾸는 회귀를 막기 위해 롤백 경로에서 명시적으로 가드한다.
+     */
+    @Test
+    void recordAfterRollbackSwallowsFailureOnRolledBack() {
+        CredentialAuthEventRecorder r = newRecorder();
+        doThrow(new RuntimeException("db down")).when(repo).save(any());
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            r.recordAfterRollback(UUID.randomUUID(), UUID.randomUUID(),
+                    CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGNATURE_INVALID, 0);
+            List<TransactionSynchronization> syncs =
+                    TransactionSynchronizationManager.getSynchronizations();
+            // 롤백 콜백 실행 시 repo.save 가 던져도 호출자(롤백 동기화)로 전파되면 안 된다.
+            assertThatCode(() -> syncs.get(0)
+                    .afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK))
+                    .doesNotThrowAnyException();
+            verify(repo).save(any(CredentialAuthEvent.class));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }

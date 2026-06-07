@@ -215,7 +215,9 @@ public class AuthenticationFinishService {
                 log.warn("assertion verify failed for tenant {}: {}", ch.tenantId(), e.toString());
                 // spec §6.1: credential 식별 이후의 검증 실패도 기록한다. newCounter 는
                 // 아직 검증 전이라 보존된 cred.getSignCount() 를 signCount 로 남긴다.
-                authEvents.record(cred.getId(), UUID.fromString(ch.tenantId()),
+                // recordAfterRollback: cred 는 PESSIMISTIC_WRITE 로 락된 행이라 즉시
+                // REQUIRES_NEW INSERT 하면 FK 락 경합이 난다. outer 롤백 완료(락 해제) 후 기록.
+                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.tenantId()),
                         CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGNATURE_INVALID,
                         cred.getSignCount());
                 throw new IllegalArgumentException("assertion verify failed");
@@ -239,7 +241,9 @@ public class AuthenticationFinishService {
                         Map.of(
                                 "credentialId", String.valueOf(cred.getId()),
                                 "tenantId", String.valueOf(ch.tenantId()))));
-                authEvents.record(cred.getId(), UUID.fromString(ch.tenantId()),
+                // recordAfterRollback: 위 verify 실패와 동일한 이유(락된 cred 행과의 FK
+                // 락 경합 회피) — outer 롤백 완료 후 기록한다.
+                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.tenantId()),
                         CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGN_COUNT_REPLAY,
                         newCounter);
                 throw new IllegalArgumentException("signCount replay detected");
