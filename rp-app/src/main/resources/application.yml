@@ -3,6 +3,10 @@ server:
 
 rp-app:
   origin: ${RP_APP_ORIGIN:http://localhost:9090}
+  # 재기동 후에도 확정 등록된 user↔handle↔credential 매핑을 유지하기 위한 JSON 파일.
+  # 단일 인스턴스 데모용. 환경변수 RP_APP_USER_STORE_FILE 로 오버라이드 가능.
+  user-store:
+    file: ${RP_APP_USER_STORE_FILE:./data/rp-app-users.json}
   # 네이티브 앱 패스키용 Well-Known URI 값. 미설정 시 첨부 샘플 앱(com.crosscert.sample.passkey)
   # 으로 바로 동작한다. 고객사는 아래 환경변수만 자기 앱 값으로 교체하면 코드 수정 없이 재사용.
   well-known:
