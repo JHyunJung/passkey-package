@@ -222,8 +222,8 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
       <div className="grid-4">
         <MetricCard label="등록 Credential" value={fmt(tenant.credentials)} sub="활성 + 회수 포함" />
         <MetricCard label="유효 API Key" value={tenant.apiKeys} sub="ACTIVE 상태" />
-        <MetricCard label="등록 성공률 (7d)" value={f.registration.attempts > 0 ? `${(f.registration.ratio * 100).toFixed(1)}%` : '—'} sub={f.registration.attempts > 0 ? `${fmt(f.registration.success)} / ${fmt(f.registration.attempts)} 시도` : 'Phase E3 연결 예정'} />
-        <MetricCard label="인증 성공률 (7d)" value={f.authentication.attempts > 0 ? `${(f.authentication.ratio * 100).toFixed(1)}%` : '—'} sub={f.authentication.attempts > 0 ? `${fmt(f.authentication.success)} / ${fmt(f.authentication.attempts)} 시도` : 'Phase E3 연결 예정'} />
+        <MetricCard label="등록 성공률 (7d)" value={f.registration.attempts > 0 ? `${(f.registration.ratio * 100).toFixed(1)}%` : '—'} sub={f.registration.attempts > 0 ? `${fmt(f.registration.success)} / ${fmt(f.registration.attempts)} 시도` : '최근 7일 등록 시도 없음'} />
+        <MetricCard label="인증 성공률 (7d)" value={f.authentication.attempts > 0 ? `${(f.authentication.ratio * 100).toFixed(1)}%` : '—'} sub={f.authentication.attempts > 0 ? `${fmt(f.authentication.success)} / ${fmt(f.authentication.attempts)} 시도` : '최근 7일 인증 시도 없음'} />
       </div>
 
       <div className="grid-2">
