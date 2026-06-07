@@ -23,6 +23,8 @@ dependencies {
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     archiveFileName.set("sample-rp.jar")
+    // 실행 가능한 jar 를 루트 deploy/ 에 모아 배포 편의를 높인다.
+    destinationDirectory.set(rootProject.layout.projectDirectory.dir("deploy"))
 }
 
 tasks.named<Test>("test") {
