@@ -37,6 +37,15 @@ public class CredentialAdminController {
         return ApiResponse.ok(service.list(tenantId, page, size, q));
     }
 
+    @GetMapping("/{credentialId}/auth-events")
+    public ApiResponse<PageView<CredentialAdminDto.AuthEventView>> authEvents(
+            @PathVariable UUID tenantId,
+            @PathVariable String credentialId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ApiResponse.ok(service.listAuthEvents(tenantId, credentialId, page, size));
+    }
+
     @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @DeleteMapping("/{credentialId}")
     public ResponseEntity<ApiResponse<Void>> revoke(

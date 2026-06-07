@@ -33,15 +33,18 @@ public class CredentialAdminService {
     private final MdsAaguidCache mds;
     private final AuditLogService audit;
     private final TenantBoundary tenantBoundary;
+    private final com.crosscert.passkey.core.repository.CredentialAuthEventRepository authEvents;
 
     public CredentialAdminService(CredentialRepository creds,
                                   MdsAaguidCache mds,
                                   AuditLogService audit,
-                                  TenantBoundary tenantBoundary) {
+                                  TenantBoundary tenantBoundary,
+                                  com.crosscert.passkey.core.repository.CredentialAuthEventRepository authEvents) {
         this.creds = creds;
         this.mds = mds;
         this.audit = audit;
         this.tenantBoundary = tenantBoundary;
+        this.authEvents = authEvents;
     }
 
     @Transactional(readOnly = true)
@@ -63,6 +66,33 @@ public class CredentialAdminService {
         log.debug("list credentials tenant={} page={} size={} q={} totalElements={}",
                 tenantId, page, cappedSize, q, rows.getTotalElements());
         return PageView.from(rows.map(this::toView));
+    }
+
+    @Transactional(readOnly = true)
+    public PageView<CredentialAdminDto.AuthEventView> listAuthEvents(
+            UUID tenantId, String credentialIdB64, int page, int size) {
+        tenantBoundary.assertCanAccessTenant(tenantId);
+        byte[] credId;
+        try {
+            credId = Base64.getUrlDecoder().decode(credentialIdB64);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "credentialId 가 base64url 형식이 아님");
+        }
+        Credential c = creds.findByCredentialId(credId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENTITY_NOT_FOUND, "credential 없음"));
+
+        // VPD 가 admin-app 에서 비활성 — tenantId 일치 검사가 cross-tenant 누출 방어의 단일 layer
+        if (!c.getTenantId().equals(tenantId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "tenant boundary 위반");
+        }
+
+        int cappedSize = Math.min(Math.max(size, 1), 200);
+        Page<com.crosscert.passkey.core.entity.CredentialAuthEvent> rows =
+                authEvents.findByCredentialIdOrderByCreatedAtDesc(
+                        c.getId(), PageRequest.of(Math.max(page, 0), cappedSize));
+        return PageView.from(rows.map(e -> new CredentialAdminDto.AuthEventView(
+                e.getResult(), e.getFailureReason(), e.getSignCount(), e.getCreatedAt())));
     }
 
     @Transactional
