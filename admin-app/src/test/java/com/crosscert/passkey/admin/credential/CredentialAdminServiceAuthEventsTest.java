@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.PageView;
+import com.crosscert.passkey.core.ceremony.CredentialAuthResult;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.CredentialAuthEvent;
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
@@ -47,12 +48,12 @@ class CredentialAdminServiceAuthEventsTest {
 
         when(authEvents.findByCredentialIdOrderByCreatedAtDesc(eq(credPk), any()))
                 .thenReturn(new PageImpl<>(List.of(
-                        new CredentialAuthEvent(credPk, tenant, "SUCCESS", null, 3))));
+                        new CredentialAuthEvent(credPk, tenant, CredentialAuthResult.SUCCESS, null, 3))));
 
         PageView<CredentialAdminDto.AuthEventView> page = svc.listAuthEvents(tenant, credB64, 0, 50);
 
         assertThat(page.content()).hasSize(1);
-        assertThat(page.content().get(0).result()).isEqualTo("SUCCESS");
+        assertThat(page.content().get(0).result()).isEqualTo(CredentialAuthResult.SUCCESS);
         assertThat(page.content().get(0).signCount()).isEqualTo(3);
         verify(tenantBoundary).assertCanAccessTenant(tenant);
     }
