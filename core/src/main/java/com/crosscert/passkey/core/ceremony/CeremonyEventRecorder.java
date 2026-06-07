@@ -5,16 +5,23 @@ import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Objects;
 import java.util.UUID;
 
 /**
  * ceremony 집계 이벤트를 best-effort 로 기록한다. 기록 실패가 등록/인증 ceremony
- * 자체를 깨면 안 되므로 예외를 삼킨다(로그만). REQUIRES_NEW 로 별도 트랜잭션을 써,
- * 호출 측 트랜잭션이 readOnly 이거나 롤백돼도 집계 이벤트 기록이 독립적으로 커밋된다.
+ * 자체를 깨면 안 된다.
+ *
+ * <p>핵심: 트랜잭션 <b>경계 전체</b>를 try/catch 로 감싼다. {@code @Transactional}
+ * 메서드 안의 try/catch 는 커밋 시점 예외(JPA flush 지연으로 INSERT 가 커밋 때 실행되거나,
+ * tenant_id NOT NULL 등 제약 위반)를 잡지 못하고 호출자로 전파시킨다. 그래서
+ * TransactionTemplate(REQUIRES_NEW)을 직접 호출하고 그 호출을 try/catch 로 감싼다 —
+ * executeWithoutResult 가 커밋을 동기적으로 수행하므로 커밋 실패까지 여기서 삼켜진다.
+ * REQUIRES_NEW: 호출 측이 readOnly 이거나 롤백돼도 집계 기록이 독립 커밋된다.
  */
 @Component
 public class CeremonyEventRecorder {
@@ -22,17 +29,19 @@ public class CeremonyEventRecorder {
     private static final Logger log = LoggerFactory.getLogger(CeremonyEventRecorder.class);
 
     private final CeremonyEventRepository repo;
+    private final TransactionTemplate txTemplate;
 
-    public CeremonyEventRecorder(CeremonyEventRepository repo) {
+    public CeremonyEventRecorder(CeremonyEventRepository repo, PlatformTransactionManager txManager) {
         this.repo = repo;
+        this.txTemplate = new TransactionTemplate(txManager);
+        this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(UUID tenantId, String action) {
         Objects.requireNonNull(tenantId, "tenantId");
         Objects.requireNonNull(action, "action");
         try {
-            repo.save(new CeremonyEvent(tenantId, action));
+            txTemplate.executeWithoutResult(status -> repo.save(new CeremonyEvent(tenantId, action)));
         } catch (Exception e) {
             log.warn("ceremony_event 기록 실패 (무시): tenant={} action={}", tenantId, action, e);
         }
