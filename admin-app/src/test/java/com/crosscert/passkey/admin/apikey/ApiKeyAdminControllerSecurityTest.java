@@ -118,7 +118,7 @@ class ApiKeyAdminControllerSecurityTest {
         org.mockito.Mockito.when(service.issue(any(), any(UUID.class), anyString()))
                 .thenReturn(new ApiKeyAdminDto.ApiKeyCreateResponse(
                         UUID.randomUUID(), "pk_abcd1234SECRET", "pk_abcd1234",
-                        java.util.Set.of("registration", "authentication")));
+                        java.util.Set.of("registration", "authentication"), null));
         mvc.perform(post("/admin/api/api-keys")
                 .with(csrf()).contentType("application/json").content(BODY))
                 .andExpect(status().isCreated())

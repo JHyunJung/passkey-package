@@ -34,7 +34,8 @@ class ApiKeyCreateRequestValidationTest {
         return new ApiKeyAdminDto.ApiKeyCreateRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 name,
-                Set.of("registration"));
+                Set.of("registration"),
+                12);
     }
 
     @Test
