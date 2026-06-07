@@ -3,9 +3,11 @@ package com.crosscert.passkey.core.ceremony;
 import com.crosscert.passkey.core.entity.CeremonyEvent;
 import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -19,7 +21,10 @@ class CeremonyEventRecorderTest {
     void record_persistsEvent() {
         UUID tenant = UUID.randomUUID();
         recorder.record(tenant, CeremonyAction.REGISTRATION_BEGIN);
-        verify(repo, times(1)).save(any(CeremonyEvent.class));
+        ArgumentCaptor<CeremonyEvent> captor = ArgumentCaptor.forClass(CeremonyEvent.class);
+        verify(repo, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getTenantId()).isEqualTo(tenant);
+        assertThat(captor.getValue().getAction()).isEqualTo(CeremonyAction.REGISTRATION_BEGIN);
     }
 
     @Test

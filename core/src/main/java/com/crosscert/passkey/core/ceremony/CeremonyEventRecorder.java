@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -28,6 +29,8 @@ public class CeremonyEventRecorder {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(UUID tenantId, String action) {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(action, "action");
         try {
             repo.save(new CeremonyEvent(tenantId, action));
         } catch (Exception e) {
