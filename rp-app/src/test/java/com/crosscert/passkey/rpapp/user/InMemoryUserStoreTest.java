@@ -60,4 +60,16 @@ class InMemoryUserStoreTest {
 
         assertThat(store.findByUsername("anyone")).isEmpty();
     }
+
+    @Test
+    void validJsonWithNullRequiredFieldYieldsEmptyStoreWithoutCrash(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("users.json");
+        // 유효 JSON 이지만 username/userHandle 이 누락 → 맵 key 가 null 이면 NPE 위험.
+        java.nio.file.Files.writeString(file,
+                "[{\"credentialId\":\"c\",\"createdAt\":\"2020-01-01T00:00:00Z\"}]");
+
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        assertThat(store.findByUsername("x")).isEmpty();
+    }
 }

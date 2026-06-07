@@ -56,12 +56,13 @@ public class InMemoryUserStore {
         try {
             List<RpAppUser> users = mapper.readValue(file.toFile(), new TypeReference<List<RpAppUser>>() {});
             for (RpAppUser u : users) {
-                if (u.credentialId() == null) continue;   // 방어: 확정만 신뢰
+                // 방어: 확정(credentialId)만 신뢰하고, 맵 key 가 될 필수 필드가 null 이면 skip(NPE 회피).
+                if (u.credentialId() == null || u.userHandle() == null || u.username() == null) continue;
                 byHandle.put(u.userHandle(), u);
                 byUsername.put(u.username(), u.userHandle());
             }
             log.info("user-store: loaded {} confirmed user(s) from {}", byHandle.size(), file);
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.warn("user-store: failed to read {} — starting empty. cause={}", file, e.toString());
         }
     }
