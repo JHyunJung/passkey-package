@@ -5,6 +5,9 @@ plugins {
 dependencies {
     implementation(project(":core"))
 
+    // Oracle NLS(orai18n) — 문자셋/날짜·언어 변환 시 드라이버가 런타임에 로드.
+    runtimeOnly(rootProject.libs.oracle.nls)
+
     // T26 Fido2EndToEndIT brings up a Testcontainers Oracle + Redis and
     // exercises the FIDO2 RP API end-to-end. We need :core's test deps
     // (OracleContainer, junit-jupiter container support) plus the

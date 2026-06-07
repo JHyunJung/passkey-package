@@ -6,6 +6,8 @@ plugins {
 dependencies {
     implementation(project(":core"))
     implementation("org.springframework.boot:spring-boot-starter-security")
+    // Oracle NLS(orai18n) — 문자셋/날짜·언어 변환 시 드라이버가 런타임에 로드.
+    runtimeOnly(rootProject.libs.oracle.nls)
     // F4 Task 6 — Monthly Audit Chain Report PDF generation.
     // openhtmltopdf 1.0.10 is the current stable LTS release; pulls in
     // pdfbox 2.0.x transitively.
