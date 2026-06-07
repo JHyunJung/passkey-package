@@ -1,6 +1,6 @@
 import { api } from './client';
-import type { CredentialView, PageView } from './types';
-import type { Credential } from './designTypes';
+import type { CredentialView, PageView, AuthEventView } from './types';
+import type { Credential, AuthEvent } from './designTypes';
 
 // CredentialView (서버) → Credential (디자인) 어댑터
 // transports: 서버는 comma-separated string, 디자인은 string[]
@@ -16,6 +16,7 @@ function adapt(s: CredentialView): Credential {
     signatureCounter: s.signCount,
     lastUsedAt: s.lastUsedAt ?? null,
     createdAt: s.createdAt,
+    attestationFormat: s.attestationFormat ?? null,
   };
 }
 
@@ -41,5 +42,22 @@ export const credentialsApi = {
 
   revoke: async (tenantId: string, credentialId: string): Promise<void> => {
     await api.delete<void>(`/admin/api/tenants/${tenantId}/credentials/${encodeURIComponent(credentialId)}`);
+  },
+
+  authEvents: async (
+    tenantId: string,
+    credentialId: string,
+    size = 20,
+  ): Promise<AuthEvent[]> => {
+    const q = new URLSearchParams({ page: '0', size: String(size) });
+    const res = await api.get<PageView<AuthEventView>>(
+      `/admin/api/tenants/${tenantId}/credentials/${encodeURIComponent(credentialId)}/auth-events?${q}`,
+    );
+    return res.content.map((e) => ({
+      result: e.result === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
+      failureReason: e.failureReason ?? null,
+      signCount: e.signCount,
+      createdAt: e.createdAt,
+    }));
   },
 };

@@ -218,6 +218,13 @@ export interface CredentialView {
   createdAt: string;
 }
 
+export interface AuthEventView {
+  result: string;          // "SUCCESS" | "FAILED" (서버 상수)
+  failureReason: string | null;
+  signCount: number;
+  createdAt: string;
+}
+
 export interface PageView<T> {
   content: T[];
   page: number;

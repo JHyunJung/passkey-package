@@ -38,6 +38,14 @@ export type Credential = {
   signatureCounter: number;
   lastUsedAt: string | null;
   createdAt: string;
+  attestationFormat: string | null;
+};
+
+export type AuthEvent = {
+  result: 'SUCCESS' | 'FAILED';
+  failureReason: string | null;
+  signCount: number;
+  createdAt: string;
 };
 
 export type AuditEvent = {
