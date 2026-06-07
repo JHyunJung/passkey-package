@@ -50,4 +50,14 @@ class InMemoryUserStoreTest {
         assertThat(second.findByUserHandle(handle)).isEmpty();
         assertThat(second.findByUsername("bob")).isEmpty();
     }
+
+    @Test
+    void corruptFileYieldsEmptyStoreWithoutCrash(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("users.json");
+        java.nio.file.Files.writeString(file, "{ this is not valid json ][");
+
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        assertThat(store.findByUsername("anyone")).isEmpty();
+    }
 }
