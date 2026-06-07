@@ -48,7 +48,7 @@ public class InMemoryUserStore {
         load();
     }
 
-    /** 기동 시 파일에서 확정 user 복원. 파일이 없거나 손상되면 빈 상태로 시작(크래시 금지). */
+    /** 기동 시 파일에서 확정 user 복원. 파일이 없으면 빈 상태로 시작. 손상되면 quarantine 후 빈 상태로 시작(크래시 금지). */
     private void load() {
         if (!Files.exists(file)) {
             log.info("user-store: no persisted file at {} — starting empty", file);
