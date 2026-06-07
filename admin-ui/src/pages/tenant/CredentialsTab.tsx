@@ -223,6 +223,9 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
                   key={c.credentialId}
                   onClick={() => setSelected(c)}
                   onKeyDown={(ev) => {
+                    // 행 자신에 포커스가 있을 때만 — 셀 내부 버튼(회수)에서 버블된
+                    // Enter/Space 가 상세 모달을 함께 열지 않도록 차단.
+                    if (ev.target !== ev.currentTarget) return;
                     if (ev.key === 'Enter' || ev.key === ' ') {
                       ev.preventDefault();
                       setSelected(c);
