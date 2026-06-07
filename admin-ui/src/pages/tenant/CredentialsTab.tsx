@@ -166,11 +166,12 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
               if (!filtered || filtered.length === 0) return;
               downloadCsv(
                 `credentials-${tenant.slug}-${new Date().toISOString().slice(0,10)}.csv`,
-                ['credentialId', 'externalUserId', 'nickname', 'status', 'aaguid', 'transports', 'signatureCounter', 'lastUsedAt', 'createdAt'],
+                ['credentialId', 'externalUserId', 'label', 'authenticatorName', 'status', 'aaguid', 'transports', 'signatureCounter', 'lastUsedAt', 'createdAt'],
                 filtered.map((c) => [
                   c.credentialId,
                   c.externalUserId,
                   c.nickname ?? '',
+                  c.authenticatorName ?? '',
                   c.status,
                   c.aaguid ?? '',
                   c.transports.join('|'),
@@ -190,13 +191,13 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           <table className="table">
             <thead>
               <tr>
-                <th>credentialId</th>
-                <th>externalUserId</th>
-                <th>nickname</th>
-                <th>authenticator</th>
-                <th>transports</th>
-                <th style={{ textAlign: 'right' }}>sig.counter</th>
-                <th>status</th>
+                <th>Credential ID</th>
+                <th>사용자</th>
+                <th>별칭</th>
+                <th>인증기</th>
+                <th>전송 방식</th>
+                <th style={{ textAlign: 'right' }}>서명 카운터</th>
+                <th>상태</th>
                 <th>마지막 사용</th>
                 <th></th>
               </tr>
@@ -206,13 +207,21 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
                 <tr key={c.credentialId} style={{ opacity: c.status === 'REVOKED' ? 0.55 : 1 }}>
                   <td className="mono" style={{ fontSize: 12 }}>{tail(c.credentialId, 12)}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{c.externalUserId}</td>
-                  <td>{c.nickname ?? '—'}</td>
+                  <td>{c.nickname ?? <span className="faint">—</span>}</td>
                   <td>
                     <div className="row" style={{ gap: 6 }}>
                       <Icons.Fingerprint size={12} />
-                      <span className="badge badge--accent" style={{ fontSize: 10 }}>
-                        {c.aaguid ? tail(c.aaguid.replace(/-/g, ''), 8) : 'unknown'}
-                      </span>
+                      {c.authenticatorName ? (
+                        // MDS 룩업으로 모델/상태가 식별된 경우
+                        <span className="badge badge--accent" style={{ fontSize: 10 }} title={c.aaguid ?? undefined}>
+                          {c.authenticatorName}
+                        </span>
+                      ) : (
+                        // MDS 미식별 — aaguid 축약(없으면 unknown)
+                        <span className="badge" style={{ fontSize: 10 }} title={c.aaguid ?? undefined}>
+                          {c.aaguid ? tail(c.aaguid.replace(/-/g, ''), 8) : 'unknown'}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td>
@@ -220,7 +229,21 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
                       {c.transports.map((t) => <span key={t} className="badge" style={{ fontSize: 10 }}>{t}</span>)}
                     </div>
                   </td>
-                  <td style={{ textAlign: 'right' }} className="mono">{c.signatureCounter}</td>
+                  <td style={{ textAlign: 'right' }} className="mono">
+                    {c.signatureCounter > 0 ? (
+                      c.signatureCounter
+                    ) : c.lastUsedAt ? (
+                      // 인증됐는데 counter=0 → counterless 인증기(Touch ID/Windows Hello/
+                      // iCloud·Android 싱크 패스키). WebAuthn 상 정상이며 counter 기반
+                      // 복제 탐지가 적용되지 않는다.
+                      <span className="faint" title="counterless 인증기 — 플랫폼·싱크 패스키는 signCount가 0으로 고정됩니다(WebAuthn 정상). counter 기반 복제 탐지 미적용.">
+                        N/A
+                      </span>
+                    ) : (
+                      // 아직 인증 이력 없음.
+                      <span className="faint">0</span>
+                    )}
+                  </td>
                   <td><StatusBadge status={c.status} /></td>
                   <td><span className="muted">{timeAgo(c.lastUsedAt)}</span></td>
                   <td>

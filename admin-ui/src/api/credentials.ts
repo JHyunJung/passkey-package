@@ -8,7 +8,8 @@ function adapt(s: CredentialView): Credential {
   return {
     credentialId: s.credentialId,
     externalUserId: s.userHandle,
-    nickname: s.authenticatorName ?? null,
+    nickname: s.label ?? null,                       // 사용자 별칭(label)
+    authenticatorName: s.authenticatorName ?? null,  // MDS 룩업(모델/상태)
     status: 'ACTIVE',  // 서버 CredentialView에 status 필드 없음 → 기본 ACTIVE
     aaguid: s.aaguidHex ?? null,
     transports: s.transports ? s.transports.split(',').map((t) => t.trim()).filter(Boolean) : [],

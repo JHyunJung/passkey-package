@@ -198,11 +198,11 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
         <table className="table">
           <thead>
             <tr>
-              <th>Prefix</th>
+              <th>Key Prefix</th>
               <th>이름</th>
-              <th>Status</th>
+              <th>상태</th>
               <th>마지막 사용</th>
-              <th>생성</th>
+              <th>생성일</th>
               <th>만료일</th>
               <th style={{ textAlign: 'right' }}>액션</th>
             </tr>

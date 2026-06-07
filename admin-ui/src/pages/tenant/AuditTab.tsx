@@ -476,10 +476,10 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
             <thead>
               <tr>
                 <th>시각</th>
-                <th>eventType</th>
-                <th>actor</th>
-                <th>subject</th>
-                <th>payload</th>
+                <th>이벤트</th>
+                <th>행위자</th>
+                <th>대상</th>
+                <th>상세 내용</th>
               </tr>
             </thead>
             <tbody>

@@ -30,7 +30,8 @@ export type ApiKey = {
 export type Credential = {
   credentialId: string;
   externalUserId: string;
-  nickname: string | null;
+  nickname: string | null;          // 사용자 별칭(label)
+  authenticatorName: string | null; // MDS 룩업 결과(모델/상태)
   status: 'ACTIVE' | 'REVOKED';
   aaguid: string | null;
   transports: string[];

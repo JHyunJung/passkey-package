@@ -208,6 +208,7 @@ export interface TenantUpdateRequest {
 export interface CredentialView {
   credentialId: string;
   userHandle: string;
+  label: string | null;
   aaguidHex: string | null;
   authenticatorName: string | null;
   attestationFormat: string;

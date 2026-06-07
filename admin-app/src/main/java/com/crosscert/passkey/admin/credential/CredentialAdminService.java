@@ -127,6 +127,7 @@ public class CredentialAdminService {
         return new CredentialView(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(c.getCredentialId()),
                 Base64.getUrlEncoder().withoutPadding().encodeToString(c.getUserHandle()),
+                c.getLabel(),
                 aaguidHex, authName,
                 c.getAttestationFmt(), c.getTransports(),
                 c.getSignCount(), c.getLastUsedAt(), c.getCreatedAt());
