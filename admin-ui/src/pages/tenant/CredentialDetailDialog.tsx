@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog } from '@/shell/Dialog';
 import { credentialsApi } from '@/api/credentials';
 import type { Credential, AuthEvent } from '@/api/designTypes';
@@ -17,10 +17,7 @@ function fmtDateTime(iso: string | null | undefined): string {
 function ResultBadge({ result }: { result: 'SUCCESS' | 'FAILED' }) {
   const ok = result === 'SUCCESS';
   return (
-    <span
-      className="badge badge--dot"
-      style={{ color: ok ? 'var(--success, #4caf50)' : 'var(--danger, #e5484d)' }}
-    >
+    <span className={`badge badge--dot badge--${ok ? 'success' : 'danger'}`}>
       {result}
     </span>
   );
@@ -37,18 +34,23 @@ export default function CredentialDetailDialog({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // 마운트 동안만 setState 허용하는 단일 취소 신호 (effect·retry 가 공유)
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+
   const load = useCallback(() => {
-    let cancelled = false;
     setLoading(true);
     setError(false);
     credentialsApi.authEvents(tenantId, c.credentialId, 20)
-      .then((res) => { if (!cancelled) setEvents(res); })
-      .catch(() => { if (!cancelled) setError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((res) => { if (aliveRef.current) setEvents(res); })
+      .catch(() => { if (aliveRef.current) setError(true); })
+      .finally(() => { if (aliveRef.current) setLoading(false); });
   }, [tenantId, c.credentialId]);
 
-  useEffect(() => load(), [load]);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <Dialog open onClose={onClose} wide title="Credential 상세"

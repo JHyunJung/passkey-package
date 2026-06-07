@@ -222,6 +222,14 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
                 <tr
                   key={c.credentialId}
                   onClick={() => setSelected(c)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      setSelected(c);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   style={{ opacity: c.status === 'REVOKED' ? 0.55 : 1, cursor: 'pointer' }}
                 >
                   <td className="mono" style={{ fontSize: 12 }}>{tail(c.credentialId, 12)}</td>
