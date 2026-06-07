@@ -68,7 +68,7 @@ public class InMemoryUserStore {
         }
     }
 
-    /** 확정 user(credentialId ≠ null)만 골라 원자적으로 파일에 쓴다. 실패해도 예외 비전파. */
+    /** 확정 user(credentialId ≠ null)만 골라 파일에 쓴다. temp 파일 → ATOMIC_MOVE(미지원 FS 면 비원자 move 폴백). 실패해도 예외 비전파. */
     private synchronized void persist() {
         List<RpAppUser> confirmed = byHandle.values().stream()
                 .filter(u -> u.credentialId() != null)
