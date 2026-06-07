@@ -76,6 +76,37 @@ const SCOPE_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'authentication', label: 'authentication', desc: '패스키 인증(로그인)' },
 ];
 
+// 만료 프리셋(개월). null = 무기한.
+const EXPIRY_OPTIONS: { months: number | null; label: string }[] = [
+  { months: 6, label: '6개월' },
+  { months: 12, label: '12개월' },
+  { months: 24, label: '24개월' },
+  { months: 36, label: '36개월' },
+  { months: null, label: '무기한' },
+];
+
+// now + N개월의 날짜 미리보기(YYYY-MM-DD, Asia/Seoul). null이면 null.
+// 말일 보정: 1/31 + 1개월처럼 다음 달에 같은 일자가 없으면 그 달 말일로 클램프.
+function previewExpiry(months: number | null): string | null {
+  if (months == null) return null;
+  const now = new Date();
+  const lastDayOfTargetMonth = new Date(now.getFullYear(), now.getMonth() + months + 1, 0).getDate();
+  const day = Math.min(now.getDate(), lastDayOfTargetMonth);
+  const target = new Date(now.getFullYear(), now.getMonth() + months, day,
+                          now.getHours(), now.getMinutes(), now.getSeconds());
+  return target.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }); // en-CA → YYYY-MM-DD
+}
+
+// 만료 상태 판정.
+function expiryState(expiresAt: string | null): 'none' | 'expired' | 'soon' | 'ok' {
+  if (!expiresAt) return 'none';
+  const exp = new Date(expiresAt).getTime();
+  const now = Date.now();
+  if (exp <= now) return 'expired';
+  if (exp - now <= 30 * 24 * 60 * 60 * 1000) return 'soon';
+  return 'ok';
+}
+
 // ── ApiKeysTab ────────────────────────────────────────────────────────────────
 
 export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
@@ -102,9 +133,9 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
 
   useEffect(() => { reload(); }, [tenant.id]);
 
-  async function handleIssue(name: string, scopes: string[]) {
+  async function handleIssue(name: string, scopes: string[], expiresInMonths: number | null) {
     try {
-      const result = await apiKeysApi.create(tenant.id, name, scopes);
+      const result = await apiKeysApi.create(tenant.id, name, scopes, expiresInMonths);
       setShowNew(false);
       setIssued(result);
       await reload();
@@ -151,7 +182,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
   return (
     <div className="stack-4">
       <div className="grid-3">
-        <MetricCard label="총 API Key" value={keys.length} sub={`활성 ${activeCount} · 회수 ${keys.length - activeCount}`} />
+        <MetricCard label="총 API Key" value={keys.length} sub={`활성 ${activeCount} · 만료 ${keys.filter((k) => k.status === 'EXPIRED').length} · 회수 ${keys.filter((k) => k.status === 'REVOKED').length}`} />
         <MetricCard label="최근 발급" value="1일 전" sub={`production · ${tail(keys[0]?.id || '—', 6)}`} />
         <MetricCard label="권장 rotation" value="90일" sub="다음 키 회전: 73일 후" />
       </div>
@@ -173,12 +204,13 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
               <th>Status</th>
               <th>마지막 사용</th>
               <th>생성</th>
+              <th>만료일</th>
               <th style={{ textAlign: 'right' }}>액션</th>
             </tr>
           </thead>
           <tbody>
             {keys.map((k) => (
-              <tr key={k.id} style={{ opacity: k.status === 'REVOKED' ? 0.55 : 1 }}>
+              <tr key={k.id} style={{ opacity: (k.status === 'REVOKED' || k.status === 'EXPIRED') ? 0.55 : 1 }}>
                 <td>
                   <div className="row">
                     <Icons.Key size={13} />
@@ -189,6 +221,21 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
                 <td><StatusBadge status={k.status} /></td>
                 <td>{k.lastUsedAt ? <span className="muted">{timeAgo(k.lastUsedAt)}</span> : <span className="faint">미사용</span>}</td>
                 <td><span className="muted">{fmtDateTime(k.createdAt)}</span></td>
+                <td>
+                  {(() => {
+                    if (k.status === 'REVOKED') return <span className="faint">—</span>;
+                    const st = expiryState(k.expiresAt);
+                    if (st === 'none') return <span className="faint">무기한</span>;
+                    if (st === 'expired') return (
+                      <span style={{ color: 'var(--danger)', fontSize: 12 }}>{fmtDateTime(k.expiresAt!)}</span>
+                    );
+                    return (
+                      <span className={st === 'soon' ? undefined : 'muted'} style={st === 'soon' ? { color: 'var(--warning)' } : undefined}>
+                        {fmtDateTime(k.expiresAt!)}
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td style={{ textAlign: 'right' }}>
                   {k.status === 'ACTIVE' && (
                     <span style={{ display: 'inline-flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -220,19 +267,21 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
 function NewKeyDialog({ open, onClose, onIssue }: {
   open: boolean;
   onClose: () => void;
-  onIssue: (name: string, scopes: string[]) => void;
+  onIssue: (name: string, scopes: string[], expiresInMonths: number | null) => void;
 }) {
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<string[]>(['registration', 'authentication']);
+  const [expiresInMonths, setExpiresInMonths] = useState<number | null>(24); // 기본 24개월
 
   function toggle(v: string) {
     setScopes((prev) => prev.includes(v) ? prev.filter((s) => s !== v) : [...prev, v]);
   }
   function submit() {
     if (!name || scopes.length === 0) return;
-    onIssue(name, scopes);
+    onIssue(name, scopes, expiresInMonths);
     setName('');
     setScopes(['registration', 'authentication']);
+    setExpiresInMonths(24);
   }
 
   return (
@@ -259,6 +308,35 @@ function NewKeyDialog({ open, onClose, onIssue }: {
               </div>
             </label>
           ))}
+        </div>
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <label className="label">만료 기간</label>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          {EXPIRY_OPTIONS.map((o) => {
+            const selected = expiresInMonths === o.months;
+            return (
+              <button
+                key={o.label}
+                type="button"
+                onClick={() => setExpiresInMonths(o.months)}
+                style={{
+                  padding: '6px 12px', borderRadius: 8,
+                  border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                  background: selected ? 'var(--accent-soft)' : 'var(--surface)',
+                  color: selected ? 'var(--accent)' : 'var(--text)',
+                  fontWeight: selected ? 600 : 500, cursor: 'pointer', fontSize: 13,
+                }}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          {expiresInMonths == null
+            ? '만료 없음 — 키가 무기한으로 유효합니다.'
+            : `만료일: ${previewExpiry(expiresInMonths)}`}
         </div>
       </div>
     </Dialog>
@@ -303,6 +381,10 @@ function IssuedKeyModal({ issued, onClose }: {
           <div>
             <div className="muted" style={{ fontSize: 12 }}>prefix</div>
             <div className="mono" style={{ fontSize: 12 }}>{issued.key.prefix}</div>
+          </div>
+          <div>
+            <div className="muted" style={{ fontSize: 12 }}>만료</div>
+            <div style={{ fontSize: 12 }}>{issued.key.expiresAt ? fmtDateTime(issued.key.expiresAt) : <span className="faint">무기한</span>}</div>
           </div>
           <div>
             <div className="muted" style={{ fontSize: 12 }}>id</div>

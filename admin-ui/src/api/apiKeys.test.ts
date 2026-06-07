@@ -15,12 +15,23 @@ describe('apiKeysApi', () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       envelope({ id: 'k1', prefix: 'pk_x', plainText: 'pk_x.secret', scopes: ['registration'] }),
     );
-    await apiKeysApi.create('t1', 'prod', ['registration', 'authentication']);
+    await apiKeysApi.create('t1', 'prod', ['registration', 'authentication'], 24);
     const [url, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe('/admin/api/api-keys');
     const body = JSON.parse(init.body);
     expect(body.scopes).toEqual(['registration', 'authentication']);
     expect(body.scopes).not.toContain('ceremony');
+    expect(body.expiresInMonths).toBe(24);
+  });
+
+  it('create with null expiresInMonths sends null (무기한)', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      envelope({ id: 'k1', prefix: 'pk_x', plainText: 'pk_x.secret', scopes: ['registration'], expiresAt: null }),
+    );
+    await apiKeysApi.create('t1', 'prod', ['registration'], null);
+    const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.expiresInMonths).toBeNull();
   });
 
   it('rotate posts to /{id}/rotate and returns rotate response', async () => {

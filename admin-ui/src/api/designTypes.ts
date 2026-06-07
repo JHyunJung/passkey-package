@@ -20,10 +20,11 @@ export type ApiKey = {
   id: string;
   prefix: string;
   name: string;
-  status: 'ACTIVE' | 'REVOKED';
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
   createdAt: string;
   lastUsedAt: string | null;
   scopes: string[];
+  expiresAt: string | null;
 };
 
 export type Credential = {

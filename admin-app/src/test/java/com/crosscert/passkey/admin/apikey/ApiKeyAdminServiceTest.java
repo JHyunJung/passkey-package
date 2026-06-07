@@ -75,7 +75,7 @@ class ApiKeyAdminServiceTest {
         when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
 
         ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
-                TENANT_UUID, "primary", java.util.Set.of("registration", "authentication"));
+                TENANT_UUID, "primary", java.util.Set.of("registration", "authentication"), null);
         ApiKeyAdminDto.ApiKeyCreateResponse resp =
                 service.issue(req, ACTOR_UUID, "alice@example.com");
 
@@ -97,7 +97,7 @@ class ApiKeyAdminServiceTest {
         when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
 
         service.issue(new ApiKeyAdminDto.ApiKeyCreateRequest(
-                        TENANT_UUID, "primary", java.util.Set.of("registration")),
+                        TENANT_UUID, "primary", java.util.Set.of("registration"), null),
                       ACTOR_UUID, "alice@example.com");
 
         ArgumentCaptor<AuditAppendRequest> auditCaptor =
@@ -121,7 +121,7 @@ class ApiKeyAdminServiceTest {
 
         ApiKeyAdminDto.ApiKeyCreateResponse resp = service.issue(
                 new ApiKeyAdminDto.ApiKeyCreateRequest(
-                        TENANT_UUID, "primary", java.util.Set.of("registration")),
+                        TENANT_UUID, "primary", java.util.Set.of("registration"), null),
                 ACTOR_UUID, "alice@example.com");
         assertThat(resp.prefix()).startsWith("pk_");
     }
@@ -131,7 +131,7 @@ class ApiKeyAdminServiceTest {
         when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
 
         ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
-                TENANT_UUID, "primary", java.util.Set.of("Registration", "AUTHENTICATION"));
+                TENANT_UUID, "primary", java.util.Set.of("Registration", "AUTHENTICATION"), null);
         ApiKeyAdminDto.ApiKeyCreateResponse resp =
                 service.issue(req, ACTOR_UUID, "alice@example.com");
 
@@ -150,7 +150,7 @@ class ApiKeyAdminServiceTest {
         when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
 
         ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
-                TENANT_UUID, "primary", java.util.Set.of("registration", "bogus"));
+                TENANT_UUID, "primary", java.util.Set.of("registration", "bogus"), null);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                 () -> service.issue(req, ACTOR_UUID, "alice@example.com"))
@@ -170,7 +170,7 @@ class ApiKeyAdminServiceTest {
         when(tenants.findById(TENANT_UUID)).thenReturn(Optional.of(suspended));
 
         ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(
-                TENANT_UUID, "primary", java.util.Set.of("registration"));
+                TENANT_UUID, "primary", java.util.Set.of("registration"), null);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                 () -> service.issue(req, ACTOR_UUID, "alice@example.com"))
@@ -181,6 +181,51 @@ class ApiKeyAdminServiceTest {
         // No key persisted, no audit appended on the rejection path.
         org.mockito.Mockito.verify(repo, org.mockito.Mockito.never()).saveAndFlush(any());
         org.mockito.Mockito.verify(audit, org.mockito.Mockito.never()).append(any());
+    }
+
+    @Test
+    void issueWithExpiresInMonthsSetsExpiresAt() {
+        when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
+
+        ApiKeyAdminDto.ApiKeyCreateResponse resp = service.issue(
+                new ApiKeyAdminDto.ApiKeyCreateRequest(
+                        TENANT_UUID, "primary", java.util.Set.of("registration"), 24),
+                ACTOR_UUID, "alice@example.com");
+
+        assertThat(resp.expiresAt()).isEqualTo(Instant.parse("2028-06-01T00:00:00Z"));
+
+        ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
+        verify(repo).saveAndFlush(keyCaptor.capture());
+        assertThat(keyCaptor.getValue().getExpiresAt()).isEqualTo(Instant.parse("2028-06-01T00:00:00Z"));
+    }
+
+    @Test
+    void issueWithNullExpiresInMonthsLeavesNoExpiry() {
+        when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
+
+        ApiKeyAdminDto.ApiKeyCreateResponse resp = service.issue(
+                new ApiKeyAdminDto.ApiKeyCreateRequest(
+                        TENANT_UUID, "primary", java.util.Set.of("registration"), null),
+                ACTOR_UUID, "alice@example.com");
+
+        assertThat(resp.expiresAt()).isNull();
+        ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
+        verify(repo).saveAndFlush(keyCaptor.capture());
+        assertThat(keyCaptor.getValue().getExpiresAt()).isNull();
+    }
+
+    @Test
+    void issueAuditPayloadContainsExpiresAt() {
+        when(repo.findByKeyPrefix(anyString())).thenReturn(Optional.empty());
+
+        service.issue(new ApiKeyAdminDto.ApiKeyCreateRequest(
+                        TENANT_UUID, "primary", java.util.Set.of("registration"), 6),
+                ACTOR_UUID, "alice@example.com");
+
+        ArgumentCaptor<AuditAppendRequest> auditCaptor = ArgumentCaptor.forClass(AuditAppendRequest.class);
+        verify(audit).append(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().payload().get("expiresAt"))
+                .isEqualTo("2026-12-01T00:00:00Z");
     }
 
     @Test

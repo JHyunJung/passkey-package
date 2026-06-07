@@ -20,6 +20,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -114,6 +115,15 @@ public class ApiKeyAdminService {
         for (String scope : normalized) {
             key.addScope(scope);
         }
+        // 월 단위 만료: now + N개월 (UTC). null 이면 무기한(expires_at=NULL, 기존 키와 동일).
+        Instant expiresAt = null;
+        if (req.expiresInMonths() != null) {
+            expiresAt = clock.instant()
+                    .atZone(ZoneOffset.UTC)
+                    .plusMonths(req.expiresInMonths())
+                    .toInstant();
+            key.expireAt(expiresAt);
+        }
         ApiKey saved = repo.saveAndFlush(key);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -122,6 +132,7 @@ public class ApiKeyAdminService {
         payload.put("tenantId", req.tenantId().toString());
         payload.put("name", req.name());
         payload.put("scopes", normalized);
+        payload.put("expiresAt", expiresAt == null ? null : expiresAt.toString());
         audit.append(new AuditAppendRequest(
                 actorId, actorEmail, "API_KEY_ISSUE",
                 "API_KEY", saved.getId().toString(),
@@ -132,7 +143,7 @@ public class ApiKeyAdminService {
                 prefix, req.name(), req.tenantId(), normalized);
 
         return new ApiKeyAdminDto.ApiKeyCreateResponse(
-                saved.getId(), prefix + secret, prefix, normalized);
+                saved.getId(), prefix + secret, prefix, normalized, expiresAt);
     }
 
     @Transactional
