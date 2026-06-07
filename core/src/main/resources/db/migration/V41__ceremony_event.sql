@@ -7,6 +7,8 @@
 -- 테이블을 따로 둔다.
 --
 -- 기록자: passkey-app (APP_RUNTIME) — INSERT.  집계자: admin-app (APP_ADMIN) — SELECT.
+-- updated_at: append-only 지만 BaseEntity 정책(모든 엔티티 created_at/updated_at NOT NULL,
+--   Phase 8)을 따른다. CeremonyEvent 엔티티가 BaseEntity 를 상속하므로 컬럼이 필요하다.
 -- 테이블 소유자는 APP_OWNER(Flyway 실행 스키마)이며 양 런타임 유저에 GRANT.
 --
 -- Idempotency: 객체 생성은 ORA-00955(name already used)/ORA-00942 를 swallow.
