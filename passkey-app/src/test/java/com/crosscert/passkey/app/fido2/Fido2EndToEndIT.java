@@ -207,6 +207,10 @@ class Fido2EndToEndIT {
         adminJdbc.update("DELETE FROM APP_OWNER.api_key");
         adminJdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
         adminJdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        // ceremony_event 는 tenant FK 가 없는 append-only 카운트 테이블이라
+        // 별도 정리한다(다른 시나리오의 begin/finish 행이 happyPath 카운트 검증을
+        // 오염시키지 않도록). FK 가 없으므로 순서 제약은 없다.
+        adminJdbc.update("DELETE FROM APP_OWNER.ceremony_event");
         // V23: admin_user.tenant_id FK → DELETE FROM tenant 전에 NULL set 필수.
         // CK_ADMIN_USER_ROLE_TENANT 가 RP_ADMIN 의 tenant_id NOT NULL 강제하므로
         // role 도 PLATFORM_OPERATOR 로 동시 변경 (admin-role-separation IT 패턴).
@@ -249,6 +253,7 @@ class Fido2EndToEndIT {
             adminJdbc.update("DELETE FROM APP_OWNER.api_key");
             adminJdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
             adminJdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+            adminJdbc.update("DELETE FROM APP_OWNER.ceremony_event");
             // V23 FK-aware: admin_user.tenant_id NULL set 후 tenant DELETE.
             adminJdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
             adminJdbc.update("DELETE FROM APP_OWNER.tenant");
@@ -430,6 +435,37 @@ class Fido2EndToEndIT {
         assertThat(credentialId)
                 .as("cred_id must round-trip to a non-nil UUID")
                 .isNotEqualTo(new UUID(0, 0));
+
+        // Task 9: a full reg→auth cycle must have written exactly four
+        // ceremony_event rows — one per ceremony phase. The begin events
+        // (RegistrationStartService / AuthenticationStartService) and the
+        // *_FINISH_OK events (RegistrationFinishService /
+        // AuthenticationFinishService) are all recorded via
+        // CeremonyEventRecorder.recordAfterCommit. afterCommit runs
+        // synchronously during each request's transaction commit, before
+        // the HTTP response returns, so the rows are present the moment the
+        // four endpoint calls above have completed (no polling needed).
+        // seed() truncated ceremony_event for THIS tenant's clean slate, so
+        // a global count is unambiguous within this isolated scenario.
+        assertCeremonyEventCount("REGISTRATION_BEGIN", 1);
+        assertCeremonyEventCount("REGISTRATION_FINISH_OK", 1);
+        assertCeremonyEventCount("AUTHENTICATION_BEGIN", 1);
+        assertCeremonyEventCount("AUTHENTICATION_FINISH_OK", 1);
+    }
+
+    /**
+     * Asserts the exact number of {@code ceremony_event} rows for one
+     * action. Reads via the APP_ADMIN pool (V41 grants APP_ADMIN SELECT on
+     * ceremony_event) and qualifies the table as APP_OWNER.* to match the
+     * schema-qualification convention used throughout this IT.
+     */
+    private void assertCeremonyEventCount(String action, long expected) {
+        Long n = adminJdbc.queryForObject(
+                "SELECT COUNT(*) FROM APP_OWNER.ceremony_event WHERE action = ?",
+                Long.class, action);
+        assertThat(n)
+                .as("ceremony_event count for action=%s", action)
+                .isEqualTo(expected);
     }
 
     // ------------------------------------------------------------
