@@ -69,7 +69,11 @@ public class FunnelService {
     }
 
     private double ratio(long success, long attempts) {
-        return attempts == 0 ? 0.0 : (double) success / (double) attempts;
+        if (attempts == 0) return 0.0;
+        double r = (double) success / (double) attempts;
+        // 윈도우 경계에서 begin 은 잘리고 finish 만 포함되면 success>attempts 가 될 수 있다.
+        // 성공률 의미상 100% 를 넘을 수 없으므로 1.0 으로 클램프한다.
+        return Math.min(r, 1.0);
     }
 
     private List<FunnelDto.DailyPoint> buildSeries(UUID tenantId, Instant since, int windowDays) {

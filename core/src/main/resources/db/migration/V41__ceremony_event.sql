@@ -50,6 +50,20 @@ EXCEPTION
 END;
 /
 
+-- retention 인덱스: deleteCreatedBefore 는 created_at 단독으로 필터하므로 선두가
+-- created_at 인 인덱스가 필요하다(기존 (tenant_id, action, created_at) 인덱스는
+-- created_at 단독 술어에 쓸 수 없다). ORA-00955 swallow.
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_ceremony_event_created_at '
+    || 'ON ceremony_event (created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE = -955 THEN NULL; -- index already exists
+    ELSE RAISE;
+    END IF;
+END;
+/
+
 -- 런타임 GRANT (각 GRANT 를 개별 블록으로 — 멱등·부분 적용 안전)
 BEGIN EXECUTE IMMEDIATE 'GRANT INSERT ON ceremony_event TO APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
