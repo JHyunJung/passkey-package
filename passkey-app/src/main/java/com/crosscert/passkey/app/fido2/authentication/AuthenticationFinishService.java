@@ -68,6 +68,7 @@ public class AuthenticationFinishService {
     private final CeremonyMetrics ceremonyMetrics;
     private final CeremonyEventRecorder ceremonyEvents;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.crosscert.passkey.core.ceremony.CredentialAuthEventRecorder authEvents;
 
     public AuthenticationFinishService(ChallengeStore store,
                                        WebAuthnManager manager,
@@ -79,7 +80,8 @@ public class AuthenticationFinishService {
                                        Clock clock,
                                        CeremonyMetrics ceremonyMetrics,
                                        ApplicationEventPublisher eventPublisher,
-                                       CeremonyEventRecorder ceremonyEvents) {
+                                       CeremonyEventRecorder ceremonyEvents,
+                                       com.crosscert.passkey.core.ceremony.CredentialAuthEventRecorder authEvents) {
         this.store = store;
         this.manager = manager;
         this.tenants = tenants;
@@ -94,6 +96,7 @@ public class AuthenticationFinishService {
         this.ceremonyMetrics = ceremonyMetrics;
         this.eventPublisher = eventPublisher;
         this.ceremonyEvents = ceremonyEvents;
+        this.authEvents = authEvents;
     }
 
     @Transactional
@@ -228,6 +231,8 @@ public class AuthenticationFinishService {
                         Map.of(
                                 "credentialId", String.valueOf(cred.getId()),
                                 "tenantId", String.valueOf(ch.tenantId()))));
+                authEvents.record(cred.getId(), UUID.fromString(ch.tenantId()),
+                        "FAILED", "SIGN_COUNT_REPLAY", newCounter);
                 throw new IllegalArgumentException("signCount replay detected");
             }
 
@@ -243,6 +248,8 @@ public class AuthenticationFinishService {
             record.setCounter(newCounter);
             cred.recordAuthentication(newCounter, clock.instant());
             credentials.saveAndFlush(cred);
+            authEvents.recordAfterCommit(cred.getId(), UUID.fromString(ch.tenantId()),
+                    "SUCCESS", null, newCounter);
 
             String credentialIdB64 = b64url(credentialId);
             log.info("authentication/finish ok: credentialIdTail={} counter={}",
