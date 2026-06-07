@@ -53,6 +53,12 @@ public class CeremonyEventRecorder {
      * 현재 트랜잭션이 성공적으로 커밋된 후에 이벤트를 기록한다. finish ceremony 처럼
      * outer 쓰기 트랜잭션의 커밋이 확정돼야 "성공"으로 집계해야 하는 경우에 쓴다.
      * 활성 트랜잭션 동기화가 없으면(테스트/트랜잭션 밖 호출) 즉시 기록으로 폴백한다.
+     *
+     * <p>설계 트레이드오프(의도적): afterCommit 콜백은 outer 트랜잭션 connection 이
+     * 완전히 반납되기 직전에 실행되므로, 여기서 여는 REQUIRES_NEW 기록이 짧은 순간
+     * 두 번째 connection 을 요청한다. best-effort·저빈도 집계 지표라 이 잔여
+     * 오버랩은 수용한다(실패해도 ceremony 는 안 깨짐). 고동시성이 현실화되면
+     * 전용 @Async executor 로 dispatch 하도록 격상한다.
      */
     public void recordAfterCommit(UUID tenantId, String action) {
         Objects.requireNonNull(tenantId, "tenantId");
