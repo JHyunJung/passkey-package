@@ -11,7 +11,7 @@
 #
 # 결과: dev 프로필 시드(테넌트 dev-passkey, 운영자 alice, API key pk_devsrv01)가
 #       들어간 깨끗한 DB. 이후 ./gradlew :admin-app:bootRun --args='--spring.profiles.active=dev'
-#       또는 passkey-app/sample-rp 를 띄우면 된다.
+#       또는 passkey-app/rp-app 를 띄우면 된다.
 #
 # ⚠️ 파괴적: 기존 DB 데이터(테넌트·계정·패스키·초대 전부)를 삭제한다.
 #

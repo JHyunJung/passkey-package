@@ -1,10 +1,10 @@
 # RP 서버 API 명세서 (클라이언트 → RP 서버)
 
-클라이언트(웹/앱)가 **RP 서버**에 패스키 등록·인증을 요청하는 API 명세서입니다. sample-rp의 실제 구현(`/passkey/**`)을 기준으로 작성했습니다.
+클라이언트(웹/앱)가 **RP 서버**에 패스키 등록·인증을 요청하는 API 명세서입니다. rp-app의 실제 구현(`/passkey/**`)을 기준으로 작성했습니다.
 
 - **호출 관계**: 클라이언트(브라우저 JS / 모바일 앱) → **RP 서버**(당신이 구현하는 서버). RP 서버는 내부적으로 Passkey 서버를 호출하지만, 그 부분은 클라이언트에 노출되지 않습니다.
 - **범위**: 패스키 등록(`/passkey/register/**`)과 인증(`/passkey/authenticate/**`)입니다.
-- **기준 주소**: 이 문서의 예시는 RP 서버를 `https://dev-passkey.crosscert.com`으로 가정합니다(클라이언트가 요청을 보내는 대상). 로컬 개발 시에는 `http://localhost:9090`(sample-rp 기본 포트)으로 바꿔 읽으세요.
+- **기준 주소**: 이 문서의 예시는 RP 서버를 `https://dev-passkey.crosscert.com`으로 가정합니다(클라이언트가 요청을 보내는 대상). 로컬 개발 시에는 `http://localhost:9090`(rp-app 기본 포트)으로 바꿔 읽으세요.
 
 ---
 
@@ -15,7 +15,7 @@ RP 서버는 클라이언트와 패스키 ceremony를 주고받습니다. 각 ce
 ```
 ┌──────────┐    ① begin 요청     ┌─────────────┐        ┌────────────────┐
 │ 클라이언트 │ ──────────────────▶ │   RP 서버    │ ─────▶ │  Passkey 서버   │
-│ (웹/앱)   │ ◀── begin 응답 ──── │  (sample-rp) │ ◀───── │  (내부 호출)     │
+│ (웹/앱)   │ ◀── begin 응답 ──── │  (rp-app) │ ◀───── │  (내부 호출)     │
 │          │      (options)      │             │        └────────────────┘
 │  navigator.credentials.        │             │
 │  create()/get() 수행           │             │
@@ -129,12 +129,12 @@ await fetch('/passkey/register/begin', {
 });
 ```
 
-> **순수 SPA 주의**: §5의 `postJson` 헬퍼는 **Thymeleaf `<meta name="csrf">`에서** 토큰을 읽으므로(sample-rp 전용), 메타 태그가 없는 순수 SPA가 그대로 복붙하면 토큰이 빈 문자열이 되어 `403`이 납니다. SPA는 위 `csrfToken()`(쿠키 기반)으로 바꿔 쓰세요.
+> **순수 SPA 주의**: §5의 `postJson` 헬퍼는 **Thymeleaf `<meta name="csrf">`에서** 토큰을 읽으므로(rp-app 전용), 메타 태그가 없는 순수 SPA가 그대로 복붙하면 토큰이 빈 문자열이 되어 `403`이 납니다. SPA는 위 `csrfToken()`(쿠키 기반)으로 바꿔 쓰세요.
 
 ### 로그아웃 / 로그인 상태
 
 - **로그아웃**: `POST /logout` — 세션을 무효화하고 `/`로 리다이렉트(`302`)합니다. CSRF 토큰이 필요합니다. 로그아웃 후 클라이언트는 보관 중인 세션 쿠키를 폐기하세요(§4.5).
-- **로그인 상태 확인**: 전용 상태 조회 엔드포인트는 없습니다(sample-rp 기준). 로그인 여부를 알아야 하면 RP 서버에 **인증 시 사용자 정보를 반환하고 미인증 시 `A001`(401)을 주는 엔드포인트를 추가**하세요. 클라이언트는 그 엔드포인트를 호출해 **200이면 로그인, 401이면 미로그인**으로 판단합니다. SPA·앱은 보통 부팅 시 1회 호출해 초기 인증 상태를 잡습니다.
+- **로그인 상태 확인**: 전용 상태 조회 엔드포인트는 없습니다(rp-app 기준). 로그인 여부를 알아야 하면 RP 서버에 **인증 시 사용자 정보를 반환하고 미인증 시 `A001`(401)을 주는 엔드포인트를 추가**하세요. 클라이언트는 그 엔드포인트를 호출해 **200이면 로그인, 401이면 미로그인**으로 판단합니다. SPA·앱은 보통 부팅 시 1회 호출해 초기 인증 상태를 잡습니다.
 
 ### 응답 Envelope (`ApiResponse<T>`)
 
@@ -174,7 +174,7 @@ await fetch('/passkey/register/begin', {
 
 > ⚠️ `begin` 응답의 options를 `navigator.credentials.create()/get()`에 **그대로 넘기면 `TypeError`로 실패합니다.** WebAuthn JS API는 `challenge`·`user.id`·`excludeCredentials[].id`·`allowCredentials[].id`를 `ArrayBuffer`로 요구하는데, 응답은 전부 **base64url 문자열**이기 때문입니다. 반대로 `finish`에 보낼 때는 브라우저가 돌려준 `ArrayBuffer` 필드들을 다시 **base64url 문자열로 인코딩**해야 합니다.
 
-아래는 sample-rp가 실제로 쓰는 변환 헬퍼입니다(`/js/helpers.js`).
+아래는 rp-app가 실제로 쓰는 변환 헬퍼입니다(`/js/helpers.js`).
 
 ```js
 // base64url → ArrayBuffer
@@ -518,7 +518,7 @@ Set-Cookie: JSESSIONID=...; Max-Age=0
 
 ## 5. 전체 흐름 (브라우저 JS)
 
-sample-rp의 실제 등록·로그인 흐름입니다.
+rp-app의 실제 등록·로그인 흐름입니다.
 
 ### 등록
 

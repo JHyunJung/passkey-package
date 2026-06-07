@@ -1,6 +1,6 @@
 # 단일 인스턴스 배포 가이드 (RP 서버 + Passkey 서버, 서브도메인 분리)
 
-하나의 서버 인스턴스에서 **RP 서버(sample-rp)** 와 **Passkey 서버(passkey-app)** 를 함께 기동하되, nginx 리버스 프록시로 **서브도메인을 분리**해 둘 다 HTTPS(443)로 노출하는 테스트 환경 구성 문서입니다.
+하나의 서버 인스턴스에서 **RP 서버(rp-app)** 와 **Passkey 서버(passkey-app)** 를 함께 기동하되, nginx 리버스 프록시로 **서브도메인을 분리**해 둘 다 HTTPS(443)로 노출하는 테스트 환경 구성 문서입니다.
 
 > **왜 포트가 아니라 서브도메인인가요?**
 > 패스키(WebAuthn)는 `rpId`를 **도메인 기준**으로 묶고 포트는 무시합니다. 같은 도메인에 포트만 다르게 두면(예: `:443` vs `:8443`) RP 서버와 Passkey 서버가 같은 `rpId`를 공유하게 되어 신뢰 경계와 ID Token issuer가 모호해집니다. 서브도메인으로 나누면 둘 다 깔끔히 443으로 노출되고 역할이 분리됩니다.
@@ -17,7 +17,7 @@
             │                                      │
             │          ── 같은 인스턴스 ──          │
             ▼  nginx 리버스 프록시 (TLS 종료)       ▼
-     localhost:9090 (sample-rp)            localhost:8080 (passkey-app)
+     localhost:9090 (rp-app)            localhost:8080 (passkey-app)
             │                                      │
             └──────── X-API-Key (서버-투-서버) ─────┘
                                │
@@ -26,7 +26,7 @@
 
 | 구성요소 | 외부 도메인 | 내부 포트 | 역할 |
 |---|---|---|---|
-| RP 서버 (sample-rp) | `https://rp-dev.crosscert.com` | `9090` | 브라우저/앱이 접속. 패스키 `rpId`가 이 도메인. |
+| RP 서버 (rp-app) | `https://rp-dev.crosscert.com` | `9090` | 브라우저/앱이 접속. 패스키 `rpId`가 이 도메인. |
 | Passkey 서버 (passkey-app) | `https://dev-passkey.crosscert.com` | `8080` | RP가 X-API-Key로 호출. ID Token issuer. |
 | Oracle XE / Redis | (외부 비노출) | `1521` / `6379` | DB / 캐시 |
 | admin 콘솔 (admin-app) | (선택, 내부망) | `8081` | 테넌트·API key 발급 |
@@ -63,7 +63,7 @@ sudo certbot certonly --nginx \
 | 도구 | 용도 |
 |---|---|
 | Docker | Oracle XE + Redis |
-| JDK 17 | passkey-app / admin-app / sample-rp |
+| JDK 17 | passkey-app / admin-app / rp-app |
 | nginx | 리버스 프록시 + TLS 종료 |
 
 ---
@@ -122,7 +122,7 @@ PASSKEY_KEY_ENVELOPE_MASTER_KEY='<passkey-app 과 동일한 마스터키>' \
 ./gradlew :admin-app:bootRun
 ```
 
-### 3.3 RP 서버 (sample-rp, 내부 9090)
+### 3.3 RP 서버 (rp-app, 내부 9090)
 
 **§4에서 테넌트·API key를 발급한 뒤** 그 값으로 기동합니다.
 
@@ -133,14 +133,14 @@ PASSKEY_ISSUER_BASE='https://dev-passkey.crosscert.com' \
 PASSKEY_TENANT_ID='<§4에서 만든 tenantId>' \
 PASSKEY_API_KEY='<§4에서 발급한 X-API-Key>' \
 SERVER_FORWARD_HEADERS_STRATEGY=NATIVE \
-./gradlew :sample-rp:bootRun
+./gradlew :rp-app:bootRun
 ```
 
 | 환경변수 | 값 | 설명 |
 |---|---|---|
 | `PASSKEY_BASE_URL` | `https://dev-passkey.crosscert.com` | Passkey 서버 호출 주소. |
 | `PASSKEY_ISSUER_BASE` | `https://dev-passkey.crosscert.com` | ID Token `iss` 검증용. passkey-app의 `PASSKEY_ID_TOKEN_ISSUER_BASE`와 **동일**해야 함. |
-| `PASSKEY_TENANT_ID` | tenantId | §4에서 만든 테넌트. **UUID 대시 형식**(`7f00dead-0000-...`) 권장 — ID Token 의 `iss`/`aud` 가 이 형식이라. RAW hex 도 sample-rp 가 정규화해 받지만, 외부 검증 시스템은 UUID 형식을 기대한다. |
+| `PASSKEY_TENANT_ID` | tenantId | §4에서 만든 테넌트. **UUID 대시 형식**(`7f00dead-0000-...`) 권장 — ID Token 의 `iss`/`aud` 가 이 형식이라. RAW hex 도 rp-app 가 정규화해 받지만, 외부 검증 시스템은 UUID 형식을 기대한다. |
 | `PASSKEY_API_KEY` | `pk_...` | §4에서 발급한 키. |
 | `SERVER_FORWARD_HEADERS_STRATEGY` | `NATIVE` | nginx 뒤에서 https origin·secure 쿠키 인식. |
 
@@ -190,7 +190,7 @@ curl -b cookies.txt -X POST http://localhost:8081/admin/api/tenants \
     "attestationConveyance": "NONE",
     "webauthnTimeoutMs": 60000
   }'
-# 응답 data.id 가 tenantId — sample-rp 의 PASSKEY_TENANT_ID 로 사용
+# 응답 data.id 가 tenantId — rp-app 의 PASSKEY_TENANT_ID 로 사용
 ```
 
 **테넌트 생성 요청 필드**:
@@ -209,7 +209,7 @@ curl -b cookies.txt -X POST http://localhost:8081/admin/api/tenants \
 
 ### 4.3 API key 발급
 
-생성한 테넌트에 대해 `registration`·`authentication` scope를 가진 API key를 발급합니다(admin 콘솔의 API Keys 탭, 또는 `POST /admin/api/api-keys`). 발급 시 **평문 키는 1회만 표시**되므로 즉시 복사해 sample-rp의 `PASSKEY_API_KEY`로 씁니다.
+생성한 테넌트에 대해 `registration`·`authentication` scope를 가진 API key를 발급합니다(admin 콘솔의 API Keys 탭, 또는 `POST /admin/api/api-keys`). 발급 시 **평문 키는 1회만 표시**되므로 즉시 복사해 rp-app의 `PASSKEY_API_KEY`로 씁니다.
 
 ---
 
@@ -218,7 +218,7 @@ curl -b cookies.txt -X POST http://localhost:8081/admin/api/tenants \
 두 서브도메인을 각각 내부 포트로 프록시합니다. `/etc/nginx/sites-available/passkey.conf`:
 
 ```nginx
-# ── RP 서버 (sample-rp) ──────────────────────────────────────
+# ── RP 서버 (rp-app) ──────────────────────────────────────
 server {
     listen 443 ssl;
     http2 on;
@@ -292,7 +292,7 @@ sudo nginx -t && sudo systemctl reload nginx
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | 등록 시 `C001`(origin 관련) | 테넌트 `allowedOrigins`가 실제 origin과 불일치 | `allowedOrigins`를 정확히 `https://rp-dev.crosscert.com`(포트 없음)으로. 브라우저 주소창의 origin과 글자까지 일치해야 함. |
-| `iss mismatch` 로그인 실패 | passkey-app `PASSKEY_ID_TOKEN_ISSUER_BASE` ≠ sample-rp `PASSKEY_ISSUER_BASE` | 둘을 `https://dev-passkey.crosscert.com`으로 동일하게. |
+| `iss mismatch` 로그인 실패 | passkey-app `PASSKEY_ID_TOKEN_ISSUER_BASE` ≠ rp-app `PASSKEY_ISSUER_BASE` | 둘을 `https://dev-passkey.crosscert.com`으로 동일하게. |
 | 등록이 `http://...:9090` origin으로 시도됨 | forward-headers 미설정 | §3.1 `SERVER_FORWARD_HEADERS_STRATEGY=NATIVE` + nginx `X-Forwarded-Proto` 확인. |
 | 패스키가 다른 서브도메인에서 안 됨 | `rpId`를 좁게 설정함 | 여러 서브도메인을 쓰려면 `rpId`를 상위 도메인(`crosscert.com`)으로, `allowedOrigins`에 각 origin 추가. |
 | JWKS 404/타임아웃 | nginx가 `dev-passkey` 서브도메인을 8080으로 프록시 안 함 | §5 nginx 설정·DNS 확인. |

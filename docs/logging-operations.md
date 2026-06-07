@@ -1,6 +1,6 @@
 # Logging Operations Guide
 
-> 3 서버 (admin-app / passkey-app / sample-rp) 의 로그 검색·alert·troubleshooting 가이드.
+> 3 서버 (admin-app / passkey-app / rp-app) 의 로그 검색·alert·troubleshooting 가이드.
 > 인프라: G1-G4 의 `logback-spring.xml` + MDC 4종 + `SecretMaskingConverter`.
 
 ## 1. 로그 포맷
@@ -26,7 +26,7 @@ grep '9f3a-2b1' *.log
 # 또는 ELK
 traceId: "9f3a-2b1"
 ```
-sample-rp 의 `register/options` → passkey-app 의 `registration/start` → … 가 한 trace 로 정렬됨.
+rp-app 의 `register/options` → passkey-app 의 `registration/start` → … 가 한 trace 로 정렬됨.
 
 ### tenant 한정 이벤트
 ```bash
@@ -106,7 +106,7 @@ prod 에서 root 가 INFO 라 DEBUG 는 출력 안 됨.
 | `WARN api-key auth failed: reason=bad-secret` | RP 측 secret 변경 누락 또는 attack | rate, source IP 확인 |
 | `WARN signCount did not advance for credential …` | 카드 클론 또는 동기화 이슈 | 해당 credential 회수 권고 |
 | `ERROR mds sync failed: cause=SocketTimeoutException` | FIDO MDS 서버 도달 불가 / 방화벽 | 외부 네트워크 점검 |
-| `WARN login/complete failed: reason=id-token-verify-failed cause=…iss…` | passkey-app issuer-base config 불일치 | passkey-app `--passkey.id-token.issuer-base` 와 sample-rp `PASSKEY_ISSUER_BASE` 동기 |
+| `WARN login/complete failed: reason=id-token-verify-failed cause=…iss…` | passkey-app issuer-base config 불일치 | passkey-app `--passkey.id-token.issuer-base` 와 rp-app `PASSKEY_ISSUER_BASE` 동기 |
 | `WARN login/complete failed: reason=id-token-verify-failed cause=…expired…` | clock skew 또는 token TTL 너무 짧음 | 서버 시간 동기 확인 |
 | `WARN admin login failed: email=… reason=unknown-user` | 잘못된 email 또는 사용자 삭제 | `admin_user` 테이블 확인 |
 | `WARN tenant boundary violation` | RP_ADMIN 이 다른 tenant 접근 시도 | actor 확인 → 의도된 경로인지 정책 점검 |

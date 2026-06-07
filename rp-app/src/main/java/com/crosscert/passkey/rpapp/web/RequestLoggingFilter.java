@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.api;
+package com.crosscert.passkey.rpapp.web;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -16,46 +16,35 @@ import java.io.IOException;
 import java.util.Set;
 
 /**
- * Logs one line per HTTP request after the response has been written. The
- * level depends on HTTP status: >=500 ERROR, >=400 WARN, else INFO.
+ * rp-app local twin of core's {@code RequestLoggingFilter}. rp-app
+ * does not depend on core (separate webapp), so the logic is duplicated.
  *
- * <p>Order is just after {@link TraceIdFilter} so {@code traceId} MDC is
- * already populated by the time this filter runs and emits its log line.
+ * <p>Drift check: keep status-mapping + format + actorEmail handling
+ * identical to core. Intentional diffs only in excluded-paths set
+ * (rp-app does not expose {@code /.well-known/jwks.json}).
  *
- * <p>{@code actorEmail} MDC is populated in the finally block from the
- * request attribute {@link #ACTOR_EMAIL_ATTR} (set by an in-Spring-Security
- * filter — see {@code AdminMdcFilter} in admin-app), not directly from
- * {@link SecurityContextHolder}. By the time this filter's finally block
- * runs, Spring Security's outermost filter has already cleared the
- * {@link SecurityContextHolder}, so reading it here would always see
- * {@code null}. Request attributes survive into the finally because they
- * are attached to {@code HttpServletRequest}, not a thread-local.
+ * <p>rp-app's own {@code TraceIdFilter} (under {@code common.filter})
+ * runs at {@code HIGHEST_PRECEDENCE} and populates {@code traceId} MDC
+ * before this filter logs. When rp-app calls passkey-app via the SDK,
+ * {@code TraceIdPropagationInterceptor} carries the same {@code X-Trace-Id}
+ * forward so the two servers' logs share one trace.
  *
- * <p>This indirection keeps core decoupled from {@code spring-security-config}
- * (which would be required to register a filter inside the security chain)
- * while still letting the log pattern include {@code actorEmail}. Apps
- * without authenticated sessions (passkey-app, rp-app's public pages)
- * simply do not set the attribute, and the MDC slot stays empty.
+ * <p>actorEmail is read from a request attribute set by an in-security-chain
+ * filter (rp-app does not yet have one — all routes are permitAll —
+ * so this slot stays empty, matching the demo's no-auth posture).
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 10) // after TraceIdFilter (HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RequestLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
     private static final String MDC_ACTOR_EMAIL = "actorEmail";
 
-    /**
-     * Request attribute carrying the authenticated principal's name (set
-     * by an in-security-chain filter in each app). Public so app-side
-     * filters can use the same key without copy-paste of the constant.
-     */
+    /** Mirror of core's RequestLoggingFilter.ACTOR_EMAIL_ATTR. */
     public static final String ACTOR_EMAIL_ATTR = "com.crosscert.passkey.actorEmail";
 
-    private static final Set<String> EXCLUDED_PATHS = Set.of(
-            "/actuator/health",
-            "/.well-known/jwks.json"
-    );
+    private static final Set<String> EXCLUDED_PATHS = Set.of("/actuator/health");
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
@@ -70,12 +59,11 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             chain.doFilter(req, res);
         } finally {
             long durMs = (System.nanoTime() - startNs) / 1_000_000L;
-            String method = req.getMethod();
             int status = res.getStatus();
             boolean actorPut = populateActorEmailMdc(req);
             try {
                 String msg = String.format("request: method=%s path=%s status=%d durMs=%d",
-                        method, path, status, durMs);
+                        req.getMethod(), path, status, durMs);
                 if (status >= 500) {
                     log.error(msg);
                 } else if (status >= 400) {
@@ -91,14 +79,6 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    /**
-     * Pull the actorEmail from the request attribute (set by an
-     * in-security-chain filter) and push it onto MDC for the duration of
-     * the request log statement. Returns true if MDC was modified.
-     *
-     * <p>Defensive: any failure is swallowed — request logging must never
-     * throw because of an unexpected attribute type.
-     */
     private boolean populateActorEmailMdc(HttpServletRequest req) {
         try {
             Object v = req.getAttribute(ACTOR_EMAIL_ATTR);

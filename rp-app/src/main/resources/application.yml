@@ -1,0 +1,42 @@
+server:
+  port: 9090
+
+rp-app:
+  origin: ${RP_APP_ORIGIN:http://localhost:9090}
+  # 네이티브 앱 패스키용 Well-Known URI 값. 미설정 시 첨부 샘플 앱(com.crosscert.sample.passkey)
+  # 으로 바로 동작한다. 고객사는 아래 환경변수만 자기 앱 값으로 교체하면 코드 수정 없이 재사용.
+  well-known:
+    android:
+      - package-name: ${WK_ANDROID_PACKAGE:com.crosscert.sample.passkey}
+        sha256-fingerprints:
+          - ${WK_ANDROID_SHA256:63:0C:F8:85:C6:9A:80:A0:87:B0:A2:72:83:61:00:29:F8:36:65:FF:EF:8E:FE:71:71:74:13:ED:34:9D:7C:54}
+    ios:
+      app-ids:
+        - ${WK_IOS_APPID:LTPC88ZFE8.com.crosscert.sample.passkey}
+
+passkey:
+  base-url:    ${PASSKEY_BASE_URL:http://localhost:8080}
+  api-key:     ${PASSKEY_API_KEY:}
+  tenant-id:   ${PASSKEY_TENANT_ID:}
+  # passkey-app 의 IdTokenIssuer 가 발급하는 iss prefix. passkey-app 의
+  # passkey.id-token.issuer-base (기본 https://passkey.crosscert.com) 와 일치해야 한다.
+  # 로컬 데모에서는 passkey-app 측을 application-local.yml 로 같은 값으로 override 하거나
+  # bootRun 시 -Dpasskey.id-token.issuer-base=http://localhost:8080 으로 띄운다.
+  issuer-base: ${PASSKEY_ISSUER_BASE:http://localhost:8080}
+  connect-timeout: 3s
+  read-timeout: 10s
+  jwks-cache-ttl: 5m
+
+spring:
+  session:
+    store-type: none
+  thymeleaf:
+    cache: false
+
+logging:
+  level:
+    root: INFO
+    com.crosscert.passkey: INFO
+    com.crosscert.passkey.sdk: INFO
+    com.crosscert.passkey.rpapp: INFO
+    org.springframework.web: WARN

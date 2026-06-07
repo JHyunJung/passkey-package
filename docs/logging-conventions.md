@@ -58,7 +58,7 @@ log.error("mds sync failed: cause={}", e.toString(), e);  // 두 번째 e 가 st
 새 MDC 키 추가 시:
 1. 어떤 Filter/Handler 가 set/clear 하는지 명시.
 2. `core/src/main/resources/logback-spring.xml` +
-   `sample-rp/src/main/resources/logback-spring.xml` 의 pattern 에 추가.
+   `rp-app/src/main/resources/logback-spring.xml` 의 pattern 에 추가.
 3. `docs/logging-operations.md` 검색 cookbook 갱신.
 
 ## 5. DEBUG 는 dev 전용

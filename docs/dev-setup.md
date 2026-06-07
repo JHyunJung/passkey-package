@@ -20,7 +20,7 @@
 | 도구 | 버전 | 용도 |
 |---|---|---|
 | Docker | recent | Oracle XE + Redis 컨테이너 |
-| JDK | 17 | passkey-app / admin-app / sdk-java / sample-rp |
+| JDK | 17 | passkey-app / admin-app / sdk-java / rp-app |
 | Node.js | 18+ | admin-ui (선택, HMR 개발 시) |
 
 ### 1.2 저장소 구조 (monorepo)
@@ -32,8 +32,8 @@
     ├── passkey-app/ # FIDO2 server (port 8080)
     ├── admin-app/   # 운영 콘솔 API + admin-ui 정적 serving (port 8081)
     ├── admin-ui/    # React + Vite 콘솔 SPA
-    ├── sdk-java/    # 패스키 SDK (Java) — sample-rp 가 의존
-    └── sample-rp/   # 데모 RP 앱 (port 9090)
+    ├── sdk-java/    # 패스키 SDK (Java) — rp-app 가 의존
+    └── rp-app/   # 데모 RP 앱 (port 9090)
 ```
 
 ### 1.3 컨테이너 (Oracle + Redis)
@@ -158,7 +158,7 @@ npm run dev
 
 `http://localhost:5173/admin/` 로 접속.
 
-### 3.5 sample-rp (port 9090) — monorepo 안에서 직접 실행
+### 3.5 rp-app (port 9090) — monorepo 안에서 직접 실행
 
 Passkey2 루트에서 단일 명령:
 
@@ -169,8 +169,8 @@ PASSKEY_BASE_URL=http://localhost:8080 \
 PASSKEY_TENANT_ID=0000000000000000000000000000C0DE \
 PASSKEY_API_KEY=pk_devlocaldev_local_secret_known_plaintext_for_test_only \
 PASSKEY_ISSUER_BASE=http://localhost:8080 \
-SAMPLE_RP_ORIGIN=http://localhost:9090 \
-./gradlew :sample-rp:bootRun
+RP_APP_ORIGIN=http://localhost:9090 \
+./gradlew :rp-app:bootRun
 ```
 
 **dev 프로필 (서버 배포 환경):**
@@ -180,17 +180,17 @@ PASSKEY_BASE_URL=https://dev-passkey.crosscert.com \
 PASSKEY_TENANT_ID=7F00DEAD000000000000000DE7000001 \
 PASSKEY_API_KEY=pk_devsrv01dev_server_secret_known_plaintext_for_test_only \
 PASSKEY_ISSUER_BASE=https://dev-passkey.crosscert.com \
-SAMPLE_RP_ORIGIN=https://dev-passkey.crosscert.com \
-./gradlew :sample-rp:bootRun
+RP_APP_ORIGIN=https://dev-passkey.crosscert.com \
+./gradlew :rp-app:bootRun
 ```
 
 | 환경변수 | 값 |
 |---|---|
 | `PASSKEY_BASE_URL` | passkey-app URL |
-| `PASSKEY_TENANT_ID` | tenant_id. RAW(16) hex 32자 또는 UUID 대시 형식 모두 가능(sample-rp 가 비교 전 UUID 로 정규화). ID Token 의 `iss`/`aud` 는 UUID 형식이라, **외부 시스템에서 직접 검증한다면 UUID 형식**을 권장 |
+| `PASSKEY_TENANT_ID` | tenant_id. RAW(16) hex 32자 또는 UUID 대시 형식 모두 가능(rp-app 가 비교 전 UUID 로 정규화). ID Token 의 `iss`/`aud` 는 UUID 형식이라, **외부 시스템에서 직접 검증한다면 UUID 형식**을 권장 |
 | `PASSKEY_API_KEY` | X-API-Key 헤더 값 (prefix + secret) |
 | `PASSKEY_ISSUER_BASE` | ID token issuer (passkey-app 의 `id-token.issuer-base` 와 동일) |
-| `SAMPLE_RP_ORIGIN` | RP 자기 origin — `allowed_origins` 에 들어 있어야 함 |
+| `RP_APP_ORIGIN` | RP 자기 origin — `allowed_origins` 에 들어 있어야 함 |
 
 부팅 후 브라우저에서 `http://localhost:9090/` 접속.
 
@@ -202,7 +202,7 @@ SAMPLE_RP_ORIGIN=https://dev-passkey.crosscert.com \
 | dev   | `7F00DEAD000000000000000DE7000001` (UUID: `7f00dead-0000-0000-0000-000de7000001`) | `pk_devsrv01dev_server_secret_known_plaintext_for_test_only` |
 
 ⚠️ SDK 가 monorepo 안의 `:sdk-java` 모듈에 직접 의존하므로 `:sdk-java:publishToMavenLocal`
-단계 불필요. sdk-java 코드 변경 즉시 sample-rp 가 반영.
+단계 불필요. sdk-java 코드 변경 즉시 rp-app 가 반영.
 
 ---
 
@@ -233,7 +233,7 @@ curl -X POST http://localhost:8080/api/v1/rp/registration/start \
 
 성공 시 응답에 `publicKeyCredentialCreationOptions` + `registrationToken` 포함.
 
-### 4.3 sample-rp 시점
+### 4.3 rp-app 시점
 
 `http://localhost:9090/` 에서 회원가입 → 패스키 등록 → 로그아웃 → 패스키 인증
 한 사이클이 모두 정상 동작하면 환경 검증 완료.
@@ -267,7 +267,7 @@ EXIT;" | sqlplus -S system/oracle@//localhost:1521/XEPDB1'
 
 ### 5.4 `ID token issuer mismatch`
 
-passkey-app 의 `--passkey.id-token.issuer-base` 와 sample-rp 의 `PASSKEY_ISSUER_BASE`
+passkey-app 의 `--passkey.id-token.issuer-base` 와 rp-app 의 `PASSKEY_ISSUER_BASE`
 가 동일한지 확인.
 
 ### 5.5 port 충돌
@@ -300,4 +300,4 @@ SPRING_PROFILES_ACTIVE=local ./gradlew :admin-app:bootRun   # 또는 dev
 - 공통 운영자 시드: [`core/src/main/resources/db/seed-common/R__seed_operators.sql`](../core/src/main/resources/db/seed-common/R__seed_operators.sql)
 - ApiKey 인증 필터: `passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java`
 - SDK 모듈: [`sdk-java/`](../sdk-java/) (monorepo 흡수 후 — `project(":sdk-java")` 직접 의존)
-- 데모 RP: [`sample-rp/`](../sample-rp/) (monorepo 흡수 후 — `./gradlew :sample-rp:bootRun`)
+- 데모 RP: [`rp-app/`](../rp-app/) (monorepo 흡수 후 — `./gradlew :rp-app:bootRun`)

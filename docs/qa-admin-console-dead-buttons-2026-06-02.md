@@ -152,6 +152,6 @@ SystemInfoTab의 성능 지표 카드가 빈 값. 백엔드 컴포넌트 상태(
 ---
 
 ## 검증 환경 메모
-- admin-app/passkey-app/sample-rp 모두 dev 프로필 정상 기동(health 200).
+- admin-app/passkey-app/rp-app 모두 dev 프로필 정상 기동(health 200).
 - QA 중 dev 데이터 변경 없음(모든 mutation 모달은 취소/되돌리기 처리).
 - 증거 스크린샷: `docs/qa-evidence/`
