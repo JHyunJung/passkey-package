@@ -19,6 +19,11 @@ class AttestationVerifiersTest {
     }
 
     @Test
+    void resolvesApple() {
+        assertEquals("apple", registry.forFormat("apple").format());
+    }
+
+    @Test
     void unknownFormatReturnsNull() {
         assertNull(registry.forFormat("no-such-format"));
     }

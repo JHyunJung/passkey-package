@@ -21,7 +21,8 @@ public final class AttestationVerifiers {
         return new AttestationVerifiers(List.of(
                 new NoneAttestationVerifier(),
                 new PackedAttestationVerifier(),
-                new FidoU2fAttestationVerifier()));
+                new FidoU2fAttestationVerifier(),
+                new AppleAttestationVerifier()));
     }
 
     public static AttestationVerifiers of(List<AttestationVerifier> verifiers) {
