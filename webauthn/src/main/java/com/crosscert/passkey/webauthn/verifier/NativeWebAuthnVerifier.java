@@ -8,6 +8,8 @@ import com.crosscert.passkey.webauthn.attestation.AttestationVerifier;
 import com.crosscert.passkey.webauthn.attestation.AttestationVerifiers;
 import com.crosscert.passkey.webauthn.authdata.AttestedCredentialData;
 import com.crosscert.passkey.webauthn.authdata.AuthenticatorData;
+import com.crosscert.passkey.webauthn.authdata.AuthenticatorDataParser;
+import com.crosscert.passkey.webauthn.cbor.CborDecoder;
 import com.crosscert.passkey.webauthn.clientdata.ClientDataException;
 import com.crosscert.passkey.webauthn.clientdata.ClientDataValidator;
 import com.crosscert.passkey.webauthn.cose.CoseAlgorithm;
@@ -22,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.Signature;
 import java.util.Set;
 
 /**
@@ -146,7 +149,84 @@ public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
     @Override
     public AuthenticationResult verifyAuthentication(AuthenticationInput input)
             throws WebAuthnVerificationException {
-        throw new UnsupportedOperationException("implemented in Task 15");
+        ParsedAuthentication parsed;
+        try {
+            parsed = jsonParser.parseAuthentication(input.credentialJson());
+        } catch (RuntimeException e) {
+            throw fail(Reason.MALFORMED_INPUT, "authentication JSON parse failed", e);
+        }
+
+        // 1) clientData 검증 (webauthn.get)
+        try {
+            clientDataValidator.validate(parsed.clientDataJson(), "webauthn.get",
+                    input.challenge(), input.allowedOrigins());
+        } catch (ClientDataException e) {
+            throw mapClientData(e);
+        }
+
+        // assertion의 credential id가 저장된 credential과 일치하는지 (WebAuthn §7.2).
+        // 호출자가 storedCredential을 id로 조회하지만, verifier가 경계의 단일 진실로서
+        // 자체 바인딩한다 (codex P1, defense-in-depth).
+        if (!MessageDigest.isEqual(parsed.rawId(), input.storedCredential().credentialId())) {
+            throw fail(Reason.MALFORMED_INPUT, "asserted credential id does not match stored credential");
+        }
+
+        // 2) authData 파싱 (AT 없음)
+        AuthenticatorData authData;
+        try {
+            authData = AuthenticatorDataParser.parse(parsed.authenticatorData());
+        } catch (RuntimeException e) {
+            throw fail(Reason.MALFORMED_INPUT, "authenticatorData parse failed", e);
+        }
+
+        // 3) rpIdHash 대조
+        if (!MessageDigest.isEqual(authData.rpIdHash(), sha256(input.rpId()))) {
+            throw fail(Reason.RP_ID_HASH_MISMATCH, "rpIdHash mismatch");
+        }
+        // 4) UP/UV
+        if (!authData.flags().userPresent()) {
+            throw fail(Reason.UP_REQUIRED, "user presence flag not set");
+        }
+        if (input.userVerificationRequired() && !authData.flags().userVerified()) {
+            throw fail(Reason.UV_REQUIRED, "user verification required but not set");
+        }
+
+        // 5) 저장 COSE 키 복원
+        CoseKey storedKey;
+        try {
+            storedKey = CoseKeyParser.parse(
+                    CborDecoder.decode(input.storedCredential().cosePublicKey()));
+        } catch (RuntimeException e) {
+            throw fail(Reason.MALFORMED_INPUT, "stored COSE key invalid", e);
+        }
+
+        // 6) 서명 검증: authData || SHA-256(clientDataJSON)
+        byte[] clientDataHash = sha256Bytes(parsed.clientDataJson());
+        boolean ok = verifySignature(storedKey, parsed.authenticatorData(), clientDataHash,
+                parsed.signature());
+        if (!ok) {
+            throw fail(Reason.BAD_SIGNATURE, "assertion signature invalid");
+        }
+
+        return new AuthenticationResult(
+                input.storedCredential().credentialId(),
+                authData.signCount(),
+                authData.flags().userVerified(),
+                authData.flags().userPresent(),
+                authData.flags().backupState());
+    }
+
+    private static boolean verifySignature(CoseKey key, byte[] authData,
+                                           byte[] clientDataHash, byte[] signature) {
+        try {
+            Signature sig = Signature.getInstance(key.algorithm().jcaSignatureName());
+            sig.initVerify(key.publicKey());
+            sig.update(authData);
+            sig.update(clientDataHash);
+            return sig.verify(signature);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // --- trust 강제 ---

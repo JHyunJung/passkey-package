@@ -9,6 +9,15 @@ public interface WebAuthnVerifier {
     RegistrationResult verifyRegistration(RegistrationInput input)
             throws WebAuthnVerificationException;
 
+    /**
+     * assertion(인증)을 검증한다. 서명·origin·challenge·rpIdHash·UP/UV·
+     * credential id 바인딩을 검증하고 authenticator가 보고한 signCount를
+     * {@link AuthenticationResult#newSignCount()}로 반환한다.
+     *
+     * <p><b>signCount 단조증가(replay) 검사는 하지 않는다.</b> 저장된
+     * 이전 signCount와의 비교·갱신은 호출자(앱)의 책임이다. verifier는
+     * 새 signCount를 추출해 줄 뿐 거부하지 않는다.
+     */
     AuthenticationResult verifyAuthentication(AuthenticationInput input)
             throws WebAuthnVerificationException;
 }
