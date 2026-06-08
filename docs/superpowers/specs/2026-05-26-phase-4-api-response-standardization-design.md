@@ -8,7 +8,7 @@
 
 `/.well-known/jwks.json` 한 개를 제외한 **모든 REST API 응답을 `ApiResponse<T>` 단일 envelope으로 표준화**한다. 응답 성공/실패를 동일 스키마로 통일하고, 에러 코드를 중앙에서 관리하며, 분산 환경에서의 추적성을 위해 `traceId`를 모든 응답·로그에 포함한다.
 
-본 Phase는 `spring-boot-api-response-template.md`의 패턴을 우리 프로젝트 규약(record, no Lombok, multi-module `:core` 공유, FIDO2/WebAuthn protocol 인지)에 맞춰 적용한다.
+본 Phase는 `docs/spring-boot-api-response-template.md`의 패턴을 우리 프로젝트 규약(record, no Lombok, multi-module `:core` 공유, FIDO2/WebAuthn protocol 인지)에 맞춰 적용한다.
 
 ## 2. Architecture
 

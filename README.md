@@ -172,7 +172,7 @@ npm run dev      # Vite :5173 — admin-app :8081 으로 proxy
 
 ## API 레퍼런스
 
-- **RP 클라이언트** (rp-app 가 노출하는 API): [`rp-client-api-quickref.md`](./rp-client-api-quickref.md)
+- **RP 클라이언트** (rp-app 가 노출하는 API): [`rp-client-api-quickref.md`](./docs/rp-client-api-quickref.md)
 - **Passkey 서버 ceremony API** (RP 백엔드가 호출): `passkey-app` 의 `/api/v1/rp/{registration,authentication}/{start,finish}` + `/api/v1/rp/.well-known/jwks.json`
 - **Admin API**: `/admin/api/**` — UI 가 호출. Spring Security session 인증.
 

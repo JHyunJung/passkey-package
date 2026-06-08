@@ -292,7 +292,7 @@ logging:
 
 ## 5. API 응답 envelope — sample-rp 도 `ApiResponse<T>` 통일
 
-`/webauthn/**` 4개 + 향후 추가될 모든 sample-rp REST 엔드포인트는 Passkey2 의 `spring-boot-api-response-template.md` 와 동일한 envelope 구조를 따른다. Thymeleaf HTML 응답은 envelope 대상이 아니다.
+`/webauthn/**` 4개 + 향후 추가될 모든 sample-rp REST 엔드포인트는 Passkey2 의 `docs/spring-boot-api-response-template.md` 와 동일한 envelope 구조를 따른다. Thymeleaf HTML 응답은 envelope 대상이 아니다.
 
 ### 5.1 패키지 — 템플릿 그대로 복제
 

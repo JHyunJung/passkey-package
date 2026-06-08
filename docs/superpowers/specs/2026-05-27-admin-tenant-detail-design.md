@@ -98,7 +98,7 @@ public record PageView<T>(
 }
 ```
 
-응답은 항상 기존 `ApiResponse<T>` envelope 으로 감싼다 (spring-boot-api-response-template.md 패턴 그대로). Page → PageView 변환은 Spring Data 의 PageImpl serialization 경고를 피하고 응답 메타 형태를 명시한다.
+응답은 항상 기존 `ApiResponse<T>` envelope 으로 감싼다 (docs/spring-boot-api-response-template.md 패턴 그대로). Page → PageView 변환은 Spring Data 의 PageImpl serialization 경고를 피하고 응답 메타 형태를 명시한다.
 
 ### 2.4 신규 서비스
 
