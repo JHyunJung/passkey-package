@@ -80,15 +80,15 @@ public class RuntimeDsHelper {
      * VPD's update_check=TRUE must raise ORA-28115 (policy violation).
      */
     public void insertCredentialAs(UUID sessionTenant, String rowTenant,
-                                   String userHandle, String credentialId, String publicKey) {
+                                   String userHandle, String credentialId, String cosePublicKey) {
         try {
             TenantContextHolder.set(sessionTenant);
             runtimeJdbc.update(
                     "INSERT INTO APP_OWNER.credential " +
-                    "(id, tenant_id, user_handle, credential_id, public_key) " +
+                    "(id, tenant_id, user_handle, credential_id, cose_public_key) " +
                     "VALUES (SYS_GUID(), HEXTORAW(?), " +
                     "UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?))",
-                    rowTenant, userHandle, credentialId, publicKey);
+                    rowTenant, userHandle, credentialId, cosePublicKey);
         } finally {
             TenantContextHolder.clear();
         }

@@ -13,23 +13,13 @@ import com.crosscert.passkey.core.policy.AaguidPolicyChecker;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.webauthn.verifier.AttestationTrustPolicy;
+import com.crosscert.passkey.webauthn.verifier.COSEAlgorithm;
+import com.crosscert.passkey.webauthn.verifier.RegistrationInput;
+import com.crosscert.passkey.webauthn.verifier.RegistrationResult;
+import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException;
+import com.crosscert.passkey.webauthn.verifier.WebAuthnVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.webauthn4j.WebAuthnManager;
-import com.webauthn4j.converter.AttestationObjectConverter;
-import com.webauthn4j.converter.AuthenticationExtensionsClientOutputsConverter;
-import com.webauthn4j.converter.CollectedClientDataConverter;
-import com.webauthn4j.converter.util.ObjectConverter;
-import com.webauthn4j.data.AuthenticatorTransport;
-import com.webauthn4j.data.PublicKeyCredentialParameters;
-import com.webauthn4j.data.PublicKeyCredentialType;
-import com.webauthn4j.data.RegistrationData;
-import com.webauthn4j.data.RegistrationParameters;
-import com.webauthn4j.data.attestation.statement.COSEAlgorithmIdentifier;
-import com.webauthn4j.data.client.Origin;
-import com.webauthn4j.data.client.challenge.DefaultChallenge;
-import com.webauthn4j.server.ServerProperty;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,66 +30,42 @@ import java.time.Clock;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class RegistrationFinishService {
 
     private static final Logger log = LoggerFactory.getLogger(RegistrationFinishService.class);
 
-    /**
-     * Phase 1 supported credential algorithms — mirrors the
-     * pubKeyCredParams advertised by RegistrationStartService. Passing
-     * this explicit list to webauthn4j enforces that registered
-     * authenticators use one of these algorithms; passing null would
-     * disable that check (codex P1 — security-critical).
-     */
-    private static final List<PublicKeyCredentialParameters> ALLOWED_PUB_KEY_CRED_PARAMS = List.of(
-            new PublicKeyCredentialParameters(
-                    PublicKeyCredentialType.PUBLIC_KEY, COSEAlgorithmIdentifier.ES256),
-            new PublicKeyCredentialParameters(
-                    PublicKeyCredentialType.PUBLIC_KEY, COSEAlgorithmIdentifier.RS256));
-
     private final ChallengeStore store;
-    private final WebAuthnManager manager;
+    private final WebAuthnVerifier verifier;
     private final TenantRepository tenants;
     private final CredentialRepository credentials;
     private final MdsVerifier mds;
     private final AaguidPolicyChecker aaguidPolicyChecker;
     private final ObjectMapper mapper;
-    private final ObjectConverter objectConverter;
-    private final AttestationObjectConverter attestationObjectConverter;
-    private final CollectedClientDataConverter collectedClientDataConverter;
-    private final AuthenticationExtensionsClientOutputsConverter extensionsConverter;
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
     private final CeremonyEventRecorder ceremonyEvents;
 
     public RegistrationFinishService(ChallengeStore store,
-                                     WebAuthnManager manager,
+                                     WebAuthnVerifier verifier,
                                      TenantRepository tenants,
                                      CredentialRepository credentials,
                                      MdsVerifier mds,
                                      AaguidPolicyChecker aaguidPolicyChecker,
                                      ObjectMapper mapper,
-                                     ObjectConverter objectConverter,
                                      Clock clock,
                                      CeremonyMetrics ceremonyMetrics,
                                      CeremonyEventRecorder ceremonyEvents) {
         this.store = store;
-        this.manager = manager;
+        this.verifier = verifier;
         this.tenants = tenants;
         this.credentials = credentials;
         this.mds = mds;
         this.aaguidPolicyChecker = aaguidPolicyChecker;
         this.mapper = mapper;
-        this.objectConverter = objectConverter;
-        this.attestationObjectConverter = new AttestationObjectConverter(objectConverter);
-        this.collectedClientDataConverter = new CollectedClientDataConverter(objectConverter);
-        this.extensionsConverter = new AuthenticationExtensionsClientOutputsConverter(objectConverter);
         this.clock = clock;
         this.ceremonyMetrics = ceremonyMetrics;
         this.ceremonyEvents = ceremonyEvents;
@@ -134,84 +100,57 @@ public class RegistrationFinishService {
                 throw new IllegalArgumentException("publicKeyCredential JSON invalid");
             }
 
-            RegistrationData data;
-            try {
-                data = manager.parseRegistrationResponseJSON(publicKeyCredentialJson);
-            } catch (Exception e) {
-                log.warn("attestation parse failed for tenant {}: {}", ch.tenantId(), e.toString());
-                throw new IllegalArgumentException("attestation parse failed");
-            }
-
-            // Build the ServerProperty with ALL tenant origins so cross-
-            // origin RP setups (e.g. www. + app.) work, not just the first.
-            Set<Origin> origins = tenant.getAllowedOriginValues().stream()
-                    .map(Origin::create)
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            Set<String> origins = new LinkedHashSet<>(tenant.getAllowedOriginValues());
             if (origins.isEmpty()) {
                 throw new IllegalStateException(
                         "tenant " + tenant.getId() + " has no allowed_origins configured");
             }
-            ServerProperty serverProperty = ServerProperty.builder()
-                    .origins(origins)
-                    .rpId(tenant.getRpId())
-                    .challenge(new DefaultChallenge(ch.challenge()))
-                    .build();
 
-            // Pass ALLOWED_PUB_KEY_CRED_PARAMS so webauthn4j enforces our
-            // algorithm allow-list. Passing null would let an authenticator
-            // register with a weaker algorithm (codex P1 — closed here).
-            RegistrationParameters wParams = new RegistrationParameters(
-                    serverProperty,
-                    ALLOWED_PUB_KEY_CRED_PARAMS,
-                    /* userVerificationRequired */ tenant.isRequireUserVerification(),
-                    /* userPresenceRequired */ true);
+            RegistrationInput input = new RegistrationInput(
+                    publicKeyCredentialJson,
+                    ch.challenge(),
+                    origins,
+                    tenant.getRpId(),
+                    tenant.isRequireUserVerification(),
+                    Set.of(COSEAlgorithm.ES256, COSEAlgorithm.RS256),
+                    tenant.getAcceptedFormatValues(),
+                    AttestationTrustPolicy.SELF_ALLOWED);
 
+            RegistrationResult result;
             try {
-                manager.verify(data, wParams);
-            } catch (Exception e) {
-                log.warn("attestation verify failed for tenant {}: {}", ch.tenantId(), e.toString());
+                result = verifier.verifyRegistration(input);
+            } catch (WebAuthnVerificationException e) {
+                log.warn("attestation verify failed for tenant {}: {} ({})",
+                        ch.tenantId(), e.getMessage(), e.reason());
                 throw new IllegalArgumentException("attestation verify failed");
             }
 
-            String fmt = data.getAttestationObject().getFormat();
+            String fmt = result.attestationFormat();
             if (!tenant.getAcceptedFormatValues().contains(fmt)) {
                 throw new IllegalArgumentException("attestation format not accepted by tenant policy");
             }
 
-            // webauthn4j 0.31.5: AAGUID.getValue() returns UUID; getBytes() returns the raw 16-byte form.
-            byte[] aaguid = data.getAttestationObject().getAuthenticatorData()
-                    .getAttestedCredentialData().getAaguid().getBytes();
+            // AAGUID 정책 검사 — MDS verify 통과 직후, credential 저장 직전
+            // AaguidPolicyViolationException(BusinessException) 발생 시 GlobalExceptionHandler 가 HTTP 403 반환
+            byte[] aaguid = result.aaguid();
             if (!mds.verify(tenant.isMdsRequired(), aaguid)) {
                 throw new IllegalArgumentException("authenticator metadata verification failed");
             }
 
-            // AAGUID 정책 검사 — MDS verify 통과 직후, credential 저장 직전
-            // AaguidPolicyViolationException(BusinessException) 발생 시 GlobalExceptionHandler 가 HTTP 403 반환
             UUID aaguidUuid = aaguidFromBytes(aaguid);
             aaguidPolicyChecker.check(tenant.getId(), aaguidUuid);
 
-            // Persist the four CredentialRecordImpl constructor inputs
-            // (attestationObject, clientData, clientExtensions, transports)
-            // in a JSON envelope. The natural choice would be to serialize
-            // CredentialRecordImpl whole via objectConverter.getCborConverter(),
-            // but webauthn4j 0.31.5's CredentialRecordImpl has no @JsonCreator
-            // and Jackson 3 cannot synthesize one — so a CBOR readValue at
-            // auth time throws "no Creators, like default constructor, exist".
-            // The IT surfaced this as the actual blocker on first /authentication/finish.
-            // Solution: round-trip each component through its own webauthn4j
-            // converter (which IS @JsonCreator-friendly), envelope the bytes
-            // as JSON, and reconstruct CredentialRecordImpl at verify time
-            // via the public 4-arg constructor.
-            byte[] credentialRecordBytes = serializeCredentialRecordEnvelope(data);
-
-            byte[] credentialId = data.getAttestationObject().getAuthenticatorData()
-                    .getAttestedCredentialData().getCredentialId();
+            byte[] credentialId = result.credentialId();
             Credential cred = new Credential(
                     UUID.fromString(ch.tenantId()),
                     ch.userHandle(),
                     credentialId,
-                    credentialRecordBytes,
+                    result.cosePublicKey(),
                     aaguid);
+            cred.setAttestationFmt(fmt);
+            if (result.transports() != null && !result.transports().isEmpty()) {
+                cred.setTransports(String.join(",", result.transports()));
+            }
             credentials.saveAndFlush(cred);
 
             String credentialIdB64 = b64url(credentialId);
@@ -238,28 +177,6 @@ public class RegistrationFinishService {
         if (id == null) return "null";
         if (id.length() <= 12) return "***";
         return "..." + id.substring(id.length() - 12);
-    }
-
-    private byte[] serializeCredentialRecordEnvelope(RegistrationData data) {
-        try {
-            byte[] aoBytes = attestationObjectConverter.convertToBytes(data.getAttestationObject());
-            byte[] cdBytes = collectedClientDataConverter.convertToBytes(data.getCollectedClientData());
-            String ceJson = extensionsConverter.convertToString(data.getClientExtensions());
-
-            ObjectNode envelope = mapper.createObjectNode();
-            envelope.put("ao", b64url(aoBytes));
-            envelope.put("cd", b64url(cdBytes));
-            envelope.put("ce", ceJson);
-            ArrayNode transports = envelope.putArray("tr");
-            if (data.getTransports() != null) {
-                for (AuthenticatorTransport t : data.getTransports()) {
-                    if (t != null) transports.add(t.getValue());
-                }
-            }
-            return mapper.writeValueAsBytes(envelope);
-        } catch (Exception e) {
-            throw new IllegalStateException("credential record envelope serialization failed", e);
-        }
     }
 
     private static String b64url(byte[] b) {
