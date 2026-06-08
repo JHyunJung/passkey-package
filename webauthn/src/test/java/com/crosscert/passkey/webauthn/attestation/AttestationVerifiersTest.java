@@ -29,6 +29,11 @@ class AttestationVerifiersTest {
     }
 
     @Test
+    void resolvesAndroidSafetynet() {
+        assertEquals("android-safetynet", registry.forFormat("android-safetynet").format());
+    }
+
+    @Test
     void unknownFormatReturnsNull() {
         assertNull(registry.forFormat("no-such-format"));
     }
