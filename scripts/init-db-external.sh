@@ -26,6 +26,16 @@
 #
 #   PROFILE: dev(기본) | local | qa.  대상 DB 가 비어 있다고 가정.
 #
+#   [이미 우리 잔재가 있는 외부 SE DB 를 비우고 재적용하는 절차]
+#     1) DBeaver 에서 APP_OWNER 로 접속해 scripts/reset-app-owner-external.sql 실행
+#        (스크립트 상단 c_confirm 을 RESET 으로 바꿔야 동작. 테이블·데이터 삭제,
+#         CTX_PKG/APP_CTX 보존).
+#     2) 아래처럼 SKIP_BOOTSTRAP=1 로 Flyway 만 재적용:
+#        SKIP_BOOTSTRAP=1 PASSKEY_VPD_ENABLED=false \
+#        ORA_HOST=db.example.com ORA_PORT=1521 ORA_SERVICE=ORCLPDB1 PROFILE=qa \
+#        scripts/init-db-external.sh
+#     SE(Standard Edition) 는 VPD 미지원 — PASSKEY_VPD_ENABLED=false 로 둔다.
+#
 # ⚠️ 멱등하지만 파괴적이지 않다 — 기존 객체가 있으면 Flyway validate 가
 #    충돌할 수 있다. 깨끗한(빈 APP_OWNER) Oracle 에 적용하는 것을 전제한다.
 #
