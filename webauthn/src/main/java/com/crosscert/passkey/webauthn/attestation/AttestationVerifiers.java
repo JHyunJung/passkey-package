@@ -22,7 +22,8 @@ public final class AttestationVerifiers {
                 new NoneAttestationVerifier(),
                 new PackedAttestationVerifier(),
                 new FidoU2fAttestationVerifier(),
-                new AppleAttestationVerifier()));
+                new AppleAttestationVerifier(),
+                new AndroidKeyAttestationVerifier()));
     }
 
     public static AttestationVerifiers of(List<AttestationVerifier> verifiers) {

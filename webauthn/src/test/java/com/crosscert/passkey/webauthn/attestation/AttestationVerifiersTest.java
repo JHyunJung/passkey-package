@@ -24,6 +24,11 @@ class AttestationVerifiersTest {
     }
 
     @Test
+    void resolvesAndroidKey() {
+        assertEquals("android-key", registry.forFormat("android-key").format());
+    }
+
+    @Test
     void unknownFormatReturnsNull() {
         assertNull(registry.forFormat("no-such-format"));
     }
