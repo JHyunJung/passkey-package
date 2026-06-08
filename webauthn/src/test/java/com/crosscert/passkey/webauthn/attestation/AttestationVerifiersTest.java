@@ -34,6 +34,11 @@ class AttestationVerifiersTest {
     }
 
     @Test
+    void resolvesTpm() {
+        assertEquals("tpm", registry.forFormat("tpm").format());
+    }
+
+    @Test
     void unknownFormatReturnsNull() {
         assertNull(registry.forFormat("no-such-format"));
     }
