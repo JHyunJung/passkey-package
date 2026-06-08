@@ -27,8 +27,8 @@ public class Credential extends BaseEntity {
     private byte[] credentialId;
 
     @Lob
-    @Column(name = "PUBLIC_KEY", nullable = false)
-    private byte[] publicKey;
+    @Column(name = "COSE_PUBLIC_KEY", nullable = false)
+    private byte[] cosePublicKey;
 
     @Column(name = "SIGN_COUNT", nullable = false)
     private long signCount;
@@ -55,11 +55,11 @@ public class Credential extends BaseEntity {
     protected Credential() {}
 
     public Credential(UUID tenantId, byte[] userHandle, byte[] credentialId,
-                      byte[] publicKey, byte[] aaguid) {
+                      byte[] cosePublicKey, byte[] aaguid) {
         this.tenantId = tenantId;
         this.userHandle = userHandle;
         this.credentialId = credentialId;
-        this.publicKey = publicKey;
+        this.cosePublicKey = cosePublicKey;
         this.aaguid = aaguid;
         this.signCount = 0;
     }
@@ -70,19 +70,20 @@ public class Credential extends BaseEntity {
     public byte[] getUserHandle() { return userHandle; }
     public byte[] getAaguid() { return aaguid; }
     public String getTransports() { return transports; }
+    public void setTransports(String transports) { this.transports = transports; }
     public String getAttestationFmt() { return attestationFmt; }
+    public void setAttestationFmt(String attestationFmt) { this.attestationFmt = attestationFmt; }
     public Instant getLastUsedAt() { return lastUsedAt; }
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
-    public byte[] getCredentialRecordBytes() { return publicKey; } // BLOB now holds CBOR CredentialRecord — see followups doc
+    public byte[] getCosePublicKey() { return cosePublicKey; }
 
     /**
      * Atomic state mutation after a successful authentication. signCount
      * must be strictly increasing (replay defense); callers verify that
-     * before calling this. The stored CBOR CredentialRecord BLOB is
-     * immutable here — the prior signature took a byte[] that callers
-     * only ever passed back unchanged (self-assign no-op), so it was
-     * removed.
+     * before calling this. The stored COSE public key is immutable here —
+     * the prior signature took a byte[] that callers only ever passed back
+     * unchanged (self-assign no-op), so it was removed.
      */
     public void recordAuthentication(long newSignCount, Instant now) {
         this.signCount = newSignCount;
