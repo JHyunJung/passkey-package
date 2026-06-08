@@ -1,7 +1,7 @@
 package com.crosscert.passkey.admin.mds;
 
 import com.crosscert.passkey.core.entity.MdsBlobCache;
-import com.webauthn4j.metadata.data.MetadataBLOB;
+import com.crosscert.passkey.webauthn.mds.MdsBlob;
 import org.springframework.dao.IncorrectUpdateSemanticsDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,11 +16,9 @@ import java.time.LocalDate;
  * Persists the most recent verified MDS BLOB into the singleton
  * row of {@code mds_blob_cache} (seeded by V19, id = SINGLETON_ID).
  *
- * <p>The raw JWT bytes are not surfaced by webauthn4j MetadataBLOB,
- * so this Phase 3 store passes an empty JSON ("{}") for blob_jwt
- * — Phase 4+ may capture the raw form via a custom HttpClient.
- * The verifier path doesn't re-verify from the column; it uses
- * the parsed entries cached in Redis (MdsSchedulerService T16).
+ * <p>원본 BLOB JWT를 그대로 저장한다 — 감사·재검증 가능.
+ * The verifier path doesn't re-verify from the column at request time;
+ * it uses the parsed entries cached in Redis (MdsSchedulerService T16).
  */
 @Service
 public class MdsBlobStore {
@@ -37,9 +35,9 @@ public class MdsBlobStore {
     }
 
     @Transactional
-    public void store(String rawJwt, MetadataBLOB blob) {
-        long version = blob.getPayload().getNo();
-        LocalDate nextUpdate = blob.getPayload().getNextUpdate();
+    public void store(String rawJwt, MdsBlob blob) {
+        long version = blob.no();
+        LocalDate nextUpdate = blob.nextUpdate();
         Instant now = clock.instant();
         int updated = jdbc.update(
                 "UPDATE APP_OWNER.mds_blob_cache " +

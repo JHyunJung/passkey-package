@@ -1,9 +1,9 @@
 package com.crosscert.passkey.admin.mds;
 
-import com.webauthn4j.converter.util.ObjectConverter;
-import com.webauthn4j.metadata.FidoMDS3MetadataBLOBProvider;
-import com.webauthn4j.metadata.MetadataBLOBProvider;
-import com.webauthn4j.metadata.data.MetadataBLOB;
+import com.crosscert.passkey.webauthn.mds.MdsBlob;
+import com.crosscert.passkey.webauthn.mds.MdsException;
+import com.crosscert.passkey.webauthn.mds.MetadataBlobVerifier;
+import com.crosscert.passkey.webauthn.mds.NativeMetadataBlobVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,78 +11,93 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Thin Spring wrapper around webauthn4j's
- * {@link FidoMDS3MetadataBLOBProvider}. Encapsulates the
- * constructor-driven configuration so callers depend on a narrow
- * {@link #fetch()} method.
- *
- * <p>The underlying provider downloads the JWT BLOB over HTTPS,
- * verifies its signature against the configured FIDO Alliance trust
- * anchor, walks the cert chain, and returns a parsed
- * {@link MetadataBLOB}.
+ * MDS3 BLOB을 HTTPS로 다운로드하고 자체 {@link MetadataBlobVerifier}로
+ * JWS 서명·X.509 체인을 검증한 뒤 파싱한다. webauthn4j 의존 없음.
  */
 @Component
 public class MdsBlobClient {
 
     private static final Logger log = LoggerFactory.getLogger(MdsBlobClient.class);
 
-    private final MetadataBLOBProvider provider;
+    private final HttpClient httpClient;
+    private final MetadataBlobVerifier verifier;
+    private final MdsRootCertProvider rootProvider;
     private final String endpoint;
 
-    public MdsBlobClient(MetadataBLOBProvider provider,
+    public MdsBlobClient(HttpClient httpClient,
+                         MetadataBlobVerifier verifier,
+                         MdsRootCertProvider rootProvider,
                          @Value("${passkey.mds.blob-endpoint:https://mds3.fidoalliance.org/}")
                          String endpoint) {
-        this.provider = provider;
+        this.httpClient = httpClient;
+        this.verifier = verifier;
+        this.rootProvider = rootProvider;
         this.endpoint = endpoint;
     }
 
-    public MetadataBLOB fetch() {
-        // webauthn4j's FidoMDS3MetadataBLOBProvider performs the HTTPS
-        // download, JWT signature verification, and cert-chain walk
-        // inside provide(). We can't observe HTTP status / blob size
-        // directly, so we surface the boundary call: success with
-        // duration + entry count, signature/parse failure as WARN,
-        // and a generic ERROR for the rest.
+    public FetchResult fetch() {
         Instant started = Instant.now();
+        String rawJwt;
         try {
-            MetadataBLOB blob = provider.provide();
+            HttpRequest req = HttpRequest.newBuilder(URI.create(endpoint))
+                    .timeout(Duration.ofSeconds(30)).GET().build();
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200) {
+                throw new IllegalStateException("MDS fetch failed: HTTP " + resp.statusCode());
+            }
+            rawJwt = resp.body().trim();
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            // HttpClient.send는 InterruptedException을 던질 수 있다. broad catch로 묶되
+            // 인터럽트 신호는 스레드 풀/스케줄러를 위해 복원한다 (codex 관찰).
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             long durMs = Duration.between(started, Instant.now()).toMillis();
-            int entries = blob.getPayload() == null || blob.getPayload().getEntries() == null
-                    ? 0
-                    : blob.getPayload().getEntries().size();
+            log.error("mds blob fetch: transport error url={} durMs={} cause={}",
+                    endpoint, durMs, e.toString(), e);
+            throw new IllegalStateException("MDS fetch failed: " + e.getMessage(), e);
+        }
+        try {
+            MdsBlob blob = verifier.verify(rawJwt, rootProvider.anchors());
+            long durMs = Duration.between(started, Instant.now()).toMillis();
+            int entries = blob.entries() == null ? 0 : blob.entries().size();
             log.info("mds blob fetch: url={} entries={} durMs={}", endpoint, entries, durMs);
-            return blob;
-        } catch (RuntimeException e) {
+            return new FetchResult(rawJwt, blob);
+        } catch (MdsException e) {
             long durMs = Duration.between(started, Instant.now()).toMillis();
-            String name = e.getClass().getSimpleName();
-            // Heuristic: webauthn4j throws *SignatureException /
-            // *VerificationException family on trust failures, vs
-            // generic IO/RuntimeException for transport.
-            if (name.contains("Signature") || name.contains("Verification")
-                    || name.contains("Certificate") || name.contains("Trust")) {
-                log.warn("mds blob fetch: signature verify failed url={} durMs={} cause={}",
-                        endpoint, durMs, e.toString());
+            if (e.reason() == MdsException.Reason.BAD_SIGNATURE
+                    || e.reason() == MdsException.Reason.UNTRUSTED_CHAIN) {
+                log.warn("mds blob fetch: signature/chain verify failed url={} durMs={} reason={} cause={}",
+                        endpoint, durMs, e.reason(), e.toString());
             } else {
-                log.error("mds blob fetch: error url={} durMs={} cause={}",
-                        endpoint, durMs, e.toString(), e);
+                log.error("mds blob fetch: parse error url={} durMs={} reason={} cause={}",
+                        endpoint, durMs, e.reason(), e.toString(), e);
             }
             throw new IllegalStateException("MDS fetch failed: " + e.getMessage(), e);
         }
     }
 
+    public record FetchResult(String rawJwt, MdsBlob blob) {}
+
     @Configuration
     static class Wiring {
         @Bean
-        public MetadataBLOBProvider fidoMds3MetadataBLOBProvider(
-                MdsRootCertProvider rootProvider,
-                @Value("${passkey.mds.blob-endpoint:https://mds3.fidoalliance.org/}")
-                String endpoint) {
-            ObjectConverter oc = new ObjectConverter();
-            return new FidoMDS3MetadataBLOBProvider(oc, endpoint, rootProvider.get());
+        public MetadataBlobVerifier metadataBlobVerifier() {
+            return new NativeMetadataBlobVerifier();
+        }
+        @Bean
+        public HttpClient mdsHttpClient() {
+            return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
         }
     }
 }
