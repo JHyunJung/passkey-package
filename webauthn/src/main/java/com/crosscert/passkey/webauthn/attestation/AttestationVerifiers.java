@@ -20,7 +20,8 @@ public final class AttestationVerifiers {
     public static AttestationVerifiers defaults() {
         return new AttestationVerifiers(List.of(
                 new NoneAttestationVerifier(),
-                new PackedAttestationVerifier()));
+                new PackedAttestationVerifier(),
+                new FidoU2fAttestationVerifier()));
     }
 
     public static AttestationVerifiers of(List<AttestationVerifier> verifiers) {
