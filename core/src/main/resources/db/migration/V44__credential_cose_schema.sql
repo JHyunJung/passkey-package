@@ -41,6 +41,10 @@ ALTER TABLE credential ADD (cose_public_key BLOB);
 -- 행이 없음을 위에서 보장했으므로 백필은 사실상 no-op이지만, ADD→NOT NULL 사이
 -- 안전을 위해 둔다.
 UPDATE credential SET cose_public_key = EMPTY_BLOB() WHERE cose_public_key IS NULL;
-ALTER TABLE credential MODIFY (cose_public_key BLOB NOT NULL);
+-- NOT NULL 제약만 추가한다. 기존 LOB 컬럼에 MODIFY 하면서 데이터 유형(BLOB)을
+-- 다시 명시하면 Oracle 이 LONG→LOB 변환 옵션으로 해석해 ORA-22296 을 던진다
+-- (Oracle: "기존 LOB 컬럼의 MODIFY 에는 datatype 을 재지정하지 않는다"). 따라서
+-- 제약 절만 둔다 — 컬럼은 이미 BLOB 이므로 유형 재선언은 불필요하다.
+ALTER TABLE credential MODIFY (cose_public_key NOT NULL);
 
 ALTER TABLE credential DROP COLUMN public_key;
