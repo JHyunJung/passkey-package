@@ -11,6 +11,7 @@ dependencies {
     // differential 테스트 전용 — webauthn4j는 절대 프로덕션 classpath에 들어가지 않는다.
     testImplementation(rootProject.libs.webauthn4j.core)
     testImplementation(rootProject.libs.webauthn4j.test)
+    testImplementation(rootProject.libs.webauthn4j.metadata)
 
     // 테스트 전용 — TestCa가 attestation 체인 검증용 self-signed CA/leaf를 발급. 프로덕션엔 BC 없음.
     // jdk15to18 1.84로 정렬: webauthn4j-test가 bcprov/bcutil-jdk15to18:1.84를 전이로 끌어오므로
