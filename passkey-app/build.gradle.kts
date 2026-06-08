@@ -17,6 +17,10 @@ dependencies {
     // Nimbus JWT parser for ID-Token JWKS verification.
     testImplementation(rootProject.libs.testcontainers.oracle)
     testImplementation(rootProject.libs.testcontainers.junit)
+    // Fido2TestAuthenticator는 webauthn4j-core(com.webauthn4j.data.*)와 webauthn4j-test
+    // 에뮬레이터를 직접 쓴다. core가 더 이상 webauthn4j-core를 api로 전이 노출하지 않으므로
+    // (프로덕션 런타임 제거) 테스트에 명시 선언한다. 테스트 authenticator 자체구현은 후속 작업.
+    testImplementation(rootProject.libs.webauthn4j.core)
     testImplementation(rootProject.libs.webauthn4j.test)
     testImplementation(rootProject.libs.nimbus.jose.jwt)
 }

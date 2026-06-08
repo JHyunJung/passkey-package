@@ -4,7 +4,6 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
-import com.webauthn4j.metadata.data.MetadataBLOB;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,12 +86,10 @@ public class MdsSchedulerService {
         Instant started = scheduledAt;
         SyncResult result;
         try {
-            MetadataBLOB blob = client.fetch();
-            // Phase 3: raw JWT bytes not surfaced by webauthn4j parsed
-            // BLOB. Pass empty JSON placeholder; verifier consults parsed
-            // entries via Redis cache (T16) not the blob_jwt column.
-            String rawJwt = "{}";
-            store.store(rawJwt, blob);
+            MdsBlobClient.FetchResult fetched = client.fetch();
+            com.crosscert.passkey.webauthn.mds.MdsBlob blob = fetched.blob();
+            // 원본 BLOB JWT 저장 — 감사·재검증 가능.
+            store.store(fetched.rawJwt(), blob);
 
             // Invalidate AAGUID cache so passkey-app sees fresh data.
             // T16 immediately repopulates these keys with the new entries.
@@ -113,16 +110,18 @@ public class MdsSchedulerService {
             // TTL would leave a ~5.5h stale-miss window that fails closed.
             int populated = 0;
             int skippedLegacy = 0;
-            for (com.webauthn4j.metadata.data.MetadataBLOBPayloadEntry entry
-                    : blob.getPayload().getEntries()) {
-                if (entry.getAaguid() == null) {
-                    skippedLegacy++; // legacy U2F entries
+            for (com.crosscert.passkey.webauthn.mds.MdsBlobEntry entry : blob.entries()) {
+                if (entry.aaguid() == null) {
+                    skippedLegacy++; // legacy U2F
                     continue;
                 }
-                String uuid = entry.getAaguid().getValue().toString();
-                String csv = entry.getStatusReports().stream()
-                        .map(sr -> sr.getStatus() == null ? "" : sr.getStatus().getValue())
-                        .filter(s -> !s.isBlank())
+                // Reuse MdsAaguidCache.canonicalAaguid so the Redis key UUID
+                // matches passkey-app's lookup exactly.
+                String uuid = com.crosscert.passkey.core.mds.MdsAaguidCache
+                        .canonicalAaguid(entry.aaguid()).toString();
+                String csv = entry.statusReports().stream()
+                        .map(com.crosscert.passkey.webauthn.mds.MdsStatusReport::status)
+                        .filter(s -> s != null && !s.isBlank())
                         .reduce((a, b) -> a + "," + b)
                         .orElse("");
                 if (!csv.isBlank()) {
@@ -137,7 +136,7 @@ public class MdsSchedulerService {
             log.info("mds sync: entries diff populated={} previousCacheSize={} skippedLegacy={}",
                     populated, previousCount, skippedLegacy);
 
-            long version = blob.getPayload().getNo();
+            long version = blob.no();
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("version", version);
             payload.put("fetchedAt", clock.instant().toString());

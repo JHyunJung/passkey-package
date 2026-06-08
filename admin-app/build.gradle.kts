@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":webauthn"))
     implementation("org.springframework.boot:spring-boot-starter-security")
     // Oracle NLS(orai18n) — 문자셋/날짜·언어 변환 시 드라이버가 런타임에 로드.
     runtimeOnly(rootProject.libs.oracle.nls)

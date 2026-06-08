@@ -10,9 +10,9 @@ import java.security.cert.X509Certificate;
 
 /**
  * Loads the FIDO Alliance MDS3 root CA certificate from a Spring
- * resource (default: classpath:fido/fido-mds-root.crt). Returns an
- * X509Certificate suitable for webauthn4j FidoMDS3MetadataBLOBProvider
- * constructor.
+ * resource (default: classpath:fido/fido-mds-root.crt). Exposes it as
+ * an X509Certificate and as a PKIX {@link java.security.cert.TrustAnchor}
+ * set for the native {@link com.crosscert.passkey.webauthn.mds.MetadataBlobVerifier}.
  *
  * <p>Test profile (application-test.yml) overrides
  * {@code passkey.mds.root-cert} to a test-only self-signed CA so
@@ -39,5 +39,10 @@ public class MdsRootCertProvider {
 
     public X509Certificate get() {
         return root;
+    }
+
+    /** FIDO MDS3 root cert를 PKIX TrustAnchor 집합으로. MetadataBlobVerifier.verify에 주입. */
+    public java.util.Set<java.security.cert.TrustAnchor> anchors() {
+        return java.util.Set.of(new java.security.cert.TrustAnchor(root, null));
     }
 }

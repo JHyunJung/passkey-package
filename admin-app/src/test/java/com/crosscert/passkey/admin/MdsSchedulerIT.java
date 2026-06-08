@@ -3,12 +3,9 @@ package com.crosscert.passkey.admin;
 import com.crosscert.passkey.admin.mds.MdsBlobClient;
 import com.crosscert.passkey.admin.mds.MdsSchedulerService;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
-import com.webauthn4j.data.attestation.authenticator.AAGUID;
-import com.webauthn4j.metadata.data.MetadataBLOB;
-import com.webauthn4j.metadata.data.MetadataBLOBPayload;
-import com.webauthn4j.metadata.data.MetadataBLOBPayloadEntry;
-import com.webauthn4j.metadata.data.toc.AuthenticatorStatus;
-import com.webauthn4j.metadata.data.toc.StatusReport;
+import com.crosscert.passkey.webauthn.mds.MdsBlob;
+import com.crosscert.passkey.webauthn.mds.MdsBlobEntry;
+import com.crosscert.passkey.webauthn.mds.MdsStatusReport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +30,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -146,13 +142,12 @@ class MdsSchedulerIT {
         UUID packedUuid  = UUID.fromString("11111111-2222-3333-4444-555555555555");
         UUID revokedUuid = UUID.fromString("99999999-8888-7777-6666-555555555555");
 
-        MetadataBLOB blob = fakeBlob(42, LocalDate.of(2099, 1, 1),
+        MdsBlobClient.FetchResult fetched = fakeFetch(42, LocalDate.of(2099, 1, 1),
                 List.of(
-                        entry(packedUuid,  List.of(AuthenticatorStatus.FIDO_CERTIFIED_L1)),
-                        entry(revokedUuid, List.of(AuthenticatorStatus.FIDO_CERTIFIED_L1,
-                                                   AuthenticatorStatus.REVOKED))
+                        entry(packedUuid,  List.of("FIDO_CERTIFIED_L1")),
+                        entry(revokedUuid, List.of("FIDO_CERTIFIED_L1", "REVOKED"))
                 ));
-        when(client.fetch()).thenReturn(blob);
+        when(client.fetch()).thenReturn(fetched);
 
         MdsSchedulerService.SyncResult result = scheduler.runOnce();
 
@@ -221,68 +216,29 @@ class MdsSchedulerIT {
     // Helpers
     // ----------------------------------------------------------------
 
-    /**
-     * Builds a fake {@link MetadataBLOBPayloadEntry} for the given AAGUID
-     * and authenticator statuses. Adapted to the actual 0.31.5.RELEASE API:
-     * <ul>
-     *   <li>AuthenticatorStatus is an enum — use constants directly.</li>
-     *   <li>StatusReport 8-arg constructor: (status, effectiveDate, certificate,
-     *       url, certDesc, certNumber, certPolicyVer, certReqVer).</li>
-     *   <li>MetadataBLOBPayloadEntry 9-arg constructor: (aaid, aaguid,
-     *       attestationCertKeyIds, metadataStatement, biometricStatusReports,
-     *       statusReports, timeOfLastStatusChange, rogueListURL, rogueListHash).</li>
-     * </ul>
-     */
-    private static MetadataBLOBPayloadEntry entry(UUID aaguid,
-                                                   List<AuthenticatorStatus> statuses) {
-        List<StatusReport> reports = statuses.stream()
-                .map(s -> new StatusReport(
-                        s,
-                        LocalDate.of(2026, 1, 1),
-                        null,   // certificate
-                        null,   // url
-                        null,   // certificationDescriptor
-                        null,   // certificateNumber
-                        null,   // certificationPolicyVersion
-                        null))  // certificationRequirementsVersion
-                .toList();
-
-        return new MetadataBLOBPayloadEntry(
-                null,                  // aaid (FIDO U2F — null for FIDO2)
-                new AAGUID(aaguid),    // aaguid
-                null,                  // attestationCertificateKeyIdentifiers
-                null,                  // metadataStatement
-                null,                  // biometricStatusReports
-                reports,               // statusReports
-                LocalDate.of(2026, 1, 1), // timeOfLastStatusChange
-                null,                  // rogueListURL
-                null);                 // rogueListHash
+    /** UUID → 16-byte big-endian (matches MdsAaguidCache.canonicalAaguid inverse). */
+    private static byte[] uuidBytes(UUID u) {
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.allocate(16);
+        bb.putLong(u.getMostSignificantBits());
+        bb.putLong(u.getLeastSignificantBits());
+        return bb.array();
     }
 
     /**
-     * Builds a fake {@link MetadataBLOB} backed by Mockito stubs.
-     *
-     * <p>The real {@link MetadataBLOB} constructor requires a
-     * {@link com.webauthn4j.data.jws.JWS} whose own constructor is
-     * package-private. Using {@code mock()} lets us bypass that while
-     * still exercising the code paths that call
-     * {@code blob.getPayload().getNo()} and
-     * {@code blob.getPayload().getEntries()}.
-     *
-     * <p>Note: MetadataBLOBPayload.no is declared as {@code Integer} in
-     * 0.31.5.RELEASE; {@code getNo()} returns {@code Integer}. Passing
-     * {@code int} here keeps it idiomatic.
+     * Builds a native {@link MdsBlobEntry} for the given AAGUID and raw
+     * status tokens. statusReports preserve MDS3 order (most recent last).
      */
-    private static MetadataBLOB fakeBlob(int version, LocalDate nextUpdate,
-                                          List<MetadataBLOBPayloadEntry> entries) {
-        MetadataBLOBPayload payload = new MetadataBLOBPayload(
-                "test-header",
-                version,
-                nextUpdate,
-                entries);
+    private static MdsBlobEntry entry(UUID aaguid, List<String> statuses) {
+        List<MdsStatusReport> reports = statuses.stream()
+                .map(s -> new MdsStatusReport(s, null))
+                .toList();
+        return new MdsBlobEntry(uuidBytes(aaguid), reports);
+    }
 
-        MetadataBLOB blob = mock(MetadataBLOB.class);
-        when(blob.getPayload()).thenReturn(payload);
-        return blob;
+    /** Builds the {@link MdsBlobClient.FetchResult} the mocked client returns. */
+    private static MdsBlobClient.FetchResult fakeFetch(int version, LocalDate nextUpdate,
+                                                       List<MdsBlobEntry> entries) {
+        return new MdsBlobClient.FetchResult("the.raw.jwt",
+                new MdsBlob(version, nextUpdate, entries));
     }
 }

@@ -21,8 +21,6 @@ dependencies {
     api(rootProject.libs.flyway.core)
     api(rootProject.libs.flyway.oracle)
 
-    api(rootProject.libs.webauthn4j.core)
-    api(rootProject.libs.webauthn4j.metadata)
     api(rootProject.libs.nimbus.jose.jwt)
     api(rootProject.libs.spring.security.crypto)
     // GlobalExceptionHandler handles AccessDeniedException / AuthenticationException
