@@ -5,10 +5,10 @@ import java.math.BigInteger;
 import java.util.Arrays;
 
 /** JWS ES256 서명(raw 64바이트 R||S)을 JDK Signature가 받는 DER(SEQUENCE{INTEGER r, INTEGER s})로 변환. */
-final class JwsEcdsa {
+public final class JwsEcdsa {
     private JwsEcdsa() {}
 
-    static byte[] toDer(byte[] raw) {
+    public static byte[] toDer(byte[] raw) {
         if (raw.length != 64) throw new AttestationException("ES256 JWS sig must be 64 bytes");
         BigInteger r = new BigInteger(1, Arrays.copyOfRange(raw, 0, 32));
         BigInteger s = new BigInteger(1, Arrays.copyOfRange(raw, 32, 64));
