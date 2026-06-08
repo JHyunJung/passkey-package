@@ -36,8 +36,10 @@
 #        scripts/init-db-external.sh
 #     SE(Standard Edition) 는 VPD 미지원 — PASSKEY_VPD_ENABLED=false 로 둔다.
 #
-# ⚠️ 멱등하지만 파괴적이지 않다 — 기존 객체가 있으면 Flyway validate 가
-#    충돌할 수 있다. 깨끗한(빈 APP_OWNER) Oracle 에 적용하는 것을 전제한다.
+# ⚠️ 멱등하지만 파괴적이지 않다 — Flyway 가 관리하는 테이블/시퀀스/정책/마이그레이션
+#    이력(flyway_schema_history)은 비어 있어야 한다. bootstrap 산출물(APP_OWNER/role/
+#    CTX_PKG/APP_CTX)은 남아 있어도 무방하다(SKIP_BOOTSTRAP 재적용 경로 전제).
+#    빈 스키마든, reset-app-owner-external.sql 로 Flyway 객체만 비운 스키마든 적용 가능.
 #
 set -euo pipefail
 

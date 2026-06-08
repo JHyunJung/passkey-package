@@ -107,7 +107,7 @@ BEGIN
     FROM   user_objects
     WHERE  object_type IN ('PACKAGE','PROCEDURE','FUNCTION','TRIGGER',
                            'TYPE','SYNONYM','MATERIALIZED VIEW')
-      AND  object_name NOT LIKE 'SYS_%'
+      AND  object_name NOT LIKE 'SYS\_%' ESCAPE '\'
       AND  object_name <> 'CTX_PKG'
     ORDER  BY CASE object_type
                 WHEN 'TRIGGER'           THEN 1
@@ -145,7 +145,17 @@ BEGIN
     RAISE_APPLICATION_ERROR(-20098, 'reset incomplete: ' || v_cnt || ' VPD policy/policies remain. Aborting.');
   END IF;
 
-  DBMS_OUTPUT.PUT_LINE('==> external reset done. 0 tables, 0 policies remain (CTX_PKG/APP_CTX preserved).');
+  -- 9) CTX_PKG 가 보존돼 호출 가능한지 검증(Flyway 시드가 set_tenant 를 호출하므로
+  --    여기서 깨져 있으면 재적용이 실패한다 — 미리 잡는다). 무해한 프로브 후 즉시 clear.
+  BEGIN
+    APP_OWNER.CTX_PKG.set_tenant('00000000000000000000000000000000');
+    APP_OWNER.CTX_PKG.clear_tenant;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE_APPLICATION_ERROR(-20095,
+      'CTX_PKG check failed (Flyway seed needs it): ' || SQLERRM);
+  END;
+
+  DBMS_OUTPUT.PUT_LINE('==> external reset done. 0 tables, 0 policies remain (CTX_PKG/APP_CTX verified).');
 END;
 /
 
