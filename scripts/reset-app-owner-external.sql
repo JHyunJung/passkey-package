@@ -58,7 +58,9 @@ BEGIN
       'aborting: connected as "' || USER || '", not APP_OWNER. 이 스크립트는 APP_OWNER 전용입니다.');
   END IF;
   --    (b) 확인 플래그. c_confirm 을 RESET 으로 바꿔야만 진행(기본 NO 는 안전 중단).
-  IF c_confirm <> 'RESET' THEN
+  --        NULL fail-closed: Oracle 에선 빈 문자열이 NULL 이고 NULL <> 'RESET' 는 unknown 이라
+  --        IF 본문이 스킵돼 가드가 우회된다. IS NULL 을 명시해 빈 문자열도 막는다.
+  IF c_confirm IS NULL OR c_confirm <> 'RESET' THEN
     RAISE_APPLICATION_ERROR(-20096,
       '실행하려면 스크립트 상단 c_confirm 을 RESET 으로 바꾸세요 (현재: ' || c_confirm || ').');
   END IF;
@@ -79,7 +81,12 @@ BEGIN
   END LOOP;
 
   -- 2) 테이블: FK 무시(CASCADE CONSTRAINTS), 휴지통 우회(PURGE). flyway_schema_history 포함.
-  FOR t IN (SELECT table_name FROM user_tables) LOOP
+  --    MV 컨테이너 테이블은 제외(DROP TABLE 시 ORA-12083 → try_ddl 무시목록 밖이라 RAISE).
+  --    MV 자체는 아래 객체 DROP 루프의 'MATERIALIZED VIEW' 분기가 처리한다.
+  FOR t IN (
+    SELECT table_name FROM user_tables
+    WHERE table_name NOT IN (SELECT mview_name FROM user_mviews)
+  ) LOOP
     try_ddl('DROP TABLE ' || q(t.table_name) || ' CASCADE CONSTRAINTS PURGE');
   END LOOP;
 
