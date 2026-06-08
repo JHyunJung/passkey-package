@@ -39,6 +39,11 @@ ORA_PORT="${ORA_PORT:-1521}"
 ORA_SERVICE="${ORA_SERVICE:-XEPDB1}"
 ORA_SYS_PW="${ORA_SYS_PW:-oracle}"
 PROFILE="${PROFILE:-dev}"
+# SKIP_BOOTSTRAP=1 이면 단계 1(sqlplus bootstrap)을 건너뛴다. 이미 부트스트랩된
+# (예: DBeaver 로 bootstrap-external.sql 을 실행한) 외부 DB 에 Flyway 만 재적용할 때.
+SKIP_BOOTSTRAP="${SKIP_BOOTSTRAP:-0}"
+# SE(Standard Edition) 는 VPD 미지원 — false 로 두면 app-level @Filter 격리.
+PASSKEY_VPD_ENABLED="${PASSKEY_VPD_ENABLED:-false}"
 
 JDBC_URL="jdbc:oracle:thin:@${ORA_HOST}:${ORA_PORT}/${ORA_SERVICE}"
 SYS_CONN="sys/${ORA_SYS_PW}@${ORA_HOST}:${ORA_PORT}/${ORA_SERVICE} as sysdba"
@@ -49,17 +54,22 @@ echo "    profile: ${PROFILE}"
 echo "    JDBC   : ${JDBC_URL}"
 echo ""
 
-# ---- 사전 점검: sqlplus 존재 ----
-if ! command -v sqlplus >/dev/null 2>&1; then
-  echo "ERROR: sqlplus 가 PATH 에 없습니다. Oracle Instant Client(SQL*Plus)를 설치하거나," >&2
-  echo "       단계 1 SQL 을 수동으로 실행한 뒤 이 스크립트의 단계 1 을 건너뛰세요:" >&2
-  echo "         sqlplus -S '${SYS_CONN}' < ${SCRIPT_DIR}/bootstrap-external.sql" >&2
-  exit 1
+# ---- 단계 1: 부트스트랩 (SKIP_BOOTSTRAP=1 이면 건너뜀) ----
+if [ "${SKIP_BOOTSTRAP}" = "1" ]; then
+  echo "==> [1/2] 부트스트랩 건너뜀 (SKIP_BOOTSTRAP=1) — 이미 부트스트랩된 DB 전제."
+  echo "    (APP_OWNER/role/CTX_PKG 가 이미 있어야 합니다. 없으면 DBeaver 로"
+  echo "     bootstrap-external.sql 을 먼저 실행하세요.)"
+else
+  if ! command -v sqlplus >/dev/null 2>&1; then
+    echo "ERROR: sqlplus 가 PATH 에 없습니다. Oracle Instant Client(SQL*Plus)를 설치하거나," >&2
+    echo "       DBeaver 등으로 단계 1 SQL 을 수동 실행한 뒤 SKIP_BOOTSTRAP=1 로 재실행하세요:" >&2
+    echo "         (DBeaver, SYSDBA 또는 적절 권한) < ${SCRIPT_DIR}/bootstrap-external.sql" >&2
+    exit 1
+  fi
+  echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role + CTX_PKG"
+  sqlplus -S "${SYS_CONN}" < "${SCRIPT_DIR}/bootstrap-external.sql"
+  echo "    부트스트랩 완료."
 fi
-
-echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role + VPD"
-sqlplus -S "${SYS_CONN}" < "${SCRIPT_DIR}/bootstrap-external.sql"
-echo "    부트스트랩 완료."
 echo ""
 
 echo "==> [2/2] Flyway 마이그레이션 + ${PROFILE} 시드 (admin-app 부팅 후 자동 종료)"
@@ -73,6 +83,7 @@ SPRING_DATASOURCE_USERNAME='APP_ADMIN_USER' \
 SPRING_DATASOURCE_PASSWORD='admin_pw' \
 SPRING_DATA_REDIS_HOST="${REDIS_HOST:-localhost}" \
 PASSKEY_KEY_ENVELOPE_MASTER_KEY="${PASSKEY_KEY_ENVELOPE_MASTER_KEY:-jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM=}" \
+PASSKEY_VPD_ENABLED="${PASSKEY_VPD_ENABLED}" \
 ./gradlew :admin-app:bootRun \
   --args="--spring.profiles.active=${PROFILE} --spring.datasource.url=${JDBC_URL}" \
   > "${LOG}" 2>&1 &
