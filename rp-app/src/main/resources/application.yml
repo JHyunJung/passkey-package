@@ -21,6 +21,11 @@ rp-app:
 passkey:
   base-url:    ${PASSKEY_BASE_URL:http://localhost:8080}
   api-key:     ${PASSKEY_API_KEY:}
+  # 재기동 없는 키 교체용. 설정 시 이 파일을 핫리로드(api-key env 보다 우선).
+  # 미설정이면 위 api-key 를 그대로 쓴다(기존 동작 보존). 파일 내용은 키 평문 한 줄.
+  api-key-file:   ${PASSKEY_API_KEY_FILE:}
+  # api-key-file mtime 폴링 주기. 기본 10s.
+  api-key-reload: ${PASSKEY_API_KEY_RELOAD:10s}
   tenant-id:   ${PASSKEY_TENANT_ID:}
   # passkey-app 의 IdTokenIssuer 가 발급하는 iss prefix. passkey-app 의
   # passkey.id-token.issuer-base (기본 https://passkey.crosscert.com) 와 일치해야 한다.

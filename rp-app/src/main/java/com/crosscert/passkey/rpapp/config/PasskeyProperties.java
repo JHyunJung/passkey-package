@@ -3,12 +3,20 @@ package com.crosscert.passkey.rpapp.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.time.Duration;
 
 @ConfigurationProperties(prefix = "passkey")
 public record PasskeyProperties(
         URI baseUrl,
         String apiKey,
+        /**
+         * 설정 시 이 파일에서 API Key 를 핫리로드한다(env 보다 우선). 미설정이면
+         * {@link #apiKey()} 를 폴백으로 쓴다(기존 동작 보존). 파일 내용은 키 평문 한 줄.
+         */
+        Path apiKeyFile,
+        /** apiKeyFile mtime 폴링 주기. 기본 10s. */
+        Duration apiKeyReload,
         String tenantId,
         /**
          * ID Token 의 `iss` claim 비교용 prefix. passkey-app 의 `IdTokenIssuer` 가

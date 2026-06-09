@@ -1,6 +1,7 @@
 package com.crosscert.passkey.sdk.internal;
 
 import com.crosscert.passkey.sdk.PasskeyClientConfig;
+import com.crosscert.passkey.sdk.exception.PasskeyConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpRequest;
@@ -10,6 +11,7 @@ import org.springframework.http.client.ClientHttpResponse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -19,16 +21,26 @@ import java.util.regex.Pattern;
 public class RedactingRequestInterceptor implements ClientHttpRequestInterceptor {
     private static final Logger log = LoggerFactory.getLogger(RedactingRequestInterceptor.class);
 
-    private final String apiKey;
+    private final Supplier<String> apiKeySupplier;
 
     public RedactingRequestInterceptor(PasskeyClientConfig config) {
-        this.apiKey = config.apiKey();
+        this.apiKeySupplier = config.apiKeySupplier();
     }
 
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution exec)
             throws IOException {
-        request.getHeaders().set("X-API-Key", apiKey);
+        // 매 요청마다 현재 유효 키를 다시 묻는다 — "재기동 없는 교체"의 심장.
+        // 부팅 시 1회 캡처가 아니라 호출 시점 조회라, Supplier 뒤편(파일/시크릿
+        // 매니저 등)에서 키가 바뀌면 다음 요청부터 자동 반영된다.
+        String currentKey = apiKeySupplier.get();
+        if (currentKey == null || currentKey.isBlank()) {
+            // fail-fast: null/blank 키로 호출하면 서버가 401 을 주고 그 원인이
+            // SDK 설정 문제임이 드러나지 않는다. 여기서 명확히 끊는다.
+            throw new PasskeyConfigurationException(
+                    "API key supplier returned null/blank — check api key source");
+        }
+        request.getHeaders().set("X-API-Key", currentKey);
         // X-Trace-Id is set upstream by TraceIdPropagationInterceptor so it
         // is already present on the outgoing request when this interceptor
         // runs — see PasskeyClient interceptor chain ordering.

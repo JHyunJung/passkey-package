@@ -42,7 +42,7 @@ class PasskeyClientContractIT {
 
         client = PasskeyClient.of(PasskeyClientConfig.defaults(
                 URI.create("http://localhost:" + wm.port()),
-                "ck_test_apikey"));
+                () -> "ck_test_apikey"));
     }
 
     @AfterAll
