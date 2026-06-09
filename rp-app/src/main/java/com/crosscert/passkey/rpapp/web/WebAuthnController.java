@@ -7,6 +7,7 @@ import com.crosscert.passkey.rpapp.config.PasskeyProperties;
 import com.crosscert.passkey.rpapp.user.InMemoryUserStore;
 import com.crosscert.passkey.rpapp.user.RpAppUser;
 import com.crosscert.passkey.rpapp.web.dto.*;
+import com.crosscert.passkey.rpapp.web.relay.RegRelayCodec;
 import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.dto.*;
 import com.crosscert.passkey.sdk.idtoken.IdTokenClaims;
@@ -27,11 +28,14 @@ public class WebAuthnController {
     private final PasskeyClient passkey;
     private final InMemoryUserStore users;
     private final PasskeyProperties props;
+    private final RegRelayCodec relay;
 
-    public WebAuthnController(PasskeyClient passkey, InMemoryUserStore users, PasskeyProperties props) {
+    public WebAuthnController(PasskeyClient passkey, InMemoryUserStore users,
+                             PasskeyProperties props, RegRelayCodec relay) {
         this.passkey = passkey;
         this.users   = users;
         this.props   = props;
+        this.relay   = relay;
     }
 
     // ── Registration ─────────────────────────────────────────────
@@ -49,26 +53,32 @@ public class WebAuthnController {
             throw e;
         }
         log.info("register/options ok: userHandle={}", idTail(userHandle));
+        String regRelayToken = relay.encode(sdkResp.registrationToken(), userHandle);
         return ApiResponse.ok(new RegisterOptionsResp(
-                sdkResp.publicKeyCredentialCreationOptions(),
-                sdkResp.registrationToken(),
-                userHandle));
+                sdkResp.publicKeyCredentialCreationOptions(), regRelayToken));
     }
 
     @PostMapping("/register/finish")
     public ApiResponse<RegistrationFinishResponse> registerComplete(@Valid @RequestBody RegisterCompleteReq req) {
-        log.info("register/complete entry: userHandle={}", idTail(req.userHandle()));
+        RegRelayCodec.RegRelay r;
+        try {
+            r = relay.decode(req.regRelayToken());
+        } catch (IllegalArgumentException e) {
+            log.warn("register/complete failed: reason=relay-invalid cause={}", e.getMessage());
+            throw new BusinessException(ErrorCode.PENDING_REG_MISSING, e.getMessage());
+        }
+        log.info("register/complete entry: userHandle={}", idTail(r.userHandle()));
         RegistrationFinishResponse fin;
         try {
             fin = passkey.registrationFinish(
-                    new RegistrationFinishRequest(req.registrationToken(), req.publicKeyCredential()));
+                    new RegistrationFinishRequest(r.registrationToken(), req.publicKeyCredential()));
         } catch (RuntimeException e) {
             log.warn("register/complete upstream-failed: cause={}", e.toString());
             throw e;
         }
-        users.confirmRegistration(req.userHandle(), fin.credentialId());
+        users.confirmRegistration(r.userHandle(), fin.credentialId());
         log.info("register/complete ok: userHandle={} credentialId={}",
-                idTail(req.userHandle()), idTail(fin.credentialId()));
+                idTail(r.userHandle()), idTail(fin.credentialId()));
         return ApiResponse.ok("Passkey registered", fin);
     }
 

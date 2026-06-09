@@ -31,6 +31,12 @@ passkey:
   read-timeout: 10s
   jwks-cache-ttl: 5m
 
+rp:
+  relay:
+    # 등록 relay 토큰 HMAC 서명 키(spec §5). ⚠️ 운영은 환경변수로 강한 키 주입.
+    secret: ${RP_RELAY_SECRET:}
+    ttl: 5m
+
 spring:
   session:
     store-type: none

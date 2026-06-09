@@ -6,5 +6,4 @@ import jakarta.validation.constraints.NotNull;
 
 public record RegisterCompleteReq(
         @NotNull JsonNode publicKeyCredential,
-        @NotBlank String registrationToken,
-        @NotBlank String userHandle) {}
+        @NotBlank String regRelayToken) {}
