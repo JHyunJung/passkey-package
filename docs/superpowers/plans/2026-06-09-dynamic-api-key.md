@@ -216,6 +216,7 @@ package com.crosscert.passkey.sdk;
 
 import com.crosscert.passkey.sdk.dto.AuthenticationStartRequest;
 import com.crosscert.passkey.sdk.dto.RegistrationStartRequest;
+import com.crosscert.passkey.sdk.exception.PasskeyConfigurationException;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -285,7 +286,7 @@ class DynamicApiKeyHeaderIT {
 
         assertThatThrownBy(() ->
                 client.registrationStart(new RegistrationStartRequest("u1", "User One", null)))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(PasskeyConfigurationException.class)
                 .hasMessageContaining("null/blank");
     }
 
