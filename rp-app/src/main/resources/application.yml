@@ -36,6 +36,10 @@ rp:
     # 등록 relay 토큰 HMAC 서명 키(spec §5). ⚠️ 운영은 환경변수로 강한 키 주입.
     secret: ${RP_RELAY_SECRET:}
     ttl: 5m
+  cors:
+    # cross-origin 웹 SPA 의 정확한 origin 목록. 비면 CORS 비활성(같은-origin 데모만).
+    # ⚠️ 와일드카드/reflected 금지. passkey-app tenant allowed-origins 와 일치시킬 것.
+    allowed-origins: ${RP_CORS_ALLOWED_ORIGINS:}
 
 spring:
   session:
