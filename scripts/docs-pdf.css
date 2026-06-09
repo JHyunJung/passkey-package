@@ -1,0 +1,87 @@
+/* rp-server-api.md → PDF 변환용 스타일 (wkhtmltopdf, scripts/build-docs-pdf.sh).
+ * 기존 PDF(wkhtmltopdf 0.12.6 + Noto Sans CJK KR) 디자인을 재현한다.
+ * 한글 폰트는 Noto Sans KR 우선, 없으면 macOS 기본 Apple SD Gothic Neo 로 폴백. */
+
+@page {
+  margin: 18mm 16mm;
+}
+
+body {
+  font-family: "Noto Sans KR", "Noto Sans CJK KR", "Apple SD Gothic Neo",
+               -apple-system, "Helvetica Neue", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.6;
+  color: #24292e;
+  margin: 0;
+  -webkit-print-color-adjust: exact;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1.4em 0 0.6em;
+  color: #1b1f23;
+}
+h1 { font-size: 20pt; border-bottom: 2px solid #e1e4e8; padding-bottom: 0.3em; }
+h2 { font-size: 15.5pt; border-bottom: 1px solid #e1e4e8; padding-bottom: 0.25em; margin-top: 1.8em; }
+h3 { font-size: 12.5pt; }
+h4 { font-size: 11pt; }
+
+p, li { margin: 0.4em 0; }
+
+a { color: #0366d6; text-decoration: none; }
+
+/* 인라인 코드 */
+code {
+  font-family: "Noto Sans Mono CJK KR", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 9.2pt;
+  background: #f3f4f6;
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+/* 코드블록 */
+pre {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 5px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  page-break-inside: avoid;
+}
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 8.8pt;
+  line-height: 1.45;
+  white-space: pre-wrap;       /* 긴 줄 줄바꿈(페이지 밖 잘림 방지) */
+  word-break: break-all;
+}
+
+/* 표 */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+th, td {
+  border: 1px solid #d0d7de;
+  padding: 6px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: #f3f4f6; font-weight: 700; }
+tr:nth-child(even) td { background: #fafbfc; }
+
+/* 인용구(주의/안내 박스) */
+blockquote {
+  border-left: 4px solid #d0d7de;
+  background: #f6f8fa;
+  margin: 0.8em 0;
+  padding: 0.4em 1em;
+  color: #444d56;
+}
+
+hr { border: none; border-top: 1px solid #e1e4e8; margin: 1.6em 0; }
