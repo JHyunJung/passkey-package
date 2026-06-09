@@ -53,7 +53,8 @@ public class WebAuthnController {
             throw e;
         }
         log.info("register/options ok: userHandle={}", idTail(userHandle));
-        String regRelayToken = relay.encode(sdkResp.registrationToken(), userHandle);
+        String regRelayToken = relay.encode(
+                sdkResp.registrationToken(), userHandle, req.username(), req.displayName());
         return ApiResponse.ok(new RegisterOptionsResp(
                 sdkResp.publicKeyCredentialCreationOptions(), regRelayToken));
     }
@@ -76,7 +77,7 @@ public class WebAuthnController {
             log.warn("register/complete upstream-failed: cause={}", e.toString());
             throw e;
         }
-        users.confirmRegistration(r.userHandle(), fin.credentialId());
+        users.confirmRegistration(r.userHandle(), r.username(), r.displayName(), fin.credentialId());
         log.info("register/complete ok: userHandle={} credentialId={}",
                 idTail(r.userHandle()), idTail(fin.credentialId()));
         return ApiResponse.ok("Passkey registered", fin);

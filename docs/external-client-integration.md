@@ -4,14 +4,20 @@ rp-app 의 `/passkey/**` 는 무상태 토큰 릴레이 방식이다. 세션 쿠
 네이티브 앱과 cross-origin 웹 SPA 가 동일하게 연동할 수 있다. (서버는 CSRF 토큰을
 요구하지 않는다 — 쿠키 기반 인증이 없기 때문.)
 
+> **응답 형식:** 모든 `/passkey/**` 응답은 `ApiResponse` envelope 다 — 실제 값은 `data`
+> 아래에 들어간다(예: `data.publicKeyCredentialCreationOptions`, `data.regRelayToken`,
+> `data.authenticationToken`, `data.authenticated`). 아래 "응답"은 그 `data` 안의 형태를 가리킨다.
+
 ## 시퀀스
 
 ### 등록
 1. `POST /passkey/register/begin` `{username, displayName}`
-   → 응답 `{publicKeyCredentialCreationOptions, regRelayToken}`
+   → 응답 `data: {publicKeyCredentialCreationOptions, regRelayToken}`
 2. 클라이언트가 `regRelayToken` 을 **메모리에 보관**(localStorage/쿠키 금지).
    - regRelayToken 은 rp-app 이 HMAC 서명한 단일 불투명 토큰으로, 내부에 등록 토큰과
-     userHandle 바인딩이 들어있다. 클라이언트는 내용을 파싱하거나 조작할 수 없다.
+     userHandle·username·displayName 바인딩이 들어있다. base64url payload 라 **디코드(열람)는
+     가능**하지만, HMAC 키가 없으면 **수정(위조)이 불가**하다. 민감정보를 담지 않으며 무결성만
+     서명으로 보장한다.
    - 즉 클라이언트가 userHandle 을 임의로 바꿔치기할 수 없도록 rp-app 이 서명으로
      바인딩을 보장한다(begin 에서 발급한 등록 토큰 ↔ userHandle 의 결합을 서버가 강제).
 3. WebAuthn `navigator.credentials.create(publicKeyCredentialCreationOptions)` 실행.
@@ -20,12 +26,12 @@ rp-app 의 `/passkey/**` 는 무상태 토큰 릴레이 방식이다. 세션 쿠
 
 ### 인증
 1. `POST /passkey/authenticate/begin` `{username?}`
-   → 응답 `{publicKeyCredentialRequestOptions, authenticationToken}`
+   → 응답 `data: {publicKeyCredentialRequestOptions, authenticationToken}`
    - `username` 은 생략 가능하다(usernameless / discoverable credential 흐름).
 2. `authenticationToken` 메모리 보관.
 3. WebAuthn `navigator.credentials.get(publicKeyCredentialRequestOptions)` 실행.
 4. `POST /passkey/authenticate/finish` `{publicKeyCredential, authenticationToken}`
-   → 응답 `{authenticated, userHandle, displayName}`
+   → 응답 `data: {authenticated, userHandle, displayName}`
    - id-token 은 반환하지 않는다 — rp-app 내부에서만 검증·소비한다. 클라이언트는 이
      결과로 "인증됨"을 알고 자기 UX 를 진행한다.
 

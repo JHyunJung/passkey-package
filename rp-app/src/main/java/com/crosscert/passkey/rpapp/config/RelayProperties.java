@@ -13,7 +13,7 @@ import java.time.Duration;
 public record RelayProperties(String secret, Duration ttl) {
     public RelayProperties {
         if (secret == null || secret.isBlank()) {
-            secret = "dev-rp-relay-secret-not-for-prod-change-me";
+            secret = RelayKeyGuard.DEMO_SECRET;   // 데모 폴백. non-dev 프로필에선 RelayKeyGuard 가 차단(P2-a).
         }
         if (ttl == null) ttl = Duration.ofMinutes(5);
     }

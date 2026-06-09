@@ -84,7 +84,8 @@ class WebAuthnControllerTest {
                 "reg-token-upstream",
                 json.readTree("{\"challenge\":\"abc\"}")));
         given(users.createPending("alice", "Alice")).willReturn("handle-alice");
-        given(relay.encode("reg-token-upstream", "handle-alice")).willReturn("opaque.relay.token");
+        given(relay.encode("reg-token-upstream", "handle-alice", "alice", "Alice"))
+                .willReturn("opaque.relay.token");
 
         MvcResult result = mvc.perform(post("/passkey/register/begin")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -166,7 +167,7 @@ class WebAuthnControllerTest {
         given(passkey.registrationStart(any())).willReturn(new RegistrationStartResponse(
                 "reg-token", json.readTree("{\"challenge\":\"c\"}")));
         given(users.createPending(any(), any())).willReturn("h1");
-        given(relay.encode(any(), any())).willReturn("relay.tok");
+        given(relay.encode(any(), any(), any(), any())).willReturn("relay.tok");
 
         MvcResult result = mvc.perform(post("/passkey/register/begin")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -206,7 +207,7 @@ class WebAuthnControllerTest {
         // relay 토큰만이 userHandle 의 출처. body 에 클라이언트가 임의 userHandle 을 끼워넣어도
         // RegisterCompleteReq 에 해당 필드가 없어 무시되고, confirmRegistration 은 relay 의 값으로 호출된다.
         given(relay.decode("opaque.relay")).willReturn(
-                new RegRelayCodec.RegRelay("reg-token-upstream", "relay-handle"));
+                new RegRelayCodec.RegRelay("reg-token-upstream", "relay-handle", "relay-user", "Relay User"));
         given(passkey.registrationFinish(any())).willReturn(new RegistrationFinishResponse(
                 "cred-abc", "aaguid", "packed", "2026-01-01T00:00:00Z"));
 
@@ -218,7 +219,8 @@ class WebAuthnControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.credentialId").value("cred-abc"));
 
-        // 확정은 relay 가 복원한 userHandle 로만 일어난다(클라이언트 값 무시).
-        verify(users).confirmRegistration(eq("relay-handle"), eq("cred-abc"));
+        // 확정은 relay 가 복원한 userHandle/username/displayName 로만 일어난다(클라이언트 값 무시).
+        verify(users).confirmRegistration(
+                eq("relay-handle"), eq("relay-user"), eq("Relay User"), eq("cred-abc"));
     }
 }

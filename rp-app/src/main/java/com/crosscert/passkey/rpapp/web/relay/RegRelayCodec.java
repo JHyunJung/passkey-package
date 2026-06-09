@@ -12,15 +12,16 @@ import java.time.Instant;
 import java.util.Base64;
 
 /**
- * 등록 relay 토큰 코덱(spec §5). {registrationToken, userHandle, exp} 를 HMAC-SHA256 으로
- * 서명한 불투명 토큰 "base64url(payloadJson).base64url(hmac)" 을 만들고 검증한다.
+ * 등록 relay 토큰 코덱(spec §5). {registrationToken, userHandle, username, displayName, exp} 를
+ * HMAC-SHA256 으로 서명한 불투명 토큰 "base64url(payloadJson).base64url(hmac)" 을 만들고 검증한다.
  * 서명이 맞아야 payload 를 신뢰 → 클라이언트가 userHandle 을 조작할 수 없다. 무상태(자기완결).
+ * username/displayName 을 함께 봉인해 finish 가 pending 없이도 결정적으로 user 를 확정할 수 있다(P0-4).
  */
 @Component
 public class RegRelayCodec {
 
     /** 복원된 relay payload. */
-    public record RegRelay(String registrationToken, String userHandle) {}
+    public record RegRelay(String registrationToken, String userHandle, String username, String displayName) {}
 
     private static final String HMAC_ALG = "HmacSHA256";
     private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
@@ -36,10 +37,10 @@ public class RegRelayCodec {
         this.mapper = mapper;
     }
 
-    /** {rt, uh, exp} 를 서명한 relay 토큰 생성. */
-    public String encode(String registrationToken, String userHandle) {
+    /** {rt, uh, un, dn, exp} 를 서명한 relay 토큰 생성. */
+    public String encode(String registrationToken, String userHandle, String username, String displayName) {
         long exp = Instant.now().getEpochSecond() + ttlSeconds;
-        ObjectNodePayload p = new ObjectNodePayload(registrationToken, userHandle, exp);
+        ObjectNodePayload p = new ObjectNodePayload(registrationToken, userHandle, username, displayName, exp);
         byte[] payload;
         try {
             payload = mapper.writeValueAsBytes(p);
@@ -78,7 +79,14 @@ public class RegRelayCodec {
         if (p.exp() < Instant.now().getEpochSecond()) {
             throw new IllegalArgumentException("relay token expired");
         }
-        return new RegRelay(p.rt(), p.uh());
+        // 필수 4필드 검증. 배포 직전 발급된 레거시 토큰(un/dn 없음)이 TTL 내에 finish 되면
+        // un/dn 이 null 로 역직렬화되는데, 그대로 두면 upstream finish 후 confirmRegistration 의
+        // byUsername.put(null,..) 에서 NPE(500) → credential 은 생성됐는데 매핑 누락. upstream
+        // 호출 전 여기서 거부해 클라이언트가 등록을 깨끗이 재시작하게 한다(P0-4 무상태 계약).
+        if (p.rt() == null || p.uh() == null || p.un() == null || p.dn() == null) {
+            throw new IllegalArgumentException("relay token incomplete payload");
+        }
+        return new RegRelay(p.rt(), p.uh(), p.un(), p.dn());
     }
 
     private byte[] hmac(String data) {
@@ -91,6 +99,6 @@ public class RegRelayCodec {
         }
     }
 
-    /** 직렬화 payload. 필드명을 짧게(rt/uh/exp) 유지. */
-    record ObjectNodePayload(String rt, String uh, long exp) {}
+    /** 직렬화 payload. 필드명을 짧게(rt/uh/un/dn/exp) 유지. */
+    record ObjectNodePayload(String rt, String uh, String un, String dn, long exp) {}
 }

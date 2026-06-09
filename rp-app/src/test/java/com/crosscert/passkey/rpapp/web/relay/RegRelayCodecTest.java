@@ -45,11 +45,13 @@ class RegRelayCodecTest {
     void encodeThenDecode_roundTrips() {
         RegRelayCodec codec = codec("test-secret-1", Duration.ofMinutes(5));
 
-        String token = codec.encode("reg-token-xyz", "user-handle-abc");
+        String token = codec.encode("reg-token-xyz", "user-handle-abc", "alice", "Alice Example");
         RegRelayCodec.RegRelay decoded = codec.decode(token);
 
         assertThat(decoded.registrationToken()).isEqualTo("reg-token-xyz");
         assertThat(decoded.userHandle()).isEqualTo("user-handle-abc");
+        assertThat(decoded.username()).isEqualTo("alice");
+        assertThat(decoded.displayName()).isEqualTo("Alice Example");
     }
 
     // ── 2. 서명 변조 거부 ──────────────────────────────────────────
@@ -57,7 +59,7 @@ class RegRelayCodecTest {
     @Test
     void decode_rejectsTamperedSignature() {
         RegRelayCodec codec = codec("test-secret-2", Duration.ofMinutes(5));
-        String token = codec.encode("rt", "uh");
+        String token = codec.encode("rt", "uh", "un", "dn");
 
         // payload "." sig 에서 sig 부분의 첫 바이트를 디코드 레벨에서 1비트 뒤집는다.
         // (base64url 마지막 문자 치환은 패딩 비트 영향으로 flaky → 바이트 레벨 변조.)
@@ -82,7 +84,7 @@ class RegRelayCodecTest {
     void decode_rejectsTamperedPayloadWithOriginalSignature() {
         String secret = "test-secret-payload";
         RegRelayCodec codec = codec(secret, Duration.ofMinutes(5));
-        String token = codec.encode("rt", "victim-handle");
+        String token = codec.encode("rt", "victim-handle", "victim-user", "Victim");
 
         int dot = token.lastIndexOf('.');
         String origSig = token.substring(dot + 1);
@@ -91,6 +93,32 @@ class RegRelayCodecTest {
         String payloadJson = new String(B64D.decode(token.substring(0, dot)), StandardCharsets.UTF_8);
         assertThat(payloadJson).contains("victim-handle");
         String tamperedJson = payloadJson.replace("victim-handle", "attacker-handl");  // 같은 길이
+        String tamperedP64 = B64.encodeToString(tamperedJson.getBytes(StandardCharsets.UTF_8));
+
+        String forged = tamperedP64 + "." + origSig;
+
+        assertThatThrownBy(() -> codec.decode(forged))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bad signature");
+    }
+
+    // ── 2c. username 변조 거부 (서명이 username 도 바인딩하는지) ──────────────
+    //
+    // username/displayName 은 finish 가 pending 없이 user 를 결정적으로 생성할 때 쓰이므로
+    // (P0-4), 이 필드들도 서명으로 보호되어야 한다. username 만 바꿔치기하면 거부되어야 한다.
+
+    @Test
+    void decode_rejectsTamperedUsernameWithOriginalSignature() {
+        String secret = "test-secret-username";
+        RegRelayCodec codec = codec(secret, Duration.ofMinutes(5));
+        String token = codec.encode("rt", "uh", "victim-user", "Victim");
+
+        int dot = token.lastIndexOf('.');
+        String origSig = token.substring(dot + 1);
+
+        String payloadJson = new String(B64D.decode(token.substring(0, dot)), StandardCharsets.UTF_8);
+        assertThat(payloadJson).contains("victim-user");
+        String tamperedJson = payloadJson.replace("victim-user", "attackr-user");  // 같은 길이
         String tamperedP64 = B64.encodeToString(tamperedJson.getBytes(StandardCharsets.UTF_8));
 
         String forged = tamperedP64 + "." + origSig;
@@ -112,14 +140,36 @@ class RegRelayCodecTest {
         RegRelayCodec codec = codec(secret, Duration.ofMinutes(5));  // 정상 양수 TTL
 
         long pastExp = Instant.now().getEpochSecond() - 60;          // 이미 만료
-        // ObjectNodePayload(rt, uh, exp) 와 동일한 JSON 형식으로 직접 직렬화 후 유효 서명.
-        String payloadJson = "{\"rt\":\"rt\",\"uh\":\"uh\",\"exp\":" + pastExp + "}";
+        // ObjectNodePayload(rt, uh, un, dn, exp) 와 동일한 JSON 형식으로 직접 직렬화 후 유효 서명.
+        String payloadJson = "{\"rt\":\"rt\",\"uh\":\"uh\",\"un\":\"un\",\"dn\":\"dn\",\"exp\":" + pastExp + "}";
         String p64 = B64.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
         String expiredButValidlySigned = p64 + "." + hmacB64(secret, p64);
 
         assertThatThrownBy(() -> codec.decode(expiredButValidlySigned))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("expired");
+    }
+
+    // ── 3b. 레거시/불완전 payload 거부 (un/dn 누락) ─────────────────────
+    //
+    // 배포 직전 발급된 레거시 토큰은 {rt, uh, exp} 만 가져 un/dn 이 null 로 역직렬화된다.
+    // 서명·만료가 유효해도, upstream finish 전에 거부해야 confirmRegistration 의 NPE(500)·
+    // 매핑 누락을 막는다(P0-4 무상태 계약).
+
+    @Test
+    void decode_rejectsLegacyPayloadMissingUsernameAndDisplayName() {
+        String secret = "test-secret-legacy";
+        RegRelayCodec codec = codec(secret, Duration.ofMinutes(5));
+
+        long futureExp = Instant.now().getEpochSecond() + 300;        // 유효(미만료)
+        // 레거시 형식: rt/uh/exp 만, un/dn 없음. 유효 서명을 붙여도 decode 가 거부해야 한다.
+        String payloadJson = "{\"rt\":\"rt\",\"uh\":\"uh\",\"exp\":" + futureExp + "}";
+        String p64 = B64.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+        String legacyButValidlySigned = p64 + "." + hmacB64(secret, p64);
+
+        assertThatThrownBy(() -> codec.decode(legacyButValidlySigned))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("incomplete payload");
     }
 
     // ── 4. 다른 키로 서명한 토큰 거부 ──────────────────────────────
@@ -129,7 +179,7 @@ class RegRelayCodecTest {
         RegRelayCodec codecA = codec("secret-A", Duration.ofMinutes(5));
         RegRelayCodec codecB = codec("secret-B", Duration.ofMinutes(5));
 
-        String token = codecA.encode("rt", "uh");
+        String token = codecA.encode("rt", "uh", "un", "dn");
 
         assertThatThrownBy(() -> codecB.decode(token))
                 .isInstanceOf(IllegalArgumentException.class)

@@ -23,7 +23,7 @@ class InMemoryUserStoreTest {
 
         InMemoryUserStore first = new InMemoryUserStore(mapper(), file.toString());
         String handle = first.createPending("alice", "Alice");
-        first.confirmRegistration(handle, "cred-123");
+        first.confirmRegistration(handle, "alice", "Alice", "cred-123");
 
         // 새 인스턴스가 같은 파일에서 복원
         InMemoryUserStore second = new InMemoryUserStore(mapper(), file.toString());
@@ -37,6 +37,37 @@ class InMemoryUserStoreTest {
 
         assertThat(second.findByUsername("alice")).isPresent();
         assertThat(second.findByUsername("alice").get().userHandle()).isEqualTo(handle);
+    }
+
+    /**
+     * P0-4 회귀 가드: pending 이 전혀 없는 빈 store 에서 confirmRegistration(4-arg)을 호출해도
+     * relay 의 서명된 username/displayName 로 user 가 결정적으로 생성·확정되어야 한다.
+     * (rp-app 재시작·다중 인스턴스로 begin 의 메모리 pending 이 유실된 경로를 모사.)
+     */
+    @Test
+    void confirmRegistration_createsUserDeterministically_onEmptyStore(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+        // createPending 을 거치지 않음 — handle 이 store 에 전혀 없는 상태.
+        store.confirmRegistration("handle-x", "dave", "Dave", "cred-x");
+
+        Optional<RpAppUser> byHandle = store.findByUserHandle("handle-x");
+        assertThat(byHandle).isPresent();
+        assertThat(byHandle.get().userHandle()).isEqualTo("handle-x");
+        assertThat(byHandle.get().username()).isEqualTo("dave");
+        assertThat(byHandle.get().displayName()).isEqualTo("Dave");
+        assertThat(byHandle.get().credentialId()).isEqualTo("cred-x");
+        assertThat(byHandle.get().createdAt()).isNotNull();
+
+        // username→handle 매핑도 복구되어 로그인(unknown-sub 회피)이 가능해야 한다.
+        assertThat(store.findByUsername("dave")).isPresent();
+        assertThat(store.findByUsername("dave").get().userHandle()).isEqualTo("handle-x");
+
+        // 확정 user 는 영속화되어 새 인스턴스에서도 살아남아야 한다(완전 무상태).
+        InMemoryUserStore reloaded = new InMemoryUserStore(mapper(), file.toString());
+        assertThat(reloaded.findByUserHandle("handle-x")).isPresent();
+        assertThat(reloaded.findByUserHandle("handle-x").get().credentialId()).isEqualTo("cred-x");
     }
 
     @Test
@@ -85,7 +116,7 @@ class InMemoryUserStoreTest {
 
         // 새 user 확정 → persist 발생 (손상 원본을 덮어쓰면 안 됨)
         String handle = store.createPending("carol", "Carol");
-        store.confirmRegistration(handle, "cred-xyz");
+        store.confirmRegistration(handle, "carol", "Carol", "cred-xyz");
 
         // 손상본이 .corrupt- prefix 로 보존되어 있어야 한다
         try (var paths = java.nio.file.Files.list(dir)) {

@@ -123,12 +123,17 @@ public class InMemoryUserStore {
         return userHandle;
     }
 
-    /** registration/finish 성공 후 credentialId 채워서 확정 + 파일에 영속화. */
-    public void confirmRegistration(String userHandle, String credentialId) {
-        RpAppUser updated = byHandle.computeIfPresent(userHandle, (k, u) ->
-                new RpAppUser(u.userHandle(), u.username(), u.displayName(), u.createdAt(), credentialId));
-        // 알 수 없는 handle 이면 변경이 없으므로 불필요한 파일 쓰기를 생략.
-        if (updated != null) persist();
+    /**
+     * registration/finish 성공 후 확정. userHandle 이 (pending 으로) 있으면 credentialId 를 채우고,
+     * 없으면(재시작·다중 인스턴스로 pending 유실) relay 의 서명된 username/displayName 로 user 를
+     * 결정적으로 생성해 확정한다. 어느 경로든 확정 user 는 파일에 영속화된다(완전 무상태, P0-4).
+     */
+    public void confirmRegistration(String userHandle, String username, String displayName, String credentialId) {
+        byHandle.compute(userHandle, (k, existing) -> existing != null
+                ? new RpAppUser(existing.userHandle(), existing.username(), existing.displayName(), existing.createdAt(), credentialId)
+                : new RpAppUser(userHandle, username, displayName, Instant.now(), credentialId));
+        byUsername.put(username, userHandle);   // 재시작 경로에서도 username→handle 매핑 복구
+        persist();
     }
 
     public Optional<RpAppUser> findByUserHandle(String userHandle) {
