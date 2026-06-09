@@ -4,14 +4,12 @@ import com.crosscert.passkey.rpapp.common.exception.BusinessException;
 import com.crosscert.passkey.rpapp.common.exception.ErrorCode;
 import com.crosscert.passkey.rpapp.common.response.ApiResponse;
 import com.crosscert.passkey.rpapp.config.PasskeyProperties;
-import com.crosscert.passkey.rpapp.session.SessionKeys;
 import com.crosscert.passkey.rpapp.user.InMemoryUserStore;
 import com.crosscert.passkey.rpapp.user.RpAppUser;
 import com.crosscert.passkey.rpapp.web.dto.*;
 import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.dto.*;
 import com.crosscert.passkey.sdk.idtoken.IdTokenClaims;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,8 +37,7 @@ public class WebAuthnController {
     // ── Registration ─────────────────────────────────────────────
 
     @PostMapping("/register/begin")
-    public ApiResponse<RegisterOptionsResp> registerOptions(@Valid @RequestBody RegisterStartReq req,
-                                                            HttpSession s) {
+    public ApiResponse<RegisterOptionsResp> registerOptions(@Valid @RequestBody RegisterStartReq req) {
         log.info("register/options entry: usernamePresent={}", req.username() != null);
         String userHandle = users.createPending(req.username(), req.displayName());
         RegistrationStartResponse sdkResp;
@@ -51,42 +48,34 @@ public class WebAuthnController {
             log.warn("register/options upstream-failed: cause={}", e.toString());
             throw e;
         }
-        s.setAttribute(SessionKeys.PENDING_REG_TOKEN, sdkResp.registrationToken());
-        s.setAttribute(SessionKeys.PENDING_USER_HANDLE, userHandle);
         log.info("register/options ok: userHandle={}", idTail(userHandle));
-        return ApiResponse.ok(new RegisterOptionsResp(sdkResp.publicKeyCredentialCreationOptions()));
+        return ApiResponse.ok(new RegisterOptionsResp(
+                sdkResp.publicKeyCredentialCreationOptions(),
+                sdkResp.registrationToken(),
+                userHandle));
     }
 
     @PostMapping("/register/finish")
-    public ApiResponse<RegistrationFinishResponse> registerComplete(@Valid @RequestBody RegisterCompleteReq req,
-                                                                    HttpSession s) {
-        log.info("register/complete entry: sessionId={}", idTail(s.getId()));
-        String token  = (String) s.getAttribute(SessionKeys.PENDING_REG_TOKEN);
-        String handle = (String) s.getAttribute(SessionKeys.PENDING_USER_HANDLE);
-        if (token == null) {
-            log.warn("register/complete failed: reason=pending-token-missing");
-            throw new BusinessException(ErrorCode.PENDING_REG_MISSING);
-        }
-
+    public ApiResponse<RegistrationFinishResponse> registerComplete(@Valid @RequestBody RegisterCompleteReq req) {
+        log.info("register/complete entry: userHandle={}", idTail(req.userHandle()));
         RegistrationFinishResponse fin;
         try {
-            fin = passkey.registrationFinish(new RegistrationFinishRequest(token, req.publicKeyCredential()));
+            fin = passkey.registrationFinish(
+                    new RegistrationFinishRequest(req.registrationToken(), req.publicKeyCredential()));
         } catch (RuntimeException e) {
             log.warn("register/complete upstream-failed: cause={}", e.toString());
             throw e;
         }
-        users.confirmRegistration(handle, fin.credentialId());
-        s.removeAttribute(SessionKeys.PENDING_REG_TOKEN);
-        s.removeAttribute(SessionKeys.PENDING_USER_HANDLE);
+        users.confirmRegistration(req.userHandle(), fin.credentialId());
         log.info("register/complete ok: userHandle={} credentialId={}",
-                idTail(handle), idTail(fin.credentialId()));
+                idTail(req.userHandle()), idTail(fin.credentialId()));
         return ApiResponse.ok("Passkey registered", fin);
     }
 
     // ── Login ────────────────────────────────────────────────────
 
     @PostMapping("/authenticate/begin")
-    public ApiResponse<LoginOptionsResp> loginOptions(@RequestBody LoginStartReq req, HttpSession s) {
+    public ApiResponse<LoginOptionsResp> loginOptions(@RequestBody LoginStartReq req) {
         log.info("login/options entry: flow={}",
                 req.username() == null ? "discoverable" : "typed");
         String userHandle = req.username() == null ? null
@@ -98,23 +87,19 @@ public class WebAuthnController {
             log.warn("login/options upstream-failed: cause={}", e.toString());
             throw e;
         }
-        s.setAttribute(SessionKeys.PENDING_AUTH_TOKEN, sdkResp.authenticationToken());
         log.info("login/options ok: userHandlePresent={}", userHandle != null);
-        return ApiResponse.ok(new LoginOptionsResp(sdkResp.publicKeyCredentialRequestOptions()));
+        return ApiResponse.ok(new LoginOptionsResp(
+                sdkResp.publicKeyCredentialRequestOptions(),
+                sdkResp.authenticationToken()));
     }
 
     @PostMapping("/authenticate/finish")
-    public ApiResponse<Void> loginComplete(@Valid @RequestBody LoginCompleteReq req, HttpSession s) {
-        log.info("login/complete entry: sessionId={}", idTail(s.getId()));
-        String token = (String) s.getAttribute(SessionKeys.PENDING_AUTH_TOKEN);
-        if (token == null) {
-            log.warn("login/complete failed: reason=pending-token-missing");
-            throw new BusinessException(ErrorCode.PENDING_AUTH_MISSING);
-        }
-
+    public ApiResponse<LoginResultResp> loginComplete(@Valid @RequestBody LoginCompleteReq req) {
+        log.info("login/complete entry");
         AuthenticationFinishResponse fin;
         try {
-            fin = passkey.authenticationFinish(new AuthenticationFinishRequest(token, req.publicKeyCredential()));
+            fin = passkey.authenticationFinish(
+                    new AuthenticationFinishRequest(req.authenticationToken(), req.publicKeyCredential()));
         } catch (RuntimeException e) {
             log.warn("login/complete upstream-failed: cause={}", e.toString());
             throw e;
@@ -152,15 +137,12 @@ public class WebAuthnController {
 
         RpAppUser user = users.findByUserHandle(claims.sub())
                 .orElseThrow(() -> {
-                    log.warn("login/complete failed: reason=unknown-sub subTail={}",
-                            idTail(claims.sub()));
+                    log.warn("login/complete failed: reason=unknown-sub subTail={}", idTail(claims.sub()));
                     return new BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "unknown sub");
                 });
-        s.setAttribute(SessionKeys.USER, user);
-        s.removeAttribute(SessionKeys.PENDING_AUTH_TOKEN);
         log.info("login/complete ok: subTail={} userHandle={}",
                 idTail(claims.sub()), idTail(user.userHandle()));
-        return ApiResponse.ok();
+        return ApiResponse.ok(new LoginResultResp(true, user.userHandle(), user.displayName()));
     }
 
     /**
