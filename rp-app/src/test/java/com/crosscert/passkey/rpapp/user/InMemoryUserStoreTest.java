@@ -139,6 +139,52 @@ class InMemoryUserStoreTest {
         assertThat(second.findByUsername("bob")).isEmpty();
     }
 
+    /**
+     * 미완료 등록 재시도 가드: begin(createPending)만 하고 finish(confirmRegistration)를
+     * 하지 않은 username 은 같은 인스턴스에서 다시 begin 할 수 있어야 한다. begin 단계에서
+     * username 을 영구 점유하면 다이얼로그 취소·페이지 이탈로 등록을 끝내지 못한 사용자가
+     * 재기동 전까지 그 username 으로 재시도조차 못 하는 W001 버그가 된다. 실제 충돌 방지는
+     * confirmRegistration 의 putIfAbsent 가 권위 있게 처리하므로 begin 은 점유하지 않는다.
+     */
+    @Test
+    void createPending_allowsReBeginForUnconfirmedUsername(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        String firstHandle = store.createPending("erin", "Erin");   // finish 안 함
+        // 같은 username 으로 재-begin — 점유되지 않아야 하므로 예외 없이 새 handle 발급.
+        String secondHandle = store.createPending("erin", "Erin");
+
+        assertThat(secondHandle).isNotNull();
+        assertThat(secondHandle).isNotEqualTo(firstHandle);
+        // pending 은 username→handle 매핑을 만들지 않는다(확정 전까지 미점유).
+        assertThat(store.findByUsername("erin")).isEmpty();
+
+        // 재-begin 후 정상 finish 는 여전히 성공한다.
+        store.confirmRegistration(secondHandle, "erin", "Erin", "cred-erin");
+        assertThat(store.findByUsername("erin")).isPresent();
+        assertThat(store.findByUsername("erin").get().userHandle()).isEqualTo(secondHandle);
+    }
+
+    /**
+     * 확정된 username 은 여전히 보호된다: 정상 등록을 끝낸 username 으로 다시 begin 하면
+     * confirmRegistration 단계에서 다른 handle 로의 점유 시도가 USERNAME_TAKEN 으로 거부된다.
+     * (begin 점유를 제거해도 진짜 충돌 방지가 약해지지 않음을 보장.)
+     */
+    @Test
+    void confirmedUsernameStillRejectedOnDifferentHandle(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        store.confirmRegistration("h1", "frank", "Frank", "c1");
+        // begin 은 자유롭게 되지만(점유 없음)...
+        String reHandle = store.createPending("frank", "Frank");
+        // ...finish 단계에서 이미 다른 handle 이 확정 점유 → 거부.
+        assertThatThrownBy(() -> store.confirmRegistration(reHandle, "frank", "Frank", "c2"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USERNAME_TAKEN);
+    }
+
     @Test
     void corruptFileYieldsEmptyStoreWithoutCrash(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("users.json");

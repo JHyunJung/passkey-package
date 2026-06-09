@@ -108,18 +108,22 @@ public class InMemoryUserStore {
         }
     }
 
-    /** username 으로 새 userHandle (32B base64url) 발급 + pending 상태로 저장. 중복이면 USERNAME_TAKEN. */
+    /**
+     * username 으로 새 userHandle (32B base64url) 발급 + pending 상태로 저장.
+     *
+     * <p>begin 단계에서는 username 을 점유하지 <b>않는다</b>(byUsername 매핑을 만들지 않음).
+     * begin 만 하고 finish 를 못 한 사용자(다이얼로그 취소·페이지 이탈·네트워크 단절)가 같은
+     * username 으로 영구히 재시도하지 못하던 W001 버그를 막기 위함. 진짜 username 충돌 방지는
+     * confirmRegistration 의 putIfAbsent(최종 권위) + 컨트롤러의 isUsernameTakenByOther
+     * 선검사가 처리하므로, begin 점유는 정상 재시도를 차단하는 부작용만 있었다.
+     */
     public String createPending(String username, String displayName) {
         byte[] raw = new byte[32];
         rng.nextBytes(raw);
         String userHandle = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-        // putIfAbsent 로 username 을 원자적으로 예약. 동시 호출 시 두 번째는 non-null 반환 → 거부.
-        if (byUsername.putIfAbsent(username, userHandle) != null) {
-            throw new BusinessException(ErrorCode.USERNAME_TAKEN);
-        }
         RpAppUser user = new RpAppUser(userHandle, username, displayName, Instant.now(), null);
+        // byHandle 에만 pending 을 둔다(username 미점유). 영속화하지 않음 — 재기동 시 자연 정리.
         byHandle.put(userHandle, user);
-        // pending 은 영속화하지 않음 — 재기동 시 자연 정리.
         return userHandle;
     }
 
