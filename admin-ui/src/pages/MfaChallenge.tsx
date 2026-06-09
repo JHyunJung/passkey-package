@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { mfaApi } from '@/api/mfa';
 import { useToast } from '@/shell/ToastHost';
+import { formatRecoveryCode } from '@/lib/recoveryCode';
 
 export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () => void; onLogout: () => void }) {
   const [mode, setMode] = useState<'totp' | 'recovery'>('totp');
@@ -35,12 +36,12 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
 
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
-      <form onSubmit={submit} style={{ width: 360, padding: 28, border: '1px solid var(--border)', borderRadius: 14, background: 'var(--surface)' }}>
+      <form onSubmit={submit} style={{ width: 360, padding: 28, border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-xs)' }}>
         <h2 style={{ marginTop: 0, fontSize: 18 }}>2단계 인증</h2>
         <div style={{ fontSize: 13, color: 'var(--text-mute)', marginBottom: 18 }}>
           {mode === 'totp'
             ? 'authenticator 앱에 표시된 6자리 코드를 입력하세요.'
-            : '복구 코드(xxxx-xxxx)를 입력하세요. 1회용입니다.'}
+            : '복구 코드(AB3F-2K7M)를 입력하세요. 1회용입니다.'}
         </div>
         {mode === 'totp' ? (
           <input
@@ -58,9 +59,9 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
             className="input mono"
             autoFocus
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="3f9a-2b71"
-            style={{ width: '100%', fontFamily: 'monospace', textAlign: 'center', fontSize: 16 }}
+            onChange={(e) => setCode(formatRecoveryCode(e.target.value))}
+            placeholder="AB3F-2K7M"
+            style={{ width: '100%', fontFamily: 'monospace', textAlign: 'center', fontSize: 16, letterSpacing: 2 }}
           />
         )}
         <button type="submit" className="btn btn--primary" disabled={submitting || !ready} style={{ width: '100%', marginTop: 16 }}>
