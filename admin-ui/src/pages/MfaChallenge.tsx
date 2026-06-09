@@ -9,7 +9,7 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
 
-  const ready = mode === 'totp' ? code.length === 6 : code.trim().length > 0;
+  const ready = mode === 'totp' ? code.length === 6 : /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

@@ -36,4 +36,20 @@ describe('MfaChallenge', () => {
     const totp = screen.getByPlaceholderText('000000') as HTMLInputElement;
     expect(totp.value).toBe('');
   });
+
+  it('recovery mode keeps submit disabled for a partial code', () => {
+    renderChallenge();
+    fireEvent.click(screen.getByRole('button', { name: /복구 코드로 로그인/ }));
+    const rec = screen.getByPlaceholderText('AB3F-2K7M') as HTMLInputElement;
+    fireEvent.change(rec, { target: { value: 'ab3f2' } }); // -> AB3F-2 (incomplete)
+    expect(screen.getByRole('button', { name: '확인' })).toBeDisabled();
+  });
+
+  it('recovery mode enables submit for a fully-formed code', () => {
+    renderChallenge();
+    fireEvent.click(screen.getByRole('button', { name: /복구 코드로 로그인/ }));
+    const rec = screen.getByPlaceholderText('AB3F-2K7M') as HTMLInputElement;
+    fireEvent.change(rec, { target: { value: 'ab3f2k7m' } }); // -> AB3F-2K7M
+    expect(screen.getByRole('button', { name: '확인' })).not.toBeDisabled();
+  });
 });
