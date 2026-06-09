@@ -21,4 +21,27 @@ describe('RecoveryCodesModal', () => {
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('download filename includes sanitized account from accountEmail', () => {
+    const clickedNames: string[] = [];
+    const origCreate = document.createElement.bind(document);
+    const spy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = origCreate(tag) as HTMLElement;
+      if (tag === 'a') {
+        // capture the download name at click time
+        (el as HTMLAnchorElement).click = () => { clickedNames.push((el as HTMLAnchorElement).download); };
+      }
+      return el;
+    });
+    // jsdom lacks createObjectURL/revokeObjectURL
+    (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => 'blob:x';
+    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {};
+
+    render(<RecoveryCodesModal codes={CODES} accountEmail="Alice@corp.com" onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /다운로드/ }));
+
+    expect(clickedNames).toHaveLength(1);
+    expect(clickedNames[0]).toMatch(/^passkey-admin-recovery-codes-alice-\d{8}\.txt$/);
+    spy.mockRestore();
+  });
 });

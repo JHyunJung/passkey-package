@@ -123,13 +123,16 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
           {!me.mfaEnabled && enroll && (
             <div className="stack-3">
               <div className="hint">인증 앱으로 아래 QR 코드를 스캔하거나 키를 직접 입력한 후, 생성된 6자리 코드를 입력하세요.</div>
-              <QrCode value={enroll.otpauthUri} />
               <div>
-                <label className="label">수동 입력 키</label>
+                <label className="label" style={{ color: 'var(--text-soft)' }}>1. QR 코드 스캔</label>
+                <QrCode value={enroll.otpauthUri} />
+              </div>
+              <div>
+                <label className="label" style={{ color: 'var(--text-soft)' }}>2. 또는 수동 입력 키</label>
                 <div className="mono" style={{ wordBreak: 'break-all', userSelect: 'all' }}>{enroll.secret}</div>
               </div>
               <div>
-                <label className="label">인증 코드</label>
+                <label className="label" style={{ color: 'var(--text-soft)' }}>3. 인증 코드</label>
                 <input
                   className="input mono"
                   inputMode="numeric"
@@ -201,7 +204,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
       </Dialog>
 
       {recoveryCodes && (
-        <RecoveryCodesModal codes={recoveryCodes} onClose={() => setRecoveryCodes(null)} />
+        <RecoveryCodesModal codes={recoveryCodes} accountEmail={me.email} onClose={() => setRecoveryCodes(null)} />
       )}
     </div>
   );
