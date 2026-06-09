@@ -30,11 +30,13 @@
       const displayName = document.getElementById('displayName').value;
 
       const start = await postJson('/passkey/register/begin', { username, displayName });
+      const regRelayToken = start.regRelayToken; // 메모리 보관 (localStorage/쿠키 금지)
       const cred = await navigator.credentials.create({
         publicKey: decodeCreationOptions(start.publicKeyCredentialCreationOptions)
       });
       const fin = await postJson('/passkey/register/finish', {
-        publicKeyCredential: encodeAttestationCredential(cred)
+        publicKeyCredential: encodeAttestationCredential(cred),
+        regRelayToken
       });
       result.textContent = 'Passkey registered:\n' + JSON.stringify(fin, null, 2);
     } catch (e) {

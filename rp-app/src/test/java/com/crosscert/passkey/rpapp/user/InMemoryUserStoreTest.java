@@ -1,5 +1,7 @@
 package com.crosscert.passkey.rpapp.user;
 
+import com.crosscert.passkey.rpapp.common.exception.BusinessException;
+import com.crosscert.passkey.rpapp.common.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -9,6 +11,8 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InMemoryUserStoreTest {
 
@@ -23,7 +27,7 @@ class InMemoryUserStoreTest {
 
         InMemoryUserStore first = new InMemoryUserStore(mapper(), file.toString());
         String handle = first.createPending("alice", "Alice");
-        first.confirmRegistration(handle, "cred-123");
+        first.confirmRegistration(handle, "alice", "Alice", "cred-123");
 
         // 새 인스턴스가 같은 파일에서 복원
         InMemoryUserStore second = new InMemoryUserStore(mapper(), file.toString());
@@ -37,6 +41,89 @@ class InMemoryUserStoreTest {
 
         assertThat(second.findByUsername("alice")).isPresent();
         assertThat(second.findByUsername("alice").get().userHandle()).isEqualTo(handle);
+    }
+
+    /**
+     * P0-4 회귀 가드: pending 이 전혀 없는 빈 store 에서 confirmRegistration(4-arg)을 호출해도
+     * relay 의 서명된 username/displayName 로 user 가 결정적으로 생성·확정되어야 한다.
+     * (rp-app 재시작·다중 인스턴스로 begin 의 메모리 pending 이 유실된 경로를 모사.)
+     */
+    @Test
+    void confirmRegistration_createsUserDeterministically_onEmptyStore(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+        // createPending 을 거치지 않음 — handle 이 store 에 전혀 없는 상태.
+        store.confirmRegistration("handle-x", "dave", "Dave", "cred-x");
+
+        Optional<RpAppUser> byHandle = store.findByUserHandle("handle-x");
+        assertThat(byHandle).isPresent();
+        assertThat(byHandle.get().userHandle()).isEqualTo("handle-x");
+        assertThat(byHandle.get().username()).isEqualTo("dave");
+        assertThat(byHandle.get().displayName()).isEqualTo("Dave");
+        assertThat(byHandle.get().credentialId()).isEqualTo("cred-x");
+        assertThat(byHandle.get().createdAt()).isNotNull();
+
+        // username→handle 매핑도 복구되어 로그인(unknown-sub 회피)이 가능해야 한다.
+        assertThat(store.findByUsername("dave")).isPresent();
+        assertThat(store.findByUsername("dave").get().userHandle()).isEqualTo("handle-x");
+
+        // 확정 user 는 영속화되어 새 인스턴스에서도 살아남아야 한다(완전 무상태).
+        InMemoryUserStore reloaded = new InMemoryUserStore(mapper(), file.toString());
+        assertThat(reloaded.findByUserHandle("handle-x")).isPresent();
+        assertThat(reloaded.findByUserHandle("handle-x").get().credentialId()).isEqualTo("cred-x");
+    }
+
+    /**
+     * 탈취/충돌 방지: username 이 이미 다른 userHandle 로 확정돼 있으면 새 handle 로의
+     * confirmRegistration 은 USERNAME_TAKEN 으로 거부돼야 한다. HMAC 은 "유효 begin 에서 온
+     * username"만 증명하지 "finish 시점 미점유"는 증명하지 못하므로 store 가 방어한다.
+     */
+    @Test
+    void confirmRegistration_rejectsUsernameOwnedByAnotherHandle(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        store.confirmRegistration("h1", "alice", "Alice", "c1");
+
+        // 같은 username("alice")을 다른 handle("h2")로 확정 시도 → 거부.
+        assertThatThrownBy(() -> store.confirmRegistration("h2", "alice", "A2", "c2"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USERNAME_TAKEN);
+
+        // 원 매핑은 그대로 유지(탈취 안 됨).
+        assertThat(store.findByUsername("alice")).isPresent();
+        assertThat(store.findByUsername("alice").get().userHandle()).isEqualTo("h1");
+        assertThat(store.findByUsername("alice").get().credentialId()).isEqualTo("c1");
+        // 거부된 handle 은 만들어지지 않아야 한다.
+        assertThat(store.findByUserHandle("h2")).isEmpty();
+    }
+
+    /** 같은 handle 로의 재확정(정상 재시도·idempotent)은 허용되고 credentialId 만 갱신된다. */
+    @Test
+    void confirmRegistration_sameHandleReConfirm_isIdempotent(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        store.confirmRegistration("h1", "alice", "Alice", "c1");
+        assertThatCode(() -> store.confirmRegistration("h1", "alice", "Alice", "c1b"))
+                .doesNotThrowAnyException();
+
+        assertThat(store.findByUserHandle("h1")).isPresent();
+        assertThat(store.findByUserHandle("h1").get().credentialId()).isEqualTo("c1b");
+        assertThat(store.findByUsername("alice").get().userHandle()).isEqualTo("h1");
+    }
+
+    /** isUsernameTakenByOther: 점유 없음/같은 handle → false, 다른 handle → true. */
+    @Test
+    void isUsernameTakenByOther_reflectsOwnership(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        assertThat(store.isUsernameTakenByOther("alice", "h1")).isFalse();  // 미점유
+        store.confirmRegistration("h1", "alice", "Alice", "c1");
+        assertThat(store.isUsernameTakenByOther("alice", "h1")).isFalse();  // 같은 handle
+        assertThat(store.isUsernameTakenByOther("alice", "h2")).isTrue();   // 다른 handle
     }
 
     @Test
@@ -85,7 +172,7 @@ class InMemoryUserStoreTest {
 
         // 새 user 확정 → persist 발생 (손상 원본을 덮어쓰면 안 됨)
         String handle = store.createPending("carol", "Carol");
-        store.confirmRegistration(handle, "cred-xyz");
+        store.confirmRegistration(handle, "carol", "Carol", "cred-xyz");
 
         // 손상본이 .corrupt- prefix 로 보존되어 있어야 한다
         try (var paths = java.nio.file.Files.list(dir)) {

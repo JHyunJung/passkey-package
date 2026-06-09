@@ -58,13 +58,11 @@ export function encodeAssertionCredential(cred) {
 }
 
 export async function postJson(url, body) {
-  const csrfMeta = document.querySelector('meta[name=csrf]');
-  const csrf = csrfMeta ? csrfMeta.content : '';
   const res  = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': csrf },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    credentials: 'same-origin'
+    credentials: 'omit'  // 무상태: 쿠키/세션 미참여를 명시
   });
   const env = await res.json();
   if (!env.success) {

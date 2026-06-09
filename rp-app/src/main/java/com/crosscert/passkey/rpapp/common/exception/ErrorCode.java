@@ -19,8 +19,8 @@ public enum ErrorCode {
 
     // WebAuthn flow (rp-app domain)
     USERNAME_TAKEN      (CONFLICT,                "W001", "Username already registered"),
-    PENDING_REG_MISSING (BAD_REQUEST,             "W002", "No pending registration in session"),
-    PENDING_AUTH_MISSING(BAD_REQUEST,             "W003", "No pending authentication in session"),
+    PENDING_REG_MISSING (BAD_REQUEST,             "W002", "Registration token missing or expired"),
+    PENDING_AUTH_MISSING(BAD_REQUEST,             "W003", "Authentication token missing or expired"),
 
     // Passkey-server proxy
     PASSKEY_API_ERROR   (BAD_GATEWAY,             "P001", "Upstream passkey server error"),
