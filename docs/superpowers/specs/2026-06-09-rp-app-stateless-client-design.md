@@ -29,6 +29,7 @@
 - **P0-2 id-token 을 클라이언트 bearer 로 승격**: id-token 은 nonce/azp/jti 가 없어 같은 tenant 내 다른 서비스로 replay 가능하고, 15분 TTL 동안 무한 재사용·XSS 유출(HttpOnly 쿠키 대비 후퇴) 위험. → **id-token 을 클라이언트에 노출하지 않는다**(rp-app 내부에서만 검증·소비; 아래 §4). 근본 원인("장기 bearer 를 클라이언트에 쥐여줌")을 제거하므로 nonce/jti 땜질이 불필요하고 passkey-app 무수정.
 - **P1 CORS reflected-origin**: 게으른 CORS 가 요청 Origin 을 반사하면 모든 사이트가 응답 본문을 읽는다. → **정확한 화이트리스트, reflected 금지, Allow-Credentials off**(아래 §3).
 - **P1 무상태 begin 남용**: 세션이 없어 challenge 발급(Redis 적재) 남용을 막을 per-client 상관관계가 사라진다. rp-app 자체 rate limit 없음. → 데모 범위 수용 + 프로덕션 경고 문서화.
+- **P0-3 등록 토큰↔userHandle 바인딩 소실** (코드 리뷰에서 발견): passkey-app 의 registrationToken 은 challenge/tenant 에 묶이지만 **rp-app 의 pending userHandle 엔 안 묶인다**. 세션 방식은 `PENDING_REG_TOKEN`↔`PENDING_USER_HANDLE` 를 세션에 함께 보관해 바인딩했는데, 무상태로 풀면서 둘이 **클라이언트가 독립적으로 보내는 두 필드**가 됐다. 악성/버그 클라이언트가 `{registrationToken=A, userHandle=B}` 로 finish 하면 rp-app 이 A 의 credential 을 B 계정에 붙일 수 있다(`confirmRegistration` 이 클라이언트 userHandle 을 신뢰). 멀티유저면 계정 탈취급. (인증은 authenticationToken 에 userHandle 이 묶여 있어 무관.) → **rp-app 자체 서명 relay 토큰으로 바인딩**(아래 §5, passkey-app 무수정).
 
 ## 범위
 
@@ -89,6 +90,17 @@ authenticate/finish ← 요청 body {publicKeyCredential, authenticationToken}
 - `authenticate/finish` 는 id-token 을 rp-app 내부에서만 검증(iss/aud/sub)하고 **소비 후 폐기**. 응답 body 에 id-token/JWT 를 싣지 않는다.
 - 성공 응답: rp-app 자체 결과 `LoginResultResp(boolean authenticated, String userHandle, String displayName)` (신규 DTO). 클라이언트는 이걸로 "인증됨"을 알고 자기 UX 를 진행한다. (장기 세션이 필요한 프로덕션 RP 는 여기서 자체 세션/토큰을 발급하면 됨 — 데모는 결과만 반환.)
 - 이로써 cross-service id-token replay·15분 무한재사용·XSS 유출 표면이 **구조적으로 제거**된다(클라이언트가 id-token 을 받지 않으므로).
+
+### §5 등록 relay 토큰 — userHandle 바인딩 (P0-3, passkey-app 무수정)
+
+등록 흐름에서 `registrationToken`↔`userHandle` 바인딩을 rp-app 이 **자기 서명으로** 보장한다. passkey-app 은 안 건드린다.
+
+- **register/begin**: rp-app 이 `registrationToken`·`userHandle`·만료(`exp`)를 묶어 **HMAC-SHA256 서명한 불투명 relay 토큰**(`regRelayToken`)을 만들어, 원시 `registrationToken`/`userHandle` **대신** 클라이언트에 반환한다.
+  - 형식(예): `base64url(payload).base64url(hmac)` 여기서 payload = `{rt, uh, exp}` JSON. 서명 키 = rp-app 설정 `rp.relay.secret`(HMAC). exp = now + 5분(passkey-app 토큰 TTL 과 정렬).
+- **register/finish**: 클라이언트가 `regRelayToken` 을 보낸다. rp-app 이 HMAC 검증·만료 확인 후 payload 에서 `registrationToken`·`userHandle` 을 **복원**한다. 클라이언트는 userHandle 을 조작할 수 없다(서명 불일치로 거부). 복원한 `registrationToken` 으로 SDK `registrationFinish`, 복원한 `userHandle` 로 `confirmRegistration`.
+- **인증(authenticate)은 relay 불필요**: `authenticationToken` 은 passkey-app 의 `AuthenticationChallenge` 가 userHandle 을 토큰에 묶어두고, finish 가 challenge.userHandle ↔ credential 을 검증한다(typed flow). discoverable flow 는 id-token sub 가 항상 실제 서명자라 무관. 따라서 authenticationToken 은 그대로 노출·릴레이한다(§1).
+- **무상태 유지**: relay 토큰은 서명된 자기완결 토큰이라 rp-app 이 아무 상태도 저장하지 않는다(서버 세션/Redis 불필요).
+- **DTO 영향**: `RegisterOptionsResp` 는 `registrationToken`+`userHandle` 대신 `regRelayToken`(단일 불투명 문자열)을 반환. `RegisterCompleteReq` 는 `registrationToken`+`userHandle` 대신 `regRelayToken` 을 받는다. (§2 의 register DTO 형태를 이 §5 로 대체.)
 
 ## 에러 처리
 
