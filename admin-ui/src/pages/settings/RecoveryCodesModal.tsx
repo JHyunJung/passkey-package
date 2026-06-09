@@ -1,12 +1,21 @@
 import { useState } from 'react';
 import { Dialog } from '@/shell/Dialog';
 import { Icons } from '@/icons/Icons';
+import { recoveryCodesFilename } from '@/lib/recoveryCodeFilename';
 
 /**
  * MFA 복구 코드 1회 표시 모달. confirm 직후 enroll 응답의 recoveryCodes 를 보여준다.
  * "저장했습니다" 체크 전에는 닫기 불가(IssuedKeyModal 패턴). 닫으면 영구히 다시 못 봄.
  */
-export function RecoveryCodesModal({ codes, onClose }: { codes: string[]; onClose: () => void }) {
+export function RecoveryCodesModal({
+  codes,
+  accountEmail,
+  onClose,
+}: {
+  codes: string[];
+  accountEmail?: string;
+  onClose: () => void;
+}) {
   const [checked, setChecked] = useState(false);
   const [copied, setCopied] = useState(false);
   const text = codes.join('\n');
@@ -21,16 +30,9 @@ export function RecoveryCodesModal({ codes, onClose }: { codes: string[]; onClos
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'recovery-codes.txt';
+    a.download = recoveryCodesFilename(accountEmail, new Date());
     a.click();
     URL.revokeObjectURL(url);
-  }
-  function print() {
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write('<pre style="font-size:16px;line-height:2">' + codes.join('\n') + '</pre>');
-    w.document.close();
-    w.print();
   }
 
   return (
@@ -56,7 +58,6 @@ export function RecoveryCodesModal({ codes, onClose }: { codes: string[]; onClos
             {copied ? <><Icons.Check size={12} /> 복사됨</> : <><Icons.Copy size={12} /> 복사</>}
           </button>
           <button className="btn btn--sm" onClick={download} style={{ flex: 1 }}>다운로드 (.txt)</button>
-          <button className="btn btn--sm" onClick={print} style={{ flex: 1 }}>인쇄</button>
         </div>
         <label style={{ display: 'flex', gap: 10, padding: 12, background: checked ? 'var(--success-soft)' : 'var(--warning-soft)', borderRadius: 8, alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
