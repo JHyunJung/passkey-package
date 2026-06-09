@@ -25,10 +25,12 @@ public class RelayKeyGuard {
     @EventListener(ApplicationReadyEvent.class)
     public void check() {
         Set<String> active = Set.of(env.getActiveProfiles());
-        boolean devOrLocal = active.contains("dev") || active.contains("local") || active.isEmpty();
+        // dev/local 이 명시적으로 active 일 때만 데모 키 허용. 빈 프로필(env-only 운영,
+        // spring.profiles.active 미설정)은 운영으로 간주해 데모 키를 거부한다.
+        boolean devOrLocal = active.contains("dev") || active.contains("local");
         if (!devOrLocal && DEMO_SECRET.equals(props.secret())) {
             throw new IllegalStateException(
-                    "rp.relay.secret 이 데모 기본 키입니다. 운영 프로필에서는 RP_RELAY_SECRET 로 강한 키를 주입하세요.");
+                    "rp.relay.secret 이 데모 기본 키입니다. 운영(또는 프로필 미지정) 환경에서는 RP_RELAY_SECRET 로 강한 키를 주입하세요.");
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.crosscert.passkey.rpapp.user;
 
+import com.crosscert.passkey.rpapp.common.exception.BusinessException;
+import com.crosscert.passkey.rpapp.common.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -9,6 +11,8 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InMemoryUserStoreTest {
 
@@ -68,6 +72,58 @@ class InMemoryUserStoreTest {
         InMemoryUserStore reloaded = new InMemoryUserStore(mapper(), file.toString());
         assertThat(reloaded.findByUserHandle("handle-x")).isPresent();
         assertThat(reloaded.findByUserHandle("handle-x").get().credentialId()).isEqualTo("cred-x");
+    }
+
+    /**
+     * 탈취/충돌 방지: username 이 이미 다른 userHandle 로 확정돼 있으면 새 handle 로의
+     * confirmRegistration 은 USERNAME_TAKEN 으로 거부돼야 한다. HMAC 은 "유효 begin 에서 온
+     * username"만 증명하지 "finish 시점 미점유"는 증명하지 못하므로 store 가 방어한다.
+     */
+    @Test
+    void confirmRegistration_rejectsUsernameOwnedByAnotherHandle(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        store.confirmRegistration("h1", "alice", "Alice", "c1");
+
+        // 같은 username("alice")을 다른 handle("h2")로 확정 시도 → 거부.
+        assertThatThrownBy(() -> store.confirmRegistration("h2", "alice", "A2", "c2"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USERNAME_TAKEN);
+
+        // 원 매핑은 그대로 유지(탈취 안 됨).
+        assertThat(store.findByUsername("alice")).isPresent();
+        assertThat(store.findByUsername("alice").get().userHandle()).isEqualTo("h1");
+        assertThat(store.findByUsername("alice").get().credentialId()).isEqualTo("c1");
+        // 거부된 handle 은 만들어지지 않아야 한다.
+        assertThat(store.findByUserHandle("h2")).isEmpty();
+    }
+
+    /** 같은 handle 로의 재확정(정상 재시도·idempotent)은 허용되고 credentialId 만 갱신된다. */
+    @Test
+    void confirmRegistration_sameHandleReConfirm_isIdempotent(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        store.confirmRegistration("h1", "alice", "Alice", "c1");
+        assertThatCode(() -> store.confirmRegistration("h1", "alice", "Alice", "c1b"))
+                .doesNotThrowAnyException();
+
+        assertThat(store.findByUserHandle("h1")).isPresent();
+        assertThat(store.findByUserHandle("h1").get().credentialId()).isEqualTo("c1b");
+        assertThat(store.findByUsername("alice").get().userHandle()).isEqualTo("h1");
+    }
+
+    /** isUsernameTakenByOther: 점유 없음/같은 handle → false, 다른 handle → true. */
+    @Test
+    void isUsernameTakenByOther_reflectsOwnership(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString());
+
+        assertThat(store.isUsernameTakenByOther("alice", "h1")).isFalse();  // 미점유
+        store.confirmRegistration("h1", "alice", "Alice", "c1");
+        assertThat(store.isUsernameTakenByOther("alice", "h1")).isFalse();  // 같은 handle
+        assertThat(store.isUsernameTakenByOther("alice", "h2")).isTrue();   // 다른 handle
     }
 
     @Test

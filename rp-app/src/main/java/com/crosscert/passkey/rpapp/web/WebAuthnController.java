@@ -69,6 +69,16 @@ public class WebAuthnController {
             throw new BusinessException(ErrorCode.PENDING_REG_MISSING, e.getMessage());
         }
         log.info("register/complete entry: userHandle={}", idTail(r.userHandle()));
+        // upstream finish 전 username 점유 선검사: 유효 begin 에서 온(HMAC 증명) username 이라도
+        // finish 시점에 다른 사용자에게 확정돼 있으면 typed-login 탈취/충돌을 막는다. 단일 인스턴스
+        // (이 store 의 설계 전제)에선 upstream credential 을 만들기 전에 거부해 rp-app↔passkey-app
+        // 불일치도 피한다. confirmRegistration 의 putIfAbsent 가 최종 권위(이중 방어) — 다중
+        // 인스턴스 동시 finish 같은 좁은 race 에선 선검사를 통과한 패자가 store 확정 단계에서 거부될 수
+        // 있고, 그 경우 upstream credential 만 남는다(단일 인스턴스 데모 전제상 허용 범위).
+        if (users.isUsernameTakenByOther(r.username(), r.userHandle())) {
+            log.warn("register/complete failed: reason=username-taken userHandle={}", idTail(r.userHandle()));
+            throw new BusinessException(ErrorCode.USERNAME_TAKEN);
+        }
         RegistrationFinishResponse fin;
         try {
             fin = passkey.registrationFinish(

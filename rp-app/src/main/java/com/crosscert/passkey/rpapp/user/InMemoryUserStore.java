@@ -124,15 +124,33 @@ public class InMemoryUserStore {
     }
 
     /**
+     * username 이 이미 <b>다른</b> userHandle 로 점유돼 있는지 검사. 컨트롤러가 upstream
+     * registrationFinish <b>전에</b> 호출해, 유효 begin 에서 온(HMAC 으로 증명된) username 이라도
+     * finish 시점에 다른 사용자에게 확정돼 있으면 typed-login 탈취/충돌을 미리 차단하기 위함이다.
+     * 같은 handle(정상 재확정)이면 false.
+     */
+    public boolean isUsernameTakenByOther(String username, String userHandle) {
+        String existingHandle = byUsername.get(username);
+        return existingHandle != null && !existingHandle.equals(userHandle);
+    }
+
+    /**
      * registration/finish 성공 후 확정. userHandle 이 (pending 으로) 있으면 credentialId 를 채우고,
      * 없으면(재시작·다중 인스턴스로 pending 유실) relay 의 서명된 username/displayName 로 user 를
      * 결정적으로 생성해 확정한다. 어느 경로든 확정 user 는 파일에 영속화된다(완전 무상태, P0-4).
+     *
+     * <p>방어(이중): username 이 이미 다른 userHandle 로 점유돼 있으면 거부(탈취/충돌 방지).
+     * putIfAbsent 로 원자적 점유 검사 + 같은-handle 재확정(idempotent)은 허용. HMAC 은 "유효
+     * begin 에서 온 username"만 증명하지 "finish 시점 미점유"는 증명하지 못하므로 필요하다.
      */
     public void confirmRegistration(String userHandle, String username, String displayName, String credentialId) {
+        String existingHandle = byUsername.putIfAbsent(username, userHandle);
+        if (existingHandle != null && !existingHandle.equals(userHandle)) {
+            throw new BusinessException(ErrorCode.USERNAME_TAKEN);
+        }
         byHandle.compute(userHandle, (k, existing) -> existing != null
                 ? new RpAppUser(existing.userHandle(), existing.username(), existing.displayName(), existing.createdAt(), credentialId)
                 : new RpAppUser(userHandle, username, displayName, Instant.now(), credentialId));
-        byUsername.put(username, userHandle);   // 재시작 경로에서도 username→handle 매핑 복구
         persist();
     }
 

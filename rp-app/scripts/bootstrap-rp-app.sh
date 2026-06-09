@@ -75,6 +75,10 @@ if [ -z "$API_KEY" ] || [ "$API_KEY" = "null" ]; then
 fi
 
 # 3. .env 작성
+# RP_RELAY_SECRET: 등록 relay 토큰 HMAC 서명 키. RelayKeyGuard 는 프로필 미지정(env-only)을
+# 운영으로 간주해 데모 기본 키를 거부하므로, no-profile `./gradlew bootRun` 데모 경로에서도
+# 부팅이 되도록 강한 무작위 키를 생성해 .env 에 박는다. (재실행 시 매번 새 키가 발급된다.)
+RP_RELAY_SECRET="${RP_RELAY_SECRET:-$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)}"
 [ -f "$ENV_FILE" ] && cp "$ENV_FILE" "$ENV_FILE.bak"
 cat > "$ENV_FILE" <<EOF
 PASSKEY_BASE_URL=http://localhost:8080
@@ -82,6 +86,7 @@ PASSKEY_TENANT_ID=$TENANT_ID
 PASSKEY_API_KEY=$API_KEY
 PASSKEY_ISSUER_BASE=$ISSUER_BASE
 RP_APP_ORIGIN=$ORIGIN
+RP_RELAY_SECRET=$RP_RELAY_SECRET
 EOF
 
 echo "✓ rp-app/.env written"

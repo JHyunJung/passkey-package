@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -222,5 +223,27 @@ class WebAuthnControllerTest {
         // 확정은 relay 가 복원한 userHandle/username/displayName 로만 일어난다(클라이언트 값 무시).
         verify(users).confirmRegistration(
                 eq("relay-handle"), eq("relay-user"), eq("Relay User"), eq("cred-abc"));
+    }
+
+    // ── 6. register/finish: username 점유 선검사 — upstream finish 전에 거부 ──
+
+    @Test
+    void registerFinish_usernameTakenByOther_rejectsBeforeUpstreamFinish() throws Exception {
+        // relay 의 username 이 이미 다른 handle 로 점유됨 → upstream finish 호출 전 USERNAME_TAKEN.
+        given(relay.decode("opaque.relay")).willReturn(
+                new RegRelayCodec.RegRelay("reg-token-upstream", "relay-handle", "taken-user", "Taken User"));
+        given(users.isUsernameTakenByOther("taken-user", "relay-handle")).willReturn(true);
+
+        mvc.perform(post("/passkey/register/finish")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"publicKeyCredential\":{\"id\":\"x\"},"
+                                + "\"regRelayToken\":\"opaque.relay\"}"))
+                .andExpect(status().isConflict())   // USERNAME_TAKEN → 409
+                .andExpect(jsonPath("$.code").value("W001"))
+                .andExpect(jsonPath("$.error.errorCode").value("W001"));
+
+        // 핵심: upstream 에 credential 을 만들지 않고(불일치 방지), 확정도 일어나지 않는다.
+        verify(passkey, never()).registrationFinish(any());
+        verify(users, never()).confirmRegistration(any(), any(), any(), any());
     }
 }
