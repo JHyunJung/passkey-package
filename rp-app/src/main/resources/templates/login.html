@@ -11,26 +11,38 @@
   <button id="btn-login" type="button">Login with passkey</button>
 </form>
 
+<pre id="result"></pre>
 <p id="error" class="error"></p>
 
 <script type="module">
   import { decodeRequestOptions, encodeAssertionCredential, postJson } from '/js/helpers.js';
 
   const btn = document.getElementById('btn-login');
+  const result = document.getElementById('result');
   const error = document.getElementById('error');
 
   btn.addEventListener('click', async () => {
     error.textContent = '';
+    result.textContent = '';
     try {
       const username = document.getElementById('username').value || null;
       const start = await postJson('/passkey/authenticate/begin', { username });
+      const authenticationToken = start.authenticationToken; // 메모리 보관 (localStorage/쿠키 금지)
       const assertion = await navigator.credentials.get({
         publicKey: decodeRequestOptions(start.publicKeyCredentialRequestOptions)
       });
-      await postJson('/passkey/authenticate/finish', {
-        publicKeyCredential: encodeAssertionCredential(assertion)
+      // finish 성공 응답 = LoginResultResp { authenticated, userHandle, displayName }
+      const login = await postJson('/passkey/authenticate/finish', {
+        publicKeyCredential: encodeAssertionCredential(assertion),
+        authenticationToken
       });
-      window.location = '/';
+      result.textContent = 'Login 성공:\n' + JSON.stringify(login, null, 2);
+      // 세션 user 없음 → 클라이언트 측에서 상태표시줄 갱신
+      const status = document.getElementById('status');
+      if (status && login.authenticated) {
+        status.textContent = '로그인됨: ' + (login.displayName || login.userHandle);
+        status.classList.add('logged-in');
+      }
     } catch (e) {
       error.textContent = '[' + (e.code || 'ERR') + '] ' + e.message
                         + (e.traceId ? '  (traceId=' + e.traceId + ')' : '');
