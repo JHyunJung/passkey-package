@@ -95,12 +95,14 @@ authenticate/finish ← 요청 body {publicKeyCredential, authenticationToken}
 
 등록 흐름에서 `registrationToken`↔`userHandle` 바인딩을 rp-app 이 **자기 서명으로** 보장한다. passkey-app 은 안 건드린다.
 
-- **register/begin**: rp-app 이 `registrationToken`·`userHandle`·만료(`exp`)를 묶어 **HMAC-SHA256 서명한 불투명 relay 토큰**(`regRelayToken`)을 만들어, 원시 `registrationToken`/`userHandle` **대신** 클라이언트에 반환한다.
-  - 형식(예): `base64url(payload).base64url(hmac)` 여기서 payload = `{rt, uh, exp}` JSON. 서명 키 = rp-app 설정 `rp.relay.secret`(HMAC). exp = now + 5분(passkey-app 토큰 TTL 과 정렬).
-- **register/finish**: 클라이언트가 `regRelayToken` 을 보낸다. rp-app 이 HMAC 검증·만료 확인 후 payload 에서 `registrationToken`·`userHandle` 을 **복원**한다. 클라이언트는 userHandle 을 조작할 수 없다(서명 불일치로 거부). 복원한 `registrationToken` 으로 SDK `registrationFinish`, 복원한 `userHandle` 로 `confirmRegistration`.
+- **register/begin**: rp-app 이 `registrationToken`·`userHandle`·`username`·`displayName`·만료(`exp`)를 묶어 **HMAC-SHA256 서명한 불투명 relay 토큰**(`regRelayToken`)을 만들어, 원시 토큰/필드 **대신** 클라이언트에 반환한다.
+  - 형식(예): `base64url(payload).base64url(hmac)` 여기서 payload = `{rt, uh, un, dn, exp}` JSON. 서명 키 = rp-app 설정 `rp.relay.secret`(HMAC). exp = now + 5분(passkey-app 토큰 TTL 과 정렬).
+- **register/finish**: 클라이언트가 `regRelayToken` 을 보낸다. rp-app 이 HMAC 검증·만료 확인 후 payload 에서 `registrationToken`·`userHandle`·`username`·`displayName` 을 **복원**한다(클라이언트는 어떤 필드도 조작 불가 — 서명 불일치로 거부). 복원한 `registrationToken` 으로 SDK `registrationFinish` 후, 복원한 `userHandle`/`username`/`displayName` 로 **결정적 confirm**(아래 P0-4).
+- **P0-4 pending user 메모리 의존 제거 (완전 무상태)**: 기존 `confirmRegistration(userHandle, credentialId)` 은 그 userHandle 이 이 JVM 의 `InMemoryUserStore` 에 **pending 으로 있을 때만** 동작(`computeIfPresent`)하고, 없으면 **조용히 no-op** 한다. begin 의 pending user 는 메모리에만 있고 영속화되지 않으므로, rp-app 재시작·다중 인스턴스·begin↔finish 간 pending 손실 시 — passkey-app 은 credential 을 만들었는데 rp-app 은 로컬 매핑을 안 남기고 **"성공"을 반환** → 이후 로그인이 `unknown-sub` 로 실패하는 **조용한 결함**(레퍼런스 RP 가 가르치면 안 될 패턴). → **finish 가 relay 의 서명된 `userHandle`/`username`/`displayName` 로 user 를 결정적으로 생성·확정**한다(`confirmRegistration` 을 "있으면 갱신, 없으면 생성" 으로). pending 메모리에 의존하지 않으므로 재시작·다중 인스턴스에도 일관. relay 가 서명돼 있어 username/displayName 도 위조 불가.
 - **인증(authenticate)은 relay 불필요**: `authenticationToken` 은 passkey-app 의 `AuthenticationChallenge` 가 userHandle 을 토큰에 묶어두고, finish 가 challenge.userHandle ↔ credential 을 검증한다(typed flow). discoverable flow 는 id-token sub 가 항상 실제 서명자라 무관. 따라서 authenticationToken 은 그대로 노출·릴레이한다(§1).
-- **무상태 유지**: relay 토큰은 서명된 자기완결 토큰이라 rp-app 이 아무 상태도 저장하지 않는다(서버 세션/Redis 불필요).
-- **DTO 영향**: `RegisterOptionsResp` 는 `registrationToken`+`userHandle` 대신 `regRelayToken`(단일 불투명 문자열)을 반환. `RegisterCompleteReq` 는 `registrationToken`+`userHandle` 대신 `regRelayToken` 을 받는다. (§2 의 register DTO 형태를 이 §5 로 대체.)
+- **무상태 유지**: relay 토큰은 서명된 자기완결 토큰이라 rp-app 이 begin↔finish 사이 **아무 서버 상태도 저장하지 않는다**(세션/Redis/pending 메모리 불필요). 확정된 user(credentialId 있음)만 파일에 영속화된다(기존 동작).
+- **relay 서명 키 강제 (P2)**: `rp.relay.secret` 미설정 시 데모 기본 키로 폴백하는데, P0-3/P0-4 의 위조불가 보장이 이 키에 의존한다. local/dev 외 프로필에서는 기본 키 사용을 startup 에서 차단(fail-fast)하거나 최소한 경고 — 운영이 데모 키로 조용히 뜨지 않게 한다.
+- **DTO 영향**: `RegisterOptionsResp` 는 `regRelayToken`(단일 불투명 문자열) 반환. `RegisterCompleteReq` 는 `regRelayToken` 수신. (§2 의 register DTO 형태를 이 §5 로 대체.)
 
 ## 에러 처리
 
