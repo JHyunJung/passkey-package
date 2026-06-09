@@ -30,4 +30,8 @@ describe('formatRecoveryCode', () => {
     expect(formatRecoveryCode('')).toBe('');
     expect(formatRecoveryCode('0011oo')).toBe('');
   });
+
+  it('does not synthesize alphabet chars via unicode case-folding (ß→SS)', () => {
+    expect(formatRecoveryCode('ßßßß')).toBe('');
+  });
 });
