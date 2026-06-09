@@ -61,4 +61,17 @@ class ReloadableApiKeySupplierTest {
 
         assertThat(s.get()).isEqualTo("pk_good");
     }
+
+    @Test
+    void throttlesEvenWithoutCachedKey(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("key.txt"); // does NOT exist yet
+        ReloadableApiKeySupplier s =
+                new ReloadableApiKeySupplier(f, Duration.ofHours(1), "env-key");
+
+        assertThat(s.get()).isEqualTo("env-key"); // first call polls, file missing → env
+
+        // create the file AFTER the first poll; within the 1h throttle window it must NOT be picked up
+        Files.writeString(f, "pk_new");
+        assertThat(s.get()).isEqualTo("env-key"); // throttled: new file not read yet
+    }
 }

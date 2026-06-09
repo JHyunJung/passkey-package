@@ -18,25 +18,32 @@ import java.util.function.Supplier;
  * <ul>
  *   <li>파일 미설정({@code keyFile == null}) → 항상 env 폴백({@code envFallback}).</li>
  *   <li>파일 설정 + 폴링 주기 경과 시에만 mtime 검사 → 변경됐을 때만 재읽기(hot path
- *       에서 매 요청 디스크 IO 회피).</li>
+ *       에서 매 요청 디스크 IO 회피). 캐시 유무와 무관하게 폴링 주기로 throttle 하되
+ *       최초 호출은 즉시 시도한다(파일 부재/blank 상태에서도 매 요청 IO·로그 폭주 방지).</li>
  *   <li>파일이 비었거나 공백뿐 → env 폴백.</li>
  *   <li>읽기 실패(삭제/권한) → 직전 유효 키 유지(fail-safe) + WARN. 단 한 번도 못
  *       읽었으면 env 폴백.</li>
  * </ul>
  *
- * <p>스레드 안전: 캐시 필드는 volatile. 여러 worker 스레드가 동시에 재읽기를
- * 시도할 수 있으나 결과가 동일하므로 lost-update 가 무해(idempotent reload).
+ * <p>스레드 안전: 캐시 상태({@code cachedKey} + {@code lastModified})를 불변 holder 로
+ * 묶어 단일 volatile 참조로 발행한다. 동시 reload 가 순서 뒤바뀌어 완료돼도 두 필드가
+ * 항상 일관된 짝으로 보이며, 마지막 성공 reload 의 (mtime,key) 쌍만 관찰된다.
+ * lastPollAt 의 race 는 무해(여분의 stat 한 번)하므로 별도 volatile 로 둔다.
  */
 public class ReloadableApiKeySupplier implements Supplier<String> {
 
     private static final Logger log = LoggerFactory.getLogger(ReloadableApiKeySupplier.class);
 
+    /** (mtime, key) 를 한 번에 발행하기 위한 불변 holder. key==null 이면 env 폴백 신호. */
+    private record State(long lastModified, String cachedKey) {}
+
+    private static final State EMPTY = new State(Long.MIN_VALUE, null);
+
     private final Path keyFile;
     private final long pollMillis;
     private final String envFallback;
 
-    private volatile String cachedKey;
-    private volatile long lastModified = Long.MIN_VALUE;
+    private volatile State state = EMPTY;
     private volatile long lastPollAt = Long.MIN_VALUE;
 
     public ReloadableApiKeySupplier(Path keyFile, Duration pollInterval, String envFallback) {
@@ -51,29 +58,36 @@ public class ReloadableApiKeySupplier implements Supplier<String> {
             return envFallback;
         }
         maybeReload();
-        return cachedKey != null ? cachedKey : envFallback;
+        String key = state.cachedKey();
+        return key != null ? key : envFallback;
     }
 
     private void maybeReload() {
         long now = System.currentTimeMillis();
-        if (now - lastPollAt < pollMillis && cachedKey != null) {
+        // 폴링 throttle: 캐시 유무와 무관하게 poll 주기 내면 디스크 안 본다.
+        // 최초 호출(lastPollAt==MIN_VALUE)은 항상 통과한다.
+        if (lastPollAt != Long.MIN_VALUE && now - lastPollAt < pollMillis) {
             return;
         }
         lastPollAt = now;
+        State current = state;
         try {
             long mtime = Files.getLastModifiedTime(keyFile).toMillis();
-            if (mtime == lastModified && cachedKey != null) {
-                return;
+            if (mtime == current.lastModified() && current.cachedKey() != null) {
+                return; // 안 바뀌었고 이미 읽은 캐시 있음
             }
             String raw = Files.readString(keyFile).trim();
-            lastModified = mtime;
             if (raw.isEmpty()) {
-                cachedKey = null;
+                // 빈/공백 파일 → 캐시 비워 env 폴백. mtime 은 갱신해 같은 빈 파일을
+                // 반복 재읽기하지 않게 하되, cachedKey=null 로 폴백 신호.
+                state = new State(mtime, null);
                 log.warn("api-key file is empty/blank, falling back to env: {}", keyFile);
             } else {
-                cachedKey = raw;
+                state = new State(mtime, raw);
             }
         } catch (IOException | RuntimeException e) {
+            // 읽기 실패(삭제/권한/IO): 직전 유효 키 유지(fail-safe). 단 한 번도
+            // 못 읽었으면 state.cachedKey==null → get() 이 env 폴백.
             log.warn("api-key file reload failed (keeping last good key): {} cause={}",
                     keyFile, e.toString());
         }
