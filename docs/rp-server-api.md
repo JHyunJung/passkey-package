@@ -319,7 +319,7 @@ Content-Type: application/json
   | 필드 | 타입 | 필수 | 설명 |
   |---|---|---|---|
   | `publicKeyCredential` | object | ✅ | `navigator.credentials.create()` 결과를 `encodeAttestationCredential()`로 인코딩한 것입니다. |
-  | `regRelayToken` | string | ✅ | `register/begin` 응답으로 받은 토큰 그대로입니다. 누락/공백이면 `400`. RP 서버가 서명을 검증해 `userHandle` 등을 복원하므로, 클라이언트는 이 값을 **변형 없이** 그대로 보냅니다. |
+  | `regRelayToken` | string | ✅ | `register/begin` 응답으로 받은 토큰 그대로입니다. 누락/공백이면 `400 C001`, 값은 있으나 만료·재사용·서명불일치면 `400 W002`. RP 서버가 서명을 검증해 `userHandle` 등을 복원하므로, 클라이언트는 이 값을 **변형 없이** 그대로 보냅니다. |
 
 - **응답 `data`** (`RegistrationFinishResponse`):
 
@@ -442,7 +442,7 @@ Content-Type: application/json
   | 필드 | 타입 | 필수 | 설명 |
   |---|---|---|---|
   | `publicKeyCredential` | object | ✅ | `navigator.credentials.get()` 결과를 `encodeAssertionCredential()`로 인코딩한 것입니다. |
-  | `authenticationToken` | string | ✅ | `authenticate/begin` 응답으로 받은 토큰 그대로입니다. 누락/공백이면 `400`. |
+  | `authenticationToken` | string | ✅ | `authenticate/begin` 응답으로 받은 토큰 그대로입니다. 누락/공백이면 `400 C001`, 값은 있으나 만료·재사용·유효하지 않으면 `400 W003`. |
 
 - **응답 `data`** (`LoginResultResp`):
 
@@ -566,14 +566,16 @@ export async function postJson(url, body) {
 
 | code | HTTP | 의미 | 상황 |
 |---|---|---|---|
-| `C001` | 400 | INVALID_INPUT | 필드 검증 실패(예: `username`/`displayName` 누락), 잘못된 입력입니다. |
+| `C001` | 400 | INVALID_INPUT | 필드 검증 실패입니다. 필수 필드(`username`/`displayName`)나 토큰 필드(`regRelayToken`/`authenticationToken`)가 **누락이거나 빈 문자열**일 때, 또는 body 형식이 잘못됐을 때입니다. 응답 `error.fieldErrors`에 어느 필드가 왜 거부됐는지 들어옵니다. |
 | `C002` | 405 | METHOD_NOT_ALLOWED | 잘못된 HTTP 메서드입니다. |
 | `C003` | 404 | ENTITY_NOT_FOUND | 리소스가 없습니다. |
+| `C004` | 400 | MISSING_PARAMETER | 필수 요청 파라미터가 누락됐습니다. |
+| `C005` | 400 | TYPE_MISMATCH | 파라미터 타입이 맞지 않습니다(예: 숫자 자리에 문자열). |
 | `C999` | 500 | INTERNAL_SERVER_ERROR | 서버 오류입니다. |
 | `A001` | 401 | UNAUTHORIZED | 인증이 필요합니다. |
 | `W001` | 409 | USERNAME_TAKEN | 이미 등록된 username입니다. |
-| `W002` | 400 | PENDING_REG_MISSING | `regRelayToken`이 누락/만료/재사용됐거나 서명이 유효하지 않습니다(`begin` 없이 `finish` 호출, 토큰 5분 만료, 또는 이미 쓴 토큰). 이 경우 `register/begin`부터 다시 시작하세요. |
-| `W003` | 400 | PENDING_AUTH_MISSING | `authenticationToken`이 누락/만료/재사용됐습니다. 이 경우 `authenticate/begin`부터 다시 시작하세요. |
+| `W002` | 400 | PENDING_REG_MISSING | `regRelayToken`은 보냈지만 **만료(약 5분)·재사용됐거나 서명이 유효하지 않습니다**(`begin` 없이 위조한 토큰, 또는 이미 쓴 토큰). 이 경우 `register/begin`부터 다시 시작하세요. (토큰을 **아예 안 보내거나 빈 값**이면 이 코드가 아니라 `C001`입니다.) |
+| `W003` | 400 | PENDING_AUTH_MISSING | `authenticationToken`은 보냈지만 **만료·재사용됐거나 유효하지 않습니다**. 이 경우 `authenticate/begin`부터 다시 시작하세요. (누락/빈 값이면 `C001`.) |
 | `P001` | 502 | PASSKEY_API_ERROR | RP 서버가 호출한 Passkey 서버에서 오류가 발생했습니다. |
 | `P003` | 429 | PASSKEY_RATE_LIMITED | Passkey 서버 rate limit을 초과했습니다. 클라이언트는 즉시 재시도하지 말고 **지수 백오프**(예: 1s→2s→4s)로 재시도하세요. 응답에 `Retry-After` 헤더가 있으면 그 값을 우선합니다. |
 | `P004` | 401 | PASSKEY_ID_TOKEN | ID Token 검증에 실패했습니다(인증 ceremony 검증 실패, 또는 `iss`/`aud` 불일치 포함). RP 서버가 ID Token의 `iss`/`aud`(tenantId 기반)를 검증할 때 **tenantId는 UUID 소문자 대시 형식**(`7f00dead-0000-...`)으로 옵니다. RP 설정값을 RAW hex로 두면 표기 차이로 mismatch가 나므로, 비교 전 UUID로 정규화하거나 설정을 UUID 형식으로 맞추세요. |
