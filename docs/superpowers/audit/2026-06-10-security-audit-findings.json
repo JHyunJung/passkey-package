@@ -1,0 +1,579 @@
+{
+  "summary": "제로베이스 보안 심층 감사 — 신뢰경계 7렌즈 + STRIDE, finding별 적대적 검증",
+  "agentCount": 37,
+  "logs": [
+    "[admin-auth] 4건 발견 → 적대적 검증 시작",
+    "[crypto-core] 3건 발견 → 적대적 검증 시작",
+    "[supply-config] 4건 발견 → 적대적 검증 시작",
+    "[rp-api] 5건 발견 → 적대적 검증 시작",
+    "[client-sdk] 6건 발견 → 적대적 검증 시작",
+    "[data-protection] 4건 발견 → 적대적 검증 시작",
+    "[tenant-isolation] 4건 발견 → 적대적 검증 시작",
+    "전체 30건 중 confirmed 19건, 오탐 기각 11건"
+  ],
+  "result": {
+    "totalRaw": 30,
+    "confirmedCount": 19,
+    "confirmed": [
+      {
+        "id": "rp-ratelimit-proxy-remoteaddr",
+        "title": "리버스 프록시 뒤에서 RateLimitFilter의 IP/anon 버킷이 LB 단일 IP로 붕괴 — 교차테넌트 DoS 및 flood 방어 무력화",
+        "stride": [
+          "D"
+        ],
+        "severity": "medium",
+        "location": "/Users/jhyun/Git/10-work/crosscert/Passkey2/passkey-app/src/main/java/com/crosscert/passkey/app/security/RateLimitFilter.java:144,164; /Users/jhyun/Git/10-work/crosscert/Passkey2/passkey-app/src/main/resources/application-common.yml (forward-headers-strategy 미설정)",
+        "description": "RateLimitFilter는 IP 버킷 키(line 144 `ratelimit:<uri>:ip:<remoteAddr>`)와 anon 키 버킷(line 164 `anon-<remoteAddr>`)을 모두 `req.getRemoteAddr()` 로 만든다. 그러나 어떤 프로파일에도 `server.forward-headers-strategy` 가 설정돼 있지 않고(grep 결과 0건), RemoteIpValve/ForwardedHeaderFilter도 없다. Spring Boot 기본값은 NONE 이므로 리버스 프록시/LB 뒤에서 `getRemoteAddr()` 는 항상 프록시의 주소를 돌려준다. 결과적으로 한 엔드포인트의 IP 버킷이 전체 트래픽에 대해 단 하나로 합쳐진다. 필터 Javadoc(line 26-31)은 'IP 버킷이 BCrypt 전에 flood 를 떨어뜨리고 공격자가 prefix 스프레이로 우회할 수 없다'고 주장하지만 이 전제(remoteAddr=실제 클라이언트 IP)가 프록시 뒤에서 깨진다.",
+        "exploitScenario": "SaaS 다중테넌트 배포(명시된 위협모델)에서 LB 뒤 단일 IP 버킷이 auth/start 300/min, reg/start 60/min 으로 전체 fleet 트래픽을 묶는다. 한 공격자(또는 단일 noisy 테넌트)가 well-formed pk_ 헤더 없이 anon 경로로 분당 300+ 요청을 보내면 `ratelimit:<uri>:ip:<LB-IP>` 버킷을 고갈시켜 같은 엔드포인트로 들어오는 모든 정상 테넌트 요청이 429 를 받는다(교차테넌트 가용성 침해). 동시에 BCrypt 앞 flood 차단의 per-source 격리도 사라져 공격 트래픽과 정상 트래픽을 구분할 수 없다.",
+        "saasImpact": "직접적. LB 뒤가 표준 배포 형태이므로 IP/anon 버킷이 항상 전역 단일 버킷으로 붕괴한다. 정상 부하만으로도 false 429 가 발생할 수 있고, 한 행위자가 전체 테넌트의 해당 엔드포인트를 거부시킬 수 있다(증폭형 DoS).",
+        "onpremImpact": "내부망에 리버스 프록시/Nginx 를 두는 단일테넌트 배포에서도 per-source 격리가 무력화되어, 한 내부 호스트의 flood 가 전 사용자 ceremony 를 막을 수 있다. 단일테넌트라 교차테넌트 영향은 없어 SaaS 보다 영향은 낮다.",
+        "suggestedDirection": "프록시 뒤 배포에서 `server.forward-headers-strategy=FRAMEWORK`(또는 NATIVE) 를 신뢰 프록시 구간에서만 켜 X-Forwarded-For 기반 실제 클라이언트 IP 를 사용하도록 하거나, 신뢰 프록시 IP 화이트리스트 하에서만 XFF 를 채택하도록 하라. 신뢰할 수 없는 환경에서는 spoofing 방지를 위해 XFF 무신뢰가 안전하므로, 배포 형태별로 IP 추출 전략을 명시적으로 문서화/구성하는 것이 핵심이다.",
+        "lens": "rp-api",
+        "lensTitle": "외부 RP API 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "medium",
+          "locationVerified": true,
+          "correctedLocation": "RateLimitFilter.java:144,164 (IP/anon 버킷 키 = req.getRemoteAddr()); 설정 누락은 core/src/main/resources/application-common.yml + passkey-app/src/main/resources/application{,-dev,-qa,-prod}.yml 전부에 server.forward-headers-strategy 미설정 (finding이 인용한 passkey-app/.../application-common.yml 경로는 부정확 — 해당 파일은 core 모듈에 존재)",
+          "saasExploitable": true,
+          "onpremExploitable": true,
+          "reasoning": "반박 시도 전부 실패 → confirmed.\n\n코드 일치 확인: RateLimitFilter.java:144 `ratelimit:<uri>:ip:<req.getRemoteAddr()>`, :164 `anon-<req.getRemoteAddr()>` — 인용 정확. IP 버킷은 line 146에서 키 버킷(line 168)보다 먼저 검사되어 고갈 시 즉시 429 반환.\n\n(a) 다른 곳 방어 부재 확인: grep 결과 전 프로파일(core/application-common.yml + passkey-app application{,-dev,-qa,-prod}.yml)에 server.forward-headers-strategy 미설정, RemoteIpValve/ForwardedHeaderFilter도 없음. Spring Boot 기본 NONE이므로 프록시 뒤 getRemoteAddr()=프록시 IP. XFF가 존재해도 앱이 무시 → 방어 부재가 실재.\n\n(b) 악용 전제 성립: application-prod.yml:22 주석이 \"보통 앞단 LB/리버스프록시가 종단\"이라고 프로젝트 스스로 LB 전치를 표준 배포로 명시. 따라서 \"프록시 없음\"으로 반박 불가. IP 버킷이 모든 요청에 대해 ApiKeyAuthFilter 이전에 발화하므로 공격자는 유효 키 없이 anon 경로로 auth/start 300/min, reg/start 60/min 전역 단일 버킷을 고갈 가능 → 유효 키를 가진 정상 테넌트도 line 146에서 키 버킷 도달 전에 429. 교차테넌트 가용성 침해 성립. 정상 멀티테넌트 집계 부하만으로도 전역 300/min 상한에 걸려 false 429 발생.\n\n(c) dead/dev-test 아님: @Component, 전 프로파일 활성 프로덕션 레이트리미터.\n\n(d) 영향 과장 여부: finding이 'BCrypt 앞 flood 차단 무력화'라고 한 부분은 약간 과장 — 전역 상한이라도 총 throughput은 여전히 캡되어 BCrypt는 보호됨. 그러나 핵심 주장(per-source 격리 붕괴 → 교차테넌트 DoS + 정상부하 false 429)은 유효.\n\nseverity 독립 재판정: 악용 난이도=trivial(무인증, 단순 요청 또는 정상 집계부하), 영향=가용성(D)만, 교차테넌트 blast radius이나 conf/integrity 영향 없고 버킷 리필로 회복 가능, amplification은 전역 상한으로 한정. trivial 악용 + fleet-wide 가용성으로 medium 상단이나 회복성·가용성 한정으로 high 미달 → medium 유지.\n\n[SaaS] LB 표준 배포 + 무인증 접근 가능 → 직접 악용. [온프레미스] 내부 nginx/리버스프록시를 둔 배포에서 한 내부 호스트가 전 사용자 ceremony 차단 가능(단일테넌트라 교차테넌트 영향은 없음). 단, 온프렘이 prod.yml SSL 블록으로 앱이 직접 TLS 종단하는 무프록시 배포면 getRemoteAddr=실 클라이언트라 이슈 소멸 → 온프렘 악용은 프록시 배포 조건부·저영향."
+        }
+      },
+      {
+        "id": "rp-registration-scope-grants-destructive-delete",
+        "title": "registration scope 가 self-service 패스키 DELETE 까지 허용 — 파괴적 작업의 scope 분리 부재(최소권한 위배)",
+        "stride": [
+          "E"
+        ],
+        "severity": "low",
+        "location": "/Users/jhyun/Git/10-work/crosscert/Passkey2/passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyScopeResolver.java:27; /Users/jhyun/Git/10-work/crosscert/Passkey2/passkey-app/src/main/java/com/crosscert/passkey/app/api/v1/rp/CredentialSelfServiceController.java:56-60",
+        "description": "ApiKeyScopeResolver line 27 은 `/api/v1/rp/credentials` 하위 전체(목록·이름변경·DELETE 포함)를 단일 'registration' scope 로 매핑한다. 따라서 등록만 의도해 발급한 registration-scope 키가 CredentialSelfServiceController line 56 의 DELETE(사용자 패스키 영구 삭제)까지 수행할 수 있다. 코드 주석(line 25-26)도 'DELETE 도 이 scope 로 허용된다 — 파괴적 작업의 scope 분리는 향후 정책 논의 대상'으로 명시한다.",
+        "exploitScenario": "테넌트가 등록 전용으로 여긴 registration-scope 키를 하위 시스템에 배포하거나 그 키가 유출되면, 공격자/오용 주체가 동일 키로 자사 사용자의 패스키를 DELETE 해 lockout 을 유발할 수 있다(read/register 의도와 destructive 권한의 의도치 않은 결합).",
+        "saasImpact": "테넌트 내부 최소권한 위배. 교차테넌트로 확장되진 않지만(키는 자기 테넌트에만 유효), 등록용 키가 파괴 권한을 갖는 설계는 키 유출 시 피해 범위를 키운다.",
+        "onpremImpact": "단일테넌트에서도 동일하게, 등록용으로 배포된 키가 삭제 권한을 갖는 최소권한 위배가 존재한다.",
+        "suggestedDirection": "파괴적 self-service 작업(DELETE)을 registration 과 분리된 별도 scope(또는 management/delete scope)로 요구하도록 scope 매핑을 세분화하는 방향. 등록·조회·삭제의 권한 분리를 명시해 키 유출 시 폭발 반경을 줄인다.",
+        "lens": "rp-api",
+        "lensTitle": "외부 RP API 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "인용 위치가 코드와 정확히 일치한다(ApiKeyScopeResolver.java:27 이 /api/v1/rp/credentials 하위 전체를 단일 'registration' scope 로 매핑, line 25-26 주석이 \"DELETE 도 이 scope 로 허용 — 파괴적 작업 scope 분리는 향후 정책\"이라고 명시). 반박을 전부 시도했으나 핵심 관찰을 깰 수 없었다. (1) 다른 방어 없음: ApiKeyAuthFilter.java:192-204 는 보유 scope 집합에 required('registration') 가 포함되는지 단일 검사만 하고, ApiKeyAdminService.java:43 의 허용 scope enum 은 {registration, authentication, admin} 뿐이라 테넌트가 고를 수 있는 별도 destructive/delete scope 자체가 존재하지 않는다. (2) 악용 전제 성립: registration scope 키 보유자는 DELETE /api/v1/rp/credentials/{id}(CredentialSelfServiceController.java:56-60 → CredentialSelfService.delete → creds.delete)를 인증자/사용자 상호작용 없이 직접 호출해 기존 패스키를 영구 삭제(lockout/DoS)할 수 있다. 등록만 의도해 하위 시스템에 배포한 키가 destructive 권한을 갖는 최소권한 위배(STRIDE E)가 실재한다. (3) dev/test 전용 아님 — 프로덕션 RP API. 다만 영향은 제한적이다: TenantContextHolder(filter:185)+VPD 로 키는 자기 테넌트에만 유효해 교차테넌트 확장 불가, 악용은 유효한 테넌트 키 보유(그 자체가 비밀/유출 전제)를 요구하고, 결과는 ATO 가 아닌 DoS/lockout 이다. 즉 독립 원격 취약점이라기보다 키 유출 시 폭발반경을 키우는 defense-in-depth/최소권한 갭이다. SaaS·온프레미스 동작 동일(온프렘 단일테넌트도 registration↔delete 권한 결합 동일). severity=low 유지가 타당: 테넌트 내부 한정, 유효 키 보유 필요, DoS 등급, 명시적으로 문서화된 의도적 trade-off.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "rp-mfa-reenroll-bypass",
+        "title": "MFA-pending 세션이 enroll/confirm/disable 에 접근 가능 → 비밀번호만으로 2차 인증 완전 우회 + 정당 운영자 락아웃",
+        "stride": [
+          "S",
+          "E",
+          "D"
+        ],
+        "severity": "critical",
+        "location": "admin-app/src/main/java/com/crosscert/passkey/admin/auth/MfaPendingFilter.java:73-80, admin-app/src/main/java/com/crosscert/passkey/admin/auth/MfaController.java:99-120, admin-app/src/main/java/com/crosscert/passkey/admin/auth/MfaController.java:56-84",
+        "description": "MfaPendingFilter.isAllowedWhilePending() 가 `uri.startsWith(\"/admin/api/mfa/\")` 로 MFA namespace 전체를 pending 상태에서 허용한다(MfaPendingFilter.java:76). 따라서 1차(비밀번호) 로그인만 통과해 MFA_PENDING=true 인 세션이 verify 뿐 아니라 enroll·confirm·disable 에도 도달한다. MfaController.enroll(MfaController.java:99-120)은 인자가 `Authentication auth` 뿐이고 세션의 pending 여부나 기존 유효 TOTP 제시를 전혀 요구하지 않은 채, 새 secret 을 생성해 `u.setMfaSecret(seal(newSecret))` 로 기존 secret 을 덮어쓰고 평문 secret 을 응답으로 반환한다(MfaController.java:111-119). 공격 흐름: (1) 탈취한 운영자 비밀번호로 /admin/login → 세션 MFA_PENDING=true, (2) /admin/api/mfa/enroll 호출(pending 허용) → 피해자의 원래 TOTP secret 이 공격자 통제 secret 으로 교체되고 평문 secret 획득, (3) 그 secret 으로 계산한 코드로 /admin/api/mfa/verify(MfaController.java:56-84) → validCode 가 새 secret 에 매치 → session.removeAttribute(MFA_PENDING)(MfaController.java:75) → MFA 게이트 해제. confirm 단계조차 필요 없다. MFA 는 비밀번호 유출에 대비한 마지막 방어선인데, 비밀번호만으로 그 방어선을 우회당한다. 부작용으로 원래 secret 이 파괴되어 정당 운영자는 자신의 authenticator 로 더 이상 로그인할 수 없게 된다(피해자 락아웃).",
+        "exploitScenario": "피싱·비밀번호 재사용·자격증명 스터핑으로 운영자(예: PLATFORM_OPERATOR) 비밀번호를 확보한 외부 공격자가, TOTP 기기 없이 로그인→enroll→verify 3회 요청만으로 완전한 관리자 세션을 획득한다. PLATFORM_OPERATOR 계정이면 전 테넌트에 대한 무제한 접근(API key·감사로그·테넌트 설정)을 얻고, 동시에 원래 운영자는 MFA secret 파괴로 잠긴다.",
+        "saasImpact": "리버스 프록시 뒤 인터넷 노출 관리자 로그인에서 비밀번호 유출은 흔하다. 이 경우 PLATFORM_OPERATOR 탈취 시 멀티테넌트 전체가 cross-tenant 노출되는 최악의 권한상승. critical.",
+        "onpremImpact": "내부망 침투자/내부자가 유출·추측한 운영자 비밀번호로 단일 테넌트 전체 관리자 권한을 동일하게 탈취. VPD off 여부와 무관하게 앱 레벨 MFA 게이트가 우회되므로 critical.",
+        "suggestedDirection": "pending 상태에서 허용할 경로를 `/admin/api/mfa/verify`(및 복구코드 검증)로만 좁힌다. enroll/confirm/disable 는 이미 2차 인증을 마친(non-pending) 세션에서만 허용하도록 MfaPendingFilter 화이트리스트를 prefix 매칭 대신 명시 경로 매칭으로 바꾸거나, MfaController.enroll/confirm/disable 진입부에서 세션 pending 여부를 직접 거부한다. enroll-while-pending 차단 회귀 테스트(현재 MfaPendingFilterTest 는 verify 통과만 검증, enroll/confirm/disable 차단 미검증) 추가.",
+        "lens": "admin-auth",
+        "lensTitle": "관리자 인증 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "critical",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true,
+          "reasoning": "반박 시도 전부 실패. 모든 인용 위치가 코드와 정확히 일치한다.\n\n1) MfaPendingFilter.java:73-80 — isAllowedWhilePending()는 `uri.startsWith(\"/admin/api/mfa/\")`(76줄)로 MFA 네임스페이스 전체를 pending 상태에서 허용한다. /admin/api/mfa/enroll, /confirm, /disable 모두 이 prefix에 매칭되어 통과한다. 화이트리스트가 verify로 좁혀져 있지 않다.\n\n2) MfaController.enroll(99-120)은 인자가 `Authentication auth` 뿐이고, 세션의 MFA_PENDING 여부도, 기존 유효 TOTP 제시도 요구하지 않는다. 112줄 `u.setMfaSecret(secretCipher.seal(secret))`로 피해자의 기존 secret을 무조건 덮어쓰고, 119줄에서 평문 secret을 응답으로 반환한다.\n\n3) 핵심 — validCode(174-178)는 `u.getMfaSecret() != null` + 코드 일치만 검사하며 `mfaEnabled`는 전혀 보지 않는다. 따라서 enroll이 mfaEnabled=false로 남겨두는 것은 게이트 우회를 막지 못한다. verify(56-84)에서 새 secret으로 계산한 코드가 매치되면 75줄 `session.removeAttribute(MFA_PENDING_ATTR)`로 게이트가 해제된다.\n\n악용 체인(코드로 검증됨): (1) 탈취 비밀번호로 /admin/login → AdminSecurityConfig:249-251에서 u.isMfaEnabled()=true이므로 세션 MFA_PENDING=TRUE, (2) /admin/api/mfa/enroll(pending 허용) → 피해자 secret이 공격자 통제 secret으로 교체+평문 획득, (3) 그 secret의 TOTP로 /admin/api/mfa/verify → validCode 통과 → MFA_PENDING 제거 → 전체 관리자 세션. confirm 불필요. 부작용으로 피해자 원래 secret 파괴 → 정당 운영자 락아웃.\n\n반박 각도 전수 검토:\n- (a) 다른 곳 방어? 없음. MFA 게이트는 오로지 세션 MFA_PENDING 속성뿐이고, 이는 로그인 성공 시 1회만 설정되며 per-request로 mfaEnabled를 재검증하는 코드가 없다(MeController도 단순 조회만). MfaController 진입부에 pending 거부 없음. 회귀 테스트 MfaPendingFilterTest는 verify 통과만 검증하고 enroll/confirm/disable 차단은 검증하지 않음 — 차단되지 않기 때문.\n- CSRF? 공격자가 세션·XSRF 쿠키를 모두 보유하므로 무력. 자격증명 보유 공격자에게 CSRF는 방어가 안 됨.\n- 락아웃/레이트리밋? 공격자는 올바른 비밀번호 보유라 1회 로그인 성공.\n- (b) 악용 전제? 비밀번호 유출은 MFA가 방어하려는 바로 그 위협. 성립.\n- (c) dev/test 전용? 프로덕션 AdminSecurityConfig에 그대로 와이어링됨(167줄).\n- (d) 영향 사소? 아니다 — 완전한 관리자 세션 탈취 + secret 파괴.\n\n위협모델별: [SaaS] PLATFORM_OPERATOR 탈취 시 cross-tenant 전체 노출, VPD on과 무관. [온프레미스] 단일 테넌트 전체 관리자 권한, VPD off와 무관(앱 레벨 게이트 우회). 양쪽 모두 악용 가능.\n\n심각도 재판정: 악용 난이도 낮음(특수 도구 없이 3회 HTTP 요청, 전제는 비밀번호 1건 유출) × 영향 최대(관리자 세션 완전 탈취 + 정당 운영자 락아웃, SaaS는 멀티테넌트 권한상승). critical 유지가 독립적으로도 타당."
+        }
+      },
+      {
+        "id": "rp-mfa-verify-no-ratelimit",
+        "title": "MFA verify(TOTP/복구코드) 엔드포인트에 시도 횟수 제한·잠금·anti-automation 부재 → 2차 인증 온라인 브루트포스",
+        "stride": [
+          "S",
+          "D"
+        ],
+        "severity": "high",
+        "location": "admin-app/src/main/java/com/crosscert/passkey/admin/auth/MfaController.java:56-84, admin-app/src/main/java/com/crosscert/passkey/admin/auth/RecoveryCodeService.java:53-58, admin-app/src/main/java/com/crosscert/passkey/admin/auth/TotpService.java:53-71",
+        "description": "1차 비밀번호 로그인은 계정별 lockout(AdminUser.recordFailedLogin, 5회→15분, AdminSecurityConfig.java:285-290)으로 보호되지만, 2차 인증 검증 경로 /admin/api/mfa/verify 에는 어떤 시도 카운터·잠금·rate limit 도 없다. 코드베이스 전체 grep 결과 admin-app/core 에 실제 rate limiter 가 존재하지 않으며(AdminSecurityConfig.java:71 주석의 'credential-spray rate limiting upstream' 은 계정별 lockout 을 가리키는 것일 뿐 별도 한도기가 없음), MfaController.verify 는 실패 시 단순히 401 만 반환하고 카운터를 증가시키지 않는다. TotpService.verifyAt 는 현재±1 window(3개 코드)를 항상 수용(TotpService.java:65-69)하므로 한 번의 요청이 3/10^6 확률로 적중 → 평균 수십만 회 시도로 6자리 TOTP 온라인 브루트포스가 현실적이다. 복구코드 consume(RecoveryCodeService.java:53-58)도 키스페이스는 크지만 동일하게 무제한 시도가 가능하다. (이 결함은 위 re-enroll 우회와 별개로, 우회를 막더라도 여전히 남는다.)",
+        "exploitScenario": "운영자 비밀번호를 확보해 MFA-pending 세션을 가진 공격자가 /admin/api/mfa/verify 에 6자리 코드를 무제한 자동 제출한다. 시도당 잠금·지연·차단이 없어, 세션을 유지한 채 수십만 회를 반복하면 TOTP 코드를 적중시켜 관리자 세션을 얻는다.",
+        "saasImpact": "인터넷 노출 환경에서 비밀번호 유출 후 2차 인증을 자동화로 뚫는 표준 anti-automation 공백. high.",
+        "onpremImpact": "내부망 공격자가 동일하게 자동화 브루트포스로 2차 인증 통과. 노출면은 좁지만 방어심화 공백은 동일. high.",
+        "suggestedDirection": "verify(및 복구코드 consume) 실패에 계정/세션 단위 시도 카운터와 잠금(1차 lockout 과 동일 정책 재사용)을 적용하고, 임계 초과 시 세션 무효화 + 보안 알림 이벤트 발행. 실패 횟수에 비례한 backoff 도 고려.",
+        "lens": "admin-auth",
+        "lensTitle": "관리자 인증 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "high",
+          "reasoning": "반박 실패 — finding 확인. 인용 위치 전부 정확: MfaController.verify(56-84)는 실패 시 warn 로그+401만 반환하고 시도 카운터 증가·세션 무효화·잠금이 전혀 없으며, MFA_PENDING 세션 속성이 유지되어 동일 세션으로 무제한 재시도 가능. TotpService.verifyAt(53-71) SKEW_STEPS=1 → 매 요청 3/10^6 코드 수용. 1차 로그인 lockout(recordFailedLogin)은 form-login의 BadCredentialsException 경로에서만 동작하며 MFA verify 경로는 이를 절대 건드리지 않음(application.yml:52 lockout 설정도 1차 경로 전용). admin-app/core 전 영역 grep 결과 실제 rate limiter 0건(매칭은 repository/entity/license filter뿐). AdminSecurityConfig.java:71 'credential-spray rate limiting upstream' 주석은 코드 근거 없는 자기정당화. maximumSessions(5)는 동시 세션 제한일 뿐 세션 내 요청 수 제한 아님. 악용 전제 성립: 공격자는 비밀번호를 확보해 MFA-pending 세션을 가져야 하나 그것이 2차 인증이 방어하는 시나리오 그 자체; CSRF는 켜져 있지만 공격자가 세션과 비-httpOnly XSRF 쿠키를 소유하므로 자동화를 막지 못함; 실패해도 세션이 pending+살아있어 무제한 brute force 가능. 6자리 TOTP에 3윈도우 수용 → 평균 약 33만 요청, throttle 부재 시 스크립트로 1시간 내 적중 → 2차 인증 완전 우회. 단, 복구코드 brute force 주장은 과장(31^8≈8.5e11 키스페이스로 비현실적) — 실질 결함은 TOTP 경로. NIST 800-63B가 OTP 검증 throttling을 의무화하는 표준 anti-automation 공백이며 영향이 관리자 전권 탈취라 high로 독립 재판정.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "rp-invitation-token-logged",
+        "title": "관리자 초대 토큰이 URL 경로로 전달되어 요청 로그에 평문 기록 → 로그 열람만으로 계정 탈취(replay)",
+        "stride": [
+          "I",
+          "S",
+          "E"
+        ],
+        "severity": "medium",
+        "location": "admin-app/src/main/java/com/crosscert/passkey/admin/operator/InvitationController.java:16-25, core/src/main/java/com/crosscert/passkey/core/api/RequestLoggingFilter.java:63-91",
+        "description": "InvitationController 는 토큰을 path variable 로 받는다 — GET /admin/api/invitations/{token} 와 POST /admin/api/invitations/{token}/accept(InvitationController.java:16,21). 토큰은 계정의 비밀번호를 설정할 수 있는 베어러 자격증명(`inv_`+64 hex, CryptoUtils.randomToken, 7일 TTL)이다. core 의 RequestLoggingFilter 는 모든 요청에 대해 `path=req.getRequestURI()` 를 그대로 로그에 기록하므로(RequestLoggingFilter.java:63,77), 초대 토큰 전체가 INFO(또는 4xx/5xx 시 WARN/ERROR) 로그 라인에 평문으로 남는다. 로그 수집/파일/운영자 화면에 접근 가능한 자는 미사용 초대 토큰을 추출해 accept 로 임의 비밀번호를 설정, 해당 관리자 계정(role·tenant 고정)을 탈취할 수 있다. 대조적으로 비밀번호 재설정은 토큰을 POST 본문으로 받아(PasswordResetController.java:36-40) 로그에 남지 않는다 — 비대칭적 노출.",
+        "exploitScenario": "로그 집계 시스템/서버 로그 파일 열람 권한을 가진 내부자(또는 로그 유출을 확보한 공격자)가 `path=/admin/api/invitations/inv_...` 라인에서 토큰을 추출, TTL 만료 전 POST .../accept 로 자기 비밀번호를 설정한다. 초대가 PLATFORM_OPERATOR 면 플랫폼 전체 탈취, RP_ADMIN 이면 해당 테넌트 관리자 탈취.",
+        "saasImpact": "중앙 로그 집계(ELK 등)가 광범위 접근 대상인 SaaS 에서, 평문 토큰 노출은 곧 계정 탈취 자격으로 이어진다. PLATFORM_OPERATOR 초대 노출 시 cross-tenant. medium.",
+        "onpremImpact": "DB 덤프에는 토큰 해시만 있어 DB-only 유출로는 불가하지만, 호스트의 로그 파일 접근(내부망 침투자·운영 인력)이면 동일하게 탈취 가능. medium.",
+        "suggestedDirection": "초대 토큰을 URL 경로에서 제거하고 비밀번호 재설정과 동일하게 요청 본문(또는 비로그 헤더)으로 전달하거나, RequestLoggingFilter 가 민감 경로의 path 를 마스킹/축약하도록 한다(예: 토큰 prefix 만).",
+        "lens": "admin-auth",
+        "lensTitle": "관리자 인증 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "medium",
+          "reasoning": "반박 실패 — 코드로 전제가 모두 성립함을 확인했다.\n\n1) 위치 정확: InvitationController.java:16-25 는 GET /{token}, POST /{token}/accept 둘 다 토큰을 @PathVariable 로 받는다. RequestLoggingFilter.java:63 에서 path=getRequestURI() 를 읽어 :77 에서 그대로 \"path=%s\" 로 포맷, :80/82/84 에서 status 별 ERROR/WARN/INFO 로 기록한다. EXCLUDED_PATHS(:55)는 health/jwks 뿐이라 초대 경로는 마스킹 없이 전량 기록된다.\n\n2) 방어 부재 확인: (a) 필터에 토큰/민감경로 마스킹 로직 없음. (b) AdminApplication.java:17 scanBasePackages=\"com.crosscert.passkey\" 라 core 의 @Component 필터가 admin-app 에서 실제 활성. (c) application-prod.yml:54 com.crosscert.passkey=INFO → 정상(2xx) GET check 라인도 INFO 로 평문 토큰 기록됨(prod 한정 무력화 아님). (d) AdminSecurityConfig.java:115 /admin/api/invitations/** permitAll → 초대받은 SPA 의 fetch 가 그대로 도달·로깅. 토큰은 inv_+64hex(32 random bytes) bearer 자격이며 accept 로 임의 비밀번호 설정→계정 탈취 가능.\n\n3) 비대칭 확인: PasswordResetController.confirm 은 토큰을 POST 본문(ConfirmBody)으로 받아 경로 로그에 안 남음 — 동일 패턴인데 초대만 노출되는 명백한 누락.\n\n악용 전제(공격자가 로그 열람 권한 보유)는 STRIDE I 의 내부자/로그유출 모델로 성립. 토큰은 single-use(AdminUserInvitation.accept 가 acceptedAt 설정, lookupValid 가 isAccepted 거부)이지만: GET check 시점에 토큰이 로그에 남고 POST accept 전까지 pending 상태로 유효 → 7일 TTL 동안 초대자가 즉시 수락하지 않으면(흔함) 긴 replay 창이 생긴다. 따라서 단발성이 공격을 막지 못함.\n\nseverity 재판정: 이는 CWE-598/CWE-532(URL/로그 내 자격증명 노출) 전형. 영향은 진짜 계정 탈취(PLATFORM_OPERATOR 면 플랫폼 전체, RP_ADMIN 이면 테넌트). 다만 원격 미인증 공격이 아니라 특권적 로그 접근 + single-use 소비 레이스가 필요해 high/critical 은 아님. SaaS 의 광범위 ELK 접근성 + 7일 미사용 창 + 자명한 수정 가능성(본문 이전 또는 path 마스킹) 을 고려하면 low 로 낮추기에는 영향이 크다 → medium 유지가 독립 판단으로도 타당.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "rp-profile-endpoint-leak",
+        "title": "미인증 /admin/api/profile 이 활성 Spring profile 전체 목록을 노출 → 배포 형상 정보 누출",
+        "stride": [
+          "I"
+        ],
+        "severity": "low",
+        "location": "admin-app/src/main/java/com/crosscert/passkey/admin/config/ProfileController.java:28-35, admin-app/src/main/java/com/crosscert/passkey/admin/config/AdminSecurityConfig.java:112",
+        "description": "ProfileController.profile() 은 permitAll(AdminSecurityConfig.java:112)로 미인증 호출이 가능하며, 응답에 `local` 불리언뿐 아니라 `List<String> active`(env.getActiveProfiles() 전체)를 그대로 반환한다(ProfileController.java:29-34). 주석은 'local 여부만 노출하므로 위험 없음'이라 적었으나 실제로는 saas/onprem/vpd-off 등 운영 프로파일 전체가 외부에 노출된다. SPA 의 테스트 계정 prefill 판단에는 `local` 불리언 하나면 충분하다.",
+        "exploitScenario": "미인증 외부 공격자가 /admin/api/profile 을 호출해 활성 프로파일 목록(예: vpd-off, onprem)을 읽고, 테넌트 격리 강도·배포 모드를 파악해 후속 공격(예: VPD off 환경 가정)을 맞춤화한다.",
+        "saasImpact": "인터넷 노출 관리자 표면에서 미인증 fingerprinting 으로 배포 형상을 노출. 직접 침해는 아니나 공격 사전조사 가치 제공. low.",
+        "onpremImpact": "내부망에서만 접근되나 동일하게 프로파일(특히 vpd-off 등 약한 격리 신호)을 무자격 노출. low.",
+        "suggestedDirection": "응답에서 `active` 전체 목록을 제거하고 SPA 가 필요로 하는 `local`(혹은 기능 토글) 불리언만 노출한다.",
+        "lens": "admin-auth",
+        "lensTitle": "관리자 인증 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "인용 위치 모두 정확. ProfileController.profile()(28-35행)이 env.getActiveProfiles() 전체를 ProfileView.active로 그대로 반환하고, AdminSecurityConfig.java:112에서 /admin/api/profile 가 permitAll 로 미인증 접근 가능함을 코드로 확인. 컨트롤러에 @Profile 게이팅이 없어 prod 포함 모든 환경에서 활성이며 dev/test 전용이 아님. SPA(Login.tsx)는 local 불리언만 필요하므로 active 전체 목록 노출은 기능상 불필요 — suggestedDirection 타당. 따라서 '미인증으로 active profile 목록이 불필요하게 노출되고, 코드 주석이 위험 없음이라 단언한 것과 배치된다'는 본질은 반박 실패(confirmed). 다만 finding의 영향 묘사는 과장: exploitScenario가 드는 vpd-off/onprem 은 Spring profile 이 아니라 별도 property(PASSKEY_VPD_ENABLED, PASSKEY_DEPLOYMENT_MODE)로 제어되므로 이 엔드포인트로는 노출되지 않음. 실제 노출 대상은 prod/qa/dev/local 같은 환경 라벨 수준이라 격리 강도 신호는 새지 않는다. 직접 침해 경로 없는 단순 fingerprinting 표면이므로 SaaS·온프레미스 모두 low(영향만 보면 info 에 근접)로 재판정.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "cc-attestation-trust-never-enforced",
+        "title": "Attestation 인증서 체인이 어디서도 trust anchor로 검증되지 않음 — attestation/AAGUID 정책 위조 가능",
+        "stride": [
+          "S",
+          "E"
+        ],
+        "severity": "medium",
+        "location": "/Users/jhyun/Git/10-work/crosscert/Passkey2/passkey-app/src/main/java/com/crosscert/passkey/app/fido2/registration/RegistrationFinishService.java:117, /Users/jhyun/Git/10-work/crosscert/Passkey2/passkey-app/src/main/java/com/crosscert/passkey/app/fido2/WebAuthnVerifierConfig.java:16-19, /Users/jhyun/Git/10-work/crosscert/Passkey2/webauthn/src/main/java/com/crosscert/passkey/webauthn/verifier/NativeWebAuthnVerifier.java:243, /Users/jhyun/Git/10-work/crosscert/Passkey2/passkey-app/src/main/java/com/crosscert/passkey/app/fido2/mds/MdsVerifier.java:42-65",
+        "description": "등록 경로의 trust 정책이 RegistrationFinishService.java:117에서 `AttestationTrustPolicy.SELF_ALLOWED`로 하드코딩돼 있고, verifier 빈은 WebAuthnVerifierConfig.java:18의 `NativeWebAuthnVerifier.withDefaults(mapper)`를 통해 `EmptyTrustAnchorProvider`로 구성된다. NativeWebAuthnVerifier.enforceTrust의 SELF_ALLOWED 분기(line 243)는 빈 본문(no-op)이라, packed/tpm/apple/android-key/android-safetynet/fido-u2f가 반환하는 BASIC/ATT_CA 결과에 대해 x5c 체인을 어떤 제조사 루트로도 PKIX 검증하지 않는다. 각 포맷 검증기(예: AppleAttestationVerifier.java:23, AndroidKeyAttestationVerifier.java:30, AndroidSafetyNetAttestationVerifier.java:44-46, TpmAttestationVerifier.java:39)는 주석으로 '체인 trust anchor 검증은 상위 단계 책임'이라 명시하지만, 그 상위 단계(RegistrationFinishService)는 절대 실제 trust anchor를 넘기지 않는다. MdsVerifier.verify(MdsVerifier.java:42)는 authData에 들어온 '주장된' AAGUID가 MDS에 양호 상태로 존재하는지만 보고, attestation 서명의 신뢰 사슬은 검증하지 않는다. 그런데 AAGUID는 등록자가 통제하는 authData 안의 값이므로(공격자가 자기 키로 self-attestation 서명을 만들면 authData 전체가 공격자 통제), 공격자는 임의의 AAGUID를 주장하고 self-signed x5c leaf로 BASIC/ATT_CA를 통과시킬 수 있다.",
+        "exploitScenario": "테넌트의 등록 ceremony에 접근 가능한 악성 최종사용자(또는 유효 API key를 가진 클라이언트)가, 소프트웨어/복제 크리덴셜을 만들면서 authData의 AAGUID를 특정 하드웨어 키(예: YubiKey AAGUID, MDS에 양호 상태로 등록됨)로 위조하고, fmt=packed self-attestation으로 authData||clientDataHash를 자기 크리덴셜 키로 서명한다. 트러스트 체인 검증이 없으므로 attestation은 통과하고, MdsVerifier는 주장된 AAGUID가 MDS에 있으니 통과하며, AaguidPolicyChecker(AAGUID 허용목록)도 통과한다. 결과적으로 '하드웨어 키만 허용'·'mdsRequired=true'·'AAGUID 화이트리스트' 같은 테넌트 정책이 무력화되어, 소프트웨어 인증기가 하드웨어 인증기로 위장 등록된다.",
+        "saasImpact": "악용 가능. VPD로 테넌트 격리가 되므로 cross-tenant 영향은 없으나, attestation/AAGUID 기반 디바이스 정책을 신뢰하는 테넌트의 정책이 자기 테넌트 내에서 우회된다(최종사용자가 정책을 속임). attestation을 컴플라이언스/보증 근거로 파는 SaaS에서 보증의 허위가 발생.",
+        "onpremImpact": "악용 가능. 단일 테넌트라도 '하드웨어 인증기 강제' 같은 설정 위생이 의미를 잃는다. 내부망 침투자/악성 내부자가 소프트웨어 키를 하드웨어로 위장 등록 가능.",
+        "suggestedDirection": "attestation을 보안 결정(AaguidPolicyChecker, mdsRequired)에 쓰는 테넌트에 대해서는 TRUST_CHAIN_REQUIRED 정책 + 실제 FIDO/제조사 루트 trust anchor를 주입해 x5c 체인을 PKIX 검증하도록 배선하라. 이미 존재하는 TRUST_CHAIN_REQUIRED 경로와 TrustAnchorProvider 추상화를 실제로 연결(포맷·AAGUID별 anchor 해석)하고, attestation 신뢰가 없는 한 AAGUID/MDS 정책을 '보증'으로 표기하지 말 것.",
+        "lens": "crypto-core",
+        "lensTitle": "암호 코어",
+        "verdict": {
+          "confirmed": true,
+          "severity": "medium",
+          "reasoning": "반박 시도가 모든 각도에서 실패했다. 인용된 코드가 주장과 정확히 일치한다.\n\n(1) 위치 검증: RegistrationFinishService.java:117은 실제로 AttestationTrustPolicy.SELF_ALLOWED를 하드코딩한다. WebAuthnVerifierConfig.java:18은 NativeWebAuthnVerifier.withDefaults(mapper)를 호출하고, withDefaults(NativeWebAuthnVerifier.java:53-56)는 EmptyTrustAnchorProvider를 주입한다(trustAnchors()가 항상 빈 Set 반환). enforceTrust의 SELF_ALLOWED 분기(line 243)는 빈 본문 no-op이 맞다. MdsVerifier.verify(line 42-65)는 cache.lookup(aaguid)로 '주장된' AAGUID의 MDS 상태만 보고 서명 사슬은 검증하지 않는다. 전부 정확.\n\n(2) 핵심 악용 전제 성립 확인: PackedAttestationVerifier.java:48-60의 self 경로(x5c 없음)는 authData의 attestedCredentialData에 든 credential 공개키로 authData||clientDataHash 서명을 검증하고 AttestationResult.self()를 반환한다. 여기서 AAGUID 값(16바이트)에 대한 제약이 전혀 없다 — self-attestation이 all-zero AAGUID여야 한다는 검증이 없다. authData 전체가 공격자 통제이므로 임의 AAGUID(예: 실제 YubiKey AAGUID)를 넣고 자기 키로 self-서명하면 SELF가 나오고, SELF_ALLOWED no-op이라 통과한다. 이후 MdsVerifier는 그 AAGUID가 MDS에 양호 상태로 존재하니 통과, AaguidPolicyChecker.check(주장된 UUID만 검사)도 통과한다. 사슬 어디에도 'self-attestation으로 들어온 AAGUID는 신뢰 불가'라는 게이트가 없다.\n\n(3) 방어 부재 확인: grep 결과 TRUST_CHAIN_REQUIRED는 enum 정의와 enforceTrust 분기에만 존재하고 어떤 프로덕션 호출자도 사용하지 않는다(유일한 호출자가 SELF_ALLOWED 하드코딩). 실제 trust anchor를 주입하는 프로덕션 코드도 없다(EmptyTrustAnchorProvider만 배선). 각 포맷 검증기 주석이 '체인 trust anchor 검증은 상위 단계 책임'이라 명시(AppleAttestationVerifier.java:23 등)하나 그 상위 단계가 실제로 anchor를 넘기지 않는다.\n\n(4) 도달성: /api/v1/rp/registration/finish(RegistrationController.java:35)는 RP API 엔드포인트로 API key/tenant 컨텍스트 기반이며 admin 게이트가 없다. dev/test 전용 아님. 등록 ceremony에 접근 가능한 악성 최종사용자 또는 유효 API key 보유 클라이언트가 crafted publicKeyCredential을 제출할 수 있다.\n\n반박 실패 결론: 방어가 다른 곳에 없고, 악용 전제가 코드로 성립하며, 도달 가능하다.\n\n심각도 재판정(medium 유지): 악용 난이도는 중간 — 위조 AAGUID와 유효한 self-서명을 가진 WebAuthn attestation object를 직접 구성해야 하나, 소프트웨어 authenticator를 스크립팅할 수 있으면 충분하고 특별 권한이 필요 없다. 영향은 제한적 — VPD로 테넌트 격리되어 cross-tenant 상승이 없고, 크리덴셜 탈취나 인증 우회가 아니라 '하드웨어 강제/AAGUID 화이트리스트/mdsRequired' 같은 디바이스 보증 정책을 공격자가 자기 테넌트 내에서 무력화하는 것이다. 실질적이지만 한정된 무결성/보증 실패이므로 medium이 정확. high(cross-tenant/인증 우회)에는 못 미친다.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "cc-recovery-code-weak-hash",
+        "title": "Admin 복구코드가 저엔트로피(~40bit) + 무솔트 단일 SHA-256으로 저장 — DB 덤프에서 오프라인 복원 가능",
+        "stride": [
+          "I",
+          "S",
+          "E"
+        ],
+        "severity": "medium",
+        "location": "/Users/jhyun/Git/10-work/crosscert/Passkey2/admin-app/src/main/java/com/crosscert/passkey/admin/auth/RecoveryCodeService.java:27-30,48,57, /Users/jhyun/Git/10-work/crosscert/Passkey2/core/src/main/java/com/crosscert/passkey/core/util/CryptoUtils.java:20-27",
+        "description": "RecoveryCodeService는 8글자(GROUP_LEN*2=8, RecoveryCodeService.java:28-29) × 31-문자 알파벳('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') 복구코드를 생성한다 → 엔트로피 ≈ log2(31^8) ≈ 39.6비트. 이 코드는 generate()에서 `CryptoUtils.sha256Hex(code)`(RecoveryCodeService.java:48)로 해시되어 저장되고, consume()도 `CryptoUtils.sha256Hex(normalize(code))`(line 57)로 조회한다. CryptoUtils.sha256Hex(CryptoUtils.java:20)는 솔트 없는 단일 SHA-256이다. 무솔트 빠른 해시 + 약 40비트 엔트로피의 조합은 해시(=DB 덤프)를 확보한 공격자에게 오프라인 전수공격이 현실적이다(GPU ~10^10 SHA-256/s 기준 코드당 수십 초, 관리자·코드 전량 분 단위 복원). 복구코드는 admin MFA를 우회하는 1회용 2차인자다(MfaController.java:66 consume → MFA-pending 해제).",
+        "exploitScenario": "온프레미스 고객사에서 내부 침투자/악성 내부자가 DB 덤프를 확보(또는 SaaS에서 SQLi/백업 유출). admin_user_recovery_code 테이블의 SHA-256 해시를 오프라인으로 전수공격해 미사용 복구코드 평문을 복원한다. 동일 덤프의 admin 비밀번호 해시까지 크랙하면, 복원한 복구코드로 MFA 2차인자를 통과해 관리자 콘솔(테넌트/API key/키회전 관리)에 로그인한다.",
+        "saasImpact": "악용 가능(단, DB 덤프/백업 유출 전제). VPD는 행 접근만 격리할 뿐 덤프 확보 시 해시 자체는 노출되며, 무솔트 빠른 해시라 솔트로 인한 사전계산 방어가 없다.",
+        "onpremImpact": "악용 가능성 높음. 위협모델이 명시한 'DB-only 유출(덤프 확보)' 시나리오에 정확히 해당. 외부 SE DB(VPD off)에서 관리자 복구코드 해시 일괄 노출 시 분 단위로 평문 복원되어 MFA 우회 경로가 된다.",
+        "suggestedDirection": "복구코드 엔트로피를 충분히(예: ≥128비트) 올리거나, 저장 해시를 솔트 있는 느린 KDF(예: BCrypt/Argon2, API key와 동일한 PasswordEncoder 재사용)로 전환하라. 현재 엔트로피를 유지한다면 무솔트 SHA-256은 부적합 — 솔트 있는 느린 해시가 DB 덤프 오프라인 공격을 무력화한다.",
+        "lens": "crypto-core",
+        "lensTitle": "암호 코어",
+        "verdict": {
+          "confirmed": true,
+          "severity": "medium",
+          "reasoning": "반박에 실패했다. 코드가 주장과 일치한다: 복구코드는 8자 × 알파벳 길이 32('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') → 엔트로피 정확히 40.0비트(키스페이스 2^40≈1.1×10^12; 발견 측 '31자/39.6비트'는 오히려 과소 추정). RecoveryCodeService.java:48/57이 CryptoUtils.sha256Hex(CryptoUtils.java:20-27)로 무솔트·무페퍼 단일 SHA-256으로 저장/조회하며, MfaController.java:66 consume 성공 시 MFA_PENDING_ATTR 제거(:75)로 MFA를 우회한다. 무솔트 40비트 고속해시는 단일 GPU로 전체 키스페이스를 분 단위에 소진하고, 무솔트라 한 번의 패스로 전 관리자 코드를 동시 복원한다. 보상 통제 부재: 코드베이스는 BCryptPasswordEncoder(12)와 TOTP 비밀의 KeyEnvelope 봉인(DB 밖 키)을 갖췄음에도 복구코드만 SHA-256 — 의도된 트레이드오프가 아닌 불일치다. 오히려 DB-only 덤프 시 TOTP 비밀은 복원 불가(DB 밖 키), 비밀번호는 BCrypt(12)로 느린데 복구코드만 저렴하게 크랙되므로 동일 MFA 게이트의 가장 약한 고리다. 유일한 완화는 복구코드가 2차 인자라는 점 — 사용하려면 1차(비밀번호) 통과가 필요하고 BCrypt(12)가 실질 장벽이라 단독 악용은 불가하다. 그러나 'MFA는 비밀번호 유출에도 버텨야 한다'는 속성을 명시적으로 범위 내인 DB-덤프 위협모델에서 무력화하므로 medium이 적정(독립 악용 불가라 high 아님, admin 콘솔 탈취 영향·무솔트 40비트의 객관적 부적합성으로 low로 내리지 않음).",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true,
+          "correctedLocation": "알파벳은 31자가 아니라 32자(정확히 40비트). 위치 인용은 모두 정확: RecoveryCodeService.java:27-30,48,57 + CryptoUtils.java:20-27 + (악용경로) MfaController.java:66,75"
+        }
+      },
+      {
+        "id": "cc-cosekey-rsa-no-upper-bound",
+        "title": "COSE RSA 공개키의 modulus/exponent 상한 부재 — 악성 등록으로 인증 시 RSA 검증 비용 증폭(DoS)",
+        "stride": [
+          "D"
+        ],
+        "severity": "low",
+        "location": "/Users/jhyun/Git/10-work/crosscert/Passkey2/webauthn/src/main/java/com/crosscert/passkey/webauthn/cose/CoseKeyParser.java:62-84",
+        "description": "CoseKeyParser.parseRsa는 modulus에 하한만 검사하고(n.bitLength() < 2048 거부, CoseKeyParser.java:70) 상한이 없으며, public exponent e도 하한·홀수만 검사한다(e>=3 && odd, line 76). CBOR 바이트 길이가 요청 본문 크기까지만 제한되므로, 공격자는 수만 비트의 modulus 또는 수천~수만 비트의 public exponent를 가진 RSA COSE 키를 등록할 수 있다(packed self-attestation은 같은 키로 1회 self-서명만 만들면 등록 통과). 저장된 cosePublicKey는 이후 매 인증마다 NativeWebAuthnVerifier.verifySignature(NativeWebAuthnVerifier.java:219-230)에서 RSA 검증에 사용되며, 거대 modulus·거대 exponent의 modexp 비용은 요청당 수십~수백 ms로 증폭될 수 있다.",
+        "exploitScenario": "유효 API key를 가진 악성 테넌트(또는 등록 접근 가능한 사용자)가 비정상적으로 큰 RSA modulus와 큰 public exponent를 가진 크리덴셜을 1회 등록한 뒤, 해당 크리덴셜로 인증을 반복 호출해 서버가 매 호출마다 값비싼 RSA 검증을 수행하도록 강제한다. 동일 비용을 등록 시 1회만 부담하면 되는 비대칭 증폭이다.",
+        "saasImpact": "악용 가능(자기 테넌트 범위). RateLimitFilter로 요청율이 제한되므로 증폭은 rate-limit × 요청당 비용으로 한정되나, public exponent 무상한은 요청당 비용을 크게 키울 수 있다.",
+        "onpremImpact": "악용 가능. 단일 테넌트 환경에서도 내부 사용자가 자원 고갈을 유발할 수 있다(설정 위생 차원의 방어심화 공백).",
+        "suggestedDirection": "COSE RSA 키 파싱 시 modulus 비트수 상한(예: ≤4096) 및 public exponent 상한(예: 일반적 e ∈ {3, 65537} 화이트리스트 또는 비트수 상한)을 추가해 비정상 키를 등록 단계에서 거부하라.",
+        "lens": "crypto-core",
+        "lensTitle": "암호 코어",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "반박에 실패했다. (1) 위치 정확: CoseKeyParser.java:62-84의 parseRsa가 modulus는 하한만(line 70 `n.bitLength() < 2048` 거부), exponent는 하한+홀수만(line 76 `e>=3 && odd`) 검사하고 둘 다 상한이 전혀 없다. (2) 도달 경로 실존: 등록 시 NativeWebAuthnVerifier.java:108에서 파싱·저장(line 138 acd.coseKeyBytes())되고, 인증 시 line 197에서 저장 키를 재파싱해 verifySignature(line 219-226)의 sig.verify가 매 /authentication/finish마다 s^e mod n을 수행한다. packed/none self-attestation은 같은 키로 self-서명 1회면 등록을 통과하므로 악성 테넌트가 거대 e/n 키를 1회 등록 후 인증 반복으로 비대칭 증폭이 가능하다. (3) 상류 방어 부재: CborDecoder는 바이트열 길이를 요청 버퍼 잔량으로만 제한(CborDecoder.java:126)하고, prod/qa/dev yml 어디에도 max-http-request-size가 없어 수천~수만 비트 exponent가 일반 요청 본문에 들어간다. 주장한 '상한 부재'는 실제로 존재한다. (4) 증폭 실측: 2048-bit modexp가 e=65537일 때 ~0.31ms, e=16384bit일 때 ~20ms(~65배), n=16384bit·e=65537일 때 ~1.9ms로, 실재하지만 완만하다. 반박이 깎아낸 것은 심각도뿐이다: RateLimitFilter가 /authentication/finish를 API key당 300/min으로 제한(RateLimitFilter.java:67-68)하므로 지속 증폭 상한은 ~300×20ms≈6s CPU/min/key로 유계이고, 공격자는 유효 API key 보유+rate-limit 대상이며 기밀성/무결성 영향은 없는 순수 자원 증폭이다. 핵심 주장(상한 부재·경로 도달·증폭 가능)은 코드로 모두 확인되어 오탐으로 기각할 수 없다. 따라서 confirmed=true, 다만 유계·인증 필요·완만한 per-request 비용을 반영해 severity=low가 적정하다(원래 값과 동일하나 독립 재판정 결과).",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "rp-pending-user-unbounded-dos",
+        "title": "인증 없는 /passkey/register/begin 이 pending user 를 무한 누적 + upstream 호출 증폭(메모리 고갈 DoS)",
+        "stride": [
+          "D"
+        ],
+        "severity": "medium",
+        "location": "rp-app/src/main/java/com/crosscert/passkey/rpapp/user/InMemoryUserStore.java:120-128, rp-app/src/main/java/com/crosscert/passkey/rpapp/web/WebAuthnController.java:43-60",
+        "description": "registerOptions 는 가장 먼저 users.createPending() 을 호출하고(WebAuthnController L46), createPending 은 매 호출마다 32바이트 랜덤 userHandle 을 키로 byHandle 맵에 RpAppUser 를 put 한다(InMemoryUserStore L121-127). 이 pending 엔트리는 영속화되지 않을 뿐 TTL/eviction 도 전혀 없어 '재기동 시에만' 정리된다(주석 L125). WebSecurityConfig 는 /passkey/** 를 permitAll 로 두므로(WebSecurityConfig L27-29) 인증 없이 호출 가능하고, rp-app 자체에는 어떤 rate-limit 도 없다. 또한 매 begin 은 passkey.registrationStart 로 upstream(passkey-app)을 1회 호출(WebAuthnController L49-50)하므로 단일 rp-app API key 로 향하는 호출 증폭도 동반한다.",
+        "exploitScenario": "외부 공격자가 /passkey/register/begin 에 임의 username/displayName 으로 대량 POST 를 보낸다. 각 요청은 (1) byHandle 맵에 새 엔트리를 영구 적재해 결국 힙 고갈로 rp-app 을 OOM 시키고, (2) passkey-app 으로 registrationStart 호출을 증폭시켜 공유 API key 가 429(rate limited)에 걸리게 만들어 정상 사용자의 등록·로그인까지 차단한다.",
+        "saasImpact": "리버스 프록시 뒤 외부 비인증 공격자가 해당 테넌트 rp-app 인스턴스를 메모리 고갈로 다운시키고, 단일 API key 의 rate-limit 을 소진시켜 그 테넌트 전체의 패스키 가용성을 떨어뜨린다.",
+        "onpremImpact": "내부망 침투자(또는 잘못된 스크립트)가 동일하게 단일 인스턴스 rp-app 의 힙을 고갈시킬 수 있다. 단일 테넌트라 영향 범위는 그 고객사 전체.",
+        "suggestedDirection": "pending 엔트리에 생성시각 기반 TTL/상한(LRU 또는 만료 sweep)을 두어 unbounded 성장을 막고, /passkey/** begin 엔드포인트에 IP/세션 단위 간단한 throttle 을 추가하는 방향. begin 점유를 만들지 않는 현재 설계상 pending 은 자체 만료가 안전하다.",
+        "lens": "client-sdk",
+        "lensTitle": "클라이언트·SDK 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "medium",
+          "reasoning": "반박에 실패했다. 인용 코드가 주장과 정확히 일치한다. (1) WebAuthnController.registerOptions(L46)는 upstream 호출(L49-50)보다 먼저 users.createPending()를 호출하고, createPending(L120-128)은 매 호출마다 byHandle.put()을 TTL/eviction 없이 수행한다(주석 L125: 재기동 시에만 정리). 핵심은 pending 적재가 upstream 호출 결과와 무관하게 컨트롤러 진입 시점에 일어난다는 점이다 — 따라서 passkey-app의 RateLimitFilter(IP/key 버킷)는 upstream만 보호할 뿐 rp-app의 byHandle 성장 속도는 전혀 제어하지 못한다. (2) WebSecurityConfig L29-30이 /passkey/**를 permitAll, CSRF disable(L31)이며 rp-app 자체 rate-limit이 없다(RequestLoggingFilter 주석이 명시). CORS는 브라우저 강제라 curl/스크립트 공격자에게 무력하다. (3) RegisterStartReq는 username/displayName에 @NotBlank만 걸려 @Size 상한이 없어 공격자가 엔트리 개수뿐 아니라 엔트리 크기까지 제어 → OOM이 더 쉬워진다. 증폭 측면: upstream registration/start는 키당 60/min이므로 비인증 flood가 피해 테넌트의 등록 예산을 소진해 정상 등록을 차단한다(로그인은 별도 300/min 버킷이라 생존). 다만 passkey-app의 IP/key 버킷이 멀티테넌트 코어와 타 테넌트를 보호하므로 피해 범위는 단일 테넌트의 rp-app 가용성+등록 흐름에 한정된다. 도달 불가/테스트 전용이 아니며(rp-app은 테넌트별 배포되는 실제 RP 컴포넌트), InMemoryUserStore가 demo-grade라도 실제 사용되는 스토어다. 모든 반박 각도(타 위치 방어·악용 전제·도달성·영향)가 실패. severity 재판정: 악용 난이도는 trivial(비인증 단일 엔드포인트 POST flood)이나 영향은 단일 테넌트 가용성에 국한, 데이터 침해 없음, 재기동 자가복구, 크로스테넌트 전파 없음(upstream 격리 유지) → medium.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "admin-ui-cdn-css-no-sri",
+        "title": "admin 콘솔이 외부 CDN CSS 를 SRI 없이 로드(공급망 변조 표면)",
+        "stride": [
+          "T"
+        ],
+        "severity": "low",
+        "location": "admin-ui/index.html:12-15",
+        "description": "관리자 SPA 의 index.html 이 cdn.jsdelivr.net 의 Pretendard CSS(태그 @v1.3.9 핀이지만 해시 핀 아님)와 fonts.googleapis.com 의 동적 css2 를 integrity(SRI) 속성 없이 <link rel='stylesheet'> 로 로드한다. API key·복구코드 등 민감정보를 다루는 관리 콘솔에서 제3자 CDN 자산이 변조되면(CDN 침해/계정 탈취) CSS 기반 데이터 추출(attribute selector + background-image 등)이나 레이아웃 조작이 가능하다. 이 콘솔에는 별도 CSP meta 도 없다(서버측 헤더 의존이라면 그 자체로 방어심화 공백).",
+        "exploitScenario": "jsdelivr 의 해당 태그가 가리키는 자산 또는 Google Fonts 응답이 공급망 단계에서 변조되면, 관리자 브라우저에 주입된 악성 CSS 가 입력 필드(예: 발급 직후 1회 노출되는 plaintext API key 영역)의 값을 selector 매칭으로 외부 URL 에 유출하거나 클릭재킹용 오버레이를 구성한다.",
+        "saasImpact": "운영자/RP_ADMIN 콘솔이 외부 CDN 침해 시 민감정보(API key plaintext, 복구코드) 추출에 노출될 수 있다. 모든 테넌트 운영자가 같은 CDN 자산을 받으므로 광범위.",
+        "onpremImpact": "동일하게 적용되나, 폐쇄망 배포라면 외부 CDN 도달 자체가 막혀 영향이 줄 수 있음(반대로 자산 로드 실패로 깨질 수 있어 자가호스팅 권장).",
+        "suggestedDirection": "글꼴/CSS 를 자가호스팅하거나, 해시 고정 가능한 자산엔 integrity+crossorigin 을 부여하고, admin 응답에 엄격한 CSP(style-src 화이트리스트) 를 서버측에서 설정하는 방향.",
+        "lens": "client-sdk",
+        "lensTitle": "클라이언트·SDK 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "반박 실패 — finding은 실존한다. (a) 보상 방어 부재 확인: AdminSecurityConfig.java에 .headers() 커스터마이즈가 없고 Spring Security 기본 헤더에 CSP는 포함되지 않으며, 저장소 전체(Java/yml/conf/nginx)에서 Content-Security-Policy 설정 0건, index.html에 meta CSP도 없음. dist/index.html(실제 서빙 산출물)에도 동일한 무-SRI CDN 링크가 빌드되어 있음. (b) 악용 전제는 제3자 CDN(jsdelivr 태그는 mutable git tag) 또는 Google Fonts 침해라는 높은 장벽이지만 polyfill.io 사례처럼 실재하는 위협 모델. (c) dev 전용 아님 — 프로덕션 빌드에 포함. (d) 영향은 주장보다 다소 과장됨: plaintext API key는 ApiKeysTab.tsx:405에서 input value 속성이 아닌 텍스트 노드로 렌더되므로 attribute-selector 기반 추출은 불가하고, CSS-only 텍스트 유출은 @font-face/ligature 고급 기법이 필요(무-CSP라 가능은 함). 현실적 1차 영향은 관리 콘솔 UI 오버레이/피싱 조작과 제한적 데이터 유출 시도. 단, <link rel=stylesheet>는 JS 실행이 아니므로 직접적 세션 탈취는 불가. Google Fonts css2는 UA-동적 응답이라 SRI 자체가 불가능(자가호스팅 또는 CSP만이 해법)이라는 점에서 \"SRI 누락\" 프레임은 jsdelivr 자산에만 정확히 적용. 종합: 방어심화 공백(외부 CDN + 무SRI + 무CSP)은 사실이고, 악용 난이도 매우 높음 × 영향 제한적(CSS-only) → severity low 유지. [SaaS] 인터넷 노출 콘솔이라 CDN 침해 시 모든 테넌트 운영자에 적용 — 성립. [온프렘] 코드상 차단 없음, 인터넷 egress 허용 환경이면 동일 성립(완전 폐쇄망이면 CDN 도달 불가로 악용 불가하나 이는 배포 가정일 뿐 코드 보장이 아님 — 폰트 로드 실패 시 시스템 폰트 폴백이라 깨지지는 않음).",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "rp-missing-cross-tenant-rejection-test",
+        "title": "cross-tenant id-token(iss/aud 불일치) 거부에 대한 회귀 테스트 부재",
+        "stride": [
+          "S"
+        ],
+        "severity": "info",
+        "location": "rp-app/src/test/java/com/crosscert/passkey/rpapp/web/WebAuthnControllerTest.java:118-162, rp-app/src/main/java/com/crosscert/passkey/rpapp/web/WebAuthnController.java:140-157",
+        "description": "WebAuthnController 의 iss prefix+tenant 및 aud 정규화 비교(L140-157)는 SaaS 멀티테넌트에서 cross-tenant 토큰을 막는 핵심 방어다. 그러나 WebAuthnControllerTest 의 시나리오는 happy-path(올바른 테넌트, L132-133)와 id-token 비노출 가드, 토큰 누락 400, username 점유뿐이고, '다른 테넌트의 aud/iss 토큰 → 거부(PASSKEY_ID_TOKEN)' '알 수 없는 sub → 거부' 같은 음성 회귀 테스트가 전혀 없다(test 메서드 전수 확인). normalizeTenantId 의 RAW(32hex)↔UUID 정규화 경계도 음성 케이스 미검증.",
+        "exploitScenario": "향후 리팩터(예: iss prefix 비교를 startsWith 에서 contains 로 바꾸거나 normalize 로직 변경)가 cross-tenant 차단을 조용히 약화시켜도 테스트가 잡지 못해, 멀티테넌트 인증 우회 회귀가 무방비로 머지될 수 있다.",
+        "saasImpact": "핵심 cross-tenant 방어의 회귀를 CI 가 감지하지 못함 — 잠재적 멀티테넌트 인증 우회 회귀의 안전망 공백.",
+        "onpremImpact": "단일 테넌트라 직접 노출은 작지만, iss/aud 검증 약화 회귀는 잘못된 issuer 신뢰로 이어질 수 있어 동일하게 안전망이 필요.",
+        "suggestedDirection": "aud 불일치, iss prefix 불일치, iss 의 테넌트 segment 불일치, 알 수 없는 sub, RAW↔UUID 표기 차이의 동치성 각각에 대한 거부/수락 회귀 테스트를 추가하는 방향.",
+        "lens": "client-sdk",
+        "lensTitle": "클라이언트·SDK 경계",
+        "verdict": {
+          "confirmed": true,
+          "severity": "info",
+          "reasoning": "반박 실패 — finding의 사실관계가 전부 코드로 확인된다. (1) WebAuthnControllerTest.java의 테스트 메서드 6개 전수 확인 결과 iss 불일치/aud 불일치/unknown sub/normalizeTenantId 음성 케이스를 검증하는 테스트가 0건이고, rp-app·sdk-java 전체 테스트에서 'iss mismatch|aud mismatch|unknown sub|normalizeTenantId|PASSKEY_ID_TOKEN' grep 히트도 0건이다. (2) 방어가 다른 곳에 있다는 반박도 실패: SDK IdTokenVerifier.verify()(sdk-java/src/main/java/com/crosscert/passkey/sdk/idtoken/IdTokenVerifier.java:30-89)는 alg 고정·kid·서명·exp만 검사하고 iss/aud는 검사하지 않으며, JWKS는 테넌트 비스코프 전역 엔드포인트(/.well-known/jwks.json, passkey-app JwksController.java:30)라 같은 서버의 타 테넌트 토큰도 서명 검증을 통과한다. 즉 WebAuthnController L140-157이 rp-app 레벨의 유일한 cross-tenant 게이트인데 회귀 테스트가 전무하다. 다만 현재 코드 자체는 올바르게 동작하므로 지금 악용 가능한 취약점이 아니라 향후 리팩터 회귀를 잡을 안전망의 공백이며, severity=info가 적정하다(악용 난이도: 현재 불가/가설적 × 영향: 회귀 시 멀티테넌트 인증 우회). saas/onprem 모두 현시점 악용 불가로 exploitable=false.",
+          "locationVerified": true,
+          "saasExploitable": false,
+          "onpremExploitable": false
+        }
+      },
+      {
+        "id": "scm-external-bootstrap-hardcoded-db-creds",
+        "title": "외부 Oracle 프로비저닝 스크립트가 하드코딩된 약한 DB 비밀번호 + GRANT ALL PRIVILEGES 를 사용 (오버라이드 불가)",
+        "stride": [
+          "S",
+          "E",
+          "I"
+        ],
+        "severity": "high",
+        "location": "scripts/bootstrap-external.sql:29,75,83,89, scripts/init-db-external.sh:93-95, scripts/bootstrap-vpd.sql:69,79",
+        "description": "고객사 외부 Oracle 을 초기화하는 문서화된 경로(bootstrap-external.sql, init-db-external.sh 단계1)가 APP_OWNER(app_owner_pw)/APP_RUNTIME_USER(runtime_pw)/APP_ADMIN_USER(admin_pw) 세 계정을 모두 저장소에 공개된 고정 평문 비밀번호로 생성한다. 비밀번호는 EXECUTE IMMEDIATE 의 SQL 리터럴이라 환경변수/치환 메커니즘이 전혀 없어 운영자가 강한 값으로 바꾸려면 SQL 자체를 수정해야 한다. 더해 bootstrap-external.sql:89 는 APP_ADMIN_USER 에게 GRANT ALL PRIVILEGES 를 부여한다(스크립트 주석도 '나중 Phase 에서 조일 알려진 이슈'로 자인). init-db-external.sh:95 도 admin_pw 를 평문 상수로 박아 admin-app 을 부팅한다. docker-compose.yml:6,8 의 oracle/app_owner_pw 디폴트도 같은 약한 값.",
+        "exploitScenario": "온프레미스 고객사 운영자가 init-db-external.sh / bootstrap-external.sql 을 가이드대로 실행하면 운영 스키마 계정들이 GitHub 에 공개된 admin_pw/runtime_pw 비밀번호로 생성된다. 내부망 침투자(또는 저장소 접근이 있는 협력사 인력)가 DB 리스너에 도달하면 APP_ADMIN_USER/admin_pw 로 직접 로그인 → GRANT ALL PRIVILEGES 로 사실상 DBA 권한 획득 → 전 테넌트 credential/감사로그 덤프·변조, VPD 정책 우회(EXEMPT ACCESS POLICY 보유 role). 비밀번호 변경 절차가 스크립트에 없어 다수 배포가 디폴트로 남을 개연성이 높다.",
+        "saasImpact": "SaaS 운영팀이 동일 부트스트랩 스크립트를 그대로 쓴다면 동일 위험. 다만 SaaS 는 통상 별도 시크릿관리(Vault 등)로 DB 자격증명을 주입할 여지가 있어 노출은 운영 관행에 의존. LB/네트워크 격리로 DB 리스너 외부 노출이 막히면 외부 공격자 직접 악용은 어려움.",
+        "onpremImpact": "고객사 내부망·단일 테넌트 환경에서 가장 위험. 문서화된 유일한 외부 DB 초기화 경로가 공개 약한 비밀번호를 강제하고 APP_ADMIN_USER 가 ALL PRIVILEGES 를 가져, 내부 침투자/DB 접근자가 곧바로 전체 DB 장악 가능. DB-only 덤프 시나리오에서도 운영자가 비밀번호를 안 바꿨다면 재접속 자격증명이 곧 공개값이다.",
+        "suggestedDirection": "부트스트랩 SQL/스크립트에서 계정 비밀번호를 외부 입력(sqlplus DEFINE 변수, 환경변수 치환, 또는 운영자 필수 인자)으로 받도록 바꾸고, 디폴트가 비면 fail-fast 시키는 방향. APP_ADMIN_USER 의 GRANT ALL PRIVILEGES 를 Flyway DDL·DBMS_RLS 운영에 필요한 최소 권한 집합으로 축소. docker-compose 디폴트와 분리해 '운영 경로는 약한 디폴트가 불가능'하게.",
+        "lens": "supply-config",
+        "lensTitle": "공급망·설정·비밀관리",
+        "verdict": {
+          "confirmed": true,
+          "severity": "high",
+          "reasoning": "반박 실패. 인용된 모든 위치를 코드로 직접 확인했고 전부 정확히 일치한다. bootstrap-external.sql:29/75/83는 APP_OWNER/app_owner_pw, APP_RUNTIME_USER/runtime_pw, APP_ADMIN_USER/admin_pw를 EXECUTE IMMEDIATE SQL 리터럴로 생성한다 — 부트스트랩 시점에 env/DEFINE 치환 메커니즘이 실제로 없다. :89는 GRANT ALL PRIVILEGES TO APP_ADMIN_USER이고 :56은 APP_ADMIN role에 EXEMPT ACCESS POLICY까지 부여한다(VPD 우회). bootstrap-vpd.sql:69/79/90, init-db-external.sh:94-95, docker-compose.yml:6/8도 동일 약한 값. 스크립트 주석 자체가 GRANT ALL을 'known-issue'로 자인한다. 반박 각도: (a) prod/qa yml은 DB 시크릿을 env 빈 디폴트(미설정 시 부팅 실패)로 주입하므로 런타임 연결은 약한 비번을 강제하지 않으나, DB 계정 자체가 공개 평문으로 생성되어 운영자가 ALTER USER로 바꾸기 전까지 계정 비번=저장소 공개값이다. reset 스크립트와 사후 ALTER로 변경은 가능하므로 '오버라이드 불가'는 약간 과장이지만, 강한 비번을 강제하는 forcing function이 전무한 것은 사실이며 finding의 핵심을 무너뜨리지 못한다. (c) init-db-external.sh는 dev 지향(PROFILE 기본 dev, SYS_PW 기본 oracle)이나 bootstrap-external.sql은 외부 SE(고객 온프레미스) DB의 문서화된 초기화 경로라 dev 전용 반박 불가. 코드 레벨 주장을 반박하지 못해 confirmed. severity는 독립 재판정해도 high — 영향은 전체 DB 장악·전 테넌트 덤프·VPD 우회로 critical급이나, 악용이 '운영자가 공개 디폴트 비번 미변경' + '내부망 리스너 도달'이라는 운영적·위치적 전제에 의존해 critical까지는 끌어올리지 못한다.",
+          "locationVerified": true,
+          "saasExploitable": false,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "scm-passkey-actuator-unauthenticated",
+        "title": "passkey-app actuator(prometheus·health 상세)가 인증 없이 공개됨 — Spring Security 필터체인 부재",
+        "stride": [
+          "I",
+          "D"
+        ],
+        "severity": "medium",
+        "location": "passkey-app/src/main/resources/application.yml:8, core/src/main/resources/application-common.yml:44-53, passkey-app/build.gradle.kts(전체: starter-security 미포함), passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java:118-127",
+        "description": "passkey-app 에는 SecurityFilterChain/EnableWebSecurity 가 전혀 없고(starter-security 미의존) 유일한 인증 게이트인 ApiKeyAuthFilter 는 shouldNotFilter 로 /api/v1/rp/** 만 처리한다(ApiKeyAuthFilter.java:125-126). 따라서 application-common.yml:47 의 endpoints.web.exposure.include: health,info,prometheus 로 노출되는 /actuator/prometheus·/actuator/health·/actuator/info 가 8080 포트에서 무인증 접근 가능하다. 게다가 application-common.yml:45 의 endpoint.health.show-details: always 로 health 응답이 db/redis 컴포넌트 상태 상세를 그대로 노출한다. (대조: admin-app 은 AdminSecurityConfig.java:108 에서 health/info 만 permitAll, anyRequest denyAll 이라 prometheus 가 막힘.)",
+        "exploitScenario": "리버스프록시/LB 가 앱 포트로 경로를 전반 포워딩하는 흔한 구성이면, 외부 공격자가 GET /actuator/prometheus 로 passkey_apikey_auth_total{result=...}(unknown_prefix/bad_secret/revoked 카운트로 공격 진행·키 브루트포스 효과 추론), 레이트리밋·JVM·HikariCP 지표 등 운영 정보를 무인증 수집한다. /actuator/health 상세로 DB/Redis 가동 여부를 정찰하고, prometheus 스크레이프 엔드포인트를 반복 호출해 직렬화 비용 기반 경부하 DoS 표면으로 삼을 수 있다.",
+        "saasImpact": "멀티테넌트 SaaS 에서 무인증 메트릭/health 노출. 현재 메트릭 태그에 tenantId 직접 노출은 확인되지 않았으나 인증·레이트리밋 카운터·시스템 상태가 외부 정찰에 제공됨. 노출 여부는 LB 라우팅에 의존하지만 앱 레벨 심층방어 부재가 핵심.",
+        "onpremImpact": "내부망 배포에서도 같은 포트의 actuator 가 인증 없이 열려 있어, 내부망 침투자가 DB/Redis 상태·인증 실패 추세를 정찰. 단일 테넌트라 cross-tenant 누출은 없으나 운영 정보 노출·DoS 표면은 동일.",
+        "suggestedDirection": "passkey-app 에도 actuator 전용 보호를 둘 것 — 별도 management.server.port 로 내부망 한정 바인딩, 또는 prometheus 를 인증/네트워크 ACL 뒤로. health.show-details 를 권한 보유 시에만(when-authorized) 노출하도록 조정. LB 라우팅에 의존하지 말고 앱 레벨에서 fail-closed.",
+        "lens": "supply-config",
+        "lensTitle": "공급망·설정·비밀관리",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "코드 사실은 전부 검증됨 — 반박 실패. passkey-app/build.gradle.kts는 :core/:webauthn/oracle-nls만 의존하고 starter-security 미포함, passkey-app+core main에 SecurityFilterChain/EnableWebSecurity/HttpSecurity 0건. 유일한 인증 필터 ApiKeyAuthFilter.shouldNotFilter(125-126)는 /api/v1/rp/만 통과시키고 나머지(actuator 포함)는 전부 스킵. RateLimitFilter도 동일하게 API 경로 한정이라 actuator는 레이트리밋도 없음. application-common.yml:47 exposure=health,info,prometheus + :45 show-details=always가 그대로 적용되고 micrometer-prometheus는 core api로 클래스패스에 존재. admin-app은 AdminSecurityConfig가 /actuator/health,info만 permitAll 후 anyRequest denyAll로 prometheus를 막는 반면 passkey-app은 앱 레벨 fail-closed가 전무함 — 이 심층방어 결여는 검증된 사실이라 \\\"방어가 다른 곳에 존재\\\"로 반박 불가.\\n\\n그러나 severity는 medium→low로 강등. (1) 노출 집합이 3개 화이트리스트(health/info/prometheus)로 명시 제한 — env/heapdump/threaddump/beans/shutdown 같은 시크릿·RCE 엔드포인트는 노출 안 됨. (2) 누출 정보가 저가치 운영 텔레메트리뿐: passkey_apikey_auth_total은 집계 카운터라 키 추출 불가(공격자가 이미 아는 자기 실패 횟수), show-details는 db/redis UP/DOWN 불린 상태로 접속정보·자격증명 없음, 테넌트/크로스테넌트 데이터 0. finding 스스로 \\\"tenantId 태그 노출 미확인\\\" 인정. (3) \\\"브루트포스 효과 추론\\\"·\\\"prometheus 스크레이프 DoS\\\"는 사변적이고 성립 약함. (4) 외부 악용은 LB가 /actuator/**를 앱 포트로 포워딩한다는 전제에 전적 의존하는데 이는 코드에 근거 없음 — finding도 \\\"LB 라우팅에 의존\\\" 인정. prod yml은 앞단 LB가 TLS 종단하는 표준 토폴로지(보통 API 경로만 라우팅)를 시사. 결론: 실존하는 하드닝(심층방어) 갭이지만 시크릿/데이터/크로스테넌트 누출 없는 저가치 정보노출 → low.",
+          "locationVerified": true,
+          "saasExploitable": false,
+          "onpremExploitable": true,
+          "correctedLocation": "passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java:119-126 (shouldNotFilter); core/src/main/resources/application-common.yml:45,47; core/build.gradle.kts:15-16 (actuator/prometheus on classpath); 대조 admin-app/src/main/java/com/crosscert/passkey/admin/config/AdminSecurityConfig.java:108(+anyRequest denyAll)"
+        }
+      },
+      {
+        "id": "scm-rpapp-secretmasking-jws-drift",
+        "title": "rp-app SecretMaskingConverter 가 core 대비 standalone JWS 마스킹 패턴 누락 (드리프트)",
+        "stride": [
+          "I"
+        ],
+        "severity": "low",
+        "location": "rp-app/src/main/java/com/crosscert/passkey/rpapp/web/SecretMaskingConverter.java:28-36, core/src/main/java/com/crosscert/passkey/core/logging/SecretMaskingConverter.java:31-34",
+        "description": "core 의 SecretMaskingConverter 는 'Bearer ' 접두 없는 raw JWS(eyJ…header.payload.signature)를 잡는 JWS_STANDALONE 패턴(core …:31-34)을 갖지만, rp-app 의 복제본(rpapp/web/SecretMaskingConverter.java:28-36)에는 그 패턴이 빠져 있다(클래스 주석은 'Keep the two in sync' 라고 적었으나 드리프트). rp-app 은 id-token JWS 를 직접 다루는 컴포넌트(relay·login 흐름)인데, Bearer 접두 없이 로그에 찍힌 raw id-token 은 rp-app 에서 마스킹되지 않고 그대로 출력된다.",
+        "exploitScenario": "개발자가 디버깅 중 rp-app 에서 id-token 문자열을 log.info/log.debug 로 (Bearer 접두 없이) 출력하면 심층방어 마스킹이 적용되지 않아 평문 JWS 가 로그에 남는다. 로그 파일/수집기에 접근하는 내부자가 유효 서명된 id-token 을 회수해 재생할 수 있다(토큰 TTL 내).",
+        "saasImpact": "rp-app 은 데모/통합 컴포넌트 성격이라 SaaS 코어 노출 면은 작지만, rp-app 을 실제 RP 통합 템플릿으로 배포하면 로그 토큰 평문화 위험 상속. 심층방어(2차선) 공백이라 직접 취약점은 아님.",
+        "onpremImpact": "온프레미스에서 rp-app 류를 RP 측 어댑터로 배포할 경우 동일한 로그 토큰 누출 심층방어 공백. 로그 접근 가능한 내부자가 주된 악용 주체.",
+        "suggestedDirection": "두 SecretMaskingConverter 를 실제로 동기화(core 의 JWS_STANDALONE 패턴을 rp-app 복제본에도 반영)하거나, 공용 모듈로 단일화해 드리프트 자체를 제거. 회귀 방지로 두 converter 의 패턴 동등성을 검증하는 테스트 추가.",
+        "lens": "supply-config",
+        "lensTitle": "공급망·설정·비밀관리",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "반박 시도 전부 실패 — 드리프트는 실존한다. core SecretMaskingConverter(core/src/main/java/com/crosscert/passkey/core/logging/SecretMaskingConverter.java:33-34, 51행 적용)에는 JWS_STANDALONE 패턴이 있으나 rp-app 복제본(rp-app/src/main/java/com/crosscert/passkey/rpapp/web/SecretMaskingConverter.java)에는 패턴 선언·적용 모두 없고, 복제본 javadoc(19-21행)이 'Keep the two in sync'를 명시해 동기화 계약 위반이 명확하다. (a) 대체 방어 없음: rp-app logback-spring.xml:4가 이 converter를 유일한 마스킹 계층으로 연결하며 LogRedact 사용 0건, JWT_BEARER는 'Bearer ' 접두 필수라 raw JWS 미포착. (b) rp-app은 WebAuthnController에서 fin.idToken()을 직접 다루는 컴포넌트라 자산 노출면은 실재하나, 현재 코드는 idTail()로 꼬리만 로깅하고 SDK도 status/code만 찍어 지금 당장 토큰이 새는 경로는 없다 — 악용은 미래 개발자의 raw 토큰 로깅 실수 + 로그 접근 내부자 + 토큰 TTL 내 재생이라는 3중 전제에 의존하는 순수 심층방어 공백. (c) rp-app은 'Sample-rp copy' 명시된 샘플 성격이지만 RP 통합 템플릿으로 배포 가능해 완전 면책은 아님. 따라서 finding의 사실 주장(드리프트+2차선 공백)은 confirmed, 단 양 환경 모두 현재 악용 가능 경로는 없어 exploitable=false, severity는 low 유지.",
+          "locationVerified": true,
+          "saasExploitable": false,
+          "onpremExploitable": false
+        }
+      },
+      {
+        "id": "dp-admin-user-grant-all-privileges",
+        "title": "admin-app 런타임 DB 계정(APP_ADMIN_USER)에 GRANT ALL PRIVILEGES — audit_log append-only 및 컬럼 단위 최소권한 통제가 무력화됨",
+        "stride": [
+          "E",
+          "R",
+          "T"
+        ],
+        "severity": "high",
+        "location": "scripts/bootstrap-vpd.sql:90, scripts/bootstrap-external.sql:89, core/src/main/resources/db/migration/V10__audit_log_table.sql:15-16,39, core/src/main/resources/db/migration/V9__admin_user_table.sql:27",
+        "description": "Flyway 마이그레이션은 감사로그를 tamper-evident 통제로 설계한다 — V10:15-16 주석은 'APP_ADMIN gets SELECT + INSERT only. NO UPDATE, NO DELETE, even from APP_ADMIN. Tampering requires DBA-level privilege' 라고 명시하고 V10:39 도 `GRANT SELECT, INSERT ON audit_log TO APP_ADMIN` 만 부여한다. 또 V9:27/V19:186 은 admin_user 를 `GRANT UPDATE(last_login_at, bcrypt_hash, role, enabled)` 로 컬럼 단위 제한한다. 그러나 두 부트스트랩 스크립트(bootstrap-vpd.sql:90, bootstrap-external.sql:89)는 admin-app 이 접속하는 계정 APP_ADMIN_USER 에 `GRANT ALL PRIVILEGES` 를 부여한다. ALL PRIVILEGES 는 UPDATE ANY TABLE / DELETE ANY TABLE / ALTER 등 시스템 권한을 포함하므로, 마이그레이션의 컬럼·DML 단위 GRANT 는 모두 무의미해지고 admin-app 의 런타임 principal 이 사실상 DBA 다. 즉 append-only 라고 문서화된 audit_log 를 admin-app 계정이 직접 UPDATE/DELETE 할 수 있다. bootstrap 주석(bootstrap-vpd.sql:87-89)도 'ADMIN needs broad rights ... known-issue to tighten' 로 인지하고 있으나 양쪽 배포 경로(SaaS 도커, 온프레미스 외부 Oracle) 모두에 그대로 출하된다.",
+        "exploitScenario": "admin-app 에 SQLi/RCE 가 발생하거나 admin-app 의 DB 자격증명이 유출되면, 공격자는 APP_ADMIN_USER 세션으로 audit_log 행을 DELETE 한 뒤 해시체인을 재계산(hash/prev_hash 컬럼 UPDATE)하여 일관된 체인으로 위조할 수 있다. 해시체인 검증기(AuditChainVerifier.verify)는 재계산된 체인을 통과시키므로 prevention 도, detection 도 모두 우회된다. 또한 ALL PRIVILEGES 로 모든 테넌트의 credential/api_key 를 직접 읽거나 VPD 정책 자체를 변경할 수 있다.",
+        "saasImpact": "리버스 프록시 뒤 다중 테넌트 배포에서 admin-app 콘솔이 침해되면 단일 principal 로 전 테넌트 데이터 열람·변조 및 감사기록 위조가 가능하다. EXEMPT ACCESS POLICY(APP_ADMIN role)까지 더해져 VPD 도 무력화되므로 cross-tenant 격리의 DB 레이어 방어가 사라진다.",
+        "onpremImpact": "외부 SE DB(VPD off) 배포에서 영향이 더 크다. bootstrap-external.sql 은 APP_ADMIN_USER 를 단순 디폴트 비밀번호(admin_pw, line 83)로 만들고 ALL PRIVILEGES 를 부여한다 — 운영자가 비밀번호를 바꾸지 않으면 내부망 침투자가 SQL*Net 으로 admin_pw 로그인만으로 사실상 DBA 가 되어 덤프·변조·감사 위조를 수행한다.",
+        "suggestedDirection": "admin-app 런타임 계정에서 GRANT ALL PRIVILEGES 를 제거하고 마이그레이션의 컬럼·DML 단위 GRANT(APP_ADMIN role) 만으로 동작하도록 권한을 좁힌다. Flyway DDL 권한은 별도의 마이그레이션 전용 계정으로 분리하고 런타임 계정은 audit_log 에 SELECT+INSERT 만 갖게 하여 append-only 통제를 실제로 강제한다. 부트스트랩의 디폴트 비밀번호는 설치 시 강제 교체하도록 가이드/검증을 둔다. 또한 '런타임 계정은 audit_log UPDATE/DELETE 불가'를 보증하는 통합 회귀 테스트가 없다 — Testcontainers 권한 검증 테스트 추가 권장.",
+        "saasImpactDummy": "",
+        "lens": "data-protection",
+        "lensTitle": "데이터 보호",
+        "verdict": {
+          "confirmed": true,
+          "severity": "high",
+          "reasoning": "반박에 실패했다. 인용 위치 전부 정확: bootstrap-vpd.sql:90 / bootstrap-external.sql:89의 GRANT ALL PRIVILEGES TO APP_ADMIN_USER 존재, V10:15-16 주석과 :39의 SELECT,INSERT only GRANT, V9:27 컬럼 단위 UPDATE GRANT 모두 일치. admin-app 런타임 데이터소스가 실제로 APP_ADMIN_USER임을 확인(application-dev.yml:23, application-local.yml:14, init-db-external.sh:94). cross-tenant 관리에 EXEMPT ACCESS POLICY가 필요하므로 admin-app은 VPD 바인딩된 APP_RUNTIME_USER를 쓸 수 없고 APP_ADMIN_USER만 가능 — 즉 런타임 principal이 ALL PRIVILEGES 보유. ALL PRIVILEGES는 UPDATE/DELETE/ALTER ANY TABLE를 포함하여 V10/V9의 객체·컬럼 단위 GRANT를 전부 무력화한다. 단일 데이터소스(CoreDataSourceConfig)라 마이그레이션/런타임 계정 분리도 없음. AuditChainVerifier.verify()는 저장 필드로 hash를 재계산해 비교(54-72행)하므로, DELETE 후 체인을 재계산하면 통과 — 검출도 우회됨. 별도 외부 앵커 없음. dev/test 전용 아님(SaaS 도커·온프레미스 외부 Oracle 양쪽 프로덕션 부트스트랩에 출하). 반박 각도(다른 방어/전제 불성립/도달불가/사소함) 모두 실패. severity는 원래 값에 끌리지 않고 독립 재판정해도 high: SaaS는 admin-app 1차 침해(SQLi/RCE/자격증명 유출) 전제의 방어심층 결손이나 침해 시 봉쇄통제가 전무하여 전 테넌트 데이터+감사기록 위조+VPD 무력화로 영향이 파국적이고, 온프레미스는 admin_pw 디폴트 비밀번호가 스크립트에 하드코딩되고 강제 교체가 없어 내부망 침투자가 SQL*Net 직접 로그인만으로 DBA가 되는 직접 악용 경로가 성립.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "dp-runtime-overgrant-admin-secret-tables",
+        "title": "인터넷 노출 passkey-app DB 계정(APP_RUNTIME)이 admin 자격증명 테이블(bcrypt_hash·mfa_secret·recovery/reset 해시)에 SELECT 보유 + 동일 앱이 KeyEnvelope 마스터키 보유",
+        "stride": [
+          "I",
+          "E"
+        ],
+        "severity": "medium",
+        "location": "core/src/main/resources/db/migration/V12__admin_user_runtime_grants.sql:10, core/src/main/resources/db/migration/V19__uuid_migration.sql:188, core/src/main/resources/db/migration/V36__credential_label_and_mfa_recovery.sql:76, core/src/main/resources/db/migration/V37__admin_account_security.sql:120, core/src/main/resources/db/migration/V30__admin_user_invitation_runtime_grants.sql:15, passkey-app/src/main/resources/application-prod.yml:38",
+        "description": "passkey-app(가장 큰 인터넷 공격면)이 접속하는 APP_RUNTIME 계정에 admin_user(bcrypt_hash, mfa_secret 포함), admin_user_recovery_code(code_hash), admin_password_reset_token(token_hash), admin_user_invitation 에 대한 `GRANT SELECT` 가 부여되어 있다. 마이그레이션 주석(V12:1-9, V36:72-74)이 밝히듯 이 GRANT 는 passkey-app 이 @EntityScan 으로 core 의 전 엔티티를 스캔해 Hibernate ddl-validate 를 통과시키기 위한 것일 뿐 passkey-app 은 이 테이블들을 실제로 읽지 않는다. 동시에 passkey-app 은 SigningKeyProvider 가 서명키 PKCS8 봉투를 열어야 하므로 동일한 KeyEnvelope 마스터키(application-prod.yml:38)를 메모리에 보유한다. 즉 passkey-app 침해 시 (1) 암호화 안 된 admin bcrypt 해시·recovery/reset 해시를 직접 SELECT 하고, (2) 마스터키로 enc:v1: mfa_secret 봉투까지 복호화할 수 있어 MfaSecretCipher 의 at-rest 보호가 의미를 잃는다.",
+        "exploitScenario": "공격자가 인터넷 노출된 passkey-app 에 SQLi 또는 RCE 를 확보하면, passkey-app 의 DB 세션으로 `SELECT bcrypt_hash, mfa_secret FROM admin_user` 를 수행해 모든 플랫폼 운영자의 비밀번호 해시(오프라인 크랙 대상)를 빼내고, 같은 프로세스에 로드된 KeyEnvelope 마스터키로 mfa_secret 을 평문 Base32 로 복호화하여 운영자 MFA 를 무력화한다. admin_user_recovery_code.code_hash 도 함께 유출된다.",
+        "saasImpact": "passkey-app 은 다중 테넌트 트래픽을 받는 1차 공격면이며 admin_user 는 플랫폼 전역이므로, 한 곳 침해로 전 플랫폼 운영자 자격증명 material 이 노출된다. mfa_secret 은 봉투+마스터키가 같은 프로세스에 공존해 봉투화의 격리 효과가 없다.",
+        "onpremImpact": "내부망 침투자가 passkey-app 을 발판으로 동일하게 admin 자격증명 테이블을 읽는다. 단일 테넌트라도 운영자 계정 탈취 경로가 된다.",
+        "suggestedDirection": "passkey-app 이 admin 엔티티를 스캔할 필요가 없도록 엔티티 스캔 범위를 런타임이 실제로 쓰는 테이블로 좁히거나, ddl-validate 통과만을 위해 민감 컬럼을 제외한 읽기 전용 뷰에만 SELECT 를 부여한다. 최소한 mfa_secret/bcrypt_hash 가 인터넷 노출 계정에 노출되지 않도록 컬럼 단위 grant 또는 별도 스키마 분리를 검토한다. 봉투 마스터키도 서명에 필요한 앱에만 주입하도록 키 사용 경로를 재검토한다.",
+        "saasImpactDummy": "",
+        "lens": "data-protection",
+        "lensTitle": "데이터 보호",
+        "verdict": {
+          "confirmed": true,
+          "severity": "medium",
+          "reasoning": "반박에 실패했다. 인용된 모든 위치가 코드와 정확히 일치하며 두 악용 전제가 모두 성립한다.\n\n(1) GRANT 정확성: V19:188 `GRANT SELECT ON admin_user TO APP_RUNTIME` 는 컬럼 목록이 없는 테이블 단위 grant 이므로 bcrypt_hash·mfa_secret 전 컬럼이 노출된다(APP_ADMIN 의 V19:185-186 은 컬럼 제한 grant 인 것과 대조적). V36:76(recovery_code), V37:120(reset_token), V30:15(invitation) 도 동일하게 APP_RUNTIME 에 SELECT 부여. 마이그레이션 주석(V12:7-8, V36:72-73, V37:116-117, V30:5-6)이 \"passkey-app 은 실제로 읽지 않고 Hibernate ddl-validate 통과용일 뿐\"이라고 명시 — 즉 과도한 권한임을 코드 작성자 스스로 인정.\n\n(2) 마스터키 공존: KeyEnvelope.java:40 은 `@Value(\"${passkey.key-envelope.master-key}\")` 를 생성자 주입받는 @Component 이고, passkey-app/application-prod.yml:38 이 이 키를 주입한다. passkey-app 은 SigningKeyProvider(JwksController 경유)로 signing_key.private_pkcs8 봉투를 열어야 하므로 마스터키가 프로세스 메모리에 반드시 로드된다. MfaSecretCipher 는 동일 KeyEnvelope 로 enc:v1: mfa_secret 을 봉투화하므로, passkey-app 침해 시 같은 마스터키로 복호화 가능 → at-rest 봉투의 격리 효과 무력화가 성립.\n\n반박 각도 전부 실패:\n(a) 방어 부재: admin_user 는 platform-scoped로 VPD 없음(V19:168, V36:31 명시 확인). V40 readable 뷰가 민감 컬럼을 제외하긴 하나 그것은 별도 뷰일 뿐 V19:188 의 테이블 직접 grant 를 막지 못한다. 컬럼 단위/뷰 단위 제한이 grant 에 없다.\n(b) 악용 전제: 직접 악용은 불가 — passkey-app 의 선행 침해(SQLi 또는 RCE)가 필요하다. 이것이 finding 을 직접 익스플로잇이 아닌 최소권한/방어심층(blast-radius) 결함으로 만든다.\n(c) dev/test 전용 아님: prod 프로파일 yml 과 prod 마이그레이션에 실재.\n\n위협모델별: [SaaS] admin_user 는 플랫폼 전역이라 한 곳 침해로 전 운영자 자격증명 노출, VPD 도 admin_user 엔 무관(platform-scoped) → 성립. [온프레미스] VPD off 와 무관하게 동일 grant 가 유효 → 성립. 양쪽 모두 성립.\n\n심각도 재판정: 영향은 높음(전 플랫폼 운영자 bcrypt 해시 오프라인 크랙 + 마스터키로 mfa_secret 복호화 → MFA 무력화 + recovery/reset 해시 유출). 그러나 악용에 passkey-app 의 완전 침해라는 선행조건이 필요한 순수 방어심층/최소권한 위반이며 직접 익스플로잇 체인은 아니다. 난이도(선행 침해 필요) × 영향(높음, 봉투 격리 무력화) = medium 이 타당. 원래 medium 과 일치하나 끌려간 것이 아니라 독립 판정으로 동일 결론.",
+          "locationVerified": true,
+          "saasExploitable": true,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "dp-recovery-code-unsalted-low-entropy",
+        "title": "MFA recovery code 가 ~40비트 엔트로피 + 무염(unsalted) SHA-256 으로 저장 — DB 덤프 확보 시 오프라인으로 수분 내 역산 가능",
+        "stride": [
+          "I",
+          "S"
+        ],
+        "severity": "medium",
+        "location": "admin-app/src/main/java/com/crosscert/passkey/admin/auth/RecoveryCodeService.java:29,48,56,69-76, core/src/main/java/com/crosscert/passkey/core/util/CryptoUtils.java:20-27, core/src/main/resources/db/migration/V36__credential_label_and_mfa_recovery.sql:44",
+        "description": "recovery code 는 31자 알파벳(혼동문자 제외)에서 8자(`xxxx-xxxx`)로 생성되어 엔트로피가 31^8 ≈ 2^39.6(~40비트)에 불과하다(RecoveryCodeService.java:29,69-76). 저장은 per-code salt 없이 `CryptoUtils.sha256Hex(code)`(빠른 단일 SHA-256, CryptoUtils.java:20-27)로 code_hash 컬럼(V36:44, VARCHAR2(64))에 들어간다. 무염 고속 해시 + 40비트 도메인 조합은 DB 덤프만 확보하면 오프라인 무차별로 전수 역산이 가능하다 — GPU ~10^10 H/s 기준 2^40 후보 전수는 약 1~2분이다. recovery code 는 MFA 우회 2차 인증요소이므로, 역산되면 admin_user_recovery_code 의 평문 코드가 복원되어 인증 우회 요소가 된다. (대조적으로 API key·reset/invitation 토큰은 256비트 난수라 무염이어도 안전, API key 는 bcrypt 사용.)",
+        "exploitScenario": "백업 유출·악의적 DBA·온프레미스 덤프 등으로 admin_user_recovery_code 테이블을 확보한 공격자가 2^40 후보의 SHA-256 을 사전계산/전수하여 미사용(used_at IS NULL) 코드의 평문을 복원한다. 복원한 recovery code 로 /admin/api/mfa/verify 의 consume 경로를 통해 대상 운영자의 MFA 를 우회한다(비밀번호도 필요하나 bcrypt 해시 역시 같은 덤프에 존재).",
+        "saasImpact": "recovery code 는 플랫폼 운영자(admin_user)용이라 cross-tenant 노출은 아니지만, 관리 DB 덤프 1회로 전 운영자의 MFA 백업코드가 무력화된다. 다만 SaaS 는 매니지드 DB·VPD 로 덤프 입수 장벽이 상대적으로 높다.",
+        "onpremImpact": "온프레미스(외부 SE DB, VPD off, 덤프 확보가 명시적 위협모델)에서 영향이 직접적이다. 내부망 침투자가 DB-only 유출만으로 운영자 MFA 백업코드를 수분 내 전수 복원한다.",
+        "suggestedDirection": "recovery code 엔트로피를 충분히 키우거나(예: 10자 이상) per-code salt + 느린 KDF(또는 HMAC-with-server-pepper)로 저장해 오프라인 전수를 비현실화한다. 토큰류와 동일한 고엔트로피·무염 패턴을 쓰려면 코드 길이를 256비트 수준으로 올리고 사용성은 표시 형식으로 분리한다. '덤프에서 recovery code 가 역산되지 않음'을 보증하는 회귀 테스트는 부재하다.",
+        "saasImpactDummy": "",
+        "lens": "data-protection",
+        "lensTitle": "데이터 보호",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "인용 위치 전부 코드와 일치한다. RecoveryCodeService.java:29의 ALPHABET=31자, :71의 GROUP_LEN*2=8자 랜덤 → 엔트로피 31^8=2^39.6(~40비트) 확인. :48/:56은 per-code salt 없이 CryptoUtils.sha256Hex(code)로 저장/소비하고, CryptoUtils.java:20-27은 순수 단일 SHA-256(salt·pepper·iteration 전무), V36:44는 code_hash VARCHAR2(64). 무염 고속 해시 + 40비트 도메인은 GPU로 수분 내 전수 역산이 가능하므로 데이터보호 결함 자체는 반박 불가 — 오히려 MfaSecretCipher/KeyEnvelope가 TOTP secret을 DB 밖 env var 마스터키로 봉투암호화하는 사실이 비대칭성을 입증한다: DB-only 덤프에서 TOTP secret은 복원 불가지만 recovery code는 복원 가능한 유일한 MFA 인자다. 다만 MfaController.verify:66에서 recovery code는 2차 인자일 뿐이고, MfaPendingFilter는 bcrypt 비밀번호 1차 로그인 성공 후에만 도달한다. 따라서 실제 MFA 우회+로그인은 'DB-only 덤프 + bcrypt 비밀번호 크랙'이라는 복합 전제를 모두 충족해야 하며 recovery code 크랙만으로는 단독 우회가 불가하다(finding은 bcrypt가 같은 덤프에 있다며 이 장벽을 과소평가). cross-tenant 노출도 없다(플랫폼 admin 한정). 결함은 실재하나 단독 악용 불가 + 복합 전제 + 데이터 스케일/테넌트 노출 없음으로, 원래 medium에서 low로 재판정. 온프레미스(VPD off, 덤프가 명시 위협모델)에서는 recovery code의 at-rest 보호가 직접 무력화되어 성립; SaaS(매니지드 DB+VPD)에서는 덤프 입수 장벽과 비밀번호 크랙 요구로 실증 불가.",
+          "locationVerified": true,
+          "saasExploitable": false,
+          "onpremExploitable": true
+        }
+      },
+      {
+        "id": "dp-dev-master-key-in-git",
+        "title": "dev/local 프로파일이 실제 32바이트 KeyEnvelope 마스터키를 git 평문으로 출하 — 비-prod 프로파일로 가동 시 서명키·MFA secret 이 공개 키로 봉인됨",
+        "stride": [
+          "I",
+          "T"
+        ],
+        "severity": "low",
+        "location": "admin-app/src/main/resources/application-dev.yml:37, admin-app/src/main/resources/application-local.yml:26, passkey-app/src/main/resources/application-dev.yml:35",
+        "description": "admin-app/passkey-app 의 dev·local 프로파일은 KeyEnvelope 마스터키를 git 평문 상수 `jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM=` 로 하드코딩한다(양 앱 공유). KeyEnvelope(KeyEnvelope.java:40-52)는 이 키로 서명키 PKCS8 봉투와 admin mfa_secret(MfaSecretCipher enc:v1:) 을 AES-256-GCM 봉인한다. prod/qa 프로파일은 `${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}`(빈 디폴트 → 32바이트 아님 → 부팅 실패, fail-closed)로 안전하지만, 운영 환경을 실수로 dev/local 프로파일로 기동하면 모든 봉투 데이터가 저장소에 공개된 키로 암호화된다.",
+        "exploitScenario": "고객사가 온프레미스에서 SPRING_PROFILES_ACTIVE 를 prod 대신 dev/local 로 두고 가동하면(설치 오설정), 이후 DB 덤프를 입수한 공격자가 git 공개 마스터키로 signing_key.private_pkcs8 와 admin_user.mfa_secret 봉투를 그대로 복호화한다. 서명키 복원 시 임의 id-token 위조도 가능하다.",
+        "saasImpact": "SaaS 는 prod 프로파일 + 환경변수 주입이 기대되어 가능성은 낮으나, 배포 자동화의 프로파일 오설정 한 줄로 전 데이터 봉투가 공개 키로 약화된다.",
+        "onpremImpact": "고객사가 직접 배포·운영하므로 비-prod 프로파일 가동 가능성이 SaaS 보다 높다. 마스터키가 공개 저장소에 있으므로 덤프 + 공개키 = 서명키·MFA secret 전면 복호화로 직결된다.",
+        "suggestedDirection": "dev/local 의 하드코딩 마스터키를 실제 사용 가능한 32바이트 값 대신 명백한 더미/주석 또는 로컬 전용 미커밋 파일로 분리하고, 부팅 시 활성 프로파일이 운영성이면(또는 마스터키가 알려진 dev 상수와 일치하면) 경고/거부하는 가드를 둔다. 운영 가이드에 dev 키의 비-운영 전용성을 명시한다.",
+        "saasImpactDummy": "",
+        "lens": "data-protection",
+        "lensTitle": "데이터 보호",
+        "verdict": {
+          "confirmed": true,
+          "severity": "low",
+          "reasoning": "반박 실패 — finding은 사실. (1) 인용된 3개 yml 라인 전부 실존하며 동일한 32바이트 base64 키가 git 평문으로 커밋되어 있음(테스트 yml 2개 포함 총 5개 파일). (2) core/src/main/java/com/crosscert/passkey/core/jwt/KeyEnvelope.java:40-52 생성자가 이 키로 AES-256-GCM 봉인을 수행하고, MfaSecretCipher(enc:v1: mfa_secret)와 KeyRotationService(서명키 PKCS8)가 실제 사용함을 확인. (3) prod/qa는 ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:} 빈 디폴트 → 32바이트 불일치 → 부팅 거부로 fail-closed 확인. (4) 핵심 반박 시도 '오설정 전제가 비현실적'은 오히려 기각됨: 저장소가 출하하는 scripts/bootstrap-external.sql:83이 CREATE USER APP_ADMIN_USER IDENTIFIED BY admin_pw로 dev 프로파일의 하드코딩 datasource 자격증명과 정확히 일치하는 사용자를 생성하므로, 단일 서버 온프레미스에서 SPRING_PROFILES_ACTIVE=dev 기동이 실제로 부팅·동작한다. (5) dev 상수 키를 운영성 프로파일에서 탐지/거부하는 가드는 Java 전체 grep 결과 존재하지 않음. 다만 악용에는 '운영자 프로파일 오설정 + DB 덤프 입수'라는 두 단계 전제가 필요하므로 직접 공격 가능 취약점이 아닌 방어선 약화(latent weakness)이며, severity=low 판정이 적정. SaaS는 벤더 통제 배포 파이프라인(prod+env 주입)이라 공격자가 전제를 만들 수 없어 사실상 비악용, 온프레미스는 고객 직접 배포라 조건부 성립.",
+          "locationVerified": true,
+          "correctedLocation": "admin-app/src/main/resources/application-dev.yml:37, admin-app/src/main/resources/application-local.yml:26, passkey-app/src/main/resources/application-dev.yml:35 (정확); KeyEnvelope는 core/src/main/java/com/crosscert/passkey/core/jwt/KeyEnvelope.java:40-52 (description의 crypto 패키지 표기는 jwt가 정확)",
+          "saasExploitable": false,
+          "onpremExploitable": true
+        }
+      }
+    ],
+    "rejected": [
+      {
+        "id": "rp-suspension-only-at-start",
+        "lens": "rp-api",
+        "title": "테넌트 suspend 가 ceremony start 에서만 강제되고 finish·self-service 에는 미적용 — 정지된 테넌트가 인증 발급·패스키 관리 지속",
+        "severity": "medium",
+        "reason": "인용된 코드 사실(start에만 isSuspended 검사, finish/self-service에는 없음, ApiKeyAuthFilter:185가 status 무관 context set)은 전부 정확하나, 악용 전제가 무너진다. 테넌트를 suspend하는 유일한 코드 경로인 TenantLifecycleService.suspend()(admin-app/.../tenant/TenantLifecycleService.java:43-57)가 같은 트랜잭션에서 해당 테넌트의 모든 활성 API 키를 일괄 revoke한다. finish와 self-service(/api/v1/rp/credentials)는 전부 /api/v1/rp/** 경로라 ApiKeyAuthFilter를 거치며, 필터는 매 요청마다 캐시 없이 PL/SQL(find_by_prefix)로 키를 조회하고 row.isActive(now)(ApiKeyAuthFilter.java:164)로 revoked 키를 401 처리한다. 따라서 suspend 직후 정지된 테넌트는 in-flight 챌린지의 finish도, 패스키 self-service 삭제도 필터에서 차단된다. suspend 상태의 신규 키 발급/회전도 ApiKeyAdminService.java:97,189에서 TENANT_SUSPENDED로 거부되고, activate()는 revoked 키를 복원하지 않으며, DevTenantHeaderFilter는 @Profile(local/dev/test)로 프로덕션 비활성. 잔여 리스크는 suspend 커밋 순간의 밀리초급 경쟁 윈도우와 앱 외부(직접 DB)에서 status만 바꾸는 비정상 운영뿐으로, 주장된 '정지 테넌트의 지속적 인증 발급·대량 패스키 삭제' 시나리오는 SaaS/온프레미스 어느 쪽에서도 성립하지 않는다. start의 suspension 검사는 1차 스위치가 아니라 키 revoke 위의 defense-in-depth 중복 레이어다."
+      },
+      {
+        "id": "rp-traceid-unvalidated-reflect-logforge",
+        "lens": "rp-api",
+        "title": "TraceIdFilter 가 미검증 X-Trace-Id 를 응답 헤더+MDC 로 그대로 반영 — 로그 위조(개행 주입) 및 무제한 길이",
+        "severity": "low",
+        "reason": "인용 위치는 정확하다. TraceIdFilter.java:27-29 가 X-Trace-Id 를 blank 만 검사하고, 30행 MDC.put, 31행 res.setHeader 로 그대로 반영하며, logback-spring.xml:8 패턴이 [%X{traceId:-}] 를 raw 로 렌더하는 것까지 코드와 일치한다. 그러나 핵심 익스플로잇 전제가 런타임에서 성립하지 않아 오탐으로 판정한다.\n\n(1) 로그 위조(개행 주입)의 차단: 두 앱 모두 spring-boot-starter-web → 임베디드 Tomcat 이며(core/build.gradle.kts:7, rp-app/build.gradle.kts:11), application-common.yml 등 어디에도 server.tomcat.reject-illegal-header / relaxedQueryChars / ConnectorCustomizer 같은 검증 완화 설정이 없다(grep EXIT=1, 설정 미존재). Tomcat 기본값은 요청 헤더 값에 CR/LF 등 제어문자를 허용하지 않고, HTTP/1.1 파서 자체가 헤더 값에 raw 개행을 담을 수 없다(개행이 헤더 구분자로 종료됨). 따라서 `X-Trace-Id: ok]\\n[real` 같이 개행을 포함한 값은 req.getHeader 에 도달하기 전에 400 으로 거부되거나 파싱에서 분리되어, MDC 값에 개행이 들어가 로그 라인이 분할되는 시나리오가 실현되지 않는다. 익스플로잇 시나리오의 핵심(라인 분할 → 가짜 감사 항목 삽입)이 무너진다.\n\n(2) \"무제한 길이\" 는 사실과 다름: 헤더 길이는 Tomcat maxHttpHeaderSize 기본 8KB 로 캡되어 무제한이 아니며, 요청당 최대 ~8KB 정도의 미미한 로그 증폭에 그친다.\n\n(3) 응답 헤더 반사(res.setHeader)도 값이 이미 CRLF-free 로 검증을 통과한 뒤이고 Tomcat 이 출력 헤더 제어문자도 검증하므로 응답 분할(HTTP response splitting)이 발생하지 않는다.\n\n남는 잔여 영향은 \"출력 가능 문자만, CRLF 없는, ≤8KB 문자열이 traceId MDC 컬럼과 응답 헤더 한 곳에 들어가는 것\"으로, 라인 분할이 불가능해 주장된 repudiation/로그 무결성 훼손(별도 위조 로그 항목 생성)은 일어나지 않는다. 명시적 정규화가 없다는 점은 심층방어 관점의 개선거리이긴 하나, 기본 Tomcat 런타임에서 주장된 익스플로잇은 성립하지 않는다.\n\n위협모델별: [SaaS] 프록시/LB 가 앞단에 추가되면 잘못된 헤더를 한 번 더 거부하므로 반박이 오히려 강화된다. [온프레미스] 내부망 직접 호출도 동일 Tomcat 검증을 거치므로 개행 주입 불가. 양쪽 모두 악용 불가(saasExploitable=false, onpremExploitable=false). confirmed=false 이므로 severity 는 원래 값(low) 유지."
+      },
+      {
+        "id": "rp-finish-no-request-body-cap",
+        "lens": "rp-api",
+        "title": "finish 엔드포인트가 임의 JsonNode 본문을 본문 크기 상한 없이 수용 — 악성 테넌트의 noisy-neighbor 자원 소모",
+        "severity": "low",
+        "reason": "사실관계는 인용대로다. RegistrationFinishRequest.java:9, AuthenticationFinishRequest.java:9 모두 `@NotNull JsonNode publicKeyCredential`로 본문을 메모리 트리로 파싱하고, 코드/설정 전체에 본문 크기 상한이 없음을 grep으로 확인(max-http/max-request-size/maxPostSize/StreamReadConstraints/multipart/codec 모두 0건). RegistrationFinishService.java:98은 그 트리를 다시 writeValueAsString으로 직렬화하므로 트리가 한 번 더 메모리에 잡힌다. 위치·코드 일치는 맞다.\\n\\n그러나 '악용 가능한 자원소모 DoS'라는 결론은 다음 이유로 반박된다.\\n(1) 깊은 중첩 벡터는 프레임워크 기본값에 이미 막힌다 — Jackson(2.15+) 기본 StreamReadConstraints는 nesting depth 1000, maxStringLength(수십 MB), maxNumberLength로 캡되어 있어 '깊게 중첩된 JSON' 시나리오는 별도 설정 없이도 조기 거부된다. finding 본문도 이를 인정한다.\\n(2) SaaS 위협모델은 '프록시/LB 뒤'를 명시한다. 프로덕션 LB(nginx 기본 client_max_body_size 1MB 등)는 본문 크기를 인프라 계층에서 강제하므로, '수~수십 MB 거대 본문'은 위협모델이 가정하는 배치에서 LB가 차단한다. 코드 계층에 캡이 없다는 사실은 맞으나, 위협모델 내 배치에서 거대 본문 도달 자체가 성립하지 않는다.\\n(3) 도달 경로는 RateLimitFilter(HIGHEST_PRECEDENCE)가 ApiKeyAuthFilter보다 먼저 작동해 finish 엔드포인트를 IP·키 버킷 이중으로 캡한다(registration/finish 60/min, authentication/finish 300/min). 요청 빈도가 묶여 있어 누적 처리량이 제한된다.\\n(4) 온프레미스는 단일 테넌트라 noisy-neighbor(교차테넌트 자원잠식)가 구조적으로 존재하지 않고, 내부자가 유효 키로 자기 인스턴스 자원을 소모하는 자해성 시나리오만 남아 영향이 미미하다(finding 자신도 onpremImpact를 '낮음'으로 표기).\\n\\n남는 잔여 위험은 'SaaS인데 LB 본문 캡이 없는 오설정' 한 경우뿐인데, 이는 명시된 위협모델(프록시/LB 뒤)을 벗어난 misconfiguration이며, OOM/지연이 실제로 material하게 발생한다는 전제는 힙 크기·동시성·LB 유무에 의존해 코드만으로 입증할 수 없다. 규칙(악용 전제를 코드로 확인 불가하면 refute로 기울임)에 따라 confirmed=false. 명시적 본문 크기 캡 추가는 타당한 심층방어 하드닝 제안이나, 확인된 악용 가능 취약점은 아니다."
+      },
+      {
+        "id": "ti-saas-vpd-off-default",
+        "lens": "tenant-isolation",
+        "title": "SaaS 멀티테넌트 기본 설정이 VPD off — DB 커널 격리가 조용히 단일계층으로 붕괴",
+        "severity": "medium",
+        "reason": "인용 위치는 전부 정확하다: application-common.yml:69-76에 deployment.mode=saas 기본 + vpd.enabled=false 기본, 양 prod yml에 ${PASSKEY_VPD_ENABLED:false}, CoreDataSourceConfig.java:63-65에서 false면 raw 풀 반환, saas+vpd-off 조합 부팅 가드 부재(grep으로 vpd.enabled 참조가 CoreDataSourceConfig 외 없음 확인)도 사실이다. 그러나 finding의 핵심 전제인 '조용한(silent) 단일계층 붕괴'가 코드로 반박된다. (1) Flyway 마이그레이션(V3/V8/V20/V35/V41)이 DBMS_RLS.ADD_POLICY를 무조건 실행하며 SE2의 ORA-00439만 swallow한다 — 즉 VPD 가능한 EE/XE에 배포하면 정책이 항상 부착된다. (2) 정책이 부착된 상태에서 vpd.enabled=false면 set_tenant가 호출되지 않아 술어가 '1=0'으로 평가되어 APP_RUNTIME 유저의 모든 테넌트 테이블 쿼리가 0행을 반환한다(admin-app/passkey-app application-prod.yml 주석에 명시, 프로젝트에서 실제 관측된 동작: registration/finish 500). 따라서 exploitScenario의 '앱은 정상 부팅·동작하며 모든 테넌트 트래픽이 처리된다'는 EE/XE에서 거짓이다 — 환경변수 누락은 즉시 전면 장애(fail-closed)로 드러나며, 운영자는 vpd.enabled=true를 켜지 않고는 운영 자체가 불가능하다. 사실상 DB 정책 무조건 부착이 부팅 가드 역할을 한다. (3) vpd-off가 조용히 돌아가는 유일한 환경은 SE2인데, SE2는 VPD를 물리적으로 지원하지 않으므로 '이중방어 누락'이 아니라 플랫폼 한계이며 어떤 부팅 가드도 이를 바꿀 수 없다. SE2-SaaS에서의 단일계층 위험은 실존하지만 악용에는 별도의 미래 가정(@Filter 우회 버그 신규 도입)이 필요해 현재 코드로 악용 전제가 성립하지 않는다. 잔존 가치는 'SE2-SaaS 단일계층 모드 WARN 로그' 수준의 운영 하드닝 제안(info)에 그친다. admin-app이 EXEMPT ACCESS POLICY 유저라 VPD 백스톱이 원래 없다는 점은 별개 이슈로 이 finding의 주장이 아니다."
+      },
+      {
+        "id": "ti-event-tables-no-rls-no-filter",
+        "lens": "tenant-isolation",
+        "title": "ceremony_event·credential_auth_event·audit_log 가 VPD 정책도 @Filter 도 없이 앱 술어에만 의존",
+        "severity": "medium",
+        "reason": "사실관계(위치·@Filter 부재·VPD 정책 부재)는 모두 정확하나, 보안 finding으로서는 오탐. (1) 악용 전제가 현재 코드에 존재하지 않음 — 세 테이블의 모든 읽기 경로가 테넌트 술어를 갖는다(FunnelService.java:50-56 assertCanAccessTenant+countByTenantId, CredentialAdminService.java:94 findByTenantIdAndCredentialId, AuditLogController.java:44-55 currentTenantScope+불일치 403). exploit 시나리오는 '향후 누군가 술어 없는 쿼리를 추가한다'는 가정 코드에 전적으로 의존하며, 이는 코드로 확인 불가한 미래 가정. (2) 제안된 VPD 백스톱이 실제 공격면을 보호하지 못함 — 이 테이블들의 읽기 주체는 전부 admin-app이고 admin-app은 APP_ADMIN(EXEMPT ACCESS POLICY, scripts/bootstrap-vpd.sql:44)로 접속해 VPD를 우회한다. VPD가 효과를 갖는 passkey-app(APP_RUNTIME)은 이 테이블들에 자기 테넌트 INSERT만 하고(CeremonyEventRecorder/CredentialAuthEventRecorder) 읽기 경로가 0건. (3) audit_log 포함은 의도적 설계의 오독 — AuditLog.java:37에 'PLATFORM_OPERATOR가 전체 감사 로그를 봐야 하므로 @Filter 미적용' 명시, 전테넌트 해시체인 검증(findAllOrdered/findDistinctTenantIds)이 cross-tenant 조회를 요구해 VPD/@Filter 부착 시 기능이 깨짐. (4) @Filter 추가의 실효도 제한적 — CeremonyEventRepository 주력 집계 쿼리는 nativeQuery라 Hibernate @Filter가 적용되지 않음. 결론: 이중방어 비대칭이라는 관찰 자체는 사실이지만 현행 어느 위협 모델에서도 악용 경로가 없고 제안 교정의 핵심(VPD)이 실제 읽기 면에 무효하므로, medium 취약점이 아닌 하드닝 백로그(회귀 테스트 추가 정도) 수준."
+      },
+      {
+        "id": "ti-external-bootstrap-fixed-exempt-pw",
+        "lens": "tenant-isolation",
+        "title": "외부 부트스트랩이 VPD-exempt APP_ADMIN_USER 비밀번호를 소스에 고정 — 전테넌트 격리 우회 경로",
+        "severity": "medium",
+        "reason": "인용 위치는 전부 정확하다(bootstrap-external.sql:56 EXEMPT ACCESS POLICY, :75 runtime_pw, :83 admin_pw, :89 GRANT ALL PRIVILEGES; bootstrap-vpd.sql:44/69/79/90 동일). 고정 비밀번호와 권한 부여도 코드 그대로다. 그러나 이 finding이 일반적인 '기본 비밀번호' 지적과 구분되는 핵심 주장 — \"VPD-exempt 계정이라 로그인 시 전 테넌트 VPD 술어를 우회한다(전테넌트 격리 우회 경로)\" — 는 두 위협모델 어디서도 악용 전제가 함께 성립하지 않는다.\n\n(1) 두 조건이 상호배타적이다. EXEMPT ACCESS POLICY가 실제로 의미를 갖는 건 VPD가 켜진 경우뿐이다. 그런데 VPD 기본값은 전 프로필에서 OFF다(application-common.yml vpd 기본 false; admin/passkey prod·qa 모두 `${PASSKEY_VPD_ENABLED:false}`). 외부/온프레미스/SE 경로는 명시적으로 VPD OFF로 운영된다(init-db-external.sh:58 `PASSKEY_VPD_ENABLED=:-false`, :37/:57 \"SE는 VPD 미지원 → app-level @Filter 격리\"). VPD가 켜지는 환경(EE/XE, 멀티테넌트)은 곧 SaaS 경로이며 finding 스스로 \"SaaS는 관리형 시크릿/IAM 주입 + DB 비노출 → 노출 확률 낮음\"이라고 인정한다. 즉 (DB 리스너 1521 네트워크 도달 + 기본 비밀번호 미교체)라는 악용 전제가 현실적인 환경은 온프레미스 내부망인데, 그 환경은 VPD OFF라서 우회할 VPD 술어 자체가 존재하지 않는다. exempt 부여는 no-op이 된다.\n\n(2) 온프레미스에서 exempt의 한계효과는 사실상 0이다. VPD OFF면 테넌트 격리는 DB 커널이 아니라 앱 레벨 Hibernate @Filter로만 이뤄진다. 따라서 직접 DB 로그인은 exempt 여부와 무관하게 — 심지어 비-exempt인 APP_RUNTIME_USER/runtime_pw, APP_OWNER/app_owner_pw로도 — 격리를 그대로 무력화한다. exempt 계정이 제공하는 '특별한 테넌트 우회 경로'는 없다. 게다가 온프레미스 위협모델은 단일 테넌트라(finding도 \"(멀티테넌트라면 전테넌트)\"로 단서를 단다) 넘어갈 다른 테넌트 데이터가 애초에 없다.\n\n(3) 런타임 아키텍처가 운영자 자격증명 관리를 전제한다. prod/qa yml의 DB 비밀번호는 `${SPRING_DATASOURCE_PASSWORD:}`로 환경변수 주입이며 기본값이 빈 문자열이다 — prod 런타임이 admin_pw로 조용히 뜨지 않는다(미설정 시 빈 비밀번호로 인증 실패). init-db-external.sh:95의 admin_pw 하드코딩은 dev/local/qa '초기화·Flyway 마이그레이션' 단계 한정이다.\n\n종합하면, 잔존하는 실질 이슈는 '프로비저닝 스크립트에 커밋된 기본 DB 자격증명 + DBA급 GRANT ALL + 교체 지시 부재'라는 일반적 위생 약점(CWE-798/1392)이며 이는 실재한다. 그러나 이 finding이 medium으로 격상한 근거인 'exempt = 전테넌트 격리 단일 실패점' 프레이밍은 악용이 도달 가능한 어떤 환경에서도 결정적이지 않다(VPD OFF면 무의미, VPD ON이면 DB 비노출). 따라서 '테넌트 격리 경계' 렌즈의 주장으로서는 반박 성공 → confirmed=false. (severity 필드는 규칙에 따라 원래 값 medium 유지.)"
+      },
+      {
+        "id": "ti-aaguidpolicy-missing-self-guard",
+        "lens": "tenant-isolation",
+        "title": "AaguidPolicyService 가 tenantBoundary self-guard 부재 — 자매 서비스와 비대칭 (잠재)",
+        "severity": "low",
+        "reason": "위치·사실관계는 전부 정확하다: AaguidPolicyService.get/update(36-39, 53-56)는 self-guard 없이 repo.findById를 수행하고, WebauthnDiffService.java:22-30은 동일 위험에 self-guard+주석을 두며, 유일한 진입점 AaguidPolicyController(25,31)는 PLATFORM_OPERATOR 전용이다. 그러나 반박에 성공했다. (1) 악용 전제 불성립 — 악용은 \"미래에 RP_ADMIN을 @PreAuthorize에 추가\"라는 존재하지 않는 코드 변경이 전제이며, 현재 도달 가능한 PLATFORM_OPERATOR의 cross-tenant 접근은 의도된 동작이다(finding 스스로 '현 시점 라이브 결함 아님' 인정). (2) 방어가 이미 다른 곳에 존재 — 가정된 미래 시나리오에서도 AdminSecurityConfig:176의 TenantContextAdminFilter가 RP_ADMIN 요청마다 TenantContextHolder를 set하고, SaaS(VPD on)에서는 TenantAwareDataSource(ctx_pkg.set_tenant) + V35__tenant_child_vpd_policies.sql:45-46의 TENANT_AAGUID_POLICY/_ENTRY VPD 정책이 DB 커널에서 타 테넌트 행을 차단하므로 findById는 0행→IllegalStateException으로 끝난다. 따라서 '즉시 cross-tenant 열람/변조'라는 핵심 주장은 SaaS 위협 모델에서 거짓이다. (3) 온프레미스는 단일 테넌트라 cross-tenant가 무의미(finding도 인정). 부수 관찰: 앱 레벨 Hibernate @Filter(TenantFilterAspect)는 findById(em.find)에 적용되지 않아 VPD off+멀티테넌트라는 이중 가정에서만 구멍이 되는데, 이는 선언된 어느 위협 모델에도 해당하지 않는다. 결론적으로 이는 취약점이 아니라 방어 패턴 일관성(self-guard 추가) 위생 제안이며, suggestedDirection 자체는 채택할 가치가 있으나 finding으로는 오탐이다."
+      },
+      {
+        "id": "sdk-idtoken-no-iss-aud-validation",
+        "lens": "client-sdk",
+        "title": "IdTokenVerifier.verify() 가 issuer/audience 를 검증하지 않아 cross-tenant 토큰 수락 footgun",
+        "severity": "medium",
+        "reason": "코드 인용은 정확하다. IdTokenVerifier.verify()(L30-89)는 RS256 pin, kid 매칭, 서명, exp만 확인하고 iss/aud/sub를 검증하지 않는다. cross-tenant 차단은 rp-app 호출자(WebAuthnController L140-157)의 수동 iss prefix+tenant, aud 정규화 비교에만 존재한다. SigningKeyProvider는 단일 ACTIVE 키를 모든 테넌트가 공유하므로 \"공유 JWKS\" 전제 자체는 코드상 성립한다.\n\n그러나 이를 오탐(refuted)으로 판정하는 근거:\n\n(1) 본 repo에 실재하는 유일한 SDK 소비자(rp-app)는 이미 완전한 iss+aud 보정 검증을 수행한다(L145-157). aud 불일치/iss 불일치 모두 BusinessException으로 거부된다. 따라서 이 repo 안에서 실제 악용 가능한 경로는 0건이다.\n\n(2) 주장된 피해는 전적으로 가상의 외부 통합(\"rp-app 이외의 통합 코드\", \"aud/iss 대조를 빠뜨린 SDK 소비자\")을 전제한다. 그 코드는 이 저장소에 존재하지 않으며, 코드로 악용 전제를 확인할 수 없다. \"호출자가 검증을 빠뜨릴 수도 있다\"는 것은 footgun/API-design 우려이지 이 코드베이스의 취약점이 아니다. 검증 절차 규칙(악용 전제를 코드로 확인 불가하면 confirmed=false로 기운다)에 정확히 해당한다.\n\n(3) 더 근본적으로, OIDC/JWT 라이브러리(Nimbus, jose4j 등) 생태계에서 \"서명+exp만 검증하는 저수준 verify + 호출자가 iss/aud 대조\"는 비정상이 아니라 흔한 계층 분리 패턴이다. IdTokenClaims는 iss/aud/sub를 그대로 노출(L70-79)하여 호출자가 검증할 수 있게 명시적으로 제공한다. verify가 iss/aud를 모른 채(어떤 테넌트가 기대값인지 SDK는 알 수 없다) 검증을 강제하는 것은 오히려 불가능하다 — 기대 tenant는 호출자(props.tenantId())만 안다.\n\n(4) 위협 모델별: [SaaS] 멀티테넌트 공유 issuer라도 실제 소비자 rp-app이 검증하므로 직접 노출 없음. [온프레미스] 단일 테넌트라 cross-tenant 개념 자체가 약함. 양쪽 모두 이 repo 코드에서 성립하는 악용 경로 없음.\n\n결론: 코드 묘사는 정확하나, 본 저장소에 악용 가능한 결함이 존재하지 않고(rp-app 보정 검증 완비), 피해가 전적으로 가상의 미래 외부 통합에 의존한다. 이는 확인된 취약점이 아니라 SDK API 설계 개선 제안(suggestedDirection의 안전 오버로드 제공)에 해당한다. severity는 info에 가까우나 SDK 제품 배포 맥락의 footgun 측면을 인정해 low로 둔다."
+      },
+      {
+        "id": "sdk-baseurl-no-tls-enforced",
+        "lens": "client-sdk",
+        "title": "SDK baseUrl 스킴 미검증 — JWKS/API 가 평문 HTTP 로 나가면 서명키 교체·MITM 가능",
+        "severity": "medium",
+        "reason": "인용된 코드는 전부 정확하다. PasskeyClientConfig.java:23은 baseUrl 스킴을 검증하지 않고(requireNonNull만), JwksCache.java:42는 JWKSet.load(jwksUrl)를 그대로 수행하며, RedactingRequestInterceptor.java:43은 X-API-Key를 같은 채널로 보내고, application.yml:22 기본값은 http://localhost:8080이다. IdTokenVerifier.verify()도 jwks.get()에서 가져온 공개키로 서명을 검증하므로 'JWKS 교체→위조 토큰 통과' 메커니즘 자체는 성립한다. 그러나 이것은 확정된 코드 취약점이 아니라 방어심화(hardening) 권고이며, 악용 전제가 코드만으로는 성립하지 않는다.\n\n반박 근거:\n(1) 기본값이 안전하다. 기본 baseUrl은 http://localhost:8080(루프백)으로, 루프백 트래픽은 호스트를 떠나지 않아 네트워크 MITM이 원천적으로 불가능하다. 익스플로잇은 운영자가 PASSKEY_BASE_URL을 비-루프백 평문 http로 명시적으로 오버라이드해야만 전제가 성립한다 — 즉 코드가 도입한 결함이 아니라 운영자가 선택한 전송 평문화(설정 위생) 문제다.\n(2) 추가로 능동형 on-path MITM 공격자가 백엔드 hop 구간에 이미 자리잡고 있어야 한다. 그 위치의 공격자는 JWKS 교체보다 더 광범위한 침해(채널 장악)가 이미 가능하므로, 'SDK가 http를 거부하지 않음'이 인증 우회를 '허용'하는 근본 원인이 아니다. 근본 원인은 전송 암호화 미적용(인프라/배포 책임)이다.\n(3) http URL을 그대로 수용하는 것은 Nimbus JWKSet.load, Spring RestTemplate, java.net.URL 등 모든 HTTP 클라이언트 라이브러리의 표준·문서화된 동작이다. SDK가 https를 강제하지 않는 것은 결함이 아니라 의견 있는 가드의 부재(defense-in-depth nicety)다. RelayKeyGuard는 데모 HMAC 키 차단용이지 전송 스킴과 무관해, '이미 존재하는 가드'로 막히지도 않지만 동시에 이 항목이 코드 취약점임을 의미하지도 않는다.\n\n위협모델별:\n[SaaS] SDK는 고객(rp-app)이 SaaS passkey-app을 호출할 때 사용. SaaS 엔드포인트는 공개 https(예: https://passkey.crosscert.com)가 정상이며, 고객이 공개 SaaS를 평문 http로 가리키고 그 공인 경로에 MITM이 있어야 하는 시나리오는 비현실적이고 전적으로 고객 egress 오설정. 코드-악용 불가 → saasExploitable=false.\n[온프레미스] 내부망 평문 배포 + 내부망 능동 MITM이 둘 다 필요. 둘 다 운영자 오설정/사전 망 침해를 요구하며 코드가 기본값으로 노출하지 않는다 → 코드 자체는 악용 불가, onpremExploitable=false.\n\n결론: 위치는 모두 실존·일치(locationVerified=true)하나, 익스플로잇 전제(평문 전송)는 코드 밖 배포 오설정이고 기본값은 안전하며 클라이언트가 http를 수용하는 것은 라이브러리 표준 동작이다. 따라서 확정 취약점이 아닌 위생/하드닝 권고로 판정(confirmed=false). 심각도는 규칙에 따라 원래 값 medium 유지하나, 독립 평가로는 info/low 수준 위생 항목에 가깝다."
+      },
+      {
+        "id": "rp-idtoken-verify-error-reflected",
+        "lens": "client-sdk",
+        "title": "id-token 검증 내부 상세(kid/exp·now/alg, upstream 메시지)가 브라우저 응답으로 반사",
+        "severity": "low",
+        "reason": "인용 위치는 모두 정확하다(GlobalExceptionHandler.java L91-95/L97-102가 e.getMessage()를 반사, IdTokenVerifier.java L41/L47/L59가 alg/kid/exp·now를 메시지에 포함). 그러나 악용 전제가 코드상 성립하지 않는다.\n\n(1) 핵심 채널이 공격자-도달 불가: WebAuthnController.loginComplete(L117-134)의 요청 DTO인 LoginCompleteReq는 publicKeyCredential + authenticationToken뿐이고, id-token 필드가 없다. IdTokenVerifier.verify()에 들어가는 토큰은 클라이언트 입력이 아니라 upstream passkey-app이 authenticationFinish 성공 후 서버-서버로 발급한 fin.idToken()이다. 즉 finding의 exploit 시나리오(\"공격자가 조작/만료된 토큰을 authenticate/finish에 제출\")는 불가능하다. 검증 실패 분기(unknown-kid/unexpected-alg/expired)에 도달하려면 ① 유효한 등록 credential로 WebAuthn 인증을 실제로 성공시키고 ② upstream이 잘못된 토큰을 발급하는 운영 장애(키 회전 race, JWKS 캐시 stale, 클럭 스큐)가 동시에 필요하다 — 공격자가 임의로 유발할 수 없고, 메시지를 받는 주체도 이미 인증에 성공한 정당한 사용자다.\n\n(2) 누설 정보가 이미 공개 정보: kid는 passkey-app JwksController(/.well-known/jwks.json, 무인증 표준 엔드포인트)가 의도적으로 공개하며, 기대 alg(RS256)도 JWKS의 kty=RSA에서 자명하다. 서버 시각(now)은 RFC 7231상 모든 HTTP 응답의 Date 헤더로 이미 노출된다. 정찰 가치의 순증가가 0이다.\n\n(3) handlePasskeyApi(L97-102) 반사는 비인증 브라우저에서 도달 가능하지만(예: 쓰레기 authenticationToken → upstream 4xx envelope), 반사되는 것은 passkey-app이 API 소비자용으로 의도적으로 설계한 공개 에러 envelope 메시지(C001/W002/W003 등 문서화된 코드 체계)이지 내부 상세가 아니다. C999 \"Envelope parse failure\" 경로도 upstream 응답이 깨졌을 때만 발생하며 브라우저 입력으로 유발 불가.\n\n방어 관점 보강 근거: PasskeyAuthException(L77-82)·RateLimit(L84-88)·AccessDenied·Unhandled(L106-111)는 이미 고정 코드만 반환하도록 차등 처리돼 있어, id-token 핸들러의 메시지 반사는 의도된 설계(도달 자체가 운영 장애 신호)로 읽힌다. 메시지 일반화는 코드 위생 개선거리는 되지만 보안 finding으로는 오탐 — SaaS/온프레미스 양쪽 모두 공격자가 얻는 비공개 정보가 없다."
+      },
+      {
+        "id": "scm-external-init-default-master-key",
+        "lens": "supply-config",
+        "title": "외부 DB 초기화 스크립트가 key-envelope 마스터키를 공개된 dev 키로 디폴트 처리",
+        "severity": "medium",
+        "reason": "인용 위치는 모두 정확하다. init-db-external.sh:97 은 PASSKEY_KEY_ENVELOPE_MASTER_KEY 미설정 시 저장소에 평문 커밋된 dev 키(jDKp21WXeDAwinZI91Hf...)를 디폴트로 주입하고, 이 env 는 PROFILE 과 무관하게 무조건 설정되므로 PROFILE=qa(yml 디폴트가 빈 문자열)에서도 dev 키가 override 된다. 스크립트는 admin-app 을 \"Started AdminApplication\" 까지 풀부팅하므로 SigningKeyProvider.init()→createInitialKey()→SigningKeyFactory.newRsaSigningKey→envelope.seal 이 실행되어 dev 키로 봉인된 ACTIVE 서명키가 외부 DB 에 INSERT 된다. 여기까지는 사실이다.\n\n그러나 \"운영급 DB 에서 봉인된 서명키가 공개 키로 보호되어 토큰 위조\" 라는 핵심 악용 시나리오는 fail-loud 메커니즘 때문에 성립하지 않는다.\n\n(1) 키 불일치 = 부팅 크래시: 봉인은 AES-256-GCM(KeyEnvelope.java:54-67). 스크립트가 dev 키로 서명키를 봉인해 외부 DB 에 넣은 뒤, 실제 운영 앱이 그 DB 를 가리키며 '제대로 된 고유 마스터키'로 부팅하면 SigningKeyProvider.init()→decodeWithPrivate→envelope.open(SigningKeyProvider.java:160)이 GCM 태그 불일치로 IllegalStateException(\"envelope authentication failed\")(KeyEnvelope.java:82-84)를 던져 @PostConstruct 실패→앱이 아예 기동하지 못한다. 즉 dev-봉인 서명키는 '독'이라서 운영 앱이 다른 키를 쓰면 조용히 통과하지 못하고 즉시 장애로 드러나 운영자가 행을 삭제/재봉인하도록 강제된다.\n\n(2) 빈 키 = 부팅 크래시: qa/prod yml(application-qa.yml:41 등)은 master-key:${...:} 빈 디폴트라 키 미주입 시 Base64.decode(\"\")=0바이트≠32바이트→IllegalStateException(KeyEnvelope.java:43-46)으로 운영 앱이 기동 불가다.\n\n결론적으로 \"토큰 위조\" 가 성립하려면 운영 앱 자체가 공개 dev 키를 명시적으로 그대로 사용해야 한다 — 그 경우 취약점의 본질은 이 스크립트가 아니라 \"운영 배포가 공개 커밋된 dev 키를 사용한다\"는 별도의 더 근본적 오설정이며, qa/prod yml 구조(빈 디폴트→크래시)가 오히려 이를 적극 방지한다. 스크립트는 dev/local/qa 부트스트랩 헬퍼(헤더 명시: \"로컬 설치 또는 원격 dev 서버\", PROFILE: dev|local|qa, prod 경로 없음)이고 qa 시드는 placeholder 다. 따라서 스크립트의 dev 키 폴백 단독으로는 운영급 조용한 위조를 만들지 못한다 — envelope 의 fail-loud 가 결정적 방어다.\n\nSaaS: 배포 파이프라인이 env 로 마스터키 주입, 헬퍼 미사용. saasExploitable=false. 온프레미스: 외부 SE 가 주 타깃이나 운영은 PROFILE=qa(실제 키 필수)→키 불일치 크래시로 fail-loud, 또는 빈 키 크래시. dev 키로 봉인된 행이 운영 앱에서 조용히 살아남는 상태가 없다. onpremExploitable=false.\n\nsuggestedDirection(non-dev 프로필에서 key-envelope 도 RelayKeyGuard(RelayKeyGuard.java:25-35)와 동일한 fail-closed 적용)은 정당한 심층방어 하드닝 제안이지만, 주장된 medium \"공급망 디폴트가 공개 키를 운영급으로 정상화→토큰 위조\" 는 fail-loud 통제가 이미 존재하므로 독립 악용 가능한 결함으로는 과장이다. 오탐(refuted) 판정."
+      }
+    ]
+  }
+}
