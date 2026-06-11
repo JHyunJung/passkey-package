@@ -67,6 +67,18 @@ public class MfaController {
                                     HttpServletRequest req) {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
+
+        // Brute-force lockout: reuse the primary-login lockout fields so a
+        // throttle exists on the second factor too. A locked account is
+        // refused before any code check (fail-closed). The lock also gates
+        // primary login via AdminUserDetails.isAccountNonLocked — acceptable
+        // because reaching here means the password is already compromised.
+        if (u != null && u.isLocked(clock.instant())) {
+            log.warn("admin mfa verify blocked (locked): email={}", mask(email));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "invalid_code"));
+        }
+
         String code = body == null ? null : body.code();
         boolean totpOk = validCode(u, code);
         boolean recoveryOk = false;
@@ -74,10 +86,24 @@ public class MfaController {
             recoveryOk = recoveryCodes.consume(u.getId(), code);
         }
         if (!totpOk && !recoveryOk) {
+            if (u != null) {
+                u.recordFailedLogin(clock.instant(), maxAttempts, lockDuration);
+                users.save(u);
+                // recordFailedLogin auto-locks once maxAttempts is reached. The
+                // entry guard above already refused any already-locked account,
+                // so reaching a locked state here means this failure tripped it.
+                if (u.isLocked(clock.instant())) {
+                    var s = req.getSession(false);
+                    if (s != null) s.invalidate();   // kill the pending session on lockout
+                    log.warn("admin mfa verify lockout triggered: email={}", mask(email));
+                }
+            }
             log.warn("admin mfa verify failed: email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
         }
+        u.recordSuccessfulLogin();   // reset shared failed-login counter on success
+        users.save(u);
         var session = req.getSession(false);
         if (session != null) {
             session.removeAttribute(MfaPendingFilter.MFA_PENDING_ATTR);

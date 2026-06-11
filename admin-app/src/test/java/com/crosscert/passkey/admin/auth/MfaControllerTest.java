@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -73,5 +74,62 @@ class MfaControllerTest {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         verify(users, never()).save(any());
+    }
+
+    private AdminUser enrolledUser() {
+        AdminUser u = AdminUser.create();
+        u.setEmail("alice@example.com");
+        u.setMfaEnabled(true);
+        u.setMfaSecret("sealed-secret");
+        return u;
+    }
+
+    @Test
+    void verify_repeatedFailure_locksAccount() {
+        AdminUser u = enrolledUser();
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        when(totp.verifyAt(any(), any(), anyLong())).thenReturn(false);   // always wrong
+        when(recoveryCodes.consume(any(), any())).thenReturn(false);
+
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        HttpSession session = mock(HttpSession.class);
+        when(req.getSession(false)).thenReturn(session);
+        when(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).thenReturn(Boolean.TRUE);
+
+        for (int i = 0; i < 5; i++) {
+            controller.verify(new MfaController.VerifyRequest("000000"), auth(), req);
+        }
+        assertThat(u.isLocked(clock.instant())).isTrue();
+        verify(session).invalidate();   // session killed on lockout
+    }
+
+    @Test
+    void verify_whenLocked_rejectsEvenCorrectCode() {
+        AdminUser u = enrolledUser();
+        u.recordFailedLogin(clock.instant(), 1, Duration.ofMinutes(15)); // already locked
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);   // correct code
+
+        ResponseEntity<?> resp = controller.verify(
+                new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void verify_success_resetsFailedCount() {
+        AdminUser u = enrolledUser();
+        u.recordFailedLogin(clock.instant(), 5, Duration.ofMinutes(15)); // 1 fail, not locked
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);
+
+        ResponseEntity<?> resp = controller.verify(
+                new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(u.isLocked(clock.instant())).isFalse();
     }
 }
