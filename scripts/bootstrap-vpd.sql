@@ -46,6 +46,8 @@ GRANT EXEMPT ACCESS POLICY TO APP_ADMIN;
 -- ============================================================
 -- APP_OWNER privileges (schema owner)
 -- One GRANT per privilege so a bad name does not nuke the bundle.
+-- ⚠️ bootstrap-vpd.sql 과 bootstrap-external.sql 의 APP_OWNER 권한 블록은
+--    항상 동기 상태를 유지할 것. 한 파일 수정 시 다른 파일도 함께 수정.
 -- ============================================================
 
 GRANT CREATE TABLE         TO APP_OWNER;

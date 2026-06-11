@@ -16,6 +16,12 @@ spring:
       host: ${SPRING_DATA_REDIS_HOST:}
       port: ${SPRING_DATA_REDIS_PORT:6379}
   flyway:
+    # Finding #3 (Approach A): Flyway 는 스키마 OWNER(APP_OWNER)로 실행 — 런타임
+    # datasource 유저(APP_ADMIN_USER)에서 DDL 권한을 전부 제거하기 위함.
+    # 빈 폴백이라 qa 에서 env 미주입 시 Flyway 연결이 즉시 실패(fail-fast),
+    # datasource password 패턴과 동일.
+    user:     ${SPRING_FLYWAY_USER:}
+    password: ${SPRING_FLYWAY_PASSWORD:}
     # qa 도 baseline-on-migrate 는 base 의 true 그대로 — 일부 qa 환경에서
     # 새 schema 로 시작 가능해야 함.
     # qa 는 운영자 계정(seed-common)만. 테넌트 시드는 db/qa(placeholder).

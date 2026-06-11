@@ -114,6 +114,11 @@ class AdminFlowIT {
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
+        // Flyway runs as the schema OWNER (APP_OWNER), runtime as APP_ADMIN_USER.
+        // Finding #3 (Approach A): the runtime user no longer holds DDL power.
+        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
+        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD); // APP_OWNER pw == SYS_PASSWORD
 
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -154,7 +159,11 @@ class AdminFlowIT {
         // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
         // use ON DELETE CASCADE from their parent FKs, so deleting the
         // parent rows implicitly removes children too.
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        //
+        // audit_log: V10 deliberately withholds DELETE from APP_ADMIN (append-only
+        // design for tamper evidence). Use the schema-owner pool for cleanup so
+        // the regression guard runtimeUser_cannotTamperAuditLog stays consistent.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");
@@ -515,18 +524,23 @@ class AdminFlowIT {
      * <p>This test is <em>intentionally RED</em> while bootstrap-vpd.sql
      * contains {@code GRANT ALL PRIVILEGES TO APP_ADMIN_USER} (finding #3).
      * Task B3 removes that GRANT, which turns this test GREEN.
+     *
+     * <p>Spring's JdbcTemplate wraps Oracle privilege errors in
+     * {@code BadSqlGrammarException}; the ORA- code lives in the root
+     * cause. We navigate to the root cause via {@code rootCause()} and
+     * then check its message.
      */
     @Test
     void runtimeUser_cannotTamperAuditLog() {
         assertThatThrownBy(() ->
                 jdbc.execute("UPDATE APP_OWNER.audit_log SET action = 'X' WHERE 1=0"))
-            .hasMessageContaining("ORA-");
+            .rootCause().hasMessageContaining("ORA-");
         assertThatThrownBy(() ->
                 jdbc.execute("DELETE FROM APP_OWNER.audit_log WHERE 1=0"))
-            .hasMessageContaining("ORA-");
+            .rootCause().hasMessageContaining("ORA-");
         assertThatThrownBy(() ->
                 jdbc.execute("DROP TABLE APP_OWNER.audit_log"))
-            .hasMessageContaining("ORA-");
+            .rootCause().hasMessageContaining("ORA-");
     }
 
     /**
