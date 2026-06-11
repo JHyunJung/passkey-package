@@ -56,6 +56,8 @@ GRANT CREATE ANY CONTEXT   TO APP_OWNER;
 GRANT UNLIMITED TABLESPACE TO APP_OWNER;
 GRANT EXECUTE ON DBMS_RLS     TO APP_OWNER;
 GRANT EXECUTE ON DBMS_SESSION TO APP_OWNER;
+GRANT CREATE VIEW          TO APP_OWNER;
+GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
 -- Flyway runs as APP_ADMIN_USER and must invoke DBMS_RLS.ADD_POLICY in V3
 -- to attach VPD policies to credential. GRANT ALL PRIVILEGES does not
 -- cover object EXECUTE on SYS-owned packages, so grant explicitly here.
@@ -84,10 +86,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 GRANT APP_ADMIN TO APP_ADMIN_USER;
--- ADMIN needs broad rights for Flyway DDL + DBMS_RLS administration.
--- See docs/superpowers/followups/2026-05-25-prod-hardening-notes.md for
--- a known-issue to tighten this in a later Phase.
-GRANT ALL PRIVILEGES TO APP_ADMIN_USER;
 
 -- ============================================================
 -- CTX_PKG package + APP_CTX namespace (owned by APP_OWNER)

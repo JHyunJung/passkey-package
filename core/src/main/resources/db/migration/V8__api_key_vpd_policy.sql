@@ -52,7 +52,10 @@ END;
 -- BCrypt-verifies the secret and then sets TenantContextHolder so
 -- the rest of the request sees the correct tenant.
 
-GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
+-- EXEMPT ACCESS POLICY for APP_OWNER moved to bootstrap SQL (bootstrap-vpd.sql /
+-- bootstrap-external.sql). When Flyway runs as APP_OWNER it cannot grant a
+-- system privilege to itself, so SYS must grant it during bootstrap. The
+-- definer-rights api_key_lookup_pkg below still relies on APP_OWNER holding it.
 
 -- Step 2: the lookup package.
 CREATE OR REPLACE PACKAGE APP_OWNER.api_key_lookup_pkg AUTHID DEFINER AS
