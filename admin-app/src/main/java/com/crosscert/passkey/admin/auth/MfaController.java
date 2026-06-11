@@ -5,6 +5,7 @@ import com.crosscert.passkey.core.repository.AdminUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -37,14 +39,20 @@ public class MfaController {
     private final Clock clock;
     private final RecoveryCodeService recoveryCodes;
     private final MfaSecretCipher secretCipher;
+    private final int maxAttempts;
+    private final Duration lockDuration;
 
     public MfaController(TotpService totp, AdminUserRepository users, Clock clock,
-                         RecoveryCodeService recoveryCodes, MfaSecretCipher secretCipher) {
+                         RecoveryCodeService recoveryCodes, MfaSecretCipher secretCipher,
+                         @Value("${passkey.admin.lockout.max-attempts:5}") int maxAttempts,
+                         @Value("${passkey.admin.lockout.duration:PT15M}") Duration lockDuration) {
         this.totp = totp;
         this.users = users;
         this.clock = clock;
         this.recoveryCodes = recoveryCodes;
         this.secretCipher = secretCipher;
+        this.maxAttempts = maxAttempts;
+        this.lockDuration = lockDuration;
     }
 
     /**
@@ -97,7 +105,8 @@ public class MfaController {
      * Keeping enrollment disabled-until-confirmed closes that lock-out window.
      */
     @PostMapping("/enroll")
-    public ResponseEntity<?> enroll(Authentication auth) {
+    public ResponseEntity<?> enroll(Authentication auth, HttpServletRequest req) {
+        if (isPending(req)) return mfaRequired();
         String email = auth.getName();
         // Graceful, non-500 handling consistent with verify(): an authenticated
         // principal whose backing row is gone (concurrent delete / stale session)
@@ -125,7 +134,9 @@ public class MfaController {
      * on any failure (no secret, wrong/absent code), mirroring {@link #verify}.
      */
     @PostMapping("/confirm")
-    public ResponseEntity<?> confirm(@RequestBody VerifyRequest body, Authentication auth) {
+    public ResponseEntity<?> confirm(@RequestBody VerifyRequest body, Authentication auth,
+                                     HttpServletRequest req) {
+        if (isPending(req)) return mfaRequired();
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
@@ -147,7 +158,9 @@ public class MfaController {
      * {@code 401 {"error":"invalid_code"}} on any failure.
      */
     @PostMapping("/disable")
-    public ResponseEntity<?> disable(@RequestBody VerifyRequest body, Authentication auth) {
+    public ResponseEntity<?> disable(@RequestBody VerifyRequest body, Authentication auth,
+                                     HttpServletRequest req) {
+        if (isPending(req)) return mfaRequired();
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
@@ -164,6 +177,24 @@ public class MfaController {
     }
 
     public record VerifyRequest(String code) {}
+
+    /**
+     * Reject enroll/confirm/disable while the session is still MFA-pending.
+     * Defense-in-depth behind MfaPendingFilter (which already blocks these
+     * paths) — if the filter is ever bypassed or reordered, the handler still
+     * refuses to mutate the secret from a password-only session.
+     */
+    private static boolean isPending(HttpServletRequest req) {
+        // session==null means no session exists → request is unauthenticated
+        // and rejected upstream by Spring Security; treat as "not pending".
+        var session = req.getSession(false);
+        return session != null
+                && Boolean.TRUE.equals(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR));
+    }
+
+    private static ResponseEntity<?> mfaRequired() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "mfa_required"));
+    }
 
     /**
      * Shared TOTP gate for verify/confirm/disable: true only when the user row
