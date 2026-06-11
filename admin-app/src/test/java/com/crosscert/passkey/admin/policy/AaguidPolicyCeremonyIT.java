@@ -7,6 +7,8 @@ import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
 import com.crosscert.passkey.core.policy.AaguidPolicyViolationException;
 import com.crosscert.passkey.core.policy.DefaultAaguidPolicyChecker;
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -109,6 +111,30 @@ class AaguidPolicyCeremonyIT {
     private static final UUID AAGUID_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID AAGUID_B = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
+    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    private static HikariDataSource ownerPool;
+
+    @AfterAll
+    static void closeOwnerPool() {
+        if (ownerPool != null) {
+            ownerPool.close();
+            ownerPool = null;
+        }
+    }
+
+    private static synchronized JdbcTemplate ownerJdbc() {
+        if (ownerPool == null) {
+            HikariDataSource ds = new HikariDataSource();
+            ds.setJdbcUrl(ORACLE.getJdbcUrl());
+            ds.setUsername("APP_OWNER");
+            ds.setPassword(SYS_PASSWORD);
+            ds.setMaximumPoolSize(2);
+            ds.setPoolName("aaguid-policy-it-owner");
+            ownerPool = ds;
+        }
+        return new JdbcTemplate(ownerPool);
+    }
+
     // ----------------------------------------------------------------
     // State reset — FK-safe DELETE + Redis flush
     // ----------------------------------------------------------------
@@ -120,8 +146,10 @@ class AaguidPolicyCeremonyIT {
         // Delete in FK-safe order — new Phase C tables first
         jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy_entry");
         jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_webauthn_snapshot");
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        // tenant_webauthn_snapshot: APP_ADMIN has SELECT+INSERT only (V27) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.tenant_webauthn_snapshot");
+        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");

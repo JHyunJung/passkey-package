@@ -1,0 +1,15 @@
+-- V46: column-level UPDATE grant on audit_log.tenant_hash / tenant_prev_hash
+-- for APP_ADMIN_USER, unblocked by removing GRANT ALL (finding #3 / task B3).
+--
+-- V25 added tenant_hash + tenant_prev_hash to audit_log for per-tenant chain.
+-- V10's original grant (SELECT, INSERT only) intentionally withholds UPDATE on
+-- audit_log to enforce the append-only tamper-evident design.  That restriction
+-- is correct for *payload / hash / prev_hash* — runtime should never rewrite those.
+--
+-- AuditChainBackfillService.backfill() writes ONLY tenant_hash and
+-- tenant_prev_hash (the V25 chain columns added after V10's grant was set).
+-- These two columns carry no forensic content on their own — their correctness
+-- is verified independently by AuditChainVerifier against the payload hash.
+-- Granting column-level UPDATE on them does NOT undermine the append-only
+-- invariant for the original chain columns.
+GRANT UPDATE (tenant_hash, tenant_prev_hash) ON audit_log TO APP_ADMIN;

@@ -16,6 +16,8 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -117,13 +119,39 @@ class KeyRotationIT {
 
     JdbcTemplate jdbc;
 
+    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    private static HikariDataSource ownerPool;
+
+    @AfterAll
+    static void closeOwnerPool() {
+        if (ownerPool != null) {
+            ownerPool.close();
+            ownerPool = null;
+        }
+    }
+
+    private static synchronized JdbcTemplate ownerJdbc() {
+        if (ownerPool == null) {
+            HikariDataSource ds = new HikariDataSource();
+            ds.setJdbcUrl(ORACLE.getJdbcUrl());
+            ds.setUsername("APP_OWNER");
+            ds.setPassword(SYS_PASSWORD);
+            ds.setMaximumPoolSize(2);
+            ds.setPoolName("key-rotation-it-owner");
+            ownerPool = ds;
+        }
+        return new JdbcTemplate(ownerPool);
+    }
+
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
         // Clear audit rows from previous test runs.
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         // Wipe all signing keys so provider.init() starts fresh.
-        jdbc.update("DELETE FROM APP_OWNER.signing_key");
+        // signing_key: APP_ADMIN has no DELETE grant — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.signing_key");
         // Clear rotation and expiration lease rows but preserve the
         // AUDIT_CHAIN_LOCK sentinel row seeded by V14. Deleting it causes
         // AuditLogService to throw NoResultException on FOR UPDATE.
