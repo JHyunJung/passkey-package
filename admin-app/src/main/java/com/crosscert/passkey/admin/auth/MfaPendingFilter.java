@@ -23,7 +23,7 @@ import java.io.IOException;
  *
  * <p>Allow-listed while pending so the user can complete the second factor:
  * <ul>
- *   <li>{@code /admin/api/mfa/**} — verify / enroll endpoints.</li>
+ *   <li>{@code /admin/api/mfa/verify} — verify endpoint only.</li>
  *   <li>{@code /admin/api/me} — so the SPA can read its own session state
  *       (notably {@code mfaRequired}) and decide to show the MFA challenge.</li>
  *   <li>{@code /admin/logout} — let the operator abandon the half-finished login.</li>
@@ -67,14 +67,17 @@ public class MfaPendingFilter extends OncePerRequestFilter {
 
     /**
      * Paths reachable while a session is MFA-pending. Uses the servlet path
-     * (context-path stripped) and prefix matching; query strings are ignored
+     * (full request URI including context path) and exact matching; query strings are ignored
      * by the servlet API for {@link HttpServletRequest#getRequestURI()}.
      */
     private boolean isAllowedWhilePending(HttpServletRequest req) {
         String uri = req.getRequestURI();
         if (uri == null) return false;
-        return uri.startsWith("/admin/api/mfa/")
-                || uri.equals("/admin/api/mfa")
+        // Only the second-factor completion endpoint is reachable while pending.
+        // enroll/confirm/disable require a fully-authenticated (non-pending)
+        // session — narrowing from the old "/admin/api/mfa/" prefix closes the
+        // re-enroll bypass where a password-only session overwrote the TOTP secret.
+        return uri.equals("/admin/api/mfa/verify")
                 || uri.equals("/admin/api/me")
                 || uri.equals("/admin/logout");
     }
