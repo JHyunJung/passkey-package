@@ -23,10 +23,30 @@ WHENEVER SQLERROR EXIT SQL.SQLCODE
 ALTER SESSION SET CONTAINER = XEPDB1;
 
 -- ============================================================
+-- 계정 비밀번호 — 외부 입력. 미정의/빈 값이면 부트스트랩 중단(fail-fast).
+-- ⚠️ DBeaver 등 DEFINE 미지원 클라이언트: 아래 DEFINE 3줄을 강한 실제 비번으로
+--    직접 치환한 뒤 실행하라. (sqlplus / init-db-external.sh 경로는 env 주입.)
+-- ⚠️ 비번에 & 또는 "(큰따옴표) 포함 시 sqlplus 치환/quoting 충돌. 두 문자 회피 권장.
+-- ============================================================
+DEFINE app_owner_pw = ""
+DEFINE runtime_pw   = ""
+DEFINE admin_pw     = ""
+
+-- 빈 값 가드: 하나라도 비면 즉시 중단 (Oracle '' IS NULL → fail-closed).
+-- WHENEVER SQLERROR EXIT(상단)이 이 RAISE 를 비0 종료로 만든다.
+BEGIN
+  IF '&&app_owner_pw' IS NULL OR '&&runtime_pw' IS NULL OR '&&admin_pw' IS NULL THEN
+    RAISE_APPLICATION_ERROR(-20001,
+      'bootstrap 중단: app_owner_pw/runtime_pw/admin_pw 중 미정의. DEFINE 또는 env(APP_OWNER_PW/RUNTIME_PW/ADMIN_PW) 주입 필요.');
+  END IF;
+END;
+/
+
+-- ============================================================
 -- APP_OWNER 스키마 유저 (도커 compose 가 하던 것)
 -- ============================================================
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE USER APP_OWNER IDENTIFIED BY app_owner_pw';
+  EXECUTE IMMEDIATE 'CREATE USER APP_OWNER IDENTIFIED BY "&&app_owner_pw"';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1920 THEN NULL; -- ORA-01920: user already exists
   ELSE RAISE;
@@ -76,7 +96,7 @@ GRANT EXECUTE ON DBMS_RLS     TO APP_ADMIN;
 -- Users (Flyway = APP_ADMIN_USER, runtime = APP_RUNTIME_USER)
 -- ============================================================
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE USER APP_RUNTIME_USER IDENTIFIED BY runtime_pw';
+  EXECUTE IMMEDIATE 'CREATE USER APP_RUNTIME_USER IDENTIFIED BY "&&runtime_pw"';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1920 THEN NULL; ELSE RAISE; END IF;
 END;
@@ -84,7 +104,7 @@ END;
 GRANT APP_RUNTIME TO APP_RUNTIME_USER;
 
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE USER APP_ADMIN_USER IDENTIFIED BY admin_pw';
+  EXECUTE IMMEDIATE 'CREATE USER APP_ADMIN_USER IDENTIFIED BY "&&admin_pw"';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1920 THEN NULL; ELSE RAISE; END IF;
 END;
