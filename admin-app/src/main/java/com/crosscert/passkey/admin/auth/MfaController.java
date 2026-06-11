@@ -22,9 +22,10 @@ import java.util.Map;
  * Second-factor (TOTP) endpoints for the admin SPA.
  *
  * <p>Both endpoints require an authenticated session ({@code /admin/api/**} is
- * {@code authenticated()} in {@code AdminSecurityConfig}) and are reachable
- * while a session is MFA-pending because {@code MfaPendingFilter} allow-lists
- * {@code /admin/api/mfa/**}. CSRF stays enabled for both — the SPA already
+ * {@code authenticated()} in {@code AdminSecurityConfig}). While a session is
+ * MFA-pending, {@code MfaPendingFilter} allow-lists only
+ * {@code /admin/api/mfa/verify} (exact match); enroll/confirm/disable are
+ * rejected until MFA is satisfied. CSRF stays enabled for both — the SPA already
  * holds the {@code XSRF-TOKEN} cookie from the (pending) session, so adding
  * these to the CSRF ignore list would needlessly weaken the surface.
  */

@@ -56,6 +56,13 @@ END;
 -- bootstrap-external.sql). When Flyway runs as APP_OWNER it cannot grant a
 -- system privilege to itself, so SYS must grant it during bootstrap. The
 -- definer-rights api_key_lookup_pkg below still relies on APP_OWNER holding it.
+--
+-- DEPLOY NOTE: existing DBs that already applied the original V8 (with the
+-- GRANT line) must run `flyway repair` once after this change to update the
+-- recorded checksum (prod uses validate-on-migrate=true). New DBs are unaffected.
+--
+-- For already-bootstrapped DBs, also run as SYSDBA:
+--   REVOKE EXECUTE ON SYS.DBMS_RLS FROM APP_ADMIN;
 
 -- Step 2: the lookup package.
 CREATE OR REPLACE PACKAGE APP_OWNER.api_key_lookup_pkg AUTHID DEFINER AS

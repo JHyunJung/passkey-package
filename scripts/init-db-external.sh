@@ -49,8 +49,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 계정 비밀번호는 환경변수 필수 — 하드코딩 제거(보안 감사 #2).
-# ADMIN_PW: Flyway datasource 비번 — 항상 필요.
+# ADMIN_PW: APP_ADMIN_USER 비번 — 항상 필요 (runtime datasource).
+# APP_OWNER_PW: Flyway datasource 비번 — 항상 필요 (bootstrap 및 Flyway).
 : "${ADMIN_PW:?ADMIN_PW 환경변수 필요 (강한 비번)}"
+: "${APP_OWNER_PW:?APP_OWNER_PW 환경변수 필요 (강한 비번)}"
 
 ORA_HOST="${ORA_HOST:-localhost}"
 ORA_PORT="${ORA_PORT:-1521}"
@@ -84,8 +86,7 @@ else
     echo "         (DBeaver, SYSDBA 또는 적절 권한) < ${SCRIPT_DIR}/bootstrap-external.sql" >&2
     exit 1
   fi
-  # APP_OWNER_PW/RUNTIME_PW: bootstrap 전용 — SKIP_BOOTSTRAP=1 이면 불필요.
-  : "${APP_OWNER_PW:?APP_OWNER_PW 환경변수 필요 (강한 비번)}"
+  # RUNTIME_PW: bootstrap 전용 — SKIP_BOOTSTRAP=1 이면 불필요.
   : "${RUNTIME_PW:?RUNTIME_PW 환경변수 필요 (강한 비번)}"
   echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role + CTX_PKG"
   # ⚠️ 비번에 "(큰따옴표)가 있으면 heredoc DEFINE 줄이 파괴됨. 비번에 " 미사용 권장.
@@ -93,7 +94,7 @@ else
 DEFINE app_owner_pw = "${APP_OWNER_PW}"
 DEFINE runtime_pw   = "${RUNTIME_PW}"
 DEFINE admin_pw     = "${ADMIN_PW}"
-@${SCRIPT_DIR}/bootstrap-external.sql
+@${SCRIPT_DIR}/bootstrap-external-body.sql
 SQL
   echo "    부트스트랩 완료."
 fi
@@ -108,6 +109,8 @@ cd "${REPO_ROOT}"
 SPRING_DATASOURCE_URL="${JDBC_URL}" \
 SPRING_DATASOURCE_USERNAME='APP_ADMIN_USER' \
 SPRING_DATASOURCE_PASSWORD="${ADMIN_PW}" \
+SPRING_FLYWAY_USER='APP_OWNER' \
+SPRING_FLYWAY_PASSWORD="${APP_OWNER_PW}" \
 SPRING_DATA_REDIS_HOST="${REDIS_HOST:-localhost}" \
 PASSKEY_KEY_ENVELOPE_MASTER_KEY="${PASSKEY_KEY_ENVELOPE_MASTER_KEY:-jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM=}" \
 PASSKEY_VPD_ENABLED="${PASSKEY_VPD_ENABLED}" \

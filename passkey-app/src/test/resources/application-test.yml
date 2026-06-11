@@ -15,15 +15,16 @@ spring:
     default-schema: APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
-    # Flyway DDL (CREATE TABLE / DBMS_RLS.ADD_POLICY in V3, V8) needs
-    # APP_ADMIN_USER's wide grants AND its EXEMPT ACCESS POLICY. The
-    # runtime Spring DataSource below logs in as APP_RUNTIME_USER so
+    # Flyway runs as schema owner APP_OWNER (same as admin-app / core ITs).
+    # APP_OWNER holds DDL privileges + EXECUTE ON DBMS_RLS + EXEMPT ACCESS POLICY,
+    # so it can apply all migrations including V3/V8 VPD policy setup.
+    # The runtime Spring DataSource below logs in as APP_RUNTIME_USER so
     # VPD policies actually engage during scenario execution — which
     # is the whole point of the cross-tenant-isolation scenario. Split
     # credentials via spring.flyway.user/password keep migration and
     # runtime separate within a single Spring Boot context.
-    user: APP_ADMIN_USER
-    password: admin_pw
+    user: APP_OWNER
+    password: app_owner_pw
   jpa:
     hibernate:
       ddl-auto: validate

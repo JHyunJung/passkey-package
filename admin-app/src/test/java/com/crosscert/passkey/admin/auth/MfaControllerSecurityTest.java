@@ -48,8 +48,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * deterministic. Only {@link AdminUserRepository} is mocked.
  *
  * <p>That these endpoints are reachable at all under {@code AdminSecurityConfig}
- * (which now wires {@code MfaPendingFilter}) also confirms the filter does not
- * block {@code /admin/api/mfa/**}.
+ * (which now wires {@code MfaPendingFilter}) also confirms the filter passes
+ * {@code /admin/api/mfa/verify} for pending sessions (enroll/confirm/disable
+ * are blocked).
  */
 @WebMvcTest(controllers = MfaController.class)
 @Import({

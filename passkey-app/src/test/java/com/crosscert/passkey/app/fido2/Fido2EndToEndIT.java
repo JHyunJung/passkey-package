@@ -115,9 +115,9 @@ class Fido2EndToEndIT {
         // Runtime DataSource → APP_RUNTIME_USER so VPD policies actually
         // engage during the request path (APP_ADMIN holds EXEMPT ACCESS
         // POLICY and would silently bypass the cross-tenant isolation
-        // check). Flyway uses APP_ADMIN_USER via spring.flyway.user in
-        // application-test.yml, so migrations run independently of the
-        // runtime pool.
+        // check). Flyway runs as APP_OWNER (the schema owner) via
+        // spring.flyway.user in application-test.yml, so migrations run
+        // independently of the runtime pool.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_RUNTIME_USER");
         reg.add("spring.datasource.password", () -> "runtime_pw");
