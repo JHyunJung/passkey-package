@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import oracle.jdbc.pool.OracleDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -19,6 +21,7 @@ import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -95,12 +98,17 @@ class BaseEntityCallbackIT {
                             + "STDERR:\n" + exec.getStderr());
         }
 
-        // Connect as APP_ADMIN_USER (EXEMPT ACCESS POLICY) — same identity
-        // Flyway uses for migrations, so V22 will have run before Hibernate
+        // Connect as APP_ADMIN_USER (EXEMPT ACCESS POLICY) — runtime user.
+        // V22 (and subsequent migrations) will have run before Hibernate
         // validates ADMIN_USER's new updated_at column.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
+        // Finding #3 (Approach A): Flyway runs as APP_OWNER (schema owner)
+        // so that migrations can GRANT on APP_OWNER objects without error.
+        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
+        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired
@@ -112,10 +120,28 @@ class BaseEntityCallbackIT {
     @PersistenceContext
     EntityManager em;
 
+    /**
+     * Returns a JdbcTemplate connected as APP_OWNER (schema owner) for
+     * test cleanup that requires privileges beyond APP_ADMIN_USER's runtime
+     * grants (e.g. DELETE on admin_user). Finding #3 removed GRANT ALL
+     * PRIVILEGES from APP_ADMIN_USER; cleanup that needs broader rights must
+     * use the owner connection, as done in AdminFlowIT.resetState().
+     */
+    private JdbcTemplate ownerJdbc() throws SQLException {
+        OracleDataSource ds = new OracleDataSource();
+        ds.setURL(ORACLE.getJdbcUrl());
+        ds.setUser("APP_OWNER");
+        ds.setPassword(SYS_PASSWORD);
+        return new JdbcTemplate(ds);
+    }
+
     @AfterEach
-    void cleanup() {
-        adminUsers.deleteAll();
-        auditLogs.deleteAll();
+    void cleanup() throws SQLException {
+        // APP_ADMIN role has no DELETE on admin_user (never needed at runtime).
+        // Use the schema-owner connection for teardown — same pattern as
+        // AdminFlowIT.resetState() after finding #3 removed GRANT ALL.
+        ownerJdbc().update("DELETE FROM APP_OWNER.admin_user");
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
     }
 
     /** BCrypt-shaped hash exactly 60 chars long (matches V9 column width). */

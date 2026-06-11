@@ -1,5 +1,7 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -95,6 +97,30 @@ class AuditChainBackfillIT {
     private static final UUID TENANT_A_ID = UUID.fromString("00000000-0000-0000-0000-0000000000A2");
     private static final UUID ACTOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
+    /** APP_OWNER (schema owner) pool — used for owner-only table cleanup and tamper simulation. */
+    private static HikariDataSource ownerPool;
+
+    @AfterAll
+    static void closeOwnerPool() {
+        if (ownerPool != null) {
+            ownerPool.close();
+            ownerPool = null;
+        }
+    }
+
+    private static synchronized JdbcTemplate ownerJdbc() {
+        if (ownerPool == null) {
+            HikariDataSource ds = new HikariDataSource();
+            ds.setJdbcUrl(ORACLE.getJdbcUrl());
+            ds.setUsername("APP_OWNER");
+            ds.setPassword(SYS_PASSWORD);
+            ds.setMaximumPoolSize(2);
+            ds.setPoolName("audit-backfill-it-owner");
+            ownerPool = ds;
+        }
+        return new JdbcTemplate(ownerPool);
+    }
+
     // ----------------------------------------------------------------
     // State reset — clean audit_log + seed one tenant
     // ----------------------------------------------------------------
@@ -104,7 +130,8 @@ class AuditChainBackfillIT {
         jdbc = new JdbcTemplate(ds);
 
         // FK-safe delete order
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");
@@ -160,7 +187,8 @@ class AuditChainBackfillIT {
         // ── 2. NULL out tenant_hash + tenant_prev_hash only for the first 2 rows ─
         //    Simulates a pre-V25 migration state where these columns were added
         //    after some rows already existed. Row 3 keeps its valid chain.
-        int nulled = jdbc.update(
+        //    audit_log UPDATE requires APP_OWNER (V10 withholds UPDATE from APP_ADMIN).
+        int nulled = ownerJdbc().update(
                 "UPDATE APP_OWNER.audit_log SET tenant_hash = NULL, tenant_prev_hash = NULL"
                         + " WHERE id IN (HEXTORAW(?), HEXTORAW(?))",
                 uuidToHex(row1.getId()), uuidToHex(row2.getId()));

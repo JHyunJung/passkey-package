@@ -8,6 +8,7 @@ import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,12 +77,33 @@ public class AuditChainBackfillService {
                         row.getTenantId(),
                         payload);
                 byte[] computed = AuditLogService.computeHash(prev, req, row.getPayload(), row.getCreatedAt());
-                row.setTenantPrevHash(prev);
-                row.setTenantHash(computed);
+                // Use native SQL UPDATE targeting only tenant_hash + tenant_prev_hash so that
+                // we need only the column-level UPDATE grant on those two columns (V46),
+                // not a full-row UPDATE. This avoids triggering ORA-01031 on the other columns
+                // that APP_ADMIN intentionally cannot update (V10 append-only design).
+                em.createNativeQuery(
+                                "UPDATE APP_OWNER.audit_log"
+                                + " SET tenant_prev_hash = :prevHash,"
+                                + "     tenant_hash      = :hash"
+                                + " WHERE id = :id")
+                        .setParameter("prevHash", prev)
+                        .setParameter("hash", computed)
+                        .setParameter("id", uuidToBytes(row.getId()))
+                        .executeUpdate();
+                // Detach the entity so Hibernate does not attempt a full-row flush on commit.
+                em.detach(row);
                 prev = computed;
                 updated++;
             }
         }
         return new Summary(tenantIds.size(), updated, skipped);
+    }
+
+    /** Convert UUID to 16-byte big-endian RAW(16) for Oracle JDBC binding. */
+    private static byte[] uuidToBytes(UUID id) {
+        ByteBuffer bb = ByteBuffer.allocate(16);
+        bb.putLong(id.getMostSignificantBits());
+        bb.putLong(id.getLeastSignificantBits());
+        return bb.array();
     }
 }

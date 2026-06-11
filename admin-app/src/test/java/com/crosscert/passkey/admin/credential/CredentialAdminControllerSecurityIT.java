@@ -4,6 +4,8 @@ import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -113,6 +115,30 @@ class CredentialAdminControllerSecurityIT {
     // Separate plain RestTemplate (not TestRestTemplate) for error response inspection
     private final RestTemplate http = new RestTemplate();
 
+    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    private static HikariDataSource ownerPool;
+
+    @AfterAll
+    static void closeOwnerPool() {
+        if (ownerPool != null) {
+            ownerPool.close();
+            ownerPool = null;
+        }
+    }
+
+    private static synchronized JdbcTemplate ownerJdbc() {
+        if (ownerPool == null) {
+            HikariDataSource ds = new HikariDataSource();
+            ds.setJdbcUrl(ORACLE.getJdbcUrl());
+            ds.setUsername("APP_OWNER");
+            ds.setPassword(SYS_PASSWORD);
+            ds.setMaximumPoolSize(2);
+            ds.setPoolName("credential-security-it-owner");
+            ownerPool = ds;
+        }
+        return new JdbcTemplate(ownerPool);
+    }
+
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
@@ -124,7 +150,8 @@ class CredentialAdminControllerSecurityIT {
         // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
         // use ON DELETE CASCADE from their parent FKs, so deleting the
         // parent rows implicitly removes children too.
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");

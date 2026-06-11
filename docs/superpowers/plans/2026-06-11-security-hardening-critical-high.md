@@ -795,3 +795,4 @@ Run: `/codex:review` (묶음 B diff 대상). 특히 SQL 치환 안전성·Flyway
 - `bootstrap-vpd.sql` 비번 외부화 + docker-compose 1521 → 127.0.0.1 바인딩 — 후속 백로그.
 - MFA lockout 운영자 수동 unlock 경로 — 필요 시 후속(현재 시간 자동 해제).
 - `MfaController.validCode`의 `mfaEnabled` 검사 — 정상 흐름 파괴 위험으로 제외.
+- **[P2 codex, 묶음 A 리뷰] verify lockout의 read/check/write 비원자성(TOCTOU)** — `findByEmail`→`isLocked`→`save`가 비원자라 병렬 오답 POST가 entry lock 검사를 save 전에 통과해 last-write-wins로 increment를 잃고 maxAttempts를 초과할 수 있다. **후속 백로그로 결정**(2026-06-11): #4 spec 범위(시도제한 추가)는 충족됐고, 동일 비원자 패턴이 1차 로그인 lockout(`AdminSecurityConfig.adminLoginFailureHandler`)에도 있어 **둘을 함께 원자화**(`@Version` optimistic lock 또는 DB 원자 조건부 UPDATE)해야 일관됨. TOTP는 ±1 window 3코드라 race로도 ~33만 시도가 필요해 실익이 낮다. 후속 spec에서 1차+2차 lockout 공통 원자화로 처리.

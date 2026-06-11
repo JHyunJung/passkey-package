@@ -13,6 +13,13 @@ spring:
     default-schema: APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
+    # Finding #3 (Approach A): Flyway runs as the schema OWNER (APP_OWNER), not
+    # the runtime datasource user (APP_ADMIN_USER, which now holds ZERO DDL).
+    # url is omitted → Flyway falls back to spring.datasource.url (the per-IT
+    # Testcontainers URL). All ITs share the same APP_OWNER password because the
+    # OracleContainer uses it as both SYS and APP_OWNER secret.
+    user: APP_OWNER
+    password: app_owner_pw
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
   session:

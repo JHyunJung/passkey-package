@@ -1,5 +1,7 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -95,6 +97,30 @@ class AuditChainPerTenantIT {
     private static final UUID TENANT_B_ID = UUID.fromString("00000000-0000-0000-0000-0000000000B1");
     private static final UUID ACTOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
+    /** APP_OWNER (schema owner) pool — used for owner-only table cleanup and tamper simulation. */
+    private static HikariDataSource ownerPool;
+
+    @AfterAll
+    static void closeOwnerPool() {
+        if (ownerPool != null) {
+            ownerPool.close();
+            ownerPool = null;
+        }
+    }
+
+    private static synchronized JdbcTemplate ownerJdbc() {
+        if (ownerPool == null) {
+            HikariDataSource ds = new HikariDataSource();
+            ds.setJdbcUrl(ORACLE.getJdbcUrl());
+            ds.setUsername("APP_OWNER");
+            ds.setPassword(SYS_PASSWORD);
+            ds.setMaximumPoolSize(2);
+            ds.setPoolName("audit-per-tenant-it-owner");
+            ownerPool = ds;
+        }
+        return new JdbcTemplate(ownerPool);
+    }
+
     // ----------------------------------------------------------------
     // State reset — clean audit_log + seed two tenants
     // ----------------------------------------------------------------
@@ -104,7 +130,8 @@ class AuditChainPerTenantIT {
         jdbc = new JdbcTemplate(ds);
 
         // FK-safe delete order (mirrors AuditLogTenantScopingIT)
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");
@@ -200,8 +227,9 @@ class AuditChainPerTenantIT {
                 .isTrue();
 
         // ── 4. Tamper tenantA's 2nd row payload ───────────────────────
+        // audit_log UPDATE requires APP_OWNER (V10 withholds UPDATE from APP_ADMIN).
         UUID tamperTargetId = rowA2.getId();
-        int updated = jdbc.update(
+        int updated = ownerJdbc().update(
                 "UPDATE APP_OWNER.audit_log SET payload = '{\"tampered\":true}' WHERE id = HEXTORAW(?)",
                 uuidToHex(tamperTargetId));
         assertThat(updated).as("tamper UPDATE should affect exactly 1 row").isEqualTo(1);

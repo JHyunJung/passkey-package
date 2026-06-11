@@ -12,6 +12,12 @@ spring:
     locations: classpath:db/migration
     schemas: APP_OWNER
     default-schema: APP_OWNER
+    # Finding #3 (Approach A): Flyway runs as the schema OWNER, not the
+    # runtime datasource user. This lets us strip ALL DDL power from the
+    # runtime APP_ADMIN_USER while migrations still create/alter objects.
+    # url is omitted → Flyway falls back to spring.datasource.url (same DB).
+    user: ${SPRING_FLYWAY_USER:APP_OWNER}
+    password: ${SPRING_FLYWAY_PASSWORD:app_owner_pw}
     # APP_OWNER schema already contains the CTX_PKG package and APP_CTX
     # context created by scripts/bootstrap-vpd.sql before Flyway ever
     # runs. baseline-on-migrate lets Flyway record V0 in its history

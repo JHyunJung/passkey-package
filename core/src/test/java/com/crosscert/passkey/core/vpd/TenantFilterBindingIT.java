@@ -81,6 +81,11 @@ class TenantFilterBindingIT {
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
+        // Finding #3 (Approach A): Flyway runs as APP_OWNER (schema owner)
+        // so that migrations can GRANT on APP_OWNER objects without error.
+        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
+        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired

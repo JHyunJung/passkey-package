@@ -5,6 +5,7 @@ import com.crosscert.passkey.core.repository.AdminUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -14,15 +15,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Map;
 
 /**
  * Second-factor (TOTP) endpoints for the admin SPA.
  *
  * <p>Both endpoints require an authenticated session ({@code /admin/api/**} is
- * {@code authenticated()} in {@code AdminSecurityConfig}) and are reachable
- * while a session is MFA-pending because {@code MfaPendingFilter} allow-lists
- * {@code /admin/api/mfa/**}. CSRF stays enabled for both — the SPA already
+ * {@code authenticated()} in {@code AdminSecurityConfig}). While a session is
+ * MFA-pending, {@code MfaPendingFilter} allow-lists only
+ * {@code /admin/api/mfa/verify} (exact match); enroll/confirm/disable are
+ * rejected until MFA is satisfied. CSRF stays enabled for both — the SPA already
  * holds the {@code XSRF-TOKEN} cookie from the (pending) session, so adding
  * these to the CSRF ignore list would needlessly weaken the surface.
  */
@@ -37,14 +40,20 @@ public class MfaController {
     private final Clock clock;
     private final RecoveryCodeService recoveryCodes;
     private final MfaSecretCipher secretCipher;
+    private final int maxAttempts;
+    private final Duration lockDuration;
 
     public MfaController(TotpService totp, AdminUserRepository users, Clock clock,
-                         RecoveryCodeService recoveryCodes, MfaSecretCipher secretCipher) {
+                         RecoveryCodeService recoveryCodes, MfaSecretCipher secretCipher,
+                         @Value("${passkey.admin.lockout.max-attempts:5}") int maxAttempts,
+                         @Value("${passkey.admin.lockout.duration:PT15M}") Duration lockDuration) {
         this.totp = totp;
         this.users = users;
         this.clock = clock;
         this.recoveryCodes = recoveryCodes;
         this.secretCipher = secretCipher;
+        this.maxAttempts = maxAttempts;
+        this.lockDuration = lockDuration;
     }
 
     /**
@@ -59,6 +68,18 @@ public class MfaController {
                                     HttpServletRequest req) {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
+
+        // Brute-force lockout: reuse the primary-login lockout fields so a
+        // throttle exists on the second factor too. A locked account is
+        // refused before any code check (fail-closed). The lock also gates
+        // primary login via AdminUserDetails.isAccountNonLocked — acceptable
+        // because reaching here means the password is already compromised.
+        if (u != null && u.isLocked(clock.instant())) {
+            log.warn("admin mfa verify blocked (locked): email={}", mask(email));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "invalid_code"));
+        }
+
         String code = body == null ? null : body.code();
         boolean totpOk = validCode(u, code);
         boolean recoveryOk = false;
@@ -66,10 +87,24 @@ public class MfaController {
             recoveryOk = recoveryCodes.consume(u.getId(), code);
         }
         if (!totpOk && !recoveryOk) {
+            if (u != null) {
+                u.recordFailedLogin(clock.instant(), maxAttempts, lockDuration);
+                users.save(u);
+                // recordFailedLogin auto-locks once maxAttempts is reached. The
+                // entry guard above already refused any already-locked account,
+                // so reaching a locked state here means this failure tripped it.
+                if (u.isLocked(clock.instant())) {
+                    var s = req.getSession(false);
+                    if (s != null) s.invalidate();   // kill the pending session on lockout
+                    log.warn("admin mfa verify lockout triggered: email={}", mask(email));
+                }
+            }
             log.warn("admin mfa verify failed: email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
         }
+        u.recordSuccessfulLogin();   // reset shared failed-login counter on success
+        users.save(u);
         var session = req.getSession(false);
         if (session != null) {
             session.removeAttribute(MfaPendingFilter.MFA_PENDING_ATTR);
@@ -97,7 +132,8 @@ public class MfaController {
      * Keeping enrollment disabled-until-confirmed closes that lock-out window.
      */
     @PostMapping("/enroll")
-    public ResponseEntity<?> enroll(Authentication auth) {
+    public ResponseEntity<?> enroll(Authentication auth, HttpServletRequest req) {
+        if (isPending(req)) return mfaRequired();
         String email = auth.getName();
         // Graceful, non-500 handling consistent with verify(): an authenticated
         // principal whose backing row is gone (concurrent delete / stale session)
@@ -125,7 +161,9 @@ public class MfaController {
      * on any failure (no secret, wrong/absent code), mirroring {@link #verify}.
      */
     @PostMapping("/confirm")
-    public ResponseEntity<?> confirm(@RequestBody VerifyRequest body, Authentication auth) {
+    public ResponseEntity<?> confirm(@RequestBody VerifyRequest body, Authentication auth,
+                                     HttpServletRequest req) {
+        if (isPending(req)) return mfaRequired();
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
@@ -147,7 +185,9 @@ public class MfaController {
      * {@code 401 {"error":"invalid_code"}} on any failure.
      */
     @PostMapping("/disable")
-    public ResponseEntity<?> disable(@RequestBody VerifyRequest body, Authentication auth) {
+    public ResponseEntity<?> disable(@RequestBody VerifyRequest body, Authentication auth,
+                                     HttpServletRequest req) {
+        if (isPending(req)) return mfaRequired();
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
         String code = body == null ? null : body.code();
@@ -164,6 +204,24 @@ public class MfaController {
     }
 
     public record VerifyRequest(String code) {}
+
+    /**
+     * Reject enroll/confirm/disable while the session is still MFA-pending.
+     * Defense-in-depth behind MfaPendingFilter (which already blocks these
+     * paths) — if the filter is ever bypassed or reordered, the handler still
+     * refuses to mutate the secret from a password-only session.
+     */
+    private static boolean isPending(HttpServletRequest req) {
+        // session==null means no session exists → request is unauthenticated
+        // and rejected upstream by Spring Security; treat as "not pending".
+        var session = req.getSession(false);
+        return session != null
+                && Boolean.TRUE.equals(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR));
+    }
+
+    private static ResponseEntity<?> mfaRequired() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "mfa_required"));
+    }
 
     /**
      * Shared TOTP gate for verify/confirm/disable: true only when the user row

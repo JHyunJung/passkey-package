@@ -34,6 +34,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Phase 2 acceptance gate (T24). Boots the full admin-app context against
@@ -113,6 +115,11 @@ class AdminFlowIT {
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
+        // Flyway runs as the schema OWNER (APP_OWNER), runtime as APP_ADMIN_USER.
+        // Finding #3 (Approach A): the runtime user no longer holds DDL power.
+        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
+        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD); // APP_OWNER pw == SYS_PASSWORD
 
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -153,7 +160,11 @@ class AdminFlowIT {
         // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
         // use ON DELETE CASCADE from their parent FKs, so deleting the
         // parent rows implicitly removes children too.
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        //
+        // audit_log: V10 deliberately withholds DELETE from APP_ADMIN (append-only
+        // design for tamper evidence). Use the schema-owner pool for cleanup so
+        // the regression guard runtimeUser_cannotTamperAuditLog stays consistent.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");
@@ -500,6 +511,80 @@ class AdminFlowIT {
                 .as("audit/verify post-tamper: %s", verifyBrokenData)
                 .isFalse();
         assertThat(verifyBrokenData.get("brokenAt").isNull()).isFalse();
+    }
+
+    // ------------------------------------------------------------
+    // Security regression guards (#3: GRANT ALL on APP_ADMIN_USER)
+    // ------------------------------------------------------------
+
+    /**
+     * APP_ADMIN_USER (admin-app runtime) holds SELECT+INSERT, plus column-level
+     * UPDATE on tenant_hash/tenant_prev_hash only (V46). payload/hash/prev_hash/
+     * action UPDATE and DELETE/DROP remain denied (V10 append-only). This is the
+     * regression guard for finding #3.
+     *
+     * <p>Originally this test was <em>intentionally RED</em> while bootstrap-vpd.sql
+     * contained {@code GRANT ALL PRIVILEGES TO APP_ADMIN_USER} (finding #3).
+     * Task B3 removed that GRANT, which turned this test GREEN.
+     *
+     * <p>V46 then opened a narrow column-level UPDATE on the two V25 tenant-chain
+     * columns (tenant_hash, tenant_prev_hash) so AuditChainBackfillService can
+     * recompute the per-tenant chain at runtime. This does NOT weaken tamper
+     * evidence: AuditChainVerifier recomputes those hashes from the immutable
+     * payload columns, so a rewritten tenant_hash cannot hide a tampered row.
+     * This test pins both sides of the V46 boundary.
+     *
+     * <p>Spring's JdbcTemplate wraps Oracle privilege errors in
+     * {@code BadSqlGrammarException}; the ORA- code lives in the root
+     * cause. We navigate to the root cause via {@code rootCause()} and
+     * then check its message.
+     */
+    @Test
+    void runtimeUser_cannotTamperAuditLog() {
+        // ── Still denied: the original append-only columns (V10) ──────────────
+        // action: a forensic field — runtime must never rewrite it.
+        assertThatThrownBy(() ->
+                jdbc.execute("UPDATE APP_OWNER.audit_log SET action = 'X' WHERE 1=0"))
+            .rootCause().hasMessageContaining("ORA-");
+        // payload: the tamper target the chain protects.
+        assertThatThrownBy(() ->
+                jdbc.execute("UPDATE APP_OWNER.audit_log SET payload = payload WHERE 1=0"))
+            .rootCause().hasMessageContaining("ORA-");
+        // hash / prev_hash: the global chain columns — rewriting them would let a
+        // forger re-link the chain. V46 deliberately leaves these denied.
+        assertThatThrownBy(() ->
+                jdbc.execute("UPDATE APP_OWNER.audit_log SET hash = hash WHERE 1=0"))
+            .rootCause().hasMessageContaining("ORA-");
+        assertThatThrownBy(() ->
+                jdbc.execute("UPDATE APP_OWNER.audit_log SET prev_hash = prev_hash WHERE 1=0"))
+            .rootCause().hasMessageContaining("ORA-");
+        // DELETE / DROP: append-only — never allowed.
+        assertThatThrownBy(() ->
+                jdbc.execute("DELETE FROM APP_OWNER.audit_log WHERE 1=0"))
+            .rootCause().hasMessageContaining("ORA-");
+        assertThatThrownBy(() ->
+                jdbc.execute("DROP TABLE APP_OWNER.audit_log"))
+            .rootCause().hasMessageContaining("ORA-");
+
+        // ── Now allowed: column-level UPDATE on the two V25 tenant-chain columns ─
+        // (V46). Self-assignment with WHERE 1=0 proves the UPDATE privilege exists
+        // without mutating any row.
+        assertThatNoException().isThrownBy(() ->
+                jdbc.execute("UPDATE APP_OWNER.audit_log "
+                        + "SET tenant_hash = tenant_hash, tenant_prev_hash = tenant_prev_hash "
+                        + "WHERE 1=0"));
+    }
+
+    /**
+     * Negative-of-negative: reducing GRANT ALL must NOT break runtime DML
+     * on the tables admin-app actually manages. Smoke a harmless count.
+     */
+    @Test
+    void runtimeUser_canStillWriteAdminTables() {
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM APP_OWNER.tenant", Integer.class);
+        assertThat(n).isNotNull();
+        Integer k = jdbc.queryForObject("SELECT COUNT(*) FROM APP_OWNER.api_key", Integer.class);
+        assertThat(k).isNotNull();
     }
 
     /** For richer audit-count failure messages. */

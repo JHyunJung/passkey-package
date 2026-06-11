@@ -6,6 +6,8 @@ import com.crosscert.passkey.core.repository.AuditLogRepository;
 import com.crosscert.passkey.webauthn.mds.MdsBlob;
 import com.crosscert.passkey.webauthn.mds.MdsBlobEntry;
 import com.crosscert.passkey.webauthn.mds.MdsStatusReport;
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,11 +110,36 @@ class MdsSchedulerIT {
 
     JdbcTemplate jdbc;
 
+    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    private static HikariDataSource ownerPool;
+
+    @AfterAll
+    static void closeOwnerPool() {
+        if (ownerPool != null) {
+            ownerPool.close();
+            ownerPool = null;
+        }
+    }
+
+    private static synchronized JdbcTemplate ownerJdbc() {
+        if (ownerPool == null) {
+            HikariDataSource ds = new HikariDataSource();
+            ds.setJdbcUrl(ORACLE.getJdbcUrl());
+            ds.setUsername("APP_OWNER");
+            ds.setPassword(SYS_PASSWORD);
+            ds.setMaximumPoolSize(2);
+            ds.setPoolName("mds-scheduler-it-owner");
+            ownerPool = ds;
+        }
+        return new JdbcTemplate(ownerPool);
+    }
+
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
         // Clear any audit rows from previous test runs.
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         // Reset the mds_blob_cache sentinel row to its V19 seed values,
         // including next_update so that the happy-path test's 2099-01-01
         // write does not bleed into later tests.

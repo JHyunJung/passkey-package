@@ -127,6 +127,13 @@ class VpdIsolationIT {
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
+        // Finding #3 (Approach A): Flyway runs as the schema OWNER (APP_OWNER)
+        // so that migrations can GRANT privileges on APP_OWNER objects. The
+        // runtime datasource user (APP_ADMIN_USER) cannot GRANT on tables it
+        // does not own. APP_OWNER pw == SYS_PASSWORD in the test container.
+        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
+        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired

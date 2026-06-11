@@ -4,6 +4,8 @@ import com.crosscert.passkey.admin.auth.AdminUserDetails;
 import com.crosscert.passkey.admin.tenant.TenantAdminDto;
 import com.crosscert.passkey.admin.tenant.TenantAdminService;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import com.zaxxer.hikari.HikariDataSource;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,6 +113,30 @@ class AdminUserInvitationFlowIT {
     // Fake actor for SecurityContext (PO, not bound to a real DB row — same pattern as other ITs)
     private static final UUID SECURITY_CTX_ACTOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
+    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    private static HikariDataSource ownerPool;
+
+    @AfterAll
+    static void closeOwnerPool() {
+        if (ownerPool != null) {
+            ownerPool.close();
+            ownerPool = null;
+        }
+    }
+
+    private static synchronized JdbcTemplate ownerJdbc() {
+        if (ownerPool == null) {
+            HikariDataSource ds = new HikariDataSource();
+            ds.setJdbcUrl(ORACLE.getJdbcUrl());
+            ds.setUsername("APP_OWNER");
+            ds.setPassword(SYS_PASSWORD);
+            ds.setMaximumPoolSize(2);
+            ds.setPoolName("invitation-flow-it-owner");
+            ownerPool = ds;
+        }
+        return new JdbcTemplate(ownerPool);
+    }
+
     // ----------------------------------------------------------------
     // State reset — FK-safe DELETE + Redis flush
     // ----------------------------------------------------------------
@@ -123,16 +149,18 @@ class AdminUserInvitationFlowIT {
         jdbc.update("DELETE FROM APP_OWNER.admin_user_invitation");
         jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy_entry");
         jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_webauthn_snapshot");
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
+        // tenant_webauthn_snapshot: APP_ADMIN has SELECT+INSERT only (V27) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.tenant_webauthn_snapshot");
+        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
         jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
         jdbc.update("DELETE FROM APP_OWNER.api_key");
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
         jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
         // Remove any non-seed admin_user rows (PENDING/SUSPENDED created during tests)
-        // then reset seed users to PLATFORM_OPERATOR / ACTIVE
-        jdbc.update("DELETE FROM APP_OWNER.admin_user WHERE email NOT IN ('alice@crosscert.com','bob@crosscert.com')");
+        // admin_user: APP_ADMIN has no DELETE grant — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM APP_OWNER.admin_user WHERE email NOT IN ('alice@crosscert.com','bob@crosscert.com')");
         jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR', "
                 + "status = 'ACTIVE', suspended_at = NULL, suspended_by = NULL "
                 + "WHERE email IN ('alice@crosscert.com','bob@crosscert.com')");

@@ -20,6 +20,7 @@
 #   - 대상 Oracle 의 SYSDBA 접속 정보(단계 1) + 네트워크 도달 가능
 #
 # 사용법(환경변수로 대상 지정):
+#   ADMIN_PW=강한비번 APP_OWNER_PW=강한비번 RUNTIME_PW=강한비번 \
 #   ORA_HOST=db.example.com ORA_PORT=1521 ORA_SERVICE=XEPDB1 \
 #   ORA_SYS_PW=oracle PROFILE=dev \
 #   scripts/init-db-external.sh
@@ -31,6 +32,7 @@
 #        (스크립트 상단 c_confirm 을 RESET 으로 바꿔야 동작. 테이블·데이터 삭제,
 #         CTX_PKG/APP_CTX 보존).
 #     2) 아래처럼 SKIP_BOOTSTRAP=1 로 Flyway 만 재적용:
+#        ADMIN_PW=강한비번 \
 #        SKIP_BOOTSTRAP=1 PASSKEY_VPD_ENABLED=false \
 #        ORA_HOST=db.example.com ORA_PORT=1521 ORA_SERVICE=ORCLPDB1 PROFILE=qa \
 #        scripts/init-db-external.sh
@@ -45,6 +47,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# 계정 비밀번호는 환경변수 필수 — 하드코딩 제거(보안 감사 #2).
+# ADMIN_PW: APP_ADMIN_USER 비번 — 항상 필요 (runtime datasource).
+# APP_OWNER_PW: Flyway datasource 비번 — 항상 필요 (bootstrap 및 Flyway).
+: "${ADMIN_PW:?ADMIN_PW 환경변수 필요 (강한 비번)}"
+: "${APP_OWNER_PW:?APP_OWNER_PW 환경변수 필요 (강한 비번)}"
 
 ORA_HOST="${ORA_HOST:-localhost}"
 ORA_PORT="${ORA_PORT:-1521}"
@@ -78,8 +86,16 @@ else
     echo "         (DBeaver, SYSDBA 또는 적절 권한) < ${SCRIPT_DIR}/bootstrap-external.sql" >&2
     exit 1
   fi
+  # RUNTIME_PW: bootstrap 전용 — SKIP_BOOTSTRAP=1 이면 불필요.
+  : "${RUNTIME_PW:?RUNTIME_PW 환경변수 필요 (강한 비번)}"
   echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role + CTX_PKG"
-  sqlplus -S "${SYS_CONN}" < "${SCRIPT_DIR}/bootstrap-external.sql"
+  # ⚠️ 비번에 "(큰따옴표)가 있으면 heredoc DEFINE 줄이 파괴됨. 비번에 " 미사용 권장.
+  sqlplus -S "${SYS_CONN}" <<SQL
+DEFINE app_owner_pw = "${APP_OWNER_PW}"
+DEFINE runtime_pw   = "${RUNTIME_PW}"
+DEFINE admin_pw     = "${ADMIN_PW}"
+@${SCRIPT_DIR}/bootstrap-external-body.sql
+SQL
   echo "    부트스트랩 완료."
 fi
 echo ""
@@ -92,7 +108,9 @@ LOG="$(mktemp -t init-db-external.XXXXXX.log)"
 cd "${REPO_ROOT}"
 SPRING_DATASOURCE_URL="${JDBC_URL}" \
 SPRING_DATASOURCE_USERNAME='APP_ADMIN_USER' \
-SPRING_DATASOURCE_PASSWORD='admin_pw' \
+SPRING_DATASOURCE_PASSWORD="${ADMIN_PW}" \
+SPRING_FLYWAY_USER='APP_OWNER' \
+SPRING_FLYWAY_PASSWORD="${APP_OWNER_PW}" \
 SPRING_DATA_REDIS_HOST="${REDIS_HOST:-localhost}" \
 PASSKEY_KEY_ENVELOPE_MASTER_KEY="${PASSKEY_KEY_ENVELOPE_MASTER_KEY:-jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM=}" \
 PASSKEY_VPD_ENABLED="${PASSKEY_VPD_ENABLED}" \
