@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Phase 2 acceptance gate (T24). Boots the full admin-app context against
@@ -500,6 +501,44 @@ class AdminFlowIT {
                 .as("audit/verify post-tamper: %s", verifyBrokenData)
                 .isFalse();
         assertThat(verifyBrokenData.get("brokenAt").isNull()).isFalse();
+    }
+
+    // ------------------------------------------------------------
+    // Security regression guards (#3: GRANT ALL on APP_ADMIN_USER)
+    // ------------------------------------------------------------
+
+    /**
+     * APP_ADMIN_USER (admin-app runtime) must hold SELECT+INSERT only on
+     * audit_log — V10's append-only design. GRANT ALL would break this.
+     * This is the regression guard for finding #3.
+     *
+     * <p>This test is <em>intentionally RED</em> while bootstrap-vpd.sql
+     * contains {@code GRANT ALL PRIVILEGES TO APP_ADMIN_USER} (finding #3).
+     * Task B3 removes that GRANT, which turns this test GREEN.
+     */
+    @Test
+    void runtimeUser_cannotTamperAuditLog() {
+        assertThatThrownBy(() ->
+                jdbc.execute("UPDATE APP_OWNER.audit_log SET action = 'X' WHERE 1=0"))
+            .hasMessageContaining("ORA-");
+        assertThatThrownBy(() ->
+                jdbc.execute("DELETE FROM APP_OWNER.audit_log WHERE 1=0"))
+            .hasMessageContaining("ORA-");
+        assertThatThrownBy(() ->
+                jdbc.execute("DROP TABLE APP_OWNER.audit_log"))
+            .hasMessageContaining("ORA-");
+    }
+
+    /**
+     * Negative-of-negative: reducing GRANT ALL must NOT break runtime DML
+     * on the tables admin-app actually manages. Smoke a harmless count.
+     */
+    @Test
+    void runtimeUser_canStillWriteAdminTables() {
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM APP_OWNER.tenant", Integer.class);
+        assertThat(n).isNotNull();
+        Integer k = jdbc.queryForObject("SELECT COUNT(*) FROM APP_OWNER.api_key", Integer.class);
+        assertThat(k).isNotNull();
     }
 
     /** For richer audit-count failure messages. */
