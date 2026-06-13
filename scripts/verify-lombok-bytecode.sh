@@ -39,11 +39,26 @@ CLASSES="${ROOT}/${MODULE}/build/classes/java/main"
 WORK="/tmp/lombok-verify/${MODULE}"
 
 # Normalize a single javap dump so that only behavior-relevant content remains.
+#
+# Beyond constant-pool index renumbering and member-order, Lombok adding members
+# can push a constant past pool index 255, flipping `ldc` <-> `ldc_w` for an
+# unrelated method's string/class constant. That widens the instruction by one
+# byte, which shifts every following byte address and branch target — all of it
+# behavior-irrelevant encoding noise. To stay robust we reduce each line to the
+# opcode plus its symbolic operand (the `// ...` comment), dropping:
+#   - the byte-address prefix (`  31: `) — instruction-length-dependent
+#   - wide-vs-narrow opcode variants (ldc_w->ldc, goto_w->goto) — pure encoding
+#   - numeric branch/switch targets (`goto 42`) — address-dependent; the symbolic
+#     comment, when present, carries the real semantic reference
+# What remains — opcode kind + symbolic operand, as a sorted multiset — changes
+# only if real behavior changes.
 norm() {
   sed -E 's/#[0-9]+/#N/g' \
+    | sed -E 's/^[[:space:]]*[0-9]+:[[:space:]]+/  /' \
+    | sed -E 's/\bldc_w\b/ldc/; s/\bgoto_w\b/goto/' \
     | sed -E 's/[[:space:]]+/ /g' \
     | sed -E 's/[[:space:]]+$//' \
-    | grep -vE "lombok\.Generated|RuntimeInvisibleAnnotations|Compiled from|^Classfile|Last modified|SHA-256:|MD5:" \
+    | grep -vE "lombok\.Generated|RuntimeInvisibleAnnotations|Compiled from|^ ?Classfile|Last modified|SHA-256:|MD5:" \
     | sort
 }
 
