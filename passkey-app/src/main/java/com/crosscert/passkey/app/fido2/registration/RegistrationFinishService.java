@@ -21,6 +21,7 @@ import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException;
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ import java.util.UUID;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class RegistrationFinishService {
 
     private final ChallengeStore store;
@@ -46,28 +48,6 @@ public class RegistrationFinishService {
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
     private final CeremonyEventRecorder ceremonyEvents;
-
-    public RegistrationFinishService(ChallengeStore store,
-                                     WebAuthnVerifier verifier,
-                                     TenantRepository tenants,
-                                     CredentialRepository credentials,
-                                     MdsVerifier mds,
-                                     AaguidPolicyChecker aaguidPolicyChecker,
-                                     ObjectMapper mapper,
-                                     Clock clock,
-                                     CeremonyMetrics ceremonyMetrics,
-                                     CeremonyEventRecorder ceremonyEvents) {
-        this.store = store;
-        this.verifier = verifier;
-        this.tenants = tenants;
-        this.credentials = credentials;
-        this.mds = mds;
-        this.aaguidPolicyChecker = aaguidPolicyChecker;
-        this.mapper = mapper;
-        this.clock = clock;
-        this.ceremonyMetrics = ceremonyMetrics;
-        this.ceremonyEvents = ceremonyEvents;
-    }
 
     @Transactional
     public RegistrationFinishResponse finish(RegistrationFinishRequest req) {

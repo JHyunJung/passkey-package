@@ -1,6 +1,7 @@
 package com.crosscert.passkey.app.fido2.mds;
 
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +24,7 @@ import java.util.Set;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class MdsVerifier {
 
     private static final Set<String> BLOCKING_STATUSES = Set.of(
@@ -33,10 +35,6 @@ public class MdsVerifier {
             "USER_KEY_PHYSICAL_COMPROMISE");
 
     private final MdsAaguidCache cache;
-
-    public MdsVerifier(MdsAaguidCache cache) {
-        this.cache = cache;
-    }
 
     public boolean verify(boolean mdsRequired, byte[] aaguid) {
         if (!mdsRequired) return true;

@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class AuthenticationStartService {
 
     private final TenantRepository tenants;
@@ -49,24 +51,6 @@ public class AuthenticationStartService {
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
     private final CeremonyEventRecorder ceremonyEvents;
-
-    public AuthenticationStartService(TenantRepository tenants,
-                                      CredentialRepository credentials,
-                                      ChallengeIssuer challenges,
-                                      ChallengeStore store,
-                                      ObjectMapper mapper,
-                                      Clock clock,
-                                      CeremonyMetrics ceremonyMetrics,
-                                      CeremonyEventRecorder ceremonyEvents) {
-        this.tenants = tenants;
-        this.credentials = credentials;
-        this.challenges = challenges;
-        this.store = store;
-        this.mapper = mapper;
-        this.clock = clock;
-        this.ceremonyMetrics = ceremonyMetrics;
-        this.ceremonyEvents = ceremonyEvents;
-    }
 
     @Transactional(readOnly = true)
     public AuthenticationStartResponse start(AuthenticationStartRequest req) {

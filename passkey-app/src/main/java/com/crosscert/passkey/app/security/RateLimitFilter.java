@@ -3,6 +3,7 @@ package com.crosscert.passkey.app.security;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -49,6 +50,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
     /** {@code "pk_"} + 8 base64url chars — matches {@link ApiKeyAuthFilter}. */
@@ -82,10 +84,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
             tokenBucket(60, Duration.ofMinutes(1));
 
     private final ProxyManager<String> proxy;
-
-    public RateLimitFilter(ProxyManager<String> proxy) {
-        this.proxy = proxy;
-    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

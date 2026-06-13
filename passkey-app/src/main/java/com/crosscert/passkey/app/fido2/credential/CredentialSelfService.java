@@ -5,6 +5,7 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.repository.CredentialRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,13 +17,10 @@ import java.util.List;
 /** P0-4: end-user self-service credential 관리. tenant 격리는 VPD 가 담당. */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class CredentialSelfService {
 
     private final CredentialRepository creds;
-
-    public CredentialSelfService(CredentialRepository creds) {
-        this.creds = creds;
-    }
 
     @Transactional(readOnly = true)
     public List<CredentialView> list(byte[] userHandle) {
