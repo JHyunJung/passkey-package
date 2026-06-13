@@ -4,8 +4,7 @@ import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -24,10 +23,9 @@ import java.util.stream.Collectors;
  * <p>정책 레코드가 DB 에 없으면 ANY(pass-through) 로 동작한다.
  * 이 경우 mds_strict 도 false 로 처리되어 MDS 미등록 AAGUID 도 통과한다.
  */
+@Slf4j
 @Component
 public class DefaultAaguidPolicyChecker implements AaguidPolicyChecker {
-
-    private static final Logger log = LoggerFactory.getLogger(DefaultAaguidPolicyChecker.class);
 
     private final TenantAaguidPolicyRepository policyRepo;
     private final MdsAaguidCache mdsCache;

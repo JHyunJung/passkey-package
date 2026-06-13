@@ -2,8 +2,7 @@ package com.crosscert.passkey.core.license;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -25,10 +24,10 @@ import java.util.Set;
  * File format (single JSON object):
  *   { "tokenJws": "...", "lastVerifiedAt": "2026-05-29T08:30:00Z" }
  */
+@Slf4j
 @Component
 public class LicenseCache {
 
-    private static final Logger log = LoggerFactory.getLogger(LicenseCache.class);
     private static final ObjectMapper M = JsonMapper.builder()
             .findAndAddModules()
             .build();

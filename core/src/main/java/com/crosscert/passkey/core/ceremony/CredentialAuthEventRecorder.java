@@ -2,8 +2,7 @@ package com.crosscert.passkey.core.ceremony;
 
 import com.crosscert.passkey.core.entity.CredentialAuthEvent;
 import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -24,10 +23,9 @@ import java.util.UUID;
  * 자식 INSERT 가 그 행을 FK 참조하면 부모 락 해제를 기다려 enqueue 대기/교착이 날 수
  * 있다(self-deadlock 유사). afterCompletion(ROLLED_BACK) 시점엔 락이 이미 해제돼 안전.
  */
+@Slf4j
 @Component
 public class CredentialAuthEventRecorder {
-
-    private static final Logger log = LoggerFactory.getLogger(CredentialAuthEventRecorder.class);
 
     private final CredentialAuthEventRepository repo;
     private final TransactionTemplate txTemplate;

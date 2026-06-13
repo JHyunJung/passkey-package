@@ -1,7 +1,6 @@
 package com.crosscert.passkey.core.alert;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -13,10 +12,9 @@ import java.util.List;
  * supports 통과 채널에 per-channel 격리(try/catch)로 발송한다. 한 채널 실패가
  * 다른 채널·발행 스레드(요청)를 막지 않는다. @Async 라 발행 지점 지연 없음.
  */
+@Slf4j
 @Component
 public class AlertDispatcher {
-
-    private static final Logger log = LoggerFactory.getLogger(AlertDispatcher.class);
 
     private final List<AlertChannel> channels;
 

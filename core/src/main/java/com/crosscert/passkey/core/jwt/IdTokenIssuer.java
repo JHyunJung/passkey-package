@@ -6,8 +6,7 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -21,10 +20,9 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Component
 public class IdTokenIssuer {
-
-    private static final Logger log = LoggerFactory.getLogger(IdTokenIssuer.class);
 
     private final SigningKeyProvider signingKeys;
     private final String issuerBase;

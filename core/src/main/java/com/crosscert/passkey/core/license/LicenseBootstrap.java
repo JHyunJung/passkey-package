@@ -1,8 +1,7 @@
 package com.crosscert.passkey.core.license;
 
 import com.crosscert.passkey.core.vpd.TenantContextHolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -25,11 +24,10 @@ import java.util.UUID;
  * Bootstrap failure -> Spring application context fails to start
  * (intentional: an onprem server with no valid license must not run).
  */
+@Slf4j
 @Configuration
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")
 public class LicenseBootstrap {
-
-    private static final Logger log = LoggerFactory.getLogger(LicenseBootstrap.class);
 
     @Bean
     @ConditionalOnMissingBean(LicenseStateMachine.class)
