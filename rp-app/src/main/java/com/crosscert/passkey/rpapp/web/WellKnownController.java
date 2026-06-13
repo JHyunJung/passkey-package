@@ -1,8 +1,7 @@
 package com.crosscert.passkey.rpapp.web;
 
 import com.crosscert.passkey.rpapp.config.WellKnownProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,10 +18,9 @@ import java.util.Map;
  * 추측하지 못한다(octet-stream 위험). produces = APPLICATION_JSON_VALUE 로 강제한다.
  * 검증 에이전트는 3xx/비-json 을 거부하므로 컨트롤러 직접 매핑으로 정확한 경로만 200 을 낸다.
  */
+@Slf4j
 @RestController
 public class WellKnownController {
-
-    private static final Logger log = LoggerFactory.getLogger(WellKnownController.class);
 
     /** 패스키 자동완성을 위한 표준 relation 조합 — 고객사가 바꿀 일이 거의 없어 상수로 고정. */
     private static final List<String> RELATIONS = List.of(

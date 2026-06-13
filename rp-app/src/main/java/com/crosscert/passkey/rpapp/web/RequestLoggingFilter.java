@@ -4,8 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -33,11 +32,10 @@ import java.util.Set;
  * filter (rp-app does not yet have one — all routes are permitAll —
  * so this slot stays empty, matching the demo's no-auth posture).
  */
+@Slf4j
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RequestLoggingFilter extends OncePerRequestFilter {
-
-    private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
     private static final String MDC_ACTOR_EMAIL = "actorEmail";
 

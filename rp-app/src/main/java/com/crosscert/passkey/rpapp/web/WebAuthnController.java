@@ -12,18 +12,16 @@ import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.dto.*;
 import com.crosscert.passkey.sdk.idtoken.IdTokenClaims;
 import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequestMapping("/passkey")
 public class WebAuthnController {
-
-    private static final Logger log = LoggerFactory.getLogger(WebAuthnController.class);
 
     private final PasskeyClient passkey;
     private final InMemoryUserStore users;

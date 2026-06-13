@@ -4,8 +4,7 @@ import com.crosscert.passkey.rpapp.common.exception.BusinessException;
 import com.crosscert.passkey.rpapp.common.exception.ErrorCode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -29,10 +28,9 @@ import java.util.concurrent.ConcurrentMap;
  * 미러링한다. pending user 는 메모리에만 두어 재기동 시 자연 정리된다. 단일 인스턴스
  * 데모를 가정하며 파일 락은 두지 않는다.
  */
+@Slf4j
 @Component
 public class InMemoryUserStore {
-
-    private static final Logger log = LoggerFactory.getLogger(InMemoryUserStore.class);
 
     private final ConcurrentMap<String, RpAppUser> byHandle   = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String>    byUsername = new ConcurrentHashMap<>();
