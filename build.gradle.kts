@@ -43,6 +43,14 @@ subprojects {
     }
 
     dependencies {
+        // Lombok is a compile-time annotation processor only; it is NOT on the
+        // runtime classpath (compileOnly), so production artifacts carry zero
+        // Lombok dependency. Used solely for @Slf4j and @RequiredArgsConstructor.
+        "compileOnly"(rootProject.libs.lombok)
+        "annotationProcessor"(rootProject.libs.lombok)
+        "testCompileOnly"(rootProject.libs.lombok)
+        "testAnnotationProcessor"(rootProject.libs.lombok)
+
         "testImplementation"("org.springframework.boot:spring-boot-starter-test")
         // Align junit-platform-launcher with junit-platform-engine 1.12.x (Spring Boot 3.5 BOM).
         // Gradle 8.10 bundles an older launcher, causing
