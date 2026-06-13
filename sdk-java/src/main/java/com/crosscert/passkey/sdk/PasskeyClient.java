@@ -13,8 +13,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
@@ -23,9 +22,8 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.Instant;
 
+@Slf4j
 public final class PasskeyClient {
-    private static final Logger log = LoggerFactory.getLogger(PasskeyClient.class);
-
     private final RestClient http;
     private final IdTokenVerifier idTokenVerifier;
     private final ObjectMapper objectMapper;

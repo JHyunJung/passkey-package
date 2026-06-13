@@ -8,17 +8,15 @@ import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+@Slf4j
 public class IdTokenVerifier {
-    private static final Logger log = LoggerFactory.getLogger(IdTokenVerifier.class);
-
     private final JwksCache jwks;
     private final Clock clock;
 
