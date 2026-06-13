@@ -8,6 +8,7 @@ import com.crosscert.passkey.core.entity.ApiKey;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 /** P0-2: 테넌트 status 전이 (suspend/activate) + suspend 시 활성 API 키 일괄 revoke. */
 @Slf4j
+@RequiredArgsConstructor
 @Service
 public class TenantLifecycleService {
 
@@ -27,14 +29,6 @@ public class TenantLifecycleService {
     private final ApiKeyRepository apiKeys;
     private final AuditLogService audit;
     private final Clock clock;
-
-    public TenantLifecycleService(TenantRepository tenants, ApiKeyRepository apiKeys,
-                                  AuditLogService audit, Clock clock) {
-        this.tenants = tenants;
-        this.apiKeys = apiKeys;
-        this.audit = audit;
-        this.clock = clock;
-    }
 
     @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @Transactional

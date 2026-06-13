@@ -7,6 +7,7 @@ import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
 import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
 import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -21,6 +22,7 @@ import java.time.Instant;
  * DELETE 가 긴 row-lock·undo 를 만들고, 그 사이 scheduler lease TTL 이 만료되면
  * second instance 가 동일 행에 lock 경합하는 것을 방지한다(작은 트랜잭션으로 분할).
  */
+@RequiredArgsConstructor
 @Service
 public class RetentionPurgeService {
 
@@ -37,22 +39,6 @@ public class RetentionPurgeService {
     private final MdsHistoryService mdsHistory;
     private final CeremonyEventRepository ceremonyEvents;
     private final CredentialAuthEventRepository credentialAuthEvents;
-
-    public RetentionPurgeService(AdminUserInvitationRepository invitations,
-                                 AdminPasswordResetTokenRepository resetTokens,
-                                 AdminUserRecoveryCodeRepository recoveryCodes,
-                                 TenantWebauthnSnapshotRepository snapshots,
-                                 MdsHistoryService mdsHistory,
-                                 CeremonyEventRepository ceremonyEvents,
-                                 CredentialAuthEventRepository credentialAuthEvents) {
-        this.invitations = invitations;
-        this.resetTokens = resetTokens;
-        this.recoveryCodes = recoveryCodes;
-        this.snapshots = snapshots;
-        this.mdsHistory = mdsHistory;
-        this.ceremonyEvents = ceremonyEvents;
-        this.credentialAuthEvents = credentialAuthEvents;
-    }
 
     public int purgeInvitations(Instant cutoff) {
         int total = 0, n;

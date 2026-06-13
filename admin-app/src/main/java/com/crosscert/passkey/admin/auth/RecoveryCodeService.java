@@ -3,6 +3,7 @@ package com.crosscert.passkey.admin.auth;
 import com.crosscert.passkey.core.entity.AdminUserRecoveryCode;
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import java.util.UUID;
  * 평문 List 를 1회 반환(이후 평문 복구 불가). 소비(consume): 미사용 매칭 코드 1개를
  * used_at 마킹(one-shot). 평문은 Base32 4-4 형식("xxxx-xxxx")으로 입력 편의 제공.
  */
+@RequiredArgsConstructor
 @Service
 public class RecoveryCodeService {
 
@@ -31,11 +33,6 @@ public class RecoveryCodeService {
 
     private final AdminUserRecoveryCodeRepository repo;
     private final Clock clock;
-
-    public RecoveryCodeService(AdminUserRecoveryCodeRepository repo, Clock clock) {
-        this.repo = repo;
-        this.clock = clock;
-    }
 
     @Transactional
     public List<String> generate(UUID adminUserId) {

@@ -3,21 +3,18 @@ package com.crosscert.passkey.admin.tenant;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.admin.auth.TenantBoundary;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
+@RequiredArgsConstructor
 @Service
 public class WebauthnDiffService {
 
     private final TenantRepository tenantRepo;
     private final TenantBoundary tenantBoundary;
-
-    public WebauthnDiffService(TenantRepository tenantRepo, TenantBoundary tenantBoundary) {
-        this.tenantRepo = tenantRepo;
-        this.tenantBoundary = tenantBoundary;
-    }
 
     @Transactional(readOnly = true)
     public WebauthnConfigDiff diff(UUID tenantId, WebauthnDiffRequest proposed) {

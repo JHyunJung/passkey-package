@@ -2,20 +2,17 @@ package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+@RequiredArgsConstructor
 @Service
 public class AdminUserDetailsService implements UserDetailsService {
 
     private final AdminUserRepository repo;
     private final java.time.Clock clock;
-
-    public AdminUserDetailsService(AdminUserRepository repo, java.time.Clock clock) {
-        this.repo = repo;
-        this.clock = clock;
-    }
 
     @Override
     public AdminUserDetails loadUserByUsername(String email) {

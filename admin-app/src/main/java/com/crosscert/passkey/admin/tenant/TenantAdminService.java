@@ -17,6 +17,7 @@ import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
+@RequiredArgsConstructor
 @Service
 public class TenantAdminService {
 
@@ -46,30 +48,6 @@ public class TenantAdminService {
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
-
-    public TenantAdminService(TenantRepository tenants,
-                              AuditLogService audit,
-                              EntityManager em,
-                              TenantBoundary tenantBoundary,
-                              TenantAaguidPolicyRepository aaguidPolicyRepo,
-                              TenantWebauthnSnapshotRepository snapshotRepo,
-                              CredentialRepository credentialRepository,
-                              ApiKeyRepository apiKeyRepository,
-                              AuditLogRepository auditLogRepository,
-                              ObjectMapper objectMapper,
-                              Clock clock) {
-        this.tenants = tenants;
-        this.audit = audit;
-        this.em = em;
-        this.tenantBoundary = tenantBoundary;
-        this.aaguidPolicyRepo = aaguidPolicyRepo;
-        this.snapshotRepo = snapshotRepo;
-        this.credentialRepository = credentialRepository;
-        this.apiKeyRepository = apiKeyRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.objectMapper = objectMapper;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public List<TenantAdminDto.TenantView> list() {
