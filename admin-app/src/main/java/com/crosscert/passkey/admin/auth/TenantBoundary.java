@@ -24,8 +24,8 @@ import java.util.UUID;
  * PLATFORM_OPERATOR 는 무제한. RP_ADMIN 은 자기 tenantId 와 일치할 때만.
  */
 @Slf4j
-@RequiredArgsConstructor
 @Component
+@RequiredArgsConstructor
 public class TenantBoundary {
 
     private final ApplicationEventPublisher eventPublisher;

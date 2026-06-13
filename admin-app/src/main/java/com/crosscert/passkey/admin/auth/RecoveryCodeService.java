@@ -22,8 +22,8 @@ import java.util.UUID;
  * 평문 List 를 1회 반환(이후 평문 복구 불가). 소비(consume): 미사용 매칭 코드 1개를
  * used_at 마킹(one-shot). 평문은 Base32 4-4 형식("xxxx-xxxx")으로 입력 편의 제공.
  */
-@RequiredArgsConstructor
 @Service
+@RequiredArgsConstructor
 public class RecoveryCodeService {
 
     static final int CODE_COUNT = 10;

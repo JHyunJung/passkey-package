@@ -21,8 +21,8 @@ import java.util.UUID;
 
 /** P0-2: 테넌트 status 전이 (suspend/activate) + suspend 시 활성 API 키 일괄 revoke. */
 @Slf4j
-@RequiredArgsConstructor
 @Service
+@RequiredArgsConstructor
 public class TenantLifecycleService {
 
     private final TenantRepository tenants;

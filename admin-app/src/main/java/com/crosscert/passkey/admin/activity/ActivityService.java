@@ -22,8 +22,8 @@ import java.util.stream.Collectors;
  * action not in either set is categorized as {@code "system"} (e.g.,
  * SIGNING_KEY_ROTATE, MDS_BLOB_SYNC).
  */
-@RequiredArgsConstructor
 @Service
+@RequiredArgsConstructor
 public class ActivityService {
 
     static final Set<String> OPS_ACTIONS = Set.of(

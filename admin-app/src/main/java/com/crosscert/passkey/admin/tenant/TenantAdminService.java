@@ -33,8 +33,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
-@RequiredArgsConstructor
 @Service
+@RequiredArgsConstructor
 public class TenantAdminService {
 
     private final TenantRepository tenants;

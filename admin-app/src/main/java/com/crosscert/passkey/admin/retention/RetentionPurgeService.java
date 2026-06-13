@@ -22,8 +22,8 @@ import java.time.Instant;
  * DELETE 가 긴 row-lock·undo 를 만들고, 그 사이 scheduler lease TTL 이 만료되면
  * second instance 가 동일 행에 lock 경합하는 것을 방지한다(작은 트랜잭션으로 분할).
  */
-@RequiredArgsConstructor
 @Service
+@RequiredArgsConstructor
 public class RetentionPurgeService {
 
     /**
