@@ -1,5 +1,6 @@
 package com.crosscert.passkey.core.alert;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -14,13 +15,10 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AlertDispatcher {
 
     private final List<AlertChannel> channels;
-
-    public AlertDispatcher(List<AlertChannel> channels) {
-        this.channels = channels;
-    }
 
     @Async("alertExecutor")
     @EventListener

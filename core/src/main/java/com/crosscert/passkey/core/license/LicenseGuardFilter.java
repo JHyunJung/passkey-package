@@ -3,6 +3,7 @@ package com.crosscert.passkey.core.license;
 import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,6 +38,7 @@ import java.util.Set;
 @Component
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
+@RequiredArgsConstructor
 public class LicenseGuardFilter extends OncePerRequestFilter {
 
     /**
@@ -55,11 +57,6 @@ public class LicenseGuardFilter extends OncePerRequestFilter {
 
     private final LicenseStateMachine stateMachine;
     private final ObjectMapper mapper;
-
-    public LicenseGuardFilter(LicenseStateMachine stateMachine, ObjectMapper mapper) {
-        this.stateMachine = stateMachine;
-        this.mapper = mapper;
-    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,

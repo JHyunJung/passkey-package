@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -17,13 +18,10 @@ import java.util.List;
  * Private material is stripped via {@link JWK#toPublicJWK()}.
  */
 @Component
+@RequiredArgsConstructor
 public class JwksAssembler {
 
     private final SigningKeyRepository repo;
-
-    public JwksAssembler(SigningKeyRepository repo) {
-        this.repo = repo;
-    }
 
     public JWKSet build() {
         List<JWK> publics = new ArrayList<>();

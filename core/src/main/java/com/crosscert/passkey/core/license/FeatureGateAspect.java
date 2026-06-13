@@ -4,19 +4,17 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Aspect
 @Component
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")
+@RequiredArgsConstructor
 public class FeatureGateAspect {
 
     private final LicenseStateMachine stateMachine;
-
-    public FeatureGateAspect(LicenseStateMachine stateMachine) {
-        this.stateMachine = stateMachine;
-    }
 
     @Around("@annotation(com.crosscert.passkey.core.license.RequiresFeature)")
     public Object enforce(ProceedingJoinPoint pjp) throws Throwable {
