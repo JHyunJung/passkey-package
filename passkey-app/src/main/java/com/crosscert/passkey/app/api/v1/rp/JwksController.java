@@ -1,8 +1,7 @@
 package com.crosscert.passkey.app.api.v1.rp;
 
 import com.crosscert.passkey.core.jwt.SigningKeyProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,10 +15,9 @@ import java.util.Map;
  * RFC 7517 + OIDC Discovery wire format is mandatory; any envelope
  * breaks standard JWT libraries (Nimbus, jose4j, jsonwebtoken, jose).
  */
+@Slf4j
 @RestController
 public class JwksController {
-
-    private static final Logger log = LoggerFactory.getLogger(JwksController.class);
 
     private final SigningKeyProvider keys;
 

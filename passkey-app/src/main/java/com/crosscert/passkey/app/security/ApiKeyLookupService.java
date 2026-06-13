@@ -1,7 +1,6 @@
 package com.crosscert.passkey.app.security;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,10 +35,9 @@ import java.util.UUID;
  * path), and behaves normally for touchLastUsed (TenantContextHolder is
  * set by ApiKeyAuthFilter before that call).
  */
+@Slf4j
 @Service
 public class ApiKeyLookupService {
-
-    private static final Logger log = LoggerFactory.getLogger(ApiKeyLookupService.class);
 
     private final JdbcTemplate jdbc;
 

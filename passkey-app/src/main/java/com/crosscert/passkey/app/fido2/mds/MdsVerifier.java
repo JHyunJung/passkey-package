@@ -1,8 +1,7 @@
 package com.crosscert.passkey.app.fido2.mds;
 
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -22,10 +21,10 @@ import java.util.Set;
  * the device posture; earlier reports represent historical state and must
  * not re-block a device that has since been re-certified.
  */
+@Slf4j
 @Component
 public class MdsVerifier {
 
-    private static final Logger log = LoggerFactory.getLogger(MdsVerifier.class);
     private static final Set<String> BLOCKING_STATUSES = Set.of(
             "REVOKED",
             "USER_VERIFICATION_BYPASS",
