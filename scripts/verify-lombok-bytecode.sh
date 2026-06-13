@@ -53,11 +53,16 @@ WORK="/tmp/lombok-verify/${MODULE}"
 # What remains — opcode kind + symbolic operand, as a sorted multiset — changes
 # only if real behavior changes.
 norm() {
+  # NOTE: stay POSIX/BSD-sed safe — GNU `\b` word boundaries are unsupported on
+  # macOS and silently make the wide/narrow opcode folding a no-op, which
+  # surfaces as spurious ldc_w-vs-ldc and shifted-branch-target diffs.
   sed -E 's/#[0-9]+/#N/g' \
     | sed -E 's/^[[:space:]]*[0-9]+:[[:space:]]+/  /' \
-    | sed -E 's/\bldc_w\b/ldc/; s/\bgoto_w\b/goto/' \
+    | sed -E 's/ldc_w/ldc/g; s/goto_w/goto/g; s/jsr_w/jsr/g' \
     | sed -E 's/[[:space:]]+/ /g' \
     | sed -E 's/[[:space:]]+$//' \
+    | sed -E 's/^ (goto|jsr|ifeq|ifne|iflt|ifge|ifgt|ifle|ifnull|ifnonnull|if_icmpeq|if_icmpne|if_icmplt|if_icmpge|if_icmpgt|if_icmple|if_acmpeq|if_acmpne) [0-9]+$/ \1 TGT/' \
+    | sed -E 's/^ [0-9]+ [0-9]+ [0-9]+ (Class |any)/ PC PC PC \1/' \
     | grep -vE "lombok\.Generated|RuntimeInvisibleAnnotations|Compiled from|^ ?Classfile|Last modified|SHA-256:|MD5:" \
     | sort
 }

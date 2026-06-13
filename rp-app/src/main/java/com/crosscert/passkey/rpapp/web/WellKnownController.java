@@ -1,6 +1,7 @@
 package com.crosscert.passkey.rpapp.web;
 
 import com.crosscert.passkey.rpapp.config.WellKnownProperties;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +21,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
+@RequiredArgsConstructor
 public class WellKnownController {
 
     /** 패스키 자동완성을 위한 표준 relation 조합 — 고객사가 바꿀 일이 거의 없어 상수로 고정. */
@@ -28,10 +30,6 @@ public class WellKnownController {
             "delegate_permission/common.get_login_creds");
 
     private final WellKnownProperties props;
-
-    public WellKnownController(WellKnownProperties props) {
-        this.props = props;
-    }
 
     @GetMapping(value = "/.well-known/assetlinks.json",
                 produces = MediaType.APPLICATION_JSON_VALUE)

@@ -12,6 +12,7 @@ import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.dto.*;
 import com.crosscert.passkey.sdk.idtoken.IdTokenClaims;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,20 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequestMapping("/passkey")
+@RequiredArgsConstructor
 public class WebAuthnController {
 
     private final PasskeyClient passkey;
     private final InMemoryUserStore users;
     private final PasskeyProperties props;
     private final RegRelayCodec relay;
-
-    public WebAuthnController(PasskeyClient passkey, InMemoryUserStore users,
-                             PasskeyProperties props, RegRelayCodec relay) {
-        this.passkey = passkey;
-        this.users   = users;
-        this.props   = props;
-        this.relay   = relay;
-    }
 
     // ── Registration ─────────────────────────────────────────────
 
