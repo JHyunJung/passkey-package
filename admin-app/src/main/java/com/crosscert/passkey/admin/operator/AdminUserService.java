@@ -3,8 +3,7 @@ package com.crosscert.passkey.admin.operator;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,10 +12,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class AdminUserService {
-
-    private static final Logger log = LoggerFactory.getLogger(AdminUserService.class);
 
     private final AdminUserRepository userRepo;
     private final AdminUserInvitationRepository invitationRepo;

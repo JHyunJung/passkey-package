@@ -5,8 +5,7 @@ import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
 import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -27,10 +26,10 @@ import java.util.Map;
  * verify. After grace, the key is hidden from JWKS and any remaining
  * JWT signed by it fails verification.
  */
+@Slf4j
 @Component
 public class KeyExpirationJob {
 
-    private static final Logger log = LoggerFactory.getLogger(KeyExpirationJob.class);
     private static final String LEASE_NAME = "key-expiration";
 
     private final SigningKeyRepository repo;

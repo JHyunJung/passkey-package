@@ -5,8 +5,7 @@ import com.crosscert.passkey.core.repository.SecurityPolicyRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -22,10 +21,9 @@ import java.util.List;
  * 만료 시에만 단일 행을 읽어 갱신하며, 동시성은 약간의 중복 읽기를 허용하는
  * 단순한 방식(volatile 스냅샷)으로 처리한다 — 정확성에는 영향이 없다.
  */
+@Slf4j
 @Component
 public class DynamicCorsConfigurationSource implements CorsConfigurationSource {
-
-    private static final Logger log = LoggerFactory.getLogger(DynamicCorsConfigurationSource.class);
 
     private static final Long SINGLETON_ID = 1L;
     private static final long TTL_NANOS = 10_000_000_000L; // 10s

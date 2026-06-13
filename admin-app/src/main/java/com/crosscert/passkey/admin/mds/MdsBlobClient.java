@@ -4,8 +4,7 @@ import com.crosscert.passkey.webauthn.mds.MdsBlob;
 import com.crosscert.passkey.webauthn.mds.MdsException;
 import com.crosscert.passkey.webauthn.mds.MetadataBlobVerifier;
 import com.crosscert.passkey.webauthn.mds.NativeMetadataBlobVerifier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,10 +21,9 @@ import java.time.Instant;
  * MDS3 BLOB을 HTTPS로 다운로드하고 자체 {@link MetadataBlobVerifier}로
  * JWS 서명·X.509 체인을 검증한 뒤 파싱한다. webauthn4j 의존 없음.
  */
+@Slf4j
 @Component
 public class MdsBlobClient {
-
-    private static final Logger log = LoggerFactory.getLogger(MdsBlobClient.class);
 
     private final HttpClient httpClient;
     private final MetadataBlobVerifier verifier;

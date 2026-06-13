@@ -17,8 +17,7 @@ import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,10 +31,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class TenantAdminService {
-
-    private static final Logger log = LoggerFactory.getLogger(TenantAdminService.class);
 
     private final TenantRepository tenants;
     private final AuditLogService audit;

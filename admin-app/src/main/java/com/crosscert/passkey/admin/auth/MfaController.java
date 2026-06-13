@@ -3,8 +3,7 @@ package com.crosscert.passkey.admin.auth;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,11 +28,10 @@ import java.util.Map;
  * holds the {@code XSRF-TOKEN} cookie from the (pending) session, so adding
  * these to the CSRF ignore list would needlessly weaken the surface.
  */
+@Slf4j
 @RestController
 @RequestMapping("/admin/api/mfa")
 public class MfaController {
-
-    private static final Logger log = LoggerFactory.getLogger(MfaController.class);
 
     private final TotpService totp;
     private final AdminUserRepository users;

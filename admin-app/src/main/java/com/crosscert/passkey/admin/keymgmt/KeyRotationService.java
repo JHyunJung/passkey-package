@@ -10,8 +10,7 @@ import com.crosscert.passkey.core.jwt.KeyEnvelope;
 import com.crosscert.passkey.core.jwt.SigningKeyFactory;
 import com.crosscert.passkey.core.jwt.SigningKeyProvider;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -46,10 +45,9 @@ import java.util.UUID;
  * piggy-back on a still-held lease (SchedulerLeaseService permits
  * {@code holder=?} re-acquisition for owner refresh).
  */
+@Slf4j
 @Service
 public class KeyRotationService {
-
-    private static final Logger log = LoggerFactory.getLogger(KeyRotationService.class);
 
     private static final String LEASE_NAME = "key-rotation";
     private static final Duration LEASE_TTL = Duration.ofSeconds(30);

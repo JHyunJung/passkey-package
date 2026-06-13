@@ -3,8 +3,7 @@ package com.crosscert.passkey.admin.retention;
 import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -25,10 +24,10 @@ import java.util.function.IntSupplier;
  * 나머지·전체 job 을 막지 않음). 끝에 총계+실패 목록을 (scheduler) 액터로 audit.
  * audit_log 자체는 hash-chain forensic 이라 purge 대상 아님(spec).
  */
+@Slf4j
 @Component
 public class RetentionPurgeJob {
 
-    private static final Logger log = LoggerFactory.getLogger(RetentionPurgeJob.class);
     private static final String LEASE_NAME = "retention-purge";
 
     private final RetentionPurgeService service;

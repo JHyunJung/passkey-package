@@ -7,8 +7,7 @@ import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,10 +24,10 @@ import java.time.Instant;
  * request 는 enumeration 방지를 위해 사용자 존재 여부와 무관하게 동일하게 동작
  * (없으면 조용히 no-op). confirm 은 PasswordPolicyValidator 재사용 + lockout 리셋.
  */
+@Slf4j
 @Service
 public class PasswordResetService {
 
-    private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
     private static final Duration TOKEN_TTL = Duration.ofHours(1);
     private static final String URL_PREFIX = "/reset-password?token=";
 
