@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +37,9 @@ import java.util.UUID;
  * credential applies — only the calling tenant's credentials are
  * visible.
  */
+@Slf4j
 @Service
 public class AuthenticationStartService {
-
-    private static final org.slf4j.Logger log =
-            org.slf4j.LoggerFactory.getLogger(AuthenticationStartService.class);
 
     private final TenantRepository tenants;
     private final CredentialRepository credentials;
