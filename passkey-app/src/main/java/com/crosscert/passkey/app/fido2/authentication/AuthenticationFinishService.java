@@ -23,8 +23,7 @@ import com.crosscert.passkey.webauthn.verifier.WebAuthnVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,10 +36,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class AuthenticationFinishService {
-
-    private static final Logger log = LoggerFactory.getLogger(AuthenticationFinishService.class);
 
     private final ChallengeStore store;
     private final WebAuthnVerifier verifier;

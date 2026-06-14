@@ -1,7 +1,6 @@
 package com.crosscert.passkey.core.license;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -21,11 +20,10 @@ import java.util.Map;
  * - non-2xx, transport error, parse failure, signature failure
  *   -> StateMachine.onHeartbeatFailure(reason)
  */
+@Slf4j
 @Component
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")
 public class LicenseHeartbeatScheduler {
-
-    private static final Logger log = LoggerFactory.getLogger(LicenseHeartbeatScheduler.class);
 
     private final LicenseStateMachine stateMachine;
     private final LicenseVerifier verifier;

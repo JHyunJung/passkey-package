@@ -9,8 +9,7 @@ import com.crosscert.passkey.core.entity.ApiKey;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.ApiKeyRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,10 +29,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class ApiKeyAdminService {
-
-    private static final Logger log = LoggerFactory.getLogger(ApiKeyAdminService.class);
 
     private static final String PREFIX_HEADER = "pk_";
     private static final int PREFIX_RANDOM_BYTES = 6;   // 6 bytes → 8 b64url chars → 11-char prefix

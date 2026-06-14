@@ -1,21 +1,18 @@
 package com.crosscert.passkey.core.alert;
 
 import com.crosscert.passkey.core.mail.MailSender;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /** 메일 채널 — passkey.alert.mail.enabled=true 일 때만 등록. 기존 MailSender 재사용. */
 @Component
 @ConditionalOnProperty(prefix = "passkey.alert.mail", name = "enabled", havingValue = "true")
+@RequiredArgsConstructor
 public class MailAlertChannel implements AlertChannel {
 
     private final MailSender mailSender;
     private final AlertProperties props;
-
-    public MailAlertChannel(MailSender mailSender, AlertProperties props) {
-        this.mailSender = mailSender;
-        this.props = props;
-    }
 
     @Override
     public boolean supports(SecurityAlertEvent.Severity severity) {

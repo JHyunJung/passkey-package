@@ -6,8 +6,7 @@ import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,10 +16,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class InvitationService {
-
-    private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
 
     private static final Duration TOKEN_TTL = Duration.ofDays(7);
     private static final String URL_PREFIX = "/accept-invite?token=";

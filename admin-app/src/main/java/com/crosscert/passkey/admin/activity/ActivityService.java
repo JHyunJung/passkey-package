@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.ActivityRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
  * SIGNING_KEY_ROTATE, MDS_BLOB_SYNC).
  */
 @Service
+@RequiredArgsConstructor
 public class ActivityService {
 
     static final Set<String> OPS_ACTIONS = Set.of(
@@ -41,14 +43,6 @@ public class ActivityService {
     private final ActivityRepository activity;
     private final TenantRepository tenants;
     private final Clock clock;
-
-    public ActivityService(ActivityRepository activity,
-                            TenantRepository tenants,
-                            Clock clock) {
-        this.activity = activity;
-        this.tenants = tenants;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public ActivityView snapshot(UUID sinceId, String category) {

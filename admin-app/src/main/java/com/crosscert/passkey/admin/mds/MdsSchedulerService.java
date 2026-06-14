@@ -5,8 +5,7 @@ import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.admin.scheduler.SchedulerLeaseService;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,10 +27,10 @@ import java.util.Set;
  *
  * <p>T16 extends this to also write per-AAGUID entries back to Redis.
  */
+@Slf4j
 @Service
 public class MdsSchedulerService {
 
-    private static final Logger log = LoggerFactory.getLogger(MdsSchedulerService.class);
     private static final String LEASE_NAME = "mds-sync";
     private static final String SYNC_COUNTER = "passkey_mds_sync_total";
 

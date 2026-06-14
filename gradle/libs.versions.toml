@@ -11,8 +11,10 @@ bucket4j = "8.18.0"
 node-gradle = "7.0.2"
 wiremock = "3.10.0"
 archunit = "1.3.0"
+lombok = "1.18.34"
 
 [libraries]
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 oracle-jdbc = { module = "com.oracle.database.jdbc:ojdbc11", version.ref = "oracle-jdbc" }
 # NLS(National Language Support) — Oracle 문자셋/날짜·언어 변환 등에 필요. ojdbc 와 동일 버전 사용.
 oracle-nls = { module = "com.oracle.database.nls:orai18n", version.ref = "oracle-jdbc" }

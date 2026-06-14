@@ -4,8 +4,8 @@ import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.util.CryptoUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,16 +23,12 @@ import java.util.UUID;
  *
  * PLATFORM_OPERATOR 는 무제한. RP_ADMIN 은 자기 tenantId 와 일치할 때만.
  */
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class TenantBoundary {
 
-    private static final Logger log = LoggerFactory.getLogger(TenantBoundary.class);
-
     private final ApplicationEventPublisher eventPublisher;
-
-    public TenantBoundary(ApplicationEventPublisher eventPublisher) {
-        this.eventPublisher = eventPublisher;
-    }
 
     /** Builds + publishes a TENANT_BOUNDARY_VIOLATION/CRITICAL alert.
      *  ctx must contain only masked/identifier values (masked actor email, role, tenant UUIDs). */

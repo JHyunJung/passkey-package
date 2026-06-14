@@ -2,6 +2,7 @@ package com.crosscert.passkey.core.license;
 
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -10,13 +11,10 @@ import java.time.Instant;
 
 @Component("license")
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")
+@RequiredArgsConstructor
 public class LicenseHealthIndicator implements HealthIndicator {
 
     private final LicenseStateMachine stateMachine;
-
-    public LicenseHealthIndicator(LicenseStateMachine stateMachine) {
-        this.stateMachine = stateMachine;
-    }
 
     @Override
     public Health health() {

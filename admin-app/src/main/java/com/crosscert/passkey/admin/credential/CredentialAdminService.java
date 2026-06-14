@@ -12,8 +12,7 @@ import com.crosscert.passkey.core.entity.CredentialAuthEvent;
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
 import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
 import com.crosscert.passkey.core.repository.CredentialRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -26,10 +25,9 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class CredentialAdminService {
-
-    private static final Logger log = LoggerFactory.getLogger(CredentialAdminService.class);
 
     private final CredentialRepository creds;
     private final MdsAaguidCache mds;

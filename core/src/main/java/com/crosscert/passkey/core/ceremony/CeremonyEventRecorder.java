@@ -2,8 +2,7 @@ package com.crosscert.passkey.core.ceremony;
 
 import com.crosscert.passkey.core.entity.CeremonyEvent;
 import com.crosscert.passkey.core.repository.CeremonyEventRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -25,10 +24,9 @@ import java.util.UUID;
  * executeWithoutResult 가 커밋을 동기적으로 수행하므로 커밋 실패까지 여기서 삼켜진다.
  * REQUIRES_NEW: 호출 측이 readOnly 이거나 롤백돼도 집계 기록이 독립 커밋된다.
  */
+@Slf4j
 @Component
 public class CeremonyEventRecorder {
-
-    private static final Logger log = LoggerFactory.getLogger(CeremonyEventRecorder.class);
 
     private final CeremonyEventRepository repo;
     private final TransactionTemplate txTemplate;

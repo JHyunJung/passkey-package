@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -26,13 +27,10 @@ import java.util.UUID;
 @Component
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class OnpremTenantPinFilter extends OncePerRequestFilter {
 
     private final LicenseStateMachine stateMachine;
-
-    public OnpremTenantPinFilter(LicenseStateMachine stateMachine) {
-        this.stateMachine = stateMachine;
-    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,

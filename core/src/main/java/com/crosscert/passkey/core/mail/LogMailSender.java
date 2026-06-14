@@ -1,7 +1,6 @@
 package com.crosscert.passkey.core.mail;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,10 +9,9 @@ import org.springframework.stereotype.Component;
  * <p>실제 메일을 보내지 않고 SLF4J INFO 로그로만 출력한다.
  * 운영 프로파일에서는 실제 SMTP 구현체로 교체할 것.
  */
+@Slf4j
 @Component
 public class LogMailSender implements MailSender {
-
-    private static final Logger log = LoggerFactory.getLogger(LogMailSender.class);
 
     @Override
     public void send(String to, String subject, String body) {

@@ -1,6 +1,7 @@
 package com.crosscert.passkey.app.fido2.challenge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -8,22 +9,18 @@ import java.time.Duration;
 import java.util.Optional;
 
 @Component
+@RequiredArgsConstructor
 public class ChallengeStore {
 
     static final String REG_PREFIX = "challenge:reg:";
     static final String AUTH_PREFIX = "challenge:auth:";
     static final Duration TTL = Duration.ofMinutes(5);
 
+    // Spring's auto-configured ObjectMapper already has JavaTimeModule
+    // registered by CoreJacksonConfig. We trust the caller's mapper;
+    // tests inject one configured the same way.
     private final StringRedisTemplate redis;
     private final ObjectMapper mapper;
-
-    public ChallengeStore(StringRedisTemplate redis, ObjectMapper mapper) {
-        this.redis = redis;
-        // Spring's auto-configured ObjectMapper already has JavaTimeModule
-        // registered by CoreJacksonConfig. We trust the caller's mapper;
-        // tests inject one configured the same way.
-        this.mapper = mapper;
-    }
 
     public void putRegistration(String token, RegistrationChallenge value) {
         redis.opsForValue().set(REG_PREFIX + token, serialize(value), TTL);

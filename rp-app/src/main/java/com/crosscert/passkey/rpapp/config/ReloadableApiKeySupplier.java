@@ -1,7 +1,6 @@
 package com.crosscert.passkey.rpapp.config;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -30,9 +29,8 @@ import java.util.function.Supplier;
  * 항상 일관된 짝으로 보이며, 마지막 성공 reload 의 (mtime,key) 쌍만 관찰된다.
  * lastPollAt 의 race 는 무해(여분의 stat 한 번)하므로 별도 volatile 로 둔다.
  */
+@Slf4j
 public class ReloadableApiKeySupplier implements Supplier<String> {
-
-    private static final Logger log = LoggerFactory.getLogger(ReloadableApiKeySupplier.class);
 
     /** (mtime, key) 를 한 번에 발행하기 위한 불변 holder. key==null 이면 env 폴백 신호. */
     private record State(long lastModified, String cachedKey) {}

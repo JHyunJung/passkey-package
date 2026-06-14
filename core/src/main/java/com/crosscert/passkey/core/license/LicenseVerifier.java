@@ -4,6 +4,7 @@ import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.Ed25519Verifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.text.ParseException;
@@ -22,6 +23,7 @@ import java.util.Set;
  * LicenseBootstrap, which itself is @ConditionalOnProperty.
  */
 @Component
+@RequiredArgsConstructor
 public class LicenseVerifier {
 
     /**
@@ -34,14 +36,6 @@ public class LicenseVerifier {
     private final LicensePublicKeyProvider keys;
     private final LicenseProperties props;
     private final Clock clock;
-
-    public LicenseVerifier(LicensePublicKeyProvider keys,
-                           LicenseProperties props,
-                           Clock clock) {
-        this.keys = keys;
-        this.props = props;
-        this.clock = clock;
-    }
 
     public LicenseToken verify(String compactJws) {
         SignedJWT jwt;

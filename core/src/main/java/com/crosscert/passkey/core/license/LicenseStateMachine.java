@@ -1,7 +1,6 @@
 package com.crosscert.passkey.core.license;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -16,9 +15,8 @@ import java.util.function.Supplier;
  * Lifecycle: instantiated by LicenseBootstrap (onprem mode only).
  * Tests construct directly via the public ctor.
  */
+@Slf4j
 public class LicenseStateMachine {
-
-    private static final Logger log = LoggerFactory.getLogger(LicenseStateMachine.class);
 
     private final Supplier<Instant> now;
 

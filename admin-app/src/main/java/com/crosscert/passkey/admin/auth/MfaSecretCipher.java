@@ -1,6 +1,7 @@
 package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.core.jwt.KeyEnvelope;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -18,15 +19,12 @@ import java.util.Base64;
  * 표면화하여 secret/키 내용이 로그·예외에 새지 않도록 한다.
  */
 @Component
+@RequiredArgsConstructor
 public class MfaSecretCipher {
 
     private static final String PREFIX = "enc:v1:";
 
     private final KeyEnvelope envelope;
-
-    public MfaSecretCipher(KeyEnvelope envelope) {
-        this.envelope = envelope;
-    }
 
     /** Base32 secret → sealed 저장 문자열. */
     public String seal(String base32Secret) {

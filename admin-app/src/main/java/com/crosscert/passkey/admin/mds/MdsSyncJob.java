@@ -1,7 +1,6 @@
 package com.crosscert.passkey.admin.mds;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import com.crosscert.passkey.core.license.RequiresFeature;
@@ -10,10 +9,9 @@ import com.crosscert.passkey.core.license.RequiresFeature;
  * Fires MdsSchedulerService.runOnce() every 6 hours. Initial delay
  * 30s to avoid all instances thundering at boot.
  */
+@Slf4j
 @Component
 public class MdsSyncJob {
-
-    private static final Logger log = LoggerFactory.getLogger(MdsSyncJob.class);
 
     private final MdsSchedulerService scheduler;
 

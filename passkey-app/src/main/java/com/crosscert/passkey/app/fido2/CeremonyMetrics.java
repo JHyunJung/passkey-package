@@ -1,16 +1,14 @@
 package com.crosscert.passkey.app.fido2;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /** WebAuthn ceremony 메트릭 (P1-2). counter 이름·태그 키를 한 곳에 응집. */
 @Component
+@RequiredArgsConstructor
 public class CeremonyMetrics {
     private final MeterRegistry registry;
-
-    public CeremonyMetrics(MeterRegistry registry) {
-        this.registry = registry;
-    }
 
     public void recordSuccess(String type, String phase) {
         record(type, phase, "success");

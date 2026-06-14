@@ -17,6 +17,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,11 +26,10 @@ import java.time.Clock;
 import java.util.Base64;
 import java.util.UUID;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class RegistrationStartService {
-
-    private static final org.slf4j.Logger log =
-            org.slf4j.LoggerFactory.getLogger(RegistrationStartService.class);
 
     private final TenantRepository tenants;
     private final CredentialRepository credentials;
@@ -38,24 +39,6 @@ public class RegistrationStartService {
     private final Clock clock;
     private final CeremonyMetrics ceremonyMetrics;
     private final CeremonyEventRecorder ceremonyEvents;
-
-    public RegistrationStartService(TenantRepository tenants,
-                                    CredentialRepository credentials,
-                                    ChallengeIssuer challenges,
-                                    ChallengeStore store,
-                                    ObjectMapper mapper,
-                                    Clock clock,
-                                    CeremonyMetrics ceremonyMetrics,
-                                    CeremonyEventRecorder ceremonyEvents) {
-        this.tenants = tenants;
-        this.credentials = credentials;
-        this.challenges = challenges;
-        this.store = store;
-        this.mapper = mapper;
-        this.clock = clock;
-        this.ceremonyMetrics = ceremonyMetrics;
-        this.ceremonyEvents = ceremonyEvents;
-    }
 
     /**
      * VPD off(SE2) 모드에서 cross-tenant 누출을 막기 위해 {@code @Transactional} 필수.

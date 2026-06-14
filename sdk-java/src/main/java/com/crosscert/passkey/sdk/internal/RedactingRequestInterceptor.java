@@ -2,8 +2,7 @@ package com.crosscert.passkey.sdk.internal;
 
 import com.crosscert.passkey.sdk.PasskeyClientConfig;
 import com.crosscert.passkey.sdk.exception.PasskeyConfigurationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
@@ -18,9 +17,8 @@ import java.util.regex.Pattern;
  * SDK 의 DEBUG 로그가 ID Token / publicKeyCredential 평문을 남기지 않도록
  * 본문 일부를 마스킹해 출력. 운영 환경에선 logging.level 을 INFO 이하로.
  */
+@Slf4j
 public class RedactingRequestInterceptor implements ClientHttpRequestInterceptor {
-    private static final Logger log = LoggerFactory.getLogger(RedactingRequestInterceptor.class);
-
     private final Supplier<String> apiKeySupplier;
 
     public RedactingRequestInterceptor(PasskeyClientConfig config) {

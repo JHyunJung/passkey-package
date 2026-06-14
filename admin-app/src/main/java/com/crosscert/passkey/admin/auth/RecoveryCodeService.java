@@ -3,6 +3,7 @@ package com.crosscert.passkey.admin.auth;
 import com.crosscert.passkey.core.entity.AdminUserRecoveryCode;
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import java.util.UUID;
  * used_at 마킹(one-shot). 평문은 Base32 4-4 형식("xxxx-xxxx")으로 입력 편의 제공.
  */
 @Service
+@RequiredArgsConstructor
 public class RecoveryCodeService {
 
     static final int CODE_COUNT = 10;
@@ -31,11 +33,6 @@ public class RecoveryCodeService {
 
     private final AdminUserRecoveryCodeRepository repo;
     private final Clock clock;
-
-    public RecoveryCodeService(AdminUserRecoveryCodeRepository repo, Clock clock) {
-        this.repo = repo;
-        this.clock = clock;
-    }
 
     @Transactional
     public List<String> generate(UUID adminUserId) {

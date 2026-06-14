@@ -15,8 +15,7 @@ import com.crosscert.passkey.core.util.CryptoUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -46,11 +45,10 @@ import java.time.Clock;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 @Configuration
 @EnableMethodSecurity
 public class AdminSecurityConfig {
-
-    private static final Logger log = LoggerFactory.getLogger(AdminSecurityConfig.class);
 
     /** Maximum email length that the ACTOR_EMAIL column (VARCHAR2 255) accepts. */
     private static final int MAX_EMAIL_LEN = 255;

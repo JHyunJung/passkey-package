@@ -7,6 +7,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -37,6 +38,7 @@ import java.util.Set;
 @Component
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
+@RequiredArgsConstructor
 public class LicenseGuardFilter extends OncePerRequestFilter {
 
     /**
@@ -55,11 +57,6 @@ public class LicenseGuardFilter extends OncePerRequestFilter {
 
     private final LicenseStateMachine stateMachine;
     private final ObjectMapper mapper;
-
-    public LicenseGuardFilter(LicenseStateMachine stateMachine, ObjectMapper mapper) {
-        this.stateMachine = stateMachine;
-        this.mapper = mapper;
-    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,

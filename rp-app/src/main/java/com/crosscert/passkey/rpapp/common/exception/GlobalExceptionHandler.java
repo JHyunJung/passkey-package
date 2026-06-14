@@ -7,8 +7,7 @@ import com.crosscert.passkey.sdk.exception.PasskeyAuthException;
 import com.crosscert.passkey.sdk.exception.PasskeyIdTokenException;
 import com.crosscert.passkey.sdk.exception.PasskeyRateLimitException;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -21,10 +20,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import java.util.List;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // ── 템플릿 8 ───────────────────────────────────────────────────
 
