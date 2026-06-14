@@ -6,7 +6,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.util.function.Supplier
-import kotlin.jvm.Volatile
 
 /**
  * API Key 를 파일에서 핫리로드하는 Supplier. SDK 의 RedactingRequestInterceptor
