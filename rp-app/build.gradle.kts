@@ -2,11 +2,15 @@ plugins {
     java
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dep.mgmt)
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.spring)
 }
 
 // group / version / toolchain / repositories 모두 root allprojects + subprojects 가 처리.
 
 dependencies {
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation(kotlin("stdlib"))
     implementation(project(":sdk-java"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
@@ -19,6 +23,16 @@ dependencies {
     // RpAppSmokeIT 용 webauthn4j-test (ClientPlatform + PackedAuthenticator).
     testImplementation(rootProject.libs.webauthn4j.test)
     // junit-platform-launcher 는 root subprojects 가 자동 적용
+}
+
+// Spring Boot @ConfigurationProperties 생성자 바인딩은 생성자 파라미터 이름을 런타임에 읽는다.
+// Java 는 Spring Boot Gradle 플러그인이 -parameters 를 자동 적용하지만 Kotlin 플러그인은 아니므로
+// 명시한다. (스캔 등록되는 PasskeyProperties/RelayProperties 의 생성자 바인딩 안정성 — 파라미터
+// 이름을 kotlin-reflect 에만 의존하지 않도록.) 원본 Java record 와 동일한 표준 설정.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    compilerOptions {
+        javaParameters.set(true)
+    }
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
