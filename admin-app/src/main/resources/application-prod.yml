@@ -33,6 +33,17 @@ spring:
     validate-on-migrate: true
     # `flyway clean` 호출 차단 — prod schema 전체 drop 사고 방지.
     clean-disabled: true
+  # SMTP 설정은 환경변수로만 주입한다 — 여기에 spring.mail.host 를 빈 default 로
+  # 두면 안 된다. Spring Boot 의 @ConditionalOnProperty("spring.mail.host") 가
+  # 빈 문자열도 "present" 로 보고 쓸모없는 JavaMailSender 빈과 mail health
+  # indicator(actuator /health 의 DOWN)를 만들기 때문. 키를 생략하면:
+  #   - SPRING_MAIL_HOST 미설정 → spring.mail.host 부재 → auto-config 미동작,
+  #     MailSenderConfiguration 이 LogMailSender 선택(메일 미발송, 초대는 동작).
+  #   - SPRING_MAIL_HOST 설정 → relaxed binding 으로 spring.mail.host 자동 인식,
+  #     JavaMailSender auto-config 동작, SmtpMailSender 선택.
+  # 실제 발송 시 함께 주입: SPRING_MAIL_PORT(기본 587), SPRING_MAIL_USERNAME,
+  # SPRING_MAIL_PASSWORD, SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH,
+  # SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE.
 
 server:
   port: ${SERVER_PORT:8081}
@@ -53,6 +64,12 @@ passkey:
     enabled: ${PASSKEY_VPD_ENABLED:false}
   key-envelope:
     master-key: ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}
+
+admin:
+  invite:
+    # 초대 수락 페이지 base URL. 메일 본문의 /accept-invite?token=... 앞에 붙는다.
+    # InvitationService 의 @Value("${admin.invite.base-url:...}") 가 읽는다.
+    base-url: ${ADMIN_INVITE_BASE_URL:http://localhost:5173}
 
 logging:
   level:
