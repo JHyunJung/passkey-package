@@ -2,29 +2,22 @@ package com.crosscert.passkey.core.mail;
 
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.stereotype.Component;
 
 /**
  * 운영용 SMTP 메일 발송 구현체.
  *
- * <p>{@code spring.mail.host} 가 설정된 경우에만 등록된다. 같은 조건에서 Spring Boot 의
- * {@code MailSenderAutoConfiguration} 이 {@link JavaMailSender} 빈을 제공한다.
- * 미설정 시에는 {@link LogMailSender} 가 fallback 으로 등록된다.
+ * <p>{@link MailSenderConfiguration} 이 {@code spring.mail.host} 설정 시 이 구현체를 생성한다.
+ * 미설정 시에는 {@link LogMailSender} 가 선택된다.
  */
 @Slf4j
-@Component
-@ConditionalOnProperty(prefix = "spring.mail", name = "host")
 public class SmtpMailSender implements MailSender {
 
     private final JavaMailSender javaMailSender;
     private final String from;
 
-    public SmtpMailSender(JavaMailSender javaMailSender,
-                          @Value("${passkey.mail.from:no-reply@passkey.local}") String from) {
+    public SmtpMailSender(JavaMailSender javaMailSender, String from) {
         this.javaMailSender = javaMailSender;
         this.from = from;
     }
