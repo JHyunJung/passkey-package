@@ -129,8 +129,8 @@ class WebAuthnControllerTest {
                 List.of("user_verified"),
                 "cred-1",
                 "aaguid-1"));
-        given(props.tenantId()).willReturn("7f00dead-0000-0000-0000-000000000001");
-        given(props.issuerBase()).willReturn(URI.create("https://issuer.example.com"));
+        given(props.getTenantId()).willReturn("7f00dead-0000-0000-0000-000000000001");
+        given(props.getIssuerBase()).willReturn(URI.create("https://issuer.example.com"));
         given(users.findByUserHandle("handle-alice")).willReturn(Optional.of(
                 new RpAppUser("handle-alice", "alice", "Alice", Instant.now(), "cred-1")));
 

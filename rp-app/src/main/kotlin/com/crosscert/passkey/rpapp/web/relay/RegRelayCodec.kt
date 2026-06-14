@@ -1,6 +1,8 @@
 package com.crosscert.passkey.rpapp.web.relay
 
 import com.crosscert.passkey.rpapp.config.RelayProperties
+import com.fasterxml.jackson.annotation.JsonCreator
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
@@ -98,12 +100,17 @@ class RegRelayCodec(props: RelayProperties, private val mapper: ObjectMapper) {
         }
     }
 
-    /** 직렬화 payload. 필드명을 짧게(rt/uh/un/dn/exp) 유지. */
-    internal data class ObjectNodePayload(
-        val rt: String?,
-        val uh: String?,
-        val un: String?,
-        val dn: String?,
-        val exp: Long,
+    /**
+     * 직렬화 payload. 필드명을 짧게(rt/uh/un/dn/exp) 유지.
+     * 원본 Java 는 record 라 plain ObjectMapper(파라미터명 메타데이터 없이도)로 역직렬화됐다.
+     * Kotlin data class 는 그렇지 못하므로 @JsonCreator/@JsonProperty 로 생성자 바인딩을 명시해
+     * jackson-module-kotlin 유무와 무관하게 record 와 동일하게 복원되도록 한다.
+     */
+    internal data class ObjectNodePayload @JsonCreator constructor(
+        @JsonProperty("rt") val rt: String?,
+        @JsonProperty("uh") val uh: String?,
+        @JsonProperty("un") val un: String?,
+        @JsonProperty("dn") val dn: String?,
+        @JsonProperty("exp") val exp: Long,
     )
 }

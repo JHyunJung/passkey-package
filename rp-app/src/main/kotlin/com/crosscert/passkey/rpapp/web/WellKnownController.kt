@@ -35,13 +35,13 @@ class WellKnownController(
         produces = [MediaType.APPLICATION_JSON_VALUE],
     )
     fun assetLinks(): List<Map<String, Any>> {
-        val statements = props.android.map { app ->
+        val statements = props.android.orEmpty().map { app ->
             mapOf<String, Any>(
                 "relation" to RELATIONS,
                 "target" to mapOf(
                     "namespace" to "android_app",
                     "package_name" to app.packageName,
-                    "sha256_cert_fingerprints" to app.sha256Fingerprints,
+                    "sha256_cert_fingerprints" to app.sha256Fingerprints.orEmpty(),
                 ),
             )
         }
@@ -58,7 +58,7 @@ class WellKnownController(
         produces = [MediaType.APPLICATION_JSON_VALUE],
     )
     fun appleAppSiteAssociation(): Map<String, Any> {
-        val apps = props.ios.appIds
+        val apps = props.ios?.appIds.orEmpty()
         if (apps.isEmpty()) {
             log.warn("apple-app-site-association: iOS 앱이 설정되지 않았습니다 — iOS 패스키가 동작하지 않습니다 (rp-app.well-known.ios.app-ids 확인)")
         } else if (log.isDebugEnabled) {
