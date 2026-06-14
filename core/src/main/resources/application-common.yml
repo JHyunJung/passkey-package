@@ -81,3 +81,7 @@ passkey:
     audience: passkey-onprem
     heartbeat-url: https://license.crosscert.com/v1/license
     heartbeat-interval: PT1H
+  mail:
+    # 발신 주소. MailSenderConfiguration 의 SmtpMailSender 가 사용.
+    # SMTP 활성화(spring.mail.host 설정) 시 의미 있음.
+    from: ${PASSKEY_MAIL_FROM:no-reply@passkey.local}
