@@ -1,6 +1,7 @@
 package com.crosscert.passkey.sdk.internal
 
 import com.crosscert.passkey.sdk.envelope.ApiResponseEnvelope
+import com.crosscert.passkey.sdk.envelope.EnvelopeFieldError
 import com.crosscert.passkey.sdk.exception.PasskeyApiException
 import com.crosscert.passkey.sdk.exception.PasskeyAuthException
 import com.crosscert.passkey.sdk.exception.PasskeyRateLimitException
@@ -23,13 +24,24 @@ class PasskeyResponseErrorHandler(
         val status = response.statusCode.value()
         val bodyBytes = response.body.readAllBytes()
         val env = parseQuietly(bodyBytes)
-        // Treat a parsed envelope with no code as a non-envelope response (e.g. RFC 7807 problem+json)
-        val isEnvelope = env != null && env.code != null
 
-        val code = if (isEnvelope) env!!.code else "C999"
-        val message = if (isEnvelope) env!!.message else "Upstream error (no envelope)"
-        val traceId = if (isEnvelope) env!!.traceId else null
-        val fieldErrors = if (isEnvelope && env!!.error != null) env.error!!.fieldErrors else null
+        // Treat a parsed envelope with no code as a non-envelope response (e.g. RFC 7807 problem+json).
+        // env != null && env.code != null 분기 안에서 컴파일러가 env 를 non-null 로 smart-cast 한다.
+        val code: String?
+        val message: String?
+        val traceId: String?
+        val fieldErrors: List<EnvelopeFieldError>?
+        if (env != null && env.code != null) {
+            code = env.code
+            message = env.message
+            traceId = env.traceId
+            fieldErrors = env.error?.fieldErrors
+        } else {
+            code = "C999"
+            message = "Upstream error (no envelope)"
+            traceId = null
+            fieldErrors = null
+        }
 
         if (status == 401) {
             throw PasskeyAuthException(code, message, traceId, fieldErrors)

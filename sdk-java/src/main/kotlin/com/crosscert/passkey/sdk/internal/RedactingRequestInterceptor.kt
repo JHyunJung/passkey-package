@@ -71,12 +71,12 @@ class RedactingRequestInterceptor(config: PasskeyClientConfig) : ClientHttpReque
          * admin-app's ApiKeyAdminService generates secrets via
          * `Base64.getUrlEncoder().withoutPadding()`.
          */
-        private val API_KEY_HEADER: Pattern =
+        internal val API_KEY_HEADER: Pattern =
             Pattern.compile("(?i)(X-API-Key\\s*[:=]\\s*\"?pk_[A-Za-z0-9_-]{8})[A-Za-z0-9_-]+")
 
         /** ID Token + publicKeyCredential.response.* 값은 길이만 노출. */
         @JvmStatic
-        fun redact(json: String?): String? {
+        internal fun redact(json: String?): String? {
             if (json == null || json.isEmpty()) return json
             var out = json
                 .replace(
