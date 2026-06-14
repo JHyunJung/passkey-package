@@ -15,6 +15,7 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-actuator")
     api("io.micrometer:micrometer-registry-prometheus")
     api("org.springframework.boot:spring-boot-starter-validation")
+    api("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.springframework.boot:spring-boot-starter-aop")
 
     api(rootProject.libs.oracle.jdbc)
