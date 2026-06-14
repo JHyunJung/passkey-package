@@ -86,10 +86,10 @@ class WebAuthnController(
         }
         log.info("register/options ok: userHandle={}", idTail(userHandle))
         val regRelayToken = relay.encode(
-            sdkResp.registrationToken(), userHandle, req.username, req.displayName,
+            sdkResp.registrationToken, userHandle, req.username, req.displayName,
         )
         return ApiResponse.ok(
-            RegisterOptionsResp(sdkResp.publicKeyCredentialCreationOptions(), regRelayToken),
+            RegisterOptionsResp(sdkResp.publicKeyCredentialCreationOptions, regRelayToken),
         )
     }
 
@@ -114,16 +114,17 @@ class WebAuthnController(
         }
         val fin = try {
             passkey.registrationFinish(
-                RegistrationFinishRequest(r.registrationToken, req.publicKeyCredential),
+                // @Valid @NotNull 로 검증된 필드 — null 이면 컨트롤러 진입 전 400. SDK 는 non-null 요구.
+                RegistrationFinishRequest(r.registrationToken, req.publicKeyCredential!!),
             )
         } catch (e: RuntimeException) {
             log.warn("register/complete upstream-failed: cause={}", e.toString())
             throw e
         }
-        users.confirmRegistration(r.userHandle, r.username, r.displayName, fin.credentialId())
+        users.confirmRegistration(r.userHandle, r.username, r.displayName, fin.credentialId)
         log.info(
             "register/complete ok: userHandle={} credentialId={}",
-            idTail(r.userHandle), idTail(fin.credentialId()),
+            idTail(r.userHandle), idTail(fin.credentialId),
         )
         return ApiResponse.ok("Passkey registered", fin)
     }
@@ -147,8 +148,8 @@ class WebAuthnController(
         log.info("login/options ok: userHandlePresent={}", userHandle != null)
         return ApiResponse.ok(
             LoginOptionsResp(
-                sdkResp.publicKeyCredentialRequestOptions(),
-                sdkResp.authenticationToken(),
+                sdkResp.publicKeyCredentialRequestOptions,
+                sdkResp.authenticationToken,
             ),
         )
     }
@@ -158,14 +159,15 @@ class WebAuthnController(
         log.info("login/complete entry")
         val fin = try {
             passkey.authenticationFinish(
-                AuthenticationFinishRequest(req.authenticationToken, req.publicKeyCredential),
+                // @Valid @NotBlank/@NotNull 로 검증된 필드 — null 이면 컨트롤러 진입 전 400. SDK 는 non-null 요구.
+                AuthenticationFinishRequest(req.authenticationToken!!, req.publicKeyCredential!!),
             )
         } catch (e: RuntimeException) {
             log.warn("login/complete upstream-failed: cause={}", e.toString())
             throw e
         }
         val claims = try {
-            passkey.verifyIdToken(fin.idToken())
+            passkey.verifyIdToken(fin.idToken)
         } catch (e: RuntimeException) {
             log.warn("login/complete failed: reason=id-token-verify-failed cause={}", e.toString())
             throw e
@@ -181,7 +183,7 @@ class WebAuthnController(
         // 원본 Java(props.issuerBase().toString())는 issuerBase 누락 시 NPE→500 으로 fail-fast.
         // Kotlin 의 null-safe toString() 은 "null" 을 반환해 동작이 달라지므로 !! 로 동일 보존.
         val issPrefix = props.issuerBase!!.toString()
-        val tokenIss = claims.iss()
+        val tokenIss = claims.iss
         val issOk = tokenIss != null &&
             tokenIss.startsWith("$issPrefix/") &&
             normalizeTenantId(tokenIss.substring("$issPrefix/".length)) == expectedTenant
@@ -192,22 +194,23 @@ class WebAuthnController(
             )
             throw BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "iss mismatch")
         }
-        if (expectedTenant != normalizeTenantId(claims.aud())) {
+        if (expectedTenant != normalizeTenantId(claims.aud)) {
             log.warn(
                 "login/complete failed: reason=aud-mismatch expected={} got={}",
-                expectedTenant, claims.aud(),
+                expectedTenant, claims.aud,
             )
             throw BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "aud mismatch")
         }
 
-        val user = users.findByUserHandle(claims.sub())
+        // 검증을 통과한 ID Token 은 항상 sub(opaque userHandle)를 갖는다(IdTokenVerifier 보장).
+        val user = users.findByUserHandle(claims.sub!!)
             .orElseThrow {
-                log.warn("login/complete failed: reason=unknown-sub subTail={}", idTail(claims.sub()))
+                log.warn("login/complete failed: reason=unknown-sub subTail={}", idTail(claims.sub))
                 BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "unknown sub")
             }
         log.info(
             "login/complete ok: subTail={} userHandle={}",
-            idTail(claims.sub()), idTail(user.userHandle),
+            idTail(claims.sub), idTail(user.userHandle),
         )
         return ApiResponse.ok(LoginResultResp(true, user.userHandle, user.displayName))
     }

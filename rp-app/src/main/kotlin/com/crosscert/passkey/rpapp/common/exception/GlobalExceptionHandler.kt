@@ -77,7 +77,7 @@ class GlobalExceptionHandler {
     @ExceptionHandler(PasskeyRateLimitException::class)
     fun handlePasskeyRateLimit(e: PasskeyRateLimitException): ResponseEntity<ApiResponse<Void>> =
         ResponseEntity.status(ErrorCode.PASSKEY_RATE_LIMITED.status)
-            .header("Retry-After", e.retryAfterSeconds().toString())
+            .header("Retry-After", e.retryAfterSeconds.toString())
             .body(ApiResponse.error(ErrorCode.PASSKEY_RATE_LIMITED))
 
     @ExceptionHandler(PasskeyIdTokenException::class)
