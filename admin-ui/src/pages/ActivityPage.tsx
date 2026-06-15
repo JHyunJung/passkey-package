@@ -5,7 +5,7 @@ import { activityApi } from '@/api/activity';
 import { activityFixture } from '@/fixtures/activity';
 import { useToast } from '@/shell/ToastHost';
 import { downloadCsv } from '@/lib/csvExport';
-import type { ActivityView, ActivityCategory } from '@/api/types';
+import type { ActivityView, ActivityCategory, ActivityDetailView } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 import { actionLabel, eventSentence } from './activityLabels';
 import { tenantsApi } from '@/api/tenants';
@@ -27,6 +27,10 @@ function timeAgo(iso: string): string {
 function fmt(n: number | null | undefined): string {
   if (n == null) return '—';
   return n.toLocaleString();
+}
+
+function parsePayload(raw: string): Record<string, unknown> | null {
+  try { return JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
 }
 
 // ── Adapter: server ActivityView → display shape ──────────────────────────────
@@ -176,6 +180,46 @@ function MetricCard({
   );
 }
 
+// ── DetailPanel ───────────────────────────────────────────────────────────────
+
+function DetailPanel({
+  detail, loading, onClose,
+}: { detail: ActivityDetailView | null; loading: boolean; onClose: () => void }) {
+  const payload = detail ? parsePayload(detail.payload) : null;
+  const before = payload && typeof payload.before === 'object' && payload.before !== null ? payload.before as Record<string, unknown> : null;
+  const after = payload && typeof payload.after === 'object' && payload.after !== null ? payload.after as Record<string, unknown> : null;
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h3 className="card__title">상세</h3>
+        <button className="btn btn--ghost btn--xs" onClick={onClose}>닫기</button>
+      </div>
+      {loading && <div className="muted" style={{ fontSize: 12 }}>불러오는 중…</div>}
+      {!loading && !detail && <div className="muted" style={{ fontSize: 12 }}>행을 클릭하면 상세가 표시됩니다.</div>}
+      {!loading && detail && (
+        <div style={{ fontSize: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{actionLabel(detail.action)}</div>
+          <div className="muted" style={{ marginBottom: 8 }}>{new Date(detail.createdAt).toLocaleString()}</div>
+          <div><b>누가</b> {detail.actorEmail || 'system'}</div>
+          <div><b>테넌트</b> {detail.tenantSlug ?? '플랫폼'}</div>
+          <div style={{ marginBottom: 8 }}><b>대상</b> {detail.targetType ?? '—'} {detail.targetId ?? ''}</div>
+          <div className="label" style={{ marginBottom: 4 }}>어떻게 바뀜</div>
+          {before && after ? (
+            <pre style={{ margin: 0, padding: 10, background: 'var(--surface-3)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--mono)', overflow: 'auto', color: 'var(--text)' }}>
+{Object.keys({ ...before, ...after }).map((k) =>
+  `- ${k}: ${JSON.stringify(before[k])}\n+ ${k}: ${JSON.stringify(after[k])}`).join('\n')}
+            </pre>
+          ) : (
+            <pre style={{ margin: 0, padding: 10, background: 'var(--surface-3)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--mono)', overflow: 'auto', color: 'var(--text)' }}>
+{payload ? JSON.stringify(payload, null, 2) : detail.payload}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ActivityPage ──────────────────────────────────────────────────────────────
 
 export default function ActivityPage() {
@@ -188,6 +232,9 @@ export default function ActivityPage() {
   const [kpi, setKpi] = useState(activityFixture.kpi);
   const [topTenants, setTopTenants] = useState(activityFixture.topTenants);
   const [serverError, setServerError] = useState(false);
+
+  const [detail, setDetail] = useState<ActivityDetailView | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const [categoryFilter, setCategoryFilter] = useState<ActivityCategory>('all');
   const [visibleCount, setVisibleCount] = useState(24);
@@ -262,6 +309,16 @@ export default function ActivityPage() {
       }),
     [displayEvents, actionQuery],
   );
+
+  function openDetail(id: string) {
+    setDetailLoading(true);
+    setDetail(null);
+    activityApi
+      .fetchDetail(id)
+      .then((d) => setDetail(d))
+      .catch(() => toast({ kind: 'err', title: '상세 로드 실패' }))
+      .finally(() => setDetailLoading(false));
+  }
 
   function handleOpenTenant(tenantId: string | null) {
     if (!tenantId) return;
@@ -451,9 +508,7 @@ export default function ActivityPage() {
                     })}
                   </div>
                 </div>
-                <button className="btn btn--ghost btn--xs" onClick={() => {
-                  toast({ kind: 'ok', title: e.type, message: `id: ${e.id} · subject: ${e.subjectId}` });
-                }}>
+                <button className="btn btn--ghost btn--xs" onClick={() => openDetail(e.id)}>
                   <Icons.ChevronRight size={12} />
                 </button>
               </div>
@@ -489,6 +544,9 @@ export default function ActivityPage() {
         </div>
 
         <div className="stack-4">
+          {(detail || detailLoading) && (
+            <DetailPanel detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />
+          )}
           <div className="card">
             <div className="card__head">
               <h3 className="card__title">활발한 Tenant</h3>
