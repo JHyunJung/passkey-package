@@ -143,21 +143,23 @@ passkey:
 
 ### 6.2 SMTP 연결 — `admin-app/src/main/resources/application-prod.yml`
 
-```yaml
-spring:
-  mail:
-    host: ${SPRING_MAIL_HOST:}          # 비어있으면 LogMailSender fallback
-    port: ${SPRING_MAIL_PORT:587}
-    username: ${SPRING_MAIL_USERNAME:}
-    password: ${SPRING_MAIL_PASSWORD:}
-    properties:
-      mail.smtp.auth: ${SPRING_MAIL_AUTH:true}
-      mail.smtp.starttls.enable: ${SPRING_MAIL_STARTTLS:true}
+prod.yml 에 `spring.mail.*` 키를 **두지 않는다.** 빈 default(`${SPRING_MAIL_HOST:}`)는 빈
+문자열이라도 `spring.mail.host` 를 "정의됨" 상태로 만들어, Spring Boot 의 mail auto-config
+가 쓸모없는 `JavaMailSender` + mail health indicator(actuator `/health` 의 DOWN)를 만든다
+(codex P2). 대신 환경변수로만 주입하고, env 가 설정되면 Spring relaxed binding 이
+`spring.mail.host` 등을 자동 인식한다:
+
+```
+SPRING_MAIL_HOST=smtp.example.com   # 미설정 → host 부재 → LogMailSender 선택(메일 미발송)
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=...
+SPRING_MAIL_PASSWORD=...
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
 ```
 
-> `host` 의 빈 폴백은 의도적이다. prod 에서 `SPRING_MAIL_HOST` 를 주입하지 않으면
-> `JavaMailSender` 빈이 안 생기고 `LogMailSender` 로 안전하게 떨어진다(메일만 안 나가고
-> 초대 자체는 동작). 운영 시 반드시 주입할 것.
+`MailSenderConfiguration` 이 `hasText(spring.mail.host)` 로 SmtpMailSender/LogMailSender 를
+선택하므로, host 미설정 prod 는 안전하게 LogMailSender 로 떨어진다(메일만 안 나가고 초대는 동작).
 
 ### 6.3 초대 수락 URL — `admin-app/src/main/resources/application-prod.yml`
 
