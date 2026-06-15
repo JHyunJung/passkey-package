@@ -31,14 +31,32 @@
     <logger name="com.crosscert.passkey" level="INFO"/>
   </springProfile>
 
-  <!-- prod: 한 줄, 스택 최소. JSON 분기는 다음 task 에서 추가 -->
+  <!-- prod: 한 줄, 스택 최소. PASSKEY_LOG_JSON=true 로 JSON 전환 가능 -->
   <springProfile name="prod">
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <springProperty scope="context" name="logJson" source="passkey.log.json" defaultValue="false"/>
+
+    <appender name="CONSOLE_TEXT" class="ch.qos.logback.core.ConsoleAppender">
       <encoder>
         <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %compactMdc %logger{36} - %msg%n%rEx{3}</pattern>
       </encoder>
     </appender>
-    <root level="INFO"><appender-ref ref="CONSOLE"/></root>
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+        <includeMdcKeyName>traceId</includeMdcKeyName>
+        <includeMdcKeyName>tenantId</includeMdcKeyName>
+        <includeMdcKeyName>actorEmail</includeMdcKeyName>
+        <includeMdcKeyName>apiKeyPrefix</includeMdcKeyName>
+      </encoder>
+    </appender>
+
+    <if condition='property("logJson").equals("true")'>
+      <then>
+        <root level="INFO"><appender-ref ref="CONSOLE_JSON"/></root>
+      </then>
+      <else>
+        <root level="INFO"><appender-ref ref="CONSOLE_TEXT"/></root>
+      </else>
+    </if>
     <logger name="com.crosscert.passkey" level="INFO"/>
     <logger name="org.springframework" level="WARN"/>
   </springProfile>

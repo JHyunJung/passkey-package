@@ -18,6 +18,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.session:spring-session-core")
 
+    implementation(rootProject.libs.logstash.logback.encoder)
+    runtimeOnly("org.codehaus.janino:janino:3.1.12")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     // RpAppSmokeIT 용 webauthn4j-test (ClientPlatform + PackedAuthenticator).
