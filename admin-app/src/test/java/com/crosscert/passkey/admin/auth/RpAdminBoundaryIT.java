@@ -144,6 +144,8 @@ class RpAdminBoundaryIT {
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
         jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy_entry");
+        jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy");
         // NULL out admin_user.tenant_id before deleting tenants (V23 FK —
         // fk_admin_user_tenant blocks DELETE FROM tenant while child rows exist)
         jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
@@ -167,6 +169,15 @@ class RpAdminBoundaryIT {
         jdbc.update("""
                 INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
+                """);
+        // Re-seed demo-rp aaguid policy (ANY, mds_strict=N) — matches V26 backfill pattern.
+        // resetState() inserts the tenant via raw SQL (not createTenantViaApi), so the
+        // TenantAdminService auto-create is not triggered; we must seed it explicitly.
+        jdbc.update("""
+                INSERT INTO APP_OWNER.tenant_aaguid_policy
+                    (tenant_id, policy_mode, mds_strict, created_at, updated_at, updated_by)
+                VALUES (HEXTORAW('0000000000000000000000000000C0DE'),
+                    'ANY', 'N', SYSTIMESTAMP, SYSTIMESTAMP, 'test:reset')
                 """);
         // Re-assign bob to demo-rp as RP_ADMIN (mirrors V23 step 9)
         jdbc.update("""
@@ -454,5 +465,44 @@ class RpAdminBoundaryIT {
         assertThat(auditOwn.getStatusCode().is2xxSuccessful())
                 .as("bob GET /audit (no param) must succeed (auto-scope to demo-rp)")
                 .isTrue();
+
+        // ── 15. GET /tenants/{my}/aaguid-policy → 200 ────────────────────────
+        // demo-rp policy row is seeded by resetState(); own-tenant access must succeed.
+        ResponseEntity<JsonNode> aaguidGetMy = http.exchange(
+                url("/admin/api/tenants/" + myTenantId + "/aaguid-policy"),
+                HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
+        assertThat(aaguidGetMy.getStatusCode().is2xxSuccessful())
+                .as("bob GET own tenant aaguid-policy must succeed")
+                .isTrue();
+
+        // ── 16. GET /tenants/{other}/aaguid-policy → 403 ─────────────────────
+        // tenantAId is a different tenant — cross-tenant read must be blocked.
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/tenants/" + tenantAId + "/aaguid-policy"),
+                HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class));
+
+        // ── 17. PUT /tenants/{my}/aaguid-policy → 200 ────────────────────────
+        // Minimal valid UpdateRequest: mode=ANY, mdsStrict=false, entries=[].
+        Map<String, Object> aaguidUpdateBody = Map.of(
+                "mode", "ANY",
+                "mdsStrict", false,
+                "entries", List.of());
+        ResponseEntity<JsonNode> aaguidPutMy = http.exchange(
+                url("/admin/api/tenants/" + myTenantId + "/aaguid-policy"),
+                HttpMethod.PUT,
+                new HttpEntity<>(om.writeValueAsString(aaguidUpdateBody), bobAuth),
+                JsonNode.class);
+        assertThat(aaguidPutMy.getStatusCode().is2xxSuccessful())
+                .as("bob PUT own tenant aaguid-policy must succeed")
+                .isTrue();
+
+        // ── 18. PUT /tenants/{other}/aaguid-policy → 403 ─────────────────────
+        // Cross-tenant mutation must be blocked — this is the critical security assertion.
+        String aaguidUpdateJson = om.writeValueAsString(aaguidUpdateBody);
+        assertForbidden(() -> http.exchange(
+                url("/admin/api/tenants/" + tenantAId + "/aaguid-policy"),
+                HttpMethod.PUT,
+                new HttpEntity<>(aaguidUpdateJson, bobAuth),
+                JsonNode.class));
     }
 }
