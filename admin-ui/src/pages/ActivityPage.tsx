@@ -8,6 +8,8 @@ import { downloadCsv } from '@/lib/csvExport';
 import type { ActivityView, ActivityCategory } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 import { actionLabel, eventSentence } from './activityLabels';
+import { tenantsApi } from '@/api/tenants';
+import type { Tenant } from '@/api/designTypes';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -180,7 +182,6 @@ export default function ActivityPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [searchParams] = useSearchParams();
-  const tenantFilter = searchParams.get('tenantId') ?? undefined;
 
   // null = not yet loaded from server; undefined = server error (show empty state)
   const [events, setEvents] = useState<DisplayEvent[] | null>(null);
@@ -188,9 +189,19 @@ export default function ActivityPage() {
   const [topTenants, setTopTenants] = useState(activityFixture.topTenants);
   const [serverError, setServerError] = useState(false);
 
-  const [filter, setFilter] = useState<'all' | 'mutations' | 'failures'>('all');
   const [categoryFilter, setCategoryFilter] = useState<ActivityCategory>('all');
   const [visibleCount, setVisibleCount] = useState(24);
+
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [actionQuery, setActionQuery] = useState('');
+  const [selectedTenant, setSelectedTenant] = useState<string | undefined>(
+    searchParams.get('tenantId') ?? undefined,
+  );
+
+  // Load tenant list once for the filter dropdown
+  useEffect(() => {
+    tenantsApi.list().then(setTenants).catch(() => setTenants([]));
+  }, []);
 
   // 5-second polling
   const cancelledRef = useRef(false);
@@ -202,7 +213,7 @@ export default function ActivityPage() {
 
     async function fetchOnce() {
       try {
-        const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, tenantFilter);
+        const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant);
         if (cancelledRef.current) return;
         const adapted = adaptServerView(view);
         hasServerDataRef.current = true;
@@ -235,7 +246,7 @@ export default function ActivityPage() {
       cancelledRef.current = true;
       clearInterval(id);
     };
-  }, [categoryFilter, tenantFilter]);
+  }, [categoryFilter, selectedTenant]);
 
   // Filtered events for the feed panel
   // Use e.category (server classification) for ops/security filter;
@@ -245,20 +256,11 @@ export default function ActivityPage() {
   const filtered = useMemo(
     () =>
       displayEvents.filter((e) => {
-        if (filter === 'mutations') return e.category === 'ops';
-        if (filter === 'failures') return e.category === 'security';
-        return true;
+        if (!actionQuery.trim()) return true;
+        const q = actionQuery.trim().toUpperCase();
+        return e.type.toUpperCase().includes(q) || actionLabel(e.type).includes(actionQuery.trim());
       }),
-    [displayEvents, filter],
-  );
-
-  const failureCount = useMemo(
-    () => displayEvents.filter((e) => e.category === 'security').length,
-    [displayEvents],
-  );
-  const mutationCount = useMemo(
-    () => displayEvents.filter((e) => e.category === 'ops').length,
-    [displayEvents],
+    [displayEvents, actionQuery],
   );
 
   function handleOpenTenant(tenantId: string | null) {
@@ -268,7 +270,7 @@ export default function ActivityPage() {
 
   function handleRefresh() {
     activityApi
-      .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, tenantFilter)
+      .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant)
       .then((view) => {
         if (cancelledRef.current) return;
         const adapted = adaptServerView(view);
@@ -369,33 +371,39 @@ export default function ActivityPage() {
         />
       </div>
 
+      <div className="card" style={{ marginBottom: 16, padding: '10px 14px' }}>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>카테고리</span>
+          <ChipTab active={categoryFilter === 'all'} onClick={() => setCategoryFilter('all')}>전체</ChipTab>
+          <ChipTab active={categoryFilter === 'ops'} onClick={() => setCategoryFilter('ops')}>운영</ChipTab>
+          <ChipTab active={categoryFilter === 'security'} onClick={() => setCategoryFilter('security')}>보안</ChipTab>
+
+          <span className="muted" style={{ fontSize: 12, fontWeight: 600, marginLeft: 8 }}>테넌트</span>
+          <select
+            value={selectedTenant ?? ''}
+            onChange={(ev) => setSelectedTenant(ev.target.value || undefined)}
+            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12 }}
+          >
+            <option value="">전체</option>
+            {tenants.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
+            ))}
+          </select>
+
+          <span className="muted" style={{ fontSize: 12, fontWeight: 600, marginLeft: 8 }}>액션</span>
+          <input
+            value={actionQuery}
+            onChange={(ev) => setActionQuery(ev.target.value)}
+            placeholder="액션 검색…"
+            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, minWidth: 140 }}
+          />
+        </div>
+      </div>
+
       <div className="grid-2" style={{ gridTemplateColumns: '1fr 320px', gap: 16 }}>
         <div className="card">
-          <div className="card__head" style={{ gap: 10, flexWrap: 'wrap' }}>
-            <div>
-              <h3 className="card__title">최근 이벤트</h3>
-              <div className="card__sub">
-                필터:{' '}
-                <em>
-                  {filter === 'all'
-                    ? '전체'
-                    : filter === 'mutations'
-                    ? '운영 액션만'
-                    : '보안 실패만'}
-                </em>
-              </div>
-            </div>
-            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-              <ChipTab active={filter === 'all'} onClick={() => setFilter('all')}>
-                전체
-              </ChipTab>
-              <ChipTab active={filter === 'mutations'} onClick={() => setFilter('mutations')}>
-                운영 액션
-              </ChipTab>
-              <ChipTab active={filter === 'failures'} onClick={() => setFilter('failures')}>
-                보안 실패
-              </ChipTab>
-            </div>
+          <div className="card__head">
+            <h3 className="card__title">최근 이벤트</h3>
           </div>
           <div className="row" style={{ gap: 14, flexWrap: 'wrap', padding: '8px 20px', borderBottom: '1px solid var(--border)' }}>
             <LegendDot tone="danger" label="보안 실패" />
@@ -466,7 +474,7 @@ export default function ActivityPage() {
                   null,
                   categoryFilter === 'all' ? undefined : categoryFilter,
                   oldest,
-                  tenantFilter,
+                  selectedTenant,
                 );
                 const adapted = adaptServerView(more);
                 setEvents([...events, ...adapted.events]);
@@ -489,7 +497,7 @@ export default function ActivityPage() {
               {topTenants.map((t, i) => (
                 <button
                   key={t.tenantId}
-                  onClick={() => handleOpenTenant(t.tenantId)}
+                  onClick={() => setSelectedTenant(t.tenantId)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -556,31 +564,6 @@ export default function ActivityPage() {
             </div>
           </div>
 
-          <div className="card">
-            <div className="card__head">
-              <h3 className="card__title">카테고리 필터</h3>
-            </div>
-            <div style={{ padding: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <ChipTab
-                active={categoryFilter === 'all'}
-                onClick={() => setCategoryFilter('all')}
-              >
-                전체
-              </ChipTab>
-              <ChipTab
-                active={categoryFilter === 'ops'}
-                onClick={() => setCategoryFilter('ops')}
-              >
-                운영
-              </ChipTab>
-              <ChipTab
-                active={categoryFilter === 'security'}
-                onClick={() => setCategoryFilter('security')}
-              >
-                보안
-              </ChipTab>
-            </div>
-          </div>
         </div>
       </div>
     </div>
