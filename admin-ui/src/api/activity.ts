@@ -9,7 +9,7 @@
 //              tenantId, tenantSlug, createdAt, category }]
 
 import { api } from './client';
-import type { ActivityView, ActivityCategory } from './types';
+import type { ActivityView, ActivityCategory, ActivityDetailView } from './types';
 
 export const activityApi = {
   fetch: (
@@ -26,4 +26,6 @@ export const activityApi = {
     const qs = q.toString();
     return api.get<ActivityView>(`/admin/api/activity${qs ? `?${qs}` : ''}`);
   },
+  fetchDetail: (id: string): Promise<ActivityDetailView> =>
+    api.get<ActivityDetailView>(`/admin/api/activity/${id}`),
 };
