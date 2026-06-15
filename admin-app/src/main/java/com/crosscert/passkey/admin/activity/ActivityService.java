@@ -1,8 +1,11 @@
 package com.crosscert.passkey.admin.activity;
 
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.ActivityRepository;
+import com.crosscert.passkey.core.repository.AuditLogRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,6 +46,7 @@ public class ActivityService {
     private final ActivityRepository activity;
     private final TenantRepository tenants;
     private final Clock clock;
+    private final AuditLogRepository auditLogs;
 
     @Transactional(readOnly = true)
     public ActivityView snapshot(UUID sinceId, String category) {
@@ -150,6 +154,19 @@ public class ActivityService {
         return actionFilter.isEmpty()
                 ? activity.feedPage(tenantId, before, FEED_PAGE)
                 : activity.feedFilteredPage(actionFilter, tenantId, before, FEED_PAGE);
+    }
+
+    /**
+     * 행 클릭 시 단건 상세 — payload 포함. 존재하지 않으면 NOT_FOUND.
+     * PLATFORM_OPERATOR 전용 엔드포인트에서만 호출되므로 글로벌 조회(테넌트 무관) 허용.
+     */
+    @Transactional(readOnly = true)
+    public ActivityDetailView detail(UUID id) {
+        AuditLog a = auditLogs.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENTITY_NOT_FOUND, "activity not found: " + id));
+        String slug = a.getTenantId() == null ? null
+                : tenants.findById(a.getTenantId()).map(Tenant::getSlug).orElse("(deleted)");
+        return ActivityDetailView.from(a, slug, categorize(a.getAction()));
     }
 
     private String categorize(String action) {
