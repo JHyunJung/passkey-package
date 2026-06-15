@@ -7,6 +7,7 @@ import { useToast } from '@/shell/ToastHost';
 import { downloadCsv } from '@/lib/csvExport';
 import type { ActivityView, ActivityCategory } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
+import { actionLabel, eventSentence } from './activityLabels';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,11 +20,6 @@ function timeAgo(iso: string): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}시간 전`;
   return `${Math.floor(h / 24)}일 전`;
-}
-
-function tail(str: string | null | undefined, n: number): string {
-  if (!str) return '—';
-  return str.length <= n ? str : '…' + str.slice(-n);
 }
 
 function fmt(n: number | null | undefined): string {
@@ -117,7 +113,7 @@ function EventDot({ type, category }: { type: string; category: string }) {
 // ── EventTypeBadge ────────────────────────────────────────────────────────────
 
 function EventTypeBadge({ type, category }: { type: string; category: string }) {
-  return <span className={TONE_BADGE[eventTone(type, category)]} style={{ fontSize: 10 }}>{type}</span>;
+  return <span className={TONE_BADGE[eventTone(type, category)]} style={{ fontSize: 10 }}>{actionLabel(type)}</span>;
 }
 
 // ── LegendDot — 피드 색상 범례 ─────────────────────────────────────────────────
@@ -437,8 +433,14 @@ export default function ActivityPage() {
                       · {timeAgo(e.ts)}
                     </span>
                   </div>
-                  <div className="muted mono" style={{ fontSize: 11, marginTop: 3 }}>
-                    actor {tail(e.actorId, 10)} → subject {tail(e.subjectId, 12)}
+                  <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>
+                    {eventSentence({
+                      action: e.type,
+                      actorEmail: e.actorId ?? '',
+                      tenantSlug: e.tenantSlug,
+                      targetType: null,
+                      targetId: e.subjectId,
+                    })}
                   </div>
                 </div>
                 <button className="btn btn--ghost btn--xs" onClick={() => {
