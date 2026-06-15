@@ -1,0 +1,8 @@
+# prod 프로필 로깅 — 운영에 필요한 정보만. logback-spring.xml 의 <springProfile name="prod"> 가
+# 한 줄 패턴 + 최소 스택(%rEx{3}) + opt-in JSON(PASSKEY_LOG_JSON=true)을 담당. 여기서는 레벨만.
+# payload(req/resp 본문) 로거는 명시하지 않으므로 INFO 기준선에서 자동 억제된다.
+logging:
+  level:
+    root: WARN
+    com.crosscert.passkey: INFO
+    org.springframework: WARN

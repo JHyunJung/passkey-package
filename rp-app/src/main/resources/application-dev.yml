@@ -1,0 +1,14 @@
+# dev 프로필 로깅 — 개발 디버깅용. logback-spring.xml 의 <springProfile name="local,dev"> 가
+# 컬러 패턴 + 풀 스택트레이스 + payload 로거 DEBUG(req/resp 본문)를 담당하고,
+# 여기서는 로거별 레벨만 보조로 둔다.
+#
+# 주의: com.crosscert.passkey.payload 를 여기에 명시하지 않는다 — 명시하면 logback 의
+# local/dev DEBUG 게이트를 덮어쓸 수 있다. 본문 로깅은 logback 에서만 제어한다.
+# (com.crosscert.passkey: DEBUG 가 하위 payload 로거도 DEBUG 로 끌어올리는데, dev 에선 의도된 동작.)
+logging:
+  level:
+    root: INFO
+    com.crosscert.passkey: DEBUG
+    com.crosscert.passkey.sdk: DEBUG
+    com.crosscert.passkey.rpapp: DEBUG
+    org.springframework.web: INFO
