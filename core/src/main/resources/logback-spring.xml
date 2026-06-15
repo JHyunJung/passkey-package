@@ -59,10 +59,10 @@
 
     <if condition='property("logJson").equals("true")'>
       <then>
-        <root level="INFO"><appender-ref ref="CONSOLE_JSON"/></root>
+        <root level="WARN"><appender-ref ref="CONSOLE_JSON"/></root>
       </then>
       <else>
-        <root level="INFO"><appender-ref ref="CONSOLE_TEXT"/></root>
+        <root level="WARN"><appender-ref ref="CONSOLE_TEXT"/></root>
       </else>
     </if>
     <logger name="com.crosscert.passkey" level="INFO"/>
