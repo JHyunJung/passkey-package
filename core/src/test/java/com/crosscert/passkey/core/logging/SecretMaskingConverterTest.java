@@ -73,6 +73,42 @@ class SecretMaskingConverterTest {
         assertThat(LogRedact.idTail(null, 8)).isEqualTo("");
     }
 
+    // ── JSON 토큰 필드 마스킹 ─────────────────────────────────────────────────
+
+    @Test
+    void redactAuthenticationTokenInPlainJson() {
+        String input = "{\"authenticationToken\":\"abc.def.ghiLIVETOKEN\",\"x\":1}";
+        String out = SecretRedactor.redact(input);
+        assertThat(out).contains("\"authenticationToken\":\"<redacted>\"");
+        assertThat(out).doesNotContain("LIVETOKEN");
+        assertThat(out).contains("\"x\":1");
+    }
+
+    @Test
+    void redactRegistrationTokenInPlainJson() {
+        String input = "{\"registrationToken\":\"regpayload.regsigSECRET\"}";
+        String out = SecretRedactor.redact(input);
+        assertThat(out).contains("\"registrationToken\":\"<redacted>\"");
+        assertThat(out).doesNotContain("SECRET");
+    }
+
+    @Test
+    void redactRegRelayTokenEscapedInLogString() {
+        // Body embedded in a log string has backslash-escaped quotes
+        String input = "body={\\\"regRelayToken\\\":\\\"payloadpart.sigpartSECRET\\\"}";
+        String out = SecretRedactor.redact(input);
+        assertThat(out).doesNotContain("SECRET");
+        assertThat(out).contains("regRelayToken");
+    }
+
+    @Test
+    void doesNotRedactNonTokenField() {
+        String input = "{\"username\":\"alice\",\"registrationToken\":\"tok.enSECRET\"}";
+        String out = SecretRedactor.redact(input);
+        assertThat(out).contains("alice");          // non-token field untouched
+        assertThat(out).doesNotContain("SECRET");
+    }
+
     private static LoggingEvent makeEvent(String message) {
         LoggingEvent e = new LoggingEvent();
         e.setMessage(message);

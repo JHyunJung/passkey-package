@@ -141,4 +141,40 @@ class SecretRedactorTest {
     fun `returns empty string for empty input`() {
         assertThat(SecretRedactor.redact("")).isEqualTo("")
     }
+
+    // ── 9. JSON 토큰 필드 마스킹 ──────────────────────────────────────────────
+
+    @Test
+    fun `redacts authenticationToken value in plain JSON`() {
+        val input = """{"authenticationToken":"abc.def.ghiLIVETOKEN","x":1}"""
+        val out = SecretRedactor.redact(input)
+        assertThat(out).contains(""""authenticationToken":"<redacted>"""")
+        assertThat(out).doesNotContain("LIVETOKEN")
+        assertThat(out).contains(""""x":1""")
+    }
+
+    @Test
+    fun `redacts registrationToken value in plain JSON`() {
+        val input = """{"registrationToken":"regpayload.regsigSECRET"}"""
+        val out = SecretRedactor.redact(input)
+        assertThat(out).contains(""""registrationToken":"<redacted>"""")
+        assertThat(out).doesNotContain("SECRET")
+    }
+
+    @Test
+    fun `redacts regRelayToken value in escaped log string`() {
+        // Body embedded in a log string has backslash-escaped quotes
+        val input = """body={\"regRelayToken\":\"payloadpart.sigpartSECRET\"}"""
+        val out = SecretRedactor.redact(input)
+        assertThat(out).doesNotContain("SECRET")
+        assertThat(out).contains("regRelayToken")
+    }
+
+    @Test
+    fun `does not redact non-token JSON field`() {
+        val input = """{"username":"alice","registrationToken":"tok.enSECRET"}"""
+        val out = SecretRedactor.redact(input)
+        assertThat(out).contains("alice")    // non-token field untouched
+        assertThat(out).doesNotContain("SECRET")
+    }
 }

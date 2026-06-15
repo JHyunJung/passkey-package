@@ -25,6 +25,11 @@ public final class SecretRedactor {
     private static final Pattern PASSWORD_KV = Pattern.compile("(?i)(password)\\s*=\\s*\"?[^\\s\"\\]]+\"?");
     // bcrypt hash $2a$/$2b$/$2y$ (62 chars total: $2x$NN$ + 53 chars)
     private static final Pattern BCRYPT = Pattern.compile("\\$2[ayb]\\$\\d{2}\\$[A-Za-z0-9./]{53}");
+    // JSON 토큰 필드 값 마스킹: "authenticationToken":"...", "registrationToken":"...", "regRelayToken":"..."
+    // 본문이 로그 문자열 안에 박혀 \" 로 이스케이프된 경우(\"key\":\"val\")도 포함. 값만 가리고
+    // 필드명은 남겨 디버깅 시 '토큰 존재'는 보이게 한다.
+    private static final Pattern JSON_TOKEN_FIELD = Pattern.compile(
+            "(\\\\?\"(?:authenticationToken|registrationToken|regRelayToken)\\\\?\"\\s*:\\s*\\\\?\")[^\"\\\\]+");
 
     private SecretRedactor() {}
 
@@ -38,6 +43,7 @@ public final class SecretRedactor {
         msg = JWS_STANDALONE.matcher(msg).replaceAll("<jws-redacted>");
         msg = API_KEY.matcher(msg).replaceAll(m -> m.group().substring(0, 11) + "<redacted>");
         msg = PASSWORD_KV.matcher(msg).replaceAll("$1=<redacted>");
-        return BCRYPT.matcher(msg).replaceAll("<bcrypt-redacted>");
+        msg = BCRYPT.matcher(msg).replaceAll("<bcrypt-redacted>");
+        return JSON_TOKEN_FIELD.matcher(msg).replaceAll("$1<redacted>");
     }
 }

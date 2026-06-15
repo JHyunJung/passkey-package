@@ -39,6 +39,11 @@ object SecretRedactor {
     private val BCRYPT: Pattern =
         Pattern.compile("\\$2[ayb]\\$\\d{2}\\$[A-Za-z0-9./]{53}")
 
+    // JSON 토큰 필드 값 마스킹 (authenticationToken/registrationToken/regRelayToken).
+    // 본문이 로그 문자열 안에 박혀 \" 로 이스케이프된 경우도 포함. 값만 가리고 필드명은 남긴다.
+    private val JSON_TOKEN_FIELD: Pattern =
+        Pattern.compile("(\\\\?\"(?:authenticationToken|registrationToken|regRelayToken)\\\\?\"\\s*:\\s*\\\\?\")[^\"\\\\]+")
+
     fun redact(msg: String?): String? {
         if (msg == null || msg.isEmpty()) return msg
 
@@ -52,6 +57,7 @@ object SecretRedactor {
             full.substring(0, 11) + "<redacted>" // pk_ + 8 + <redacted>
         }
         result = PASSWORD_KV.matcher(result).replaceAll("\$1=<redacted>")
-        return BCRYPT.matcher(result).replaceAll("<bcrypt-redacted>")
+        result = BCRYPT.matcher(result).replaceAll("<bcrypt-redacted>")
+        return JSON_TOKEN_FIELD.matcher(result).replaceAll("\$1<redacted>")
     }
 }
