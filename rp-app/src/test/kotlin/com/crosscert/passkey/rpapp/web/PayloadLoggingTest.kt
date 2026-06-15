@@ -63,7 +63,7 @@ class PayloadLoggingTest {
         attach(Level.DEBUG)
         runFilter("x".repeat(5000))
         val payloadMsgs = appender.list.map { it.formattedMessage }.filter { it.contains("req body") }
-        assertThat(payloadMsgs).isNotEmpty
+        assertThat(payloadMsgs).isNotEmpty()
         assertThat(payloadMsgs.first().length).isLessThan(2200)
     }
 }
