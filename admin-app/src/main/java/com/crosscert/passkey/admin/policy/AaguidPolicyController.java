@@ -22,13 +22,13 @@ public class AaguidPolicyController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     public AaguidPolicyDto.View get(@PathVariable UUID tenantId) {
         return service.get(tenantId);
     }
 
     @PutMapping
-    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     public AaguidPolicyDto.View update(@PathVariable UUID tenantId,
                                        @RequestBody AaguidPolicyDto.UpdateRequest req,
                                        Authentication auth) {
