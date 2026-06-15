@@ -37,6 +37,7 @@ spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version = "8.0" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

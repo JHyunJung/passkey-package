@@ -1,15 +1,82 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-  <conversionRule conversionWord="msg"
-                  converterClass="com.crosscert.passkey.core.logging.SecretMaskingConverter"/>
+  <!-- Spring Boot 기본 변환어(%clr, %wEx 등) 등록 -->
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder>
-      <pattern>%d{HH:mm:ss.SSS} %-5level [%X{traceId:-}] [%X{tenantId:-}] [%X{actorEmail:-}] [%X{apiKeyPrefix:-}] %logger{36} - %msg%n</pattern>
-    </encoder>
-  </appender>
-  <root level="INFO">
-    <appender-ref ref="CONSOLE"/>
-  </root>
-  <logger name="com.crosscert.passkey" level="INFO"/>
+  <conversionRule conversionWord="msg"
+                  class="com.crosscert.passkey.core.logging.SecretMaskingConverter"/>
+  <conversionRule conversionWord="compactMdc"
+                  class="com.crosscert.passkey.core.logging.CompactMdcConverter"/>
+
+  <!-- local/dev: 색상 + 가독성 우선, 풀 스택트레이스 -->
+  <springProfile name="local,dev">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{HH:mm:ss.SSS} %clr(%-5level) %compactMdc %clr(%logger{36}){cyan} - %msg%n%ex</pattern>
+      </encoder>
+    </appender>
+    <root level="INFO"><appender-ref ref="CONSOLE"/></root>
+    <logger name="com.crosscert.passkey" level="DEBUG"/>
+    <logger name="com.crosscert.passkey.payload" level="DEBUG"/>
+  </springProfile>
+
+  <!-- qa: 한 줄 구조화, 축약 스택 -->
+  <springProfile name="qa">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %compactMdc %logger{36} - %msg%n%rEx{8}</pattern>
+      </encoder>
+    </appender>
+    <root level="INFO"><appender-ref ref="CONSOLE"/></root>
+    <logger name="com.crosscert.passkey" level="INFO"/>
+  </springProfile>
+
+  <!-- prod: 한 줄, 스택 최소. PASSKEY_LOG_JSON=true 로 JSON 전환 가능 -->
+  <springProfile name="prod">
+    <springProperty scope="context" name="logJson" source="passkey.log.json" defaultValue="false"/>
+
+    <appender name="CONSOLE_TEXT" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %compactMdc %logger{36} - %msg%n%rEx{3}</pattern>
+      </encoder>
+    </appender>
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+        <includeMdcKeyName>traceId</includeMdcKeyName>
+        <includeMdcKeyName>tenantId</includeMdcKeyName>
+        <includeMdcKeyName>actorEmail</includeMdcKeyName>
+        <includeMdcKeyName>apiKeyPrefix</includeMdcKeyName>
+        <fieldNames>
+          <message>[ignore]</message>
+        </fieldNames>
+        <provider class="com.crosscert.passkey.core.logging.RedactingMessageJsonProvider"/>
+        <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+          <maxDepthPerThrowable>3</maxDepthPerThrowable>
+          <rootCauseFirst>true</rootCauseFirst>
+        </throwableConverter>
+      </encoder>
+    </appender>
+
+    <if condition='property("logJson").equals("true")'>
+      <then>
+        <root level="WARN"><appender-ref ref="CONSOLE_JSON"/></root>
+      </then>
+      <else>
+        <root level="WARN"><appender-ref ref="CONSOLE_TEXT"/></root>
+      </else>
+    </if>
+    <logger name="com.crosscert.passkey" level="INFO"/>
+    <logger name="org.springframework" level="WARN"/>
+  </springProfile>
+
+  <!-- 프로필 미지정(테스트 등) 폴백 -->
+  <springProfile name="!local &amp; !dev &amp; !qa &amp; !prod">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{HH:mm:ss.SSS} %-5level %compactMdc %logger{36} - %msg%n</pattern>
+      </encoder>
+    </appender>
+    <root level="INFO"><appender-ref ref="CONSOLE"/></root>
+    <logger name="com.crosscert.passkey" level="INFO"/>
+  </springProfile>
 </configuration>

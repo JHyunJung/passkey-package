@@ -30,6 +30,8 @@ dependencies {
     api("org.springframework.security:spring-security-core")
     api(rootProject.libs.bucket4j.core)
     api(rootProject.libs.bucket4j.redis)
+    api(rootProject.libs.logstash.logback.encoder)
+    runtimeOnly("org.codehaus.janino:janino:3.1.12")
 
     testImplementation(rootProject.libs.testcontainers.oracle)
     testImplementation(rootProject.libs.testcontainers.junit)

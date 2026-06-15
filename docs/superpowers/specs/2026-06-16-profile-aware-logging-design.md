@@ -60,7 +60,12 @@ core 를 표준으로, 5개 구성요소.
   패턴에서 기존 `[%X{..}] [%X{..}] ...` 4개를 `%compactMdc` 하나로 대체.
 
 ### 3.2 프로필별 logback `<springProfile>` 분기 (core + rp-app)
-두 logback-spring.xml 에 프로필별 appender/패턴을 둔다.
+두 logback-spring.xml 에 프로필별 appender/패턴을 둔다. `%clr`(컬러)이 동작하려면
+`<include resource="org/springframework/boot/logging/logback/defaults.xml"/>` 가 필수다(구현 중
+확인 — 없으면 Spring Boot 가 `IllegalStateException: Logback configuration error` 로 부팅 실패).
+`conversionRule` 은 deprecated `converterClass=` 대신 `class=` 속성을 쓴다. prod 의 logback
+`<root>` 레벨은 `application-prod.yml` 의 `root: WARN` 과 맞춘다(둘 다 WARN; codex P2 — 불일치
+시 혼란).
 
 - `local,dev`:
   - 패턴: 컬러(`%clr`) + 가독성 우선. `%d{HH:mm:ss.SSS} %clr(%-5level) %compactMdc %clr(%logger{36}){cyan} - %msg%n`
@@ -85,8 +90,11 @@ core 를 표준으로, 5개 구성요소.
   ResponseWrapper` 도입.)
 - 게이트: 이 로거는 local/dev logback 에서만 DEBUG 로 활성. qa/prod 는 INFO 기준선이라
   코드가 호출돼도 출력 안 됨(레벨 게이트).
-- 안전장치(삼중): (a) 레벨 게이트, (b) `%msg` SecretMaskingConverter 마스킹 전 구간 적용,
-  (c) 본문 길이 캡(예: 2KB truncate) — WebAuthn 의 거대 base64 본문 폭주 방지.
+- 안전장치(다중): (a) 레벨 게이트(local/dev 만), (b) `%msg` SecretMaskingConverter 마스킹 전 구간
+  적용, (c) 본문 길이 캡(2KB truncate) — WebAuthn 거대 base64 본문 폭주 방지, (d) JSON 토큰 필드
+  값 마스킹(codex 최종 P2) — req/resp 본문의 `authenticationToken`/`registrationToken`/`regRelayToken`
+  은 opaque/one-dot 형식이라 기존 JWS 패턴에 안 걸리므로, `SecretRedactor` 에 JSON 필드 패턴
+  (`"key":"…"` + 이스케이프된 `\"key\":\"…\"` 모두)을 추가해 값만 `<redacted>`, 필드명은 보존.
 
 ### 3.4 프로필별 logging.level (각 앱 application-{profile}.yml)
 - rp-app: `application-dev.yml`, `application-qa.yml`, `application-prod.yml` 신설
@@ -97,10 +105,21 @@ core 를 표준으로, 5개 구성요소.
   logback**, **로거별 레벨은 yml**(운영 중 조정 용이). 충돌 없이 상보적.
 
 ### 3.5 JSON 구조 로그 (opt-in)
-- `logstash-logback-encoder` 의존성 추가(core build, rp-app build).
-- qa/prod logback 에 JSON appender 정의하되, `PASSKEY_LOG_JSON=true` 일 때만 root 가 그것을
-  참조(아니면 텍스트 appender). `<springProperty>` 또는 `<if>` 로 분기.
-- 기본값 false — 수집 시스템 준비되면 env 로 켠다.
+- `logstash-logback-encoder` 의존성 추가(core build, rp-app build). logback `<if>` 가 Janino 를
+  요구하므로 `runtimeOnly("org.codehaus.janino:janino")` 도 추가(구현 중 확인 — transitive 부재).
+- prod logback 에 JSON appender(`CONSOLE_JSON`) + 텍스트 appender(`CONSOLE_TEXT`) 정의, root 가
+  `<springProperty name="logJson" source="passkey.log.json"/>` + `<if condition='property("logJson").equals("true")'>`
+  로 분기. `PASSKEY_LOG_JSON=true` 면 JSON, 아니면 텍스트. 기본값 false.
+  (logback 1.5.x 가 `<if condition=>` 속성을 deprecated 로 경고하나, `<condition class>` 대안이
+  `<springProfile>` 2차 처리 컨텍스트에서 root appender 배선에 실패해 deprecated 형태가 유일한 동작 방식.)
+
+> **구현 노트 — JSON 마스킹(보안 필수, codex P1):** `LogstashEncoder` 는 message 를 직접
+> 직렬화해 텍스트 모드의 `%msg`(SecretMaskingConverter) 마스킹을 **우회**한다. 그대로 두면 JSON
+> 모드에서 비밀값이 평문 노출된다. 해결: 마스킹 정규식을 `SecretRedactor.redact(String)` 정적
+> 헬퍼로 추출(텍스트 컨버터와 JSON 둘 다 공유 → drift 방지)하고, JSON 은 `<message>[ignore]</message>`
+> 로 기본 message provider 를 끄고 `RedactingMessageJsonProvider`(AbstractFieldJsonProvider)가
+> `SecretRedactor.redact(formattedMessage)` 를 message 필드로 쓴다. 스택은 `ShortenedThrowableConverter
+> maxDepthPerThrowable=3`(codex P2) 으로 텍스트 `%rEx{3}` 과 맞춘다.
 
 ## 4. 데이터 흐름
 
