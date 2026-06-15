@@ -41,26 +41,55 @@
 
 ## 3. 아키텍처
 
-단일 인터페이스 `core.mail.MailSender` 에 SMTP 구현체를 추가하고, `spring.mail.host` 설정 유무로 빈을 자동 선택한다.
+단일 인터페이스 `core.mail.MailSender` 에 SMTP 구현체를 추가하고, `spring.mail.host` 설정 유무로 빈을 선택한다.
 
 ```
 core/src/main/java/com/crosscert/passkey/core/mail/
-  MailSender.java          (기존, 변경 없음)
-  LogMailSender.java       (기존) → @ConditionalOnMissingBean(MailSender.class) 추가
-  SmtpMailSender.java      (신규) → JavaMailSender 위임, HTML(MimeMessage) 발송
-core/build.gradle.kts      → spring-boot-starter-mail 추가
+  MailSender.java              (기존, 변경 없음)
+  LogMailSender.java           (기존) → 순수 POJO 로 강등(@Component 제거)
+  SmtpMailSender.java          (신규) → JavaMailSender 위임, HTML(MimeMessage) 발송, 순수 POJO
+  MailSenderConfiguration.java (신규) → 단일 @Bean 팩토리가 구현체 선택
+core/build.gradle.kts          → spring-boot-starter-mail 추가
 ```
 
-### 빈 선택 메커니즘 (조건부 자동 전환)
+### 빈 선택 메커니즘 (단일 팩토리 빈)
 
-- `spring.mail.host` 가 설정됨
-  → Spring Boot `MailSenderAutoConfiguration` 이 `JavaMailSender` 빈 생성
-  → `SmtpMailSender` 활성화 (`@ConditionalOnProperty(prefix="spring.mail", name="host")`)
-- `spring.mail.host` 미설정
-  → `JavaMailSender` 빈 없음
-  → `LogMailSender` 가 fallback (`@ConditionalOnMissingBean(MailSender.class)`)
+> **구현 노트(중요):** 최초 설계는 `SmtpMailSender` 에 `@ConditionalOnProperty`, `LogMailSender`
+> 에 `@ConditionalOnMissingBean` 을 붙이는 "조건부 자동 전환" 이었으나, 구현 중 codex 리뷰가
+> 결함을 잡아 **단일 팩토리 빈 방식으로 변경**했다. 이유: `@ConditionalOnMissingBean` 은
+> 컴포넌트 스캔된 두 `@Component` 사이에서 **신뢰할 수 없다** — 평가 시점에 "지금까지 등록된"
+> 빈 정의만 보고, 스캔 순서가 보장되지 않아 `spring.mail.host` 설정 시 두 빈이 모두 등록되어
+> `NoUniqueBeanDefinitionException`(앱 부팅 실패)이 날 수 있다.
 
-`SmtpMailSender` 와 `LogMailSender` 가 동시에 등록되지 않도록, `LogMailSender` 에 `@ConditionalOnMissingBean(MailSender.class)` 를 붙여 SMTP 빈이 있으면 물러나게 한다. (등록 순서 보장을 위해 `SmtpMailSender` 에는 명시적 조건을 두고, `LogMailSender` 는 "다른 MailSender 없을 때"만 등록.)
+채택한 방식 — `MailSenderConfiguration` 의 단일 `@Bean` 팩토리가 결정 규칙을 직접 모델링한다.
+두 구현체는 Spring 애너테이션 없는 순수 POJO 다.
+
+```java
+@Configuration
+public class MailSenderConfiguration {
+    @Bean
+    public MailSender passkeyMailSender(
+            Environment environment,
+            ObjectProvider<JavaMailSender> javaMailSenderProvider,
+            @Value("${passkey.mail.from:no-reply@passkey.local}") String from) {
+        String host = environment.getProperty("spring.mail.host");
+        if (StringUtils.hasText(host)) {
+            return new SmtpMailSender(javaMailSenderProvider.getObject(), from);
+        }
+        return new LogMailSender();
+    }
+}
+```
+
+- `spring.mail.host` 가 설정됨(hasText) → Spring Boot `MailSenderAutoConfiguration` 이 만든
+  `JavaMailSender` 를 주입받아 `SmtpMailSender` 반환.
+- 미설정 → `LogMailSender` 반환.
+
+`MailSender` 타입 빈 정의가 **항상 정확히 하나만** 생성되므로 컴포넌트 스캔 순서·조건부 평가
+타이밍과 무관하게 결정적이다(NoUniqueBeanDefinitionException 위험 제거). `@Bean` 메서드명은
+`passkeyMailSender` — Spring Boot 가 등록하는 `mailSender`(JavaMailSender) 빈과 이름 충돌해
+`BeanDefinitionOverrideException` 이 나지 않도록 한 것이며, 주입은 타입(`MailSender`)으로 되므로
+호출자(InvitationService 등)는 영향 없다.
 
 ## 4. 데이터 흐름 (호출자 코드 무변경)
 
@@ -80,19 +109,23 @@ core/build.gradle.kts      → spring-boot-starter-mail 추가
 
 ### 5.1 `SmtpMailSender` (신규)
 
-- `core.mail` 패키지.
-- 생성자 주입: `JavaMailSender`, 발신 주소(`passkey.mail.from`).
+- `core.mail` 패키지. Spring 애너테이션 없는 순수 POJO(`MailSenderConfiguration` 이 생성).
+- 생성자: `SmtpMailSender(JavaMailSender, String from)` — from 은 팩토리가 `passkey.mail.from`
+  에서 읽어 주입.
 - `send(to, subject, body)`:
   - `JavaMailSender.createMimeMessage()` → `MimeMessageHelper(message, "UTF-8")`
   - `setFrom(from)`, `setTo(to)`, `setSubject(subject)`, `setText(body, true)` (HTML=true — 본문이 `<a href>` 등 HTML 포함)
+  - `message.saveChanges()` — `setText(.., true)` 가 `invalidateContentHeaders()` 로 지운
+    Content-Type 헤더를 DataHandler 에서 다시 플러시(실제 `send()` 도 내부적으로 호출하는
+    JavaMail 관용구; mock 테스트가 헤더를 검증할 수 있게 명시).
   - `javaMailSender.send(message)`
 - 로그: `LogMailSender` 와 동일한 마스킹 수준 — `to`, `subject`, `body-length` 만 INFO 로. 본문 평문은 로그에 남기지 않는다.
-- 예외: `MessagingException` 등은 `RuntimeException` 으로 감싸 던진다 (호출자의 `catch(Exception)` 가 받는다 — fallback 정책 유지).
+- 예외: 발송 실패는 `RuntimeException` 으로 감싸 던진다 (호출자의 `catch(Exception)` 가 받는다 — fallback 정책 유지).
 
 ### 5.2 `LogMailSender` (수정)
 
-- 클래스에 `@ConditionalOnMissingBean(MailSender.class)` 추가.
-- 그 외 동작 동일.
+- `@Component`/조건부 애너테이션을 제거해 순수 POJO 로 강등(팩토리가 생성). `@Slf4j` 와
+  `send()` 로직은 동일.
 
 ### 5.3 `core/build.gradle.kts` (수정)
 
@@ -157,8 +190,11 @@ dev/local/test/CI 는 `SPRING_MAIL_HOST` 를 주입하지 않으므로 자동으
 ## 9. 영향 범위 / 리스크
 
 - 변경 파일: `core/build.gradle.kts`, `core/.../mail/SmtpMailSender.java`(신규),
-  `core/.../mail/LogMailSender.java`(애너테이션 1줄), `application-common.yml`,
-  `application-prod.yml`. 호출자 3곳 무변경.
+  `core/.../mail/MailSenderConfiguration.java`(신규 팩토리),
+  `core/.../mail/LogMailSender.java`(POJO 강등), `application-common.yml`,
+  `application-prod.yml`(SMTP 는 키 미정의 — env 전용). 호출자 3곳 무변경.
 - 리스크 낮음: 기본 동작(host 미설정)에서 기존과 100% 동일. SMTP 활성화는 prod 에서 env 주입 시에만.
+  prod.yml 은 `spring.mail.host` 를 빈 default 로 두지 않는다(빈 문자열이 Spring Boot mail
+  auto-config 를 트리거해 actuator health 에 mail DOWN 을 끼우는 문제 — codex P2 로 발견·수정).
 - 부수 효과(의도됨): SMTP 활성화 시 초대뿐 아니라 비밀번호 재설정 메일,
   `passkey.alert.mail.enabled=true` 인 경우 보안 알림 메일도 실제 발송된다.
