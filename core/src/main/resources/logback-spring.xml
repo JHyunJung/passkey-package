@@ -46,6 +46,14 @@
         <includeMdcKeyName>tenantId</includeMdcKeyName>
         <includeMdcKeyName>actorEmail</includeMdcKeyName>
         <includeMdcKeyName>apiKeyPrefix</includeMdcKeyName>
+        <fieldNames>
+          <message>[ignore]</message>
+        </fieldNames>
+        <provider class="com.crosscert.passkey.core.logging.RedactingMessageJsonProvider"/>
+        <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+          <maxDepthPerThrowable>3</maxDepthPerThrowable>
+          <rootCauseFirst>true</rootCauseFirst>
+        </throwableConverter>
       </encoder>
     </appender>
 
