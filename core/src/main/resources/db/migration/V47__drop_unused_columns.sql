@@ -5,7 +5,7 @@
 --   1. credential.backup_state (CLOB) + ck_credential_backup_state CHECK
 --      — Credential.java 에 매핑만 있고 getter 호출 0. webauthn 의
 --        backupState(BS 비트)는 무관한 별개.
---   2. mds_blob_cache.blob_jwt (BLOB) — MdsBlobStore 가 raw SQL 로 쓰기만,
+--   2. mds_blob_cache.blob_jwt (CLOB) — MdsBlobStore 가 raw SQL 로 쓰기만,
 --        읽는 코드 없음("감사·재검증용" 의도 미구현).
 --
 -- DROP COLUMN 은 NOT NULL 과 무관하게 동작 — V36 류 "MODIFY BLOB NOT NULL →
