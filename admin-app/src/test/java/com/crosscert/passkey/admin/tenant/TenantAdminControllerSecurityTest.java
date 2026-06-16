@@ -82,7 +82,6 @@ class TenantAdminControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
     @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
-    @MockBean com.crosscert.passkey.core.repository.MdsBlobCacheRepository mdsBlobCacheRepository;
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
     @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
     @MockBean com.crosscert.passkey.core.repository.AdminUserInvitationRepository invitationRepository;

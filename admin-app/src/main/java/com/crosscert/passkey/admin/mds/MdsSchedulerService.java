@@ -87,8 +87,8 @@ public class MdsSchedulerService {
         try {
             MdsBlobClient.FetchResult fetched = client.fetch();
             com.crosscert.passkey.webauthn.mds.MdsBlob blob = fetched.blob();
-            // 원본 BLOB JWT 저장 — 감사·재검증 가능.
-            store.store(fetched.rawJwt(), blob);
+            // BLOB 메타데이터(version/next_update/fetched_at) 저장.
+            store.store(blob);
 
             // Invalidate AAGUID cache so passkey-app sees fresh data.
             // T16 immediately repopulates these keys with the new entries.

@@ -42,10 +42,6 @@ public class Credential extends BaseEntity {
     @Column(name = "ATTESTATION_FMT", length = 64)
     private String attestationFmt;
 
-    @Lob
-    @Column(name = "BACKUP_STATE")
-    private String backupStateJson;
-
     @Column(name = "LAST_USED_AT")
     private Instant lastUsedAt;
 

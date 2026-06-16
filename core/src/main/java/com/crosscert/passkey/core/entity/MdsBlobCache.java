@@ -36,10 +36,6 @@ public class MdsBlobCache {
     @Column(name = "FETCHED_AT", nullable = false)
     private Instant fetchedAt;
 
-    @Lob
-    @Column(name = "BLOB_JWT", nullable = false)
-    private String blobJwt;
-
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -63,7 +59,6 @@ public class MdsBlobCache {
     public UUID getId() { return id; }
     public long getVersion() { return version; }
     public LocalDate getNextUpdate() { return nextUpdate; }
-    public String getBlobJwt() { return blobJwt; }
     public Instant getFetchedAt() { return fetchedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
