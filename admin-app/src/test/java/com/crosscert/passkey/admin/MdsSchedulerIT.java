@@ -144,7 +144,7 @@ class MdsSchedulerIT {
         // including next_update so that the happy-path test's 2099-01-01
         // write does not bleed into later tests.
         jdbc.update("UPDATE APP_OWNER.mds_blob_cache " +
-                    "SET version=0, next_update=DATE '1970-01-01', blob_jwt='{}', " +
+                    "SET version=0, next_update=DATE '1970-01-01', " +
                     "    fetched_at=TIMESTAMP '1970-01-01 00:00:00 +00:00' " +
                     "WHERE id=HEXTORAW('00000000000000000000000000000001')");
         // Clear mds-sync lease rows but preserve the AUDIT_CHAIN_LOCK sentinel
