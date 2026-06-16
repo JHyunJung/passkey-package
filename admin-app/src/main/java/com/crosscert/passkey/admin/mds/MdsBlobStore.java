@@ -13,12 +13,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * Persists the most recent verified MDS BLOB into the singleton
+ * Persists the most recent verified MDS BLOB metadata into the singleton
  * row of {@code mds_blob_cache} (seeded by V19, id = SINGLETON_ID).
  *
- * <p>원본 BLOB JWT를 그대로 저장한다 — 감사·재검증 가능.
- * The verifier path doesn't re-verify from the column at request time;
- * it uses the parsed entries cached in Redis (MdsSchedulerService T16).
+ * <p>The verifier path uses the parsed entries cached in Redis
+ * (MdsSchedulerService T16); only version/next_update/fetched_at are stored here.
  */
 @Service
 public class MdsBlobStore {
@@ -35,18 +34,17 @@ public class MdsBlobStore {
     }
 
     @Transactional
-    public void store(String rawJwt, MdsBlob blob) {
+    public void store(MdsBlob blob) {
         long version = blob.no();
         LocalDate nextUpdate = blob.nextUpdate();
         Instant now = clock.instant();
         int updated = jdbc.update(
                 "UPDATE APP_OWNER.mds_blob_cache " +
-                "SET version=?, next_update=?, fetched_at=?, blob_jwt=? " +
+                "SET version=?, next_update=?, fetched_at=? " +
                 "WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
                 version,
                 java.sql.Date.valueOf(nextUpdate),
-                Timestamp.from(now),
-                rawJwt);
+                Timestamp.from(now));
         if (updated != 1) {
             throw new IncorrectUpdateSemanticsDataAccessException(
                     "mds_blob_cache sentinel row missing — V19 migration may not have run");
