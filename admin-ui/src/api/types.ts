@@ -113,6 +113,20 @@ export interface ActivityEvent {
   category: 'ops' | 'security' | 'system';
 }
 
+export interface ActivityDetailView {
+  id: string;
+  action: string;
+  actorId: string | null;
+  actorEmail: string;
+  targetType: string | null;
+  targetId: string | null;
+  tenantId: string | null;
+  tenantSlug: string | null;
+  createdAt: string;
+  category: 'ops' | 'security' | 'system';
+  payload: string; // canonical JSON string
+}
+
 export interface ActivityView {
   kpi: ActivityKpi;
   top5: ActivityTopTenant[];

@@ -5,8 +5,11 @@ import { activityApi } from '@/api/activity';
 import { activityFixture } from '@/fixtures/activity';
 import { useToast } from '@/shell/ToastHost';
 import { downloadCsv } from '@/lib/csvExport';
-import type { ActivityView, ActivityCategory } from '@/api/types';
+import type { ActivityView, ActivityCategory, ActivityDetailView } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
+import { actionLabel, eventSentence } from './activityLabels';
+import { tenantsApi } from '@/api/tenants';
+import type { Tenant } from '@/api/designTypes';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -21,14 +24,13 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}일 전`;
 }
 
-function tail(str: string | null | undefined, n: number): string {
-  if (!str) return '—';
-  return str.length <= n ? str : '…' + str.slice(-n);
-}
-
 function fmt(n: number | null | undefined): string {
   if (n == null) return '—';
   return n.toLocaleString();
+}
+
+function parsePayload(raw: string): Record<string, unknown> | null {
+  try { return JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
 }
 
 // ── Adapter: server ActivityView → display shape ──────────────────────────────
@@ -117,7 +119,7 @@ function EventDot({ type, category }: { type: string; category: string }) {
 // ── EventTypeBadge ────────────────────────────────────────────────────────────
 
 function EventTypeBadge({ type, category }: { type: string; category: string }) {
-  return <span className={TONE_BADGE[eventTone(type, category)]} style={{ fontSize: 10 }}>{type}</span>;
+  return <span className={TONE_BADGE[eventTone(type, category)]} style={{ fontSize: 10 }}>{actionLabel(type)}</span>;
 }
 
 // ── LegendDot — 피드 색상 범례 ─────────────────────────────────────────────────
@@ -178,13 +180,52 @@ function MetricCard({
   );
 }
 
+// ── DetailPanel ───────────────────────────────────────────────────────────────
+
+function DetailPanel({
+  detail, loading, onClose,
+}: { detail: ActivityDetailView | null; loading: boolean; onClose: () => void }) {
+  const payload = detail ? parsePayload(detail.payload) : null;
+  const before = payload && typeof payload.before === 'object' && payload.before !== null ? payload.before as Record<string, unknown> : null;
+  const after = payload && typeof payload.after === 'object' && payload.after !== null ? payload.after as Record<string, unknown> : null;
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h3 className="card__title">상세</h3>
+        <button className="btn btn--ghost btn--xs" onClick={onClose}>닫기</button>
+      </div>
+      {loading && <div className="muted" style={{ fontSize: 12 }}>불러오는 중…</div>}
+      {!loading && !detail && <div className="muted" style={{ fontSize: 12 }}>행을 클릭하면 상세가 표시됩니다.</div>}
+      {!loading && detail && (
+        <div style={{ fontSize: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{actionLabel(detail.action)}</div>
+          <div className="muted" style={{ marginBottom: 8 }}>{new Date(detail.createdAt).toLocaleString()}</div>
+          <div><b>누가</b> {detail.actorEmail || 'system'}</div>
+          <div><b>테넌트</b> {detail.tenantSlug ?? '플랫폼'}</div>
+          <div style={{ marginBottom: 8 }}><b>대상</b> {detail.targetType ?? '—'} {detail.targetId ?? ''}</div>
+          <div className="label" style={{ marginBottom: 4 }}>어떻게 바뀜</div>
+          {before && after ? (
+            <pre style={{ margin: 0, padding: 10, background: 'var(--surface-3)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--mono)', overflow: 'auto', color: 'var(--text)' }}>
+{Object.keys({ ...before, ...after }).map((k) =>
+  `- ${k}: ${JSON.stringify(before[k])}\n+ ${k}: ${JSON.stringify(after[k])}`).join('\n')}
+            </pre>
+          ) : (
+            <pre style={{ margin: 0, padding: 10, background: 'var(--surface-3)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--mono)', overflow: 'auto', color: 'var(--text)' }}>
+{payload ? JSON.stringify(payload, null, 2) : detail.payload}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ActivityPage ──────────────────────────────────────────────────────────────
 
 export default function ActivityPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [searchParams] = useSearchParams();
-  const tenantFilter = searchParams.get('tenantId') ?? undefined;
 
   // null = not yet loaded from server; undefined = server error (show empty state)
   const [events, setEvents] = useState<DisplayEvent[] | null>(null);
@@ -192,9 +233,22 @@ export default function ActivityPage() {
   const [topTenants, setTopTenants] = useState(activityFixture.topTenants);
   const [serverError, setServerError] = useState(false);
 
-  const [filter, setFilter] = useState<'all' | 'mutations' | 'failures'>('all');
+  const [detail, setDetail] = useState<ActivityDetailView | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const [categoryFilter, setCategoryFilter] = useState<ActivityCategory>('all');
   const [visibleCount, setVisibleCount] = useState(24);
+
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [actionQuery, setActionQuery] = useState('');
+  const [selectedTenant, setSelectedTenant] = useState<string | undefined>(
+    searchParams.get('tenantId') ?? undefined,
+  );
+
+  // Load tenant list once for the filter dropdown
+  useEffect(() => {
+    tenantsApi.list().then(setTenants).catch(() => setTenants([]));
+  }, []);
 
   // 5-second polling
   const cancelledRef = useRef(false);
@@ -206,7 +260,7 @@ export default function ActivityPage() {
 
     async function fetchOnce() {
       try {
-        const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, tenantFilter);
+        const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant);
         if (cancelledRef.current) return;
         const adapted = adaptServerView(view);
         hasServerDataRef.current = true;
@@ -239,7 +293,7 @@ export default function ActivityPage() {
       cancelledRef.current = true;
       clearInterval(id);
     };
-  }, [categoryFilter, tenantFilter]);
+  }, [categoryFilter, selectedTenant]);
 
   // Filtered events for the feed panel
   // Use e.category (server classification) for ops/security filter;
@@ -249,21 +303,22 @@ export default function ActivityPage() {
   const filtered = useMemo(
     () =>
       displayEvents.filter((e) => {
-        if (filter === 'mutations') return e.category === 'ops';
-        if (filter === 'failures') return e.category === 'security';
-        return true;
+        if (!actionQuery.trim()) return true;
+        const q = actionQuery.trim().toUpperCase();
+        return e.type.toUpperCase().includes(q) || actionLabel(e.type).includes(actionQuery.trim());
       }),
-    [displayEvents, filter],
+    [displayEvents, actionQuery],
   );
 
-  const failureCount = useMemo(
-    () => displayEvents.filter((e) => e.category === 'security').length,
-    [displayEvents],
-  );
-  const mutationCount = useMemo(
-    () => displayEvents.filter((e) => e.category === 'ops').length,
-    [displayEvents],
-  );
+  function openDetail(id: string) {
+    setDetailLoading(true);
+    setDetail(null);
+    activityApi
+      .fetchDetail(id)
+      .then((d) => setDetail(d))
+      .catch(() => toast({ kind: 'err', title: '상세 로드 실패' }))
+      .finally(() => setDetailLoading(false));
+  }
 
   function handleOpenTenant(tenantId: string | null) {
     if (!tenantId) return;
@@ -272,7 +327,7 @@ export default function ActivityPage() {
 
   function handleRefresh() {
     activityApi
-      .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, tenantFilter)
+      .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant)
       .then((view) => {
         if (cancelledRef.current) return;
         const adapted = adaptServerView(view);
@@ -373,33 +428,39 @@ export default function ActivityPage() {
         />
       </div>
 
+      <div className="card" style={{ marginBottom: 16, padding: '10px 14px' }}>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>카테고리</span>
+          <ChipTab active={categoryFilter === 'all'} onClick={() => setCategoryFilter('all')}>전체</ChipTab>
+          <ChipTab active={categoryFilter === 'ops'} onClick={() => setCategoryFilter('ops')}>운영</ChipTab>
+          <ChipTab active={categoryFilter === 'security'} onClick={() => setCategoryFilter('security')}>보안</ChipTab>
+
+          <span className="muted" style={{ fontSize: 12, fontWeight: 600, marginLeft: 8 }}>테넌트</span>
+          <select
+            value={selectedTenant ?? ''}
+            onChange={(ev) => setSelectedTenant(ev.target.value || undefined)}
+            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12 }}
+          >
+            <option value="">전체</option>
+            {tenants.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
+            ))}
+          </select>
+
+          <span className="muted" style={{ fontSize: 12, fontWeight: 600, marginLeft: 8 }}>액션</span>
+          <input
+            value={actionQuery}
+            onChange={(ev) => setActionQuery(ev.target.value)}
+            placeholder="액션 검색…"
+            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, minWidth: 140 }}
+          />
+        </div>
+      </div>
+
       <div className="grid-2" style={{ gridTemplateColumns: '1fr 320px', gap: 16 }}>
         <div className="card">
-          <div className="card__head" style={{ gap: 10, flexWrap: 'wrap' }}>
-            <div>
-              <h3 className="card__title">최근 이벤트</h3>
-              <div className="card__sub">
-                필터:{' '}
-                <em>
-                  {filter === 'all'
-                    ? '전체'
-                    : filter === 'mutations'
-                    ? '운영 액션만'
-                    : '보안 실패만'}
-                </em>
-              </div>
-            </div>
-            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-              <ChipTab active={filter === 'all'} onClick={() => setFilter('all')}>
-                전체
-              </ChipTab>
-              <ChipTab active={filter === 'mutations'} onClick={() => setFilter('mutations')}>
-                운영 액션
-              </ChipTab>
-              <ChipTab active={filter === 'failures'} onClick={() => setFilter('failures')}>
-                보안 실패
-              </ChipTab>
-            </div>
+          <div className="card__head">
+            <h3 className="card__title">최근 이벤트</h3>
           </div>
           <div className="row" style={{ gap: 14, flexWrap: 'wrap', padding: '8px 20px', borderBottom: '1px solid var(--border)' }}>
             <LegendDot tone="danger" label="보안 실패" />
@@ -437,13 +498,17 @@ export default function ActivityPage() {
                       · {timeAgo(e.ts)}
                     </span>
                   </div>
-                  <div className="muted mono" style={{ fontSize: 11, marginTop: 3 }}>
-                    actor {tail(e.actorId, 10)} → subject {tail(e.subjectId, 12)}
+                  <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>
+                    {eventSentence({
+                      action: e.type,
+                      actorEmail: e.actorId ?? '',
+                      tenantSlug: e.tenantSlug,
+                      targetType: null,
+                      targetId: e.subjectId,
+                    })}
                   </div>
                 </div>
-                <button className="btn btn--ghost btn--xs" onClick={() => {
-                  toast({ kind: 'ok', title: e.type, message: `id: ${e.id} · subject: ${e.subjectId}` });
-                }}>
+                <button className="btn btn--ghost btn--xs" onClick={() => openDetail(e.id)}>
                   <Icons.ChevronRight size={12} />
                 </button>
               </div>
@@ -464,7 +529,7 @@ export default function ActivityPage() {
                   null,
                   categoryFilter === 'all' ? undefined : categoryFilter,
                   oldest,
-                  tenantFilter,
+                  selectedTenant,
                 );
                 const adapted = adaptServerView(more);
                 setEvents([...events, ...adapted.events]);
@@ -479,6 +544,9 @@ export default function ActivityPage() {
         </div>
 
         <div className="stack-4">
+          {(detail || detailLoading) && (
+            <DetailPanel detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />
+          )}
           <div className="card">
             <div className="card__head">
               <h3 className="card__title">활발한 Tenant</h3>
@@ -487,7 +555,7 @@ export default function ActivityPage() {
               {topTenants.map((t, i) => (
                 <button
                   key={t.tenantId}
-                  onClick={() => handleOpenTenant(t.tenantId)}
+                  onClick={() => setSelectedTenant(t.tenantId)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -554,31 +622,6 @@ export default function ActivityPage() {
             </div>
           </div>
 
-          <div className="card">
-            <div className="card__head">
-              <h3 className="card__title">카테고리 필터</h3>
-            </div>
-            <div style={{ padding: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <ChipTab
-                active={categoryFilter === 'all'}
-                onClick={() => setCategoryFilter('all')}
-              >
-                전체
-              </ChipTab>
-              <ChipTab
-                active={categoryFilter === 'ops'}
-                onClick={() => setCategoryFilter('ops')}
-              >
-                운영
-              </ChipTab>
-              <ChipTab
-                active={categoryFilter === 'security'}
-                onClick={() => setCategoryFilter('security')}
-              >
-                보안
-              </ChipTab>
-            </div>
-          </div>
         </div>
       </div>
     </div>

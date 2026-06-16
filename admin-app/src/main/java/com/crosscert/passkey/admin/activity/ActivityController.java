@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.api.ApiResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,5 +43,12 @@ public class ActivityController {
                 @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant before,
             @RequestParam(required = false) UUID tenantId) {
         return ApiResponse.ok(service.snapshot(sinceId, category, before, tenantId));
+    }
+
+    /** 행 클릭 시 단건 상세 — payload 포함. PLATFORM_OPERATOR 전용(피드와 동일 경계). */
+    @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
+    @GetMapping("/{id}")
+    public ApiResponse<ActivityDetailView> detail(@PathVariable UUID id) {
+        return ApiResponse.ok(service.detail(id));
     }
 }

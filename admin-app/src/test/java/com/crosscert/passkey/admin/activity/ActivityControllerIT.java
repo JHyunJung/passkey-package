@@ -425,4 +425,72 @@ class ActivityControllerIT {
                 .as("new ADMIN_LOGIN row should appear when polling with old sinceId: %s", feed3)
                 .isGreaterThanOrEqualTo(1);
     }
+
+    // ----------------------------------------------------------------
+    // detail — GET /admin/api/activity/{id}
+    // ----------------------------------------------------------------
+
+    @Test
+    void detail_returnsPayload_forPlatformOperator() {
+        // demo-rp(...C0DE)에 payload 있는 행 1건. RAW 0000...DA01 = UUID 00000000-0000-0000-0000-0000000000da01
+        ownerJdbc().update("""
+                INSERT INTO APP_OWNER.audit_log
+                    (id, prev_hash, hash, actor_id, actor_email, action,
+                     target_type, target_id, payload, created_at, updated_at,
+                     tenant_id, tenant_prev_hash, tenant_hash)
+                VALUES (HEXTORAW('0000000000000000000000000000DA01'), NULL, SYS_GUID(), NULL, 'admin@acme.com',
+                     'WEBAUTHN_CONFIG_UPDATED', 'TENANT', 'demo-rp',
+                     '{"before":{"uv":false},"after":{"uv":true}}',
+                     SYSTIMESTAMP, SYSTIMESTAMP,
+                     HEXTORAW('0000000000000000000000000000C0DE'), NULL, SYS_GUID())
+                """);
+
+        HttpHeaders auth = loginAs("alice@crosscert.com", "alice-temp-pw");
+        ResponseEntity<String> resp = rest.exchange(
+                url("/admin/api/activity/00000000-0000-0000-0000-00000000da01"),
+                HttpMethod.GET, new HttpEntity<>(auth), String.class);
+
+        assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
+        JsonNode body = readActivityJson(resp.getBody());
+        assertThat(body.get("action").asText()).isEqualTo("WEBAUTHN_CONFIG_UPDATED");
+        assertThat(body.get("payload").asText()).contains("\"after\"");
+        assertThat(body.get("tenantSlug").asText()).isEqualTo("demo-rp");
+    }
+
+    @Test
+    void detail_isForbidden_forRpAdmin() {
+        ownerJdbc().update("""
+                INSERT INTO APP_OWNER.audit_log
+                    (id, prev_hash, hash, actor_id, actor_email, action,
+                     target_type, target_id, payload, created_at, updated_at,
+                     tenant_id, tenant_prev_hash, tenant_hash)
+                VALUES (HEXTORAW('0000000000000000000000000000DA02'), NULL, SYS_GUID(), NULL, 'x@x.com', 'API_KEY_ISSUE',
+                     'API_KEY', 'pk_x', '{}', SYSTIMESTAMP, SYSTIMESTAMP,
+                     HEXTORAW('0000000000000000000000000000C0DE'), NULL, SYS_GUID())
+                """);
+        HttpHeaders auth = loginAs("bob@crosscert.com", "bob-temp-pw");
+        ResponseEntity<String> resp = rest.exchange(
+                url("/admin/api/activity/00000000-0000-0000-0000-00000000da02"),
+                HttpMethod.GET, new HttpEntity<>(auth), String.class);
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void detail_isNotFound_forUnknownId() {
+        HttpHeaders auth = loginAs("alice@crosscert.com", "alice-temp-pw");
+        ResponseEntity<String> resp = rest.exchange(
+                url("/admin/api/activity/00000000-0000-0000-0000-00000000dead"),
+                HttpMethod.GET, new HttpEntity<>(auth), String.class);
+        assertThat(resp.getStatusCode().value()).isEqualTo(404);
+    }
+
+    /** ApiResponse envelope이면 data를 벗기고, 아니면 root 반환. */
+    private JsonNode readActivityJson(String body) {
+        try {
+            JsonNode root = om.readTree(body);
+            return root.has("data") ? root.get("data") : root;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
