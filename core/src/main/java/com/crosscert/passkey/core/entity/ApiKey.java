@@ -5,7 +5,7 @@ import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -33,13 +33,13 @@ public class ApiKey extends BaseEntity {
     private Set<ApiKeyScope> scopes = new HashSet<>();
 
     @Column(name = "LAST_USED_AT")
-    private Instant lastUsedAt;
+    private OffsetDateTime lastUsedAt;
 
     @Column(name = "EXPIRES_AT")
-    private Instant expiresAt;
+    private OffsetDateTime expiresAt;
 
     @Column(name = "REVOKED_AT")
-    private Instant revokedAt;
+    private OffsetDateTime revokedAt;
 
     protected ApiKey() {}
 
@@ -69,21 +69,21 @@ public class ApiKey extends BaseEntity {
     public String getKeyPrefix() { return keyPrefix; }
     public String getKeyHash() { return keyHash; }
     public String getName() { return name; }
-    public Instant getLastUsedAt() { return lastUsedAt; }
-    public Instant getExpiresAt() { return expiresAt; }
-    public Instant getRevokedAt() { return revokedAt; }
+    public OffsetDateTime getLastUsedAt() { return lastUsedAt; }
+    public OffsetDateTime getExpiresAt() { return expiresAt; }
+    public OffsetDateTime getRevokedAt() { return revokedAt; }
 
-    public boolean isActive(Instant now) {
+    public boolean isActive(OffsetDateTime now) {
         if (revokedAt != null) return false;
         if (expiresAt != null && !expiresAt.isAfter(now)) return false;
         return true;
     }
 
-    public void touchLastUsed(Instant now) {
+    public void touchLastUsed(OffsetDateTime now) {
         this.lastUsedAt = now;
     }
 
-    public void revoke(Instant now) {
+    public void revoke(OffsetDateTime now) {
         this.revokedAt = now;
     }
 
@@ -92,7 +92,7 @@ public class ApiKey extends BaseEntity {
      * (1) 발급 시 now+N개월 만료(ApiKeyAdminService.issue),
      * (2) P1-5 rotation 의 구 키 grace 만료.
      */
-    public void expireAt(Instant when) {
+    public void expireAt(OffsetDateTime when) {
         this.expiresAt = when;
     }
 }

@@ -147,7 +147,7 @@ class ApiKeyAdminControllerSecurityTest {
                 .thenReturn(new ApiKeyAdminDto.ApiKeyRotateResponse(
                         UUID.randomUUID(), "pk_new12345SECRET", "pk_new12345",
                         java.util.Set.of("registration"),
-                        java.time.Instant.parse("2026-06-02T00:00:00Z")));
+                        java.time.OffsetDateTime.parse("2026-06-02T00:00:00Z")));
         mvc.perform(post("/admin/api/api-keys/" + UUID.randomUUID() + "/rotate").with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))

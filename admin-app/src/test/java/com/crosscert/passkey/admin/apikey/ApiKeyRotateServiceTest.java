@@ -19,6 +19,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
@@ -111,8 +112,8 @@ class ApiKeyRotateServiceTest {
         assertThat(resp.scopes()).containsExactlyInAnyOrder("registration", "authentication");
 
         // old key grace-expired at now + grace
-        assertThat(old.getExpiresAt()).isEqualTo(clock.instant().plus(grace));
-        assertThat(resp.oldKeyExpiresAt()).isEqualTo(clock.instant().plus(grace));
+        assertThat(old.getExpiresAt()).isEqualTo(OffsetDateTime.now(clock).plus(grace));
+        assertThat(resp.oldKeyExpiresAt()).isEqualTo(OffsetDateTime.now(clock).plus(grace));
 
         // the new key persisted via saveAndFlush carries the copied scopes + a hash matching the secret
         ArgumentCaptor<ApiKey> savedCaptor = ArgumentCaptor.forClass(ApiKey.class);
@@ -144,7 +145,7 @@ class ApiKeyRotateServiceTest {
     @Test
     void rotateRejectsRevokedKey() {
         ApiKey old = activeKey();
-        old.revoke(clock.instant().minusSeconds(60));
+        old.revoke(OffsetDateTime.now(clock).minusSeconds(60));
         when(repo.findById(old.getId())).thenReturn(Optional.of(old));
 
         assertThatThrownBy(() -> service.rotate(old.getId(), ACTOR_UUID, "alice@example.com"))
@@ -159,7 +160,7 @@ class ApiKeyRotateServiceTest {
     @Test
     void rotateRejectsExpiredKey() {
         ApiKey old = activeKey();
-        old.expireAt(clock.instant().minusSeconds(60));
+        old.expireAt(OffsetDateTime.now(clock).minusSeconds(60));
         when(repo.findById(old.getId())).thenReturn(Optional.of(old));
 
         assertThatThrownBy(() -> service.rotate(old.getId(), ACTOR_UUID, "alice@example.com"))

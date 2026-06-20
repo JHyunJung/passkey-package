@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,7 +29,7 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
     /**
      * Phase F2 — TenantAdminService.toView() 의 KPI 집계용.
      * ApiKey 엔티티는 별도의 STATUS 컬럼을 두지 않고 revokedAt + expiresAt 로
-     * "active" 여부를 파생한다 ({@link ApiKey#isActive(Instant)} 참고). 따라서
+     * "active" 여부를 파생한다 ({@link ApiKey#isActive(OffsetDateTime)} 참고). 따라서
      * "활성 API 키 수" 카운트는 revokedAt IS NULL AND (expiresAt IS NULL OR
      * expiresAt > :now) 로 표현한다. 동일한 의미가 Service 레이어에서도 사용된다.
      */
@@ -39,7 +39,7 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
               and k.revokedAt is null
               and (k.expiresAt is null or k.expiresAt > :now)
             """)
-    long countActiveByTenantId(@Param("tenantId") UUID tenantId, @Param("now") Instant now);
+    long countActiveByTenantId(@Param("tenantId") UUID tenantId, @Param("now") OffsetDateTime now);
 
     /**
      * Phase QW-3 — TenantAdminService.list() N+1 제거용 배치 집계.
@@ -55,7 +55,7 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
               and (k.expiresAt is null or k.expiresAt > :now)
             group by k.tenantId
             """)
-    java.util.List<Object[]> countActiveGroupedByTenantId(@Param("now") Instant now);
+    java.util.List<Object[]> countActiveGroupedByTenantId(@Param("now") OffsetDateTime now);
 
     /** active = 미revoke AND 미만료. suspend 일괄 revoke·KPI 와 동일 정의. */
     @Query("""
@@ -65,5 +65,5 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
               and (k.expiresAt is null or k.expiresAt > :now)
             """)
     java.util.List<com.crosscert.passkey.core.entity.ApiKey> findActiveByTenantId(
-            @Param("tenantId") UUID tenantId, @Param("now") java.time.Instant now);
+            @Param("tenantId") UUID tenantId, @Param("now") java.time.OffsetDateTime now);
 }

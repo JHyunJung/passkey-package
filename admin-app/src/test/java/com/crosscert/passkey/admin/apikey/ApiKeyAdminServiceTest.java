@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
@@ -192,11 +193,11 @@ class ApiKeyAdminServiceTest {
                         TENANT_UUID, "primary", java.util.Set.of("registration"), 24),
                 ACTOR_UUID, "alice@example.com");
 
-        assertThat(resp.expiresAt()).isEqualTo(Instant.parse("2028-06-01T00:00:00Z"));
+        assertThat(resp.expiresAt()).isEqualTo(OffsetDateTime.parse("2028-06-01T00:00:00Z"));
 
         ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
         verify(repo).saveAndFlush(keyCaptor.capture());
-        assertThat(keyCaptor.getValue().getExpiresAt()).isEqualTo(Instant.parse("2028-06-01T00:00:00Z"));
+        assertThat(keyCaptor.getValue().getExpiresAt()).isEqualTo(OffsetDateTime.parse("2028-06-01T00:00:00Z"));
     }
 
     @Test
@@ -225,7 +226,7 @@ class ApiKeyAdminServiceTest {
         ArgumentCaptor<AuditAppendRequest> auditCaptor = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());
         assertThat(auditCaptor.getValue().payload().get("expiresAt"))
-                .isEqualTo("2026-12-01T00:00:00Z");
+                .isEqualTo("2026-12-01T00:00Z");
     }
 
     @Test
@@ -256,7 +257,7 @@ class ApiKeyAdminServiceTest {
 
         service.revoke(existingId, ACTOR_UUID, "alice@example.com");
 
-        assertThat(existing.isActive(clock.instant())).isFalse();
+        assertThat(existing.isActive(OffsetDateTime.now(clock))).isFalse();
         ArgumentCaptor<AuditAppendRequest> auditCaptor =
                 ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());

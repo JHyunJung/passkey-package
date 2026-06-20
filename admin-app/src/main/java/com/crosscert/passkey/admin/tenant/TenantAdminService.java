@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -68,7 +69,7 @@ public class TenantAdminService {
         Map<UUID, Long> credByTenant =
                 toCountMap(credentialRepository.countGroupedByTenantId());
         Map<UUID, Long> activeKeysByTenant =
-                toCountMap(apiKeyRepository.countActiveGroupedByTenantId(clock.instant()));
+                toCountMap(apiKeyRepository.countActiveGroupedByTenantId(OffsetDateTime.now(clock)));
         Map<UUID, Instant> lastEventByTenant =
                 toInstantMap(auditLogRepository.findLatestCreatedAtGroupedByTenantId());
 
@@ -109,7 +110,7 @@ public class TenantAdminService {
      */
     private TenantAdminDto.TenantView toView(Tenant t) {
         long credentials = credentialRepository.countByTenantId(t.getId());
-        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), clock.instant());
+        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), OffsetDateTime.now(clock));
         Instant lastEventAt = auditLogRepository
                 .findFirstByTenantIdOrderByCreatedAtDesc(t.getId())
                 .map(AuditLog::getCreatedAt)
