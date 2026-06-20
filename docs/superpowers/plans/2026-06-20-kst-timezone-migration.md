@@ -718,6 +718,8 @@ Expected: 테스트 컴파일 에러 목록 = 수정 대상.
 - `Clock.fixed(Instant.parse("...Z"), ZoneOffset.UTC)` → `Clock.fixed(Instant.parse("...Z"), ZoneId.of("Asia/Seoul"))` (기준 instant 불변, zone만 KST).
 - `Instant` 비교 단언 → `OffsetDateTime` 비교 또는 `.toInstant()` 비교.
 - JSON 응답의 `"...Z"` 기대 → `"+09:00"` 형식으로.
+
+> **Task 6 에서 이월 (실행 확인 항목):** Task 6 의 `LicenseVerifierKstTest` 는 작성 시점에 `:core:compileTestJava` 가 `AuditLogTest`/`BaseEntityCallbackIT` 의 pre-existing 에러로 깨져 있어 **커밋 상태로는 실행되지 못했다**(broken 파일을 임시로 옮겨야만 14개 그린 확인 가능했음). Step 1 이 `:core:compileTestJava` 를 그린으로 만든 뒤 **`./gradlew :core:test --tests '*License*'` 를 실제로 돌려 LicenseVerifierKstTest 포함 그린을 확인**할 것.
 다시 컴파일 통과까지 반복.
 
 - [ ] **Step 3: base(main) 대조 기준선 확보**
