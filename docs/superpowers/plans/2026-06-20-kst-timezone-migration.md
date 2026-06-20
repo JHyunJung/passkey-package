@@ -637,6 +637,10 @@ git commit -m "refactor(license): 엔티티 타임스탬프 타입 정렬 + KST 
 
 이 태스크는 만료 비즈니스 로직이 없는(또는 단순한) 엔티티들의 일괄 타입 치환이다. SchedulerLease(만료 판정 있음)는 `isExpired`/`expiresAt` 비교를 `OffsetDateTime`으로.
 
+> **Task 4 에서 넘어온 검증 항목 (실행 시 반드시 확인):**
+> 1. **RetentionPurgeService `Instant cutoff` (안전 — 지금 버그 아님):** `RetentionPurgeService.purgeInvitations(Instant cutoff)`·`purgeResetTokens(Instant cutoff)` + repo native `deleteConsumedOrExpiredBefore(@Param Instant cutoff)` 가 이제 `OffsetDateTime` 매핑 컬럼에 `Instant` 를 바인딩한다. 대상 컬럼은 `TIMESTAMP WITH TIME ZONE`(V29)라 `col < :cutoff` 는 **절대시각 비교 → 지금도 올바른 행을 선택**한다(write-path 가 아닌 read-side라 selection 불변). 따라서 **열린 버그가 아니며**, 타입/스타일 일관성 목적으로만 `Instant cutoff` → `OffsetDateTime` 통일. `RetentionPurgeJob` 의 `clock.instant()` 도 `OffsetDateTime.now(clock)` 로.
+> 2. **ctor self-source 분기 점검 (codex P2 패턴):** self-source `.now()` 를 쓰는 생성자/`@PrePersist`(SchedulerLease·MdsBlobCache 직접 구현, 그 외 ctor 에서 stamp 하는 엔티티)에서, **caller 가 별도 `now` 로 만료/관련 시각을 만드는데 ctor 가 createdAt 류를 따로 self-source 하면 시각 출처가 분기**된다(한 레코드의 createdAt 과 expiresAt 이 다른 순간 → fixed-clock 비결정성, 극단적으로 createdAt > expiresAt). 이런 분기가 있으면 Task 4 처럼 caller 의 단일 `now` 를 ctor 로 주입해 통일할 것. zone-상수 self-source 가 허용되는 건 caller 가 동일 작업에서 다른 시각을 만들지 않는 순수 `@PrePersist` 경우뿐.
+
 - [ ] **Step 1: Write one guard test per expiry-bearing entity**
 
 예 — `core/src/test/java/com/crosscert/passkey/core/entity/SchedulerLeaseExpiryTest.java`:
