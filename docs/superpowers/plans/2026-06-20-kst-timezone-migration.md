@@ -775,6 +775,27 @@ git add -A
 git commit -m "docs(plan): KST 전환 실DB·UI 육안 검증 결과 기록" --allow-empty
 ```
 
+### 검증 결과 (2026-06-20, dev 프로파일 실DB 부팅)
+
+**환경**: passkey-oracle/passkey-redis 컨테이너 기동, admin-app `SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun` (port 8081). local 프로파일은 DB에 적용된 `R__seed_dev_tenant`(2026-06-17 dev 부팅 잔재)가 local 클래스패스(`db/local`)에서 미해소 → Flyway validate 실패. dev 프로파일이 현재 DB 상태와 일치하므로 dev 로 부팅(둘 다 동일 localhost DB·동일 KST connection-init-sql).
+
+**세션 TZ**: 기본 sqlplus 세션은 `SESSIONTIMEZONE=+00:00`, `DBTIMEZONE=+00:00`. 앱이 강제하는 `ALTER SESSION SET TIME_ZONE='Asia/Seoul'` 적용 시 `SESSIONTIMEZONE=Asia/Seoul`, `CURRENT_TIMESTAMP` 가 `... PM ASIA/SEOUL`(=+09:00)로 렌더 — 9시간 시프트 확인. connection-init-sql(`application-common.yml:37`) 정상 동작.
+
+**V49 적용**: 부팅 전 DB max version=47. 부팅 시 Flyway 가 V48→V49(`kst session timezone`)→`R__seed_dev_tenant` 순으로 "Successfully applied 3 migrations, now at version v49". `flyway_schema_history` 에서 V48·V49 `success=1` 확인. 실패 0건.
+
+**저장값 +09:00 (헤드라인 증거)**: 부팅된 KST 앱으로 alice(PLATFORM_OPERATOR) 로그인 후 신규 테넌트 `POST /admin/api/tenants` 생성(slug `kst-verify-*`, HTTP 201). **기본(ALTER 미적용) sqlplus 세션**으로 읽은 저장값:
+- `tenant.created_at`/`updated_at` = `2026-06-20 23:48:21.015935 +09:00`
+- `audit_log` `TENANT_CREATE` = `2026-06-20 23:48:21.073624 +09:00`, `ADMIN_LOGIN` = `2026-06-20 23:47:55 +09:00`
+- (마이그레이션 이전 row 는 여전히 +00:00 — TIMESTAMP WITH TIME ZONE 은 기록 당시 오프셋 보존이므로 정상, 재기록 안 함)
+
+**API JSON wire format**: 같은 생성 응답의 엔티티 필드가 `"createdAt":"2026-06-20T23:48:21.015935+09:00"` (Z/+00:00 아님). 단 응답 envelope 의 `timestamp` 필드는 Instant 기반이라 `...Z` — 엔티티 컬럼과 무관.
+
+**판정**: KST 영속화가 실제 스택에서 end-to-end(HTTP→앱→KST HikariCP 커넥션→Oracle TIMESTAMP WITH TIME ZONE→read-back) **운영 입증됨**.
+
+**FunnelService 일별 버킷팅 (이월 항목)**: `FunnelService.buildSeries`(line 93·104)는 여전히 `ZoneOffset.UTC` 로 파싱/`now()` — 이번 마이그레이션에서 변경 안 함(계획대로). `TRUNC(created_at)` 자체는 KST 세션에서 동작하나 Java 측 UTC 재파싱이 남아 KST 00:00~09:00 이벤트가 전날 버킷으로 빠질 수 있는 off-by-one **코드상 잔존 확인**. 실제 차트 날짜 어긋남은 admin-ui GUI 육안(데이터 있는 테넌트)로만 최종 확인 가능 → 사용자 핸드오프 / 별도 후속.
+
+**사용자 확인 필요(GUI)**: admin-ui Step 3 8개 지점 화면 회귀(Tenant 목록/상세, Credential, ApiKey 만료, Audit 시각, AdminUsers)와 Funnel/Activity 일별 차트 날짜 — GUI 없는 본 세션에서 수행 불가, 사용자 육안 검증 권장.
+
 ---
 
 ## Self-Review (작성자 점검 결과)
