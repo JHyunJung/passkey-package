@@ -23,6 +23,7 @@ import org.testcontainers.utility.MountableFile;
 
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -196,8 +197,8 @@ class BaseEntityCallbackIT {
     void onUpdate_advancesUpdatedAt_butNotCreatedAt() throws InterruptedException {
         AdminUser saved = adminUsers.saveAndFlush(
                 new AdminUser(uniqueEmail("update"), bcryptHash(), "PLATFORM_OPERATOR"));
-        Instant originalCreatedAt = saved.getCreatedAt();
-        Instant originalUpdatedAt = saved.getUpdatedAt();
+        OffsetDateTime originalCreatedAt = saved.getCreatedAt();
+        OffsetDateTime originalUpdatedAt = saved.getUpdatedAt();
 
         // Sleep long enough that the next Instant.now() is strictly later
         // than the pre-persist one. 50ms >> system clock granularity.
