@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
@@ -66,9 +67,10 @@ class PasswordResetServiceTest {
         // lockout 을 실제로 걸어 단언을 load-bearing 하게 (maxAttempts=1 → 첫 호출에 즉시 lock).
         u.recordFailedLogin(clock.instant(), 1, Duration.ofMinutes(15));
         assertThat(u.getLockedUntil()).isNotNull();  // 사전조건
+        OffsetDateTime now = OffsetDateTime.now(clock);
         AdminPasswordResetToken tok = new AdminPasswordResetToken(
                 uid, service.hashForTest("plain-token"), "plain-to",
-                clock.instant().plusSeconds(3600), clock.instant());
+                now.plusSeconds(3600), now);
         when(tokens.findByTokenHash(service.hashForTest("plain-token"))).thenReturn(Optional.of(tok));
         when(users.findById(uid)).thenReturn(Optional.of(u));
         when(encoder.encode("NewPassw0rd!")).thenReturn("newhash");
@@ -84,9 +86,10 @@ class PasswordResetServiceTest {
     @Test
     void confirm_expired_token_rejected() {
         UUID uid = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         AdminPasswordResetToken tok = new AdminPasswordResetToken(
                 uid, service.hashForTest("t"), "tt",
-                clock.instant().minusSeconds(1), clock.instant().minusSeconds(3600));
+                now.minusSeconds(1), now.minusSeconds(3600));
         when(tokens.findByTokenHash(service.hashForTest("t"))).thenReturn(Optional.of(tok));
         assertThatThrownBy(() -> service.confirm("t", "NewPassw0rd!"))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -95,10 +98,11 @@ class PasswordResetServiceTest {
     @Test
     void confirm_consumed_token_rejected() {
         UUID uid = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         AdminPasswordResetToken tok = new AdminPasswordResetToken(
                 uid, service.hashForTest("t"), "tt",
-                clock.instant().plusSeconds(3600), clock.instant());
-        tok.consume(clock.instant());
+                now.plusSeconds(3600), now);
+        tok.consume(now);
         when(tokens.findByTokenHash(service.hashForTest("t"))).thenReturn(Optional.of(tok));
         assertThatThrownBy(() -> service.confirm("t", "NewPassw0rd!"))
                 .isInstanceOf(IllegalArgumentException.class);

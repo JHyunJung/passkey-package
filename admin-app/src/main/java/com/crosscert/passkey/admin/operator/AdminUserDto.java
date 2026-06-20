@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public final class AdminUserDto {
@@ -31,14 +32,14 @@ public final class AdminUserDto {
             String tokenPrefix,
             String plaintextToken,
             String acceptUrl,
-            Instant expiresAt
+            OffsetDateTime expiresAt
     ) {}
 
     public record InvitationCheck(
             String email,
             String role,
             UUID tenantId,
-            Instant expiresAt
+            OffsetDateTime expiresAt
     ) {}
 
     public record AcceptRequest(

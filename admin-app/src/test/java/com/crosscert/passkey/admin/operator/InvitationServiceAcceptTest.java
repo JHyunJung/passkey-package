@@ -10,11 +10,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -41,16 +45,18 @@ class InvitationServiceAcceptTest {
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final PasswordPolicyValidator passwordPolicyValidator = mock(PasswordPolicyValidator.class);
 
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-20T09:00:00Z"), ZoneOffset.UTC);
+
     private final InvitationService service = new InvitationService(
-            invitationRepo, userRepo, mailSender, passwordEncoder, passwordPolicyValidator);
+            invitationRepo, userRepo, mailSender, passwordEncoder, passwordPolicyValidator, clock);
 
     private AdminUser stubLookup() {
         UUID userId = UUID.randomUUID();
         AdminUserInvitation inv = mock(AdminUserInvitation.class);
         when(inv.getAdminUserId()).thenReturn(userId);
-        when(inv.isExpired()).thenReturn(false);
+        when(inv.isExpired(any())).thenReturn(false);
         when(inv.isAccepted()).thenReturn(false);
-        when(inv.getExpiresAt()).thenReturn(Instant.now().plusSeconds(3600));
+        when(inv.getExpiresAt()).thenReturn(OffsetDateTime.now().plusSeconds(3600));
         when(invitationRepo.findByTokenHash(anyString())).thenReturn(Optional.of(inv));
 
         AdminUser user = mock(AdminUser.class);

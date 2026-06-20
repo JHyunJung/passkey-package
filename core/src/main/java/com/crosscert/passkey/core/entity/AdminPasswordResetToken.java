@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -40,21 +40,21 @@ public class AdminPasswordResetToken {
     private String tokenPrefix;
 
     @Column(name = "EXPIRES_AT", nullable = false, updatable = false)
-    private Instant expiresAt;
+    private OffsetDateTime expiresAt;
 
     @Column(name = "CONSUMED_AT")
-    private Instant consumedAt;
+    private OffsetDateTime consumedAt;
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
-    private Instant createdAt;
+    private OffsetDateTime createdAt;
 
     protected AdminPasswordResetToken() {}
 
     public AdminPasswordResetToken(UUID adminUserId,
                                    String tokenHash,
                                    String tokenPrefix,
-                                   Instant expiresAt,
-                                   Instant now) {
+                                   OffsetDateTime expiresAt,
+                                   OffsetDateTime now) {
         this.adminUserId = adminUserId;
         this.tokenHash   = tokenHash;
         this.tokenPrefix = tokenPrefix;
@@ -73,18 +73,18 @@ public class AdminPasswordResetToken {
 
     public String getTokenPrefix() { return tokenPrefix; }
 
-    public Instant getExpiresAt() { return expiresAt; }
+    public OffsetDateTime getExpiresAt() { return expiresAt; }
 
-    public Instant getConsumedAt() { return consumedAt; }
+    public OffsetDateTime getConsumedAt() { return consumedAt; }
 
-    public Instant getCreatedAt() { return createdAt; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
 
     // ──────────────────────────────────────────────────────────────────
     // Business helpers
 
-    public boolean isExpired(Instant now) { return now.isAfter(expiresAt); }
+    public boolean isExpired(OffsetDateTime now) { return now.isAfter(expiresAt); }
 
     public boolean isConsumed() { return consumedAt != null; }
 
-    public void consume(Instant now) { this.consumedAt = now; }
+    public void consume(OffsetDateTime now) { this.consumedAt = now; }
 }

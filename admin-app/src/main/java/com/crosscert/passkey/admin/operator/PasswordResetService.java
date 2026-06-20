@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 /**
  * Admin self-service password reset (P1-6).
@@ -65,7 +65,7 @@ public class PasswordResetService {
         AdminUser user = userOpt.get();
         String plaintext = CryptoUtils.randomToken("rst_");
         String prefix = plaintext.substring(0, 8);
-        Instant now = clock.instant();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         var tok = new AdminPasswordResetToken(
                 user.getId(), CryptoUtils.sha256Hex(plaintext), prefix, now.plus(TOKEN_TTL), now);
         tokens.save(tok);
@@ -86,7 +86,7 @@ public class PasswordResetService {
         String hash = CryptoUtils.sha256Hex(plaintext);
         AdminPasswordResetToken tok = tokens.findByTokenHash(hash)
                 .orElseThrow(() -> new IllegalArgumentException("invalid token"));
-        Instant now = clock.instant();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         if (tok.isConsumed()) throw new IllegalArgumentException("token already used");
         if (tok.isExpired(now)) throw new IllegalArgumentException("token expired");
 
