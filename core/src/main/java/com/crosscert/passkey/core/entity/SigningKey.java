@@ -2,7 +2,7 @@ package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "SIGNING_KEY")
@@ -26,10 +26,10 @@ public class SigningKey extends BaseEntity {
     private byte[] privatePkcs8;
 
     @Column(name = "ROTATED_AT")
-    private Instant rotatedAt;
+    private OffsetDateTime rotatedAt;
 
     @Column(name = "REVOKED_AT")
-    private Instant revokedAt;
+    private OffsetDateTime revokedAt;
 
     protected SigningKey() {}
 
@@ -46,15 +46,15 @@ public class SigningKey extends BaseEntity {
     public String getStatus() { return status; }
     public String getPublicJwk() { return publicJwk; }
     public byte[] getPrivatePkcs8() { return privatePkcs8; }
-    public Instant getRotatedAt() { return rotatedAt; }
-    public Instant getRevokedAt() { return revokedAt; }
+    public OffsetDateTime getRotatedAt() { return rotatedAt; }
+    public OffsetDateTime getRevokedAt() { return revokedAt; }
 
-    public void rotate(Instant now) {
+    public void rotate(OffsetDateTime now) {
         this.status = "ROTATED";
         this.rotatedAt = now;
     }
 
-    public void revoke(Instant now) {
+    public void revoke(OffsetDateTime now) {
         this.status = "REVOKED";
         this.revokedAt = now;
     }

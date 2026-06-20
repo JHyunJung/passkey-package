@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,8 +41,8 @@ public class SchedulerLeaseService {
 
     @Transactional
     public boolean tryAcquire(String name, String holder, Duration ttl) {
-        Instant now = clock.instant();
-        Instant newExpiry = now.plus(ttl);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        OffsetDateTime newExpiry = now.plus(ttl);
 
         // Pessimistic-write lock on the existing row serializes concurrent callers.
         Optional<SchedulerLease> existing = repo.findByNameForUpdate(name);
@@ -51,7 +51,7 @@ public class SchedulerLeaseService {
             // No row yet — try to INSERT.  Another node may race us here;
             // if they win the unique constraint throws and we return false.
             try {
-                SchedulerLease fresh = new SchedulerLease(UUID.randomUUID(), name, holder, newExpiry);
+                SchedulerLease fresh = new SchedulerLease(UUID.randomUUID(), name, holder, newExpiry, now);
                 repo.save(fresh);
                 return true;
             } catch (DataIntegrityViolationException e) {

@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
@@ -60,12 +60,14 @@ import java.util.Map;
  * (system/scheduler entries) collapses to empty string.
  *
  * <h2>Timestamp precision</h2>
- * <p>The {@code Instant} is truncated to microseconds before hashing and
- * before storing in the entity.  Oracle {@code TIMESTAMP WITH TIME ZONE}
- * defaults to 6 fractional-second digits (microsecond precision).  If we
- * hashed nanoseconds but stored only microseconds, the chain verifier (T9)
- * would recompute a different hash from the DB-read value.  Truncation to
- * MICROS prevents this round-trip mismatch.
+ * <p>The {@code OffsetDateTime} (KST, {@code +09:00}) is truncated to
+ * microseconds before hashing and before storing in the entity.  Oracle
+ * {@code TIMESTAMP WITH TIME ZONE} defaults to 6 fractional-second digits
+ * (microsecond precision).  If we hashed nanoseconds but stored only
+ * microseconds, the chain verifier would recompute a different hash from the
+ * DB-read value.  Truncation to MICROS prevents this round-trip mismatch.
+ * The {@code +09:00} offset is part of the hashed {@code toString()} form,
+ * so the verifier must recompute from the same OffsetDateTime to match.
  */
 @Service
 public class AuditLogService {
@@ -126,9 +128,11 @@ public class AuditLogService {
         byte[] tenantPrev = latestTenantList.isEmpty() ? null
                 : latestTenantList.get(0).getTenantHash();
         // Truncate to micros so the hashed timestamp matches what Oracle
-        // stores and what the verifier (T9) reads back. Oracle TIMESTAMP
+        // stores and what the verifier reads back. Oracle TIMESTAMP
         // WITH TIME ZONE defaults to 6 fractional digits (microseconds).
-        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        // OffsetDateTime.now(clock) carries the KST (+09:00) offset so the
+        // hashed toString() and the stored value share one wall-clock form.
+        OffsetDateTime now = OffsetDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
         String payloadJson = serialize(req.payload());
         byte[] hash = computeHash(prevHash, req, payloadJson, now);
         // Phase B — tenant-scoped chain hash (동일 알고리즘, tenantPrev 만 다름)
@@ -164,7 +168,7 @@ public class AuditLogService {
      * <p>Package-private for hash verifier (T9) reuse.
      */
     static byte[] computeHash(byte[] prevHash, AuditAppendRequest req,
-                              String payloadJson, Instant now) {
+                              String payloadJson, OffsetDateTime now) {
         StringBuilder input = new StringBuilder();
         input.append(prevHash == null ? "" : CryptoUtils.hex(prevHash));
         input.append('|');
@@ -178,6 +182,9 @@ public class AuditLogService {
         input.append('|');
         input.append(req.targetId() == null ? "" : req.targetId());
         input.append('|');
+        // hash 안정성은 동일 OffsetDateTime 필드값(동일 MICROS 정밀도 + +09:00 offset)에
+        // 의존한다. 다른 정밀도/offset 값을 넣으면 안 됨 — verifier 는 row.getCreatedAt()
+        // (저장된 그 값)을 그대로 다시 넣어야 stored==recomputed 가 성립한다.
         input.append(now.toString());
         input.append('|');
         input.append(payloadJson);

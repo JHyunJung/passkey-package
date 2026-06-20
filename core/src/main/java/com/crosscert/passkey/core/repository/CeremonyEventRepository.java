@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,7 +19,7 @@ import java.util.UUID;
 public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UUID> {
 
     /** stage attempt/success 카운터: tenant + action 의 since 이후 행 수. */
-    long countByTenantIdAndActionAndCreatedAtAfter(UUID tenantId, String action, Instant since);
+    long countByTenantIdAndActionAndCreatedAtAfter(UUID tenantId, String action, OffsetDateTime since);
 
     /** 일별 series. 반환 행: [day TIMESTAMP, action VARCHAR, count NUMBER]. */
     @Query(value = "SELECT TRUNC(created_at), action, COUNT(*) "
@@ -30,7 +30,7 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
     List<Object[]> aggregateDailyByTenantAndActions(
             @Param("tenantId") UUID tenantId,
             @Param("actions") List<String> actions,
-            @Param("since") Instant since);
+            @Param("since") OffsetDateTime since);
 
     /** action 별 카운트. 반환 행: [action VARCHAR, count NUMBER]. */
     @Query(value = "SELECT action, COUNT(*) "
@@ -41,7 +41,7 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
     List<Object[]> aggregateByTenantAndActionsGrouped(
             @Param("tenantId") UUID tenantId,
             @Param("actions") List<String> actions,
-            @Param("since") Instant since);
+            @Param("since") OffsetDateTime since);
 
     /**
      * P1-4 retention: created_at 이 cutoff 이전인 ceremony 이벤트 삭제. funnel 쿼리는
@@ -55,5 +55,5 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
          + "SELECT id FROM {h-schema}ceremony_event WHERE "
          + "created_at < :cutoff "
          + "AND ROWNUM <= :batchSize)", nativeQuery = true)
-    int deleteCreatedBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+    int deleteCreatedBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 }

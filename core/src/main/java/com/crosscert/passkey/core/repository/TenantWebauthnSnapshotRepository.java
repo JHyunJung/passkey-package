@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,5 +26,5 @@ public interface TenantWebauthnSnapshotRepository extends JpaRepository<TenantWe
          + "SELECT id FROM {h-schema}tenant_webauthn_snapshot WHERE "
          + "taken_at < :cutoff "
          + "AND ROWNUM <= :batchSize)", nativeQuery = true)
-    int deleteTakenBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+    int deleteTakenBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 }

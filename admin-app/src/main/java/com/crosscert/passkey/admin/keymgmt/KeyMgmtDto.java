@@ -2,7 +2,7 @@ package com.crosscert.passkey.admin.keymgmt;
 
 import com.crosscert.passkey.core.entity.SigningKey;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,9 +15,9 @@ public final class KeyMgmtDto {
             String kid,
             String alg,
             String status,
-            Instant createdAt,
-            Instant rotatedAt,
-            Instant revokedAt
+            OffsetDateTime createdAt,
+            OffsetDateTime rotatedAt,
+            OffsetDateTime revokedAt
     ) {
         public static SigningKeyView from(SigningKey k) {
             return new SigningKeyView(

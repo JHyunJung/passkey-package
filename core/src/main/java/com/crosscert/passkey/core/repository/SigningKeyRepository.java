@@ -3,7 +3,7 @@ package com.crosscert.passkey.core.repository;
 import com.crosscert.passkey.core.entity.SigningKey;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,5 +29,5 @@ public interface SigningKeyRepository extends JpaRepository<SigningKey, UUID> {
      * Used by KeyExpirationJob. Finds ROTATED rows whose grace period
      * has elapsed, ready to transition to REVOKED.
      */
-    List<SigningKey> findAllByStatusAndRotatedAtBefore(String status, Instant cutoff);
+    List<SigningKey> findAllByStatusAndRotatedAtBefore(String status, OffsetDateTime cutoff);
 }

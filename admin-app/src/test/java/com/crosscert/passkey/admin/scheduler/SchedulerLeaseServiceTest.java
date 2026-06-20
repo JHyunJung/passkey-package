@@ -9,7 +9,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,7 +21,7 @@ import static org.mockito.Mockito.*;
 class SchedulerLeaseServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-06-01T00:00:00Z");
-    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, KstTime.ZONE);
 
     private SchedulerLeaseRepository repo;
     private SchedulerLeaseService svc;
@@ -63,7 +64,7 @@ class SchedulerLeaseServiceTest {
 
     @Test
     void tryAcquireTakesOverExpiredLease() {
-        Instant expired = NOW.minusSeconds(60);
+        OffsetDateTime expired = OffsetDateTime.now(FIXED_CLOCK).minusSeconds(60);
         SchedulerLease lease = new SchedulerLease(
                 UUID.randomUUID(), "mds-sync", "other-host", expired);
         when(repo.findByNameForUpdate("mds-sync")).thenReturn(Optional.of(lease));
@@ -78,7 +79,7 @@ class SchedulerLeaseServiceTest {
 
     @Test
     void tryAcquireRenewsOwnLease() {
-        Instant future = NOW.plusSeconds(60);
+        OffsetDateTime future = OffsetDateTime.now(FIXED_CLOCK).plusSeconds(60);
         SchedulerLease lease = new SchedulerLease(
                 UUID.randomUUID(), "mds-sync", "host-1", future);
         when(repo.findByNameForUpdate("mds-sync")).thenReturn(Optional.of(lease));
@@ -92,7 +93,7 @@ class SchedulerLeaseServiceTest {
 
     @Test
     void tryAcquireReturnsFalseWhenAnotherHolderActive() {
-        Instant future = NOW.plusSeconds(60);
+        OffsetDateTime future = OffsetDateTime.now(FIXED_CLOCK).plusSeconds(60);
         SchedulerLease lease = new SchedulerLease(
                 UUID.randomUUID(), "mds-sync", "somebody-else", future);
         when(repo.findByNameForUpdate("mds-sync")).thenReturn(Optional.of(lease));

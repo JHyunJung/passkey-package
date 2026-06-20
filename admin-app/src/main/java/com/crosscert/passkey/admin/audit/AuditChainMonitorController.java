@@ -60,7 +60,9 @@ public class AuditChainMonitorController {
 
             long[] buckets = new long[windowHours];
             for (AuditLog row : rows) {
-                Instant t = row.getCreatedAt();
+                // Window math is purely relative (minutes-between); compare on the
+                // absolute instant so the KST offset is irrelevant to bucketing.
+                Instant t = row.getCreatedAt().toInstant();
                 if (t.isBefore(since)) continue;
                 long minutesSince = ChronoUnit.MINUTES.between(t, now);
                 int idx = (int) (minutesSince / bucketSizeMinutes);

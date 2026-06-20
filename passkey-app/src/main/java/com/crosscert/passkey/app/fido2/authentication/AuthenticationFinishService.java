@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashSet;
@@ -199,7 +200,7 @@ public class AuthenticationFinishService {
             //
             // Pessimistic lock (above) + the @Transactional boundary make
             // this read-check-update sequence safe under concurrency.
-            cred.recordAuthentication(newCounter, clock.instant());
+            cred.recordAuthentication(newCounter, OffsetDateTime.now(clock));
             credentials.saveAndFlush(cred);
             authEvents.recordAfterCommit(cred.getId(), UUID.fromString(ch.tenantId()),
                     CredentialAuthResult.SUCCESS, null, newCounter);

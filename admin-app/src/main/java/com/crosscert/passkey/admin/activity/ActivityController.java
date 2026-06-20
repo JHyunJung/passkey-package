@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @RestController
@@ -40,7 +40,7 @@ public class ActivityController {
             @RequestParam(required = false) UUID sinceId,
             @RequestParam(required = false) String category,
             @RequestParam(required = false)
-                @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant before,
+                @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
             @RequestParam(required = false) UUID tenantId) {
         return ApiResponse.ok(service.snapshot(sinceId, category, before, tenantId));
     }

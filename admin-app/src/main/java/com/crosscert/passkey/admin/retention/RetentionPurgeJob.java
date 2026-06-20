@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import java.lang.management.ManagementFactory;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -79,7 +79,7 @@ public class RetentionPurgeJob {
         // 길어져도 끝나는 즉시 release 하므로 다음 실행/다른 인스턴스가 30분 TTL 만료를
         // 기다릴 필요 없이 곧바로 획득 가능(TTL 은 크래시 시 stale lease 회수용 안전망일 뿐).
         try {
-            Instant now = clock.instant();
+            OffsetDateTime now = OffsetDateTime.now(clock);
             Map<String, Object> payload = new LinkedHashMap<>();
             List<String> failed = new ArrayList<>();
 

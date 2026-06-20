@@ -10,10 +10,13 @@ const FORMATTER = new Intl.DateTimeFormat('ko-KR', {
 });
 
 /**
- * Convert ISO-8601 UTC timestamp to KST display format.
+ * Convert an ISO-8601 timestamp to KST display format. The input's
+ * offset is irrelevant — `new Date(iso)` parses the absolute instant,
+ * and the formatter projects it to Asia/Seoul. Backend now emits
+ * `+09:00`; both `+09:00` and `Z` render identically (no double-shift).
  * Em-dash for null/undefined/empty. Raw input on parse failure.
  *
- * Example: "2026-05-27T03:00:00Z" -> "2026. 05. 27. 12:00:00"
+ * Example: "2026-05-27T12:00:00+09:00" -> "2026. 05. 27. 12:00:00"
  */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';

@@ -12,7 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,7 +26,7 @@ import static org.mockito.Mockito.*;
 class RecoveryCodeServiceTest {
 
     @Mock AdminUserRecoveryCodeRepository repo;
-    Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), ZoneOffset.UTC);
+    Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), KstTime.ZONE);
     RecoveryCodeService service;
 
     private static String sha256Hex(String s) throws Exception {
@@ -53,7 +54,7 @@ class RecoveryCodeServiceTest {
         UUID uid = UUID.randomUUID();
         String plain = "abcd-efgh";
         String normalizedHash = sha256Hex("ABCD-EFGH"); // service.normalize 결과 기준
-        when(repo.markUsed(eq(uid), eq(normalizedHash), eq(clock.instant())))
+        when(repo.markUsed(eq(uid), eq(normalizedHash), eq(OffsetDateTime.now(clock))))
                 .thenReturn(1);
 
         boolean ok = service.consume(uid, plain);

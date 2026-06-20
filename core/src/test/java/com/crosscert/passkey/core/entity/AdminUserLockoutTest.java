@@ -3,13 +3,13 @@ package com.crosscert.passkey.core.entity;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AdminUserLockoutTest {
 
-    private static final Instant NOW = Instant.parse("2026-05-30T00:00:00Z");
+    private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-05-30T00:00:00Z");
     private static final int MAX = 5;
     private static final Duration LOCK = Duration.ofMinutes(15);
 
@@ -46,7 +46,7 @@ class AdminUserLockoutTest {
     void relocks_after_autounlock_requires_fresh_maxAttempts() {
         AdminUser u = user();
         for (int i = 0; i < MAX; i++) u.recordFailedLogin(NOW, MAX, LOCK);
-        Instant afterUnlock = NOW.plus(LOCK).plusSeconds(1);
+        OffsetDateTime afterUnlock = NOW.plus(LOCK).plusSeconds(1);
         assertThat(u.isLocked(afterUnlock)).isFalse();
         // 자동 해제 후 한 번 실패로는 즉시 재잠금되지 않음
         u.recordFailedLogin(afterUnlock, MAX, LOCK);

@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -57,7 +57,7 @@ public class AuditLog extends BaseEntity {
                     String action, String targetType, String targetId,
                     UUID tenantId,
                     byte[] tenantPrevHash, byte[] tenantHash,
-                    String payload, Instant createdAtArg) {
+                    String payload, OffsetDateTime createdAtArg) {
         this.prevHash = prevHash;
         this.hash = hash;
         this.actorId = actorId;
@@ -80,13 +80,14 @@ public class AuditLog extends BaseEntity {
      * Reflectively seed BaseEntity's private createdAt and updatedAt fields.
      * Required because:
      *   1. AuditLog's hash chain depends on a caller-chosen createdAt that
-     *      must survive @PrePersist (which uses Instant.now() by default).
+     *      must survive @PrePersist (which uses OffsetDateTime.now(KstTime.ZONE)
+     *      by default).
      *   2. BaseEntity intentionally exposes no setters for createdAt/updatedAt
      *      to keep the lifecycle contract uniform across the other 9 entities.
      * @PrePersist's null-check ({@code if (createdAt == null) createdAt = now})
      * then leaves the seeded value alone.
      */
-    private void seedTimestamps(Instant t) {
+    private void seedTimestamps(OffsetDateTime t) {
         try {
             java.lang.reflect.Field createdAtField = BaseEntity.class.getDeclaredField("createdAt");
             createdAtField.setAccessible(true);

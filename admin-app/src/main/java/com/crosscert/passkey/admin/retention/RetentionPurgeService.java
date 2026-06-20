@@ -10,7 +10,7 @@ import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 /**
  * P1-4 데이터 retention purge. 테이블별 독립 메서드로 — RetentionPurgeJob 이
@@ -40,7 +40,7 @@ public class RetentionPurgeService {
     private final CeremonyEventRepository ceremonyEvents;
     private final CredentialAuthEventRepository credentialAuthEvents;
 
-    public int purgeInvitations(Instant cutoff) {
+    public int purgeInvitations(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
             n = invitations.deleteConsumedOrExpiredBefore(cutoff, BATCH);
@@ -49,7 +49,7 @@ public class RetentionPurgeService {
         return total;
     }
 
-    public int purgeResetTokens(Instant cutoff) {
+    public int purgeResetTokens(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
             n = resetTokens.deleteConsumedOrExpiredBefore(cutoff, BATCH);
@@ -58,7 +58,7 @@ public class RetentionPurgeService {
         return total;
     }
 
-    public int purgeRecoveryCodes(Instant cutoff) {
+    public int purgeRecoveryCodes(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
             n = recoveryCodes.deleteUsedBefore(cutoff, BATCH);
@@ -67,7 +67,7 @@ public class RetentionPurgeService {
         return total;
     }
 
-    public int purgeSnapshots(Instant cutoff) {
+    public int purgeSnapshots(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
             n = snapshots.deleteTakenBefore(cutoff, BATCH);
@@ -76,7 +76,7 @@ public class RetentionPurgeService {
         return total;
     }
 
-    public int purgeMdsHistory(Instant cutoff) {
+    public int purgeMdsHistory(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
             n = mdsHistory.purgeStartedBefore(cutoff, BATCH);
@@ -85,7 +85,7 @@ public class RetentionPurgeService {
         return total;
     }
 
-    public int purgeCeremonyEvents(Instant cutoff) {
+    public int purgeCeremonyEvents(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
             n = ceremonyEvents.deleteCreatedBefore(cutoff, BATCH);
@@ -94,7 +94,7 @@ public class RetentionPurgeService {
         return total;
     }
 
-    public int purgeCredentialAuthEvents(Instant cutoff) {
+    public int purgeCredentialAuthEvents(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
             n = credentialAuthEvents.deleteCreatedBefore(cutoff, BATCH);

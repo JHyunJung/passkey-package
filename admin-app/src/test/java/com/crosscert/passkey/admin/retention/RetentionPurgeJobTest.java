@@ -13,7 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,7 +26,7 @@ class RetentionPurgeJobTest {
     @Mock RetentionPurgeService service;
     @Mock SchedulerLeaseService leases;
     @Mock AuditLogService audit;
-    Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), KstTime.ZONE);
     RetentionPurgeJob job;
 
     @BeforeEach

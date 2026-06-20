@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,7 +28,7 @@ public final class ApiKeyAdminDto {
             String plainText,          // ONE-TIME — only returned at issue
             String prefix,
             Set<String> scopes,
-            Instant expiresAt          // null = 무기한
+            OffsetDateTime expiresAt   // null = 무기한
     ) {}
 
     /** P1-5 rotation 응답 — plaintextKey 는 ONE-TIME, oldKeyExpiresAt 는 구 키 grace 만료 시각. */
@@ -37,7 +37,7 @@ public final class ApiKeyAdminDto {
             String plaintextKey,       // ONE-TIME — only returned at rotate
             String prefix,
             Set<String> scopes,
-            Instant oldKeyExpiresAt
+            OffsetDateTime oldKeyExpiresAt
     ) {}
 
     public record ApiKeyView(
@@ -46,10 +46,10 @@ public final class ApiKeyAdminDto {
             String name,
             String keyPrefix,
             Set<String> scopes,
-            Instant createdAt,
-            Instant expiresAt,
-            Instant revokedAt,
-            Instant lastUsedAt
+            OffsetDateTime createdAt,
+            OffsetDateTime expiresAt,
+            OffsetDateTime revokedAt,
+            OffsetDateTime lastUsedAt
     ) {
         public static ApiKeyView from(ApiKey k) {
             return new ApiKeyView(

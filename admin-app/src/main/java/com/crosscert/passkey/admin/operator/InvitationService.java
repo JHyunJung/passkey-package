@@ -12,8 +12,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Slf4j
@@ -28,6 +29,7 @@ public class InvitationService {
     private final MailSender mailSender;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicyValidator passwordPolicyValidator;
+    private final Clock clock;
 
     @Value("${admin.invite.base-url:http://localhost:5173}")
     private String baseUrl;
@@ -36,12 +38,14 @@ public class InvitationService {
                              AdminUserRepository userRepo,
                              MailSender mailSender,
                              PasswordEncoder passwordEncoder,
-                             PasswordPolicyValidator passwordPolicyValidator) {
+                             PasswordPolicyValidator passwordPolicyValidator,
+                             Clock clock) {
         this.invitationRepo = invitationRepo;
         this.userRepo = userRepo;
         this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
         this.passwordPolicyValidator = passwordPolicyValidator;
+        this.clock = clock;
     }
 
     @Transactional
@@ -50,8 +54,9 @@ public class InvitationService {
         String tokenHash = CryptoUtils.sha256Hex(plaintext);
         String prefix = plaintext.substring(0, 8);
 
-        Instant expiresAt = Instant.now().plus(TOKEN_TTL);
-        var inv = new AdminUserInvitation(adminUserId, tokenHash, prefix, invitedBy, expiresAt);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        OffsetDateTime expiresAt = now.plus(TOKEN_TTL);
+        var inv = new AdminUserInvitation(adminUserId, tokenHash, prefix, invitedBy, now, expiresAt);
         invitationRepo.save(inv);
 
         String acceptUrl = baseUrl + URL_PREFIX + plaintext;
@@ -69,7 +74,7 @@ public class InvitationService {
 
     @Transactional(readOnly = true)
     public AdminUserDto.InvitationCheck check(String plaintext) {
-        var inv = lookupValid(plaintext);
+        var inv = lookupValid(plaintext, OffsetDateTime.now(clock));
         var user = userRepo.findById(inv.getAdminUserId())
                 .orElseThrow(() -> new IllegalStateException("user not found"));
         return new AdminUserDto.InvitationCheck(
@@ -78,18 +83,19 @@ public class InvitationService {
 
     @Transactional
     public void accept(String plaintext, String password) {
-        var inv = lookupValid(plaintext);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        var inv = lookupValid(plaintext, now);
         var user = userRepo.findById(inv.getAdminUserId())
                 .orElseThrow(() -> new IllegalStateException("user not found"));
         passwordPolicyValidator.validate(password);
         user.setBcryptHash(passwordEncoder.encode(password));
         user.setStatus("ACTIVE");
-        inv.accept();
+        inv.accept(now);
         log.info("invitation accepted: email={} tokenPrefix={}",
                 CryptoUtils.maskEmail(user.getEmail()), inv.getTokenPrefix());
     }
 
-    private AdminUserInvitation lookupValid(String plaintext) {
+    private AdminUserInvitation lookupValid(String plaintext, OffsetDateTime now) {
         String hash = CryptoUtils.sha256Hex(plaintext);
         var inv = invitationRepo.findByTokenHash(hash)
                 .orElseThrow(() -> {
@@ -101,7 +107,7 @@ public class InvitationService {
                     log.warn("invitation lookup failed: tokenPrefix={} reason=not-found", tp);
                     return new IllegalStateException("Invalid token");
                 });
-        if (inv.isExpired()) {
+        if (inv.isExpired(now)) {
             log.warn("invitation expired: tokenPrefix={}", inv.getTokenPrefix());
             throw new IllegalStateException("Token expired");
         }

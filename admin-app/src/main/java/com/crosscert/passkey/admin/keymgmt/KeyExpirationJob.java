@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.lang.management.ManagementFactory;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,10 +59,10 @@ public class KeyExpirationJob {
             log.debug("KeyExpirationJob skipped — another instance holds the lease");
             return;
         }
-        Instant cutoff = clock.instant().minus(grace);
+        OffsetDateTime cutoff = OffsetDateTime.now(clock).minus(grace);
         List<SigningKey> expired = repo.findAllByStatusAndRotatedAtBefore("ROTATED", cutoff);
         log.info("key expiration tick: candidates={}", expired.size());
-        Instant now = clock.instant();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         for (SigningKey k : expired) {
             long ageMs = Duration.between(k.getRotatedAt(), now).toMillis();
             k.revoke(now);

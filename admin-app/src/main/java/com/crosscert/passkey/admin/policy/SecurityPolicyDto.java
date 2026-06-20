@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public final class SecurityPolicyDto {
@@ -16,7 +16,7 @@ public final class SecurityPolicyDto {
             int passwordMinLength,
             boolean mfaRequired,
             List<String> corsAllowlist,
-            Instant updatedAt,
+            OffsetDateTime updatedAt,
             String updatedBy
     ) {
         public View {

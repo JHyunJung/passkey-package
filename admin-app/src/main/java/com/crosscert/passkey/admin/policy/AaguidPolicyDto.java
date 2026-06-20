@@ -1,7 +1,7 @@
 package com.crosscert.passkey.admin.policy;
 
 import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,7 +15,7 @@ public final class AaguidPolicyDto {
             TenantAaguidPolicy.Mode mode,
             boolean mdsStrict,
             List<Entry> entries,
-            Instant updatedAt,
+            OffsetDateTime updatedAt,
             String updatedBy
     ) {}
 

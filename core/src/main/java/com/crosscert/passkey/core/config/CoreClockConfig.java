@@ -9,6 +9,6 @@ import java.time.Clock;
 public class CoreClockConfig {
     @Bean
     public Clock clock() {
-        return Clock.systemUTC();
+        return Clock.system(KstTime.ZONE);
     }
 }

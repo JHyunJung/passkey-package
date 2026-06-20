@@ -22,7 +22,8 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,7 +43,7 @@ class KeyRotationServiceTest {
     private SchedulerLeaseService leases;
     private AuditLogService audit;
     private KeyEnvelope envelope;
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), KstTime.ZONE);
     private KeyRotationService svc;
 
     @BeforeEach
@@ -70,7 +71,7 @@ class KeyRotationServiceTest {
         KeyRotationService.RotateResult result = svc.rotate(UUID.randomUUID(), "alice@example.com");
 
         assertThat(current.getStatus()).isEqualTo("ROTATED");
-        assertThat(current.getRotatedAt()).isEqualTo(clock.instant());
+        assertThat(current.getRotatedAt()).isEqualTo(OffsetDateTime.now(clock));
 
         // Codex T17 P1-1: UPDATE-old (saveAndFlush) must happen BEFORE
         // INSERT-new (save) so Hibernate emits SQL in that order and

@@ -24,7 +24,7 @@ class AdminUserTest {
     @Test
     void recordLoginUpdatesLastLoginAt() {
         AdminUser u = new AdminUser("alice@example.com", "$2a$12$abc", "ADMIN");
-        java.time.Instant now = java.time.Instant.parse("2026-06-01T00:00:00Z");
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.parse("2026-06-01T00:00:00Z");
         u.recordLogin(now);
         assertThat(u.getLastLoginAt()).isEqualTo(now);
     }

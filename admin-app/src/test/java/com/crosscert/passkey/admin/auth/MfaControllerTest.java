@@ -12,7 +12,8 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,7 +30,7 @@ class MfaControllerTest {
     private final AdminUserRepository users = mock(AdminUserRepository.class);
     private final RecoveryCodeService recoveryCodes = mock(RecoveryCodeService.class);
     private final MfaSecretCipher cipher = mock(MfaSecretCipher.class);
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-11T00:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-11T00:00:00Z"), KstTime.ZONE);
 
     // max-attempts=5, duration=15m mirror AdminSecurityConfig defaults.
     private final MfaController controller =
@@ -100,14 +101,14 @@ class MfaControllerTest {
         for (int i = 0; i < 5; i++) {
             controller.verify(new MfaController.VerifyRequest("000000"), auth(), req);
         }
-        assertThat(u.isLocked(clock.instant())).isTrue();
+        assertThat(u.isLocked(OffsetDateTime.now(clock))).isTrue();
         verify(session).invalidate();   // session killed on lockout
     }
 
     @Test
     void verify_whenLocked_rejectsEvenCorrectCode() {
         AdminUser u = enrolledUser();
-        u.recordFailedLogin(clock.instant(), 1, Duration.ofMinutes(15)); // already locked
+        u.recordFailedLogin(OffsetDateTime.now(clock), 1, Duration.ofMinutes(15)); // already locked
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
         when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
         when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);   // correct code
@@ -121,7 +122,7 @@ class MfaControllerTest {
     @Test
     void verify_success_resetsFailedCount() {
         AdminUser u = enrolledUser();
-        u.recordFailedLogin(clock.instant(), 5, Duration.ofMinutes(15)); // 1 fail, not locked
+        u.recordFailedLogin(OffsetDateTime.now(clock), 5, Duration.ofMinutes(15)); // 1 fail, not locked
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
         when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
         when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);
@@ -130,6 +131,6 @@ class MfaControllerTest {
                 new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(u.isLocked(clock.instant())).isFalse();
+        assertThat(u.isLocked(OffsetDateTime.now(clock))).isFalse();
     }
 }

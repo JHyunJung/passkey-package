@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -37,9 +38,10 @@ public class TenantLifecycleService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
         t.suspend();
         tenants.save(t);
-        List<ApiKey> active = apiKeys.findActiveByTenantId(tenantId, clock.instant());
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        List<ApiKey> active = apiKeys.findActiveByTenantId(tenantId, now);
         for (ApiKey k : active) {
-            k.revoke(clock.instant());
+            k.revoke(now);
         }
         audit.append(new AuditAppendRequest(actorId, actorEmail, "TENANT_SUSPEND",
                 "TENANT", tenantId.toString(), tenantId,

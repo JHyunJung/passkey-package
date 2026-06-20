@@ -23,12 +23,12 @@ public final class AdminUserDetails implements UserDetails {
     private final String role;          // "PLATFORM_OPERATOR" | "RP_ADMIN"
     private final UUID tenantId;        // RP_ADMIN 은 non-null
     private final boolean enabled;
-    private final java.time.Instant lockedUntil;
+    private final java.time.OffsetDateTime lockedUntil;
     private final java.time.Clock clock;
 
     public AdminUserDetails(UUID id, String email, String passwordHash,
                             String role, UUID tenantId, boolean enabled,
-                            java.time.Instant lockedUntil, java.time.Clock clock) {
+                            java.time.OffsetDateTime lockedUntil, java.time.Clock clock) {
         this.id = Objects.requireNonNull(id);
         this.email = Objects.requireNonNull(email);
         this.passwordHash = Objects.requireNonNull(passwordHash);
@@ -53,7 +53,7 @@ public final class AdminUserDetails implements UserDetails {
     @Override public String getUsername()              { return email; }
     @Override public boolean isAccountNonExpired()     { return true; }
     @Override public boolean isAccountNonLocked() {
-        return lockedUntil == null || clock.instant().isAfter(lockedUntil);
+        return lockedUntil == null || java.time.OffsetDateTime.now(clock).isAfter(lockedUntil);
     }
     @Override public boolean isCredentialsNonExpired() { return true; }
     @Override public boolean isEnabled()               { return enabled; }

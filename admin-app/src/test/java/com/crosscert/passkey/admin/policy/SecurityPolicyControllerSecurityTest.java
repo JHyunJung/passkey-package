@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -87,7 +87,7 @@ class SecurityPolicyControllerSecurityTest {
 
     private static SecurityPolicyDto.View sampleView() {
         return new SecurityPolicyDto.View(
-                30, 12, false, List.of(), Instant.parse("2026-05-31T00:00:00Z"), "alice@example.com");
+                30, 12, false, List.of(), OffsetDateTime.parse("2026-05-31T00:00:00Z"), "alice@example.com");
     }
 
     @Test

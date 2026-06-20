@@ -1,10 +1,11 @@
 package com.crosscert.passkey.core.entity;
 
+import com.crosscert.passkey.core.config.KstTime;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -35,42 +36,60 @@ public class SchedulerLease {
     private String holder;
 
     @Column(name = "EXPIRES_AT", nullable = false)
-    private Instant expiresAt;
+    private OffsetDateTime expiresAt;
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
-    private Instant createdAt;
+    private OffsetDateTime createdAt;
 
     @Column(name = "UPDATED_AT", nullable = false)
-    private Instant updatedAt;
+    private OffsetDateTime updatedAt;
 
     protected SchedulerLease() {}
 
-    public SchedulerLease(UUID id, String name, String holder, Instant expiresAt) {
+    public SchedulerLease(UUID id, String name, String holder, OffsetDateTime expiresAt) {
         this.id = id;
         this.name = name;
         this.holder = holder;
         this.expiresAt = expiresAt;
     }
 
+    /**
+     * Single-source-of-time constructor. The caller supplies one {@code now}
+     * (the same instant from which {@code expiresAt = now + ttl} is derived) so
+     * createdAt/updatedAt and expiresAt share a single time source. Pre-seeding
+     * createdAt/updatedAt makes @PrePersist's null-check leave them alone —
+     * preventing fixed-clock nondeterminism (and createdAt > expiresAt) that
+     * arises when @PrePersist self-sources a second {@code .now()}.
+     */
+    public SchedulerLease(UUID id, String name, String holder,
+                          OffsetDateTime expiresAt, OffsetDateTime now) {
+        this.id = id;
+        this.name = name;
+        this.holder = holder;
+        this.expiresAt = expiresAt;
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
     @PrePersist
     protected void onCreate() {
-        Instant now = Instant.now();
+        OffsetDateTime now = OffsetDateTime.now(KstTime.ZONE);
         if (createdAt == null) createdAt = now;
         if (updatedAt == null) updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = OffsetDateTime.now(KstTime.ZONE);
     }
 
     public UUID getId() { return id; }
     public String getName() { return name; }
     public String getHolder() { return holder; }
-    public Instant getExpiresAt() { return expiresAt; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
+    public OffsetDateTime getExpiresAt() { return expiresAt; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
+    public OffsetDateTime getUpdatedAt() { return updatedAt; }
 
     public void setHolder(String holder) { this.holder = holder; }
-    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+    public void setExpiresAt(OffsetDateTime expiresAt) { this.expiresAt = expiresAt; }
 }

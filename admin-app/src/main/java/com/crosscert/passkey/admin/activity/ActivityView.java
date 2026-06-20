@@ -1,6 +1,6 @@
 package com.crosscert.passkey.admin.activity;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,7 +43,7 @@ public record ActivityView(
             String targetId,
             UUID tenantId,
             String tenantSlug,
-            Instant createdAt,
+            OffsetDateTime createdAt,
             String category
     ) {}
 }

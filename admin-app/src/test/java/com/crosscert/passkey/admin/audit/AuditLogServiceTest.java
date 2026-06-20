@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.crosscert.passkey.core.config.KstTime;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +13,7 @@ import org.mockito.ArgumentCaptor;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +34,9 @@ class AuditLogServiceTest {
     private AuditLogRepository repo;
     private EntityManager em;
     private AuditLogService service;
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    // KST clock: the fixed absolute instant (UTC midnight) presents as
+    // 2026-06-01T09:00+09:00 wall-clock, matching production's KstTime.ZONE.
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), KstTime.ZONE);
 
     @BeforeEach
     void setUp() {
@@ -73,9 +76,12 @@ class AuditLogServiceTest {
         assertThat(row.getPayload()).isEqualTo("{\"ip\":\"127.0.0.1\",\"ua\":\"JUnit\"}");
 
         // Manually recompute the expected hash (actorId is UUID string in hash input).
+        // KST clock: OffsetDateTime.now(clock).truncatedTo(MICROS).toString() of the
+        // fixed UTC-midnight instant is "2026-06-01T09:00+09:00" (seconds collapse to
+        // empty when zero; +09:00 offset is part of the hashed form).
         byte[] expected = MessageDigest.getInstance("SHA-256")
                 .digest(("|" + actorUuid + "|ADMIN_LOGIN||"
-                         + "|2026-06-01T00:00:00Z|"
+                         + "|2026-06-01T09:00+09:00|"
                          + row.getPayload()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         assertThat(row.getHash()).containsExactly(toIntArray(expected));
     }
@@ -85,7 +91,7 @@ class AuditLogServiceTest {
         UUID actorUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AuditLog prev = new AuditLog(
                 null, new byte[]{9, 9, 9}, actorUuid, "alice@example.com",
-                "ADMIN_LOGIN", null, null, null, null, null, "{}", clock.instant());
+                "ADMIN_LOGIN", null, null, null, null, null, "{}", OffsetDateTime.now(clock));
         when(repo.findLatestForUpdate()).thenReturn(Optional.of(prev));
 
         service.append(new AuditAppendRequest(

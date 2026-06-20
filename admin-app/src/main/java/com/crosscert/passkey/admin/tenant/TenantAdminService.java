@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -68,9 +68,9 @@ public class TenantAdminService {
         Map<UUID, Long> credByTenant =
                 toCountMap(credentialRepository.countGroupedByTenantId());
         Map<UUID, Long> activeKeysByTenant =
-                toCountMap(apiKeyRepository.countActiveGroupedByTenantId(clock.instant()));
-        Map<UUID, Instant> lastEventByTenant =
-                toInstantMap(auditLogRepository.findLatestCreatedAtGroupedByTenantId());
+                toCountMap(apiKeyRepository.countActiveGroupedByTenantId(OffsetDateTime.now(clock)));
+        Map<UUID, OffsetDateTime> lastEventByTenant =
+                toOffsetDateTimeMap(auditLogRepository.findLatestCreatedAtGroupedByTenantId());
 
         return tenants.findAll().stream()
                 .map(t -> toView(t,
@@ -88,10 +88,10 @@ public class TenantAdminService {
         return m;
     }
 
-    private static Map<UUID, Instant> toInstantMap(List<Object[]> rows) {
-        Map<UUID, Instant> m = new HashMap<>();
+    private static Map<UUID, OffsetDateTime> toOffsetDateTimeMap(List<Object[]> rows) {
+        Map<UUID, OffsetDateTime> m = new HashMap<>();
         for (Object[] r : rows) {
-            m.put((UUID) r[0], (Instant) r[1]);
+            m.put((UUID) r[0], (OffsetDateTime) r[1]);
         }
         return m;
     }
@@ -109,15 +109,15 @@ public class TenantAdminService {
      */
     private TenantAdminDto.TenantView toView(Tenant t) {
         long credentials = credentialRepository.countByTenantId(t.getId());
-        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), clock.instant());
-        Instant lastEventAt = auditLogRepository
+        long apiKeys = apiKeyRepository.countActiveByTenantId(t.getId(), OffsetDateTime.now(clock));
+        OffsetDateTime lastEventAt = auditLogRepository
                 .findFirstByTenantIdOrderByCreatedAtDesc(t.getId())
                 .map(AuditLog::getCreatedAt)
                 .orElse(null);
         return toView(t, credentials, apiKeys, lastEventAt);
     }
 
-    private TenantAdminDto.TenantView toView(Tenant t, long credentials, long apiKeys, Instant lastEventAt) {
+    private TenantAdminDto.TenantView toView(Tenant t, long credentials, long apiKeys, OffsetDateTime lastEventAt) {
         return TenantAdminDto.TenantView.from(t, credentials, apiKeys, lastEventAt);
     }
 

@@ -22,7 +22,7 @@ import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -148,7 +148,7 @@ class CredentialAuthEventRepositoryTest {
         repo.save(new CredentialAuthEvent(cred, tenant, CredentialAuthResult.SUCCESS, null, 2));
 
         // cutoff far in the future → both rows are "before" it and get purged.
-        Instant cutoff = Instant.now().plus(1, ChronoUnit.DAYS);
+        OffsetDateTime cutoff = OffsetDateTime.now().plus(1, ChronoUnit.DAYS);
         int deleted = repo.deleteCreatedBefore(cutoff, 100);
 
         assertThat(deleted).isEqualTo(2);

@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,5 +32,5 @@ public interface AdminUserInvitationRepository extends JpaRepository<AdminUserIn
          + "((accepted_at IS NOT NULL AND accepted_at < :cutoff) "
          + "OR (accepted_at IS NULL AND expires_at < :cutoff)) "
          + "AND ROWNUM <= :batchSize)", nativeQuery = true)
-    int deleteConsumedOrExpiredBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+    int deleteConsumedOrExpiredBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 }

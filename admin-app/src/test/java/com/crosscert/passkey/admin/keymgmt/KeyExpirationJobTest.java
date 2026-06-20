@@ -13,7 +13,8 @@ import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,7 +33,7 @@ class KeyExpirationJobTest {
     private SchedulerLeaseService leases;
     private AuditLogService audit;
     private KeyExpirationJob job;
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), KstTime.ZONE);
 
     @BeforeEach
     void setUp() {
@@ -56,14 +57,14 @@ class KeyExpirationJobTest {
                 .thenReturn(true);
         // rotated at clock - 31min — past the 30min grace
         SigningKey old = withId(rotatedKey("expired"), UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        setRotatedAt(old, clock.instant().minus(Duration.ofMinutes(31)));
+        setRotatedAt(old, OffsetDateTime.now(clock).minus(Duration.ofMinutes(31)));
         when(repo.findAllByStatusAndRotatedAtBefore(eq("ROTATED"), any()))
                 .thenReturn(List.of(old));
 
         job.runOnce();
 
         assertThat(old.getStatus()).isEqualTo("REVOKED");
-        assertThat(old.getRevokedAt()).isEqualTo(clock.instant());
+        assertThat(old.getRevokedAt()).isEqualTo(OffsetDateTime.now(clock));
         verify(repo).save(old);
 
         ArgumentCaptor<AuditAppendRequest> auditCap =
@@ -86,7 +87,7 @@ class KeyExpirationJobTest {
 
     private static SigningKey rotatedKey(String kid) {
         SigningKey k = new SigningKey(kid, "RS256", "{}", new byte[]{0});
-        k.rotate(Instant.parse("2026-06-01T00:00:00Z"));
+        k.rotate(OffsetDateTime.parse("2026-06-01T00:00:00Z"));
         return k;
     }
 
@@ -97,7 +98,7 @@ class KeyExpirationJobTest {
         return k;
     }
 
-    private static void setRotatedAt(SigningKey k, Instant t) throws Exception {
+    private static void setRotatedAt(SigningKey k, OffsetDateTime t) throws Exception {
         Field f = SigningKey.class.getDeclaredField("rotatedAt");
         f.setAccessible(true);
         f.set(k, t);

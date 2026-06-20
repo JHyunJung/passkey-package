@@ -2,7 +2,7 @@ package com.crosscert.passkey.core.entity;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,7 +15,7 @@ class AuditLogTest {
     void constructorPopulatesAllRequiredFields() {
         byte[] prev = new byte[]{1,2,3};
         byte[] hash = new byte[]{4,5,6};
-        Instant ts  = Instant.parse("2026-06-01T00:00:00Z");
+        OffsetDateTime ts  = OffsetDateTime.parse("2026-06-01T00:00:00Z");
         AuditLog row = new AuditLog(
                 prev, hash, ACTOR_UUID, "alice@example.com",
                 "TENANT_CREATE", "TENANT", "T_A",
@@ -37,7 +37,7 @@ class AuditLogTest {
     void prevHashMayBeNullForGenesisRow() {
         AuditLog row = new AuditLog(
                 null, new byte[]{0}, ACTOR_UUID, "alice@example.com",
-                "ADMIN_LOGIN", null, null, null, null, null, "{}", Instant.now());
+                "ADMIN_LOGIN", null, null, null, null, null, "{}", OffsetDateTime.now());
         assertThat(row.getPrevHash()).isNull();
     }
 
@@ -45,7 +45,7 @@ class AuditLogTest {
     void nullActorIdAllowedForSystemAuditEntries() {
         AuditLog row = new AuditLog(
                 null, new byte[]{0}, null, "system",
-                "SYSTEM_ACTION", null, null, null, null, null, "{}", Instant.now());
+                "SYSTEM_ACTION", null, null, null, null, null, "{}", OffsetDateTime.now());
         assertThat(row.getActorId()).isNull();
     }
 }

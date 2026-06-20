@@ -15,7 +15,8 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,14 +32,14 @@ class AdminLoginSuccessHandlerTest {
         // has no constraint, so a 0/negative value can be built here to exercise
         // the defensive clamp path.
         when(policy.get()).thenReturn(new SecurityPolicyDto.View(
-                minutes, 12, false, List.of(), Instant.now(), null));
+                minutes, 12, false, List.of(), OffsetDateTime.now(), null));
         return handlerWithPolicy(policy);
     }
 
     private AuthenticationSuccessHandler handlerWithPolicy(SecurityPolicyService policy) {
         AuditLogService audit = mock(AuditLogService.class);
         AdminUserRepository users = mock(AdminUserRepository.class);
-        Clock clock = Clock.fixed(Instant.parse("2026-06-04T00:00:00Z"), ZoneOffset.UTC);
+        Clock clock = Clock.fixed(Instant.parse("2026-06-04T00:00:00Z"), KstTime.ZONE);
         ObjectMapper mapper = new ObjectMapper();
 
         AdminUser u = mock(AdminUser.class);

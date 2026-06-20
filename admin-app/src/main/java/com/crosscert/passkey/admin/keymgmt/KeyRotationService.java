@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.lang.management.ManagementFactory;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -91,7 +92,7 @@ public class KeyRotationService {
         // before the subsequent INSERT, so the function-based unique
         // index `signing_key_one_active_uix` sees a single ACTIVE at any
         // moment. Both writes commit together.
-        old.rotate(clock.instant());
+        old.rotate(OffsetDateTime.now(clock));
         repo.saveAndFlush(old);
 
         SigningKey fresh = SigningKeyFactory.newRsaSigningKey(envelope);

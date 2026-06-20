@@ -6,9 +6,12 @@ import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.crosscert.passkey.core.config.KstTime;
+
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -48,7 +51,7 @@ public class FunnelService {
     public FunnelDto.View compute(UUID tenantId, int windowDays) {
         // RP_ADMIN must not query other tenants' funnels. PLATFORM_OPERATOR is unrestricted.
         tenantBoundary.assertCanAccessTenant(tenantId);
-        Instant since = Instant.now().minus(windowDays, ChronoUnit.DAYS);
+        OffsetDateTime since = OffsetDateTime.now(KstTime.ZONE).minus(windowDays, ChronoUnit.DAYS);
 
         long regAttempts  = repo.countByTenantIdAndActionAndCreatedAtAfter(tenantId, REGISTRATION_BEGIN, since);
         long regSuccess   = repo.countByTenantIdAndActionAndCreatedAtAfter(tenantId, REGISTRATION_SUCCESS, since);
@@ -76,7 +79,7 @@ public class FunnelService {
         return Math.min(r, 1.0);
     }
 
-    private List<FunnelDto.DailyPoint> buildSeries(UUID tenantId, Instant since, int windowDays) {
+    private List<FunnelDto.DailyPoint> buildSeries(UUID tenantId, OffsetDateTime since, int windowDays) {
         Map<LocalDate, long[]> byDay = new HashMap<>();
         for (Object[] row : repo.aggregateDailyByTenantAndActions(
                 tenantId,
@@ -109,7 +112,7 @@ public class FunnelService {
         return series;
     }
 
-    private List<FunnelDto.EventCount> buildByEventType(UUID tenantId, Instant since) {
+    private List<FunnelDto.EventCount> buildByEventType(UUID tenantId, OffsetDateTime since) {
         return repo.aggregateByTenantAndActionsGrouped(
                 tenantId,
                 List.of(REGISTRATION_BEGIN, REGISTRATION_SUCCESS, AUTHENTICATION_BEGIN, AUTHENTICATION_SUCCESS),

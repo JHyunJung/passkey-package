@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public final class AdminUserDto {
@@ -12,8 +12,8 @@ public final class AdminUserDto {
 
     public record View(
             UUID id, String email, String role, String status,
-            UUID tenantId, Instant createdAt, Instant lastLoginAt,
-            Instant suspendedAt, String createdBy, boolean mfaEnabled
+            UUID tenantId, OffsetDateTime createdAt, OffsetDateTime lastLoginAt,
+            OffsetDateTime suspendedAt, String createdBy, boolean mfaEnabled
     ) {}
 
     public record InviteRequest(
@@ -31,14 +31,14 @@ public final class AdminUserDto {
             String tokenPrefix,
             String plaintextToken,
             String acceptUrl,
-            Instant expiresAt
+            OffsetDateTime expiresAt
     ) {}
 
     public record InvitationCheck(
             String email,
             String role,
             UUID tenantId,
-            Instant expiresAt
+            OffsetDateTime expiresAt
     ) {}
 
     public record AcceptRequest(

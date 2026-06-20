@@ -7,7 +7,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.ParamDef;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -43,7 +43,7 @@ public class Credential extends BaseEntity {
     private String attestationFmt;
 
     @Column(name = "LAST_USED_AT")
-    private Instant lastUsedAt;
+    private OffsetDateTime lastUsedAt;
 
     @Column(name = "LABEL", length = 128)
     private String label;
@@ -69,7 +69,7 @@ public class Credential extends BaseEntity {
     public void setTransports(String transports) { this.transports = transports; }
     public String getAttestationFmt() { return attestationFmt; }
     public void setAttestationFmt(String attestationFmt) { this.attestationFmt = attestationFmt; }
-    public Instant getLastUsedAt() { return lastUsedAt; }
+    public OffsetDateTime getLastUsedAt() { return lastUsedAt; }
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
     public byte[] getCosePublicKey() { return cosePublicKey; }
@@ -81,7 +81,7 @@ public class Credential extends BaseEntity {
      * the prior signature took a byte[] that callers only ever passed back
      * unchanged (self-assign no-op), so it was removed.
      */
-    public void recordAuthentication(long newSignCount, Instant now) {
+    public void recordAuthentication(long newSignCount, OffsetDateTime now) {
         this.signCount = newSignCount;
         this.lastUsedAt = now;
     }

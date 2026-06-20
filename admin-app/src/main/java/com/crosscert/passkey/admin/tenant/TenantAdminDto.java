@@ -3,7 +3,7 @@ package com.crosscert.passkey.admin.tenant;
 import com.crosscert.passkey.core.entity.Tenant;
 import jakarta.validation.constraints.*;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -52,11 +52,11 @@ public final class TenantAdminDto {
             int webauthnTimeoutMs,
             long credentials,
             long apiKeys,
-            Instant lastEventAt,
-            Instant createdAt,
-            Instant updatedAt
+            OffsetDateTime lastEventAt,
+            OffsetDateTime createdAt,
+            OffsetDateTime updatedAt
     ) {
-        public static TenantView from(Tenant t, long credentials, long apiKeys, Instant lastEventAt) {
+        public static TenantView from(Tenant t, long credentials, long apiKeys, OffsetDateTime lastEventAt) {
             return new TenantView(
                     t.getId(), t.getSlug(), t.getDisplayName(), t.getStatus(),
                     t.getRpId(), t.getRpName(),

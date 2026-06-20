@@ -22,7 +22,7 @@ spring:
     open-in-view: false
     properties:
       hibernate.dialect: org.hibernate.dialect.OracleDialect
-      hibernate.jdbc.time_zone: UTC
+      hibernate.jdbc.time_zone: Asia/Seoul
       hibernate.default_schema: APP_OWNER
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
@@ -30,6 +30,7 @@ spring:
       maximum-pool-size: 4
       minimum-idle: 1
       pool-name: vpd-it-pool
+      connection-init-sql: "ALTER SESSION SET TIME_ZONE='Asia/Seoul'"
   # Disable Redis auto-config in the IT — no Redis container is needed
   # to prove VPD isolation, and forcing one would slow the suite down
   # by another 30+ seconds for zero coverage benefit.

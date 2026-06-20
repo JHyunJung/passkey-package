@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -69,10 +70,13 @@ public class MdsHistoryService {
      * 수개월 누적분 unbounded DELETE 방지). 호출측(RetentionPurgeService)이 0 행 될 때까지 반복.
      */
     @Transactional
-    public int purgeStartedBefore(Instant cutoff, int batchSize) {
+    public int purgeStartedBefore(OffsetDateTime cutoff, int batchSize) {
+        // JDBC raw path — bind the absolute instant as a Timestamp (mds_sync_history
+        // is JdbcTemplate-managed, not a Hibernate entity). The caller now supplies a
+        // KST OffsetDateTime; .toInstant() preserves the exact instant for the compare.
         return jdbc.update(
                 "DELETE FROM APP_OWNER.mds_sync_history WHERE started_at < ? AND ROWNUM <= ?",
-                java.sql.Timestamp.from(cutoff), batchSize);
+                java.sql.Timestamp.from(cutoff.toInstant()), batchSize);
     }
 
     @Transactional(readOnly = true)

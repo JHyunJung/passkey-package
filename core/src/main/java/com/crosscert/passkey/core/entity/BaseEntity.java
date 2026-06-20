@@ -9,7 +9,9 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import com.crosscert.passkey.core.config.KstTime;
+
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -34,24 +36,24 @@ public abstract class BaseEntity {
     private UUID id;
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
-    private Instant createdAt;
+    private OffsetDateTime createdAt;
 
     @Column(name = "UPDATED_AT", nullable = false)
-    private Instant updatedAt;
+    private OffsetDateTime updatedAt;
 
     @PrePersist
     protected void onCreate() {
-        Instant now = Instant.now();
+        OffsetDateTime now = OffsetDateTime.now(KstTime.ZONE);
         if (createdAt == null) createdAt = now;
         if (updatedAt == null) updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = OffsetDateTime.now(KstTime.ZONE);
     }
 
     public UUID getId() { return id; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
+    public OffsetDateTime getUpdatedAt() { return updatedAt; }
 }

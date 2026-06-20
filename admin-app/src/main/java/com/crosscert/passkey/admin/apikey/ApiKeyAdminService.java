@@ -18,8 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -113,13 +112,10 @@ public class ApiKeyAdminService {
         for (String scope : normalized) {
             key.addScope(scope);
         }
-        // 월 단위 만료: now + N개월 (UTC). null 이면 무기한(expires_at=NULL, 기존 키와 동일).
-        Instant expiresAt = null;
+        // 월 단위 만료: now + N개월 (KST). null 이면 무기한(expires_at=NULL, 기존 키와 동일).
+        OffsetDateTime expiresAt = null;
         if (req.expiresInMonths() != null) {
-            expiresAt = clock.instant()
-                    .atZone(ZoneOffset.UTC)
-                    .plusMonths(req.expiresInMonths())
-                    .toInstant();
+            expiresAt = OffsetDateTime.now(clock).plusMonths(req.expiresInMonths());
             key.expireAt(expiresAt);
         }
         ApiKey saved = repo.saveAndFlush(key);
@@ -149,7 +145,7 @@ public class ApiKeyAdminService {
         ApiKey k = repo.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.API_KEY_NOT_FOUND));
         tenantBoundary.assertCanAccessTenant(k.getTenantId());
-        k.revoke(clock.instant());
+        k.revoke(OffsetDateTime.now(clock));
         repo.save(k);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -176,7 +172,7 @@ public class ApiKeyAdminService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.API_KEY_NOT_FOUND));
         tenantBoundary.assertCanAccessTenant(old.getTenantId());
 
-        Instant now = clock.instant();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         if (!old.isActive(now)) {
             throw new BusinessException(ErrorCode.API_KEY_NOT_FOUND,
                     "cannot rotate inactive (revoked/expired) key: " + oldKeyId);
@@ -199,7 +195,7 @@ public class ApiKeyAdminService {
         }
         ApiKey savedNew = repo.saveAndFlush(fresh);
 
-        Instant oldExpiry = now.plus(rotationGrace);
+        OffsetDateTime oldExpiry = now.plus(rotationGrace);
         old.expireAt(oldExpiry);
         repo.save(old);
 

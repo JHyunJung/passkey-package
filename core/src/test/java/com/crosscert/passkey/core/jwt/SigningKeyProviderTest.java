@@ -17,6 +17,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
@@ -112,7 +113,7 @@ class SigningKeyProviderTest {
     void publicJwkSetIncludesActiveAndRotated() throws Exception {
         SigningKey active = freshActiveKey("active-kid");
         SigningKey rotated = freshActiveKey("rotated-kid");
-        rotated.rotate(clock.instant());
+        rotated.rotate(OffsetDateTime.now(clock));
         when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
                 .thenReturn(Optional.of(active));
         when(repo.findAllByStatusIn(List.of("ACTIVE", "ROTATED")))

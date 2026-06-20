@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -51,7 +52,7 @@ public class RecoveryCodeService {
     public boolean consume(UUID adminUserId, String code) {
         if (code == null || code.isBlank()) return false;
         String hash = CryptoUtils.sha256Hex(normalize(code));
-        return repo.markUsed(adminUserId, hash, clock.instant()) == 1;
+        return repo.markUsed(adminUserId, hash, OffsetDateTime.now(clock)) == 1;
     }
 
     @Transactional(readOnly = true)

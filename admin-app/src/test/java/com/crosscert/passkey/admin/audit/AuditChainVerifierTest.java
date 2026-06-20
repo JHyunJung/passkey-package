@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.crosscert.passkey.core.config.KstTime;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +26,9 @@ class AuditChainVerifierTest {
 
     private AuditLogRepository repo;
     private AuditChainVerifier verifier;
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    // KST clock so the seeded createdAt + hashed timestamp carry the +09:00
+    // offset, matching production (KstTime.ZONE). Absolute instant unchanged.
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), KstTime.ZONE);
 
     @BeforeEach
     void setUp() {
@@ -98,12 +101,15 @@ class AuditChainVerifierTest {
                     actorId, "alice@example.com", "ACTION_" + i,
                     "TENANT", "T_" + i, null, Map.of("seq", i));
             String payload = "{\"seq\":" + i + "}";
-            byte[] hash = AuditLogService.computeHash(prev, req, payload, clock.instant());
+            // Single now (KST, +09:00) shared by the hash input and the seeded
+            // createdAt so the verifier recomputes an identical hash.
+            OffsetDateTime now = OffsetDateTime.now(clock);
+            byte[] hash = AuditLogService.computeHash(prev, req, payload, now);
             AuditLog row = new AuditLog(
                     prev, hash, req.actorId(), req.actorEmail(),
                     req.action(), req.targetType(), req.targetId(),
                     null, null, null,
-                    payload, clock.instant());
+                    payload, now);
             UUID rowId = UUID.fromString(
                     String.format("00000000-0000-0000-0000-%012d", i));
             copyId(row, rowId);

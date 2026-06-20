@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Clock;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -101,7 +101,9 @@ class TenantAdminServiceTest {
         UUID idB = UUID.randomUUID();
         setId(a, idA);
         setId(b, idB);
-        Instant eventA = Instant.parse("2026-05-01T00:00:00Z");
+        // audit_log.created_at is OffsetDateTime (KST, +09:00) after the timezone migration;
+        // the batch aggregate row carries an OffsetDateTime that the view exposes as-is.
+        OffsetDateTime eventA = OffsetDateTime.parse("2026-05-01T09:00:00+09:00");
 
         when(boundary.currentTenantScope()).thenReturn(java.util.Optional.empty());
         when(repo.findAll()).thenReturn(List.of(a, b));

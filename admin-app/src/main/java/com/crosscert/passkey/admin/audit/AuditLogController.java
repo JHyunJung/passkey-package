@@ -8,10 +8,11 @@ import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,8 +38,10 @@ public class AuditLogController {
     public ApiResponse<List<AuditLogView>> list(@RequestParam(required = false) String action,
                                                 @RequestParam(required = false) UUID actorId,
                                                 @RequestParam(required = false) UUID tenantId,
-                                                @RequestParam(required = false) Instant from,
-                                                @RequestParam(required = false) Instant to,
+                                                @RequestParam(required = false)
+                                                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+                                                @RequestParam(required = false)
+                                                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
                                                 @RequestParam(defaultValue = "0") int page,
                                                 @RequestParam(defaultValue = "50") int size) {
         Optional<UUID> scope = tenantBoundary.currentTenantScope();
@@ -67,7 +70,7 @@ public class AuditLogController {
 
     public record AuditLogView(
             UUID id, UUID actorId, String actorEmail, String action,
-            String targetType, String targetId, UUID tenantId, String payload, Instant createdAt) {
+            String targetType, String targetId, UUID tenantId, String payload, OffsetDateTime createdAt) {
         public static AuditLogView from(AuditLog a) {
             return new AuditLogView(
                     a.getId(), a.getActorId(), a.getActorEmail(), a.getAction(),
