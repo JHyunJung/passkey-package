@@ -144,6 +144,49 @@ class TenantAdminServiceTest {
     }
 
     @Test
+    void createRejectsMalformedOrigin() {
+        when(repo.existsBySlug("T_A")).thenReturn(false);
+        TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
+                "T_A", "Tenant A", "localhost", "Tenant A",
+                List.of("ftp://bad.example.com"), // 형식 위반
+                Set.of("none"),
+                true, false,
+                "NONE", 60000);
+        assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_INPUT));
+    }
+
+    @Test
+    void updateRejectsMalformedOrigin() {
+        // lookup(idOrSlug) → findBySlug 가 기존 tenant 반환 (realistic existing tenant)
+        Tenant existing = new Tenant("T_A", "Tenant A", "localhost", "Tenant A");
+        existing.addAllowedOrigin("http://localhost", 0);
+        existing.addAcceptedFormat("none");
+        setId(existing, UUID.randomUUID());
+        when(repo.findBySlug("T_A")).thenReturn(java.util.Optional.of(existing));
+        // tenantBoundary.assertCanAccessTenant 는 void mock → 통과
+
+        TenantAdminDto.TenantUpdateRequest req = new TenantAdminDto.TenantUpdateRequest(
+                "Tenant A", "localhost", "Tenant A",
+                List.of("ftp://bad.example.com"), // 형식 위반
+                Set.of("none"),
+                true, false,
+                "NONE", 60000);
+
+        assertThatThrownBy(() -> service.update("T_A", req, UUID.randomUUID(), "alice@example.com"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_INPUT));
+
+        // validate-before-mutate: 형식 위반이면 saveAndFlush 까지 도달하지 않음
+        verify(repo, never()).saveAndFlush(any());
+        // validate-before-snapshot (hoist lock-in): access check 직후 검증 → snapshot insert 시도 안 함
+        verify(snapshotRepo, never()).save(any());
+    }
+
+    @Test
     void createRejectsDuplicateSlug() {
         when(repo.existsBySlug("T_A")).thenReturn(true);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(

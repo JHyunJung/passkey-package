@@ -134,6 +134,7 @@ public class TenantAdminService {
         t.setAttestationConveyance(req.attestationConveyance());
         t.setWebauthnTimeoutMs(req.webauthnTimeoutMs());
 
+        validateOriginFormats(req.allowedOrigins());
         int order = 0;
         for (String origin : req.allowedOrigins()) {
             t.addAllowedOrigin(origin, order++);
@@ -190,6 +191,8 @@ public class TenantAdminService {
                                             String actorEmail) {
         Tenant t = lookup(idOrSlug);
         tenantBoundary.assertCanAccessTenant(t.getId());
+        // fail-fast: snapshot 저장·mutation 이전에 origin 형식 검증 (DB 도달 전 400)
+        validateOriginFormats(req.allowedOrigins());
         TenantSnapshot before = TenantSnapshot.of(t);
 
         // 변경 직전 값을 snapshot 으로 보존
@@ -286,6 +289,19 @@ public class TenantAdminService {
                     .orElseThrow(() -> new BusinessException(ErrorCode.TENANT_NOT_FOUND));
         } catch (IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.TENANT_NOT_FOUND);
+        }
+    }
+
+    /**
+     * 등록/수정 시 allowedOrigin 형식을 DB 도달 전에 검증 — 위반 시 400 fail-fast.
+     * 웹 origin 또는 android:apk-key-hash origin 만 허용 (AllowedOriginFormat).
+     */
+    private static void validateOriginFormats(List<String> origins) {
+        for (String origin : origins) {
+            if (!AllowedOriginFormat.isValid(origin)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "invalid allowedOrigin format: " + origin);
+            }
         }
     }
 }

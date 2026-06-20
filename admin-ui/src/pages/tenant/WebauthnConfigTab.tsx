@@ -4,6 +4,7 @@ import { Dialog } from '@/shell/Dialog';
 import { useToast } from '@/shell/ToastHost';
 import { webauthnApi } from '@/api/webauthn';
 import type { Tenant, WebauthnConfig } from '@/api/designTypes';
+import { apkKeyHashFromFingerprint, isApkKeyHashOrigin, APK_KEY_HASH_PREFIX } from '@/lib/apkKeyHash';
 
 // webauthnApi.get returns WebauthnConfig + _mdsRequired. Use this locally.
 type ConfigWithMds = WebauthnConfig & { _mdsRequired: boolean };
@@ -35,6 +36,17 @@ function diffObjects(
 export function validateOrigin(input: string, rpId: string): { ok: true; value: string } | { ok: false; error: string } {
   const raw = input.trim();
   if (!raw) return { ok: false, error: 'origin 을 입력하세요.' };
+
+  // Android 네이티브 앱 origin: android:apk-key-hash:<43자 base64url>.
+  // 도메인이 아니라 앱 서명키 해시이므로 rpId 서브도메인 범위 검사를 적용하지 않는다.
+  if (isApkKeyHashOrigin(raw)) {
+    const body = raw.slice(APK_KEY_HASH_PREFIX.length);
+    if (/^[A-Za-z0-9_-]{43}$/.test(body)) {
+      return { ok: true, value: raw };
+    }
+    return { ok: false, error: 'android:apk-key-hash 값은 43자 base64url 이어야 합니다.' };
+  }
+
   // 스킴이 없으면 https:// 를 가정해 파싱(사용자가 host만 입력한 경우 허용).
   const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   let url: URL;
@@ -124,6 +136,7 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
   const [cfg, setCfg] = useState<ConfigWithMds | null>(null);
   const [draft, setDraft] = useState<ConfigWithMds | null>(null);
   const [originInput, setOriginInput] = useState('');
+  const [apkInput, setApkInput] = useState('');
   const [originError, setOriginError] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
   const [diffChanges, setDiffChanges] = useState<{ key: string; from: unknown; to: unknown }[]>([]);
@@ -158,6 +171,22 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
     }
     setDraft({ ...draft, origins: [...draft.origins, result.value] });
     setOriginInput('');
+    setOriginError(null);
+  }
+
+  function addApkKey() {
+    if (!draft) return;
+    const conv = apkKeyHashFromFingerprint(apkInput);
+    if (!conv.ok) {
+      setOriginError(conv.error);
+      return;
+    }
+    if (draft.origins.includes(conv.value)) {
+      setOriginError('이미 추가된 Android 키입니다.');
+      return;
+    }
+    setDraft({ ...draft, origins: [...draft.origins, conv.value] });
+    setApkInput('');
     setOriginError(null);
   }
 
@@ -257,7 +286,9 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 8px', border: `1px solid ${originError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 8, background: 'var(--surface)', minHeight: 38 }}>
                   {draft.origins.map((o) => (
                     <span key={o} className="chip mono" style={{ fontSize: 11 }}>
-                      {o}
+                      {isApkKeyHashOrigin(o)
+                        ? `🤖 ${o.slice(APK_KEY_HASH_PREFIX.length, APK_KEY_HASH_PREFIX.length + 8)}…`
+                        : o}
                       <button className="chip__x" onClick={() => removeOrigin(o)}><Icons.X size={11} /></button>
                     </span>
                   ))}
@@ -268,6 +299,17 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
                     onChange={(e) => { setOriginInput(e.target.value); if (originError) setOriginError(null); }}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addOrigin())}
                   />
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+                  <input
+                    className="input mono"
+                    placeholder="Android 서명키 SHA-256 지문 (keytool 출력 붙여넣기) 후 Enter"
+                    style={{ flex: 1, fontSize: 12 }}
+                    value={apkInput}
+                    onChange={(e) => { setApkInput(e.target.value); if (originError) setOriginError(null); }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addApkKey())}
+                  />
+                  <button className="btn btn--sm" onClick={addApkKey}>앱 키 추가</button>
                 </div>
                 {originError && (
                   <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--danger-soft)', borderRadius: 6, fontSize: 12, lineHeight: 1.6, color: 'var(--danger)', display: 'flex', gap: 7 }}>
