@@ -14,7 +14,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,7 +33,7 @@ class KeyExpirationJobTest {
     private SchedulerLeaseService leases;
     private AuditLogService audit;
     private KeyExpirationJob job;
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), KstTime.ZONE);
 
     @BeforeEach
     void setUp() {

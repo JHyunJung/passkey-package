@@ -13,7 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -41,7 +41,7 @@ class PasswordResetControllerTest {
     @Import(PasswordResetController.class)
     static class SliceConfig {
         // AdminSecurityConfig's adminLoginSuccessHandler bean needs a Clock.
-        @Bean Clock clock() { return Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), ZoneOffset.UTC); }
+        @Bean Clock clock() { return Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), KstTime.ZONE); }
     }
 
     @Autowired MockMvc mvc;

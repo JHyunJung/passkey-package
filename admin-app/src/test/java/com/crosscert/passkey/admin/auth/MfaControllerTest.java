@@ -13,7 +13,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +30,7 @@ class MfaControllerTest {
     private final AdminUserRepository users = mock(AdminUserRepository.class);
     private final RecoveryCodeService recoveryCodes = mock(RecoveryCodeService.class);
     private final MfaSecretCipher cipher = mock(MfaSecretCipher.class);
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-11T00:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-11T00:00:00Z"), KstTime.ZONE);
 
     // max-attempts=5, duration=15m mirror AdminSecurityConfig defaults.
     private final MfaController controller =

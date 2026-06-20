@@ -13,7 +13,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.*;
 class RecoveryCodeServiceTest {
 
     @Mock AdminUserRecoveryCodeRepository repo;
-    Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), ZoneOffset.UTC);
+    Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), KstTime.ZONE);
     RecoveryCodeService service;
 
     private static String sha256Hex(String s) throws Exception {

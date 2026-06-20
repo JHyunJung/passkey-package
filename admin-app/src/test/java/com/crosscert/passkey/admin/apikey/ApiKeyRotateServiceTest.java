@@ -20,7 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,7 +44,7 @@ class ApiKeyRotateServiceTest {
     private TenantBoundary boundary;
     private TenantRepository tenants;
     private ApiKeyAdminService service;
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), KstTime.ZONE);
     private final Duration grace = Duration.ofHours(24);
 
     @BeforeEach

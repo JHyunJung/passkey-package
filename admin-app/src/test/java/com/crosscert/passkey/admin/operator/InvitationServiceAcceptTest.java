@@ -13,7 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,7 +45,7 @@ class InvitationServiceAcceptTest {
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final PasswordPolicyValidator passwordPolicyValidator = mock(PasswordPolicyValidator.class);
 
-    private final Clock clock = Clock.fixed(Instant.parse("2026-06-20T09:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-06-20T09:00:00Z"), KstTime.ZONE);
 
     private final InvitationService service = new InvitationService(
             invitationRepo, userRepo, mailSender, passwordEncoder, passwordPolicyValidator, clock);

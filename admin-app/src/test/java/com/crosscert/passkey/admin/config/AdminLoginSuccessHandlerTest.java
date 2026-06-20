@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,7 +39,7 @@ class AdminLoginSuccessHandlerTest {
     private AuthenticationSuccessHandler handlerWithPolicy(SecurityPolicyService policy) {
         AuditLogService audit = mock(AuditLogService.class);
         AdminUserRepository users = mock(AdminUserRepository.class);
-        Clock clock = Clock.fixed(Instant.parse("2026-06-04T00:00:00Z"), ZoneOffset.UTC);
+        Clock clock = Clock.fixed(Instant.parse("2026-06-04T00:00:00Z"), KstTime.ZONE);
         ObjectMapper mapper = new ObjectMapper();
 
         AdminUser u = mock(AdminUser.class);

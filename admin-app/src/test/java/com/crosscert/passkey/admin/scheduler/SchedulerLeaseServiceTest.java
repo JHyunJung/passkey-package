@@ -10,7 +10,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.*;
 class SchedulerLeaseServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-06-01T00:00:00Z");
-    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, KstTime.ZONE);
 
     private SchedulerLeaseRepository repo;
     private SchedulerLeaseService svc;

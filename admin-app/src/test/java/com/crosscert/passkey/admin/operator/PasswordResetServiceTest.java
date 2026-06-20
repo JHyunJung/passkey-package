@@ -17,7 +17,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,7 +35,7 @@ class PasswordResetServiceTest {
     @Mock MailSender mail;
     @Mock PasswordEncoder encoder;
     @Mock PasswordPolicyValidator policy;
-    Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), ZoneOffset.UTC);
+    Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), KstTime.ZONE);
     PasswordResetService service;
 
     @BeforeEach

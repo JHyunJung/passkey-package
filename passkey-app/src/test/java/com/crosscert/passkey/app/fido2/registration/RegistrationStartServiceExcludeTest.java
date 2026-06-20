@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import com.crosscert.passkey.core.config.KstTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -41,7 +41,7 @@ class RegistrationStartServiceExcludeTest {
     private final ChallengeIssuer challenges = mock(ChallengeIssuer.class);
     private final ChallengeStore store = mock(ChallengeStore.class);
     private final ObjectMapper mapper = new ObjectMapper();
-    private final Clock clock = Clock.fixed(Instant.parse("2026-05-29T00:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-05-29T00:00:00Z"), KstTime.ZONE);
 
     @AfterEach
     void clear() { TenantContextHolder.clear(); }
