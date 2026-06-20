@@ -265,7 +265,9 @@ git commit -m "refactor(core): BaseEntity createdAt/updatedAt Instant→OffsetDa
 
 **Files:**
 - Modify: `core/.../entity/ApiKey.java:8,36-97`
-- Modify (연쇄): `core/.../repository/ApiKeyRepository.java`, `admin-app/.../apikey/ApiKeyAdminService.java`, `admin-app/.../apikey/ApiKeyAdminDto.java`, `passkey-app/.../security/ApiKeyLookupService.java`, `passkey-app/.../security/ApiKeyAuthFilter.java`
+- Modify (연쇄): `core/.../repository/ApiKeyRepository.java`, `admin-app/.../apikey/ApiKeyAdminService.java`, `admin-app/.../apikey/ApiKeyAdminDto.java`, `admin-app/.../tenant/TenantAdminService.java`, `admin-app/.../tenant/TenantLifecycleService.java`
+
+> **실행 정정 (Task 3 완료 후, 3-검토자 합의):** plan이 원래 연쇄 대상으로 적은 `passkey-app/.../security/ApiKeyLookupService.java`·`ApiKeyAuthFilter.java`는 **ApiKey 엔티티에 결합되지 않음** — V8 PL/SQL 패키지 + 로컬 `ApiKeyAuthRow` record + JDBC `Timestamp`/`Instant` 경로라 컴파일러가 강제하지 않는다(`:passkey-app:compileJava` GREEN 유지). `Timestamp.toInstant()`는 offset-무관 절대시각이라 CRITICAL #4 enforcement는 정상. **이 두 파일의 `Instant`는 Task 8에서 별도 판단**(엔티티 전환과 무관하므로 유지해도 안전; 통일하려면 ApiKeyAuthRow record만 손대면 됨).
 - Test: `core/src/test/java/com/crosscert/passkey/core/entity/ApiKeyExpiryTest.java`
 
 **Interfaces:**
