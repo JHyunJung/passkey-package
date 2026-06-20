@@ -160,7 +160,7 @@ class TenantAdminServiceTest {
 
     @Test
     void updateRejectsMalformedOrigin() {
-        // lookup(idOrSlug) → findBySlug 가 기존 tenant 반환 (valid origin 으로 pre-mutation snapshot 직렬화 통과)
+        // lookup(idOrSlug) → findBySlug 가 기존 tenant 반환 (realistic existing tenant)
         Tenant existing = new Tenant("T_A", "Tenant A", "localhost", "Tenant A");
         existing.addAllowedOrigin("http://localhost", 0);
         existing.addAcceptedFormat("none");
@@ -182,6 +182,8 @@ class TenantAdminServiceTest {
 
         // validate-before-mutate: 형식 위반이면 saveAndFlush 까지 도달하지 않음
         verify(repo, never()).saveAndFlush(any());
+        // validate-before-snapshot (hoist lock-in): access check 직후 검증 → snapshot insert 시도 안 함
+        verify(snapshotRepo, never()).save(any());
     }
 
     @Test

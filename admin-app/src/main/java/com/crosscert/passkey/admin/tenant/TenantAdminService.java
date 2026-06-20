@@ -191,6 +191,8 @@ public class TenantAdminService {
                                             String actorEmail) {
         Tenant t = lookup(idOrSlug);
         tenantBoundary.assertCanAccessTenant(t.getId());
+        // fail-fast: snapshot 저장·mutation 이전에 origin 형식 검증 (DB 도달 전 400)
+        validateOriginFormats(req.allowedOrigins());
         TenantSnapshot before = TenantSnapshot.of(t);
 
         // 변경 직전 값을 snapshot 으로 보존
@@ -215,7 +217,6 @@ public class TenantAdminService {
 
         t.setDisplayName(req.displayName());
         t.setRpName(req.rpName());
-        validateOriginFormats(req.allowedOrigins());
         replaceAllowedOrigins(t, req.allowedOrigins());
         replaceAcceptedFormats(t, req.acceptedFormats());
         t.setRequireUserVerification(req.requireUserVerification());
