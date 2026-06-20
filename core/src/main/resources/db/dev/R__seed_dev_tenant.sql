@@ -9,6 +9,12 @@
 -- API key: pk_devsrv01 + plaintext "dev_server_secret_known_plaintext_for_test_only".
 --   전체 X-API-Key: pk_devsrv01dev_server_secret_known_plaintext_for_test_only
 --
+-- RP_ADMIN(bob) 도 이 테넌트에 바인딩해 함께 시드 — dev 어드민 콘솔을
+--   PLATFORM_OPERATOR(alice) 처럼 별도 수동 INSERT 없이 바로 로그인 가능.
+--   bob@crosscert.com / "bob-temp-pw", mfa_enabled='N'(편의상 TOTP 생략).
+--   ⚠️ RP_ADMIN 은 V23 CHECK 제약상 tenant_id NOT NULL 필수 → 테넌트 INSERT
+--      뒤에 와야 하므로 seed-common 이 아니라 이 파일(같은 트랜잭션 순서)에 둔다.
+--
 -- aaguid_policy(ANY)·snapshot 직접 시드. VPD 컨텍스트 필요.
 -- Idempotent: NOT EXISTS 가드.
 -- ============================================================
@@ -138,6 +144,22 @@ WHERE EXISTS (SELECT 1 FROM api_key WHERE id = HEXTORAW('7F00DEAD000000000000000
   AND NOT EXISTS (
     SELECT 1 FROM api_key_scope
      WHERE api_key_id = HEXTORAW('7F00DEAD000000000000000DE700AA01') AND scope = 'authentication'
+  );
+
+-- 8. admin_user: bob (RP_ADMIN, dev-passkey 테넌트 바인딩)
+--    alice(PLATFORM_OPERATOR)와 동급으로 dev 어드민에 바로 로그인.
+--    고정 RAW id 0x...0011 (testfix V9001 의 bob 과 동일), bcrypt "bob-temp-pw".
+--    mfa_enabled='N' — 비밀번호만으로 admin/api 접근(MfaPendingFilter 우회).
+INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, tenant_id, mfa_enabled, created_at)
+SELECT HEXTORAW('00000000000000000000000000000011'), 'bob@crosscert.com',
+       '$2a$12$gvD5tGra6vKnSn/9cxqfQOKZOzlzp4LCg276Ddfkpwl8Kk24Zbb1G',
+       'RP_ADMIN', 'Y',
+       (SELECT id FROM tenant WHERE slug = 'dev-passkey'),
+       'N', SYSTIMESTAMP
+FROM dual
+WHERE EXISTS (SELECT 1 FROM tenant WHERE slug = 'dev-passkey')
+  AND NOT EXISTS (
+    SELECT 1 FROM admin_user WHERE email = 'bob@crosscert.com'
   );
 
 COMMIT;
