@@ -298,7 +298,8 @@ public class TenantAdminService {
     private static void validateOriginFormats(List<String> origins) {
         for (String origin : origins) {
             if (!AllowedOriginFormat.isValid(origin)) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "invalid allowedOrigin format: " + origin);
             }
         }
     }
