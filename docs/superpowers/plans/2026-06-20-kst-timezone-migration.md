@@ -750,6 +750,8 @@ git commit -m "test: KST 전환에 맞춰 Clock fixed zone + 타임스탬프 단
 
 **Files:** 변경 없음(검증 태스크). 필요 시 dev seed 확인.
 
+> **Task 7 에서 이월 (육안검사 시 확인):** `admin-app/.../funnel/FunnelService.buildSeries` 의 일별 버킷팅이 `TRUNC(created_at)` 결과를 `ZoneOffset.UTC` 로 파싱한다(이번 마이그레이션에서 변경 안 함 — 기존 동작 유지). KST 저장으로 바뀐 뒤 **Funnel/Activity 일별 차트의 날짜 경계가 UTC 기준으로 하루 어긋나 보일 수 있다**(예: KST 00:00~09:00 이벤트가 전날로 집계). Step 3 화면 검증에서 funnel/activity 일별 집계의 날짜가 한국 날짜와 맞는지 확인하고, 어긋나면 `FunnelService` 의 버킷팅 zone(UTC→Asia/Seoul)이 원인 — 별도 후속으로 처리(이 마이그레이션 스코프 밖이지만 KST 전환의 가시적 부작용이므로 기록).
+
 - [ ] **Step 1: dev 프로파일로 로컬 부팅**
 
 메모리 절차 준수: `SPRING_PROFILES_ACTIVE=local`(또는 dev) env, APP_OWNER 접속, Oracle/Redis 컨테이너 기동, flyway 소문자 식별자, 필요 시 V8 repair. admin-app 부팅.
