@@ -64,6 +64,29 @@ class ClientDataValidatorTest {
     }
 
     @Test
+    void acceptsAndroidApkKeyHashOrigin() {
+        byte[] challenge = "the-challenge".getBytes(StandardCharsets.UTF_8);
+        String androidOrigin = "android:apk-key-hash:" + "A".repeat(43);
+        byte[] cd = clientDataJson("webauthn.get", b64url(challenge), androidOrigin);
+
+        CollectedClientData parsed = validator.validate(
+                cd, "webauthn.get", challenge, Set.of(androidOrigin));
+
+        assertEquals(androidOrigin, parsed.origin());
+    }
+
+    @Test
+    void rejectsAndroidOriginNotInAllowlist() {
+        byte[] challenge = "c".getBytes(StandardCharsets.UTF_8);
+        String androidOrigin = "android:apk-key-hash:" + "B".repeat(43);
+        byte[] cd = clientDataJson("webauthn.get", b64url(challenge), androidOrigin);
+        ClientDataException ex = assertThrows(ClientDataException.class,
+                () -> validator.validate(cd, "webauthn.get", challenge,
+                        Set.of("android:apk-key-hash:" + "A".repeat(43))));
+        assertEquals(ClientDataException.Reason.ORIGIN_MISMATCH, ex.reason());
+    }
+
+    @Test
     void rejectsMissingTypeField() {
         byte[] cd = ("{\"challenge\":\"" + b64url("c".getBytes(StandardCharsets.UTF_8))
                 + "\",\"origin\":\"https://example.com\"}").getBytes(StandardCharsets.UTF_8);
