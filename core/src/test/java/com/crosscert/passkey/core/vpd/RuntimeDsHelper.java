@@ -43,6 +43,8 @@ public class RuntimeDsHelper {
         this.runtimePhysical.setMaximumPoolSize(2);
         this.runtimePhysical.setMinimumIdle(1);
         this.runtimePhysical.setPoolName("vpd-it-runtime-pool");
+        // KST 세션 강제 — yml 의 connection-init-sql 이 닿지 않는 프로그래밍 방식 풀.
+        this.runtimePhysical.setConnectionInitSql("ALTER SESSION SET TIME_ZONE='Asia/Seoul'");
 
         DataSource wrapped = new TenantAwareDataSource(runtimePhysical);
         this.runtimeJdbc = new JdbcTemplate(wrapped);
