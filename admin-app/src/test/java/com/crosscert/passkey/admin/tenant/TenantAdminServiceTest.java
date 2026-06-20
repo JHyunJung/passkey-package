@@ -144,6 +144,21 @@ class TenantAdminServiceTest {
     }
 
     @Test
+    void createRejectsMalformedOrigin() {
+        when(repo.existsBySlug("T_A")).thenReturn(false);
+        TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
+                "T_A", "Tenant A", "localhost", "Tenant A",
+                List.of("ftp://bad.example.com"), // 형식 위반
+                Set.of("none"),
+                true, false,
+                "NONE", 60000);
+        assertThatThrownBy(() -> service.create(req, UUID.randomUUID(), "alice@example.com"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_INPUT));
+    }
+
+    @Test
     void createRejectsDuplicateSlug() {
         when(repo.existsBySlug("T_A")).thenReturn(true);
         TenantAdminDto.TenantCreateRequest req = new TenantAdminDto.TenantCreateRequest(
