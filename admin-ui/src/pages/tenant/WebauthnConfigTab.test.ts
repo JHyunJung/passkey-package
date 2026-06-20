@@ -75,4 +75,9 @@ describe('validateOrigin', () => {
     const r = validateOrigin('android:apk-key-hash:TOOSHORT', RP);
     expect(r.ok).toBe(false);
   });
+
+  it('android:apk-key-hash 가 43자라도 base64url 이 아닌 문자를 포함하면 거부한다', () => {
+    const r = validateOrigin('android:apk-key-hash:' + 'A'.repeat(42) + '!', RP);
+    expect(r.ok).toBe(false);
+  });
 });
