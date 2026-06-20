@@ -4,6 +4,7 @@ import { Dialog } from '@/shell/Dialog';
 import { useToast } from '@/shell/ToastHost';
 import { webauthnApi } from '@/api/webauthn';
 import type { Tenant, WebauthnConfig } from '@/api/designTypes';
+import { isApkKeyHashOrigin, APK_KEY_HASH_PREFIX } from '@/lib/apkKeyHash';
 
 // webauthnApi.get returns WebauthnConfig + _mdsRequired. Use this locally.
 type ConfigWithMds = WebauthnConfig & { _mdsRequired: boolean };
@@ -35,6 +36,17 @@ function diffObjects(
 export function validateOrigin(input: string, rpId: string): { ok: true; value: string } | { ok: false; error: string } {
   const raw = input.trim();
   if (!raw) return { ok: false, error: 'origin 을 입력하세요.' };
+
+  // Android 네이티브 앱 origin: android:apk-key-hash:<43자 base64url>.
+  // 도메인이 아니라 앱 서명키 해시이므로 rpId 서브도메인 범위 검사를 적용하지 않는다.
+  if (isApkKeyHashOrigin(raw)) {
+    const body = raw.slice(APK_KEY_HASH_PREFIX.length);
+    if (/^[A-Za-z0-9_-]{43}$/.test(body)) {
+      return { ok: true, value: raw };
+    }
+    return { ok: false, error: 'android:apk-key-hash 값은 43자 base64url 이어야 합니다.' };
+  }
+
   // 스킴이 없으면 https:// 를 가정해 파싱(사용자가 host만 입력한 경우 허용).
   const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   let url: URL;

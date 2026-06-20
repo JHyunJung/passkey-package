@@ -64,4 +64,15 @@ describe('validateOrigin', () => {
     const r = validateOrigin('SUB.Dev-Passkey.Crosscert.COM', RP);
     expect(r.ok).toBe(true);
   });
+
+  it('이미 완성된 android:apk-key-hash origin 은 rpId 범위와 무관하게 통과한다', () => {
+    const apk = 'android:apk-key-hash:' + 'A'.repeat(43);
+    const r = validateOrigin(apk, RP);
+    expect(r).toEqual({ ok: true, value: apk });
+  });
+
+  it('android:apk-key-hash 가 43자가 아니면 거부한다', () => {
+    const r = validateOrigin('android:apk-key-hash:TOOSHORT', RP);
+    expect(r.ok).toBe(false);
+  });
 });
