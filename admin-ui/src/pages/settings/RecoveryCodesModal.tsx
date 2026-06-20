@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dialog } from '@/shell/Dialog';
 import { Icons } from '@/icons/Icons';
 import { recoveryCodesFilename } from '@/lib/recoveryCodeFilename';
+import { copyToClipboard } from '@/lib/clipboard';
 
 /**
  * MFA 복구 코드 1회 표시 모달. confirm 직후 enroll 응답의 recoveryCodes 를 보여준다.
@@ -18,12 +19,16 @@ export function RecoveryCodesModal({
 }) {
   const [checked, setChecked] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const text = codes.join('\n');
 
-  function copy() {
-    navigator.clipboard?.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function copy() {
+    const ok = await copyToClipboard(text);
+    setCopyFailed(!ok);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   }
   function download() {
     const blob = new Blob([text + '\n'], { type: 'text/plain' });
@@ -59,6 +64,11 @@ export function RecoveryCodesModal({
           </button>
           <button className="btn btn--sm" onClick={download} style={{ flex: 1 }}>다운로드 (.txt)</button>
         </div>
+        {copyFailed && (
+          <div style={{ fontSize: 12, color: 'var(--warning)' }}>
+            복사에 실패했습니다. 위 코드를 직접 선택해 복사하거나 다운로드하세요.
+          </div>
+        )}
         <label style={{ display: 'flex', gap: 10, padding: 12, background: checked ? 'var(--success-soft)' : 'var(--warning-soft)', borderRadius: 8, alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
           <span style={{ fontSize: 13, fontWeight: 600, color: checked ? 'var(--success)' : 'var(--warning)' }}>안전한 곳에 저장했습니다.</span>

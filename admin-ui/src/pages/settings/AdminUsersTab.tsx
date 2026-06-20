@@ -6,6 +6,7 @@ import type { Tenant } from '@/api/designTypes';
 import { useToast } from '@/shell/ToastHost';
 import { StatusBadge } from '@/shell/StatusBadge';
 import { Dialog } from '@/shell/Dialog';
+import { copyToClipboard } from '@/lib/clipboard';
 
 // ── Local utilities ───────────────────────────────────────────────────────────
 
@@ -572,11 +573,12 @@ function InvitationModal({
   const [confirmed, setConfirmed] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  function copyToClipboard(text: string) {
-    void navigator.clipboard.writeText(text).then(() => {
+  async function copyInvite(text: string) {
+    const ok = await copyToClipboard(text);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    }
   }
 
   return (
@@ -644,7 +646,7 @@ function InvitationModal({
             </code>
             <button
               className="btn btn--sm"
-              onClick={() => copyToClipboard(info.acceptUrl)}
+              onClick={() => void copyInvite(info.acceptUrl)}
               style={{ flex: 'none' }}
             >
               {copied ? <Icons.Check size={12} /> : <Icons.Copy size={12} />}

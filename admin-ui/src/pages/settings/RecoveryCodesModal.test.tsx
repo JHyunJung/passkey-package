@@ -1,11 +1,38 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RecoveryCodesModal } from './RecoveryCodesModal';
+import { copyToClipboard } from '@/lib/clipboard';
+
+// Copy must route through the shared copyToClipboard util (which has the
+// execCommand fallback for insecure HTTP contexts). Calling
+// navigator.clipboard directly silently no-ops on non-secure origins, which
+// was the original "복사가 안 된다" bug.
+vi.mock('@/lib/clipboard', () => ({
+  copyToClipboard: vi.fn().mockResolvedValue(true),
+}));
 
 const CODES = ['3f9a-2b71', '8c4d-9e02', 'a17b-44ff', '6620-d3a9', 'e591-7c08',
                '1bd4-aa3e', '9038-5f6c', '72e1-0b8d', 'c4a6-118f', '5d20-93b7'];
 
 describe('RecoveryCodesModal', () => {
+  beforeEach(() => {
+    vi.mocked(copyToClipboard).mockClear();
+    vi.mocked(copyToClipboard).mockResolvedValue(true);
+  });
+
+  it('copy button routes through copyToClipboard with all codes joined by newline', async () => {
+    render(<RecoveryCodesModal codes={CODES} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /복사/ }));
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(CODES.join('\n')));
+  });
+
+  it('shows a manual-copy hint when copyToClipboard fails', async () => {
+    vi.mocked(copyToClipboard).mockResolvedValue(false);
+    render(<RecoveryCodesModal codes={CODES} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /복사/ }));
+    await waitFor(() => expect(screen.getByText(/복사에 실패했습니다/)).toBeInTheDocument());
+  });
+
   it('renders all codes', () => {
     render(<RecoveryCodesModal codes={CODES} onClose={() => {}} />);
     for (const c of CODES) expect(screen.getByText(c)).toBeInTheDocument();
