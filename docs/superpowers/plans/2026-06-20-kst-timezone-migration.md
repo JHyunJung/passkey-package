@@ -730,6 +730,9 @@ Run: `./gradlew :passkey-app:test`
 Run: `./gradlew :rp-app:test :sdk-java:test`
 Expected: base 대비 **신규 실패 0건**. 신규 실패가 있으면 해당 테스트가 시간 형식/타입 가정을 잘못 들고 있는지 점검 후 수정.
 
+> **HARD GATE — Audit IT round-trip (CRITICAL #1, Task 5 에서 이월):** Task 5 의 no-DB 하니스는 in-JVM hash/seed 로직만 증명했고, **`OffsetDateTime` → Oracle `TIMESTAMP WITH TIME ZONE` 저장 → Hibernate read-back 이 byte-identical `toString()`(동일 +09:00, 동일 micros, 동일 trailing-zero 생략)을 내는지**는 실행된 적 없다. 이게 audit 체인 검증의 진짜 위험(read-back 정밀도/offset 불일치 시 false tamper alarm). 따라서 admin-app 이 컴파일되는 이 시점에 **Testcontainers audit IT 를 반드시 실행해 통과를 확인**해야 한다:
+> Run: `./gradlew :admin-app:test --tests '*Audit*'` (특히 append→store→read→verify roundtrip IT: AuditChainVerifierTest / AuditChainBackfillIT / per-tenant chain IT). **이 IT 들이 GREEN 이어야 Task 5(CRITICAL #1)가 진짜 완료**이며, epic 종료(Task 9)의 선결 조건이다. RED 면 hibernate.jdbc.time_zone/세션 TZ/@TimeZoneStorage 설정과 micros 정밀도부터 점검.
+
 - [ ] **Step 5: Commit**
 
 ```bash
