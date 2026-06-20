@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -71,7 +70,7 @@ public class AdminUserService {
         AdminUser user = userRepo.findById(userId).orElseThrow();
         assertNotLockingOut(user, byUser, "suspend");
         user.setStatus("SUSPENDED");
-        user.setSuspendedAt(clock.instant());
+        user.setSuspendedAt(OffsetDateTime.now(clock));
         user.setSuspendedBy(byUser);
         log.info("admin suspended: emailMasked={}", mask(user.getEmail()));
     }

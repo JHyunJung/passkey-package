@@ -3,7 +3,7 @@ package com.crosscert.passkey.core.entity;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -30,7 +30,7 @@ public class AdminUser extends BaseEntity {
     private UUID tenantId;
 
     @Column(name = "LAST_LOGIN_AT")
-    private Instant lastLoginAt;
+    private OffsetDateTime lastLoginAt;
 
     @Column(name = "STATUS", length = 16, nullable = false)
     private String status = "ACTIVE";
@@ -39,7 +39,7 @@ public class AdminUser extends BaseEntity {
     private String createdBy;
 
     @Column(name = "SUSPENDED_AT")
-    private Instant suspendedAt;
+    private OffsetDateTime suspendedAt;
 
     @Column(name = "SUSPENDED_BY", length = 255)
     private String suspendedBy;
@@ -55,7 +55,7 @@ public class AdminUser extends BaseEntity {
     private int failedLoginCount = 0;
 
     @Column(name = "LOCKED_UNTIL")
-    private Instant lockedUntil;
+    private OffsetDateTime lockedUntil;
 
     protected AdminUser() {}
 
@@ -87,9 +87,9 @@ public class AdminUser extends BaseEntity {
     public boolean isEnabled() { return "Y".equals(enabledFlag); }
     public void setEnabled(boolean enabled) { this.enabledFlag = enabled ? "Y" : "N"; }
 
-    public Instant getLastLoginAt() { return lastLoginAt; }
+    public OffsetDateTime getLastLoginAt() { return lastLoginAt; }
 
-    public void recordLogin(Instant now) {
+    public void recordLogin(OffsetDateTime now) {
         this.lastLoginAt = now;
     }
 
@@ -105,8 +105,8 @@ public class AdminUser extends BaseEntity {
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
 
-    public Instant getSuspendedAt() { return suspendedAt; }
-    public void setSuspendedAt(Instant suspendedAt) { this.suspendedAt = suspendedAt; }
+    public OffsetDateTime getSuspendedAt() { return suspendedAt; }
+    public void setSuspendedAt(OffsetDateTime suspendedAt) { this.suspendedAt = suspendedAt; }
 
     public String getSuspendedBy() { return suspendedBy; }
     public void setSuspendedBy(String suspendedBy) { this.suspendedBy = suspendedBy; }
@@ -117,14 +117,14 @@ public class AdminUser extends BaseEntity {
     public String getMfaSecret() { return mfaSecret; }
     public void setMfaSecret(String v) { this.mfaSecret = v; }
 
-    public Instant getLockedUntil() { return lockedUntil; }
+    public OffsetDateTime getLockedUntil() { return lockedUntil; }
 
     /** 테스트 전용 lock 판정. 실제 로그인 게이트는 AdminUserDetails.isAccountNonLocked. */
-    public boolean isLocked(Instant now) {
+    public boolean isLocked(OffsetDateTime now) {
         return lockedUntil != null && now.isBefore(lockedUntil);
     }
 
-    public void recordFailedLogin(Instant now, int maxAttempts, java.time.Duration lockDuration) {
+    public void recordFailedLogin(OffsetDateTime now, int maxAttempts, java.time.Duration lockDuration) {
         this.failedLoginCount++;
         if (this.failedLoginCount >= maxAttempts) {
             this.lockedUntil = now.plus(lockDuration);

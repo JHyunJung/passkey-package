@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +54,7 @@ class RecoveryCodeServiceTest {
         UUID uid = UUID.randomUUID();
         String plain = "abcd-efgh";
         String normalizedHash = sha256Hex("ABCD-EFGH"); // service.normalize 결과 기준
-        when(repo.markUsed(eq(uid), eq(normalizedHash), eq(clock.instant())))
+        when(repo.markUsed(eq(uid), eq(normalizedHash), eq(OffsetDateTime.now(clock))))
                 .thenReturn(1);
 
         boolean ok = service.consume(uid, plain);

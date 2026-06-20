@@ -1,11 +1,12 @@
 package com.crosscert.passkey.core.entity;
 
+import com.crosscert.passkey.core.config.KstTime;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -57,7 +58,7 @@ public class TenantWebauthnSnapshot {
     private String mdsRequiredFlag;
 
     @Column(name = "TAKEN_AT", nullable = false)
-    private Instant takenAt = Instant.now();
+    private OffsetDateTime takenAt = OffsetDateTime.now(KstTime.ZONE);
 
     @Column(name = "TAKEN_BY", length = 255)
     private String takenBy;
@@ -92,6 +93,6 @@ public class TenantWebauthnSnapshot {
     public String getAcceptedFormatsJson() { return acceptedFormatsJson; }
     public boolean isRequireUserVerification() { return "Y".equals(requireUserVerificationFlag); }
     public boolean isMdsRequired() { return "Y".equals(mdsRequiredFlag); }
-    public Instant getTakenAt() { return takenAt; }
+    public OffsetDateTime getTakenAt() { return takenAt; }
     public String getTakenBy() { return takenBy; }
 }

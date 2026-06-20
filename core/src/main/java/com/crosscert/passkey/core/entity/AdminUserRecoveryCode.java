@@ -6,7 +6,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.generator.EventType;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -43,11 +43,11 @@ public class AdminUserRecoveryCode {
     private String codeHash;
 
     @Column(name = "USED_AT")
-    private Instant usedAt;
+    private OffsetDateTime usedAt;
 
     @Generated(event = EventType.INSERT)
     @Column(name = "CREATED_AT", nullable = false, insertable = false, updatable = false)
-    private Instant createdAt;
+    private OffsetDateTime createdAt;
 
     protected AdminUserRecoveryCode() {}
 
@@ -65,14 +65,14 @@ public class AdminUserRecoveryCode {
 
     public String getCodeHash() { return codeHash; }
 
-    public Instant getUsedAt() { return usedAt; }
+    public OffsetDateTime getUsedAt() { return usedAt; }
 
-    public Instant getCreatedAt() { return createdAt; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
 
     // ──────────────────────────────────────────────────────────────────
     // Business helpers
 
     public boolean isUsed() { return usedAt != null; }
 
-    public void markUsed(Instant now) { this.usedAt = now; }
+    public void markUsed(OffsetDateTime now) { this.usedAt = now; }
 }

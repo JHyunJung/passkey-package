@@ -2,7 +2,7 @@ package com.crosscert.passkey.admin.activity;
 
 import com.crosscert.passkey.core.entity.AuditLog;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -21,7 +21,7 @@ public record ActivityDetailView(
         String targetId,
         UUID tenantId,
         String tenantSlug,
-        Instant createdAt,
+        OffsetDateTime createdAt,
         String category,
         String payload
 ) {

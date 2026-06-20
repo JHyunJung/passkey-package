@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 
 public interface AdminPasswordResetTokenRepository extends JpaRepository<AdminPasswordResetToken, Long> {
@@ -27,5 +27,5 @@ public interface AdminPasswordResetTokenRepository extends JpaRepository<AdminPa
          + "((consumed_at IS NOT NULL AND consumed_at < :cutoff) "
          + "OR (consumed_at IS NULL AND expires_at < :cutoff)) "
          + "AND ROWNUM <= :batchSize)", nativeQuery = true)
-    int deleteConsumedOrExpiredBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+    int deleteConsumedOrExpiredBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 }

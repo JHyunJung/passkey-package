@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,7 +30,7 @@ public interface AdminUserRecoveryCodeRepository extends JpaRepository<AdminUser
     @Modifying
     @Query("update AdminUserRecoveryCode r set r.usedAt = :now "
             + "where r.adminUserId = :uid and r.codeHash = :hash and r.usedAt is null")
-    int markUsed(@Param("uid") UUID uid, @Param("hash") String hash, @Param("now") Instant now);
+    int markUsed(@Param("uid") UUID uid, @Param("hash") String hash, @Param("now") OffsetDateTime now);
 
     /**
      * P1-4 retention: 사용된 recovery code 중 used_at 이 cutoff 이전인 것 삭제.
@@ -44,5 +44,5 @@ public interface AdminUserRecoveryCodeRepository extends JpaRepository<AdminUser
          + "SELECT id FROM {h-schema}admin_user_recovery_code WHERE "
          + "used_at IS NOT NULL AND used_at < :cutoff "
          + "AND ROWNUM <= :batchSize)", nativeQuery = true)
-    int deleteUsedBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+    int deleteUsedBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 }

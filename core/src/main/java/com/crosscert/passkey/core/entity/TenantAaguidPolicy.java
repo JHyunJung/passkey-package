@@ -1,11 +1,12 @@
 package com.crosscert.passkey.core.entity;
 
+import com.crosscert.passkey.core.config.KstTime;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -38,10 +39,10 @@ public class TenantAaguidPolicy {
     private String mdsStrictFlag = "N";
 
     @Column(name = "CREATED_AT", nullable = false)
-    private Instant createdAt = Instant.now();
+    private OffsetDateTime createdAt = OffsetDateTime.now(KstTime.ZONE);
 
     @Column(name = "UPDATED_AT", nullable = false)
-    private Instant updatedAt = Instant.now();
+    private OffsetDateTime updatedAt = OffsetDateTime.now(KstTime.ZONE);
 
     @Column(name = "UPDATED_BY", length = 255)
     private String updatedBy;
@@ -117,10 +118,10 @@ public class TenantAaguidPolicy {
     public boolean isMdsStrict() { return "Y".equals(mdsStrictFlag); }
     public void setMdsStrict(boolean v) { this.mdsStrictFlag = v ? "Y" : "N"; }
 
-    public Instant getCreatedAt() { return createdAt; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
 
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant t) { this.updatedAt = t; }
+    public OffsetDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(OffsetDateTime t) { this.updatedAt = t; }
 
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String s) { this.updatedBy = s; }

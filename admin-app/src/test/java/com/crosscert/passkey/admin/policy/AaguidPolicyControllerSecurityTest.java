@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -97,7 +97,7 @@ class AaguidPolicyControllerSecurityTest {
                 com.crosscert.passkey.core.entity.TenantAaguidPolicy.Mode.ANY,
                 false,
                 List.of(),
-                Instant.parse("2026-05-31T00:00:00Z"),
+                OffsetDateTime.parse("2026-05-31T00:00:00Z"),
                 "alice@example.com");
     }
 

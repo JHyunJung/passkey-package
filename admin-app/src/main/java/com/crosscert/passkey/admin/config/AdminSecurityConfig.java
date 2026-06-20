@@ -42,6 +42,7 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import com.crosscert.passkey.core.license.LicenseGuardFilter;
 
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Optional;
 
@@ -209,7 +210,7 @@ public class AdminSecurityConfig {
         return (HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
             String email = auth.getName();
             AdminUser u = users.findByEmail(email).orElseThrow();
-            u.recordLogin(clock.instant());
+            u.recordLogin(OffsetDateTime.now(clock));
             u.recordSuccessfulLogin();
             users.save(u);
             audit.append(new AuditAppendRequest(
@@ -282,7 +283,7 @@ public class AdminSecurityConfig {
             // "user-locked") without any extra wiring here.
             if (ex instanceof BadCredentialsException && raw != null) {
                 users.findByEmail(raw).ifPresent(u -> {
-                    u.recordFailedLogin(clock.instant(), maxAttempts, lockDuration);
+                    u.recordFailedLogin(OffsetDateTime.now(clock), maxAttempts, lockDuration);
                     users.save(u);
                 });
             }

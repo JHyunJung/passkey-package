@@ -141,7 +141,7 @@ class TenantAdminControllerSecurityTest {
                         true, false,
                         "NONE", 60000,
                         0L, 0L, null,
-                        java.time.Instant.now(), java.time.Instant.now()));
+                        java.time.OffsetDateTime.now(), java.time.OffsetDateTime.now()));
         mvc.perform(post("/admin/api/tenants")
                 .with(csrf())
                 .contentType("application/json")
@@ -188,7 +188,7 @@ class TenantAdminControllerSecurityTest {
                 List.of("http://localhost"), Set.of("none"),
                 true, false, "NONE", 60000,
                 0L, 0L, null,
-                java.time.Instant.now(), java.time.Instant.now()));
+                java.time.OffsetDateTime.now(), java.time.OffsetDateTime.now()));
         mvc.perform(post("/admin/api/tenants/acme/suspend").with(csrf()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true));

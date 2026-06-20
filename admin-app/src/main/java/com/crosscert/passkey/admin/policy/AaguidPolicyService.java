@@ -8,8 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.crosscert.passkey.core.config.KstTime;
+
 import java.nio.ByteBuffer;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -70,7 +72,7 @@ public class AaguidPolicyService {
                 p.addEntry(e.aaguid(), e.note());
             }
         }
-        p.setUpdatedAt(Instant.now());
+        p.setUpdatedAt(OffsetDateTime.now(KstTime.ZONE));
         p.setUpdatedBy(updatedBy);
         repo.save(p);
 

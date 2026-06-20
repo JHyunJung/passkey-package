@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
@@ -72,7 +73,7 @@ public class MfaController {
         // refused before any code check (fail-closed). The lock also gates
         // primary login via AdminUserDetails.isAccountNonLocked — acceptable
         // because reaching here means the password is already compromised.
-        if (u != null && u.isLocked(clock.instant())) {
+        if (u != null && u.isLocked(OffsetDateTime.now(clock))) {
             log.warn("admin mfa verify blocked (locked): email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
@@ -86,12 +87,12 @@ public class MfaController {
         }
         if (!totpOk && !recoveryOk) {
             if (u != null) {
-                u.recordFailedLogin(clock.instant(), maxAttempts, lockDuration);
+                u.recordFailedLogin(OffsetDateTime.now(clock), maxAttempts, lockDuration);
                 users.save(u);
                 // recordFailedLogin auto-locks once maxAttempts is reached. The
                 // entry guard above already refused any already-locked account,
                 // so reaching a locked state here means this failure tripped it.
-                if (u.isLocked(clock.instant())) {
+                if (u.isLocked(OffsetDateTime.now(clock))) {
                     var s = req.getSession(false);
                     if (s != null) s.invalidate();   // kill the pending session on lockout
                     log.warn("admin mfa verify lockout triggered: email={}", mask(email));

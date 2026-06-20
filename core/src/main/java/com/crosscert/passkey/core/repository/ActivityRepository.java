@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -29,11 +29,11 @@ import java.util.UUID;
 public interface ActivityRepository extends Repository<AuditLog, UUID> {
 
     @Query("SELECT COUNT(a) FROM AuditLog a WHERE a.createdAt >= :since")
-    long countSince(@Param("since") Instant since);
+    long countSince(@Param("since") OffsetDateTime since);
 
     @Query("SELECT COUNT(a) FROM AuditLog a WHERE a.createdAt >= :since AND a.action IN :actions")
     long countByActionsSince(@Param("actions") Set<String> actions,
-                              @Param("since") Instant since);
+                              @Param("since") OffsetDateTime since);
 
     @Query("""
         SELECT new com.crosscert.passkey.core.repository.ActivityRepository$TenantRow(a.tenantId, COUNT(a))
@@ -42,9 +42,9 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
         GROUP BY a.tenantId
         ORDER BY COUNT(a) DESC
     """)
-    List<TenantRow> topTenantsSinceRaw(@Param("since") Instant since, Pageable limit);
+    List<TenantRow> topTenantsSinceRaw(@Param("since") OffsetDateTime since, Pageable limit);
 
-    default List<TenantRow> topTenantsSince(Instant since, int n) {
+    default List<TenantRow> topTenantsSince(OffsetDateTime since, int n) {
         return topTenantsSinceRaw(since, PageRequest.of(0, n));
     }
 
@@ -129,10 +129,10 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
         ORDER BY a.createdAt DESC, a.id DESC
     """)
     List<AuditLog> feedPageRaw(@Param("tenantId") UUID tenantId,
-                               @Param("before") Instant before,
+                               @Param("before") OffsetDateTime before,
                                Pageable limit);
 
-    default List<AuditLog> feedPage(UUID tenantId, Instant before, int n) {
+    default List<AuditLog> feedPage(UUID tenantId, OffsetDateTime before, int n) {
         return feedPageRaw(tenantId, before, PageRequest.of(0, n));
     }
 
@@ -150,10 +150,10 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
     """)
     List<AuditLog> feedFilteredPageRaw(@Param("actions") Set<String> actions,
                                        @Param("tenantId") UUID tenantId,
-                                       @Param("before") Instant before,
+                                       @Param("before") OffsetDateTime before,
                                        Pageable limit);
 
-    default List<AuditLog> feedFilteredPage(Set<String> actions, UUID tenantId, Instant before, int n) {
+    default List<AuditLog> feedFilteredPage(Set<String> actions, UUID tenantId, OffsetDateTime before, int n) {
         return feedFilteredPageRaw(actions, tenantId, before, PageRequest.of(0, n));
     }
 

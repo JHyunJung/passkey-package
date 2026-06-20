@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -89,7 +89,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * Phase QW-3 — TenantAdminService.list() N+1 제거용 배치 집계.
      * findFirstByTenantIdOrderByCreatedAtDesc(tenantId) 는 tenant 의 최신 audit row 를
      * 반환하고 toView 는 거기서 createdAt 만 읽는다. 따라서 배치 등가물은 tenant_id 별
-     * MAX(createdAt). 결과는 Object[]{UUID tenantId, Instant maxCreatedAt}. audit row 가
+     * MAX(createdAt). 결과는 Object[]{UUID tenantId, OffsetDateTime maxCreatedAt}. audit row 가
      * 없는 tenant 는 결과 행이 없으므로 호출부에서 null 처리(기존 .orElse(null) 와 동일).
      * tenant_id IS NULL 인 PLATFORM row 는 group key 가 null 이라 tenant lookup 에서
      * 자연히 무시된다.
@@ -108,8 +108,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     Page<AuditLog> search(@Param("action") String action,
                           @Param("actorId") UUID actorId,
                           @Param("tenantId") UUID tenantId,
-                          @Param("from") Instant from,
-                          @Param("to") Instant to,
+                          @Param("from") OffsetDateTime from,
+                          @Param("to") OffsetDateTime to,
                           Pageable page);
 
     /**
@@ -117,7 +117,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * Spring Data derived query: select count(*) from audit_log
      *   where tenant_id = ? and action = ? and created_at > ?.
      */
-    long countByTenantIdAndActionAndCreatedAtAfter(UUID tenantId, String action, Instant since);
+    long countByTenantIdAndActionAndCreatedAtAfter(UUID tenantId, String action, OffsetDateTime since);
 
     /**
      * Phase F3 — FunnelService daily series.
@@ -134,7 +134,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     List<Object[]> aggregateDailyByTenantAndActions(
             @Param("tenantId") UUID tenantId,
             @Param("actions") List<String> actions,
-            @Param("since") Instant since);
+            @Param("since") OffsetDateTime since);
 
     /**
      * Phase F3 — FunnelService by-event-type breakdown.
@@ -149,5 +149,5 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     List<Object[]> aggregateByTenantAndActionsGrouped(
             @Param("tenantId") UUID tenantId,
             @Param("actions") List<String> actions,
-            @Param("since") Instant since);
+            @Param("since") OffsetDateTime since);
 }

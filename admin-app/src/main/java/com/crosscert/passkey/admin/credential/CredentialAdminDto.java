@@ -1,6 +1,6 @@
 package com.crosscert.passkey.admin.credential;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 public final class CredentialAdminDto {
 
@@ -15,13 +15,13 @@ public final class CredentialAdminDto {
             String  attestationFormat,
             String  transports,
             long    signCount,
-            Instant lastUsedAt,          // null 가능
-            Instant createdAt
+            OffsetDateTime lastUsedAt,   // null 가능
+            OffsetDateTime createdAt
     ) {}
 
     public record AuthEventView(
             String result,
             String failureReason,
             long signCount,
-            Instant createdAt) {}
+            OffsetDateTime createdAt) {}
 }

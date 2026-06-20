@@ -22,7 +22,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 import java.sql.SQLException;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -204,7 +203,7 @@ class BaseEntityCallbackIT {
         // than the pre-persist one. 50ms >> system clock granularity.
         Thread.sleep(50);
 
-        saved.recordLogin(Instant.now());
+        saved.recordLogin(OffsetDateTime.now());
         AdminUser merged = adminUsers.saveAndFlush(saved);
 
         assertThat(merged.getCreatedAt())
@@ -229,7 +228,7 @@ class BaseEntityCallbackIT {
      */
     @Test
     void auditLog_preservesCallerSuppliedCreatedAt_acrossPersistAndReload() {
-        Instant caller = Instant.parse("2026-05-01T12:34:56.789012Z");
+        OffsetDateTime caller = OffsetDateTime.parse("2026-05-01T12:34:56.789012Z");
         AuditLog row = new AuditLog(
                 null, new byte[]{1, 2, 3},
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),

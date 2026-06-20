@@ -9,7 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import com.crosscert.passkey.core.config.KstTime;
+
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Slf4j
@@ -41,7 +43,7 @@ public class SecurityPolicyService {
         p.setPasswordMinLength(req.passwordMinLength());
         p.setMfaRequired(Boolean.TRUE.equals(req.mfaRequired()));
         p.setCorsAllowlistJson(serialize(req.corsAllowlist()));
-        p.setUpdatedAt(Instant.now());
+        p.setUpdatedAt(OffsetDateTime.now(KstTime.ZONE));
         p.setUpdatedBy(updatedBy);
         repo.save(p);
 

@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -34,5 +34,5 @@ public interface CredentialAuthEventRepository extends JpaRepository<CredentialA
          + "SELECT id FROM {h-schema}credential_auth_event WHERE "
          + "created_at < :cutoff "
          + "AND ROWNUM <= :batchSize)", nativeQuery = true)
-    int deleteCreatedBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+    int deleteCreatedBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 }

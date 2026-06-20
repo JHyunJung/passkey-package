@@ -65,7 +65,7 @@ class PasswordResetServiceTest {
         AdminUser u = new AdminUser("op@crosscert.com", "old", "PLATFORM_OPERATOR");
         UUID uid = u.getId();
         // lockout 을 실제로 걸어 단언을 load-bearing 하게 (maxAttempts=1 → 첫 호출에 즉시 lock).
-        u.recordFailedLogin(clock.instant(), 1, Duration.ofMinutes(15));
+        u.recordFailedLogin(OffsetDateTime.now(clock), 1, Duration.ofMinutes(15));
         assertThat(u.getLockedUntil()).isNotNull();  // 사전조건
         OffsetDateTime now = OffsetDateTime.now(clock);
         AdminPasswordResetToken tok = new AdminPasswordResetToken(

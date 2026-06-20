@@ -1,7 +1,7 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "SECURITY_POLICY")
@@ -25,7 +25,7 @@ public class SecurityPolicy {
     private String corsAllowlistJson;
 
     @Column(name = "UPDATED_AT", nullable = false)
-    private Instant updatedAt;
+    private OffsetDateTime updatedAt;
 
     @Column(name = "UPDATED_BY", length = 255)
     private String updatedBy;
@@ -46,8 +46,8 @@ public class SecurityPolicy {
     public String getCorsAllowlistJson() { return corsAllowlistJson; }
     public void setCorsAllowlistJson(String v) { this.corsAllowlistJson = v; }
 
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant v) { this.updatedAt = v; }
+    public OffsetDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(OffsetDateTime v) { this.updatedAt = v; }
 
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String v) { this.updatedBy = v; }

@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -77,8 +77,8 @@ public class ActivityService {
      * </ul>
      */
     @Transactional(readOnly = true)
-    public ActivityView snapshot(UUID sinceId, String category, Instant before, UUID tenantId) {
-        Instant since = clock.instant().minus(WINDOW);
+    public ActivityView snapshot(UUID sinceId, String category, OffsetDateTime before, UUID tenantId) {
+        OffsetDateTime since = OffsetDateTime.now(clock).minus(WINDOW);
 
         long events24h    = activity.countSince(since);
         long ops24h       = activity.countByActionsSince(OPS_ACTIONS, since);
@@ -138,7 +138,7 @@ public class ActivityService {
      * client asks "what's new since X", a pagination client asks "what came
      * before Y". The dashboard never sends both.
      */
-    private List<AuditLog> resolveFeed(UUID sinceId, Instant before, UUID tenantId,
+    private List<AuditLog> resolveFeed(UUID sinceId, OffsetDateTime before, UUID tenantId,
                                        Set<String> actionFilter) {
         if (sinceId != null) {
             // Forward polling path. tenantId composes — null means global,

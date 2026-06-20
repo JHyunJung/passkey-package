@@ -2,7 +2,7 @@ package com.crosscert.passkey.core.entity;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,7 +27,7 @@ class SigningKeyTest {
     @Test
     void rotateTransitionsToRotated() {
         SigningKey k = new SigningKey("kid","RS256","{}",new byte[]{0});
-        Instant now = Instant.parse("2026-06-01T00:00:00Z");
+        OffsetDateTime now = OffsetDateTime.parse("2026-06-01T00:00:00Z");
         k.rotate(now);
         assertThat(k.getStatus()).isEqualTo("ROTATED");
         assertThat(k.getRotatedAt()).isEqualTo(now);
@@ -37,8 +37,8 @@ class SigningKeyTest {
     @Test
     void revokeTransitionsToRevoked() {
         SigningKey k = new SigningKey("kid","RS256","{}",new byte[]{0});
-        Instant t1 = Instant.parse("2026-06-01T00:00:00Z");
-        Instant t2 = Instant.parse("2026-06-01T00:30:00Z");
+        OffsetDateTime t1 = OffsetDateTime.parse("2026-06-01T00:00:00Z");
+        OffsetDateTime t2 = OffsetDateTime.parse("2026-06-01T00:30:00Z");
         k.rotate(t1);
         k.revoke(t2);
         assertThat(k.getStatus()).isEqualTo("REVOKED");
