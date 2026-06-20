@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -67,7 +68,7 @@ public class AuditLogController {
 
     public record AuditLogView(
             UUID id, UUID actorId, String actorEmail, String action,
-            String targetType, String targetId, UUID tenantId, String payload, Instant createdAt) {
+            String targetType, String targetId, UUID tenantId, String payload, OffsetDateTime createdAt) {
         public static AuditLogView from(AuditLog a) {
             return new AuditLogView(
                     a.getId(), a.getActorId(), a.getActorEmail(), a.getAction(),
