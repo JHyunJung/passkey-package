@@ -22,7 +22,7 @@ spring:
     open-in-view: false
     properties:
       hibernate.dialect: org.hibernate.dialect.OracleDialect
-      hibernate.jdbc.time_zone: UTC
+      hibernate.jdbc.time_zone: Asia/Seoul
       hibernate.default_schema: APP_OWNER
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
