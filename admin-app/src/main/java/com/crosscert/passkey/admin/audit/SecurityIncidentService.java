@@ -5,6 +5,8 @@ import com.crosscert.passkey.core.entity.SecurityIncident;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.SecurityIncidentRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ import java.util.UUID;
  * 전용 플랫폼 테이블이며, 컨트롤러가 {@code @PreAuthorize("hasRole('PLATFORM_OPERATOR')")}
  * 로 RP_ADMIN 노출 경로를 차단한다.
  */
+@Slf4j
 @Service
 public class SecurityIncidentService {
 
@@ -37,19 +40,22 @@ public class SecurityIncidentService {
     private final ApplicationEventPublisher events;
     private final TenantRepository tenants;
     private final Clock clock;
+    private final ObjectMapper objectMapper;
 
     public SecurityIncidentService(SecurityIncidentRepository repo,
                                    AuditChainVerifier verifier,
                                    AuditLogService audit,
                                    ApplicationEventPublisher events,
                                    TenantRepository tenants,
-                                   Clock clock) {
+                                   Clock clock,
+                                   ObjectMapper objectMapper) {
         this.repo = repo;
         this.verifier = verifier;
         this.audit = audit;
         this.events = events;
         this.tenants = tenants;
         this.clock = clock;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -70,10 +76,10 @@ public class SecurityIncidentService {
         if (repo.existsByTenantIdAndStatus(tenantId, SecurityIncident.STATUS_OPEN)) {
             throw new IncidentConflictException("open incident already exists for tenant: " + tenantId);
         }
-        // 3. 스냅샷 detail + 저장
+        // 3. 스냅샷 detail + 저장. tenantName 은 displayName(자유 텍스트)이라 백슬래시/제어문자가
+        //    들어와도 깨지지 않도록 수동 조립 대신 Jackson 으로 직렬화한다.
         String tenantName = tenants.findById(tenantId).map(Tenant::getDisplayName).orElse(tenantId.toString());
-        String detail = "{\"tenantName\":\"" + tenantName.replace("\"", "\\\"")
-                + "\",\"tamperedEntryId\":\"" + (tamperedEntryId == null ? "" : tamperedEntryId) + "\"}";
+        String detail = serializeDetail(tenantName, tamperedEntryId);
         OffsetDateTime now = OffsetDateTime.now(clock);
         SecurityIncident incident = SecurityIncident.open(tenantId, tamperedEntryId, detail, actorId, now);
         try {
@@ -94,6 +100,8 @@ public class SecurityIncidentService {
                 "audit chain incident created",
                 Map.of("tenantId", tenantId.toString(),
                        "incidentId", incident.getId().toString())));
+        log.warn("audit chain incident created: id={} tenant={} by={}",
+                incident.getId(), tenantId, actorEmail);
         return incident;
     }
 
@@ -118,6 +126,24 @@ public class SecurityIncidentService {
                 actorId, actorEmail, "AUDIT_CHAIN_INCIDENT_RESOLVED",
                 "SECURITY_INCIDENT", incident.getId().toString(), incident.getTenantId(),
                 Map.of("note", note)));
+        log.warn("audit chain incident resolved: id={} by={}", incidentId, actorEmail);
         return incident;
+    }
+
+    /**
+     * incident detail 스냅샷을 canonical JSON 으로 직렬화한다. tenantName 이 자유 텍스트라
+     * 백슬래시/제어문자/따옴표가 들어와도 Jackson 이 안전하게 이스케이프한다. 직렬화 실패는
+     * detail 이 audit/alert 본문이 아니라 부가 스냅샷이므로 빈 객체로 안전하게 폴백한다.
+     */
+    private String serializeDetail(String tenantName, UUID tamperedEntryId) {
+        Map<String, Object> detailMap = Map.of(
+                "tenantName", tenantName,
+                "tamperedEntryId", tamperedEntryId == null ? "" : tamperedEntryId.toString());
+        try {
+            return objectMapper.writeValueAsString(detailMap);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            log.warn("incident detail serialization failed; falling back to empty object", e);
+            return "{}";
+        }
     }
 }
