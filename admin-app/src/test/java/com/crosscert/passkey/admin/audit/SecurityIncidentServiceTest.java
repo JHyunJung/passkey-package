@@ -54,7 +54,7 @@ class SecurityIncidentServiceTest {
         Tenant t = mock(Tenant.class);
         when(t.getDisplayName()).thenReturn("Acme Corp");
         when(tenants.findById(TENANT)).thenReturn(Optional.of(t));
-        when(repo.save(any(SecurityIncident.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repo.saveAndFlush(any(SecurityIncident.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     private void stubTampered(boolean tampered) {
@@ -74,8 +74,9 @@ class SecurityIncidentServiceTest {
 
         assertThat(i.getStatus()).isEqualTo("OPEN");
         assertThat(i.getTenantId()).isEqualTo(TENANT);
-        verify(repo).save(any(SecurityIncident.class));
+        verify(repo).saveAndFlush(any(SecurityIncident.class));
         verify(audit).append(any());
+        // 단위 테스트는 트랜잭션 동기화 비활성 → afterCommit 우회 즉시 발행(else 분기).
         verify(events).publishEvent(any(SecurityAlertEvent.class));
     }
 
@@ -86,7 +87,7 @@ class SecurityIncidentServiceTest {
 
         assertThatThrownBy(() -> svc.create(TENANT, ENTRY, ACTOR, "alice@crosscert.com"))
                 .isInstanceOf(IncidentConflictException.class);
-        verify(repo, never()).save(any());
+        verify(repo, never()).saveAndFlush(any());
         verify(events, never()).publishEvent(any());
     }
 
@@ -96,7 +97,7 @@ class SecurityIncidentServiceTest {
 
         assertThatThrownBy(() -> svc.create(TENANT, ENTRY, ACTOR, "alice@crosscert.com"))
                 .isInstanceOf(IncidentNotTamperedException.class);
-        verify(repo, never()).save(any());
+        verify(repo, never()).saveAndFlush(any());
     }
 
     @Test

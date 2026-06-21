@@ -11,11 +11,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -66,6 +69,8 @@ public class SecurityIncidentService {
     @Transactional
     public SecurityIncident create(UUID tenantId, UUID tamperedEntryId,
                                    UUID actorId, String actorEmail) {
+        // 0. actorId 가드 — created_by NOT NULL(서비스 경계 방어; 컨트롤러는 항상 non-null).
+        Objects.requireNonNull(actorId, "actorId");
         // 1. 위변조 실재 재검증 — 위조 요청으로 가짜 incident 생성 방지.
         AuditChainVerifier.TenantResult r = verifier.verifyTenant(tenantId);
         if (r.ok()) {
@@ -83,9 +88,13 @@ public class SecurityIncidentService {
         OffsetDateTime now = OffsetDateTime.now(clock);
         SecurityIncident incident = SecurityIncident.open(tenantId, tamperedEntryId, detail, actorId, now);
         try {
-            repo.save(incident);
+            // saveAndFlush 로 INSERT 를 즉시 flush 한다. save 만 쓰면 INSERT 가 commit 까지
+            // 지연돼 부분 유니크 인덱스 위반이 create() 리턴 후 commit 시점에 터질 수 있는데,
+            // 그러면 이 try/catch 를 벗어나 409 변환에 실패하고 audit/alert 만 발행된 상태가 된다.
+            // 즉시 flush 하면 위반이 여기서 잡혀 audit append/alert 발행 전에 실패한다.
+            repo.saveAndFlush(incident);
         } catch (DataIntegrityViolationException e) {
-            // 부분 유니크 인덱스 위반(동시 생성 경쟁) → 409 로 변환.
+            // 부분 유니크 인덱스 위반(동시 생성 경쟁) 가정 → 409 로 변환.
             throw new IncidentConflictException("open incident already exists for tenant: " + tenantId);
         }
         // 4. audit append
@@ -93,13 +102,24 @@ public class SecurityIncidentService {
                 actorId, actorEmail, "AUDIT_CHAIN_INCIDENT_CREATED",
                 "SECURITY_INCIDENT", incident.getId().toString(), tenantId,
                 Map.of("tamperedEntryId", tamperedEntryId == null ? "" : tamperedEntryId.toString())));
-        // 5. CRITICAL 알림
-        events.publishEvent(new SecurityAlertEvent(
+        // 5. CRITICAL 알림 — 트랜잭션 커밋 후에만 발행한다. AlertDispatcher 가 @Async 라
+        //    publish 즉시 비동기 발송되므로, 트랜잭션 안에서 publish 하면 이후 commit 이
+        //    롤백돼도 alert 이 이미 나가버린다. afterCommit 으로 미뤄 incident 가 실제
+        //    commit 된 뒤에만 alert 이 나가게 한다(롤백 시 alert 없음).
+        SecurityAlertEvent alert = new SecurityAlertEvent(
                 SecurityAlertEvent.AlertType.AUDIT_CHAIN_TAMPERING,
                 SecurityAlertEvent.Severity.CRITICAL,
                 "audit chain incident created",
                 Map.of("tenantId", tenantId.toString(),
-                       "incidentId", incident.getId().toString())));
+                       "incidentId", incident.getId().toString()));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { events.publishEvent(alert); }
+            });
+        } else {
+            // 트랜잭션 동기화 비활성(예: 단위 테스트) — 즉시 발행.
+            events.publishEvent(alert);
+        }
         log.warn("audit chain incident created: id={} tenant={} by={}",
                 incident.getId(), tenantId, actorEmail);
         return incident;
@@ -112,6 +132,8 @@ public class SecurityIncidentService {
         if (note == null || note.isBlank()) {
             throw new IllegalArgumentException("resolution note must not be blank");
         }
+        // actorId 가드 — resolved_by NOT NULL(서비스 경계 방어; 컨트롤러는 항상 non-null).
+        Objects.requireNonNull(actorId, "actorId");
         OffsetDateTime now = OffsetDateTime.now(clock);
         // 1. 조건부 원자 UPDATE — OPEN 일 때만 전이. 동시 resolve race 를 DB 레벨에서 직렬화.
         int updated = repo.resolveIfOpen(incidentId, actorId, note, now);
