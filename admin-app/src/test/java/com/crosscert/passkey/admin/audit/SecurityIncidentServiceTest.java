@@ -8,6 +8,7 @@ import com.crosscert.passkey.core.repository.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -139,6 +140,42 @@ class SecurityIncidentServiceTest {
         assertThatThrownBy(() -> svc.resolve(id, null, id, "alice@crosscert.com"))
                 .isInstanceOf(IllegalArgumentException.class);
 
+        verify(repo, never()).resolveIfOpen(any(), any(), any(), any());
+        verify(audit, never()).append(any());
+    }
+
+    @Test
+    void create_whenUniqueIndexViolated_translatesToConflictWithoutSideEffects() {
+        // 선체크는 통과(false)했지만 동시 생성 race 에서 DB 부분 유니크 인덱스가 막는 경우:
+        // saveAndFlush 가 즉시 위반을 던지고 409 로 변환되며 audit/alert side-effect 가 없어야 한다.
+        stubTampered(true);
+        when(repo.existsByTenantIdAndStatus(TENANT, "OPEN")).thenReturn(false);
+        when(repo.saveAndFlush(any(SecurityIncident.class)))
+                .thenThrow(new DataIntegrityViolationException("ux_incident_open_per_tenant"));
+
+        assertThatThrownBy(() -> svc.create(TENANT, ENTRY, ACTOR, "alice@crosscert.com"))
+                .isInstanceOf(IncidentConflictException.class);
+
+        verify(audit, never()).append(any());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void create_whenActorIdNull_throws() {
+        // actorId 가드(Objects.requireNonNull → NPE)가 영속화 전에 차단해야 한다.
+        assertThatThrownBy(() -> svc.create(TENANT, ENTRY, null, "alice@crosscert.com"))
+                .isInstanceOf(NullPointerException.class);
+        verify(repo, never()).saveAndFlush(any());
+        verify(audit, never()).append(any());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void resolve_whenActorIdNull_throws() {
+        // actorId 가드(Objects.requireNonNull → NPE)가 UPDATE 전에 차단해야 한다.
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> svc.resolve(id, "note", null, "alice@crosscert.com"))
+                .isInstanceOf(NullPointerException.class);
         verify(repo, never()).resolveIfOpen(any(), any(), any(), any());
         verify(audit, never()).append(any());
     }
