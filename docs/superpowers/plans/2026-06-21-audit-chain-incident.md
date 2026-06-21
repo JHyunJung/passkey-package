@@ -561,6 +561,35 @@ public class SecurityIncidentService {
 
 > **주의:** `SecurityAlertEvent`/`SecurityAlertEvent.Severity` 의 정확한 생성자 시그니처는 Task 시작 시 `SecurityAlertEvent.java` 를 열어 확인하고, 위 `publishEvent(new SecurityAlertEvent(type, severity, summary, contextMap))` 호출을 실제 생성자에 맞춰 조정한다(현재 record: `AlertType type, Severity severity, ...`). `AuditAppendRequest` 7-필드 시그니처는 본 plan §Task4 Interfaces 와 일치.
 
+> **Codex 리뷰(Task 2) 반영 — 이 Task에서 반드시 처리할 것:**
+> 1. **note 검증 (서비스 레이어 가드):** `resolve()` 진입 시 `note` 가 null 또는 blank 이면
+>    `IllegalArgumentException`(또는 400 매핑되는 검증 예외)을 던져라. 엔티티 `resolve()` 가
+>    그대로 RESOLVED 로 바꾸면 `ck_security_incident_resolution`(RESOLVED 면 resolution_note
+>    NOT NULL)이 flush 시점에 ORA-02290 으로 터지므로, 서비스에서 선제 차단한다. 컨트롤러 DTO
+>    `@NotBlank` 와 **이중 방어**(서비스 직접 호출/테스트 경로 대비).
+> 2. **resolve 동시성 (race) — 단일 원자 UPDATE:** 위 `findByIdAndStatus`→`save` 2단계는 두
+>    운영자가 동시에 같은 OPEN incident 를 resolve 하면 나중 flush 가 앞 값을 덮어쓴다.
+>    이를 막기 위해 리포지토리에 **조건부 원자 UPDATE** 를 추가하고 resolve 가 이를 쓰게 한다:
+>    ```java
+>    // SecurityIncidentRepository 에 추가
+>    @Modifying
+>    @Query("update SecurityIncident i set i.status='RESOLVED', i.resolvedBy=:by, " +
+>           "i.resolutionNote=:note, i.resolvedAt=:at " +
+>           "where i.id=:id and i.status='OPEN'")
+>    int resolveIfOpen(@Param("id") UUID id, @Param("by") UUID by,
+>                      @Param("note") String note, @Param("at") OffsetDateTime at);
+>    ```
+>    서비스 `resolve()` 는 `int updated = repo.resolveIfOpen(...)` 후 `updated == 0` 이면
+>    `IncidentConflictException`("no open incident ...") 을 던진다(이미 RESOLVED 됐거나 없음 →
+>    race 의 패자도 여기로 떨어져 안전). UPDATE 가 1행이면 그 후 `findById` 로 다시 읽어 audit
+>    append + 반환에 쓴다. 이렇게 하면 `WHERE status='OPEN'` 가 DB 레벨에서 race 를 직렬화한다.
+>    (참고: 생성 경로의 race 는 V50 부분 유니크 인덱스가 이미 막으므로 추가 조치 불필요 — create
+>    의 `DataIntegrityViolationException`→409 변환이 그 방어다.)
+> 3. **거부된 Codex 지적(기록):** Codex 가 P1 으로 든 "리포 메서드에 tenantId 없음"(전역 조회)은
+>    spec §VPD(운영자가 전 테넌트 incident 를 봐야 함, PLATFORM_OPERATOR 전용 플랫폼 테이블)에
+>    따라 **의도된 동작**이라 수정하지 않는다. RP_ADMIN 노출 경로는 없다(컨트롤러 전체
+>    `@PreAuthorize("hasRole('PLATFORM_OPERATOR')")`).
+
 - [ ] **Step 5: 테스트 실행 → 통과 확인**
 
 Run: `./gradlew :admin-app:test --tests "*SecurityIncidentServiceTest"`
