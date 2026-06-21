@@ -18,7 +18,8 @@ public record SecurityAlertEvent(
         COUNTER_REGRESSION,
         TENANT_BOUNDARY_VIOLATION,
         ADMIN_LOGIN_FAILURE,
-        MDS_SYNC_FAILURE
+        MDS_SYNC_FAILURE,
+        AUDIT_CHAIN_TAMPERING
     }
 
     public enum Severity {
