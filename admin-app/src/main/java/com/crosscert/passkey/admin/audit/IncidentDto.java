@@ -12,7 +12,8 @@ import jakarta.validation.constraints.Size;
 public final class IncidentDto {
     private IncidentDto() {}
 
-    public record CreateRequest(@NotBlank String tenantId, String tamperedEntryId) {}
+    // tamperedEntryId 는 요청에서 받지 않는다 — 서버가 위변조 재검증 결과에서 도출(증거 위조 방지).
+    public record CreateRequest(@NotBlank String tenantId) {}
 
     public record ResolveRequest(@NotBlank @Size(max = 1024) String note) {}
 

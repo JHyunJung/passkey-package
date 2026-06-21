@@ -48,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @Import({
     com.crosscert.passkey.admin.config.AdminSecurityConfig.class,
+    com.crosscert.passkey.core.api.GlobalExceptionHandler.class,
     IncidentControllerSecurityTest.JpaStubs.class
 })
 class IncidentControllerSecurityTest {
@@ -105,8 +106,8 @@ class IncidentControllerSecurityTest {
     private static final UUID ENTRY = UUID.randomUUID();
     private static final UUID ACTOR = UUID.randomUUID();
 
-    private static final String CREATE_BODY =
-            "{\"tenantId\":\"" + TENANT + "\",\"tamperedEntryId\":\"" + ENTRY + "\"}";
+    // tamperedEntryId 는 요청에 없다 — 서버가 도출한다. body 는 tenantId 만.
+    private static final String CREATE_BODY = "{\"tenantId\":\"" + TENANT + "\"}";
 
     /** OPEN incident with a deterministic id for toView() stubbing. */
     private SecurityIncident openIncident() {
@@ -156,16 +157,16 @@ class IncidentControllerSecurityTest {
     @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void operatorCanCreate() throws Exception {
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(adminUserWithUuid()));
-        when(admins.findById(ACTOR)).thenReturn(Optional.of(adminUserWithUuid()));
-        when(tenants.findById(any(UUID.class))).thenReturn(Optional.empty());
-        when(incidents.create(any(), any(), any(), anyString())).thenReturn(openIncident());
+        // create 는 3-arg(tenantId, actorId, actorEmail) — tamperedEntryId 는 서버가 도출.
+        when(incidents.create(any(), any(), anyString())).thenReturn(openIncident());
 
         mvc.perform(post("/admin/api/audit/chain/incidents")
                         .with(csrf())
                         .contentType("application/json")
                         .content(CREATE_BODY))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value(TENANT.toString()))
+                .andExpect(jsonPath("$.tamperedEntryId").value(ENTRY.toString()))
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.severity").value("CRITICAL"));
     }
@@ -174,8 +175,6 @@ class IncidentControllerSecurityTest {
     @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void operatorCanList() throws Exception {
         when(incidents.list()).thenReturn(java.util.List.of(openIncident()));
-        when(admins.findById(ACTOR)).thenReturn(Optional.of(adminUserWithUuid()));
-        when(tenants.findById(any(UUID.class))).thenReturn(Optional.empty());
 
         mvc.perform(get("/admin/api/audit/chain/incidents"))
                 .andExpect(status().isOk())
@@ -183,13 +182,13 @@ class IncidentControllerSecurityTest {
                 .andExpect(jsonPath("$[0].status").value("OPEN"));
     }
 
-    // ---- 예외 매핑 (409 / 422) --------------------------------------------
+    // ---- 예외 매핑 (409 / 422 / 404 / 400) --------------------------------
 
     @Test
     @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void conflictMapsTo409() throws Exception {
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(adminUserWithUuid()));
-        when(incidents.create(any(), any(), any(), anyString()))
+        when(incidents.create(any(), any(), anyString()))
                 .thenThrow(new IncidentConflictException("open incident already exists"));
 
         mvc.perform(post("/admin/api/audit/chain/incidents")
@@ -204,7 +203,7 @@ class IncidentControllerSecurityTest {
     @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
     void notTamperedMapsTo422() throws Exception {
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(adminUserWithUuid()));
-        when(incidents.create(any(), any(), any(), anyString()))
+        when(incidents.create(any(), any(), anyString()))
                 .thenThrow(new IncidentNotTamperedException("tenant chain is intact"));
 
         mvc.perform(post("/admin/api/audit/chain/incidents")
@@ -215,6 +214,49 @@ class IncidentControllerSecurityTest {
                 .andExpect(jsonPath("$.error").value("not_tampered"));
     }
 
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void resolveNotFoundMapsTo404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(adminUserWithUuid()));
+        when(incidents.resolve(any(), anyString(), any(), anyString()))
+                .thenThrow(new IncidentNotFoundException("no incident with id: " + id));
+
+        mvc.perform(post("/admin/api/audit/chain/incidents/" + id + "/resolve")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"note\":\"x\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("not_found"));
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void invalidTenantIdMapsTo400() throws Exception {
+        // UUID.fromString("not-a-uuid") → IllegalArgumentException → GlobalExceptionHandler 400.
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(adminUserWithUuid()));
+
+        mvc.perform(post("/admin/api/audit/chain/incidents")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"tenantId\":\"not-a-uuid\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = "PLATFORM_OPERATOR")
+    void blankResolveNoteMapsTo400() throws Exception {
+        // @NotBlank note → MethodArgumentNotValidException → GlobalExceptionHandler 400.
+        UUID id = UUID.randomUUID();
+        when(admins.findByEmail(anyString())).thenReturn(Optional.of(adminUserWithUuid()));
+
+        mvc.perform(post("/admin/api/audit/chain/incidents/" + id + "/resolve")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"note\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     // ---- resolve happy path -----------------------------------------------
 
     @Test
@@ -223,8 +265,6 @@ class IncidentControllerSecurityTest {
         SecurityIncident incident = openIncident();
         incident.resolve(ACTOR, "DBA 복구 완료", OffsetDateTime.now(ZoneOffset.ofHours(9)));
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(adminUserWithUuid()));
-        when(admins.findById(ACTOR)).thenReturn(Optional.of(adminUserWithUuid()));
-        when(tenants.findById(any(UUID.class))).thenReturn(Optional.empty());
         when(incidents.resolve(any(), anyString(), any(), anyString())).thenReturn(incident);
 
         mvc.perform(post("/admin/api/audit/chain/incidents/" + incident.getId() + "/resolve")

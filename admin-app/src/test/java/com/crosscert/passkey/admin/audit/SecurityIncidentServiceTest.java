@@ -71,10 +71,12 @@ class SecurityIncidentServiceTest {
         stubTampered(true);
         when(repo.existsByTenantIdAndStatus(TENANT, "OPEN")).thenReturn(false);
 
-        SecurityIncident i = svc.create(TENANT, ENTRY, ACTOR, "alice@crosscert.com");
+        SecurityIncident i = svc.create(TENANT, ACTOR, "alice@crosscert.com");
 
         assertThat(i.getStatus()).isEqualTo("OPEN");
         assertThat(i.getTenantId()).isEqualTo(TENANT);
+        // tamperedEntryId 는 caller 입력이 아니라 verifyTenant 의 broken row(ENTRY)에서 도출돼야 한다.
+        assertThat(i.getTamperedEntryId()).isEqualTo(ENTRY);
         verify(repo).saveAndFlush(any(SecurityIncident.class));
         verify(audit).append(any());
         // 단위 테스트는 트랜잭션 동기화 비활성 → afterCommit 우회 즉시 발행(else 분기).
@@ -86,7 +88,7 @@ class SecurityIncidentServiceTest {
         stubTampered(true);
         when(repo.existsByTenantIdAndStatus(TENANT, "OPEN")).thenReturn(true);
 
-        assertThatThrownBy(() -> svc.create(TENANT, ENTRY, ACTOR, "alice@crosscert.com"))
+        assertThatThrownBy(() -> svc.create(TENANT, ACTOR, "alice@crosscert.com"))
                 .isInstanceOf(IncidentConflictException.class);
         verify(repo, never()).saveAndFlush(any());
         verify(events, never()).publishEvent(any());
@@ -96,7 +98,7 @@ class SecurityIncidentServiceTest {
     void create_whenNotActuallyTampered_throwsUnprocessable() {
         stubTampered(false);
 
-        assertThatThrownBy(() -> svc.create(TENANT, ENTRY, ACTOR, "alice@crosscert.com"))
+        assertThatThrownBy(() -> svc.create(TENANT, ACTOR, "alice@crosscert.com"))
                 .isInstanceOf(IncidentNotTamperedException.class);
         verify(repo, never()).saveAndFlush(any());
     }
@@ -120,11 +122,25 @@ class SecurityIncidentServiceTest {
     }
 
     @Test
-    void resolve_whenNotOpen_throwsConflict() {
+    void resolve_whenNotFound_throwsNotFound() {
         UUID id = UUID.randomUUID();
-        // Atomic UPDATE affects 0 rows → already RESOLVED or missing (race loser lands here too).
+        // Atomic UPDATE affects 0 rows AND row does not exist → 404.
         when(repo.resolveIfOpen(eq(id), eq(ACTOR), eq("note"), any(OffsetDateTime.class)))
                 .thenReturn(0);
+        when(repo.existsById(id)).thenReturn(false);
+
+        assertThatThrownBy(() -> svc.resolve(id, "note", ACTOR, "alice@crosscert.com"))
+                .isInstanceOf(IncidentNotFoundException.class);
+        verify(audit, never()).append(any());
+    }
+
+    @Test
+    void resolve_whenAlreadyResolved_throwsConflict() {
+        UUID id = UUID.randomUUID();
+        // Atomic UPDATE affects 0 rows but row exists → already RESOLVED (race loser lands here too) → 409.
+        when(repo.resolveIfOpen(eq(id), eq(ACTOR), eq("note"), any(OffsetDateTime.class)))
+                .thenReturn(0);
+        when(repo.existsById(id)).thenReturn(true);
 
         assertThatThrownBy(() -> svc.resolve(id, "note", ACTOR, "alice@crosscert.com"))
                 .isInstanceOf(IncidentConflictException.class);
@@ -153,7 +169,7 @@ class SecurityIncidentServiceTest {
         when(repo.saveAndFlush(any(SecurityIncident.class)))
                 .thenThrow(new DataIntegrityViolationException("ux_incident_open_per_tenant"));
 
-        assertThatThrownBy(() -> svc.create(TENANT, ENTRY, ACTOR, "alice@crosscert.com"))
+        assertThatThrownBy(() -> svc.create(TENANT, ACTOR, "alice@crosscert.com"))
                 .isInstanceOf(IncidentConflictException.class);
 
         verify(audit, never()).append(any());
@@ -163,7 +179,7 @@ class SecurityIncidentServiceTest {
     @Test
     void create_whenActorIdNull_throws() {
         // actorId 가드(Objects.requireNonNull → NPE)가 영속화 전에 차단해야 한다.
-        assertThatThrownBy(() -> svc.create(TENANT, ENTRY, null, "alice@crosscert.com"))
+        assertThatThrownBy(() -> svc.create(TENANT, null, "alice@crosscert.com"))
                 .isInstanceOf(NullPointerException.class);
         verify(repo, never()).saveAndFlush(any());
         verify(audit, never()).append(any());
