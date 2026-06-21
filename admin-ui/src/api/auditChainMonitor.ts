@@ -27,6 +27,23 @@ export type BackfillResult = {
   rowsSkipped: number;
 };
 
+// SecurityIncident view — controller toView() 와 1:1 (전부 string | null).
+export type IncidentView = {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  tamperedEntryId: string | null;
+  type: string;
+  severity: string;
+  status: 'OPEN' | 'RESOLVED';
+  detail: string | null;
+  createdAt: string;
+  createdByEmail: string;
+  resolvedAt: string | null;
+  resolvedByEmail: string | null;
+  resolutionNote: string | null;
+};
+
 // NOTE: AuditChainMonitorController returns raw POJO (no ApiResponse envelope).
 // Use getRaw / postRaw instead of the envelope-aware get / post.
 export const auditChainMonitorApi = {
@@ -37,5 +54,18 @@ export const auditChainMonitorApi = {
   },
   backfill: async (): Promise<BackfillResult> => {
     return api.postRaw<BackfillResult>('/admin/api/audit/chain/backfill', {});
+  },
+  listIncidents: async (): Promise<IncidentView[]> => {
+    return api.getRaw<IncidentView[]>('/admin/api/audit/chain/incidents');
+  },
+  // tamperedEntryId 는 보내지 않는다 — 서버가 위변조 재검증 결과에서 도출한다.
+  createIncident: async (tenantId: string): Promise<IncidentView> => {
+    return api.postRaw<IncidentView>('/admin/api/audit/chain/incidents', { tenantId });
+  },
+  resolveIncident: async (id: string, note: string): Promise<IncidentView> => {
+    return api.postRaw<IncidentView>(
+      `/admin/api/audit/chain/incidents/${id}/resolve`,
+      { note },
+    );
   },
 };
