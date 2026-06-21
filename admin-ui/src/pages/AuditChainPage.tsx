@@ -164,6 +164,7 @@ export default function AuditChainPage() {
   const [showReport, setShowReport] = useState(false);
   const [running, setRunning] = useState(false);
   const [incidents, setIncidents] = useState<IncidentView[]>([]);
+  const [incidentError, setIncidentError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [confirmCreate, setConfirmCreate] = useState(false);
   const [resolving, setResolving] = useState<IncidentView | null>(null);
@@ -172,19 +173,27 @@ export default function AuditChainPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
+  // Incident 목록만 재조회(페이지 전체 spinner 없이). 실패를 "비어있음"으로
+  // 오인시키면 운영자가 실제 OPEN incident(위변조)를 놓치므로, 실패 시 기존
+  // incidents 를 빈 배열로 덮지 않고 에러 플래그만 세운다.
+  async function refreshIncidents() {
+    try {
+      const list = await auditChainMonitorApi.listIncidents();
+      setIncidents(list);
+      setIncidentError(false);
+    } catch {
+      setIncidentError(true);
+    }
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
     try {
       const o = await auditChainMonitorApi.overview(24);
       setOverview(o);
-      try {
-        const list = await auditChainMonitorApi.listIncidents();
-        setIncidents(list);
-      } catch {
-        // Incident 목록 로드 실패는 페이지 전체를 막지 않는다 — 빈 목록으로 둔다.
-        setIncidents([]);
-      }
+      // Incident 목록 로드 실패는 페이지 전체를 막지 않는다(독립 처리).
+      await refreshIncidents();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'overview 로드 실패';
       setError(msg);
@@ -222,6 +231,8 @@ export default function AuditChainPage() {
       await load();
     } catch (e: unknown) {
       if (e instanceof ApiError && e.status === 409) {
+        // 다른 운영자가 이미 OPEN incident 를 만든 stale 상태일 수 있다 — 닫고 목록 동기화.
+        setConfirmCreate(false);
         toast({ kind: 'warn', title: '이미 진행 중', message: '해당 tenant 에 OPEN 상태 incident 가 이미 있습니다.' });
       } else if (e instanceof ApiError && e.status === 422) {
         toast({ kind: 'warn', title: '위변조 미확인', message: '재검증 결과 위변조가 확인되지 않아 incident 를 생성하지 않았습니다.' });
@@ -229,6 +240,8 @@ export default function AuditChainPage() {
         const msg = e instanceof Error ? e.message : 'incident 생성 실패';
         toast({ kind: 'err', title: 'Incident 생성 실패', message: msg });
       }
+      // 어느 실패 경로든 서버 상태와 목록을 동기화(409 의 stale OPEN incident 노출).
+      await refreshIncidents();
     } finally {
       setCreating(false);
     }
@@ -245,13 +258,19 @@ export default function AuditChainPage() {
       await load();
     } catch (e: unknown) {
       if (e instanceof ApiError && e.status === 409) {
+        // 이미 RESOLVED — stale 다이얼로그를 닫고 목록 동기화.
+        setResolving(null);
+        setResolveNote('');
         toast({ kind: 'warn', title: '이미 해결됨', message: '해당 incident 는 이미 RESOLVED 상태입니다.' });
       } else if (e instanceof ApiError && e.status === 404) {
+        setResolving(null);
+        setResolveNote('');
         toast({ kind: 'warn', title: '대상 없음', message: 'incident 를 찾을 수 없습니다.' });
       } else {
         const msg = e instanceof Error ? e.message : 'incident 해결 실패';
         toast({ kind: 'err', title: '해결 실패', message: msg });
       }
+      await refreshIncidents();
     } finally {
       setResolveBusy(false);
     }
@@ -386,7 +405,18 @@ export default function AuditChainPage() {
             )}
           </div>
         </div>
-        {incidents.length === 0 ? (
+        {incidentError ? (
+          <div className="card__body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '24px 0' }}>
+            <span style={{ color: 'var(--danger)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icons.Alert size={14} /> Incident 목록을 불러오지 못했습니다.
+              {incidents.length > 0 && <span className="muted" style={{ fontSize: 12 }}>(아래는 마지막으로 조회된 목록)</span>}
+            </span>
+            <button className="btn btn--sm" onClick={() => void refreshIncidents()}>
+              <Icons.Refresh size={12} /> 다시 시도
+            </button>
+          </div>
+        ) : null}
+        {incidentError && incidents.length === 0 ? null : !incidentError && incidents.length === 0 ? (
           <div className="card__body muted" style={{ fontSize: 13, textAlign: 'center', padding: '28px 0' }}>
             등록된 incident가 없습니다.
           </div>
@@ -475,10 +505,14 @@ export default function AuditChainPage() {
           </button>
         </>}
       >
-        <label className="label">해결 메모 (필수)</label>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <label className="label">해결 메모 (필수)</label>
+          <span className="muted" style={{ fontSize: 11 }}>{resolveNote.length}/1024</span>
+        </div>
         <textarea
           className="input"
           rows={4}
+          maxLength={1024}
           value={resolveNote}
           onChange={(e) => setResolveNote(e.target.value)}
           placeholder="조사 결과 및 조치 내용을 기록하세요."
