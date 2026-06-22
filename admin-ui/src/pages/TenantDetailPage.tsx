@@ -151,10 +151,10 @@ function TenantTabs({ current, onChange }: { current: string; onChange: (tab: st
     { id: 'overview', label: '개요' },
     { id: 'webauthn', label: 'WebAuthn' },
     { id: 'aaguid', label: 'AAGUID 정책' },
-    { id: 'apikeys', label: 'API Keys' },
+    { id: 'apikeys', label: 'API 키' },
     { id: 'credentials', label: 'Credentials' },
-    { id: 'audit', label: 'Audit Logs' },
-    { id: 'funnel', label: 'Funnel' },
+    { id: 'audit', label: '감사 로그' },
+    { id: 'funnel', label: '퍼널' },
   ];
   return (
     <div className="tabs">
