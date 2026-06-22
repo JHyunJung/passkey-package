@@ -136,7 +136,6 @@ function TenantHeader({ tenant, onSuspend, onActivate, onReload }: { tenant: Ten
       <div className="row">
         <button className="btn btn--sm" onClick={() => tenant.rpId && window.open('https://' + tenant.rpId, '_blank', 'noopener,noreferrer')}><Icons.ExternalLink size={12} /> RP 사이트 열기</button>
         <button className="btn btn--sm" onClick={onReload}><Icons.Refresh size={12} /> Refresh</button>
-        <button className="btn btn--sm" onClick={() => {}}><Icons.Dots size={14} /></button>
         {tenant.status === 'ACTIVE' ? (
           <button className="btn btn--sm btn--danger" onClick={onSuspend}>테넌트 정지</button>
         ) : (
