@@ -130,11 +130,11 @@ function MonthlyReportDialog({ open, onClose, overview }: {
     >
       <div className="grid-2" style={{ marginBottom: 14 }}>
         <div>
-          <label className="label">from</label>
+          <label className="label">시작일</label>
           <input className="input mono" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
         <div>
-          <label className="label">to</label>
+          <label className="label">종료일</label>
           <input className="input mono" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
       </div>
