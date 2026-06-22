@@ -88,8 +88,8 @@ export const statusLabel = (v: string): string => STATUS_LABELS[v] ?? v;
   Funnel→퍼널, API Keys→API 키
   - **`Tenants` 네비 라벨은 영어 유지** — "Tenant 용어는 통일하지 않는다"는 결정에 따라
     메뉴명도 영어로 둔다(테이블 헤더 `Tenant`와 일관).
-- **테이블 헤더**: Slug→슬러그, Status→상태, Credentials→자격증명, Key Prefix→키 접두사
-  (`Tenant` 헤더는 영어 유지)
+- **테이블 헤더**: Slug→슬러그, Status→상태, Key Prefix→키 접두사
+  (`Tenant`·`RP ID`·`Credentials` 헤더는 영어 유지 — Credentials는 WebAuthn 고유 용어 보존)
 - **AAGUID 정책 모드(`AaguidPolicyTab.tsx`)**: ANY→전체 허용, ALLOWLIST→허용 목록,
   DENYLIST→차단 목록
 - **다이얼로그 잔여 영어**: from/to→시작일/종료일, ON/OFF→켜짐/꺼짐
