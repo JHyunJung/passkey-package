@@ -145,11 +145,11 @@ export default function AdminUsersTab() {
           <thead>
             <tr>
               <th>운영자</th>
-              <th>Role</th>
+              <th>역할</th>
               <th>Tenant</th>
               <th>MFA</th>
               <th>마지막 로그인</th>
-              <th>Status</th>
+              <th>상태</th>
               <th style={{ textAlign: 'right' }}>액션</th>
             </tr>
           </thead>

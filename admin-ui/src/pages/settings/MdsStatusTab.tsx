@@ -162,7 +162,7 @@ export default function MdsStatusTab() {
               <th>시각</th>
               <th>버전</th>
               <th>변경</th>
-              <th>Status</th>
+              <th>상태</th>
               <th>응답 시간</th>
             </tr>
           </thead>

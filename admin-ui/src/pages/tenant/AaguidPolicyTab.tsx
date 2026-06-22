@@ -3,6 +3,7 @@ import { Icons } from '@/icons/Icons';
 import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import type { Tenant, AaguidPolicy } from '@/api/designTypes';
 import { useToast } from '@/shell/ToastHost';
+import { AAGUID_MODE_LABELS } from '@/i18n/labels';
 
 // ── AAGUID 입력 자동 포맷 ─────────────────────────────────────────────────────
 // 입력값에서 16진수만 남기고(최대 32자) UUID 형식 8-4-4-4-12 위치에 하이픈을
@@ -113,9 +114,9 @@ export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
           <Field label="mode">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxWidth: 540 }}>
               {[
-                { v: 'ANY', t: 'ANY', d: '모든 authenticator 허용' },
-                { v: 'ALLOWLIST', t: 'ALLOWLIST', d: '지정된 AAGUID만 허용' },
-                { v: 'DENYLIST', t: 'DENYLIST', d: '지정된 AAGUID만 차단' },
+                { v: 'ANY', t: AAGUID_MODE_LABELS.ANY, d: '모든 authenticator 허용' },
+                { v: 'ALLOWLIST', t: AAGUID_MODE_LABELS.ALLOWLIST, d: '지정된 AAGUID만 허용' },
+                { v: 'DENYLIST', t: AAGUID_MODE_LABELS.DENYLIST, d: '지정된 AAGUID만 차단' },
               ].map((o) => (
                 <button
                   key={o.v}
@@ -199,7 +200,7 @@ export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
             <Toggle
               on={draft.mdsStrict}
               onChange={(v) => setDraft({ ...draft, mdsStrict: v })}
-              label={draft.mdsStrict ? 'MDS strict ON' : 'MDS strict OFF'}
+              label={draft.mdsStrict ? 'MDS strict 켜짐' : 'MDS strict 꺼짐'}
             />
           </Field>
         </div>

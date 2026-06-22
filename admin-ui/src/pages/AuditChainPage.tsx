@@ -6,6 +6,7 @@ import { monthlyReportApi } from '@/api/monthlyReport';
 import { useToast } from '@/shell/ToastHost';
 import { Dialog } from '@/shell/Dialog';
 import { ApiError } from '@/api/types';
+import { statusLabel } from '@/i18n/labels';
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
@@ -129,11 +130,11 @@ function MonthlyReportDialog({ open, onClose, overview }: {
     >
       <div className="grid-2" style={{ marginBottom: 14 }}>
         <div>
-          <label className="label">from</label>
+          <label className="label">시작일</label>
           <input className="input mono" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
         <div>
-          <label className="label">to</label>
+          <label className="label">종료일</label>
           <input className="input mono" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
       </div>
@@ -143,7 +144,7 @@ function MonthlyReportDialog({ open, onClose, overview }: {
             <input type="checkbox" defaultChecked style={{ marginRight: 10 }} />
             <span style={{ flex: 1 }}>{c.tenantName}</span>
             <span className="mono muted" style={{ fontSize: 11, marginRight: 12 }}>{fmt(c.verifiedRows)} rows</span>
-            {c.intact ? <span className="badge badge--success">INTACT</span> : <span className="badge badge--danger">TAMPERED</span>}
+            {c.intact ? <span className="badge badge--success">{statusLabel('INTACT')}</span> : <span className="badge badge--danger">{statusLabel('TAMPERED')}</span>}
           </div>
         ))}
       </div>
@@ -301,7 +302,7 @@ export default function AuditChainPage() {
     <div className="page">
       <div className="page__head">
         <div>
-          <h1 className="page__title">Audit Chain Monitor</h1>
+          <h1 className="page__title">감사 체인 모니터</h1>
           <div className="page__sub">전체 tenant의 SHA-256 hash chain 무결성 상태. scheduler가 60초마다 자동 검증합니다.</div>
         </div>
         <div className="row">
@@ -313,7 +314,7 @@ export default function AuditChainPage() {
       </div>
 
       <div className="grid-4" style={{ marginBottom: 20 }}>
-        <MetricCard label="무결 / 전체" value={`${totals.tenantsIntact} / ${totals.tenantsTotal}`} sub={tamperedTenant ? `위변조 의심: ${tamperedTenant.tenantName}` : '전체 무결'} />
+        <MetricCard label="정상 / 전체" value={`${totals.tenantsIntact} / ${totals.tenantsTotal}`} sub={tamperedTenant ? `위변조 의심: ${tamperedTenant.tenantName}` : '전체 정상'} />
         <MetricCard label="검증된 audit row" value={fmt(totals.verifiedRows)} sub="누적 chain length" />
         <MetricCard label="검증 주기" value="60s" sub="background scheduler · prometheus 연동" />
         <MetricCard label="평균 chain 검증" value={`${totals.verificationMs}ms`} sub="100k rows 기준 · p99 920ms" />
@@ -349,16 +350,16 @@ export default function AuditChainPage() {
           <h3 className="card__title">Tenant별 Chain 상태</h3>
           <div className="row">
             <span className="muted" style={{ fontSize: 12 }}>최근 60초 기준</span>
-            <span className="badge badge--success badge--dot">INTACT {totals.tenantsIntact}</span>
-            {totals.tenantsTampered > 0 && <span className="badge badge--danger badge--dot">TAMPERED {totals.tenantsTampered}</span>}
+            <span className="badge badge--success badge--dot">{statusLabel('INTACT')} {totals.tenantsIntact}</span>
+            {totals.tenantsTampered > 0 && <span className="badge badge--danger badge--dot">{statusLabel('TAMPERED')} {totals.tenantsTampered}</span>}
           </div>
         </div>
         <table className="table">
           <thead>
             <tr>
               <th>Tenant</th>
-              <th>Status</th>
-              <th style={{ textAlign: 'right' }}>Verified Rows</th>
+              <th>상태</th>
+              <th style={{ textAlign: 'right' }}>검증 행 수</th>
               <th>마지막 검증</th>
               <th>Chain (시각화)</th>
               <th style={{ textAlign: 'right' }}>액션</th>
@@ -375,9 +376,9 @@ export default function AuditChainPage() {
                 </td>
                 <td>
                   {c.intact ? (
-                    <span className="badge badge--success badge--dot">INTACT</span>
+                    <span className="badge badge--success badge--dot">{statusLabel('INTACT')}</span>
                   ) : (
-                    <span className="badge badge--danger badge--dot">TAMPERED</span>
+                    <span className="badge badge--danger badge--dot">{statusLabel('TAMPERED')}</span>
                   )}
                 </td>
                 <td style={{ textAlign: 'right' }} className="mono">{fmt(c.verifiedRows)}</td>
@@ -400,7 +401,7 @@ export default function AuditChainPage() {
             <span className="muted" style={{ fontSize: 12 }}>위변조 감지 시 등록되는 대응 incident</span>
             {incidents.some((i) => i.status === 'OPEN') && (
               <span className="badge badge--danger badge--dot">
-                OPEN {incidents.filter((i) => i.status === 'OPEN').length}
+                {statusLabel('OPEN')} {incidents.filter((i) => i.status === 'OPEN').length}
               </span>
             )}
           </div>
@@ -437,9 +438,9 @@ export default function AuditChainPage() {
                 <tr key={inc.id}>
                   <td>
                     {inc.status === 'OPEN' ? (
-                      <span className="badge badge--danger badge--dot">OPEN</span>
+                      <span className="badge badge--danger badge--dot">{statusLabel('OPEN')}</span>
                     ) : (
-                      <span className="badge badge--dot">RESOLVED</span>
+                      <span className="badge badge--dot">{statusLabel('RESOLVED')}</span>
                     )}
                   </td>
                   <td style={{ fontWeight: 600, fontSize: 13 }}>{inc.tenantName}</td>

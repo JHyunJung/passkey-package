@@ -25,8 +25,8 @@ describe('Sidebar nav role filter', () => {
   it('PLATFORM_OPERATOR sees platform nav items', async () => {
     renderSidebar(platform);
     expect(screen.getByText('Tenants')).toBeInTheDocument();
-    expect(screen.getByText('Activity')).toBeInTheDocument();
-    expect(screen.getByText('Audit Chain')).toBeInTheDocument();
+    expect(screen.getByText('활동')).toBeInTheDocument();
+    expect(screen.getByText('감사 체인')).toBeInTheDocument();
     expect(screen.getByText('설정')).toBeInTheDocument();
     await screen.findByText('설정'); // async license fetch flush
   });
@@ -34,8 +34,8 @@ describe('Sidebar nav role filter', () => {
   it('RP_ADMIN does NOT see platform-only nav items but keeps 설정', async () => {
     renderSidebar(rp);
     expect(screen.queryByText('Tenants')).not.toBeInTheDocument();
-    expect(screen.queryByText('Activity')).not.toBeInTheDocument();
-    expect(screen.queryByText('Audit Chain')).not.toBeInTheDocument();
+    expect(screen.queryByText('활동')).not.toBeInTheDocument();
+    expect(screen.queryByText('감사 체인')).not.toBeInTheDocument();
     expect(screen.getByText('설정')).toBeInTheDocument(); // 내 계정 접근 위해 유지
     await screen.findByText('설정'); // async license fetch flush
   });

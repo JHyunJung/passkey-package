@@ -53,20 +53,20 @@ function buildBreadcrumb(
       overview: '개요',
       webauthn: 'WebAuthn',
       aaguid: 'AAGUID 정책',
-      apikeys: 'API Keys',
+      apikeys: 'API 키',
       credentials: 'Credentials',
-      audit: 'Audit Logs',
-      funnel: 'Funnel',
+      audit: '감사 로그',
+      funnel: '퍼널',
     };
     items.push({ label: tabName[route.tab] ?? route.tab });
   } else if (route.name === 'activity') {
-    items.push({ label: 'Activity' });
+    items.push({ label: '활동' });
   } else if (route.name === 'audit-chain') {
-    items.push({ label: 'Audit Chain Monitor' });
+    items.push({ label: '감사 체인 모니터' });
   } else if (route.name === 'settings') {
     items.push({ label: '설정' });
   } else if (route.name === 'license') {
-    items.push({ label: 'License' });
+    items.push({ label: '라이선스' });
   }
 
   return items;

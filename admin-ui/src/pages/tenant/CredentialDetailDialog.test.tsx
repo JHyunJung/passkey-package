@@ -38,8 +38,8 @@ describe('CredentialDetailDialog', () => {
       { result: 'FAILED', failureReason: 'SIGN_COUNT_REPLAY', signCount: 5, createdAt: '2026-06-06T05:00:00Z' },
     ]);
     render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} />);
-    await waitFor(() => expect(screen.getByText('SUCCESS')).toBeInTheDocument());
-    expect(screen.getByText('FAILED')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('성공')).toBeInTheDocument());
+    expect(screen.getByText('실패')).toBeInTheDocument();
     expect(screen.getByText('SIGN_COUNT_REPLAY')).toBeInTheDocument();
   });
 
@@ -70,9 +70,9 @@ describe('CredentialDetailDialog', () => {
 
     fireEvent.click(retry);
 
-    await waitFor(() => expect(screen.getByText('SUCCESS')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('성공')).toBeInTheDocument());
     expect(spy).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('FAILED')).toBeInTheDocument();
+    expect(screen.getByText('실패')).toBeInTheDocument();
     expect(screen.getByText('SIGN_COUNT_REPLAY')).toBeInTheDocument();
   });
 });

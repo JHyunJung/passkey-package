@@ -22,21 +22,21 @@ type TopLevelRouteName = 'tenants' | 'activity' | 'audit-chain' | 'settings' | '
 
 const NAV_PLATFORM: { id: TopLevelRouteName; label: string; icon: string }[] = [
   { id: 'tenants', label: 'Tenants', icon: 'Building' },
-  { id: 'activity', label: 'Activity', icon: 'Activity' },
-  { id: 'audit-chain', label: 'Audit Chain', icon: 'Hash' },
+  { id: 'activity', label: '활동', icon: 'Activity' },
+  { id: 'audit-chain', label: '감사 체인', icon: 'Hash' },
   { id: 'settings', label: '설정', icon: 'Cog' },
 ];
 
-const NAV_LICENSE: { id: TopLevelRouteName; label: string; icon: string } = { id: 'license', label: 'License', icon: 'Key' };
+const NAV_LICENSE: { id: TopLevelRouteName; label: string; icon: string } = { id: 'license', label: '라이선스', icon: 'Key' };
 
 const NAV_RP = [
   { id: 'overview', label: '개요', icon: 'Activity' },
   { id: 'webauthn', label: 'WebAuthn', icon: 'Globe' },
   { id: 'aaguid', label: 'AAGUID 정책', icon: 'Shield' },
-  { id: 'apikeys', label: 'API Keys', icon: 'Key' },
+  { id: 'apikeys', label: 'API 키', icon: 'Key' },
   { id: 'credentials', label: 'Credentials', icon: 'Fingerprint' },
-  { id: 'audit', label: 'Audit Logs', icon: 'Receipt' },
-  { id: 'funnel', label: 'Funnel', icon: 'Activity' },
+  { id: 'audit', label: '감사 로그', icon: 'Receipt' },
+  { id: 'funnel', label: '퍼널', icon: 'Activity' },
 ];
 
 // ===== NavBtn (private helper) =====
