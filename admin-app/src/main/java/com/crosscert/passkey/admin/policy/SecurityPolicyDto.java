@@ -13,7 +13,6 @@ public final class SecurityPolicyDto {
 
     public record View(
             int sessionIdleTimeoutMinutes,
-            int passwordMinLength,
             boolean mfaRequired,
             List<String> corsAllowlist,
             OffsetDateTime updatedAt,
@@ -26,7 +25,6 @@ public final class SecurityPolicyDto {
 
     public record UpdateRequest(
             @Min(1) int sessionIdleTimeoutMinutes,
-            @Min(1) int passwordMinLength,
             @NotNull Boolean mfaRequired,
             @NotNull @Size(max = 64) List<@NotBlank @Size(max = 256) String> corsAllowlist
     ) {

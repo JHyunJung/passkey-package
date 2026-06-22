@@ -1,6 +1,5 @@
 package com.crosscert.passkey.admin.operator;
 
-import com.crosscert.passkey.admin.policy.PasswordPolicyValidator;
 import com.crosscert.passkey.core.entity.AdminPasswordResetToken;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.mail.MailSender;
@@ -34,13 +33,12 @@ class PasswordResetServiceTest {
     @Mock AdminUserRepository users;
     @Mock MailSender mail;
     @Mock PasswordEncoder encoder;
-    @Mock PasswordPolicyValidator policy;
     Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), KstTime.ZONE);
     PasswordResetService service;
 
     @BeforeEach
     void setUp() {
-        service = new PasswordResetService(tokens, users, mail, encoder, policy, clock);
+        service = new PasswordResetService(tokens, users, mail, encoder, clock);
     }
 
     @Test
@@ -77,7 +75,6 @@ class PasswordResetServiceTest {
 
         service.confirm("plain-token", "NewPassw0rd!");
 
-        verify(policy).validate("NewPassw0rd!");
         assertThat(u.getBcryptHash()).isEqualTo("newhash");
         assertThat(tok.isConsumed()).isTrue();
         assertThat(u.getLockedUntil()).isNull();     // 이제 reset 이 실제로 해제했음을 증명

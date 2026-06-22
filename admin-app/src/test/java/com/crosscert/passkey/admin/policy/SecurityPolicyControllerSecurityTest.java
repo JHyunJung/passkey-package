@@ -87,7 +87,7 @@ class SecurityPolicyControllerSecurityTest {
 
     private static SecurityPolicyDto.View sampleView() {
         return new SecurityPolicyDto.View(
-                30, 12, false, List.of(), OffsetDateTime.parse("2026-05-31T00:00:00Z"), "alice@example.com");
+                30, false, List.of(), OffsetDateTime.parse("2026-05-31T00:00:00Z"), "alice@example.com");
     }
 
     @Test
@@ -108,7 +108,7 @@ class SecurityPolicyControllerSecurityTest {
         when(service.get()).thenReturn(sampleView());
         mvc.perform(get("/admin/api/security-policy"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.passwordMinLength").value(12))
+            .andExpect(jsonPath("$.sessionIdleTimeoutMinutes").value(30))
             .andExpect(jsonPath("$.updatedBy").value("alice@example.com"));
     }
 }

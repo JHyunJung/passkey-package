@@ -14,9 +14,6 @@ public class SecurityPolicy {
     @Column(name = "SESSION_IDLE_TIMEOUT_MINUTES", nullable = false)
     private int sessionIdleTimeoutMinutes;
 
-    @Column(name = "PASSWORD_MIN_LENGTH", nullable = false)
-    private int passwordMinLength;
-
     @Column(name = "MFA_REQUIRED", columnDefinition = "CHAR(1)", nullable = false)
     private String mfaRequiredFlag;
 
@@ -36,9 +33,6 @@ public class SecurityPolicy {
 
     public int getSessionIdleTimeoutMinutes() { return sessionIdleTimeoutMinutes; }
     public void setSessionIdleTimeoutMinutes(int v) { this.sessionIdleTimeoutMinutes = v; }
-
-    public int getPasswordMinLength() { return passwordMinLength; }
-    public void setPasswordMinLength(int v) { this.passwordMinLength = v; }
 
     public boolean isMfaRequired() { return "Y".equals(mfaRequiredFlag); }
     public void setMfaRequired(boolean v) { this.mfaRequiredFlag = v ? "Y" : "N"; }

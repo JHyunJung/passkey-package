@@ -40,7 +40,6 @@ public class SecurityPolicyService {
         SecurityPolicy p = repo.findById(SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("security_policy singleton row missing — V31 not applied?"));
         p.setSessionIdleTimeoutMinutes(req.sessionIdleTimeoutMinutes());
-        p.setPasswordMinLength(req.passwordMinLength());
         p.setMfaRequired(Boolean.TRUE.equals(req.mfaRequired()));
         p.setCorsAllowlistJson(serialize(req.corsAllowlist()));
         p.setUpdatedAt(OffsetDateTime.now(KstTime.ZONE));
@@ -48,9 +47,8 @@ public class SecurityPolicyService {
         repo.save(p);
 
         int allowlistSize = req.corsAllowlist() == null ? 0 : req.corsAllowlist().size();
-        log.info("security policy updated: sessionIdle={} pwMin={} mfa={} corsAllowlistSize={}",
+        log.info("security policy updated: sessionIdle={} mfa={} corsAllowlistSize={}",
                 req.sessionIdleTimeoutMinutes(),
-                req.passwordMinLength(),
                 Boolean.TRUE.equals(req.mfaRequired()),
                 allowlistSize);
 
@@ -60,7 +58,6 @@ public class SecurityPolicyService {
     private SecurityPolicyDto.View toView(SecurityPolicy p) {
         return new SecurityPolicyDto.View(
                 p.getSessionIdleTimeoutMinutes(),
-                p.getPasswordMinLength(),
                 p.isMfaRequired(),
                 deserialize(p.getCorsAllowlistJson()),
                 p.getUpdatedAt(),

@@ -209,7 +209,7 @@ class SecurityPolicyIT {
         HttpHeaders auth = loginAs("alice@crosscert.com", "alice-temp-pw");
         auth.setContentType(MediaType.APPLICATION_JSON);
 
-        // 1. GET — seeded defaults from V31 (idle=30, minLen=12, mfa=Y, cors=[]).
+        // 1. GET — seeded defaults from V31 (idle=30, mfa=Y, cors=[]).
         ResponseEntity<JsonNode> initial = rest.exchange(
                 url("/admin/api/security-policy"),
                 HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
@@ -221,7 +221,6 @@ class SecurityPolicyIT {
         // 2. PUT — new values.
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sessionIdleTimeoutMinutes", 15);
-        body.put("passwordMinLength", 16);
         body.put("mfaRequired", false);
         body.put("corsAllowlist", List.of("https://a.example.com"));
         ResponseEntity<JsonNode> putRes = rest.exchange(
@@ -237,7 +236,6 @@ class SecurityPolicyIT {
                 HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
         assertThat(readback.getStatusCode().value()).isEqualTo(200);
         assertThat(readback.getBody().get("sessionIdleTimeoutMinutes").asInt()).isEqualTo(15);
-        assertThat(readback.getBody().get("passwordMinLength").asInt()).isEqualTo(16);
         assertThat(readback.getBody().get("mfaRequired").asBoolean()).isFalse();
         JsonNode cors = readback.getBody().get("corsAllowlist");
         assertThat(cors.isArray()).isTrue();

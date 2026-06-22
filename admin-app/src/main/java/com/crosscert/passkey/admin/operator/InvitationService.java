@@ -1,6 +1,5 @@
 package com.crosscert.passkey.admin.operator;
 
-import com.crosscert.passkey.admin.policy.PasswordPolicyValidator;
 import com.crosscert.passkey.core.entity.AdminUserInvitation;
 import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
@@ -28,7 +27,6 @@ public class InvitationService {
     private final AdminUserRepository userRepo;
     private final MailSender mailSender;
     private final PasswordEncoder passwordEncoder;
-    private final PasswordPolicyValidator passwordPolicyValidator;
     private final Clock clock;
 
     @Value("${admin.invite.base-url:http://localhost:5173}")
@@ -38,13 +36,11 @@ public class InvitationService {
                              AdminUserRepository userRepo,
                              MailSender mailSender,
                              PasswordEncoder passwordEncoder,
-                             PasswordPolicyValidator passwordPolicyValidator,
                              Clock clock) {
         this.invitationRepo = invitationRepo;
         this.userRepo = userRepo;
         this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
-        this.passwordPolicyValidator = passwordPolicyValidator;
         this.clock = clock;
     }
 
@@ -87,7 +83,6 @@ public class InvitationService {
         var inv = lookupValid(plaintext, now);
         var user = userRepo.findById(inv.getAdminUserId())
                 .orElseThrow(() -> new IllegalStateException("user not found"));
-        passwordPolicyValidator.validate(password);
         user.setBcryptHash(passwordEncoder.encode(password));
         user.setStatus("ACTIVE");
         inv.accept(now);

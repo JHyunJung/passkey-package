@@ -1,6 +1,5 @@
 package com.crosscert.passkey.admin.operator;
 
-import com.crosscert.passkey.admin.policy.PasswordPolicyValidator;
 import com.crosscert.passkey.core.entity.AdminPasswordResetToken;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.mail.MailSender;
@@ -22,7 +21,7 @@ import java.time.OffsetDateTime;
  *
  * <p>InvitationService 패턴 복제 — sha-256 token_hash, MailSender, 1회용 토큰.
  * request 는 enumeration 방지를 위해 사용자 존재 여부와 무관하게 동일하게 동작
- * (없으면 조용히 no-op). confirm 은 PasswordPolicyValidator 재사용 + lockout 리셋.
+ * (없으면 조용히 no-op). confirm 은 lockout 리셋.
  */
 @Slf4j
 @Service
@@ -35,7 +34,6 @@ public class PasswordResetService {
     private final AdminUserRepository users;
     private final MailSender mail;
     private final PasswordEncoder encoder;
-    private final PasswordPolicyValidator policy;
     private final Clock clock;
 
     @Value("${admin.invite.base-url:http://localhost:5173}")
@@ -45,13 +43,11 @@ public class PasswordResetService {
                                 AdminUserRepository users,
                                 MailSender mail,
                                 PasswordEncoder encoder,
-                                PasswordPolicyValidator policy,
                                 Clock clock) {
         this.tokens = tokens;
         this.users = users;
         this.mail = mail;
         this.encoder = encoder;
-        this.policy = policy;
         this.clock = clock;
     }
 
@@ -92,7 +88,6 @@ public class PasswordResetService {
 
         AdminUser user = users.findById(tok.getAdminUserId())
                 .orElseThrow(() -> new IllegalArgumentException("invalid token"));
-        policy.validate(newPassword);
         user.setBcryptHash(encoder.encode(newPassword));
         user.recordSuccessfulLogin();
         // 동시 confirm race 는 의도적으로 용인: 토큰은 설계상 1회용이고 operator 가
