@@ -73,7 +73,6 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 
 export default function SecurityPolicyTab() {
   const [sessionMin, setSessionMin] = useState(30);
-  const [pwMin, setPwMin] = useState(12);
   const [reqMfa, setReqMfa] = useState(true);
   const [corsAllowlist, setCorsAllowlist] = useState<string[]>([]);
   const [originInput, setOriginInput] = useState('');
@@ -83,7 +82,6 @@ export default function SecurityPolicyTab() {
 
   function applyView(v: SecurityPolicyView) {
     setSessionMin(v.sessionIdleTimeoutMinutes);
-    setPwMin(v.passwordMinLength);
     setReqMfa(v.mfaRequired);
     setCorsAllowlist(v.corsAllowlist);
   }
@@ -116,7 +114,6 @@ export default function SecurityPolicyTab() {
     try {
       const v = await securityPolicyApi.update({
         sessionIdleTimeoutMinutes: sessionMin,
-        passwordMinLength: pwMin,
         mfaRequired: reqMfa,
         corsAllowlist,
       });
@@ -149,9 +146,6 @@ export default function SecurityPolicyTab() {
         <div className="card__body stack-4">
           <Field label="세션 idle timeout (분)" hint="이 시간 동안 활동이 없으면 자동 로그아웃됩니다. PRD REQ-A-5.">
             <input className="input mono" type="number" value={sessionMin} onChange={(e) => setSessionMin(parseInt(e.target.value || '0', 10))} style={{ width: 120 }} />
-          </Field>
-          <Field label="비밀번호 최소 길이" hint="이 길이 미만의 비밀번호는 거부됩니다. 변경은 다음 로그인부터 적용.">
-            <input className="input mono" type="number" value={pwMin} onChange={(e) => setPwMin(parseInt(e.target.value || '0', 10))} style={{ width: 120 }} />
           </Field>
           <Field label="MFA 필수">
             <Toggle on={reqMfa} onChange={setReqMfa} label={reqMfa ? '모든 운영자에게 MFA 필수' : 'MFA 선택'} />

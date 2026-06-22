@@ -32,7 +32,7 @@ class AdminLoginSuccessHandlerTest {
         // has no constraint, so a 0/negative value can be built here to exercise
         // the defensive clamp path.
         when(policy.get()).thenReturn(new SecurityPolicyDto.View(
-                minutes, 12, false, List.of(), OffsetDateTime.now(), null));
+                minutes, false, List.of(), OffsetDateTime.now(), null));
         return handlerWithPolicy(policy);
     }
 

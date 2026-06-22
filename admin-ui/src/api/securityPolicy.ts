@@ -2,7 +2,6 @@ import { api } from './client';
 
 export type SecurityPolicyView = {
   sessionIdleTimeoutMinutes: number;
-  passwordMinLength: number;
   mfaRequired: boolean;
   corsAllowlist: string[];
   updatedAt: string;
@@ -11,7 +10,6 @@ export type SecurityPolicyView = {
 
 export type SecurityPolicyUpdateRequest = {
   sessionIdleTimeoutMinutes: number;
-  passwordMinLength: number;
   mfaRequired: boolean;
   corsAllowlist: string[];
 };

@@ -42,7 +42,6 @@ public class SecurityPolicyController {
                 null,
                 Map.of(
                         "sessionIdleTimeoutMinutes", view.sessionIdleTimeoutMinutes(),
-                        "passwordMinLength", view.passwordMinLength(),
                         "mfaRequired", view.mfaRequired(),
                         "corsAllowlistSize", view.corsAllowlist().size())
         ));
