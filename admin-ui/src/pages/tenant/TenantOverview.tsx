@@ -7,6 +7,7 @@ import { funnelApi, type FunnelData } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
 import { useToast } from '@/shell/ToastHost';
 import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
+import { statusLabel } from '@/i18n/labels';
 
 // ── Local utilities (mirrors design globals) ────────────────────────────────
 
@@ -119,7 +120,7 @@ function ChainStatusCard({
           <div style={{ flex: 1 }}>
             <div className="row" style={{ gap: 8 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>Audit Hash Chain 무결</div>
-              <span className="badge badge--success badge--dot">INTACT</span>
+              <span className="badge badge--success badge--dot">{statusLabel('INTACT')}</span>
             </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>마지막 자동 검증 · {timeAgo(state.verifiedAt)} · 위변조 0건</div>
           </div>
@@ -139,7 +140,7 @@ function ChainStatusCard({
         <div style={{ flex: 1 }}>
           <div className="row" style={{ gap: 8 }}>
             <div style={{ fontWeight: 600, fontSize: 14 }}>Audit Hash Chain 위변조 감지</div>
-            <span className="badge badge--danger badge--dot">TAMPERED</span>
+            <span className="badge badge--danger badge--dot">{statusLabel('TAMPERED')}</span>
           </div>
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
             마지막 검증 · {timeAgo(state.verifiedAt)}{state.tamperedEntryId ? ` · 위변조 항목: ${tail(state.tamperedEntryId, 8)}` : ''}

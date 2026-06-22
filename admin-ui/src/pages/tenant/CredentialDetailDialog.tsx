@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog } from '@/shell/Dialog';
 import { credentialsApi } from '@/api/credentials';
 import type { Credential, AuthEvent } from '@/api/designTypes';
+import { statusLabel } from '@/i18n/labels';
 
 function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -18,7 +19,7 @@ function ResultBadge({ result }: { result: 'SUCCESS' | 'FAILED' }) {
   const ok = result === 'SUCCESS';
   return (
     <span className={`badge badge--dot badge--${ok ? 'success' : 'danger'}`}>
-      {result}
+      {statusLabel(result)}
     </span>
   );
 }
