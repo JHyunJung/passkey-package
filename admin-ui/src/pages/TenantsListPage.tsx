@@ -175,11 +175,11 @@ export default function TenantsListPage() {
             <thead>
               <tr>
                 <th>Tenant</th>
-                <th>Slug</th>
+                <th>슬러그</th>
                 <th>RP ID</th>
                 <th style={{ textAlign: 'right' }}>Credentials</th>
-                <th style={{ textAlign: 'right' }}>API Keys</th>
-                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>API 키</th>
+                <th>상태</th>
                 <th>마지막 이벤트</th>
                 <th>생성일</th>
                 <th style={{ width: 40 }}></th>

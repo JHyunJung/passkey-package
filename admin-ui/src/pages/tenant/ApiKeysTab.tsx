@@ -198,7 +198,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
         <table className="table">
           <thead>
             <tr>
-              <th>Key Prefix</th>
+              <th>키 접두사</th>
               <th>이름</th>
               <th>상태</th>
               <th>마지막 사용</th>
