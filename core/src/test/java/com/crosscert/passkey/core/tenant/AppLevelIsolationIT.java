@@ -81,7 +81,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * at the {@code @Transactional} boundary of these helper methods, reading the
  * context that the test set BEFORE calling into the service.
  *
- * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-vpd.sql /
+ * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-schema.sql /
  * application-test.yml pattern as {@link TenantFilterAspectIT}. The test
  * connects as APP_ADMIN_USER; with VPD removed there is no DB-level isolation,
  * so the Hibernate filter is the ONLY active isolation mechanism.
@@ -116,18 +116,18 @@ class AppLevelIsolationIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Follows the {@code @SpringBootTest + @Testcontainers} shape of
  * {@code VpdIsolationIT} / {@code BaseEntityCallbackIT}: real Oracle XE 21,
- * {@code bootstrap-vpd.sql} run as SYS, Flyway applies V1–V48 as APP_OWNER, and
+ * {@code bootstrap-schema.sql} run as SYS, Flyway applies V1–V48 as APP_OWNER, and
  * the Spring datasource connects as APP_ADMIN_USER (EXEMPT ACCESS POLICY +
  * INSERT grant on the table), so direct JDBC INSERTs exercise only the CHECK
  * constraint and are not filtered by the V35 VPD policy.
@@ -82,8 +82,8 @@ class TenantAllowedOriginAndroidCheckIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
@@ -92,10 +92,10 @@ class TenantAllowedOriginAndroidCheckIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

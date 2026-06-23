@@ -6,7 +6,7 @@
 #   1. docker compose down -v && up -d  — Oracle/Redis 컨테이너 + 볼륨 재생성
 #      (gvenzl/oracle-xe 가 APP_OWNER 스키마/유저만 자동 생성)
 #   2. wait-for-oracle               — healthcheck 가 healthy 될 때까지 대기
-#   3. run-bootstrap.sh              — APP_ADMIN/APP_RUNTIME role + VPD + CTX_PKG 생성
+#   3. run-bootstrap.sh              — APP_ADMIN/APP_RUNTIME role + 테이블 GRANT 생성
 #   4. admin-app(dev) 부팅           — Flyway 가 V1~ 마이그레이션 + dev 시드(R__) 적용 후 종료
 #
 # 결과: dev 프로필 시드(테넌트 dev-passkey, 운영자 alice, API key pk_devsrv01)가
@@ -58,7 +58,7 @@ ${COMPOSE} up -d
 echo "==> [2/4] Oracle healthy 대기"
 bash "${SCRIPT_DIR}/wait-for-oracle.sh"
 
-echo "==> [3/4] VPD/role 부트스트랩"
+echo "==> [3/4] role/GRANT 부트스트랩"
 bash "${SCRIPT_DIR}/run-bootstrap.sh"
 
 echo "==> [4/4] Flyway 마이그레이션 + ${PROFILE} 시드 적용 (admin-app 부팅 후 자동 종료)"

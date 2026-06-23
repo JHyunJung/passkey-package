@@ -83,10 +83,10 @@ tasks.named<Test>("test") {
     systemProperty("api.version", "1.43")
 }
 
-// Copy scripts/bootstrap-vpd.sql onto the test classpath so
+// Copy scripts/bootstrap-schema.sql onto the test classpath so
 // AdminFlowIT can ship it into the Testcontainers Oracle via
 // MountableFile (same pattern as core / passkey-app — scripts/ is
 // the single source of truth used by docker-compose).
 tasks.named<Copy>("processTestResources") {
-    from(rootProject.file("scripts/bootstrap-vpd.sql"))
+    from(rootProject.file("scripts/bootstrap-schema.sql"))
 }

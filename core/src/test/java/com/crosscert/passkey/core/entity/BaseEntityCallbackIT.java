@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Phase 8 T3 acceptance gate for the new {@link BaseEntity} superclass.
  *
- * <p>Boots a real Testcontainers Oracle XE 21, runs {@code scripts/bootstrap-vpd.sql}
+ * <p>Boots a real Testcontainers Oracle XE 21, runs {@code scripts/bootstrap-schema.sql}
  * via {@code sqlplus} as SYS, lets Flyway apply V1–V22 (V22 adds the
  * {@code updated_at} columns required by Hibernate's {@code validate} mode),
  * then exercises the JPA lifecycle callbacks through {@link AdminUser} —
@@ -80,8 +80,8 @@ class BaseEntityCallbackIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
@@ -90,10 +90,10 @@ class BaseEntityCallbackIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

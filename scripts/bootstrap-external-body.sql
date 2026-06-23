@@ -53,23 +53,18 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 GRANT CREATE SESSION TO APP_ADMIN;
-GRANT EXEMPT ACCESS POLICY TO APP_ADMIN;
 
 -- ============================================================
 -- APP_OWNER privileges (schema owner) — one GRANT per privilege.
--- ⚠️ bootstrap-vpd.sql 과 bootstrap-external.sql 의 APP_OWNER 권한 블록은
+-- ⚠️ bootstrap-schema.sql 과 bootstrap-external.sql 의 APP_OWNER 권한 블록은
 --    항상 동기 상태를 유지할 것. 한 파일 수정 시 다른 파일도 함께 수정.
 -- ============================================================
 GRANT CREATE TABLE         TO APP_OWNER;
 GRANT CREATE SEQUENCE      TO APP_OWNER;
 GRANT CREATE PROCEDURE     TO APP_OWNER;
 GRANT CREATE TRIGGER       TO APP_OWNER;
-GRANT CREATE ANY CONTEXT   TO APP_OWNER;
 GRANT UNLIMITED TABLESPACE TO APP_OWNER;
-GRANT EXECUTE ON DBMS_RLS     TO APP_OWNER;
-GRANT EXECUTE ON DBMS_SESSION TO APP_OWNER;
 GRANT CREATE VIEW          TO APP_OWNER;
-GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
 
 -- ============================================================
 -- Users (runtime = APP_RUNTIME_USER, admin = APP_ADMIN_USER)
@@ -89,31 +84,5 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 GRANT APP_ADMIN TO APP_ADMIN_USER;
-
--- ============================================================
--- CTX_PKG package + APP_CTX namespace (owned by APP_OWNER)
--- ============================================================
-CREATE OR REPLACE PACKAGE APP_OWNER.CTX_PKG AS
-  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2);
-  PROCEDURE clear_tenant;
-END;
-/
-
-CREATE OR REPLACE PACKAGE BODY APP_OWNER.CTX_PKG AS
-  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2) IS
-  BEGIN
-    DBMS_SESSION.SET_CONTEXT('APP_CTX', 'TENANT_ID', p_tenant_hex);
-  END;
-  PROCEDURE clear_tenant IS
-  BEGIN
-    DBMS_SESSION.CLEAR_CONTEXT('APP_CTX', NULL, 'TENANT_ID');
-  END;
-END;
-/
-
-CREATE OR REPLACE CONTEXT APP_CTX USING APP_OWNER.CTX_PKG;
-
-GRANT EXECUTE ON APP_OWNER.CTX_PKG TO APP_RUNTIME;
-GRANT EXECUTE ON APP_OWNER.CTX_PKG TO APP_ADMIN;
 
 EXIT;

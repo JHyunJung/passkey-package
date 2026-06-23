@@ -81,8 +81,8 @@ class KeyRotationIT {
             .withUsername("APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                    "/tmp/bootstrap-vpd.sql");
+                    MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                    "/tmp/bootstrap-schema.sql");
 
     @Container
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
@@ -90,15 +90,15 @@ class KeyRotationIT {
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry reg) throws Exception {
-        // Run bootstrap-vpd.sql before Hikari opens its first connection —
+        // Run bootstrap-schema.sql before Hikari opens its first connection —
         // APP_ADMIN_USER must exist before Spring's Flyway / datasource init.
         var exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

@@ -1,8 +1,10 @@
 -- reset-app-owner.sql — APP_OWNER 스키마의 모든 객체를 SYS(SYSDBA) 세션에서 DROP 한다.
 --
 -- 컨테이너/볼륨/유저(APP_OWNER, APP_RUNTIME_USER, APP_ADMIN_USER)/role 은 건드리지
--- 않는다. 스키마 안의 테이블·시퀀스·패키지·컨텍스트·트리거·뷰·VPD 정책만 비운다.
--- 실행 후에는 run-bootstrap.sql 로 CTX_PKG/APP_CTX 를 재생성하고 Flyway 로
+-- 않는다. 스키마 안의 테이블·시퀀스·패키지·트리거·뷰만 비운다. (VPD 는 제거됨 —
+-- 격리는 앱 레벨 Hibernate @Filter. 과거 EE 잔재로 VPD 정책/CTX_PKG/APP_CTX 가
+-- 남아있을 수 있어 멱등 청소 루프가 그것들도 함께 제거한다.)
+-- 실행 후에는 run-bootstrap.sql 로 스키마 유저/권한을 재설정하고 Flyway 로
 -- 스키마를 다시 마이그레이션해야 한다(reset-app-owner.sh 가 자동으로 수행).
 --
 -- 멱등성(idempotent): 객체가 없어도 실패하지 않도록 모든 DROP 을 데이터 딕셔너리
@@ -92,7 +94,7 @@ BEGIN
   END LOOP;
 
   -- 5) 패키지/프로시저/함수/타입/트리거 등 나머지 객체.
-  --    CTX_PKG 패키지가 여기서 정리된다(이후 bootstrap 이 재생성).
+  --    과거 VPD 잔재 CTX_PKG 패키지가 남아있으면 여기서 함께 정리된다(재생성 안 함).
   --    이미 DROP 된 테이블의 종속 객체(인덱스/제약/LOB)는 건너뛴다.
   FOR o IN (
     SELECT object_name, object_type
@@ -105,7 +107,8 @@ BEGIN
     try_ddl('DROP ' || o.object_type || ' ' || v_owner || '."' || o.object_name || '"');
   END LOOP;
 
-  -- 6) APP_CTX 컨텍스트(CTX_PKG 를 참조). bootstrap 이 CREATE OR REPLACE 로 복구.
+  -- 6) APP_CTX 컨텍스트(과거 VPD 잔재, CTX_PKG 를 참조했음). bootstrap 은 더 이상
+  --    재생성하지 않는다 — 남아있으면 멱등 청소한다.
   try_ddl('DROP CONTEXT APP_CTX');
 
   -- 7) APP_OWNER 휴지통만 비운다. SYS 로 'PURGE DBA_RECYCLEBIN' 을 하면 PDB 전역

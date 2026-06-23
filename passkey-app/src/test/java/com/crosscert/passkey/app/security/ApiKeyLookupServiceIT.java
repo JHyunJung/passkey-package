@@ -53,7 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (last_used_at) so the assertions never depend on the service under test for
  * their own ground truth.
  *
- * <p>Mirrors the Testcontainers Oracle XE 21 / bootstrap-vpd.sql /
+ * <p>Mirrors the Testcontainers Oracle XE 21 / bootstrap-schema.sql /
  * application-test.yml pattern used by {@code AppLevelIsolationIT}.
  */
 @SpringBootTest
@@ -96,18 +96,18 @@ class ApiKeyLookupServiceIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

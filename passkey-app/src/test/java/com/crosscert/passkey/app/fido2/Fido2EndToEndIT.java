@@ -87,8 +87,8 @@ class Fido2EndToEndIT {
             .withUsername("APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                    "/tmp/bootstrap-vpd.sql");
+                    MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                    "/tmp/bootstrap-schema.sql");
 
     // Redis 7 with the same pinned tag as docker-compose.yml so dev and CI
     // exercise the same engine. exposedPorts wires Spring's Lettuce
@@ -99,16 +99,16 @@ class Fido2EndToEndIT {
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
-        // Run scripts/bootstrap-vpd.sql before Spring opens its first
+        // Run scripts/bootstrap-schema.sql before Spring opens its first
         // pool connection — APP_ADMIN_USER must exist before Hikari
         // tries to authenticate. Same pattern as :core's VpdIsolationIT.
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

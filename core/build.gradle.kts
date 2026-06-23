@@ -51,10 +51,11 @@ tasks.named<Test>("test") {
     systemProperty("api.version", "1.43")
 }
 
-// Copy scripts/bootstrap-vpd.sql onto the test classpath so VpdIsolationIT
-// can read it as a classpath resource and ship it into the Testcontainers
+// Copy scripts/bootstrap-schema.sql onto the test classpath so the Oracle ITs
+// (AppLevelIsolationIT, TenantFilterAspectIT, etc.) can read it as a classpath
+// resource and ship it into the Testcontainers
 // Oracle via MountableFile. Sourcing from scripts/ (the single source of
 // truth used by docker-compose) prevents drift between local dev and CI.
 tasks.named<Copy>("processTestResources") {
-    from(rootProject.file("scripts/bootstrap-vpd.sql"))
+    from(rootProject.file("scripts/bootstrap-schema.sql"))
 }

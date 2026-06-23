@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The test FAILS without {@link TenantFilterAspect} because step 3 returns both
  * rows (filter never enabled). It PASSES once the aspect is active.
  *
- * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-vpd.sql / application-test.yml
+ * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-schema.sql / application-test.yml
  * pattern as {@link VpdIsolationIT} and {@link TenantFilterBindingIT} for consistency.
  */
 @SpringBootTest
@@ -85,18 +85,18 @@ class TenantFilterAspectIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
