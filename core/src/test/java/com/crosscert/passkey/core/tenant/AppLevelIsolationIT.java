@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.OracleContainer;
@@ -32,17 +31,19 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Task 4 acceptance gate — VPD-OFF mode isolation proof.
+ * Single regression gate for multi-tenant isolation after Oracle VPD removal.
  *
- * <p>With {@code passkey.vpd.enabled=false} the Oracle VPD session-context
- * mechanism (the former {@code TenantAwareDataSource}) is not the isolation mechanism.
- * Tenant isolation must be provided entirely by the Hibernate {@code @Filter}
- * enabled through {@link TenantFilterAspect} at {@code @Transactional} entry.
+ * <p><b>If this test breaks, cross-tenant data leakage is possible.</b> With
+ * Oracle VPD fully removed there is no DB-kernel fallback: tenant isolation is
+ * provided entirely by the Hibernate {@code @Filter} enabled through
+ * {@link TenantFilterAspect} at the {@code @Transactional} boundary. This test
+ * proves that the filter — and only the filter — keeps one tenant from seeing
+ * another's rows.
  *
  * <p>This test targets the four "risky" {@link CredentialRepository} methods
- * that carry NO explicit {@code tenant_id} WHERE clause — they have historically
- * relied on VPD to enforce isolation. With VPD off, the Hibernate filter must
- * step in as the sole guard.
+ * that carry NO explicit {@code tenant_id} WHERE clause — without the Hibernate
+ * filter they would return cross-tenant rows. The filter must step in as the
+ * sole guard.
  *
  * <h2>Risky methods under test</h2>
  * <ol>
@@ -81,15 +82,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * context that the test set BEFORE calling into the service.
  *
  * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-vpd.sql /
- * application-test.yml pattern as {@link TenantFilterAspectIT} and
- * {@link VpdIsolationIT}. The test connects as APP_ADMIN_USER which holds
- * EXEMPT ACCESS POLICY — Oracle VPD is bypassed at the DB level, making the
- * Hibernate filter the ONLY active isolation mechanism.
+ * application-test.yml pattern as {@link TenantFilterAspectIT}. The test
+ * connects as APP_ADMIN_USER; with VPD removed there is no DB-level isolation,
+ * so the Hibernate filter is the ONLY active isolation mechanism.
  */
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
-@TestPropertySource(properties = "passkey.vpd.enabled=false")
 class AppLevelIsolationIT {
 
     // ── Minimal Spring Boot test app ────────────────────────────────────────
@@ -177,9 +176,8 @@ class AppLevelIsolationIT {
      * meaningful cross-tenant leak if the filter is absent.
      *
      * <p>Seeding is performed with {@link TenantContextHolder} CLEARED so the
-     * aspect does NOT enable the filter during persistence — APP_ADMIN_USER
-     * bypasses VPD anyway, but clearing the context makes the behavior
-     * consistent regardless of aspect state during seeding.
+     * aspect does NOT enable the filter during persistence — both tenants' rows
+     * must land in the table regardless of any active context.
      *
      * @return {@code {tenantAId, tenantBId}}
      */
@@ -383,55 +381,38 @@ class AppLevelIsolationIT {
                 .isEqualTo(tenantAId);
     }
 
-    // ── Test 5: prove VPD is bypassed so @Filter is the ONLY isolation ───────
+    // ── Test 5: no tenant context (PLATFORM_OPERATOR) → @Filter not applied ──
 
     /**
-     * Guards the load-bearing premise of this entire test class: that Oracle
-     * VPD is NOT active on this session, so every isolation result above is
-     * attributable to the Hibernate {@code @Filter} ALONE — never to VPD.
+     * Documents the INTENDED behavior when no tenant is in scope: with
+     * {@link TenantContextHolder} cleared the {@link TenantFilterAspect} does
+     * NOT enable the Hibernate {@code @Filter}, so a cross-tenant query returns
+     * EVERY tenant's rows. This is the PLATFORM_OPERATOR path — a deliberately
+     * unscoped, all-tenant view — not a leak.
      *
-     * <p>The premise is otherwise expressed only in comments. If a future
-     * change swaps the connecting user from APP_ADMIN_USER to an APP_RUNTIME
-     * identity (which IS subject to VPD), the four tests above could keep
-     * passing for the WRONG reason — VPD's {@code tenant_id = SYS_CONTEXT(...)}
-     * predicate would do the isolation while the {@code @Filter} silently
-     * stopped mattering. This test converts that comment into an executable
-     * assertion so the false-pass cannot happen unnoticed.
-     *
-     * <p><b>How it proves VPD is bypassed:</b> with {@link TenantContextHolder}
-     * CLEARED there is no tenant in scope. If VPD were applied to this session,
-     * a missing tenant context would make the V20 policy predicate evaluate to
-     * {@code '1=0'} (or, equivalently, {@code set_tenant} would never have run),
-     * so {@code findByUserHandle} would return ZERO rows — the safe default. The
-     * fact that it instead returns BOTH seeded rows proves the session is EXEMPT
-     * ACCESS POLICY (APP_ADMIN_USER) and VPD does not constrain it. Therefore
-     * the per-tenant filtering observed in the other four tests is the work of
-     * the Hibernate {@code @Filter} only.
-     *
-     * <p><b>Double protection:</b> this class also runs under
-     * {@code passkey.vpd.enabled=false}, so the former {@code TenantAwareDataSource} does
-     * not call {@code ctx_pkg.set_tenant} on borrow. Even on a VPD-subject user
-     * the context would never be set — but relying on that alone would be
-     * fragile, so this test asserts the OBSERVED outcome (2 rows, no context)
-     * rather than the configuration. Both layers must hold for the row count
-     * to be 2.
+     * <p>It also serves as the load-bearing baseline for the four isolation
+     * tests above: it proves both seed rows actually exist and are reachable, so
+     * their positive assertions ("T_A's row is found") cannot silently pass on
+     * an empty table, and their isolation must come from the filter being
+     * ENABLED under a tenant context — the only thing that differs between this
+     * test (2 rows) and those (1 row).
      */
     @Test
-    void vpdIsBypassed_provesThatFilterIsTheOnlyIsolation() {
+    void noTenantContext_returnsAllTenantsRows() {
         UUID[] ids = seed();
         tenantAId = ids[0];
         tenantBId = ids[1];
 
-        // No tenant in scope → if VPD governed this session the predicate would
-        // be '1=0' and the result would be EMPTY. Both rows visible ⇒ EXEMPT.
+        // No tenant in scope → aspect does not enable the filter →
+        // cross-tenant query returns both tenants' rows (intended PLATFORM_OPERATOR view).
         TenantContextHolder.clear();
         List<Credential> all = helper.findByUserHandle(SHARED_USER);
 
         assertThat(all)
-                .as("APP_ADMIN_USER (EXEMPT ACCESS POLICY) + passkey.vpd.enabled=false → "
-                        + "VPD inactive on this session; with no tenant context both rows must be "
-                        + "visible. If only 1 (or 0) appeared, VPD would be doing the isolation and "
-                        + "the @Filter proofs above would be false-passes.")
+                .as("no tenant context (PLATFORM_OPERATOR): @Filter not applied → "
+                        + "both T_A and T_B rows visible. This is the intended unscoped view AND "
+                        + "the baseline proving the four isolation tests above aren't false-passes "
+                        + "on an empty table.")
                 .hasSize(2)
                 .extracting(Credential::getTenantId)
                 .containsExactlyInAnyOrder(tenantAId, tenantBId);
