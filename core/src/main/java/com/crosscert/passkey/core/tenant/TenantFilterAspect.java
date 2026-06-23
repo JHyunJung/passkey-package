@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -45,7 +45,7 @@ import java.util.UUID;
  * 그 세션에 설정한 filter는 실제 쿼리 세션에 영향을 주지 않는다.
  * {@code LOWEST_PRECEDENCE} (안쪽)로 설정하면 트랜잭션이 이미 열린 상태에서
  * {@code em.unwrap(Session)}이 transaction-bound 세션을 반환하므로 filter가 올바르게
- * 적용된다. {@link com.crosscert.passkey.core.vpd.TenantFilterAspectIT}에서 검증됨.
+ * 적용된다. {@link com.crosscert.passkey.core.tenant.TenantFilterAspectIT}에서 검증됨.
  */
 @Aspect
 @Component

@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

@@ -1,6 +1,6 @@
 package com.crosscert.passkey.app.fido2;
 
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.zaxxer.hikari.HikariDataSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

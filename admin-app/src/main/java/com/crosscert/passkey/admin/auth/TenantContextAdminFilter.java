@@ -2,7 +2,7 @@ package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;

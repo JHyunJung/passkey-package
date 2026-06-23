@@ -1,6 +1,6 @@
 package com.crosscert.passkey.core.license;
 
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -2,7 +2,7 @@ package com.crosscert.passkey.app.security;
 
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.repository.ApiKeyScopeRepository;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

@@ -9,7 +9,7 @@ import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.fasterxml.jackson.databind.JsonNode;

@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Task 4 acceptance gate — VPD-OFF mode isolation proof.
  *
  * <p>With {@code passkey.vpd.enabled=false} the Oracle VPD session-context
- * mechanism ({@link TenantAwareDataSource}) is not the isolation mechanism.
+ * mechanism (the former {@code TenantAwareDataSource}) is not the isolation mechanism.
  * Tenant isolation must be provided entirely by the Hibernate {@code @Filter}
  * enabled through {@link TenantFilterAspect} at {@code @Transactional} entry.
  *
@@ -409,7 +409,7 @@ class AppLevelIsolationIT {
      * the Hibernate {@code @Filter} only.
      *
      * <p><b>Double protection:</b> this class also runs under
-     * {@code passkey.vpd.enabled=false}, so {@link TenantAwareDataSource} does
+     * {@code passkey.vpd.enabled=false}, so the former {@code TenantAwareDataSource} does
      * not call {@code ctx_pkg.set_tenant} on borrow. Even on a VPD-subject user
      * the context would never be set — but relying on that alone would be
      * fragile, so this test asserts the OBSERVED outcome (2 rows, no context)

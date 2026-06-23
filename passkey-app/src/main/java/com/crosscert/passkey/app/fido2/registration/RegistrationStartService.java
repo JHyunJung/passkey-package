@@ -12,7 +12,7 @@ import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -42,7 +42,7 @@ public class RegistrationStartService {
 
     /**
      * VPD off(SE2) 모드에서 cross-tenant 누출을 막기 위해 {@code @Transactional} 필수.
-     * {@link com.crosscert.passkey.core.vpd.TenantFilterAspect}는 {@code @Transactional}
+     * {@link com.crosscert.passkey.core.tenant.TenantFilterAspect}는 {@code @Transactional}
      * 진입 시에만 Hibernate {@code tenantFilter}를 enable 하는데, line 96의
      * {@code credentials.findCredentialIdsByUserHandle(userHandle)}는 tenant 조건 없이
      * 필터/VPD에만 의존한다. 트랜잭션 경계가 없으면 필터가 켜지지 않아 다른 tenant의
