@@ -44,8 +44,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * APP_OWNER 풀로 payload 컬럼을 UPDATE 하여 체인 hash 를 깬다(APP_ADMIN 은 audit_log UPDATE 불가, V10).
  * 깨진 row id 는 {@code verifyTenant().brokenAt()} 이고, 서버는 이를 incident.tamperedEntryId 로 도출한다.
  *
- * <p>VPD 는 test 프로필에서 비활성(application-common.yml passkey.vpd.enabled=false → application-test.yml
- * 미오버라이드)이므로 별도 tenant 컨텍스트 설정이 불필요하다(템플릿 두 IT 와 동일).
+ * <p>테넌트 격리는 앱 레벨(Hibernate @Filter)이 담당하므로 DB 커널 차원의 별도
+ * tenant 컨텍스트 설정이 불필요하다(템플릿 두 IT 와 동일).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")

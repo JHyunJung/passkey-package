@@ -15,7 +15,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
 import javax.sql.DataSource;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.OracleContainer;
@@ -36,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * tenant context, and that {@code touchLastUsed} keeps tenant isolation via an
  * explicit {@code tenant_id} WHERE predicate.
  *
- * <h2>Why APP_ADMIN_USER + vpd.enabled=false</h2>
+ * <h2>Why APP_ADMIN_USER</h2>
  * The native {@code findByPrefix} lookup runs as a plain {@link JdbcTemplate}
  * SELECT — it does NOT pass through Hibernate's {@code @Filter}. It also must
  * return a row even though no tenant context is set at authentication time.
@@ -44,10 +43,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code tenant_id = SYS_CONTEXT(...)} VPD predicate), this IT connects as
  * {@code APP_ADMIN_USER}, which holds {@code EXEMPT ACCESS POLICY} and so is
  * not constrained by the V8/V20 DBMS_RLS policies that Flyway still installs
- * (their DB removal happens later in Task 7). Combined with
- * {@code passkey.vpd.enabled=false} this makes the native query observe the
- * row regardless of session context — exactly the production behavior once
- * VPD is gone.
+ * (their DB removal happens later in Task 7). This makes the native query
+ * observe the row regardless of session context — exactly the production
+ * behavior once VPD is gone.
  *
  * <h2>Seed strategy</h2>
  * One tenant + one api_key, inserted directly via {@link JdbcTemplate} with
@@ -61,7 +59,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
-@TestPropertySource(properties = "passkey.vpd.enabled=false")
 class ApiKeyLookupServiceIT {
 
     // ── Minimal Spring Boot test app ────────────────────────────────────────

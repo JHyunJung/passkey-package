@@ -31,7 +31,7 @@ spring:
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
     # url/username/password come from @DynamicPropertySource (after
-    # the OracleContainer boots and bootstrap-vpd.sql runs).
+    # the OracleContainer boots and the bootstrap schema script runs).
   data:
     redis:
       # host/port come from @DynamicPropertySource (Redis container).
@@ -40,18 +40,6 @@ spring:
           enabled: false  # one-shot test, no need for pool warm-up
 
 passkey:
-  # VPD ON for the IT: the runtime DataSource logs in as APP_RUNTIME_USER and
-  # the @DynamicPropertySource bootstrap applies the V3/V8/V20/V35 DBMS_RLS
-  # policies (credential, api_key, AND the tenant child tables — V35). Those
-  # policies gate every APP_RUNTIME read on SYS_CONTEXT('APP_CTX','TENANT_ID').
-  # That context is only populated when CoreDataSourceConfig wraps the pool in
-  # TenantAwareDataSource (ctx_pkg.set_tenant on borrow), which happens only
-  # when this flag is true. Without it the now-VPD-protected tenant_allowed_origin
-  # returns zero rows and registration/finish fails with
-  # "tenant ... has no allowed_origins configured" — see crossTenantIsolation,
-  # which depends on these same policies engaging.
-  vpd:
-    enabled: true
   id-token:
     issuer-base: https://passkey.test
     ttl: PT15M
