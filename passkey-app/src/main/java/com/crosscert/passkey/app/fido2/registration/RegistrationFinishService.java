@@ -12,7 +12,7 @@ import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.policy.AaguidPolicyChecker;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.crosscert.passkey.webauthn.verifier.AttestationTrustPolicy;
 import com.crosscert.passkey.webauthn.verifier.COSEAlgorithm;
 import com.crosscert.passkey.webauthn.verifier.RegistrationInput;
@@ -58,7 +58,7 @@ public class RegistrationFinishService {
 
             // codex P2: bind challenge tenant to current API-key tenant
             // before touching tenant config — defense-in-depth on top of
-            // VPD. Mirrors AuthenticationFinishService.
+            // the app-level @Filter. Mirrors AuthenticationFinishService.
             UUID ctxTenantUuid = TenantContextHolder.get();
             String ctxTenant = ctxTenantUuid == null ? null : ctxTenantUuid.toString();
             if (ctxTenant == null || !ctxTenant.equals(ch.tenantId())) {

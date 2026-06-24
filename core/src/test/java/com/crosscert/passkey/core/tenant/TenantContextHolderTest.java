@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

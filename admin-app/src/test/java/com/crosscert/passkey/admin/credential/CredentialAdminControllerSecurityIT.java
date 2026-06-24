@@ -43,8 +43,8 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * Cross-tenant boundary 회귀 채널. admin-app 은 VPD 비활성이므로
- * service 의 entity.tenantId vs path.tenantId 비교가 단일 방어선.
+ * Cross-tenant boundary 회귀 채널. VPD 제거됨 — admin-app 은 cross-tenant 조회를
+ * 하므로 service 의 entity.tenantId vs path.tenantId 비교가 단일 방어선.
  *
  * 시나리오:
  *   1. tenant_A, tenant_B 생성
@@ -73,8 +73,8 @@ class CredentialAdminControllerSecurityIT {
             .withUsername("APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                    "/tmp/bootstrap-vpd.sql");
+                    MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                    "/tmp/bootstrap-schema.sql");
 
     @org.testcontainers.junit.jupiter.Container
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
@@ -85,10 +85,10 @@ class CredentialAdminControllerSecurityIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

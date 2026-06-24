@@ -12,17 +12,16 @@ import java.util.UUID;
 public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
 
     /**
-     * Look up an API key by its prefix. VPD filters by tenant_id =
-     * SYS_CONTEXT, so this call only returns a row when the calling
-     * session has already set TenantContextHolder to the same tenant
-     * that owns the key. Useful from admin endpoints (Phase 2) and
-     * test fixtures (where APP_ADMIN bypasses VPD).
+     * Look up an API key by its prefix. The app-level Hibernate {@code @Filter}
+     * isolates by tenant, so this JPA call only returns a row once the calling
+     * session has set {@code TenantContextHolder} to the tenant that owns the
+     * key. Useful from admin endpoints (Phase 2) and test fixtures.
      *
-     * <p>Phase 1 auth filter does NOT use this — auth runs before
-     * tenant context exists. See {@code ApiKeyLookupService} (T16)
-     * which calls a definer-rights PL/SQL package
-     * ({@code APP_OWNER.api_key_lookup_pkg.find_by_prefix}) that
-     * bypasses VPD safely.
+     * <p>The auth filter does NOT use this — authentication runs before any
+     * tenant context exists, so it cannot rely on the {@code @Filter}. It
+     * instead resolves the prefix via a native query in
+     * {@code ApiKeyLookupService}, which bypasses the ORM-level filter and
+     * looks up the globally-unique prefix without a tenant context.
      */
     Optional<ApiKey> findByKeyPrefix(String keyPrefix);
 

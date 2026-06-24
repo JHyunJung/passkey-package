@@ -5,4 +5,4 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 docker exec -i passkey-oracle \
   sqlplus -S sys/oracle@localhost:1521/XEPDB1 as sysdba \
-  < "${SCRIPT_DIR}/bootstrap-vpd.sql"
+  < "${SCRIPT_DIR}/bootstrap-schema.sql"

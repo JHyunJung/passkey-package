@@ -10,9 +10,9 @@
 # 절차:
 #   1. (가드) 프로필이 dev/local 인지 확인 — qa/prod 면 거부.
 #   2. (가드) 'RESET' 을 직접 타이핑해야 진행 (--yes 로 우회).
-#   3. reset-app-owner.sql  : SYS 세션에서 APP_OWNER 객체 전부 DROP(VPD정책·테이블·
-#                             시퀀스·뷰·패키지(CTX_PKG)·컨텍스트(APP_CTX)·트리거 등).
-#   4. run-bootstrap.sh     : CTX_PKG/APP_CTX/role/VPD GRANT 재생성.
+#   3. reset-app-owner.sql  : SYS 세션에서 APP_OWNER 객체 전부 DROP(테이블·시퀀스·
+#                             뷰·패키지·트리거 + 과거 VPD 잔재(정책·CTX_PKG·APP_CTX) 청소).
+#   4. run-bootstrap.sh     : role/스키마 재생성(VPD 제거됨 — CTX_PKG/APP_CTX/VPD GRANT 안 만듦).
 #   5. admin-app(Flyway)    : V1~ 마이그레이션 + ${PROFILE} 시드(R__) 적용 후 종료.
 #
 # 결과: 컨테이너 재기동 없이, ${PROFILE} 시드가 들어간 깨끗한 APP_OWNER 스키마.
@@ -88,7 +88,7 @@ docker exec -i "${ORACLE_CONTAINER}" \
   sqlplus -S sys/oracle@localhost:1521/XEPDB1 as sysdba \
   < "${SCRIPT_DIR}/reset-app-owner.sql"
 
-echo "==> [2/3] VPD/role/CTX_PKG 재부트스트랩"
+echo "==> [2/3] role/스키마 재부트스트랩"
 bash "${SCRIPT_DIR}/run-bootstrap.sh"
 
 echo "==> [3/3] Flyway 마이그레이션 + ${PROFILE} 시드 적용 (admin-app 부팅 후 자동 종료)"

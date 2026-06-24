@@ -15,7 +15,7 @@
 --   ⚠️ RP_ADMIN 은 V23 CHECK 제약상 tenant_id NOT NULL 필수 → 테넌트 INSERT
 --      뒤에 와야 하므로 seed-common 이 아니라 이 파일(같은 트랜잭션 순서)에 둔다.
 --
--- aaguid_policy(ANY)·snapshot 직접 시드. VPD 컨텍스트 필요.
+-- aaguid_policy(ANY)·snapshot 직접 시드. (VPD 제거됨 — tenant_id 명시 INSERT, 컨텍스트 불필요.)
 -- Idempotent: NOT EXISTS 가드.
 -- ============================================================
 
@@ -101,12 +101,8 @@ WHERE t.slug = 'dev-passkey'
     SELECT 1 FROM tenant_webauthn_snapshot s WHERE s.tenant_id = t.id
   );
 
--- 6. api_key (VPD)
-BEGIN
-  APP_OWNER.CTX_PKG.set_tenant('7F00DEAD000000000000000DE7000001');
-END;
-/
-
+-- 6. api_key — tenant_id 를 명시 INSERT 한다. (VPD 제거됨: 과거엔 update_check 통과를
+--    위해 CTX_PKG.set_tenant 로 컨텍스트를 설정했으나, 이제 불필요.)
 INSERT INTO api_key (id, tenant_id, key_prefix, key_hash, name, created_at)
 SELECT
   HEXTORAW('7F00DEAD000000000000000DE700AA01'),
@@ -121,11 +117,6 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE id = HEXTORAW('7F00DEAD000000000000000D
     SELECT 1 FROM api_key WHERE key_prefix = 'pk_devsrv01'
         OR id = HEXTORAW('7F00DEAD000000000000000DE700AA01')
   );
-
-BEGIN
-  APP_OWNER.CTX_PKG.clear_tenant;
-END;
-/
 
 -- 7. api_key_scope
 INSERT INTO api_key_scope (id, api_key_id, scope)

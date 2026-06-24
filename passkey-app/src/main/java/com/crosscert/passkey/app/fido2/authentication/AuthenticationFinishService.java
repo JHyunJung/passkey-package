@@ -14,7 +14,7 @@ import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.jwt.IdTokenIssuer;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.crosscert.passkey.webauthn.verifier.AuthenticationInput;
 import com.crosscert.passkey.webauthn.verifier.AuthenticationResult;
 import com.crosscert.passkey.webauthn.verifier.StoredCredential;
@@ -85,7 +85,7 @@ public class AuthenticationFinishService {
                             "authentication token missing or expired"));
 
             // codex P2: bind challenge tenant to current API-key tenant before
-            // touching tenant config — defense-in-depth on top of VPD.
+            // touching tenant config — defense-in-depth on top of the app-level @Filter.
             UUID ctxTenantUuid = TenantContextHolder.get();
             String ctxTenant = ctxTenantUuid == null ? null : ctxTenantUuid.toString();
             if (ctxTenant == null || !ctxTenant.equals(ch.tenantId())) {
@@ -120,7 +120,7 @@ public class AuthenticationFinishService {
 
             // codex P1: lock the row before the read-check-update on
             // signCount to prevent two concurrent /finish calls from both
-            // passing the strict-monotonic check. VPD filters by tenant.
+            // passing the strict-monotonic check. The app-level @Filter scopes by tenant.
             Credential cred = credentials.findByCredentialIdForUpdate(credentialId)
                     .orElseThrow(() -> new IllegalArgumentException("credential not registered"));
 

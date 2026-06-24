@@ -82,7 +82,7 @@ public class CredentialAdminService {
         Credential c = creds.findByCredentialId(credId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENTITY_NOT_FOUND, "credential 없음"));
 
-        // VPD 가 admin-app 에서 비활성 — tenantId 일치 검사가 cross-tenant 누출 방어의 단일 layer
+        // VPD 제거됨 — admin-app 은 cross-tenant 조회를 하므로 tenantId 일치 검사가 누출 방어의 단일 layer
         if (!c.getTenantId().equals(tenantId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "tenant boundary 위반");
         }
@@ -111,7 +111,7 @@ public class CredentialAdminService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENTITY_NOT_FOUND,
                         "credential 없음"));
 
-        // VPD 가 admin-app 에서 비활성 — tenantId 일치 검사가 cross-tenant 누출 방어의 단일 layer
+        // VPD 제거됨 — admin-app 은 cross-tenant 조회를 하므로 tenantId 일치 검사가 누출 방어의 단일 layer
         if (!c.getTenantId().equals(tenantId)) {
             log.warn("cross-tenant revoke attempt: pathTenant={} actualTenant={} credentialId={}",
                     tenantId, c.getTenantId(), idTail(credentialIdB64));

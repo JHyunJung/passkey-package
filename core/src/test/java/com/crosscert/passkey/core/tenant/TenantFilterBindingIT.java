@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
@@ -33,10 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@code CREDENTIAL.TENANT_ID}).
  *
  * <p>Boots a real Testcontainers Oracle XE 21 (same image/bootstrap as
- * {@link VpdIsolationIT}) so the Flyway schema and VPD policy are applied
- * identically. The test connects as APP_ADMIN_USER (EXEMPT ACCESS POLICY),
- * meaning Oracle VPD is bypassed; isolation is enforced purely by the
- * Hibernate filter enabled inside the test.
+ * {@link AppLevelIsolationIT}) so the Flyway schema is applied identically.
+ * Isolation is enforced purely by the Hibernate filter enabled inside the
+ * test — with Oracle VPD removed there is no DB-kernel layer.
  *
  * <p>Pass criterion: after enabling the filter with {@code tenantId = T_A},
  * querying {@code CredentialRepository.findAll()} must return only T_A's
@@ -63,18 +62,18 @@ class TenantFilterBindingIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

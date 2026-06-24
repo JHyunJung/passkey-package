@@ -64,8 +64,8 @@ class TenantAdminControllerUpdateIT {
             .withUsername("APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                    "/tmp/bootstrap-vpd.sql");
+                    MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                    "/tmp/bootstrap-schema.sql");
 
     @org.testcontainers.junit.jupiter.Container
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
@@ -76,10 +76,10 @@ class TenantAdminControllerUpdateIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

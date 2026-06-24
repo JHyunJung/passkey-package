@@ -11,7 +11,7 @@
 -- aaguid_policy(ANY)·snapshot 도 직접 시드 — V26/V27 백필은 이미 적용 완료라
 -- 새 tenant 를 따라오지 않으므로.
 --
--- VPD: api_key INSERT 전후로 CTX_PKG.set_tenant/clear_tenant 필요.
+-- api_key 는 tenant_id 를 명시 INSERT 한다(VPD 제거됨 — CTX_PKG 컨텍스트 불필요).
 -- Idempotent: 모든 INSERT NOT EXISTS 가드.
 -- ============================================================
 
@@ -97,12 +97,7 @@ WHERE t.slug = 'demo-rp'
     SELECT 1 FROM tenant_webauthn_snapshot s WHERE s.tenant_id = t.id
   );
 
--- 6. api_key (VPD 컨텍스트 필요)
-BEGIN
-  APP_OWNER.CTX_PKG.set_tenant('0000000000000000000000000000C0DE');
-END;
-/
-
+-- 6. api_key — tenant_id 를 명시 INSERT (VPD 제거됨: CTX_PKG 컨텍스트 불필요).
 INSERT INTO api_key (id, tenant_id, key_prefix, key_hash, name, created_at)
 SELECT
   HEXTORAW('0000000000000000000000000000CAFE'),
@@ -117,11 +112,6 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE id = HEXTORAW('000000000000000000000000
     SELECT 1 FROM api_key WHERE key_prefix = 'pk_devlocal'
         OR id = HEXTORAW('0000000000000000000000000000CAFE')
   );
-
-BEGIN
-  APP_OWNER.CTX_PKG.clear_tenant;
-END;
-/
 
 -- 7. api_key_scope: registration + authentication
 INSERT INTO api_key_scope (id, api_key_id, scope)

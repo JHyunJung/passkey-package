@@ -1,6 +1,6 @@
 package com.crosscert.passkey.core.license;
 
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -63,7 +63,7 @@ public class LicenseBootstrap {
         // Per-request pinning is handled by OnpremTenantPinFilter so request
         // threads see the same tenant context.
         TenantContextHolder.set(UUID.fromString(effective.tenantId()));
-        log.info("onprem mode: pinned VPD tenant to {} (per-request pinning via OnpremTenantPinFilter)",
+        log.info("onprem mode: pinned tenant to {} (per-request pinning via OnpremTenantPinFilter)",
                 effective.tenantId());
 
         return new LicenseStateMachine(effective, verifiedAt, clock::instant);

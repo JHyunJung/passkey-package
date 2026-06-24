@@ -69,12 +69,6 @@ logging:
 passkey:
   deployment:
     mode: saas
-  # VPD(Oracle Virtual Private Database, DBMS_RLS) 토글.
-  # true  → Enterprise Edition / XE: DB 커널이 tenant 술어를 강제(이중 방어).
-  # false → Standard Edition 2(VPD 미지원): 앱 레벨 Hibernate @Filter 가 격리.
-  # 기본 false. VPD 를 지원하는 DB(EE/XE)에 배포할 때만 환경별 yml 에서 true 로 켠다.
-  vpd:
-    enabled: false
   license:
     path: /etc/passkey/license.jwt
     cache-path: /var/lib/passkey/license-cache.jwt

@@ -28,12 +28,6 @@ server:
     key-alias:          ${SERVER_SSL_KEY_ALIAS:}
 
 passkey:
-  # VPD 토글. ⚠️ 중요: 대상 Oracle 에 VPD 정책이 이미 부착돼 있으면(기존 EE/XE 운영 DB)
-  # 반드시 true 로 설정해야 한다. 정책이 active 인데 false 면 set_tenant 가 호출되지 않아
-  # VPD predicate 가 '1=0' 으로 평가되어 모든 쿼리가 0행을 반환한다(앱 장애).
-  # SE2(VPD 미지원, 정책 미부착) 배포에서만 false. 환경변수 PASSKEY_VPD_ENABLED 로 제어.
-  vpd:
-    enabled: ${PASSKEY_VPD_ENABLED:false}
   key-envelope:
     master-key: ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}
   id-token:

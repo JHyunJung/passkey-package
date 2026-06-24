@@ -1,7 +1,7 @@
 package com.crosscert.passkey.app.security;
 
 import com.crosscert.passkey.core.repository.ApiKeyScopeRepository;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

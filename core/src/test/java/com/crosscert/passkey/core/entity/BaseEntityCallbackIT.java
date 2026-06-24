@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Phase 8 T3 acceptance gate for the new {@link BaseEntity} superclass.
  *
- * <p>Boots a real Testcontainers Oracle XE 21, runs {@code scripts/bootstrap-vpd.sql}
+ * <p>Boots a real Testcontainers Oracle XE 21, runs {@code scripts/bootstrap-schema.sql}
  * via {@code sqlplus} as SYS, lets Flyway apply V1–V22 (V22 adds the
  * {@code updated_at} columns required by Hibernate's {@code validate} mode),
  * then exercises the JPA lifecycle callbacks through {@link AdminUser} —
@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ol>
  *
  * <p>We deliberately follow the {@code @SpringBootTest + @Testcontainers}
- * shape of {@code VpdIsolationIT} rather than {@code @DataJpaTest} so the
+ * shape of {@code AppLevelIsolationIT} rather than {@code @DataJpaTest} so the
  * bootstrap-as-SYS step and full {@code application-test.yml} (Flyway +
  * Hibernate validate + Redis exclusion) apply identically across :core ITs.
  */
@@ -54,7 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BaseEntityCallbackIT {
 
     /**
-     * Minimal Spring Boot test app, mirroring {@code VpdIsolationIT.TestApp}.
+     * Minimal Spring Boot test app, mirroring {@code AppLevelIsolationIT.TestApp}.
      * :core is a library subproject with no main class; the IT brings up its
      * own context with @EntityScan + @EnableJpaRepositories pointed at the
      * production packages so repositories and entities resolve normally.
@@ -65,7 +65,7 @@ class BaseEntityCallbackIT {
     static class TestApp {
     }
 
-    // Pinned image tag matches docker-compose.yml + VpdIsolationIT so all
+    // Pinned image tag matches docker-compose.yml + AppLevelIsolationIT so all
     // ITs exercise the same Oracle binary.
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
 
@@ -80,8 +80,8 @@ class BaseEntityCallbackIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
@@ -90,15 +90,15 @@ class BaseEntityCallbackIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
 
-        // Connect as APP_ADMIN_USER (EXEMPT ACCESS POLICY) — runtime user.
+        // Connect as APP_ADMIN_USER — runtime user.
         // V22 (and subsequent migrations) will have run before Hibernate
         // validates ADMIN_USER's new updated_at column.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);

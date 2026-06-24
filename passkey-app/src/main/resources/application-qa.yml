@@ -26,10 +26,6 @@ server:
     key-alias:          ${SERVER_SSL_KEY_ALIAS:}
 
 passkey:
-  # VPD 토글. ⚠️ QA 가 VPD 정책이 active 한 EE/XE DB(prod-restored 스키마 등)를
-  # 가리키면 반드시 true. 정책 active 인데 false 면 모든 쿼리가 0행을 반환한다(앱 장애).
-  vpd:
-    enabled: ${PASSKEY_VPD_ENABLED:false}
   key-envelope:
     master-key: ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}
   id-token:

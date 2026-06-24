@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -17,8 +17,8 @@ import java.util.UUID;
  * Hibernate {@code tenantFilter}를 enable 한다. context가 null 이면 enable 하지
  * 않는다(=cross-tenant; admin PLATFORM_OPERATOR 케이스).
  *
- * <p>VPD와 독립적인 앱 레벨 격리의 중앙 hook. VPD off(Oracle SE2) 에서도 이 Aspect가
- * tenant 격리를 보장한다.
+ * <p>앱 레벨 tenant 격리의 중앙 hook. Oracle VPD 제거 후 유일한 격리 메커니즘으로,
+ * 모든 Oracle 에디션(EE/XE/SE2)에서 이 Aspect 가 tenant 격리를 보장한다.
  *
  * <h2>@Order 결정: {@code Ordered.LOWEST_PRECEDENCE}</h2>
  *
@@ -45,7 +45,7 @@ import java.util.UUID;
  * 그 세션에 설정한 filter는 실제 쿼리 세션에 영향을 주지 않는다.
  * {@code LOWEST_PRECEDENCE} (안쪽)로 설정하면 트랜잭션이 이미 열린 상태에서
  * {@code em.unwrap(Session)}이 transaction-bound 세션을 반환하므로 filter가 올바르게
- * 적용된다. {@link com.crosscert.passkey.core.vpd.TenantFilterAspectIT}에서 검증됨.
+ * 적용된다. {@link com.crosscert.passkey.core.tenant.TenantFilterAspectIT}에서 검증됨.
  */
 @Aspect
 @Component

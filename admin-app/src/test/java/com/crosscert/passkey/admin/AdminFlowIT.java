@@ -85,8 +85,8 @@ class AdminFlowIT {
             .withUsername("APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                    "/tmp/bootstrap-vpd.sql");
+                    MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                    "/tmp/bootstrap-schema.sql");
 
     @org.testcontainers.junit.jupiter.Container
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
@@ -94,24 +94,24 @@ class AdminFlowIT {
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
-        // Run scripts/bootstrap-vpd.sql before Spring opens its first
+        // Run scripts/bootstrap-schema.sql before Spring opens its first
         // pool connection — APP_ADMIN_USER must exist before Hikari
         // tries to authenticate. Same pattern as :passkey-app's
-        // Fido2EndToEndIT and :core's VpdIsolationIT.
+        // Fido2EndToEndIT and :core's AppLevelIsolationIT.
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
         // admin-app's runtime DataSource → APP_ADMIN_USER (Flyway + DML on
-        // platform-scoped tables). admin-app does NOT exercise VPD on the
-        // request path (it intentionally manages cross-tenant resources),
-        // so we don't need a separate runtime user like passkey-app does.
+        // platform-scoped tables). admin-app does NOT enable the app-level
+        // @Filter on the request path (it intentionally manages cross-tenant
+        // resources), so we don't need a separate runtime user like passkey-app.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
@@ -523,7 +523,7 @@ class AdminFlowIT {
      * action UPDATE and DELETE/DROP remain denied (V10 append-only). This is the
      * regression guard for finding #3.
      *
-     * <p>Originally this test was <em>intentionally RED</em> while bootstrap-vpd.sql
+     * <p>Originally this test was <em>intentionally RED</em> while bootstrap-schema.sql
      * contained {@code GRANT ALL PRIVILEGES TO APP_ADMIN_USER} (finding #3).
      * Task B3 removed that GRANT, which turned this test GREEN.
      *

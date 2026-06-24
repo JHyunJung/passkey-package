@@ -40,31 +40,13 @@ END;
 /
 
 -- ------------------------------------------------------------
--- STEP 2: Drop VPD policies on tables being dropped
--- (required before DROP TABLE succeeds)
+-- STEP 2: (VPD 제거됨) — 원래 여기서 DROP TABLE 전에 CREDENTIAL/API_KEY 의
+-- DBMS_RLS VPD 정책을 분리했습니다. VPD 는 제거되었고(앱 레벨 @Filter 가 격리),
+-- bootstrap 이 더 이상 DBMS_RLS EXECUTE 를 GRANT 하지 않으므로 여기서 DBMS_RLS 를
+-- static 참조하면 PLS-00201 로 마이그레이션이 깨집니다. 기배포 DB 에 남아있을 수
+-- 있는 정책 잔재는 V52__drop_vpd.sql 이 동적 SQL 멱등 가드로 제거합니다.
+-- 신규 DB 는 V3/V8 이 no-op 이라 애초에 정책이 없어 DROP TABLE 이 그대로 성공합니다.
 -- ------------------------------------------------------------
-
-BEGIN
-  DBMS_RLS.DROP_POLICY(
-    object_schema => 'APP_OWNER',
-    object_name   => 'CREDENTIAL',
-    policy_name   => 'CREDENTIAL_TENANT_ISOLATION'
-  );
-EXCEPTION WHEN OTHERS THEN
-  IF SQLCODE != -28101 THEN RAISE; END IF;
-END;
-/
-
-BEGIN
-  DBMS_RLS.DROP_POLICY(
-    object_schema => 'APP_OWNER',
-    object_name   => 'API_KEY',
-    policy_name   => 'API_KEY_TENANT_ISOLATION'
-  );
-EXCEPTION WHEN OTHERS THEN
-  IF SQLCODE != -28101 THEN RAISE; END IF;
-END;
-/
 
 -- ------------------------------------------------------------
 -- STEP 3: Drop tables (children first, then parents)
@@ -341,68 +323,11 @@ COMMIT;
 -- (Updated to use RAW(16) id types where applicable)
 -- ------------------------------------------------------------
 
--- 7a. api_key_lookup_pkg (V8 invariant; id type updated to RAW(16))
-CREATE OR REPLACE PACKAGE APP_OWNER.api_key_lookup_pkg AUTHID DEFINER AS
-  TYPE api_key_row IS RECORD (
-    id            RAW(16),
-    tenant_id     RAW(16),
-    key_hash      VARCHAR2(255),
-    expires_at    TIMESTAMP WITH TIME ZONE,
-    revoked_at    TIMESTAMP WITH TIME ZONE
-  );
-
-  PROCEDURE find_by_prefix(
-    p_prefix       IN  VARCHAR2,
-    p_found        OUT NUMBER,
-    p_id           OUT RAW,
-    p_tenant_id    OUT RAW,
-    p_key_hash     OUT VARCHAR2,
-    p_expires_at   OUT TIMESTAMP WITH TIME ZONE,
-    p_revoked_at   OUT TIMESTAMP WITH TIME ZONE);
-
-  PROCEDURE touch_last_used(p_id IN RAW, p_now IN TIMESTAMP WITH TIME ZONE);
-END api_key_lookup_pkg;
-/
-
-CREATE OR REPLACE PACKAGE BODY APP_OWNER.api_key_lookup_pkg AS
-
-  PROCEDURE find_by_prefix(
-    p_prefix       IN  VARCHAR2,
-    p_found        OUT NUMBER,
-    p_id           OUT RAW,
-    p_tenant_id    OUT RAW,
-    p_key_hash     OUT VARCHAR2,
-    p_expires_at   OUT TIMESTAMP WITH TIME ZONE,
-    p_revoked_at   OUT TIMESTAMP WITH TIME ZONE) IS
-  BEGIN
-    SELECT id, tenant_id, key_hash, expires_at, revoked_at
-      INTO p_id, p_tenant_id, p_key_hash, p_expires_at, p_revoked_at
-      FROM api_key
-     WHERE key_prefix = p_prefix;
-    p_found := 1;
-  EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-      p_found := 0;
-      p_id := NULL;
-      p_tenant_id := NULL;
-      p_key_hash := NULL;
-      p_expires_at := NULL;
-      p_revoked_at := NULL;
-  END find_by_prefix;
-
-  PROCEDURE touch_last_used(p_id IN RAW, p_now IN TIMESTAMP WITH TIME ZONE) IS
-  BEGIN
-    UPDATE api_key
-       SET last_used_at = p_now
-     WHERE id = p_id
-       AND tenant_id = HEXTORAW(SYS_CONTEXT('APP_CTX','TENANT_ID'));
-  END touch_last_used;
-
-END api_key_lookup_pkg;
-/
-
-GRANT EXECUTE ON APP_OWNER.api_key_lookup_pkg TO APP_RUNTIME;
-GRANT EXECUTE ON APP_OWNER.api_key_lookup_pkg TO APP_ADMIN;
+-- 7a. (VPD 제거됨) — 원래 여기서 api_key_lookup_pkg 를 RAW(16) 으로 재정의했습니다.
+-- 이 definer-rights 패키지는 VPD predicate(1=0) 를 우회해 tenant context 없이
+-- api_key prefix 를 룩업하려는 용도였습니다. VPD 가 제거되어 우회가 불필요해졌고,
+-- ApiKey 룩업/touch 는 앱 native 쿼리(ApiKeyLookupService)가 전담합니다.
+-- 기배포 DB 에 남아있을 수 있는 패키지는 V52__drop_vpd.sql 이 제거합니다.
 
 -- 7b. signing_key_bootstrap_pkg (V18 invariant; id type updated to RAW(16))
 CREATE OR REPLACE PACKAGE APP_OWNER.signing_key_bootstrap_pkg

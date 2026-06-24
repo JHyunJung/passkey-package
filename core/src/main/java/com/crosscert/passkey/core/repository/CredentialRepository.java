@@ -18,8 +18,8 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     /**
      * Phase F2 — TenantAdminService.toView() 의 KPI 집계용.
      * Spring Data derived query: SELECT COUNT(*) FROM credential WHERE tenant_id = :tenantId.
-     * VPD 가 활성화된 세션에서는 자동으로 tenant 격리되지만, 명시적으로 tenantId 를
-     * 받아 PLATFORM_OPERATOR (cross-tenant listing) 케이스에도 동작하도록 한다.
+     * 명시적으로 tenantId 를 받아 PLATFORM_OPERATOR (cross-tenant listing) 케이스에도
+     * 동작하도록 한다.
      */
     long countByTenantId(UUID tenantId);
 
@@ -40,8 +40,9 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
      * observe the same stored counter and both pass the strict-monotonic
      * check (codex P1: TOCTOU counter race).
      *
-     * <p>VPD filters credentials to the calling tenant, so a credential
-     * ID match across tenants returns empty.
+     * <p>The app-level Hibernate @Filter (TenantFilterAspect) scopes
+     * credentials to the calling tenant, so a credential ID match across
+     * tenants returns empty.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Credential c where c.credentialId = :credentialId")
@@ -51,7 +52,7 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
      * Lock-free read-only lookup by WebAuthn credentialId. Mirrors
      * {@link #findByCredentialIdForUpdate(byte[])} but WITHOUT the pessimistic
      * lock — admin read APIs (e.g. credential 인증 이벤트 조회) must not take a
-     * row lock on a read path. VPD/app-level tenant boundary still applies.
+     * row lock on a read path. The app-level tenant boundary still applies.
      */
     @Query("select c from Credential c where c.credentialId = :credentialId")
     Optional<Credential> findByCredentialId(@Param("credentialId") byte[] credentialId);
@@ -93,12 +94,12 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     /**
      * P0-3: registration/start 가 excludeCredentials 를 채우기 위해 사용.
      * 같은 userHandle 의 기존 credentialId 들을 반환 → 동일 authenticator 중복 등록 방지.
-     * VPD 가 tenant 로 필터하므로 tenant 격리는 세션 컨텍스트가 담당.
+     * 앱 레벨 Hibernate @Filter(TenantFilterAspect)가 tenant 로 필터한다.
      */
     @Query("select c.credentialId from Credential c where c.userHandle = :userHandle")
     List<byte[]> findCredentialIdsByUserHandle(@Param("userHandle") byte[] userHandle);
 
-    /** P0-4: self-service — 특정 userHandle 의 모든 credential (VPD 가 tenant 격리). */
+    /** P0-4: self-service — 특정 userHandle 의 모든 credential (앱 레벨 @Filter 가 tenant 격리). */
     List<Credential> findByUserHandle(byte[] userHandle);
 
     /** P0-4: self-service 삭제/수정 — credentialId + userHandle 동시 일치 (소유권 확인). */

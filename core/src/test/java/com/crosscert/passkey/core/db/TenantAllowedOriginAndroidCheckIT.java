@@ -37,18 +37,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * name {@code ck_tao_origin_format} unchanged.
  *
  * <p>Follows the {@code @SpringBootTest + @Testcontainers} shape of
- * {@code VpdIsolationIT} / {@code BaseEntityCallbackIT}: real Oracle XE 21,
- * {@code bootstrap-vpd.sql} run as SYS, Flyway applies V1–V48 as APP_OWNER, and
- * the Spring datasource connects as APP_ADMIN_USER (EXEMPT ACCESS POLICY +
- * INSERT grant on the table), so direct JDBC INSERTs exercise only the CHECK
- * constraint and are not filtered by the V35 VPD policy.
+ * {@code AppLevelIsolationIT} / {@code BaseEntityCallbackIT}: real Oracle XE 21,
+ * {@code bootstrap-schema.sql} run as SYS, Flyway applies V1–V48 as APP_OWNER, and
+ * the Spring datasource connects as APP_ADMIN_USER (INSERT grant on the table),
+ * so direct JDBC INSERTs exercise the CHECK constraint. With Oracle VPD removed
+ * there is no DB-kernel row filter — the app-level @Filter is ORM-only and does
+ * not affect raw JDBC.
  *
  * <p>A real {@link Tenant} is seeded via JPA so its {@code @UuidGenerator}
  * RAW(16) id satisfies the {@code fk_tao_tenant} foreign key; the three
  * INSERTs below target that tenant. Raw JDBC (not JPA) is intentional so the
  * ORA constraint error fires synchronously inside {@code assertThatThrownBy}
  * rather than at flush time — the same rationale as
- * {@code VpdIsolationIT.runtimeCannotInsertCrossTenant}.
+ * {@code AppLevelIsolationIT}'s raw-JDBC seeding.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -56,7 +57,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TenantAllowedOriginAndroidCheckIT {
 
     /**
-     * Minimal Spring Boot test app, mirroring {@code VpdIsolationIT.TestApp}.
+     * Minimal Spring Boot test app, mirroring {@code AppLevelIsolationIT.TestApp}.
      * :core is a library subproject with no main class; the IT brings up its
      * own context with @EntityScan + @EnableJpaRepositories pointed at the
      * production packages so repositories and entities resolve normally.
@@ -82,8 +83,8 @@ class TenantAllowedOriginAndroidCheckIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
@@ -92,15 +93,15 @@ class TenantAllowedOriginAndroidCheckIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
 
-        // Runtime datasource = APP_ADMIN_USER (EXEMPT ACCESS POLICY).
+        // Runtime datasource = APP_ADMIN_USER.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
@@ -125,8 +126,9 @@ class TenantAllowedOriginAndroidCheckIT {
         // Clean any tenant rows from prior tests / migration seeds so the FK
         // and UNIQUE(tenant_id, origin) start from a known state.
         resetState();
-        // APP_ADMIN holds EXEMPT ACCESS POLICY → JPA save writes the tenant row
-        // and its @UuidGenerator assigns a RAW(16) id we can FK against.
+        // JPA save (with no TenantContextHolder set, so the app-level @Filter is
+        // off) writes the tenant row and its @UuidGenerator assigns a RAW(16) id
+        // we can FK against.
         Tenant tenant = tenants.save(
                 new Tenant("android-check", "Android Check", "localhost", "Android Check RP"));
         UUID id = tenant.getId();
@@ -142,7 +144,7 @@ class TenantAllowedOriginAndroidCheckIT {
     private void resetState() {
         // V23 fk_admin_user_tenant points admin_user.tenant_id → tenant; null it
         // (and demote RP_ADMIN to satisfy CK_ADMIN_USER_ROLE_TENANT) before the
-        // tenant DELETE, mirroring VpdIsolationIT.resetState(). fk_tao_tenant has
+        // tenant DELETE, mirroring AppLevelIsolationIT's reset. fk_tao_tenant has
         // ON DELETE CASCADE, so deleting the tenant clears our allowed_origin rows.
         jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
         jdbc.update("DELETE FROM APP_OWNER.tenant");

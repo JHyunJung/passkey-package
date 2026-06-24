@@ -2,7 +2,7 @@ package com.crosscert.passkey.app.security;
 
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.repository.ApiKeyScopeRepository;
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -26,8 +26,8 @@ import java.util.Set;
 
 /**
  * Filters every {@code /api/v1/rp/**} request. Parses {@code X-API-Key},
- * looks up the row via {@link ApiKeyLookupService} (definer-rights
- * PL/SQL bypasses VPD safely), BCrypt-verifies the secret, and on
+ * looks up the row via {@link ApiKeyLookupService} (native SQL that runs
+ * before any tenant context is set), BCrypt-verifies the secret, and on
  * success sets {@link TenantContextHolder} for the duration of the
  * request.
  *
@@ -184,7 +184,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         try {
             // P1-5: 경로가 scope 를 요구하면 키 보유 scope 와 대조. 키는 유효하나
             // 권한 부족이면 403(401 과 구분). 매핑 없는 경로는 scope 검사 생략.
-            // 검사는 TenantContextHolder 가 설정된 상태에서 수행 — VPD-scoped 조회가
+            // 검사는 TenantContextHolder 가 설정된 상태에서 수행 — 앱 레벨 @Filter 조회가
             // 해당 키의 테넌트를 본다. getServletPath() 는 shouldNotFilter 의 인증
             // 게이트와 동일 기준이라 context-path 우회 위험이 없다.
             Optional<String> required = scopeResolver.requiredScope(req.getServletPath());
@@ -204,8 +204,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             MDC.put(MDC_API_KEY_PREFIX, prefix);
             MDC.put(MDC_TENANT_ID, row.tenantId().toString());
             try {
-                // V42 부터 패키지는 SYS_CONTEXT 대신 명시 tenant_id 로 격리하므로
-                // 인증된 row.tenantId() 를 그대로 넘긴다(VPD on/off 무관하게 정확).
+                // 조회는 native SQL 로 명시 tenant_id 로 격리하므로
+                // 인증된 row.tenantId() 를 그대로 넘긴다.
                 lookup.touchLastUsed(row.id(), row.tenantId(), now);
                 if (log.isDebugEnabled()) {
                     log.debug("api-key auth ok: prefix={} tenantId={}", prefix, row.tenantId());

@@ -74,8 +74,8 @@ sudo certbot certonly --nginx \
 
 ```bash
 docker compose up -d
-# 첫 부팅 시 VPD 스키마 부트스트랩
-docker exec -i passkey-oracle sqlplus -s / as sysdba < scripts/bootstrap-vpd.sql
+# 첫 부팅 시 스키마/유저 부트스트랩
+docker exec -i passkey-oracle sqlplus -s / as sysdba < scripts/bootstrap-schema.sql
 ```
 
 Oracle XE가 ready 되기까지 30~60초 걸립니다.

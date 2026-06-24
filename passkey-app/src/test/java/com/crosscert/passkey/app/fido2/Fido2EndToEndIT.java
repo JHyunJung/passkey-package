@@ -1,6 +1,6 @@
 package com.crosscert.passkey.app.fido2;
 
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.zaxxer.hikari.HikariDataSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -87,8 +87,8 @@ class Fido2EndToEndIT {
             .withUsername("APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                    "/tmp/bootstrap-vpd.sql");
+                    MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                    "/tmp/bootstrap-schema.sql");
 
     // Redis 7 with the same pinned tag as docker-compose.yml so dev and CI
     // exercise the same engine. exposedPorts wires Spring's Lettuce
@@ -99,25 +99,26 @@ class Fido2EndToEndIT {
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
-        // Run scripts/bootstrap-vpd.sql before Spring opens its first
+        // Run scripts/bootstrap-schema.sql before Spring opens its first
         // pool connection — APP_ADMIN_USER must exist before Hikari
-        // tries to authenticate. Same pattern as :core's VpdIsolationIT.
+        // tries to authenticate. Same pattern as :core's AppLevelIsolationIT.
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
-        // Runtime DataSource → APP_RUNTIME_USER so VPD policies actually
-        // engage during the request path (APP_ADMIN holds EXEMPT ACCESS
-        // POLICY and would silently bypass the cross-tenant isolation
-        // check). Flyway runs as APP_OWNER (the schema owner) via
-        // spring.flyway.user in application-test.yml, so migrations run
-        // independently of the runtime pool.
+        // Runtime DataSource → APP_RUNTIME_USER, the production-realistic
+        // least-privilege runtime user (SELECT-only on tenant; see V1).
+        // Cross-tenant isolation on the request path is enforced by the
+        // app-level Hibernate @Filter (TenantFilterAspect), not the DB user.
+        // Flyway runs as APP_OWNER (the schema owner) via spring.flyway.user
+        // in application-test.yml, so migrations run independently of the
+        // runtime pool.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_RUNTIME_USER");
         reg.add("spring.datasource.password", () -> "runtime_pw");
@@ -140,14 +141,13 @@ class Fido2EndToEndIT {
 
     /**
      * Independent APP_ADMIN_USER pool used ONLY by seed and cleanup.
-     * The primary Spring DataSource logs in as APP_RUNTIME_USER so that
-     * VPD policies engage during scenario execution (the
-     * cross-tenant-isolation scenario depends on that). But APP_RUNTIME
-     * lacks INSERT/UPDATE/DELETE grants on the {@code tenant} table
-     * (V1 grants only SELECT to APP_RUNTIME), and VPD's update_check=TRUE
-     * blocks cross-tenant writes from the runtime path. Seeding via
-     * APP_ADMIN sidesteps both: EXEMPT ACCESS POLICY bypasses VPD,
-     * and APP_ADMIN holds full DML on the platform-scoped tables.
+     * The primary Spring DataSource logs in as APP_RUNTIME_USER, the
+     * production-realistic least-privilege runtime user, so the request
+     * path exercises the same isolation the app enforces in production
+     * (the app-level Hibernate @Filter). But APP_RUNTIME lacks
+     * INSERT/UPDATE/DELETE grants on the {@code tenant} table (V1 grants
+     * only SELECT to APP_RUNTIME), so seeding uses APP_ADMIN, which holds
+     * full DML on the platform-scoped tables.
      */
     private static HikariDataSource adminPool;
     private static JdbcTemplate adminJdbc;
@@ -245,8 +245,8 @@ class Fido2EndToEndIT {
     @AfterEach
     void cleanup() {
         TenantContextHolder.clear();
-        // Same FK-aware order on cleanup. Use the admin pool so we
-        // don't have to juggle APP_CTX for every DELETE.
+        // Same FK-aware order on cleanup. Use the admin pool so the DELETEs
+        // run with full DML grants regardless of tenant context.
         if (adminJdbc != null) {
             adminJdbc.update("DELETE FROM APP_OWNER.credential");
             adminJdbc.update("DELETE FROM APP_OWNER.api_key_scope");
@@ -297,9 +297,9 @@ class Fido2EndToEndIT {
      */
     private void seedTenant(String tenantHex, String slug, String displayName,
                              String prefix, String secret) {
-        // INSERT via raw JDBC as APP_ADMIN — VPD does not engage for
-        // APP_ADMIN (EXEMPT ACCESS POLICY), and APP_ADMIN has full DML
-        // on tenant and api_key (V21 grants).
+        // INSERT via raw JDBC as APP_ADMIN — raw JDBC does not pass through
+        // the app-level Hibernate @Filter, and APP_ADMIN has full DML on
+        // tenant and api_key (V21 grants).
         //
         // Phase 6: id and tenant_id are RAW(16); HEXTORAW converts the
         // 32-char hex literal. SYS_GUID() generates the api_key PK.
@@ -484,15 +484,15 @@ class Fido2EndToEndIT {
                 attestationJson);
 
         // Now call /authentication/start from T_B with T_A's userHandle.
-        // VPD must hide T_A's credential row from T_B, so allowCredentials
-        // comes back EMPTY (no credentials match userHandle within T_B's
-        // view of the credential table).
+        // The app-level @Filter must hide T_A's credential row from T_B, so
+        // allowCredentials comes back EMPTY (no credentials match userHandle
+        // within T_B's view of the credential table).
         JsonNode authStart = authenticationStart(PREFIX_B, SECRET_B, USER_HANDLE_A);
         JsonNode allow = authStart.get("publicKeyCredentialRequestOptions")
                 .get("allowCredentials");
         assertThat(allow.isArray()).isTrue();
         assertThat(allow.size())
-                .as("VPD must hide T_A's credential from T_B's /authentication/start")
+                .as("app-level @Filter must hide T_A's credential from T_B's /authentication/start")
                 .isZero();
     }
 

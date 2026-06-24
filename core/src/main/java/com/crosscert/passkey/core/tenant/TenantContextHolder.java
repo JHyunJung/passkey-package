@@ -1,14 +1,14 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import java.util.UUID;
 
 /**
- * Thread-bound tenant context. The tenant id is a UUID since Phase 6;
- * the JDBC layer in {@link TenantAwareDataSource} converts to a
- * 32-char hex string when calling CTX_PKG.SET_TENANT.
+ * Thread-bound tenant context. The tenant id is a UUID, consumed by
+ * {@link TenantFilterAspect} to enable the Hibernate {@code tenantFilter}
+ * for app-level tenant isolation.
  *
- * <p>Phase 0 invariant preserved: when no tenant is set, the VPD
- * policy returns '1=0' (no rows visible).
+ * <p>Invariant: when no tenant is set, the filter is not enabled (the
+ * cross-tenant / PLATFORM_OPERATOR case).
  */
 public final class TenantContextHolder {
 

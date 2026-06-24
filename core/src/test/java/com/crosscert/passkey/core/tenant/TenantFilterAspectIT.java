@@ -1,4 +1,4 @@
-package com.crosscert.passkey.core.vpd;
+package com.crosscert.passkey.core.tenant;
 
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.entity.Tenant;
@@ -52,8 +52,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The test FAILS without {@link TenantFilterAspect} because step 3 returns both
  * rows (filter never enabled). It PASSES once the aspect is active.
  *
- * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-vpd.sql / application-test.yml
- * pattern as {@link VpdIsolationIT} and {@link TenantFilterBindingIT} for consistency.
+ * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-schema.sql / application-test.yml
+ * pattern as {@link AppLevelIsolationIT} and {@link TenantFilterBindingIT} for consistency.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -85,18 +85,18 @@ class TenantFilterAspectIT {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
@@ -134,8 +134,8 @@ class TenantFilterAspectIT {
     // ── Helper: seed two tenants + one credential each (filter OFF) ──────────
     /** Returns [tenantAId, tenantBId] */
     private UUID[] seedTwoTenants() {
-        // Seed directly without TenantContextHolder so filter is never enabled
-        // (APP_ADMIN_USER is EXEMPT ACCESS POLICY — bypass VPD, direct JPA save works).
+        // Seed directly without TenantContextHolder so the app-level @Filter is
+        // never enabled (no context → aspect skips it, direct JPA save works).
         TenantContextHolder.clear();
 
         Tenant tA = new Tenant("aspect-it-a", "Tenant A (Aspect IT)", "localhost", "Aspect RP A");

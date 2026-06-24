@@ -4,12 +4,12 @@
 -- ⚠️ 파괴적: APP_OWNER 의 모든 테이블·데이터(테넌트·계정·패스키·인증기록)를 삭제한다.
 -- ⚠️ dev/qa 전용. prod 에는 절대 실행하지 말 것.
 --
--- 보존: CTX_PKG(패키지+바디), APP_CTX(컨텍스트).
---   - APP_OWNER 는 DROP CONTEXT 권한이 없고(CREATE ANY CONTEXT 만 보유),
---     시드(R__)가 CTX_PKG.set_tenant 를 호출하므로 둘 다 남겨 재적용이 바로 되게 한다.
---   - CTX_PKG 는 bootstrap 의 CREATE OR REPLACE 로 멱등 — 남아 있어도 무해.
+-- VPD 제거됨: 테넌트 격리는 앱 레벨 Hibernate @Filter 가 전담한다. 이 스크립트는
+--   더 이상 CTX_PKG 를 보존하지 않는다(seed 가 set_tenant 를 호출하지 않으므로 패키지
+--   DROP 루프에서 함께 정리). APP_CTX 컨텍스트는 APP_OWNER 에 DROP CONTEXT 권한이
+--   없어 남지만 무해(참조 패키지 부재로 동작 불가).
 -- SE 노트: SE 는 VPD 미지원이라 user_policies 가 보통 0건이다(아래 루프는 빈 채 통과).
---   EE 잔재로 정책이 남아있으면 DBMS_RLS.DROP_POLICY 로 분리한다.
+--   과거 EE 잔재로 정책이 남아있으면 DBMS_RLS.DROP_POLICY(동적 SQL)로 분리한다.
 --
 -- 사용법(DBeaver, APP_OWNER 로 접속한 SQL 에디터에 전체 붙여넣고 실행):
 --   1) 먼저 아래 확인 쿼리로 대상 DB/스키마를 눈으로 확인한다.
@@ -65,14 +65,20 @@ BEGIN
       '실행하려면 스크립트 상단 c_confirm 을 RESET 으로 바꾸세요 (현재: ' || c_confirm || ').');
   END IF;
 
-  -- 1) VPD 정책 분리(SE 면 0건). DROP_POLICY(USER, ...) — 자기 스키마 대상.
+  -- 1) VPD 정책 분리(SE 면 0건; 과거 EE 잔재가 있으면 청소).
+  --    ⚠️ DBMS_RLS 를 EXECUTE IMMEDIATE 동적 SQL 로 호출한다. VPD 제거 후 bootstrap
+  --    이 APP_OWNER 에 EXECUTE ON DBMS_RLS 를 더 이상 GRANT 하지 않으므로, 정적
+  --    참조하면 권한 없을 때 PLS-00201 로 블록 컴파일이 깨진다(루프가 0회여도 발생).
+  --    동적 SQL 은 런타임 해석이라 권한/객체 부재를 SQLCODE 로 잡아 멱등 처리한다.
   FOR p IN (SELECT object_name, policy_name FROM user_policies) LOOP
     BEGIN
-      DBMS_RLS.DROP_POLICY(USER, p.object_name, p.policy_name);
+      EXECUTE IMMEDIATE
+        'BEGIN DBMS_RLS.DROP_POLICY(USER, :1, :2); END;'
+        USING p.object_name, p.policy_name;
       v_cnt := v_cnt + 1;
       DBMS_OUTPUT.PUT_LINE('  dropped policy ' || p.policy_name || ' on ' || p.object_name);
     EXCEPTION WHEN OTHERS THEN
-      IF SQLCODE IN (-28102, -28104) THEN NULL;
+      IF SQLCODE IN (-28102, -28104, -1031, -6550, -201) THEN NULL;  -- 없음/권한없음/식별자미해결 → 멱등
       ELSE
         DBMS_OUTPUT.PUT_LINE('  [error] drop_policy ' || p.policy_name || ': ' || SQLERRM);
         RAISE;
@@ -100,7 +106,9 @@ BEGIN
     try_ddl('DROP VIEW ' || q(v.view_name));
   END LOOP;
 
-  -- 5) 패키지/프로시저/함수/트리거/타입 — CTX_PKG 는 보존(set_tenant 의존 + DROP CONTEXT 불가).
+  -- 5) 패키지/프로시저/함수/트리거/타입. (VPD 제거됨 — CTX_PKG 도 더 이상 보존하지
+  --    않는다. seed 가 set_tenant 를 호출하지 않으므로 여기서 함께 정리한다. APP_CTX
+  --    컨텍스트는 DROP CONTEXT 권한이 없어 남지만 무해.)
   --    종속성 실패를 줄이려고 타입을 마지막에 DROP 하도록 정렬하고, TYPE 만 FORCE 를 붙인다.
   FOR o IN (
     SELECT object_name, object_type
@@ -108,7 +116,6 @@ BEGIN
     WHERE  object_type IN ('PACKAGE','PROCEDURE','FUNCTION','TRIGGER',
                            'TYPE','SYNONYM','MATERIALIZED VIEW')
       AND  object_name NOT LIKE 'SYS\_%' ESCAPE '\'
-      AND  object_name <> 'CTX_PKG'
     ORDER  BY CASE object_type
                 WHEN 'TRIGGER'           THEN 1
                 WHEN 'PROCEDURE'         THEN 2
@@ -127,14 +134,16 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 6) APP_CTX 컨텍스트: 보존(DROP 권한 없음 + CREATE OR REPLACE 로 재사용). 손대지 않음.
+  -- 6) APP_CTX 컨텍스트: APP_OWNER 에 DROP CONTEXT 권한이 없어 남는다(무해 — 참조
+  --    패키지 CTX_PKG 가 step 5 에서 제거돼 동작 불가 상태로만 잔존). 손대지 않음.
 
   -- 7) 휴지통: APP_OWNER 자기 것만 PURGE(전역 PURGE 금지).
   FOR r IN (SELECT object_name FROM user_recyclebin) LOOP
     try_ddl('PURGE TABLE ' || q(r.object_name));
   END LOOP;
 
-  -- 8) 검증: 테이블 0 + VPD 정책 0. CTX_PKG/APP_CTX 는 의도적 보존이라 카운트 제외.
+  -- 8) 검증: 테이블 0 + VPD 정책 0. APP_CTX 컨텍스트는 DROP 권한 부재로 잔존하나
+  --    동작 불가(참조 패키지 제거됨)라 카운트 제외.
   SELECT COUNT(*) INTO v_cnt FROM user_tables;
   IF v_cnt > 0 THEN
     RAISE_APPLICATION_ERROR(-20099, 'reset incomplete: ' || v_cnt || ' table(s) remain. Aborting.');
@@ -145,20 +154,12 @@ BEGIN
     RAISE_APPLICATION_ERROR(-20098, 'reset incomplete: ' || v_cnt || ' VPD policy/policies remain. Aborting.');
   END IF;
 
-  -- 9) CTX_PKG 가 보존돼 호출 가능한지 검증(Flyway 시드가 set_tenant 를 호출하므로
-  --    여기서 깨져 있으면 재적용이 실패한다 — 미리 잡는다). 무해한 프로브 후 즉시 clear.
-  BEGIN
-    APP_OWNER.CTX_PKG.set_tenant('00000000000000000000000000000000');
-    APP_OWNER.CTX_PKG.clear_tenant;
-  EXCEPTION WHEN OTHERS THEN
-    RAISE_APPLICATION_ERROR(-20095,
-      'CTX_PKG check failed (Flyway seed needs it): ' || SQLERRM);
-  END;
+  -- (VPD 제거됨) — 과거엔 여기서 CTX_PKG 가 호출 가능한지 프로브했습니다. seed 가
+  --    더 이상 set_tenant 를 호출하지 않고 CTX_PKG 도 정리되므로 프로브를 제거합니다.
 
-  DBMS_OUTPUT.PUT_LINE('==> external reset done. 0 tables, 0 policies remain (CTX_PKG/APP_CTX verified).');
+  DBMS_OUTPUT.PUT_LINE('==> external reset done. 0 tables, 0 policies remain.');
 END;
 /
 
--- [실행 후 확인] 테이블 0 + CTX_PKG 보존 확인.
+-- [실행 후 확인] 남은 테이블 0 이어야 한다.
 SELECT COUNT(*) AS remaining_tables FROM user_tables;
-SELECT object_name, object_type, status FROM user_objects WHERE object_name = 'CTX_PKG' ORDER BY object_type;

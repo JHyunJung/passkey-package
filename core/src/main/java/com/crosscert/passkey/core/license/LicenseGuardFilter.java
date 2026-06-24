@@ -33,7 +33,7 @@ import java.util.Set;
  *
  * Order = HIGHEST_PRECEDENCE + 1: runs after OnpremTenantPinFilter
  * (HIGHEST_PRECEDENCE) but before any auth filter, so license check
- * happens before any auth work but after VPD tenant context is set.
+ * happens before any auth work but after the tenant context is set.
  */
 @Component
 @ConditionalOnProperty(name = "passkey.deployment.mode", havingValue = "onprem")

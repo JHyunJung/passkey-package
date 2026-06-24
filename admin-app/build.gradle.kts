@@ -27,8 +27,8 @@ dependencies {
     testImplementation(rootProject.libs.wiremock.standalone)
     // QW-1 (sec-admin-vpd-exempt-sole-layer): ArchUnit enforces that
     // tenant-scoped admin services reference TenantBoundary, so a future
-    // refactor that drops the isolation check fails the build (admin-app
-    // runs VPD-EXEMPT — TenantBoundary is the sole isolation layer).
+    // refactor that drops the isolation check fails the build (VPD removed;
+    // admin-app does cross-tenant queries — TenantBoundary is the sole layer).
     testImplementation(rootProject.libs.archunit.junit5)
 }
 
@@ -83,10 +83,10 @@ tasks.named<Test>("test") {
     systemProperty("api.version", "1.43")
 }
 
-// Copy scripts/bootstrap-vpd.sql onto the test classpath so
+// Copy scripts/bootstrap-schema.sql onto the test classpath so
 // AdminFlowIT can ship it into the Testcontainers Oracle via
 // MountableFile (same pattern as core / passkey-app — scripts/ is
 // the single source of truth used by docker-compose).
 tasks.named<Copy>("processTestResources") {
-    from(rootProject.file("scripts/bootstrap-vpd.sql"))
+    from(rootProject.file("scripts/bootstrap-schema.sql"))
 }

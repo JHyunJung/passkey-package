@@ -15,14 +15,15 @@ spring:
     default-schema: APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
-    # Flyway runs as schema owner APP_OWNER (same as admin-app / core ITs).
-    # APP_OWNER holds DDL privileges + EXECUTE ON DBMS_RLS + EXEMPT ACCESS POLICY,
-    # so it can apply all migrations including V3/V8 VPD policy setup.
-    # The runtime Spring DataSource below logs in as APP_RUNTIME_USER so
-    # VPD policies actually engage during scenario execution — which
-    # is the whole point of the cross-tenant-isolation scenario. Split
-    # credentials via spring.flyway.user/password keep migration and
-    # runtime separate within a single Spring Boot context.
+    # Flyway runs as schema owner APP_OWNER (same as admin-app / core ITs),
+    # so it can apply all migrations (including the V3/V8/V52 no-op/cleanup
+    # migrations left over from the removed Oracle VPD).
+    # The runtime Spring DataSource below logs in as APP_RUNTIME_USER, the
+    # production-realistic least-privilege runtime user, so the request path
+    # exercises the same app-level @Filter isolation as production — the
+    # whole point of the cross-tenant-isolation scenario. Split credentials
+    # via spring.flyway.user/password keep migration and runtime separate
+    # within a single Spring Boot context.
     user: APP_OWNER
     password: app_owner_pw
   jpa:
@@ -31,7 +32,7 @@ spring:
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
     # url/username/password come from @DynamicPropertySource (after
-    # the OracleContainer boots and bootstrap-vpd.sql runs).
+    # the OracleContainer boots and the bootstrap schema script runs).
   data:
     redis:
       # host/port come from @DynamicPropertySource (Redis container).
@@ -40,18 +41,6 @@ spring:
           enabled: false  # one-shot test, no need for pool warm-up
 
 passkey:
-  # VPD ON for the IT: the runtime DataSource logs in as APP_RUNTIME_USER and
-  # the @DynamicPropertySource bootstrap applies the V3/V8/V20/V35 DBMS_RLS
-  # policies (credential, api_key, AND the tenant child tables — V35). Those
-  # policies gate every APP_RUNTIME read on SYS_CONTEXT('APP_CTX','TENANT_ID').
-  # That context is only populated when CoreDataSourceConfig wraps the pool in
-  # TenantAwareDataSource (ctx_pkg.set_tenant on borrow), which happens only
-  # when this flag is true. Without it the now-VPD-protected tenant_allowed_origin
-  # returns zero rows and registration/finish fails with
-  # "tenant ... has no allowed_origins configured" — see crossTenantIsolation,
-  # which depends on these same policies engaging.
-  vpd:
-    enabled: true
   id-token:
     issuer-base: https://passkey.test
     ttl: PT15M

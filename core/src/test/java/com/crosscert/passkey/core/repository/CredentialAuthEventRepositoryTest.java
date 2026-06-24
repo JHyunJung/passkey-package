@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link CredentialAuthEventRepository} acceptance gate.
  *
  * <p>:core has no embedded DB on the test classpath — repository tests boot a
- * real Testcontainers Oracle XE 21 and run {@code bootstrap-vpd.sql} as SYS,
+ * real Testcontainers Oracle XE 21 and run {@code bootstrap-schema.sql} as SYS,
  * then let Flyway apply V1–V43 (V43 creates {@code credential_auth_event}).
  * We follow the {@code @SpringBootTest + @Testcontainers} shape of
  * {@link com.crosscert.passkey.core.entity.BaseEntityCallbackIT} rather than
@@ -61,18 +61,18 @@ class CredentialAuthEventRepositoryTest {
                     .withUsername("APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-vpd.sql"),
-                            "/tmp/bootstrap-vpd.sql");
+                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
+                            "/tmp/bootstrap-schema.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-vpd.sql");
+                        + "@/tmp/bootstrap-schema.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-vpd.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }

@@ -1,6 +1,6 @@
 package com.crosscert.passkey.core.license;
 
-import com.crosscert.passkey.core.vpd.TenantContextHolder;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * Per-request VPD tenant pinning in on-prem (single-tenant) mode.
+ * Per-request tenant pinning in on-prem (single-tenant) mode.
  * Pins TenantContextHolder to the licensed tenantId at request entry,
  * clears in finally. Runs even before LicenseGuardFilter so the
  * 503 response path (rendered by ApiResponse / GlobalExceptionHandler)
