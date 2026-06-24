@@ -34,9 +34,9 @@ import java.util.UUID;
  * when present (typed flow); when null returns an empty allow-list
  * (usernameless / discoverable credential flow).
  *
- * <p>Runs with TenantContextHolder set by ApiKeyAuthFilter, so VPD on
- * credential applies — only the calling tenant's credentials are
- * visible.
+ * <p>Runs with TenantContextHolder set by ApiKeyAuthFilter, so the
+ * app-level @Filter on credential applies — only the calling tenant's
+ * credentials are visible.
  */
 @Slf4j
 @Service
@@ -74,7 +74,7 @@ public class AuthenticationStartService {
                     ? null
                     : Base64.getUrlDecoder().decode(req.userHandle());
 
-            // VPD filters to this tenant; derived query avoids the findAll scan.
+            // The app-level @Filter scopes to this tenant; derived query avoids the findAll scan.
             // Usernameless flow (userHandle == null): server cannot know which
             // credentials to advertise → empty allowCredentials per WebAuthn.
             List<Credential> userCreds = (userHandle == null)

@@ -53,7 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * rows (filter never enabled). It PASSES once the aspect is active.
  *
  * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-schema.sql / application-test.yml
- * pattern as {@link VpdIsolationIT} and {@link TenantFilterBindingIT} for consistency.
+ * pattern as {@link AppLevelIsolationIT} and {@link TenantFilterBindingIT} for consistency.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -134,8 +134,8 @@ class TenantFilterAspectIT {
     // ── Helper: seed two tenants + one credential each (filter OFF) ──────────
     /** Returns [tenantAId, tenantBId] */
     private UUID[] seedTwoTenants() {
-        // Seed directly without TenantContextHolder so filter is never enabled
-        // (APP_ADMIN_USER is EXEMPT ACCESS POLICY — bypass VPD, direct JPA save works).
+        // Seed directly without TenantContextHolder so the app-level @Filter is
+        // never enabled (no context → aspect skips it, direct JPA save works).
         TenantContextHolder.clear();
 
         Tenant tA = new Tenant("aspect-it-a", "Tenant A (Aspect IT)", "localhost", "Aspect RP A");

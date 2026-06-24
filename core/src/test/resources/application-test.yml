@@ -1,14 +1,14 @@
-# VpdIsolationIT — Phase 0 acceptance gate.
+# Shared :core integration-test config (AppLevelIsolationIT and friends).
 #
 # The Testcontainers Oracle container is started by @Testcontainers /
-# @Container in VpdIsolationIT, and a @DynamicPropertySource registers
-# the JDBC URL/username/password at runtime — those keys are intentionally
-# omitted here. Everything else (Flyway, JPA, driver) is fixed.
+# @Container in each IT, and a @DynamicPropertySource registers the JDBC
+# URL/username/password at runtime — those keys are intentionally omitted
+# here. Everything else (Flyway, JPA, driver) is fixed.
 #
-# Spring connects as APP_ADMIN_USER (EXEMPT ACCESS POLICY) which is the
-# correct identity for Flyway migrations and lets the "appAdminBypass"
-# scenario observe every credential row directly. APP_RUNTIME-scoped
-# assertions go through RuntimeDsHelper, which builds its own pool.
+# Spring connects as APP_ADMIN_USER, the runtime user, which is the correct
+# identity for Flyway migrations and lets ITs seed/observe credential rows
+# via raw JDBC. Tenant isolation is enforced by the app-level Hibernate
+# @Filter (TenantFilterAspect), not the DB user — Oracle VPD was removed.
 spring:
   flyway:
     enabled: true
@@ -32,7 +32,7 @@ spring:
       pool-name: vpd-it-pool
       connection-init-sql: "ALTER SESSION SET TIME_ZONE='Asia/Seoul'"
   # Disable Redis auto-config in the IT — no Redis container is needed
-  # to prove VPD isolation, and forcing one would slow the suite down
+  # to prove tenant isolation, and forcing one would slow the suite down
   # by another 30+ seconds for zero coverage benefit.
   autoconfigure:
     exclude:

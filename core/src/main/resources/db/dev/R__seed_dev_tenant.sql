@@ -15,7 +15,7 @@
 --   ⚠️ RP_ADMIN 은 V23 CHECK 제약상 tenant_id NOT NULL 필수 → 테넌트 INSERT
 --      뒤에 와야 하므로 seed-common 이 아니라 이 파일(같은 트랜잭션 순서)에 둔다.
 --
--- aaguid_policy(ANY)·snapshot 직접 시드. VPD 컨텍스트 필요.
+-- aaguid_policy(ANY)·snapshot 직접 시드. (VPD 제거됨 — tenant_id 명시 INSERT, 컨텍스트 불필요.)
 -- Idempotent: NOT EXISTS 가드.
 -- ============================================================
 

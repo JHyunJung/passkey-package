@@ -97,7 +97,7 @@ class AdminFlowIT {
         // Run scripts/bootstrap-schema.sql before Spring opens its first
         // pool connection — APP_ADMIN_USER must exist before Hikari
         // tries to authenticate. Same pattern as :passkey-app's
-        // Fido2EndToEndIT and :core's VpdIsolationIT.
+        // Fido2EndToEndIT and :core's AppLevelIsolationIT.
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
@@ -109,9 +109,9 @@ class AdminFlowIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         // admin-app's runtime DataSource → APP_ADMIN_USER (Flyway + DML on
-        // platform-scoped tables). admin-app does NOT exercise VPD on the
-        // request path (it intentionally manages cross-tenant resources),
-        // so we don't need a separate runtime user like passkey-app does.
+        // platform-scoped tables). admin-app does NOT enable the app-level
+        // @Filter on the request path (it intentionally manages cross-tenant
+        // resources), so we don't need a separate runtime user like passkey-app.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");

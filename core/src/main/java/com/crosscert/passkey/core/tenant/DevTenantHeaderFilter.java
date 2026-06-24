@@ -29,7 +29,7 @@ import java.util.logging.Logger;
  * has just set from a validated X-API-Key. Without the skip, a valid
  * RP API request would either lose its tenant (if no X-Tenant-Id is
  * sent) or be silently switched to a caller-supplied tenant (if one
- * is sent) — both fatal for VPD isolation.
+ * is sent) — both fatal for tenant isolation.
  */
 @Component
 @Profile({"local", "dev", "test"})

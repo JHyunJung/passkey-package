@@ -24,8 +24,9 @@ ALTER SESSION SET CONTAINER = XEPDB1;
 -- Roles
 -- ============================================================
 
--- APP_RUNTIME: runtime sessions (passkey-app, admin-app normal transactions)
--- VPD policy applies to this role.
+-- APP_RUNTIME: runtime sessions (passkey-app, admin-app normal transactions).
+-- Tenant isolation is enforced at the app level (Hibernate @Filter), not via
+-- any DB-kernel policy on this role.
 BEGIN
   EXECUTE IMMEDIATE 'CREATE ROLE APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN

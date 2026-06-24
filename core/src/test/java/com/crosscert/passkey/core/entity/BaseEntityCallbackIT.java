@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ol>
  *
  * <p>We deliberately follow the {@code @SpringBootTest + @Testcontainers}
- * shape of {@code VpdIsolationIT} rather than {@code @DataJpaTest} so the
+ * shape of {@code AppLevelIsolationIT} rather than {@code @DataJpaTest} so the
  * bootstrap-as-SYS step and full {@code application-test.yml} (Flyway +
  * Hibernate validate + Redis exclusion) apply identically across :core ITs.
  */
@@ -54,7 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BaseEntityCallbackIT {
 
     /**
-     * Minimal Spring Boot test app, mirroring {@code VpdIsolationIT.TestApp}.
+     * Minimal Spring Boot test app, mirroring {@code AppLevelIsolationIT.TestApp}.
      * :core is a library subproject with no main class; the IT brings up its
      * own context with @EntityScan + @EnableJpaRepositories pointed at the
      * production packages so repositories and entities resolve normally.
@@ -65,7 +65,7 @@ class BaseEntityCallbackIT {
     static class TestApp {
     }
 
-    // Pinned image tag matches docker-compose.yml + VpdIsolationIT so all
+    // Pinned image tag matches docker-compose.yml + AppLevelIsolationIT so all
     // ITs exercise the same Oracle binary.
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
 
@@ -98,7 +98,7 @@ class BaseEntityCallbackIT {
                             + "STDERR:\n" + exec.getStderr());
         }
 
-        // Connect as APP_ADMIN_USER (EXEMPT ACCESS POLICY) — runtime user.
+        // Connect as APP_ADMIN_USER — runtime user.
         // V22 (and subsequent migrations) will have run before Hibernate
         // validates ADMIN_USER's new updated_at column.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);

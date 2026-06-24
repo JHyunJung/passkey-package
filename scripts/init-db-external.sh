@@ -5,11 +5,11 @@
 #
 # 두 단계:
 #   1. bootstrap-external.sql 을 SYSDBA 로 실행 — APP_OWNER 스키마 유저 +
-#      APP_ADMIN/APP_RUNTIME role + VPD CTX_PKG + GRANT 생성.
-#      (VPD 인프라는 Task 7 까지 잔존 — 마이그레이션이 아직 DBMS_RLS 참조.)
+#      APP_ADMIN/APP_RUNTIME role + GRANT 생성.
+#      (VPD 제거됨 — CTX_PKG/APP_CTX/DBMS_RLS GRANT 는 더 이상 만들지 않는다.)
 #   2. admin-app 을 그 Oracle 의 JDBC URL 로 부팅 — Flyway 가 V1~ 마이그레이션
-#      (테이블/VPD 정책/시퀀스) + 프로필 시드(R__) 를 적용. 마이그레이션이
-#      끝나면 종료.
+#      (테이블/시퀀스 + V52 의 VPD 잔재 청소) + 프로필 시드(R__) 를 적용.
+#      마이그레이션이 끝나면 종료.
 #
 # 즉 "최종 스키마+시드"를 Flyway 가 직접 만들어 넣는다. Flyway 가 만드는 건
 # 깨끗한 최종 스키마이고, flyway_schema_history 테이블이 함께 생기지만(무해,
@@ -30,19 +30,19 @@
 #
 #   [이미 우리 잔재가 있는 외부 SE DB 를 비우고 재적용하는 절차]
 #     1) DBeaver 에서 APP_OWNER 로 접속해 scripts/reset-app-owner-external.sql 실행
-#        (스크립트 상단 c_confirm 을 RESET 으로 바꿔야 동작. 테이블·데이터 삭제,
-#         CTX_PKG/APP_CTX 보존).
+#        (스크립트 상단 c_confirm 을 RESET 으로 바꿔야 동작. 테이블·데이터 삭제.
+#         VPD 제거됨 — CTX_PKG 도 함께 정리되고 APP_CTX 는 DROP 권한 부재로 무해하게 잔존).
 #     2) 아래처럼 SKIP_BOOTSTRAP=1 로 Flyway 만 재적용:
 #        ADMIN_PW=강한비번 \
 #        SKIP_BOOTSTRAP=1 \
 #        ORA_HOST=db.example.com ORA_PORT=1521 ORA_SERVICE=ORCLPDB1 PROFILE=qa \
 #        scripts/init-db-external.sh
-#     앱 격리는 앱 레벨(Hibernate @Filter). VPD 인프라(CTX_PKG/정책)는 Task 7 까지
-#     잔존하나 앱 런타임은 PASSKEY_VPD_ENABLED 를 더 이상 읽지 않는다.
+#     앱 격리는 앱 레벨(Hibernate @Filter). VPD 는 완전히 제거됐고(코드/설정/DB),
+#     앱 런타임은 어떤 VPD 설정도 읽지 않는다.
 #
-# ⚠️ 멱등하지만 파괴적이지 않다 — Flyway 가 관리하는 테이블/시퀀스/정책/마이그레이션
-#    이력(flyway_schema_history)은 비어 있어야 한다. bootstrap 산출물(APP_OWNER/role/
-#    CTX_PKG/APP_CTX)은 남아 있어도 무방하다(SKIP_BOOTSTRAP 재적용 경로 전제).
+# ⚠️ 멱등하지만 파괴적이지 않다 — Flyway 가 관리하는 테이블/시퀀스/마이그레이션
+#    이력(flyway_schema_history)은 비어 있어야 한다. bootstrap 산출물(APP_OWNER/role)
+#    은 남아 있어도 무방하다(SKIP_BOOTSTRAP 재적용 경로 전제).
 #    빈 스키마든, reset-app-owner-external.sql 로 Flyway 객체만 비운 스키마든 적용 가능.
 #
 set -euo pipefail
@@ -77,7 +77,7 @@ echo ""
 # ---- 단계 1: 부트스트랩 (SKIP_BOOTSTRAP=1 이면 건너뜀) ----
 if [ "${SKIP_BOOTSTRAP}" = "1" ]; then
   echo "==> [1/2] 부트스트랩 건너뜀 (SKIP_BOOTSTRAP=1) — 이미 부트스트랩된 DB 전제."
-  echo "    (APP_OWNER/role/CTX_PKG 가 이미 있어야 합니다. 없으면 DBeaver 로"
+  echo "    (APP_OWNER/role 이 이미 있어야 합니다. 없으면 DBeaver 로"
   echo "     bootstrap-external.sql 을 먼저 실행하세요.)"
 else
   if ! command -v sqlplus >/dev/null 2>&1; then
@@ -88,7 +88,7 @@ else
   fi
   # RUNTIME_PW: bootstrap 전용 — SKIP_BOOTSTRAP=1 이면 불필요.
   : "${RUNTIME_PW:?RUNTIME_PW 환경변수 필요 (강한 비번)}"
-  echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role + CTX_PKG"
+  echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role"
   # ⚠️ 비번에 "(큰따옴표)가 있으면 heredoc DEFINE 줄이 파괴됨. 비번에 " 미사용 권장.
   sqlplus -S "${SYS_CONN}" <<SQL
 DEFINE app_owner_pw = "${APP_OWNER_PW}"

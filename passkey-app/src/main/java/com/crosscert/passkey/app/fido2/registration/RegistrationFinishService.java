@@ -58,7 +58,7 @@ public class RegistrationFinishService {
 
             // codex P2: bind challenge tenant to current API-key tenant
             // before touching tenant config — defense-in-depth on top of
-            // VPD. Mirrors AuthenticationFinishService.
+            // the app-level @Filter. Mirrors AuthenticationFinishService.
             UUID ctxTenantUuid = TenantContextHolder.get();
             String ctxTenant = ctxTenantUuid == null ? null : ctxTenantUuid.toString();
             if (ctxTenant == null || !ctxTenant.equals(ch.tenantId())) {

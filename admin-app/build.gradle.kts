@@ -27,8 +27,8 @@ dependencies {
     testImplementation(rootProject.libs.wiremock.standalone)
     // QW-1 (sec-admin-vpd-exempt-sole-layer): ArchUnit enforces that
     // tenant-scoped admin services reference TenantBoundary, so a future
-    // refactor that drops the isolation check fails the build (admin-app
-    // runs VPD-EXEMPT — TenantBoundary is the sole isolation layer).
+    // refactor that drops the isolation check fails the build (VPD removed;
+    // admin-app does cross-tenant queries — TenantBoundary is the sole layer).
     testImplementation(rootProject.libs.archunit.junit5)
 }
 

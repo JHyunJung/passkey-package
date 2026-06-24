@@ -39,13 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The native {@code findByPrefix} lookup runs as a plain {@link JdbcTemplate}
  * SELECT — it does NOT pass through Hibernate's {@code @Filter}. It also must
  * return a row even though no tenant context is set at authentication time.
- * To model the post-VPD-removal runtime (where the DB no longer carries a
- * {@code tenant_id = SYS_CONTEXT(...)} VPD predicate), this IT connects as
- * {@code APP_ADMIN_USER}, which holds {@code EXEMPT ACCESS POLICY} and so is
- * not constrained by the V8/V20 DBMS_RLS policies that Flyway still installs
- * (their DB removal happens later in Task 7). This makes the native query
- * observe the row regardless of session context — exactly the production
- * behavior once VPD is gone.
+ * This IT connects as {@code APP_ADMIN_USER}, the production runtime user, so
+ * the native query observes the row regardless of session context — exactly
+ * the production behavior now that Oracle VPD is removed (no DB-kernel row
+ * filter exists, so the plain SQL query already sees all rows).
  *
  * <h2>Seed strategy</h2>
  * One tenant + one api_key, inserted directly via {@link JdbcTemplate} with
@@ -111,8 +108,8 @@ class ApiKeyLookupServiceIT {
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
-        // Runtime DataSource → APP_ADMIN_USER (EXEMPT ACCESS POLICY) so the
-        // native SELECT is not VPD-filtered, mirroring the post-removal state.
+        // Runtime DataSource → APP_ADMIN_USER, the production runtime user, so
+        // the native SELECT mirrors the post-VPD-removal state (no DB row filter).
         // APP_ADMIN also holds full DML on api_key/tenant for seeding.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
@@ -190,9 +187,9 @@ class ApiKeyLookupServiceIT {
     /**
      * With {@link TenantContextHolder} cleared (the authentication-time state),
      * the native {@code findByPrefix} must still return the seeded row — the
-     * JdbcTemplate SELECT does not pass through the Hibernate {@code @Filter},
-     * and APP_ADMIN_USER bypasses DB VPD, so a globally-unique prefix resolves
-     * to exactly one row regardless of context.
+     * JdbcTemplate SELECT does not pass through the Hibernate {@code @Filter}
+     * and (with Oracle VPD removed) no DB-kernel row filter applies, so a
+     * globally-unique prefix resolves to exactly one row regardless of context.
      */
     @Test
     void findByPrefix_returnsRow_withoutTenantContext() {

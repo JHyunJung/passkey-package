@@ -15,8 +15,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 /**
  * QW-1 (sec-admin-vpd-exempt-sole-layer) — cross-tenant 회귀 방지.
  *
- * <p>admin-app 은 VPD-EXEMPT(APP_ADMIN_USER)로 DB 에 접속하므로 cross-tenant
- * 격리가 애플리케이션 레벨 TenantBoundary 단일 계층에만 의존한다. 어느
+ * <p>VPD 제거됨 — admin-app 은 cross-tenant 리소스를 의도적으로 관리하므로
+ * cross-tenant 격리가 애플리케이션 레벨 TenantBoundary 단일 계층에만 의존한다. 어느
  * tenant-scoped 서비스가 boundary 참조를 통째로 잃으면 즉시 cross-tenant
  * 노출이므로, 그 회귀를 빌드 시점에 잡는다.
  *
@@ -47,8 +47,8 @@ class TenantBoundaryArchTest {
                 .should().dependOnClassesThat()
                 .haveFullyQualifiedName("com.crosscert.passkey.admin.auth.TenantBoundary")
                 .as("tenant-scoped admin services must reference TenantBoundary "
-                        + "(admin-app is VPD-EXEMPT; TenantBoundary is the sole "
-                        + "cross-tenant isolation layer)")
+                        + "(VPD removed; admin-app does cross-tenant queries, so "
+                        + "TenantBoundary is the sole cross-tenant isolation layer)")
                 .because("sec-admin-vpd-exempt-sole-layer: losing the boundary "
                         + "reference silently re-enables cross-tenant access");
 

@@ -14,7 +14,7 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 
-/** P0-4: end-user self-service credential 관리. tenant 격리는 VPD 가 담당. */
+/** P0-4: end-user self-service credential 관리. tenant 격리는 앱 레벨 @Filter 가 담당. */
 @Slf4j
 @Service
 @RequiredArgsConstructor

@@ -33,10 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@code CREDENTIAL.TENANT_ID}).
  *
  * <p>Boots a real Testcontainers Oracle XE 21 (same image/bootstrap as
- * {@link VpdIsolationIT}) so the Flyway schema and VPD policy are applied
- * identically. The test connects as APP_ADMIN_USER (EXEMPT ACCESS POLICY),
- * meaning Oracle VPD is bypassed; isolation is enforced purely by the
- * Hibernate filter enabled inside the test.
+ * {@link AppLevelIsolationIT}) so the Flyway schema is applied identically.
+ * Isolation is enforced purely by the Hibernate filter enabled inside the
+ * test — with Oracle VPD removed there is no DB-kernel layer.
  *
  * <p>Pass criterion: after enabling the filter with {@code tenantId = T_A},
  * querying {@code CredentialRepository.findAll()} must return only T_A's

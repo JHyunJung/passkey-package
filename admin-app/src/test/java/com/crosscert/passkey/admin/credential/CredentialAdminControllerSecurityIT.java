@@ -43,8 +43,8 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * Cross-tenant boundary 회귀 채널. admin-app 은 VPD 비활성이므로
- * service 의 entity.tenantId vs path.tenantId 비교가 단일 방어선.
+ * Cross-tenant boundary 회귀 채널. VPD 제거됨 — admin-app 은 cross-tenant 조회를
+ * 하므로 service 의 entity.tenantId vs path.tenantId 비교가 단일 방어선.
  *
  * 시나리오:
  *   1. tenant_A, tenant_B 생성

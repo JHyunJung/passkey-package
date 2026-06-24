@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * P0-4: RP 백엔드가 X-API-Key 인증 상태에서 특정 user(userHandle)의 passkey 를 관리.
- * tenant 격리는 ApiKeyAuthFilter 가 set 한 context + VPD 가 담당.
+ * tenant 격리는 ApiKeyAuthFilter 가 set 한 context + 앱 레벨 @Filter 가 담당.
  *
  * <p>응답은 다른 RP 컨트롤러(RegistrationController 등)와 동일하게
  * {@link ApiResponse} envelope 로 감싼다.

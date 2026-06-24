@@ -15,14 +15,15 @@ spring:
     default-schema: APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
-    # Flyway runs as schema owner APP_OWNER (same as admin-app / core ITs).
-    # APP_OWNER holds DDL privileges + EXECUTE ON DBMS_RLS + EXEMPT ACCESS POLICY,
-    # so it can apply all migrations including V3/V8 VPD policy setup.
-    # The runtime Spring DataSource below logs in as APP_RUNTIME_USER so
-    # VPD policies actually engage during scenario execution — which
-    # is the whole point of the cross-tenant-isolation scenario. Split
-    # credentials via spring.flyway.user/password keep migration and
-    # runtime separate within a single Spring Boot context.
+    # Flyway runs as schema owner APP_OWNER (same as admin-app / core ITs),
+    # so it can apply all migrations (including the V3/V8/V52 no-op/cleanup
+    # migrations left over from the removed Oracle VPD).
+    # The runtime Spring DataSource below logs in as APP_RUNTIME_USER, the
+    # production-realistic least-privilege runtime user, so the request path
+    # exercises the same app-level @Filter isolation as production — the
+    # whole point of the cross-tenant-isolation scenario. Split credentials
+    # via spring.flyway.user/password keep migration and runtime separate
+    # within a single Spring Boot context.
     user: APP_OWNER
     password: app_owner_pw
   jpa:

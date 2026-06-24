@@ -17,8 +17,8 @@ import java.util.UUID;
  * Hibernate {@code tenantFilter}를 enable 한다. context가 null 이면 enable 하지
  * 않는다(=cross-tenant; admin PLATFORM_OPERATOR 케이스).
  *
- * <p>VPD와 독립적인 앱 레벨 격리의 중앙 hook. VPD off(Oracle SE2) 에서도 이 Aspect가
- * tenant 격리를 보장한다.
+ * <p>앱 레벨 tenant 격리의 중앙 hook. Oracle VPD 제거 후 유일한 격리 메커니즘으로,
+ * 모든 Oracle 에디션(EE/XE/SE2)에서 이 Aspect 가 tenant 격리를 보장한다.
  *
  * <h2>@Order 결정: {@code Ordered.LOWEST_PRECEDENCE}</h2>
  *
