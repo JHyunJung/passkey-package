@@ -101,12 +101,8 @@ WHERE t.slug = 'dev-passkey'
     SELECT 1 FROM tenant_webauthn_snapshot s WHERE s.tenant_id = t.id
   );
 
--- 6. api_key (VPD)
-BEGIN
-  APP_OWNER.CTX_PKG.set_tenant('7F00DEAD000000000000000DE7000001');
-END;
-/
-
+-- 6. api_key — tenant_id 를 명시 INSERT 한다. (VPD 제거됨: 과거엔 update_check 통과를
+--    위해 CTX_PKG.set_tenant 로 컨텍스트를 설정했으나, 이제 불필요.)
 INSERT INTO api_key (id, tenant_id, key_prefix, key_hash, name, created_at)
 SELECT
   HEXTORAW('7F00DEAD000000000000000DE700AA01'),
@@ -121,11 +117,6 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE id = HEXTORAW('7F00DEAD000000000000000D
     SELECT 1 FROM api_key WHERE key_prefix = 'pk_devsrv01'
         OR id = HEXTORAW('7F00DEAD000000000000000DE700AA01')
   );
-
-BEGIN
-  APP_OWNER.CTX_PKG.clear_tenant;
-END;
-/
 
 -- 7. api_key_scope
 INSERT INTO api_key_scope (id, api_key_id, scope)

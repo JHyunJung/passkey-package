@@ -53,7 +53,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 GRANT CREATE SESSION TO APP_ADMIN;
-GRANT EXEMPT ACCESS POLICY TO APP_ADMIN;
 
 -- ============================================================
 -- APP_OWNER privileges (schema owner) — one GRANT per privilege.
@@ -64,12 +63,8 @@ GRANT CREATE TABLE         TO APP_OWNER;
 GRANT CREATE SEQUENCE      TO APP_OWNER;
 GRANT CREATE PROCEDURE     TO APP_OWNER;
 GRANT CREATE TRIGGER       TO APP_OWNER;
-GRANT CREATE ANY CONTEXT   TO APP_OWNER;
 GRANT UNLIMITED TABLESPACE TO APP_OWNER;
-GRANT EXECUTE ON DBMS_RLS     TO APP_OWNER;
-GRANT EXECUTE ON DBMS_SESSION TO APP_OWNER;
 GRANT CREATE VIEW          TO APP_OWNER;
-GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
 
 -- ============================================================
 -- Users (runtime = APP_RUNTIME_USER, admin = APP_ADMIN_USER)
@@ -90,30 +85,7 @@ END;
 /
 GRANT APP_ADMIN TO APP_ADMIN_USER;
 
--- ============================================================
--- CTX_PKG package + APP_CTX namespace (owned by APP_OWNER)
--- ============================================================
-CREATE OR REPLACE PACKAGE APP_OWNER.CTX_PKG AS
-  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2);
-  PROCEDURE clear_tenant;
-END;
-/
-
-CREATE OR REPLACE PACKAGE BODY APP_OWNER.CTX_PKG AS
-  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2) IS
-  BEGIN
-    DBMS_SESSION.SET_CONTEXT('APP_CTX', 'TENANT_ID', p_tenant_hex);
-  END;
-  PROCEDURE clear_tenant IS
-  BEGIN
-    DBMS_SESSION.CLEAR_CONTEXT('APP_CTX', NULL, 'TENANT_ID');
-  END;
-END;
-/
-
-CREATE OR REPLACE CONTEXT APP_CTX USING APP_OWNER.CTX_PKG;
-
-GRANT EXECUTE ON APP_OWNER.CTX_PKG TO APP_RUNTIME;
-GRANT EXECUTE ON APP_OWNER.CTX_PKG TO APP_ADMIN;
+-- (VPD 제거됨) — 과거엔 CTX_PKG 패키지 + APP_CTX 컨텍스트를 생성했습니다. VPD 가
+-- 제거되어 더 이상 만들지 않습니다. 테넌트 격리는 앱 레벨 Hibernate @Filter.
 
 EXIT;

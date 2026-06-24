@@ -1,8 +1,9 @@
 -- Phase 0 bootstrap. Runs once as SYS(SYSDBA) after `docker compose up -d`.
 -- 스키마 소유자(APP_OWNER) + 런타임/어드민 유저·권한 부트스트랩.
--- VPD 인프라(DBMS_RLS GRANT·CTX_PKG·APP_CTX)는 Task 7 까지 잔존한다 —
--- 마이그레이션(V3/V8/V20/V35)이 DBMS_RLS.ADD_POLICY 를 static 참조하므로
--- 그 참조가 사라진 뒤(Task 7)에 제거. 테넌트 격리는 앱 레벨(Hibernate @Filter).
+-- VPD 는 제거됨 — 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect)가
+-- 전담한다. DBMS_RLS GRANT·CTX_PKG·APP_CTX·EXEMPT ACCESS POLICY 는 더 이상 만들지
+-- 않는다(과거 잔재는 V52__drop_vpd.sql 이 제거). 유저 3분할(APP_OWNER/APP_RUNTIME_
+-- USER/APP_ADMIN_USER)은 최소권한(테이블별 GRANT·DDL 격리)을 위해 유지한다.
 -- The APP_OWNER user is created by docker-compose's APP_USER env var.
 --
 -- Idempotency: every statement is safe to re-run. Roles/users use PL/SQL
@@ -35,8 +36,8 @@ END;
 /
 GRANT CREATE SESSION TO APP_RUNTIME;
 
--- APP_ADMIN: admin-app runtime + scheduler. EXEMPT ACCESS POLICY allows
--- cross-tenant admin queries (Flyway now runs as APP_OWNER).
+-- APP_ADMIN: admin-app runtime + scheduler. Cross-tenant admin queries are
+-- handled at the app layer (explicit tenant_id checks); Flyway runs as APP_OWNER.
 BEGIN
   EXECUTE IMMEDIATE 'CREATE ROLE APP_ADMIN';
 EXCEPTION WHEN OTHERS THEN
@@ -46,7 +47,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 GRANT CREATE SESSION TO APP_ADMIN;
-GRANT EXEMPT ACCESS POLICY TO APP_ADMIN;
 
 -- ============================================================
 -- APP_OWNER privileges (schema owner)
@@ -59,12 +59,8 @@ GRANT CREATE TABLE         TO APP_OWNER;
 GRANT CREATE SEQUENCE      TO APP_OWNER;
 GRANT CREATE PROCEDURE     TO APP_OWNER;
 GRANT CREATE TRIGGER       TO APP_OWNER;
-GRANT CREATE ANY CONTEXT   TO APP_OWNER;
 GRANT UNLIMITED TABLESPACE TO APP_OWNER;
-GRANT EXECUTE ON DBMS_RLS     TO APP_OWNER;
-GRANT EXECUTE ON DBMS_SESSION TO APP_OWNER;
 GRANT CREATE VIEW          TO APP_OWNER;
-GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
 
 -- ============================================================
 -- Users
@@ -90,40 +86,8 @@ END;
 /
 GRANT APP_ADMIN TO APP_ADMIN_USER;
 
--- ============================================================
--- CTX_PKG package + APP_CTX namespace (owned by APP_OWNER)
--- Created from SYS session via schema-qualified DDL; no CONNECT needed.
--- ============================================================
-
-CREATE OR REPLACE PACKAGE APP_OWNER.CTX_PKG AS
-  -- Phase 6: tenant_id is now RAW(16). Callers pass 32-char hex string
-  -- (no dashes). VPD policy function uses HEXTORAW() to compare.
-  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2);
-  PROCEDURE clear_tenant;
-END;
-/
-
-CREATE OR REPLACE PACKAGE BODY APP_OWNER.CTX_PKG AS
-  PROCEDURE set_tenant(p_tenant_hex IN VARCHAR2) IS
-  BEGIN
-    DBMS_SESSION.SET_CONTEXT('APP_CTX', 'TENANT_ID', p_tenant_hex);
-  END;
-  PROCEDURE clear_tenant IS
-  BEGIN
-    -- Signature: CLEAR_CONTEXT(namespace, client_id, attribute).
-    -- CLIENT_ID must be NULL so we target the session attribute,
-    -- not a client-identifier-scoped value. Pass positionally to avoid
-    -- name drift across Oracle versions.
-    DBMS_SESSION.CLEAR_CONTEXT('APP_CTX', NULL, 'TENANT_ID');
-  END;
-END;
-/
-
--- Context namespace must reference APP_OWNER.CTX_PKG (the trusted package
--- that sets/clears it). Created with CREATE ANY CONTEXT from SYS.
-CREATE OR REPLACE CONTEXT APP_CTX USING APP_OWNER.CTX_PKG;
-
-GRANT EXECUTE ON APP_OWNER.CTX_PKG TO APP_RUNTIME;
-GRANT EXECUTE ON APP_OWNER.CTX_PKG TO APP_ADMIN;
+-- (VPD 제거됨) — 과거엔 여기서 CTX_PKG 패키지와 APP_CTX 컨텍스트를 생성해 VPD
+-- predicate 가 SYS_CONTEXT('APP_CTX','TENANT_ID') 로 테넌트를 읽게 했습니다. VPD
+-- 가 제거되어 더 이상 만들지 않습니다. 테넌트 격리는 앱 레벨 Hibernate @Filter.
 
 EXIT;
