@@ -15,8 +15,9 @@
 WHENEVER OSERROR EXIT FAILURE
 WHENEVER SQLERROR EXIT SQL.SQLCODE
 
--- 서비스/PDB 명: 호출측(reset-app-owner.sh)에서 DEFINE ora_service=... 로 주입, 미주입 시 XEPDB1
-DEFINE ora_service = XEPDB1
+-- 서비스/PDB 명: 호출측(reset-app-owner.sh)에서 DEFINE ora_service=... 로 주입 필수.
+-- SQL 파일에 in-file DEFINE 이 없으므로 호출측 주입이 유일 정의가 된다.
+-- 직접 실행 시엔 먼저 `DEFINE ora_service = <PDB명>` 을 선행 실행하라.
 ALTER SESSION SET CONTAINER = &ora_service;
 
 SET SERVEROUTPUT ON SIZE UNLIMITED

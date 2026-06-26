@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORA_SERVICE="${ORA_SERVICE:-XEPDB1}"
 # Prepend DEFINE so bootstrap-schema.sql 내의 &ora_service 가 채워진다.
-# 셸이 DEFINE 을 override 하므로 SQL 파일 자체의 안전 기본값보다 우선한다.
+# SQL 파일에 in-file DEFINE 이 없으므로 이 주입이 유일 정의가 된다.
 { echo "DEFINE ora_service = ${ORA_SERVICE}"; cat "${SCRIPT_DIR}/bootstrap-schema.sql"; } | \
   docker exec -i passkey-oracle \
     sqlplus -S sys/oracle@localhost:1521/${ORA_SERVICE} as sysdba
