@@ -1,11 +1,9 @@
 -- reset-app-owner.sql — APP_OWNER 스키마의 모든 객체를 SYS(SYSDBA) 세션에서 DROP 한다.
 --
 -- 컨테이너/볼륨/유저(APP_OWNER, APP_RUNTIME_USER, APP_ADMIN_USER)/role 은 건드리지
--- 않는다. 스키마 안의 테이블·시퀀스·패키지·컨텍스트·트리거·뷰·(과거 EE 잔재) VPD
--- 정책만 비운다. VPD 제거됨 — 테넌트 격리는 앱 레벨 Hibernate @Filter 가 전담한다.
--- 실행 후에는 run-bootstrap.sh 로 스키마/role 을 재생성하고 Flyway 로 다시
--- 마이그레이션한다(reset-app-owner.sh 가 자동으로 수행). bootstrap 은 더 이상
--- CTX_PKG/APP_CTX/VPD 인프라를 만들지 않는다.
+-- 않는다. 스키마 안의 테이블·시퀀스·패키지·컨텍스트·트리거·뷰·과거 EE 잔재 VPD 정책만 비운다.
+-- 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect) 전담 (VPD/DBMS_RLS 미사용, SE2 호환).
+-- 실행 후에는 run-bootstrap.sh 로 스키마/role 을 재생성하고 Flyway 로 다시 마이그레이션한다.
 --
 -- 멱등성(idempotent): 객체가 없어도 실패하지 않도록 모든 DROP 을 데이터 딕셔너리
 -- 기반 동적 루프로 감싸고, "이미 없음" 류 오류는 무시한다. 여러 번 재실행해도 안전.
@@ -17,7 +15,9 @@
 WHENEVER OSERROR EXIT FAILURE
 WHENEVER SQLERROR EXIT SQL.SQLCODE
 
-ALTER SESSION SET CONTAINER = XEPDB1;
+-- 서비스/PDB 명: 호출측(reset-app-owner.sh)에서 DEFINE ora_service=... 로 주입, 미주입 시 XEPDB1
+DEFINE ora_service = XEPDB1
+ALTER SESSION SET CONTAINER = &ora_service;
 
 SET SERVEROUTPUT ON SIZE UNLIMITED
 

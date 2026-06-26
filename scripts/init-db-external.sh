@@ -94,6 +94,7 @@ else
 DEFINE app_owner_pw = "${APP_OWNER_PW}"
 DEFINE runtime_pw   = "${RUNTIME_PW}"
 DEFINE admin_pw     = "${ADMIN_PW}"
+DEFINE ora_service  = ${ORA_SERVICE}
 @${SCRIPT_DIR}/bootstrap-external-body.sql
 SQL
   echo "    부트스트랩 완료."

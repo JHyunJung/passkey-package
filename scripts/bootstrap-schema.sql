@@ -1,9 +1,7 @@
 -- Phase 0 bootstrap. Runs once as SYS(SYSDBA) after `docker compose up -d`.
 -- 스키마 소유자(APP_OWNER) + 런타임/어드민 유저·권한 부트스트랩.
--- VPD 는 제거됨 — 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect)가
--- 전담한다. DBMS_RLS GRANT·CTX_PKG·APP_CTX·EXEMPT ACCESS POLICY 는 더 이상 만들지
--- 않는다(과거 잔재는 V52__drop_vpd.sql 이 제거). 유저 3분할(APP_OWNER/APP_RUNTIME_
--- USER/APP_ADMIN_USER)은 최소권한(테이블별 GRANT·DDL 격리)을 위해 유지한다.
+-- 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect) 전담 (VPD/DBMS_RLS 미사용, SE2 호환).
+-- 유저 3분할(APP_OWNER/APP_RUNTIME_USER/APP_ADMIN_USER)은 최소권한(테이블별 GRANT·DDL 격리)을 위해 유지한다.
 -- The APP_OWNER user is created by docker-compose's APP_USER env var.
 --
 -- Idempotency: every statement is safe to re-run. Roles/users use PL/SQL
@@ -18,7 +16,9 @@
 WHENEVER OSERROR EXIT FAILURE
 WHENEVER SQLERROR EXIT SQL.SQLCODE
 
-ALTER SESSION SET CONTAINER = XEPDB1;
+-- 서비스/PDB 명: 호출측(run-bootstrap.sh)에서 DEFINE ora_service=... 로 주입, 미주입 시 XEPDB1
+DEFINE ora_service = XEPDB1
+ALTER SESSION SET CONTAINER = &ora_service;
 
 -- ============================================================
 -- Roles
@@ -87,8 +87,6 @@ END;
 /
 GRANT APP_ADMIN TO APP_ADMIN_USER;
 
--- (VPD 제거됨) — 과거엔 여기서 CTX_PKG 패키지와 APP_CTX 컨텍스트를 생성해 VPD
--- predicate 가 SYS_CONTEXT('APP_CTX','TENANT_ID') 로 테넌트를 읽게 했습니다. VPD
--- 가 제거되어 더 이상 만들지 않습니다. 테넌트 격리는 앱 레벨 Hibernate @Filter.
+-- 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect) 전담 (CTX_PKG/APP_CTX 미생성).
 
 EXIT;

@@ -8,5 +8,7 @@
 DEFINE app_owner_pw = ""
 DEFINE runtime_pw   = ""
 DEFINE admin_pw     = ""
+-- 서비스/PDB 명: DBeaver 수동 실행 시 실제 PDB 명으로 변경. 기본값 XEPDB1.
+DEFINE ora_service  = XEPDB1
 
 @@bootstrap-external-body.sql
