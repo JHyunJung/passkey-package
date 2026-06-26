@@ -30,6 +30,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROFILE="${PROFILE:-local}"
 ORACLE_CONTAINER="${ORACLE_CONTAINER:-passkey-oracle}"
+ORA_SERVICE="${ORA_SERVICE:-XEPDB1}"
 
 # init-dev-db.sh 와 동일하게 compose project name 을 고정(worktree 충돌 방지).
 COMPOSE="docker compose -p passkey2"
@@ -84,9 +85,9 @@ fi
 cd "${REPO_ROOT}"
 
 echo "==> [1/3] APP_OWNER 객체 DROP (SYS 세션)"
-docker exec -i "${ORACLE_CONTAINER}" \
-  sqlplus -S sys/oracle@localhost:1521/XEPDB1 as sysdba \
-  < "${SCRIPT_DIR}/reset-app-owner.sql"
+{ echo "DEFINE ora_service = ${ORA_SERVICE}"; cat "${SCRIPT_DIR}/reset-app-owner.sql"; } | \
+  docker exec -i "${ORACLE_CONTAINER}" \
+    sqlplus -S sys/oracle@localhost:1521/${ORA_SERVICE} as sysdba
 
 echo "==> [2/3] role/스키마 재부트스트랩"
 bash "${SCRIPT_DIR}/run-bootstrap.sh"

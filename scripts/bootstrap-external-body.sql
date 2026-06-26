@@ -8,9 +8,10 @@
 WHENEVER OSERROR EXIT FAILURE
 WHENEVER SQLERROR EXIT SQL.SQLCODE
 
--- 외부 Oracle 이 단일 인스턴스(non-CDB)면 이 줄에서 ORA-65040 등이 날 수 있다.
--- 그 경우 이 줄을 주석 처리하라(이미 올바른 컨테이너/스키마에 접속한 상태).
-ALTER SESSION SET CONTAINER = XEPDB1;
+-- 서비스/PDB 명: 호출측(init-db-external.sh 또는 bootstrap-external.sql wrapper)에서
+-- DEFINE ora_service=... 로 주입 필수. SQL 파일에 in-file DEFINE 이 없으므로 주입이 유일 정의.
+-- non-CDB 인스턴스에서는 이 줄에서 ORA-65040 이 날 수 있다 — 그 경우 이 줄을 주석 처리하라.
+ALTER SESSION SET CONTAINER = &ora_service;
 
 -- 빈 값 가드: 하나라도 비면 즉시 중단 (Oracle '' IS NULL → fail-closed).
 -- WHENEVER SQLERROR EXIT(상단)이 이 RAISE 를 비0 종료로 만든다.
@@ -85,7 +86,6 @@ END;
 /
 GRANT APP_ADMIN TO APP_ADMIN_USER;
 
--- (VPD 제거됨) — 과거엔 CTX_PKG 패키지 + APP_CTX 컨텍스트를 생성했습니다. VPD 가
--- 제거되어 더 이상 만들지 않습니다. 테넌트 격리는 앱 레벨 Hibernate @Filter.
+-- 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect) 전담 (CTX_PKG/APP_CTX 미생성).
 
 EXIT;
