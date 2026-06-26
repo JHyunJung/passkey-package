@@ -781,6 +781,14 @@ GRANT SELECT ON v_tenant_allowed_origin TO APP_RUNTIME;
 GRANT SELECT ON v_tenant_webauthn_snapshot TO APP_ADMIN;
 GRANT SELECT ON v_tenant_webauthn_snapshot TO APP_RUNTIME;
 
+-- 컬럼 스코프 UPDATE GRANT (원본 V7/V15/V19/V22/V46/V50 — 최소권한 유지, 테이블 전체로 넓히지 말 것)
+GRANT UPDATE(status, rotated_at, revoked_at) ON signing_key TO APP_ADMIN;
+GRANT UPDATE(updated_at) ON signing_key TO APP_ADMIN;
+GRANT UPDATE(last_used_at) ON api_key TO APP_RUNTIME;
+GRANT UPDATE(updated_at) ON api_key TO APP_RUNTIME;
+GRANT UPDATE (tenant_hash, tenant_prev_hash) ON audit_log TO APP_ADMIN;
+GRANT UPDATE (status, resolved_at, resolved_by, resolution_note) ON security_incident TO APP_ADMIN;
+
 
 -- ============================================================
 -- 7. 인프라 시드 (환경 무관 3개)
