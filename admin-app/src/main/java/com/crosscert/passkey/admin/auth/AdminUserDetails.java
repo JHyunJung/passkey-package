@@ -7,11 +7,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Spring Security principal — login 시 AdminUserDetailsService 가 채워서
- * SecurityContext 에 박는다. tenantId 가 null 이면 PLATFORM_OPERATOR.
+ * SecurityContext 에 박는다. PLATFORM_OPERATOR 는 allowedTenantIds 가 빈 Set.
  *
  * Service 계층은 SecurityContextHolder 에서 이 객체를 꺼내 tenant boundary 검사.
  */
@@ -21,27 +22,27 @@ public final class AdminUserDetails implements UserDetails {
     private final String email;
     private final String passwordHash;
     private final String role;          // "PLATFORM_OPERATOR" | "RP_ADMIN"
-    private final UUID tenantId;        // RP_ADMIN 은 non-null
+    private final Set<UUID> allowedTenantIds;   // PLATFORM_OPERATOR 는 빈 Set
     private final boolean enabled;
     private final java.time.OffsetDateTime lockedUntil;
     private final java.time.Clock clock;
 
     public AdminUserDetails(UUID id, String email, String passwordHash,
-                            String role, UUID tenantId, boolean enabled,
+                            String role, Set<UUID> allowedTenantIds, boolean enabled,
                             java.time.OffsetDateTime lockedUntil, java.time.Clock clock) {
         this.id = Objects.requireNonNull(id);
         this.email = Objects.requireNonNull(email);
         this.passwordHash = Objects.requireNonNull(passwordHash);
         this.role = Objects.requireNonNull(role);
-        this.tenantId = tenantId;
+        this.allowedTenantIds = Set.copyOf(Objects.requireNonNull(allowedTenantIds));
         this.enabled = enabled;
         this.lockedUntil = lockedUntil;
         this.clock = Objects.requireNonNull(clock);
     }
 
-    public UUID getId()       { return id; }
-    public String getRole()   { return role; }
-    public UUID getTenantId() { return tenantId; }
+    public UUID getId()                        { return id; }
+    public String getRole()                    { return role; }
+    public Set<UUID> getAllowedTenantIds()      { return allowedTenantIds; }
 
     public boolean isPlatformOperator() { return "PLATFORM_OPERATOR".equals(role); }
     public boolean isRpAdmin()          { return "RP_ADMIN".equals(role); }

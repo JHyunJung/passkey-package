@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * SPA bootstrap call. AdminUserDetails 에서 email/role/tenantId 추출.
  *
@@ -47,10 +50,11 @@ public class MeController {
             idleMinutes = session.getMaxInactiveInterval() / 60;
         }
 
+        List<java.util.UUID> tenantIds = new ArrayList<>(principal.getAllowedTenantIds());
         return ApiResponse.ok(new MeView(
                 principal.getUsername(),
                 principal.getRole(),
-                principal.getTenantId(),
+                tenantIds,
                 mfaEnabled,
                 mfaRequired,
                 idleMinutes
