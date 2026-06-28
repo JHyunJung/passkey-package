@@ -1,10 +1,7 @@
 package com.crosscert.passkey.core.entity;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "ADMIN_USER")
@@ -21,13 +18,6 @@ public class AdminUser extends BaseEntity {
 
     @Column(name = "ENABLED", columnDefinition = "CHAR(1)", nullable = false)
     private String enabledFlag;
-
-    // tenant 격리에서 의도적 제외: tenantId nullable (PLATFORM_OPERATOR=NULL).
-    // @Filter(tenant_id=:tenantId)를 걸면 NULL row가 가려져 로그인/운영자 조회가 깨진다.
-    // 격리는 앱 레벨 TenantBoundary 게이팅이 담당.
-    @Column(name = "tenant_id", columnDefinition = "RAW(16)")
-    @JdbcTypeCode(SqlTypes.UUID)
-    private UUID tenantId;
 
     @Column(name = "LAST_LOGIN_AT")
     private OffsetDateTime lastLoginAt;
@@ -95,9 +85,6 @@ public class AdminUser extends BaseEntity {
 
     public boolean isPlatformOperator() { return "PLATFORM_OPERATOR".equals(role); }
     public boolean isRpAdmin()          { return "RP_ADMIN".equals(role); }
-
-    public UUID getTenantId() { return tenantId; }
-    public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
