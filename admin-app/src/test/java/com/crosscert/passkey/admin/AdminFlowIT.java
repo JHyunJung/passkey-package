@@ -155,7 +155,7 @@ class AdminFlowIT {
         // FK chain: api_key.tenant_id → tenant.id; credential.tenant_id →
         // tenant.id. audit_log has no FK. admin_user (V11 seed) is left
         // untouched so alice/bob stay logged-in-able across test runs.
-        // V23 added admin_user.tenant_id FK → tenant.id: null it out before
+        // admin_user_tenant.tenant_id → tenant.id: delete mapping rows before
         // deleting tenants so the FK constraint is not violated.
         // Child tables (api_key_scope, tenant_allowed_origin, tenant_accepted_format)
         // use ON DELETE CASCADE from their parent FKs, so deleting the
@@ -170,9 +170,9 @@ class AdminFlowIT {
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
         jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
-        // NULL out admin_user.tenant_id before deleting tenants (V23 FK —
-        // fk_admin_user_tenant blocks DELETE FROM tenant while child rows exist)
-        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+        // admin_user_tenant 매핑 먼저 삭제 (FK: admin_user_tenant.tenant_id → tenant.id)
+        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role <> 'PLATFORM_OPERATOR'");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
         // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
         // bob (RP_ADMIN) needs this tenant to exist and be assigned to him.
@@ -195,12 +195,20 @@ class AdminFlowIT {
                 INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
                 """);
-        // Re-assign bob to demo-rp as RP_ADMIN (mirrors V23 step 9)
+        // bob 을 demo-rp 의 RP_ADMIN 으로 재할당 (role + admin_user_tenant 매핑)
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
-                   SET role = 'RP_ADMIN',
-                       tenant_id = HEXTORAW('0000000000000000000000000000C0DE')
+                   SET role = 'RP_ADMIN'
                  WHERE email = 'bob@crosscert.com'
+                """);
+        jdbc.update("""
+                MERGE INTO APP_OWNER.admin_user_tenant t
+                USING (SELECT HEXTORAW('00000000000000000000000000000011') AS aid,
+                              HEXTORAW('0000000000000000000000000000C0DE') AS tid FROM dual) s
+                   ON (t.admin_user_id = s.aid AND t.tenant_id = s.tid)
+                 WHEN NOT MATCHED THEN
+                   INSERT (admin_user_id, tenant_id, created_at, created_by)
+                   VALUES (s.aid, s.tid, SYSTIMESTAMP, 'it')
                 """);
         // Close the connection explicitly — RedisConnection isn't
         // AutoCloseable in Spring Data 3.x.
