@@ -76,7 +76,22 @@ public class TenantBoundary {
         if (me.isPlatformOperator()) return Optional.empty();
         if (me.isRpAdmin()) {
             UUID active = activeTenantResolver.resolve(me);
-            return active == null ? Optional.empty() : Optional.of(active);
+            // fail-closed: RP_ADMIN 의 active 가 null 이면(=allowedTenantIds 비어 매핑 0개)
+            // empty 를 반환하면 @Filter 가 꺼져 전체 테넌트가 노출된다(fail-open). RP_ADMIN 은
+            // 매핑 ≥1 이 앱 레벨 불변식이므로 여기 도달은 비정상 — 전체 노출 대신 차단한다.
+            // (assertCanAccessTenant 의 RP_ADMIN 분기와 동일하게 fail-closed.)
+            if (active == null) {
+                log.warn("tenant boundary violation: actor={} role=RP_ADMIN scope=list active=none",
+                        CryptoUtils.maskEmail(me.getUsername()));
+                publishViolation(Map.of(
+                        "actor", CryptoUtils.maskEmail(me.getUsername()),
+                        "role", "RP_ADMIN",
+                        "scope", "list",
+                        "active", "none"));
+                throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                        "RP_ADMIN has no active tenant");
+            }
+            return Optional.of(active);
         }
         log.warn("tenant boundary violation: actor={} role={} scope=list allowed=none",
                 CryptoUtils.maskEmail(me.getUsername()), me.getRole());

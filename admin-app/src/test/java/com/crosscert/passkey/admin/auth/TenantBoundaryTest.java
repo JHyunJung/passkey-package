@@ -62,6 +62,17 @@ class TenantBoundaryTest {
     }
 
     @Test
+    void scopeFailsClosedWhenRpAdminHasNoActiveTenant() {
+        // 비정상 상태(매핑 0개) — fail-open(전체 노출) 대신 ACCESS_DENIED 여야 한다.
+        UUID a = UUID.randomUUID();
+        AdminUserDetails me = rpAdmin(Set.of(a));
+        login(me);
+        when(activeTenant.resolve(me)).thenReturn(null);
+        assertThatThrownBy(() -> boundary.currentTenantScope())
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
     void scopeEmptyForPlatformOperator() {
         AdminUserDetails me = new AdminUserDetails(UUID.randomUUID(), "ops@x.com", "hash",
                 "PLATFORM_OPERATOR", Set.of(), true, null, Clock.systemUTC());
