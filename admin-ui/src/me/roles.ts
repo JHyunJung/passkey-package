@@ -10,7 +10,7 @@ export function isRpAdmin(me: Me): boolean {
   return me.role === 'RP_ADMIN';
 }
 
-/** RP_ADMIN 의 테넌트 id. PLATFORM 이거나 tenantId 누락(데이터 이상) 시 null. */
+/** RP_ADMIN 의 첫 번째(활성) 테넌트 id. PLATFORM 이거나 tenantIds 비어있으면 null. */
 export function rpTenantId(me: Me): string | null {
-  return me.role === 'RP_ADMIN' ? me.tenantId : null;
+  return me.role === 'RP_ADMIN' && me.tenantIds.length > 0 ? me.tenantIds[0] : null;
 }

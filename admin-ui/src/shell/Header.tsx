@@ -1,6 +1,10 @@
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import { Breadcrumb } from './Breadcrumb';
+import { activeTenantApi } from '@/api/activeTenant';
+import type { ActiveTenantView } from '@/api/activeTenant';
+import { tenantsApi } from '@/api/tenants';
+import type { Tenant } from '@/api/designTypes';
 
 // ===== MenuItem (private helper) =====
 type MenuItemProps = {
@@ -22,6 +26,114 @@ function MenuItem({ icon, label, onClick }: MenuItemProps) {
   );
 }
 
+// ===== RpSwitcher =====
+// Shown only when allowedTenantIds.length >= 2 (RP_ADMIN with multiple tenants).
+// Fetches tenant names for label display.
+
+type RpSwitcherProps = {
+  onSwitch: () => void;
+};
+
+function RpSwitcher({ onSwitch }: RpSwitcherProps) {
+  const [activeTenant, setActiveTenant] = useState<ActiveTenantView | null>(null);
+  const [tenantMap, setTenantMap] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    activeTenantApi.get()
+      .then(setActiveTenant)
+      .catch(() => { /* non-critical — hide switcher on error */ });
+
+    tenantsApi.list()
+      .then((list: Tenant[]) => {
+        const map: Record<string, string> = {};
+        list.forEach((t) => { map[t.id] = t.name; });
+        setTenantMap(map);
+      })
+      .catch(() => { /* labels fall back to id suffix */ });
+  }, []);
+
+  // Only show when >= 2 allowed tenants
+  if (!activeTenant || activeTenant.allowedTenantIds.length < 2) return null;
+
+  const activeLabel = activeTenant.activeTenantId
+    ? (tenantMap[activeTenant.activeTenantId] ?? activeTenant.activeTenantId.slice(-8))
+    : '—';
+
+  async function handleSwitch(tenantId: string) {
+    if (tenantId === activeTenant?.activeTenantId) { setOpen(false); return; }
+    setSwitching(true);
+    try {
+      await activeTenantApi.switch(tenantId);
+      setOpen(false);
+      onSwitch();
+    } catch {
+      // silently ignore — no toast here, caller can add if needed
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        className="btn btn--ghost"
+        disabled={switching}
+        onClick={() => setOpen((v) => !v)}
+        style={{ padding: '4px 8px', gap: 6, fontSize: 12 }}
+        title="RP 전환"
+      >
+        <Icons.Building size={14} />
+        <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {switching ? '전환 중…' : activeLabel}
+        </span>
+        <Icons.ChevronDown size={12} />
+      </button>
+      {open && (
+        <>
+          <div onMouseDown={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, marginTop: 6,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 10, boxShadow: 'var(--shadow-lg)',
+            minWidth: 220, zIndex: 31, overflow: 'hidden',
+          }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-mute)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              RP 전환
+            </div>
+            <div style={{ padding: 4 }}>
+              {activeTenant.allowedTenantIds.map((id) => {
+                const label = tenantMap[id] ?? id.slice(-8);
+                const isActive = id === activeTenant.activeTenantId;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => void handleSwitch(id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                      padding: '8px 10px', border: 0, borderRadius: 6,
+                      background: isActive ? 'var(--accent-soft)' : 'transparent',
+                      color: isActive ? 'var(--accent)' : 'var(--text)',
+                      cursor: 'pointer', fontSize: 13, textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--surface-3)'; }}
+                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    {isActive && <Icons.Check size={12} />}
+                    {!isActive && <span style={{ width: 12 }} />}
+                    <span style={{ flex: 1 }}>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ===== Header =====
 type HeaderProps = {
   me: { role: string; email: string; displayName?: string };
@@ -29,9 +141,10 @@ type HeaderProps = {
   onSwitchRole?: () => void;
   breadcrumb: { label: ReactNode; onClick?: () => void }[];
   onOpenPalette: () => void;
+  onRpSwitch?: () => void;
 };
 
-export function Header({ me, onLogout, onSwitchRole, breadcrumb, onOpenPalette }: HeaderProps) {
+export function Header({ me, onLogout, onSwitchRole, breadcrumb, onOpenPalette, onRpSwitch }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <header style={{
@@ -42,6 +155,11 @@ export function Header({ me, onLogout, onSwitchRole, breadcrumb, onOpenPalette }
     }}>
       <Breadcrumb items={breadcrumb} />
       <div className="spacer" />
+
+      {/* RP switcher — shown only for RP_ADMIN with ≥2 tenants */}
+      {me.role === 'RP_ADMIN' && (
+        <RpSwitcher onSwitch={onRpSwitch ?? (() => window.location.reload())} />
+      )}
 
       {/* Global search — opens command palette */}
       <button onClick={onOpenPalette} style={{

@@ -1,7 +1,8 @@
 export interface Me {
   email: string;
   role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
-  tenantId: string | null;
+  /** /me 응답의 tenantIds (복수). RP_ADMIN은 ≥1개, PLATFORM_OPERATOR는 빈 배열. */
+  tenantIds: string[];
   mfaEnabled: boolean;
   mfaRequired: boolean;
   sessionIdleTimeoutMinutes: number;
@@ -327,7 +328,7 @@ export type AdminUserView = {
   email: string;
   role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
   status: AdminUserStatus;
-  tenantId: string | null;
+  tenantIds: string[];
   createdAt: string;
   lastLoginAt: string | null;
   suspendedAt: string | null;
@@ -337,7 +338,7 @@ export type AdminUserView = {
 export type InviteRequest = {
   email: string;
   role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
-  tenantId?: string;
+  tenantIds: string[];
 };
 
 export type InvitationInfo = {
@@ -355,6 +356,6 @@ export type InviteResponse = {
 export type InvitationCheck = {
   email: string;
   role: string;
-  tenantId: string | null;
+  tenantIds: string[];
   expiresAt: string;
 };

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { isPlatform, isRpAdmin, rpTenantId } from './roles';
 import type { Me } from '@/api/types';
 
-const platform: Me = { email: 'a@x.com', role: 'PLATFORM_OPERATOR', tenantId: null, mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
-const rp: Me = { email: 'b@x.com', role: 'RP_ADMIN', tenantId: 'tid-123', mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
+const platform: Me = { email: 'a@x.com', role: 'PLATFORM_OPERATOR', tenantIds: [], mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
+const rp: Me = { email: 'b@x.com', role: 'RP_ADMIN', tenantIds: ['tid-123'], mfaEnabled: false, mfaRequired: false, sessionIdleTimeoutMinutes: 30 };
 
 describe('roles', () => {
   it('isPlatform', () => {
@@ -18,8 +18,8 @@ describe('roles', () => {
     expect(rpTenantId(rp)).toBe('tid-123');
     expect(rpTenantId(platform)).toBeNull();
   });
-  it('rpTenantId null when RP_ADMIN has null tenantId (data anomaly)', () => {
-    const broken: Me = { ...rp, tenantId: null };
+  it('rpTenantId null when RP_ADMIN has empty tenantIds (data anomaly)', () => {
+    const broken: Me = { ...rp, tenantIds: [] };
     expect(rpTenantId(broken)).toBeNull();
   });
 });

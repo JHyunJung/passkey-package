@@ -6,7 +6,7 @@ import type { AppRoute } from '@/appRoute';
 export type CommandPaletteProps = {
   open: boolean;
   onClose: () => void;
-  me: { role: string; tenantId?: string | null; email: string; displayName?: string };
+  me: { role: string; tenantIds?: string[]; email: string; displayName?: string };
   onNavigate: (route: AppRoute) => void;
   onAction: (kind: string) => void;
 };
@@ -58,8 +58,9 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
     }
 
     // Tenants — only platform sees all (populated from searchResults below)
-    if (!isPlatform && me?.tenantId) {
-      // RP_ADMIN sees only their tenant tabs
+    if (!isPlatform && me?.tenantIds && me.tenantIds.length > 0) {
+      // RP_ADMIN sees only their tenant tabs (first/active tenant)
+      const activeTenantId = me.tenantIds[0];
       const tabs = [
         { id: "overview", label: "개요", icon: "Activity" },
         { id: "webauthn", label: "WebAuthn", icon: "Globe" },
@@ -69,7 +70,7 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
         { id: "audit", label: "Audit Logs", icon: "Receipt" },
         { id: "funnel", label: "Funnel", icon: "Activity" },
       ];
-      tabs.forEach((tb) => items.push({ group: "현재 Tenant", icon: tb.icon, label: tb.label, hint: `내 tenant > ${tb.label}`, action: () => onNavigate({ name: "tenant", tenantId: me.tenantId!, tab: tb.id }) }));
+      tabs.forEach((tb) => items.push({ group: "현재 Tenant", icon: tb.icon, label: tb.label, hint: `내 tenant > ${tb.label}`, action: () => onNavigate({ name: "tenant", tenantId: activeTenantId, tab: tb.id }) }));
     }
 
     // Quick actions
