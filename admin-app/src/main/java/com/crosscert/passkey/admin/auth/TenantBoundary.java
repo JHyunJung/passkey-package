@@ -29,6 +29,7 @@ import java.util.UUID;
 public class TenantBoundary {
 
     private final ApplicationEventPublisher eventPublisher;
+    private final ActiveTenantResolver activeTenantResolver;
 
     /** Builds + publishes a TENANT_BOUNDARY_VIOLATION/CRITICAL alert.
      *  ctx must contain only masked/identifier values (masked actor email, role, tenant UUIDs). */
@@ -44,14 +45,14 @@ public class TenantBoundary {
         AdminUserDetails me = currentPrincipal();
         if (me.isPlatformOperator()) return;
         if (me.isRpAdmin()) {
-            if (!me.getTenantId().equals(tenantId)) {
+            if (!me.getAllowedTenantIds().contains(tenantId)) {
                 log.warn("tenant boundary violation: actor={} role={} requested={} allowed={}",
-                        CryptoUtils.maskEmail(me.getUsername()), me.getRole(), tenantId, me.getTenantId());
+                        CryptoUtils.maskEmail(me.getUsername()), me.getRole(), tenantId, me.getAllowedTenantIds());
                 publishViolation(Map.of(
                         "actor", CryptoUtils.maskEmail(me.getUsername()),
                         "role", String.valueOf(me.getRole()),
                         "requested", String.valueOf(tenantId),
-                        "allowed", String.valueOf(me.getTenantId())));
+                        "allowed", String.valueOf(me.getAllowedTenantIds())));
                 throw new BusinessException(ErrorCode.ACCESS_DENIED,
                         "RP_ADMIN cannot access tenant " + tenantId);
             }
@@ -73,7 +74,10 @@ public class TenantBoundary {
     public Optional<UUID> currentTenantScope() {
         AdminUserDetails me = currentPrincipal();
         if (me.isPlatformOperator()) return Optional.empty();
-        if (me.isRpAdmin())          return Optional.of(me.getTenantId());
+        if (me.isRpAdmin()) {
+            UUID active = activeTenantResolver.resolve(me);
+            return active == null ? Optional.empty() : Optional.of(active);
+        }
         log.warn("tenant boundary violation: actor={} role={} scope=list allowed=none",
                 CryptoUtils.maskEmail(me.getUsername()), me.getRole());
         publishViolation(Map.of(
