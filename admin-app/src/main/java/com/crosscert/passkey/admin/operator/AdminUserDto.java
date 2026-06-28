@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public final class AdminUserDto {
@@ -12,14 +13,14 @@ public final class AdminUserDto {
 
     public record View(
             UUID id, String email, String role, String status,
-            UUID tenantId, OffsetDateTime createdAt, OffsetDateTime lastLoginAt,
+            List<UUID> tenantIds, OffsetDateTime createdAt, OffsetDateTime lastLoginAt,
             OffsetDateTime suspendedAt, String createdBy, boolean mfaEnabled
     ) {}
 
     public record InviteRequest(
             @NotBlank @Email String email,
             @NotBlank String role,
-            UUID tenantId
+            List<UUID> tenantIds
     ) {}
 
     public record InviteResponse(
@@ -37,7 +38,7 @@ public final class AdminUserDto {
     public record InvitationCheck(
             String email,
             String role,
-            UUID tenantId,
+            List<UUID> tenantIds,
             OffsetDateTime expiresAt
     ) {}
 
