@@ -146,9 +146,9 @@ class RpAdminBoundaryIT {
         jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
         jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy_entry");
         jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy");
-        // NULL out admin_user.tenant_id before deleting tenants (V23 FK —
-        // fk_admin_user_tenant blocks DELETE FROM tenant while child rows exist)
-        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+        // Clear admin_user_tenant mapping before deleting tenants (FK admin_user_tenant.tenant_id → tenant)
+        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
         // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
         jdbc.update("""

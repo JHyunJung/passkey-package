@@ -11,7 +11,7 @@ function getCookie(name: string): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-async function adminFetch<T>(
+export async function adminFetch<T>(
   method: string,
   path: string,
   body?: unknown,
@@ -72,7 +72,7 @@ export type AdminUserView = {
   email: string;
   role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
   status: 'ACTIVE' | 'PENDING' | 'SUSPENDED';
-  tenantId: string | null;
+  tenantIds: string[];
   createdAt: string;
   lastLoginAt: string | null;
   suspendedAt: string | null;
@@ -96,7 +96,7 @@ export const adminUsersApi = {
   list: (): Promise<AdminUserView[]> =>
     adminFetch<AdminUserView[]>('GET', '/admin/api/admin-users'),
 
-  invite: (body: { email: string; role: string; tenantId?: string }): Promise<InviteResponse> =>
+  invite: (body: { email: string; role: string; tenantIds: string[] }): Promise<InviteResponse> =>
     adminFetch<InviteResponse>('POST', '/admin/api/admin-users', body),
 
   // Spring @PostMapping("/{id}/suspend") returns 200 with no body
@@ -112,4 +112,10 @@ export const adminUsersApi = {
       `/admin/api/admin-users/${id}/invitation/resend?email=${encodeURIComponent(email)}`,
       {},
     ),
+
+  addTenant: (id: string, tenantId: string): Promise<void> =>
+    adminFetch<void>('POST', `/admin/api/admin-users/${id}/tenants`, { tenantId }),
+
+  removeTenant: (id: string, tenantId: string): Promise<void> =>
+    adminFetch<void>('DELETE', `/admin/api/admin-users/${id}/tenants/${encodeURIComponent(tenantId)}`),
 };

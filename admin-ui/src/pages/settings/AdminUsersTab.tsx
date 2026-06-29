@@ -70,7 +70,7 @@ export default function AdminUsersTab() {
 
   useEffect(() => { void reload(); }, []);
 
-  async function handleCreate(body: { email: string; role: string; tenantId?: string }) {
+  async function handleCreate(body: { email: string; role: string; tenantIds: string[] }) {
     try {
       const res = await adminUsersApi.invite(body);
       setShowNew(false);
@@ -194,9 +194,11 @@ export default function AdminUsersTab() {
                   </span>
                 </td>
                 <td>
-                  {u.tenantId ? (
+                  {u.tenantIds && u.tenantIds.length > 0 ? (
                     <span className="mono" style={{ fontSize: 12 }}>
-                      {tail(u.tenantId, 10)}
+                      {u.tenantIds.length === 1
+                        ? tail(u.tenantIds[0], 10)
+                        : `${u.tenantIds.length}개 RP`}
                     </span>
                   ) : (
                     <span className="faint">—</span>
@@ -289,13 +291,13 @@ function NewAdminDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (body: { email: string; role: string; tenantId?: string }) => Promise<void>;
+  onCreate: (body: { email: string; role: string; tenantIds: string[] }) => Promise<void>;
   existingEmails: string[];
 }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('RP_ADMIN');
-  const [tenantId, setTenantId] = useState('');
+  const [tenantIds, setTenantIds] = useState<string[]>([]);
   const [requireMfa, setRequireMfa] = useState(true);
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -306,7 +308,7 @@ function NewAdminDialog({
       .then((list) => {
         const active = list.filter((t) => t.status === 'ACTIVE');
         setTenants(active);
-        if (active.length > 0 && !tenantId) setTenantId(active[0].id);
+        if (active.length > 0 && tenantIds.length === 0) setTenantIds([active[0].id]);
       })
       .catch(() => { /* non-critical */ });
   }, []);
@@ -315,18 +317,24 @@ function NewAdminDialog({
     if (!open) {
       setEmail('');
       setRole('RP_ADMIN');
-      setTenantId(tenants[0]?.id || '');
+      setTenantIds(tenants[0]?.id ? [tenants[0].id] : []);
       setRequireMfa(true);
       setTouched(false);
       setSubmitting(false);
     }
   }, [open]);
 
+  function toggleTenant(id: string) {
+    setTenantIds((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    );
+  }
+
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const emailValid = emailRe.test(email);
   const emailDup = existingEmails.map((e) => e.toLowerCase()).includes(email.toLowerCase());
   const formValid =
-    emailValid && !emailDup && (role === 'PLATFORM_OPERATOR' || !!tenantId);
+    emailValid && !emailDup && (role === 'PLATFORM_OPERATOR' || tenantIds.length > 0);
 
   async function submit() {
     setTouched(true);
@@ -336,7 +344,7 @@ function NewAdminDialog({
       await onCreate({
         email: email.toLowerCase(),
         role,
-        ...(role === 'RP_ADMIN' && tenantId ? { tenantId } : {}),
+        tenantIds: role === 'RP_ADMIN' ? tenantIds : [],
       });
     } finally {
       setSubmitting(false);
@@ -344,7 +352,6 @@ function NewAdminDialog({
   }
 
   if (!open) return null;
-  const selectedTenant = tenants.find((t) => t.id === tenantId);
 
   return (
     <Dialog
@@ -444,20 +451,58 @@ function NewAdminDialog({
         {role === 'RP_ADMIN' && (
           <Field
             label="할당 Tenant"
-            hint="이 운영자는 선택한 tenant만 접근 가능합니다. 생성 후 변경하려면 새 운영자를 만들어야 합니다."
+            hint={
+              tenantIds.length === 0 && touched
+                ? <span style={{ color: 'var(--danger)' }}>Tenant를 최소 1개 선택해야 합니다.</span>
+                : '이 운영자가 접근 가능한 tenant를 선택하세요 (복수 선택 가능).'
+            }
           >
-            <select
-              className="input"
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
+            <div
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                overflow: 'hidden',
+                maxHeight: 200,
+                overflowY: 'auto',
+              }}
             >
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} · {t.slug}
-                </option>
-              ))}
-            </select>
-            {selectedTenant && (
+              {tenants.length === 0 && (
+                <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-mute)' }}>
+                  활성 tenant 없음
+                </div>
+              )}
+              {tenants.map((t, i) => {
+                const checked = tenantIds.includes(t.id);
+                return (
+                  <label
+                    key={t.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 12px',
+                      borderBottom: i < tenants.length - 1 ? '1px solid var(--border)' : 'none',
+                      background: checked ? 'var(--accent-soft)' : 'transparent',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleTenant(t.id)}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, color: checked ? 'var(--accent)' : 'var(--text)' }}>
+                        {t.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>{t.slug}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            {tenantIds.length > 0 && (
               <div
                 style={{
                   marginTop: 8,
@@ -466,30 +511,11 @@ function NewAdminDialog({
                   borderRadius: 6,
                   fontSize: 12,
                   color: 'var(--text-soft)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
                 }}
               >
-                <div
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 5,
-                    background: 'var(--accent-soft)',
-                    color: 'var(--accent)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontWeight: 700,
-                    fontSize: 10,
-                  }}
-                >
-                  {selectedTenant.name.slice(0, 1)}
-                </div>
-                <span>
-                  로그인 즉시 <strong>{selectedTenant.name}</strong>의 상세 페이지로 자동
-                  라우팅됩니다.
-                </span>
+                {tenantIds.length === 1
+                  ? <>로그인 즉시 <strong>{tenants.find((t) => t.id === tenantIds[0])?.name ?? tenantIds[0]}</strong>의 상세 페이지로 자동 라우팅됩니다.</>
+                  : <><strong>{tenantIds.length}개</strong> tenant에 접근 가능합니다. 최초 로그인 시 첫 번째 tenant로 라우팅됩니다.</>}
               </div>
             )}
           </Field>

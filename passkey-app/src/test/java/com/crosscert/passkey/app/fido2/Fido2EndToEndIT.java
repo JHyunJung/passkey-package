@@ -211,10 +211,9 @@ class Fido2EndToEndIT {
         // 별도 정리한다(다른 시나리오의 begin/finish 행이 happyPath 카운트 검증을
         // 오염시키지 않도록). FK 가 없으므로 순서 제약은 없다.
         adminJdbc.update("DELETE FROM APP_OWNER.ceremony_event");
-        // V23: admin_user.tenant_id FK → DELETE FROM tenant 전에 NULL set 필수.
-        // CK_ADMIN_USER_ROLE_TENANT 가 RP_ADMIN 의 tenant_id NOT NULL 강제하므로
-        // role 도 PLATFORM_OPERATOR 로 동시 변경 (admin-role-separation IT 패턴).
-        adminJdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+        // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant).
+        adminJdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+        adminJdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
         adminJdbc.update("DELETE FROM APP_OWNER.tenant");
 
         seedTenant(TENANT_A_HEX, SLUG_A, "Tenant A", PREFIX_A, SECRET_A);
@@ -254,8 +253,9 @@ class Fido2EndToEndIT {
             adminJdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
             adminJdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
             adminJdbc.update("DELETE FROM APP_OWNER.ceremony_event");
-            // V23 FK-aware: admin_user.tenant_id NULL set 후 tenant DELETE.
-            adminJdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+            // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant).
+            adminJdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+            adminJdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
             adminJdbc.update("DELETE FROM APP_OWNER.tenant");
         }
         // Redis is shared across scenarios — flush all challenge tokens

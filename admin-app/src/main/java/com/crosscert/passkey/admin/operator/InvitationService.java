@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.entity.AdminUserInvitation;
 import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -25,6 +27,7 @@ public class InvitationService {
 
     private final AdminUserInvitationRepository invitationRepo;
     private final AdminUserRepository userRepo;
+    private final AdminUserTenantRepository mappingRepo;
     private final MailSender mailSender;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
@@ -34,11 +37,13 @@ public class InvitationService {
 
     public InvitationService(AdminUserInvitationRepository invitationRepo,
                              AdminUserRepository userRepo,
+                             AdminUserTenantRepository mappingRepo,
                              MailSender mailSender,
                              PasswordEncoder passwordEncoder,
                              Clock clock) {
         this.invitationRepo = invitationRepo;
         this.userRepo = userRepo;
+        this.mappingRepo = mappingRepo;
         this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
@@ -73,8 +78,9 @@ public class InvitationService {
         var inv = lookupValid(plaintext, OffsetDateTime.now(clock));
         var user = userRepo.findById(inv.getAdminUserId())
                 .orElseThrow(() -> new IllegalStateException("user not found"));
+        List<UUID> tids = mappingRepo.findTenantIdsByAdminUserId(user.getId());
         return new AdminUserDto.InvitationCheck(
-                user.getEmail(), user.getRole(), user.getTenantId(), inv.getExpiresAt());
+                user.getEmail(), user.getRole(), tids, inv.getExpiresAt());
     }
 
     @Transactional

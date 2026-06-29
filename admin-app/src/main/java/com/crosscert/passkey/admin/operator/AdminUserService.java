@@ -1,14 +1,17 @@
 package com.crosscert.passkey.admin.operator;
 
 import com.crosscert.passkey.core.entity.AdminUser;
+import com.crosscert.passkey.core.entity.AdminUserTenant;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,21 +22,24 @@ public class AdminUserService {
     private final AdminUserRepository userRepo;
     private final AdminUserInvitationRepository invitationRepo;
     private final InvitationService invitationService;
+    private final AdminUserTenantRepository mappingRepo;
     private final Clock clock;
 
     public AdminUserService(AdminUserRepository userRepo,
                             AdminUserInvitationRepository invitationRepo,
                             InvitationService invitationService,
+                            AdminUserTenantRepository mappingRepo,
                             Clock clock) {
         this.userRepo = userRepo;
         this.invitationRepo = invitationRepo;
         this.invitationService = invitationService;
+        this.mappingRepo = mappingRepo;
         this.clock = clock;
     }
 
     @Transactional(readOnly = true)
     public List<AdminUserDto.View> list() {
-        return userRepo.findAll().stream().map(AdminUserService::toView).toList();
+        return userRepo.findAll().stream().map(this::toView).toList();
     }
 
     @Transactional
@@ -41,11 +47,13 @@ public class AdminUserService {
         if (!"PLATFORM_OPERATOR".equals(req.role()) && !"RP_ADMIN".equals(req.role())) {
             throw new IllegalArgumentException("Invalid role: " + req.role());
         }
-        if ("RP_ADMIN".equals(req.role()) && req.tenantId() == null) {
-            throw new IllegalArgumentException("RP_ADMIN requires tenantId");
+        List<UUID> tenantIds = req.tenantIds() == null
+                ? List.of() : req.tenantIds();
+        if ("RP_ADMIN".equals(req.role()) && tenantIds.isEmpty()) {
+            throw new IllegalArgumentException("RP_ADMIN requires at least one tenant");
         }
-        if ("PLATFORM_OPERATOR".equals(req.role()) && req.tenantId() != null) {
-            throw new IllegalArgumentException("PLATFORM_OPERATOR must not have tenantId");
+        if ("PLATFORM_OPERATOR".equals(req.role()) && !tenantIds.isEmpty()) {
+            throw new IllegalArgumentException("PLATFORM_OPERATOR must not have tenant");
         }
         if (userRepo.findByEmail(req.email()).isPresent()) {
             throw new IllegalStateException("Email already exists: " + req.email());
@@ -56,13 +64,41 @@ public class AdminUserService {
         user.setRole(req.role());
         user.setStatus("PENDING");
         user.setCreatedBy(invitedBy);
-        if (req.tenantId() != null) user.setTenantId(req.tenantId());
         AdminUser saved = userRepo.save(user);
 
+        for (UUID tid : new LinkedHashSet<>(tenantIds)) {   // 중복 멱등
+            mappingRepo.save(AdminUserTenant.of(saved.getId(), tid, invitedBy));
+        }
+
         var inv = invitationService.createInvitation(saved.getId(), invitedBy, req.email());
-        log.info("admin invite issued: emailMasked={} role={} tenantId={}",
-                mask(req.email()), req.role(), req.tenantId());
+        log.info("admin invite issued: emailMasked={} role={} tenantCount={}",
+                mask(req.email()), req.role(), tenantIds.size());
         return new AdminUserDto.InviteResponse(toView(saved), inv);
+    }
+
+    @Transactional
+    public void addTenant(UUID adminUserId, UUID tenantId, String actor) {
+        AdminUser u = userRepo.findById(adminUserId)
+                .orElseThrow(() -> new IllegalStateException("admin not found: " + adminUserId));
+        if (!"RP_ADMIN".equals(u.getRole())) {
+            throw new IllegalArgumentException("only RP_ADMIN can be mapped to a tenant");
+        }
+        if (mappingRepo.existsByAdminUserIdAndTenantId(adminUserId, tenantId)) {
+            return; // 멱등
+        }
+        mappingRepo.save(AdminUserTenant.of(adminUserId, tenantId, actor));
+        log.info("admin tenant added: adminId={} tenantId={} by={}", adminUserId, tenantId, mask(actor));
+    }
+
+    @Transactional
+    public void removeTenant(UUID adminUserId, UUID tenantId, String actor) {
+        AdminUser u = userRepo.findById(adminUserId)
+                .orElseThrow(() -> new IllegalStateException("admin not found: " + adminUserId));
+        if ("RP_ADMIN".equals(u.getRole()) && mappingRepo.countByAdminUserId(adminUserId) <= 1) {
+            throw new IllegalStateException("cannot remove last tenant of RP_ADMIN");
+        }
+        mappingRepo.deleteByAdminUserIdAndTenantId(adminUserId, tenantId);
+        log.info("admin tenant removed: adminId={} tenantId={} by={}", adminUserId, tenantId, mask(actor));
     }
 
     @Transactional
@@ -120,11 +156,12 @@ public class AdminUserService {
         return email.charAt(0) + "***" + email.substring(at);
     }
 
-    static AdminUserDto.View toView(AdminUser u) {
+    AdminUserDto.View toView(AdminUser u) {
+        List<UUID> tids = mappingRepo.findTenantIdsByAdminUserId(u.getId());
         return new AdminUserDto.View(
                 u.getId(), u.getEmail(), u.getRole(),
                 u.getStatus() != null ? u.getStatus() : "ACTIVE",
-                u.getTenantId(),
+                tids,
                 u.getCreatedAt(), u.getLastLoginAt(),
                 u.getSuspendedAt(), u.getCreatedBy(), u.isMfaEnabled());
     }

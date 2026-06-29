@@ -102,8 +102,9 @@ class TenantFilterBindingIT {
     @AfterEach
     void cleanup() {
         TenantContextHolder.clear();
-        // V23 FK: admin_user.tenant_id → tenant; null-set before tenant delete
-        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+        // Clear admin_user_tenant mapping before deleting tenants (FK admin_user_tenant.tenant_id → tenant)
+        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
     }

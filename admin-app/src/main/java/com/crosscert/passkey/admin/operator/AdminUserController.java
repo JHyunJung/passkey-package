@@ -1,6 +1,7 @@
 package com.crosscert.passkey.admin.operator;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,8 @@ public class AdminUserController {
     public AdminUserController(AdminUserService service) {
         this.service = service;
     }
+
+    public record TenantRef(@NotNull UUID tenantId) {}
 
     @GetMapping
     public List<AdminUserDto.View> list() {
@@ -45,5 +48,19 @@ public class AdminUserController {
                                                 Authentication auth,
                                                 @RequestParam String email) {
         return service.resendInvitation(id, auth.getName(), email);
+    }
+
+    @PostMapping("/{id}/tenants")
+    public void addTenant(@PathVariable UUID id,
+                          @Valid @RequestBody TenantRef body,
+                          Authentication auth) {
+        service.addTenant(id, body.tenantId(), auth.getName());
+    }
+
+    @DeleteMapping("/{id}/tenants/{tenantId}")
+    public void removeTenant(@PathVariable UUID id,
+                             @PathVariable UUID tenantId,
+                             Authentication auth) {
+        service.removeTenant(id, tenantId, auth.getName());
     }
 }

@@ -161,7 +161,9 @@ class AdminUserInvitationFlowIT {
         // Remove any non-seed admin_user rows (PENDING/SUSPENDED created during tests)
         // admin_user: APP_ADMIN has no DELETE grant — use schema-owner pool.
         ownerJdbc().update("DELETE FROM APP_OWNER.admin_user WHERE email NOT IN ('alice@crosscert.com','bob@crosscert.com')");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR', "
+        // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant)
+        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR', "
                 + "status = 'ACTIVE', suspended_at = NULL, suspended_by = NULL "
                 + "WHERE email IN ('alice@crosscert.com','bob@crosscert.com')");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
@@ -200,14 +202,14 @@ class AdminUserInvitationFlowIT {
 
         // ── 2. 초대 생성 — RP_ADMIN 로 tenant 에 묶기 ─────────────────
         AdminUserDto.InviteRequest inviteReq = new AdminUserDto.InviteRequest(
-                "newadmin@example.com", "RP_ADMIN", tenantId);
+                "newadmin@example.com", "RP_ADMIN", List.of(tenantId));
         AdminUserDto.InviteResponse inviteResponse = adminUserService.invite(inviteReq, ALICE_EMAIL);
 
         assertThat(inviteResponse).isNotNull();
         assertThat(inviteResponse.user().email()).isEqualTo("newadmin@example.com");
         assertThat(inviteResponse.user().status()).isEqualTo("PENDING");
         assertThat(inviteResponse.user().role()).isEqualTo("RP_ADMIN");
-        assertThat(inviteResponse.user().tenantId()).isEqualTo(tenantId);
+        assertThat(inviteResponse.user().tenantIds()).containsExactly(tenantId);
         assertThat(inviteResponse.invitation()).isNotNull();
 
         String plaintextToken = inviteResponse.invitation().plaintextToken();
@@ -222,7 +224,7 @@ class AdminUserInvitationFlowIT {
             AdminUserDto.InvitationCheck check = invitationService.check(plaintextToken);
             assertThat(check.email()).isEqualTo("newadmin@example.com");
             assertThat(check.role()).isEqualTo("RP_ADMIN");
-            assertThat(check.tenantId()).isEqualTo(tenantId);
+            assertThat(check.tenantIds()).containsExactly(tenantId);
         }).doesNotThrowAnyException();
 
         // ── 4. accept(plaintextToken, password) ───────────────────────

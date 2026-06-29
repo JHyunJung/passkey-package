@@ -206,7 +206,8 @@ class AppLevelIsolationIT {
     @AfterEach
     void cleanup() {
         TenantContextHolder.clear();
-        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
         jdbc.update("DELETE FROM APP_OWNER.credential");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
     }

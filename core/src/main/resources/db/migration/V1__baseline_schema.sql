@@ -146,7 +146,6 @@ CREATE TABLE admin_user (
     created_at          TIMESTAMP(6) WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
     last_login_at       TIMESTAMP(6) WITH TIME ZONE,
     updated_at          TIMESTAMP(6) WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
-    tenant_id           RAW(16),
     status              VARCHAR2(16)  DEFAULT 'ACTIVE' NOT NULL,
     created_by          VARCHAR2(255),
     suspended_at        TIMESTAMP(6) WITH TIME ZONE,
@@ -159,15 +158,23 @@ CREATE TABLE admin_user (
     CONSTRAINT pk_admin_user              PRIMARY KEY (id),
     CONSTRAINT uq_admin_user_email        UNIQUE (email),
     CONSTRAINT ck_admin_user_role         CHECK (role IN ('PLATFORM_OPERATOR', 'RP_ADMIN')),
-    CONSTRAINT ck_admin_user_role_tenant  CHECK (
-        (role = 'PLATFORM_OPERATOR' AND tenant_id IS NULL)
-        OR
-        (role = 'RP_ADMIN' AND tenant_id IS NOT NULL)
-    ),
     CONSTRAINT ck_admin_user_status       CHECK (status IN ('ACTIVE','PENDING','SUSPENDED')),
-    CONSTRAINT ck_admin_user_mfa_enabled  CHECK (mfa_enabled IN ('Y','N')),
-    CONSTRAINT fk_admin_user_tenant       FOREIGN KEY (tenant_id) REFERENCES tenant (id)
+    CONSTRAINT ck_admin_user_mfa_enabled  CHECK (mfa_enabled IN ('Y','N'))
 );
+
+-- 운영자(admin_user) ↔ RP(tenant) N:M 매핑.
+-- PLATFORM_OPERATOR 는 행 0개(전체 접근), RP_ADMIN 은 1개 이상(앱 레벨 검증).
+CREATE TABLE admin_user_tenant (
+    admin_user_id  RAW(16)                     NOT NULL,
+    tenant_id      RAW(16)                     NOT NULL,
+    created_at     TIMESTAMP(6) WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    created_by     VARCHAR2(255),
+    CONSTRAINT pk_admin_user_tenant       PRIMARY KEY (admin_user_id, tenant_id),
+    CONSTRAINT fk_aut_admin_user          FOREIGN KEY (admin_user_id) REFERENCES admin_user (id) ON DELETE CASCADE,
+    CONSTRAINT fk_aut_tenant              FOREIGN KEY (tenant_id)     REFERENCES tenant (id)
+);
+
+CREATE INDEX ix_aut_tenant ON admin_user_tenant (tenant_id);
 
 -- 1-9. CREDENTIAL (FK → TENANT)
 CREATE TABLE credential (
@@ -405,7 +412,6 @@ CREATE SEQUENCE tenant_webauthn_snapshot_seq
 -- ============================================================
 
 -- admin_user
-CREATE INDEX ix_admin_user_tenant ON admin_user (tenant_id);
 CREATE INDEX ix_admin_user_invitation_user ON admin_user_invitation (admin_user_id);
 CREATE INDEX ix_pwd_reset_admin_user ON admin_password_reset_token (admin_user_id);
 CREATE INDEX ix_recovery_admin_user ON admin_user_recovery_code (admin_user_id);
@@ -453,7 +459,7 @@ CREATE UNIQUE INDEX ux_incident_open_per_tenant ON security_incident (CASE statu
 -- ============================================================
 
 CREATE OR REPLACE FORCE VIEW v_admin_user (
-    id, email, role, tenant_slug, tenant_name, tenant_id,
+    id, email, role,
     enabled, status, mfa_enabled, last_login_at, failed_login_count,
     locked_until, created_by, suspended_at, suspended_by, created_at, updated_at
 ) AS
@@ -461,9 +467,6 @@ SELECT
     LOWER(REGEXP_REPLACE(RAWTOHEX(u.id), '(.{8})(.{4})(.{4})(.{4})(.{12})', '\1-\2-\3-\4-\5')) AS id,
     u.email,
     u.role,
-    t.slug                                                                                         AS tenant_slug,
-    t.display_name                                                                                 AS tenant_name,
-    LOWER(REGEXP_REPLACE(RAWTOHEX(u.tenant_id), '(.{8})(.{4})(.{4})(.{4})(.{12})', '\1-\2-\3-\4-\5')) AS tenant_id,
     u.enabled,
     u.status,
     u.mfa_enabled,
@@ -475,8 +478,7 @@ SELECT
     u.suspended_by,
     u.created_at,
     u.updated_at
-FROM admin_user u
-LEFT JOIN tenant t ON t.id = u.tenant_id;
+FROM admin_user u;
 
 CREATE OR REPLACE FORCE VIEW v_api_key (
     id, tenant_slug, tenant_name, tenant_id,
@@ -668,6 +670,11 @@ GRANT INSERT ON admin_user TO APP_ADMIN;
 GRANT SELECT ON admin_user TO APP_ADMIN;
 GRANT UPDATE ON admin_user TO APP_ADMIN;
 GRANT SELECT ON admin_user TO APP_RUNTIME;
+GRANT SELECT ON admin_user_tenant TO APP_ADMIN;
+GRANT INSERT ON admin_user_tenant TO APP_ADMIN;
+GRANT UPDATE ON admin_user_tenant TO APP_ADMIN;
+GRANT DELETE ON admin_user_tenant TO APP_ADMIN;
+GRANT SELECT ON admin_user_tenant TO APP_RUNTIME;
 GRANT INSERT ON admin_user_invitation TO APP_ADMIN;
 GRANT SELECT ON admin_user_invitation TO APP_ADMIN;
 GRANT UPDATE ON admin_user_invitation TO APP_ADMIN;

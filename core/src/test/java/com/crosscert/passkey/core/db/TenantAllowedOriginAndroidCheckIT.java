@@ -142,11 +142,10 @@ class TenantAllowedOriginAndroidCheckIT {
     }
 
     private void resetState() {
-        // V23 fk_admin_user_tenant points admin_user.tenant_id → tenant; null it
-        // (and demote RP_ADMIN to satisfy CK_ADMIN_USER_ROLE_TENANT) before the
-        // tenant DELETE, mirroring AppLevelIsolationIT's reset. fk_tao_tenant has
-        // ON DELETE CASCADE, so deleting the tenant clears our allowed_origin rows.
-        jdbc.update("UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL");
+        // Clear admin_user_tenant mapping before deleting tenants (FK admin_user_tenant.tenant_id → tenant).
+        // fk_tao_tenant has ON DELETE CASCADE, so deleting the tenant clears our allowed_origin rows.
+        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
         jdbc.update("DELETE FROM APP_OWNER.tenant");
     }
 
