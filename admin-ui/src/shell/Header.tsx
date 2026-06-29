@@ -3,8 +3,6 @@ import { Icons } from '@/icons/Icons';
 import { Breadcrumb } from './Breadcrumb';
 import { activeTenantApi } from '@/api/activeTenant';
 import type { ActiveTenantView } from '@/api/activeTenant';
-import { tenantsApi } from '@/api/tenants';
-import type { Tenant } from '@/api/designTypes';
 
 // ===== MenuItem (private helper) =====
 type MenuItemProps = {
@@ -36,7 +34,6 @@ type RpSwitcherProps = {
 
 function RpSwitcher({ onSwitch }: RpSwitcherProps) {
   const [activeTenant, setActiveTenant] = useState<ActiveTenantView | null>(null);
-  const [tenantMap, setTenantMap] = useState<Record<string, string>>({});
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
 
@@ -44,18 +41,15 @@ function RpSwitcher({ onSwitch }: RpSwitcherProps) {
     activeTenantApi.get()
       .then(setActiveTenant)
       .catch(() => { /* non-critical — hide switcher on error */ });
-
-    tenantsApi.list()
-      .then((list: Tenant[]) => {
-        const map: Record<string, string> = {};
-        list.forEach((t) => { map[t.id] = t.name; });
-        setTenantMap(map);
-      })
-      .catch(() => { /* labels fall back to id suffix */ });
   }, []);
 
   // Only show when >= 2 allowed tenants
   if (!activeTenant || activeTenant.allowedTenantIds.length < 2) return null;
+
+  // 라벨 맵은 백엔드 active-tenant 응답의 allowedTenants(id+name)에서 파생한다.
+  // RP_ADMIN 은 일반 tenant 목록으로 비활성 RP 를 못 보므로 여기서만 전체 이름을 얻는다.
+  const tenantMap: Record<string, string> = {};
+  activeTenant.allowedTenants.forEach((t) => { tenantMap[t.id] = t.name; });
 
   const activeLabel = activeTenant.activeTenantId
     ? (tenantMap[activeTenant.activeTenantId] ?? activeTenant.activeTenantId.slice(-8))
