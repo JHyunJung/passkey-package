@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.tenant;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -47,7 +48,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   4. GET /audit?action=TENANT_UPDATE → row + payload.changedFields 검증
  *   5. PUT 동일 body 재호출 → audit row 추가 안 됨 (no-op)
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class TenantAdminControllerUpdateIT {

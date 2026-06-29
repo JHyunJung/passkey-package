@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.activity;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -42,7 +43,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Testcontainers + loginAs inline 패턴은 RpAdminBoundaryIT 에서 복사.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class ActivityControllerIT {

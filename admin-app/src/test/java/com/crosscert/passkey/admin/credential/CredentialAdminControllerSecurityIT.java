@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.credential;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -56,7 +57,9 @@ import org.springframework.web.client.RestTemplate;
  *
  * T6 의 TenantAdminControllerUpdateIT 와 동일한 Testcontainers + 로그인 inline 패턴 사용.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class CredentialAdminControllerSecurityIT {
