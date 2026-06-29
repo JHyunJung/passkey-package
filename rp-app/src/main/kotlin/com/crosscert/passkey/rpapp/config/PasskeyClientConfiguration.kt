@@ -22,18 +22,13 @@ class PasskeyClientConfiguration {
 
     @Bean
     fun passkeyClient(props: PasskeyProperties, apiKeySupplier: Supplier<String?>): PasskeyClient =
-        // SDK 의 PasskeyClientConfig 생성자는 선택값에 null 을 받으면 기본값으로 치환한다
-        // (원본 Java record 컴팩트 생성자와 동일). 따라서 nullable 프로퍼티를 그대로 넘긴다.
-        // baseUrl 은 필수 — 원본 Java 의 Objects.requireNonNull 과 동일하게 누락 시 fail-fast(!!).
+        // SDK 의 Builder 는 필수값(baseUrl, apiKeySupplier)을 인자로 강제하고, 선택값은
+        // null 을 넘기면 기본값으로 치환한다. baseUrl 은 필수 — 누락 시 fail-fast(!!).
         PasskeyClient.of(
-            PasskeyClientConfig(
-                props.baseUrl!!,
-                apiKeySupplier,
-                props.connectTimeout,
-                props.readTimeout,
-                props.jwksCacheTtl,
-                null, // clock: SDK 기본 Clock.systemUTC()
-                null, // traceIdProvider: SDK 기본 MDC.get("traceId")
-            ),
+            PasskeyClientConfig.builder(props.baseUrl!!, apiKeySupplier)
+                .connectTimeout(props.connectTimeout)
+                .readTimeout(props.readTimeout)
+                .jwksCacheTtl(props.jwksCacheTtl)
+                .build(),
         )
 }
