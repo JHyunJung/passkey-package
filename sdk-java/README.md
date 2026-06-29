@@ -17,7 +17,7 @@ Maven local 또는 사내 레포에 publish 후 좌표로 의존:
 
 ```kotlin
 // build.gradle.kts
-implementation("com.crosscert.passkey:sdk-java:0.0.1-SNAPSHOT")
+implementation("com.crosscert.passkey:sdk-java:1.0.0")
 ```
 
 로컬 publish:

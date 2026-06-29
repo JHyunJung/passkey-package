@@ -3,8 +3,12 @@ plugins {
     `maven-publish`
 }
 
-// group / version 은 root allprojects 가 com.crosscert.passkey / 0.0.1-SNAPSHOT 로 설정.
+// group 은 root allprojects 가 com.crosscert.passkey 로 설정.
 // toolchain 17 + repositories(mavenCentral) 은 root subprojects 가 처리.
+//
+// version 은 외부 RP 에 배포되는 라이브러리라 root 의 0.0.1-SNAPSHOT(내부 모듈 공통)
+// 을 덮어 SDK 단독 versioning 한다 — 첫 stable release.
+version = "1.0.0"
 
 java {
     withSourcesJar()
