@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.auth;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -55,7 +56,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Testcontainers (Oracle XE 21 + Redis 7) 및 loginAs 패턴은 {@code AdminFlowIT} 과 동일.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지에 MfaController*Test$SliceConfig(@SpringBootConfiguration) 2개가
+// 있어 config 자동탐색이 "multiple @SpringBootConfiguration" 으로 깨진다(단독 실행 시). 메인 앱
+// 클래스를 직접 지정해 자동탐색을 끈다(AdminFlowIT 은 root 패키지라 자동탐색이 바로 AdminApplication 을 찾음).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class MultiTenantOperatorIT {

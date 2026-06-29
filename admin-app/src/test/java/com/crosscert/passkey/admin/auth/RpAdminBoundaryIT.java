@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.auth;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -47,7 +48,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * resetState() 는 T12 AdminFlowIT 패턴 (bob 을 매 test 시작 시 RP_ADMIN(demo-rp)
  * 으로 reset) 그대로 사용.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(MultiTenantOperatorIT 참고).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class RpAdminBoundaryIT {
@@ -179,12 +182,20 @@ class RpAdminBoundaryIT {
                 VALUES (HEXTORAW('0000000000000000000000000000C0DE'),
                     'ANY', 'N', SYSTIMESTAMP, SYSTIMESTAMP, 'test:reset')
                 """);
-        // Re-assign bob to demo-rp as RP_ADMIN (mirrors V23 step 9)
+        // Re-assign bob to demo-rp as RP_ADMIN (role + admin_user_tenant 매핑; N:M 전환).
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
-                   SET role = 'RP_ADMIN',
-                       tenant_id = HEXTORAW('0000000000000000000000000000C0DE')
+                   SET role = 'RP_ADMIN'
                  WHERE email = 'bob@crosscert.com'
+                """);
+        jdbc.update("""
+                MERGE INTO APP_OWNER.admin_user_tenant t
+                USING (SELECT HEXTORAW('00000000000000000000000000000011') AS aid,
+                              HEXTORAW('0000000000000000000000000000C0DE') AS tid FROM dual) s
+                   ON (t.admin_user_id = s.aid AND t.tenant_id = s.tid)
+                 WHEN NOT MATCHED THEN
+                   INSERT (admin_user_id, tenant_id, created_at, created_by)
+                   VALUES (s.aid, s.tid, SYSTIMESTAMP, 'it')
                 """);
         var redisConn = redisFactory.getConnection();
         try {
@@ -319,7 +330,7 @@ class RpAdminBoundaryIT {
         // bob (RP_ADMIN, demo-rp) 로그인
         HttpHeaders bobAuth = loginAs("bob@crosscert.com", "bob-temp-pw");
 
-        // ── 1. GET /me — role=RP_ADMIN + tenantId ──────────────────────────────
+        // ── 1. GET /me — role=RP_ADMIN + tenantIds (N:M: 단수 tenantId → 배열) ──
         ResponseEntity<JsonNode> me = http.exchange(
                 url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
         assertThat(me.getStatusCode().is2xxSuccessful()).isTrue();
@@ -327,10 +338,13 @@ class RpAdminBoundaryIT {
         assertThat(meData.get("role").asText())
                 .as("bob must have role RP_ADMIN")
                 .isEqualTo("RP_ADMIN");
-        String myTenantId = meData.get("tenantId").asText();
-        assertThat(myTenantId)
-                .as("bob must have a tenantId")
-                .isNotBlank();
+        JsonNode tenantIds = meData.get("tenantIds");
+        assertThat(tenantIds != null && tenantIds.isArray() && tenantIds.size() >= 1)
+                .as("bob (RP_ADMIN) must have at least one mapped tenant: %s", tenantIds)
+                .isTrue();
+        // demo-rp 단일 매핑 — 활성/유일 RP id 로 사용.
+        String myTenantId = tenantIds.get(0).asText();
+        assertThat(myTenantId).as("bob must have a tenantId").isNotBlank();
 
         // ── 2. GET /tenants — demo-rp 만 포함, boundary-it-a 미포함 ───────────
         ResponseEntity<JsonNode> tList = http.exchange(

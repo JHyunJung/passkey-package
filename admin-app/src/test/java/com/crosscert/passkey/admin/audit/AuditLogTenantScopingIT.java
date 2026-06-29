@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -58,7 +59,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Testcontainers + loginAs inline 패턴은 RpAdminBoundaryIT 에서 복사.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class AuditLogTenantScopingIT {
@@ -177,18 +180,25 @@ class AuditLogTenantScopingIT {
                 INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
                 """);
-        // bob → RP_ADMIN @ demo-rp (mirrors V23 step 9)
+        // bob → RP_ADMIN @ demo-rp (role + admin_user_tenant 매핑; N:M 전환).
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
-                   SET role = 'RP_ADMIN',
-                       tenant_id = HEXTORAW('0000000000000000000000000000C0DE')
+                   SET role = 'RP_ADMIN'
                  WHERE email = 'bob@crosscert.com'
                 """);
-        // alice → PLATFORM_OPERATOR (no tenant)
+        jdbc.update("""
+                MERGE INTO APP_OWNER.admin_user_tenant t
+                USING (SELECT HEXTORAW('00000000000000000000000000000011') AS aid,
+                              HEXTORAW('0000000000000000000000000000C0DE') AS tid FROM dual) s
+                   ON (t.admin_user_id = s.aid AND t.tenant_id = s.tid)
+                 WHEN NOT MATCHED THEN
+                   INSERT (admin_user_id, tenant_id, created_at, created_by)
+                   VALUES (s.aid, s.tid, SYSTIMESTAMP, 'it')
+                """);
+        // alice → PLATFORM_OPERATOR (매핑 0개 = 전체 접근)
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
-                   SET role = 'PLATFORM_OPERATOR',
-                       tenant_id = NULL
+                   SET role = 'PLATFORM_OPERATOR'
                  WHERE email = 'alice@crosscert.com'
                 """);
         var redisConn = redisFactory.getConnection();

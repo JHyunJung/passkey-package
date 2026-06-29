@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.credential;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.repository.CredentialRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -56,7 +57,9 @@ import org.springframework.web.client.RestTemplate;
  *
  * T6 의 TenantAdminControllerUpdateIT 와 동일한 Testcontainers + 로그인 inline 패턴 사용.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class CredentialAdminControllerSecurityIT {
@@ -182,12 +185,20 @@ class CredentialAdminControllerSecurityIT {
                 INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
                 """);
-        // Re-assign bob to demo-rp as RP_ADMIN (mirrors V23 step 9)
+        // Re-assign bob to demo-rp as RP_ADMIN (role + admin_user_tenant 매핑; N:M 전환).
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
-                   SET role = 'RP_ADMIN',
-                       tenant_id = HEXTORAW('0000000000000000000000000000C0DE')
+                   SET role = 'RP_ADMIN'
                  WHERE email = 'bob@crosscert.com'
+                """);
+        jdbc.update("""
+                MERGE INTO APP_OWNER.admin_user_tenant t
+                USING (SELECT HEXTORAW('00000000000000000000000000000011') AS aid,
+                              HEXTORAW('0000000000000000000000000000C0DE') AS tid FROM dual) s
+                   ON (t.admin_user_id = s.aid AND t.tenant_id = s.tid)
+                 WHEN NOT MATCHED THEN
+                   INSERT (admin_user_id, tenant_id, created_at, created_by)
+                   VALUES (s.aid, s.tid, SYSTIMESTAMP, 'it')
                 """);
         var redisConn = redisFactory.getConnection();
         try {
