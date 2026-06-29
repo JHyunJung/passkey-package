@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.auth;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -43,7 +44,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Testcontainers + loginAs inline 패턴은 T13 RpAdminBoundaryIT 에서 복사.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(MultiTenantOperatorIT 참고).
+@SpringBootTest(classes = AdminApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class PlatformOperatorUnrestrictedIT {
@@ -166,10 +169,10 @@ class PlatformOperatorUnrestrictedIT {
         // Ensure alice is PLATFORM_OPERATOR with no tenant. (MFA is disabled
         // for the seed users by the test-only migration V9000 so logins here
         // are not gated by MfaPendingFilter; see db/testfix.)
+        // alice 는 PLATFORM_OPERATOR — 매핑 0개(전체 접근). tenant_id 컬럼 제거됨(N:M 전환).
         jdbc.update("""
                 UPDATE APP_OWNER.admin_user
-                   SET role = 'PLATFORM_OPERATOR',
-                       tenant_id = NULL
+                   SET role = 'PLATFORM_OPERATOR'
                  WHERE email = 'alice@crosscert.com'
                 """);
         // Flush Redis to clear scheduler leases and session state
@@ -293,10 +296,11 @@ class PlatformOperatorUnrestrictedIT {
         ResponseEntity<JsonNode> me = http.exchange(
                 url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
         assertThat(me.getBody().get("data").get("role").asText()).isEqualTo("PLATFORM_OPERATOR");
-        // tenantId is null for PLATFORM_OPERATOR — NON_NULL serialization omits the field entirely
-        JsonNode tenantIdNode = me.getBody().get("data").path("tenantId");
-        assertThat(tenantIdNode.isNull() || tenantIdNode.isMissingNode())
-                .as("PLATFORM_OPERATOR tenantId must be null/absent").isTrue();
+        // PLATFORM_OPERATOR 는 매핑 0개 → tenantIds 빈 배열(전체 접근 의미). (N:M: 단수 tenantId → 배열)
+        JsonNode tenantIdsNode = me.getBody().get("data").path("tenantIds");
+        assertThat(tenantIdsNode.isMissingNode()
+                        || (tenantIdsNode.isArray() && tenantIdsNode.isEmpty()))
+                .as("PLATFORM_OPERATOR tenantIds must be empty/absent: %s", tenantIdsNode).isTrue();
 
         // 2. tenant_A 생성
         String tenantAId = createTenantViaApi(auth, "platform-it-a", "Tenant A");
