@@ -59,6 +59,9 @@ docker compose up -d
 docker exec -i passkey-oracle sqlplus -s / as sysdba < scripts/bootstrap-schema.sql
 ```
 
+> 한 번에 깨끗이 초기화하려면 위 두 줄 대신 `scripts/init-dev-db.sh` 를 쓴다.
+> 컨테이너·볼륨 재생성부터 부트스트랩까지 자동화한다 ([5) DB 스크립트](#5-db-스크립트) 참고).
+
 ### 프로필
 
 플랫폼 운영을 위해 세 가지 Spring 프로필이 정의되어 있다:
@@ -108,6 +111,44 @@ npm run dev      # Vite :5173 — admin-app :8081 으로 proxy
 > `alice` 는 `db/seed-common`, `bob` 은 `db/dev`(dev-passkey 테넌트에 바인딩)에서
 > 시드된다. dev/local 전용 — 비프로덕션 배포 전 반드시 로테이션.
 
+### 5) DB 스크립트
+
+`scripts/` 의 초기화 스크립트는 환경에 따라 두 갈래다. 상세 절차·환경변수는 각 스크립트
+헤더 주석에 있다. **모든 reset/init 은 dev·qa 전용 — prod 에는 쓰지 않는다.**
+
+**Docker 로컬 dev** (`docker compose` 로 Oracle 을 띄운 경우)
+
+| 스크립트 | 용도 | 언제 |
+|---|---|---|
+| `init-dev-db.sh` | 컨테이너·볼륨 재생성 → 부트스트랩까지 풀 초기화 (분 단위) | 처음부터 깨끗이 / 볼륨까지 갈아엎을 때 |
+| `reset-app-owner.sh` | 컨테이너는 두고 APP_OWNER 스키마 객체만 DROP+재생성 (초 단위) | 데이터만 비우고 빠르게 다시 시작할 때 |
+| `bootstrap-schema.sql` | APP_OWNER / APP_RUNTIME_USER / APP_ADMIN_USER + role 부트스트랩. **Testcontainers IT 의 single source of truth** | 위 스크립트가 내부 호출 (수동 실행은 1) 인프라 기동 참고) |
+| `run-bootstrap.sh` · `wait-for-oracle.sh` · `reset-app-owner.sql` | 부트스트랩 실행 러너 / healthcheck 대기 / APP_OWNER 객체 DROP(SYS) | 위 스크립트가 내부 호출 (직접 실행 불필요) |
+
+```bash
+scripts/init-dev-db.sh            # 확인 프롬프트 후 풀 초기화 (--yes 로 생략)
+scripts/reset-app-owner.sh        # 'RESET' 타이핑 확인 후 스키마만 리셋 (--yes 로 생략)
+PROFILE=dev scripts/reset-app-owner.sh   # dev 시드로 리셋
+```
+
+**외부/원격 Oracle** (Docker 없이 이미 떠 있는 Oracle — 로컬 설치 또는 원격 dev 서버)
+
+| 스크립트 | 용도 | 언제 |
+|---|---|---|
+| `init-db-external.sh` | sqlplus 로 부트스트랩 + Flyway 적용 (도커 미사용) | 외부 Oracle 에 스키마를 처음 올릴 때 |
+| `bootstrap-external.sql` (+ `bootstrap-external-body.sql`) | DBeaver 등 DEFINE 미지원 클라이언트용 부트스트랩 wrapper | sqlplus 없이 GUI 로 부트스트랩할 때 |
+| `reset-app-owner-external.sql` | 외부 SE 의 APP_OWNER 스키마를 DBeaver 에서 APP_OWNER 계정으로 비움 (SYSDBA·sqlplus 불필요) | 외부 dev DB 를 리셋할 때 |
+
+```bash
+# 외부 Oracle 초기화. 부트스트랩 비번 3종(ADMIN_PW/APP_OWNER_PW/RUNTIME_PW) 필수.
+# ORA_SYS_PW 는 기본 'oracle', ORA_HOST/PORT/SERVICE 는 원격일 때만 (기본 localhost:1521/XEPDB1).
+ADMIN_PW=... APP_OWNER_PW=... RUNTIME_PW=... \
+  ORA_HOST=db.example.com ORA_SERVICE=XEPDB1 scripts/init-db-external.sh
+
+# 이미 부트스트랩된 외부 DB 에 Flyway 만 재적용 (bootstrap 비번 불필요)
+SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
+```
+
 ## 데이터 흐름
 
 ### 등록 (Registration)
@@ -154,7 +195,7 @@ npm run dev      # Vite :5173 — admin-app :8081 으로 proxy
 ├── admin-ui/            # React + TypeScript admin SPA (Vite)
 ├── rp-app/           # 데모 RP — Thymeleaf 페이지 + WebAuthnController
 ├── sdk-java/            # Java SDK (PasskeyClient + IdTokenVerifier + Redacting/TracePropagation interceptors)
-├── scripts/             # bootstrap-schema.sql 등 DB 초기화
+├── scripts/             # DB 부트스트랩·초기화·리셋 (Docker 로컬 + 외부 Oracle) — 5) DB 스크립트 참고
 ├── docs/
 │   ├── logging-operations.md          # 운영자용 검색 cookbook + alert + trouble-shooting
 │   ├── logging-conventions.md         # 개발자용 로깅 컨벤션
