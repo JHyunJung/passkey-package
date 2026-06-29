@@ -50,7 +50,11 @@ public class MeController {
             idleMinutes = session.getMaxInactiveInterval() / 60;
         }
 
+        // tenantIds 를 UUID 자연 순서로 정렬해 내려준다. ActiveTenantResolver 의 기본 활성 RP 가
+        // new TreeSet<>(allowed).first() = UUID 최소값이므로, 프론트가 tenantIds[0] 로 라우팅해도
+        // 백엔드 활성 RP 와 항상 같은 RP 를 가리킨다(로그인 직후 화면 ↔ 스위처 활성 표시 일치).
         List<java.util.UUID> tenantIds = new ArrayList<>(principal.getAllowedTenantIds());
+        tenantIds.sort(null);
         return ApiResponse.ok(new MeView(
                 principal.getUsername(),
                 principal.getRole(),
