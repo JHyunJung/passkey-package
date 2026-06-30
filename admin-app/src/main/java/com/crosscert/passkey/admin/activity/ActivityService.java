@@ -15,7 +15,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -101,14 +100,16 @@ public class ActivityService {
         };
         List<AuditLog> feed = resolveFeed(sinceId, before, tenantId, actionFilter);
 
-        // distinct().toMap() avoids N+1 — 1 query per unique tenant in the page.
-        Map<UUID, String> slugByTenant = feed.stream()
+        // 페이지에 등장한 distinct tenantId 들을 한 번의 IN 쿼리(findAllById)로 로드 —
+        // incident 의 buildLookups 와 동일한 배치 패턴. per-tenant findById N+1 제거.
+        // 주의: findAllById 는 존재하지 않는 ID(삭제된 테넌트)를 결과에 넣지 않으므로,
+        // 121행 slug 조회에서 getOrDefault(..., "(deleted)") fallback 으로 표기를 보존한다.
+        Set<UUID> tenantIds = feed.stream()
                 .map(AuditLog::getTenantId)
                 .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toMap(
-                        Function.identity(),
-                        tid -> tenants.findById(tid).map(Tenant::getSlug).orElse("(deleted)")));
+                .collect(Collectors.toSet());
+        Map<UUID, String> slugByTenant = tenants.findAllById(tenantIds).stream()
+                .collect(Collectors.toMap(Tenant::getId, Tenant::getSlug));
 
         List<ActivityView.Event> events = feed.stream()
                 .map(a -> new ActivityView.Event(
@@ -118,7 +119,8 @@ public class ActivityService {
                         a.getTargetType(),
                         a.getTargetId(),
                         a.getTenantId(),
-                        a.getTenantId() == null ? null : slugByTenant.get(a.getTenantId()),
+                        a.getTenantId() == null ? null
+                                : slugByTenant.getOrDefault(a.getTenantId(), "(deleted)"),
                         a.getCreatedAt(),
                         categorize(a.getAction())))
                 .toList();

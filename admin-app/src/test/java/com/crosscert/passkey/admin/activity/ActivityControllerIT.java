@@ -437,6 +437,52 @@ class ActivityControllerIT {
                 .isGreaterThanOrEqualTo(1);
     }
 
+    /**
+     * F09 회귀 채널 — feed slug 를 findAllById 배치로 전환해도 삭제된 테넌트(조회 결과에
+     * 포함되지 않는 tenant_id)는 여전히 "(deleted)" 로 표기되어야 한다.
+     *
+     * <p>resetState 는 demo-rp(...C0DE) 단 하나의 테넌트만 시드한다. tenant_id =
+     * ...DEAD 인 audit_log 행을 직접 삽입하면 그 행의 테넌트는 존재하지 않으므로,
+     * findAllById 결과 Map 에 들어오지 않는다 → getOrDefault fallback 검증.
+     */
+    @Test
+    void feed_deletedTenant_slugIsDeletedFallback() throws Exception {
+        ownerJdbc().update("""
+                INSERT INTO APP_OWNER.audit_log
+                    (id, prev_hash, hash, actor_id, actor_email, action,
+                     target_type, target_id, payload, created_at, updated_at,
+                     tenant_id, tenant_prev_hash, tenant_hash)
+                VALUES (HEXTORAW('0000000000000000000000000000DA03'), NULL, SYS_GUID(), NULL, 'admin@acme.com',
+                     'API_KEY_ISSUE', 'API_KEY', 'pk_dead', '{}',
+                     SYSTIMESTAMP, SYSTIMESTAMP,
+                     HEXTORAW('0000000000000000000000000000DEAD'), NULL, SYS_GUID())
+                """);
+
+        HttpHeaders auth = loginAs("alice@crosscert.com", "alice-temp-pw");
+        ResponseEntity<JsonNode> resp = rest.exchange(
+                url("/admin/api/activity"), HttpMethod.GET,
+                new HttpEntity<>(auth), JsonNode.class);
+        assertThat(resp.getStatusCode().is2xxSuccessful())
+                .as("GET /admin/api/activity: %s body=%s", resp.getStatusCode(), resp.getBody())
+                .isTrue();
+
+        JsonNode feed = resp.getBody().get("data").get("feed");
+        JsonNode deadEvent = null;
+        for (JsonNode e : feed) {
+            if ("00000000-0000-0000-0000-00000000dead".equals(e.path("tenantId").asText())) {
+                deadEvent = e;
+                break;
+            }
+        }
+        assertThat(deadEvent)
+                .as("feed must contain the row referencing the deleted tenant (...DEAD): %s", feed)
+                .isNotNull();
+        assertThat(deadEvent.get("tenantSlug").asText())
+                .as("deleted-tenant feed row must keep the \"(deleted)\" slug fallback after findAllById batch: %s",
+                        deadEvent)
+                .isEqualTo("(deleted)");
+    }
+
     // ----------------------------------------------------------------
     // detail — GET /admin/api/activity/{id}
     // ----------------------------------------------------------------
