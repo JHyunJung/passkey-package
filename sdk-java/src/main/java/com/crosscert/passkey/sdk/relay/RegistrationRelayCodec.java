@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Objects;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -44,9 +45,10 @@ public final class RegistrationRelayCodec {
     private final Clock clock;
 
     public RegistrationRelayCodec(byte[] secret, Duration ttl, Clock clock) {
-        this.key = secret.clone();
-        this.ttlSeconds = ttl.toSeconds();
-        this.clock = clock;
+        // 공개 SDK API — 잘못된 인자는 생성 시점에 fail-fast 시켜 지연된 NPE 를 막는다.
+        this.key = Objects.requireNonNull(secret, "secret").clone();
+        this.ttlSeconds = Objects.requireNonNull(ttl, "ttl").toSeconds();
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     /** {rt, uh, un, dn, exp} 를 서명한 relay 토큰 생성. */

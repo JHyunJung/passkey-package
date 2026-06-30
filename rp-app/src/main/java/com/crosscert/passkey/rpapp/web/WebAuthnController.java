@@ -177,7 +177,8 @@ public class WebAuthnController {
             throw e;
         }
 
-        // 검증을 통과한 ID Token 은 항상 sub(opaque userHandle)를 갖는다(IdTokenVerifier 보장).
+        // sub(opaque userHandle)로 사용자를 조회한다. sub 가 없으면(null) 조회가 비어
+        // unknown sub(P004)로 거부된다 — fail-closed.
         RpAppUser user = users.findByUserHandle(claims.sub())
                 .orElseThrow(() -> {
                     log.warn("login/complete failed: reason=unknown-sub subTail={}", idTail(claims.sub()));
