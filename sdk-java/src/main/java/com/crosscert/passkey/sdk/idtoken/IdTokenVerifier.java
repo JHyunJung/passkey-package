@@ -117,7 +117,15 @@ public class IdTokenVerifier {
             throw new PasskeyIdTokenException("expectedIssuer must be <issuerBase>/<tenantId>");
         }
         String issuerBase = expectedIssuer.substring(0, slash);
-        String expectedTenant = normalizeTenantId(expectedIssuer.substring(slash + 1));
+        String tenantPart = expectedIssuer.substring(slash + 1);
+        // tenant segment 가 비어 있으면(issuerBase 만 넘어온 오설정) fail-closed.
+        // 또한 issuerBase 가 scheme 슬래시까지만 남는 경우(예: "https:/")를 막아,
+        // "https://issuer" 처럼 tenant 없는 expectedIssuer 가 잘못 통과하지 않게 한다.
+        if (tenantPart.isBlank() || issuerBase.endsWith(":/") || issuerBase.endsWith(":")) {
+            log.warn("id-token verify failed: reason=config expectedIssuer-no-tenant got={}", expectedIssuer);
+            throw new PasskeyIdTokenException("expectedIssuer must be <issuerBase>/<tenantId> with a tenant segment");
+        }
+        String expectedTenant = normalizeTenantId(tenantPart);
 
         String tokenIss = claims.iss();
         String prefix = issuerBase + "/";

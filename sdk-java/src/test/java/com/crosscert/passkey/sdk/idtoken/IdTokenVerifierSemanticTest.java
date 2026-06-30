@@ -122,4 +122,20 @@ class IdTokenVerifierSemanticTest {
         assertThatThrownBy(() -> verifier.verify(jwt, ISSUER_BASE + "/" + TENANT_DASH, "  "))
                 .isInstanceOf(PasskeyIdTokenException.class);
     }
+
+    @Test
+    void rejects_whenExpectedIssuerHasNoTenantSegment() throws Exception {
+        // issuerBase 만(tenant 없음) 넘기면 거부 — fail-open 회귀 가드(codex 발견).
+        String jwt = token(ISSUER_BASE, TENANT_DASH); // iss = "https://issuer.example.com"
+        assertThatThrownBy(() -> verifier.verify(jwt, ISSUER_BASE, TENANT_DASH))
+                .isInstanceOf(PasskeyIdTokenException.class);
+    }
+
+    @Test
+    void rejects_whenExpectedIssuerEndsWithSlashOnly() throws Exception {
+        // "https://issuer.example.com/" 처럼 tenant 가 빈 문자열인 경우도 거부.
+        String jwt = token(ISSUER_BASE + "/" + TENANT_DASH, TENANT_DASH);
+        assertThatThrownBy(() -> verifier.verify(jwt, ISSUER_BASE + "/", TENANT_DASH))
+                .isInstanceOf(PasskeyIdTokenException.class);
+    }
 }
