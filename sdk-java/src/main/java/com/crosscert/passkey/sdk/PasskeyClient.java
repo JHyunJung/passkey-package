@@ -94,6 +94,10 @@ public class PasskeyClient {
         return idTokenVerifier.verify(compactJwt);
     }
 
+    public IdTokenClaims verifyIdToken(String compactJwt, String expectedIssuer, String expectedAudience) {
+        return idTokenVerifier.verify(compactJwt, expectedIssuer, expectedAudience);
+    }
+
     private <T> T post(String path, Object body, TypeReference<ApiResponseEnvelope<T>> typeRef) {
         Instant started = Instant.now();
         byte[] bytes;
