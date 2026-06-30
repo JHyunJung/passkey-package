@@ -1,12 +1,8 @@
-package com.crosscert.passkey.rpapp.common.exception
+package com.crosscert.passkey.rpapp.common.exception;
 
-import org.springframework.http.HttpStatus
+import org.springframework.http.HttpStatus;
 
-enum class ErrorCode(
-    val status: HttpStatus,
-    val code: String,
-    val message: String,
-) {
+public enum ErrorCode {
     // Common
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "C001", "Invalid input value"),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "C002", "Method not allowed"),
@@ -28,5 +24,27 @@ enum class ErrorCode(
     PASSKEY_API_ERROR(HttpStatus.BAD_GATEWAY, "P001", "Upstream passkey server error"),
     PASSKEY_AUTH_ERROR(HttpStatus.UNAUTHORIZED, "P002", "Invalid X-API-Key (rp-app config)"),
     PASSKEY_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "P003", "Upstream rate limit exceeded"),
-    PASSKEY_ID_TOKEN(HttpStatus.UNAUTHORIZED, "P004", "ID Token verification failed"),
+    PASSKEY_ID_TOKEN(HttpStatus.UNAUTHORIZED, "P004", "ID Token verification failed");
+
+    private final HttpStatus status;
+    private final String code;
+    private final String message;
+
+    ErrorCode(HttpStatus status, String code, String message) {
+        this.status = status;
+        this.code = code;
+        this.message = message;
+    }
+
+    public HttpStatus status() { return status; }
+    public String code() { return code; }
+    public String message() { return message; }
+
+    // JavaBean getters — required so still-Kotlin callers (e.g. ApiResponse.kt
+    // using `code.code` / `code.message` property syntax) compile. Kotlin only
+    // synthesizes properties from getX() getters, not from the record-style
+    // accessors above. Behavior-identical; remove once all callers are Java.
+    public HttpStatus getStatus() { return status; }
+    public String getCode() { return code; }
+    public String getMessage() { return message; }
 }
