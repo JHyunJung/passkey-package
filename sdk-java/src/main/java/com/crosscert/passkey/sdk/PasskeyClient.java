@@ -94,6 +94,11 @@ public class PasskeyClient {
         return idTokenVerifier.verify(compactJwt);
     }
 
+    /**
+     * 서명·exp 검증에 더해 iss/aud 시맨틱 검증까지 수행한다.
+     * expectedIssuer 는 {@code <issuerBase>/<tenantId>} 전체 문자열, expectedAudience 는 tenantId.
+     * 검증 실패 시 {@link com.crosscert.passkey.sdk.exception.PasskeyIdTokenException}.
+     */
     public IdTokenClaims verifyIdToken(String compactJwt, String expectedIssuer, String expectedAudience) {
         return idTokenVerifier.verify(compactJwt, expectedIssuer, expectedAudience);
     }

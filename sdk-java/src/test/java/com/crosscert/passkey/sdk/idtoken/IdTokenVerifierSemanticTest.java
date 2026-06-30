@@ -115,4 +115,11 @@ class IdTokenVerifierSemanticTest {
         assertThatThrownBy(() -> verifier.verify(jwt, "  ", TENANT_DASH))
                 .isInstanceOf(PasskeyIdTokenException.class);
     }
+
+    @Test
+    void rejects_whenExpectedAudienceBlank() throws Exception {
+        String jwt = token(ISSUER_BASE + "/" + TENANT_DASH, TENANT_DASH);
+        assertThatThrownBy(() -> verifier.verify(jwt, ISSUER_BASE + "/" + TENANT_DASH, "  "))
+                .isInstanceOf(PasskeyIdTokenException.class);
+    }
 }

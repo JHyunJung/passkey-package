@@ -140,7 +140,7 @@ public class IdTokenVerifier {
 
     /**
      * tenantId 를 표준 UUID(소문자+대시)로 정규화한다. hex32(대시 없음) 또는 대시 UUID
-     * 모두 허용. 파싱 불가하면 입력을 그대로 반환(원본 비교에 맡김).
+     * 모두 허용. 파싱 불가하면 trim 된 입력을 그대로 반환(원본 비교에 맡김).
      */
     private static String normalizeTenantId(String raw) {
         if (raw == null) return null;
@@ -152,7 +152,7 @@ public class IdTokenVerifier {
         try {
             return java.util.UUID.fromString(s).toString();
         } catch (IllegalArgumentException e) {
-            return raw;
+            return s;
         }
     }
 
