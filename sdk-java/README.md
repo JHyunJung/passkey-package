@@ -1,15 +1,41 @@
 # Passkey RP SDK (sdk-java)
 
 Passkey2 RP(Relying Party) API 를 호출하는 순수 Java 클라이언트 라이브러리.
-등록/인증 4종 + ID Token 검증을 얇게 감싼다.
+등록/인증 4종 호출 + ID Token 검증(서명·exp·iss·aud) + 무상태 등록 릴레이 코덱을 제공한다.
 
 ## 1. 개요
 
 - **무엇을 하나:** RP 서버가 Passkey2 백엔드의 `/api/v1/rp/*` 엔드포인트(등록 start/finish,
   인증 start/finish)를 호출하고, 발급된 ID Token(RS256 JWT)을 JWKS 로 검증한다.
+- **무상태 릴레이:** 무상태 RP 가 등록 begin↔finish 사이 userHandle 을 서버 세션 없이 잇도록
+  HMAC 서명 릴레이 토큰 코덱(`RegistrationRelayCodec`)을 제공한다.
+- **ID Token 시맨틱 검증:** 서명·exp 뿐 아니라 iss/aud 까지 한 번에 검증하는 3-인자
+  `verifyIdToken` 을 제공해, RP 가 직접 iss/aud 를 비교하다 실수하는 것을 막는다.
 - **요구 사항:** Java 17+, Spring Web(`RestClient`) 런타임. (transitive 로 spring-web,
   jackson-databind/jsr310, nimbus-jose-jwt, slf4j-api 를 끌어온다.)
 - **순수 Java:** Kotlin 런타임 의존성 없음.
+
+### 토큰 플로우
+
+RP 가 다루는 4개 토큰의 출처·이동:
+
+```text
+[등록]
+  RP ──registrationStart()──► SDK ──► registrationToken
+  RP : regRelayToken = relay.encode(registrationToken, userHandle, …)        ──► 브라우저
+  브라우저 ──(navigator.credentials.create)──► regRelayToken + credential    ──► RP
+  RP : registrationToken = relay.decode(regRelayToken).registrationToken()
+  RP ──registrationFinish(registrationToken, credential)──► SDK ──► credentialId
+
+[인증]
+  RP ──authenticationStart()──► SDK ──► authenticationToken                  ──► 브라우저
+  브라우저 ──(navigator.credentials.get)──► authenticationToken + credential ──► RP
+  RP ──authenticationFinish(authenticationToken, credential)──► SDK ──► idToken
+  RP : claims = verifyIdToken(idToken, issuerBase + "/" + tenantId, tenantId)
+```
+
+릴레이 코덱은 **등록에만** 쓰인다 — 인증은 `authenticationToken` 을 그대로 왕복하므로 별도 릴레이가
+필요 없다.
 
 ## 2. 설치
 
