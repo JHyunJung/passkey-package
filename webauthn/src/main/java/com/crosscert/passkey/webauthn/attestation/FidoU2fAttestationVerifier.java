@@ -4,6 +4,7 @@ import com.crosscert.passkey.webauthn.authdata.AttestedCredentialData;
 import com.crosscert.passkey.webauthn.authdata.AuthenticatorData;
 import com.crosscert.passkey.webauthn.cbor.CborValue;
 import com.crosscert.passkey.webauthn.cbor.CborValue.*;
+import com.crosscert.passkey.webauthn.cose.CoseAlgorithm;
 import com.crosscert.passkey.webauthn.cose.CoseKey;
 import com.crosscert.passkey.webauthn.cose.CoseKeyParser;
 
@@ -38,6 +39,9 @@ public final class FidoU2fAttestationVerifier implements AttestationVerifier {
         X509Certificate leaf = parseCert(((CborBytes) x5c.items().get(0)).value());
 
         CoseKey credKey = CoseKeyParser.parse(acd.coseKeyMap());
+        if (credKey.algorithm() != CoseAlgorithm.ES256) {
+            throw new AttestationException("fido-u2f credential must be ES256 (P-256)");
+        }
         if (!(credKey.publicKey() instanceof ECPublicKey ec)) {
             throw new AttestationException("fido-u2f credential is not EC");
         }
