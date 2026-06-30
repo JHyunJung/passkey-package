@@ -8,6 +8,10 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 import java.util.function.Supplier;
 
+/**
+ * SDK {@link PasskeyClient} 빈 구성. 고객사 RP 의 SDK 연동 레퍼런스다.
+ * baseUrl·apiKey 등 {@code passkey.*} 설정을 읽어 클라이언트를 만든다. API Key 는 핫리로드 가능한 공급자로 주입한다.
+ */
 @Configuration
 public class PasskeyClientConfiguration {
 
