@@ -34,13 +34,13 @@ class InMemoryUserStoreTest {
 
         Optional<RpAppUser> byHandle = second.findByUserHandle(handle);
         assertThat(byHandle).isPresent();
-        assertThat(byHandle.get().getUsername()).isEqualTo("alice");
-        assertThat(byHandle.get().getDisplayName()).isEqualTo("Alice");
-        assertThat(byHandle.get().getCredentialId()).isEqualTo("cred-123");
-        assertThat(byHandle.get().getCreatedAt()).isNotNull();
+        assertThat(byHandle.get().username()).isEqualTo("alice");
+        assertThat(byHandle.get().displayName()).isEqualTo("Alice");
+        assertThat(byHandle.get().credentialId()).isEqualTo("cred-123");
+        assertThat(byHandle.get().createdAt()).isNotNull();
 
         assertThat(second.findByUsername("alice")).isPresent();
-        assertThat(second.findByUsername("alice").get().getUserHandle()).isEqualTo(handle);
+        assertThat(second.findByUsername("alice").get().userHandle()).isEqualTo(handle);
     }
 
     /**
@@ -58,20 +58,20 @@ class InMemoryUserStoreTest {
 
         Optional<RpAppUser> byHandle = store.findByUserHandle("handle-x");
         assertThat(byHandle).isPresent();
-        assertThat(byHandle.get().getUserHandle()).isEqualTo("handle-x");
-        assertThat(byHandle.get().getUsername()).isEqualTo("dave");
-        assertThat(byHandle.get().getDisplayName()).isEqualTo("Dave");
-        assertThat(byHandle.get().getCredentialId()).isEqualTo("cred-x");
-        assertThat(byHandle.get().getCreatedAt()).isNotNull();
+        assertThat(byHandle.get().userHandle()).isEqualTo("handle-x");
+        assertThat(byHandle.get().username()).isEqualTo("dave");
+        assertThat(byHandle.get().displayName()).isEqualTo("Dave");
+        assertThat(byHandle.get().credentialId()).isEqualTo("cred-x");
+        assertThat(byHandle.get().createdAt()).isNotNull();
 
         // username→handle 매핑도 복구되어 로그인(unknown-sub 회피)이 가능해야 한다.
         assertThat(store.findByUsername("dave")).isPresent();
-        assertThat(store.findByUsername("dave").get().getUserHandle()).isEqualTo("handle-x");
+        assertThat(store.findByUsername("dave").get().userHandle()).isEqualTo("handle-x");
 
         // 확정 user 는 영속화되어 새 인스턴스에서도 살아남아야 한다(완전 무상태).
         InMemoryUserStore reloaded = new InMemoryUserStore(mapper(), file.toString());
         assertThat(reloaded.findByUserHandle("handle-x")).isPresent();
-        assertThat(reloaded.findByUserHandle("handle-x").get().getCredentialId()).isEqualTo("cred-x");
+        assertThat(reloaded.findByUserHandle("handle-x").get().credentialId()).isEqualTo("cred-x");
     }
 
     /**
@@ -93,8 +93,8 @@ class InMemoryUserStoreTest {
 
         // 원 매핑은 그대로 유지(탈취 안 됨).
         assertThat(store.findByUsername("alice")).isPresent();
-        assertThat(store.findByUsername("alice").get().getUserHandle()).isEqualTo("h1");
-        assertThat(store.findByUsername("alice").get().getCredentialId()).isEqualTo("c1");
+        assertThat(store.findByUsername("alice").get().userHandle()).isEqualTo("h1");
+        assertThat(store.findByUsername("alice").get().credentialId()).isEqualTo("c1");
         // 거부된 handle 은 만들어지지 않아야 한다.
         assertThat(store.findByUserHandle("h2")).isEmpty();
     }
@@ -110,8 +110,8 @@ class InMemoryUserStoreTest {
                 .doesNotThrowAnyException();
 
         assertThat(store.findByUserHandle("h1")).isPresent();
-        assertThat(store.findByUserHandle("h1").get().getCredentialId()).isEqualTo("c1b");
-        assertThat(store.findByUsername("alice").get().getUserHandle()).isEqualTo("h1");
+        assertThat(store.findByUserHandle("h1").get().credentialId()).isEqualTo("c1b");
+        assertThat(store.findByUsername("alice").get().userHandle()).isEqualTo("h1");
     }
 
     /** isUsernameTakenByOther: 점유 없음/같은 handle → false, 다른 handle → true. */
@@ -163,7 +163,7 @@ class InMemoryUserStoreTest {
         // 재-begin 후 정상 finish 는 여전히 성공한다.
         store.confirmRegistration(secondHandle, "erin", "Erin", "cred-erin");
         assertThat(store.findByUsername("erin")).isPresent();
-        assertThat(store.findByUsername("erin").get().getUserHandle()).isEqualTo(secondHandle);
+        assertThat(store.findByUsername("erin").get().userHandle()).isEqualTo(secondHandle);
     }
 
     /**
@@ -231,6 +231,6 @@ class InMemoryUserStoreTest {
         // 새 users.json 에는 방금 확정한 user 가 들어있어야 한다 (reload 로 검증)
         InMemoryUserStore reloaded = new InMemoryUserStore(mapper(), file.toString());
         assertThat(reloaded.findByUsername("carol")).isPresent();
-        assertThat(reloaded.findByUsername("carol").get().getCredentialId()).isEqualTo("cred-xyz");
+        assertThat(reloaded.findByUsername("carol").get().credentialId()).isEqualTo("cred-xyz");
     }
 }

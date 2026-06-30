@@ -24,6 +24,8 @@ bin/
 
 # Gradle
 .gradle/
+# 테스트용 GRADLE_USER_HOME 산출물(빌드 격리 실행이 생성)
+.gradle-home-test/
 !gradle-wrapper.jar
 
 # Logs

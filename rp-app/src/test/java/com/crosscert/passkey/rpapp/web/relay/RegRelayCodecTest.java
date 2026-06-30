@@ -48,10 +48,10 @@ class RegRelayCodecTest {
         String token = codec.encode("reg-token-xyz", "user-handle-abc", "alice", "Alice Example");
         RegRelayCodec.RegRelay decoded = codec.decode(token);
 
-        assertThat(decoded.getRegistrationToken()).isEqualTo("reg-token-xyz");
-        assertThat(decoded.getUserHandle()).isEqualTo("user-handle-abc");
-        assertThat(decoded.getUsername()).isEqualTo("alice");
-        assertThat(decoded.getDisplayName()).isEqualTo("Alice Example");
+        assertThat(decoded.registrationToken()).isEqualTo("reg-token-xyz");
+        assertThat(decoded.userHandle()).isEqualTo("user-handle-abc");
+        assertThat(decoded.username()).isEqualTo("alice");
+        assertThat(decoded.displayName()).isEqualTo("Alice Example");
     }
 
     // ── 2. 서명 변조 거부 ──────────────────────────────────────────
