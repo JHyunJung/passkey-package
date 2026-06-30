@@ -1,5 +1,6 @@
 package com.crosscert.passkey.webauthn.attestation;
 
+import com.crosscert.passkey.webauthn.JsonMappers;
 import com.crosscert.passkey.webauthn.authdata.AuthenticatorData;
 import com.crosscert.passkey.webauthn.cbor.CborValue;
 import com.crosscert.passkey.webauthn.cbor.CborValue.*;
@@ -52,7 +53,7 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
     private static final String EXPECTED_HOSTNAME = "attest.android.com";
 
     /** header/payload JSON 파싱 전용 — 스레드 안전(공유 가능). */
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = JsonMappers.secure();
 
     private static final Base64.Decoder B64URL = Base64.getUrlDecoder();
     private static final Base64.Decoder B64STD = Base64.getDecoder();

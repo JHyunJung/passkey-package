@@ -1,5 +1,6 @@
 package com.crosscert.passkey.webauthn.mds;
 
+import com.crosscert.passkey.webauthn.JsonMappers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -15,7 +16,7 @@ import java.util.List;
  */
 public final class MdsJws {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JsonMappers.secure();
     private static final Base64.Decoder B64URL = Base64.getUrlDecoder();
     private static final Base64.Decoder B64STD = Base64.getDecoder();
 
