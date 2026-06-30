@@ -104,6 +104,20 @@ class TpmAttestationVerifierTest {
     }
 
     @Test
+    void rejectsAlgAikKeyMismatch() throws Exception {
+        // F33: attStmt.alg=RS256(-257)인데 AIK 공개키가 EC면 alg↔AIK 키타입 불일치로 거부.
+        // (정상 TPM은 ES256↔EC, RS256↔RSA. extraData 해시는 둘 다 SHA-256이라 그 검사는 통과하므로,
+        //  alg↔키 단정이 verifySignature 이전에 명시적으로 거부함을 확인한다.)
+        Fixture f = new Fixture();
+        f.overrideAlg = -257L; // RS256 — 그러나 AIK는 EC 키
+        f.build();
+        AttestationException ex = assertThrows(AttestationException.class,
+                () -> verifier.verify(f.authData, f.rawAuthData, f.attStmt, f.clientDataHash));
+        assertTrue(ex.getMessage().contains("alg/AIK-key mismatch"),
+                "expected alg/AIK-key mismatch rejection, got: " + ex.getMessage());
+    }
+
+    @Test
     void rejectsAikWithoutBasicConstraints() throws Exception {
         // basicConstraints extension이 없는 AIK cert는 거부되어야 한다 (codex P2).
         Fixture f = new Fixture();
@@ -123,6 +137,7 @@ class TpmAttestationVerifierTest {
         boolean corruptPubAreaModulus = false;
         boolean appendCertInfoTrailingByte = false;
         boolean omitBasicConstraints = false;
+        Long overrideAlg = null; // null이면 정상 alg(-7, ES256). 설정 시 attStmt.alg를 덮어씀.
 
         AuthenticatorData authData;
         byte[] rawAuthData;
@@ -187,7 +202,7 @@ class TpmAttestationVerifierTest {
             // 7. attStmt CBOR map
             Map<CborValue, CborValue> m = new LinkedHashMap<>();
             m.put(new CborText("ver"), new CborText("2.0"));
-            m.put(new CborText("alg"), new CborInt(-7)); // EC AIK → ES256
+            m.put(new CborText("alg"), new CborInt(overrideAlg != null ? overrideAlg : -7)); // 기본: EC AIK → ES256
             m.put(new CborText("sig"), new CborBytes(signature));
             m.put(new CborText("x5c"), new CborArray(List.of(new CborBytes(aikCert.getEncoded()))));
             m.put(new CborText("certInfo"), new CborBytes(certInfo));

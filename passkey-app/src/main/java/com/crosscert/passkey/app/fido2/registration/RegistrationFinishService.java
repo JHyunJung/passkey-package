@@ -5,6 +5,8 @@ import com.crosscert.passkey.app.api.v1.rp.dto.RegistrationFinishResponse;
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore;
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge;
 import com.crosscert.passkey.app.fido2.mds.MdsVerifier;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.ceremony.CeremonyAction;
 import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
 import com.crosscert.passkey.core.entity.Credential;
@@ -55,6 +57,16 @@ public class RegistrationFinishService {
             RegistrationChallenge ch = store.takeRegistration(req.registrationToken())
                     .orElseThrow(() -> new IllegalArgumentException(
                             "registration token missing or expired"));
+
+            // F19 방어심화: challenge freshness 를 앱-레벨에서도 확인한다.
+            // 평시에는 Redis TTL 이 만료 challenge 를 먼저 제거하므로 이 가드가
+            // 추가로 거부하는 정상 요청은 없다(이중 방어). Redis 가 만료를 놓친
+            // 경계 상황(시계 차이·키 잔존 등)에서만 issuedAt 기준으로 거부한다.
+            if (clock.instant().minus(ChallengeStore.TTL).isAfter(ch.issuedAt())) {
+                log.warn("stale registration challenge rejected: issuedAt={} ttl={}",
+                        ch.issuedAt(), ChallengeStore.TTL);
+                throw new BusinessException(ErrorCode.CHALLENGE_INVALID, "challenge expired");
+            }
 
             // codex P2: bind challenge tenant to current API-key tenant
             // before touching tenant config — defense-in-depth on top of

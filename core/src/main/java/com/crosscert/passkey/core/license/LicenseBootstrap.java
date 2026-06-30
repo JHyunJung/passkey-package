@@ -1,6 +1,5 @@
 package com.crosscert.passkey.core.license;
 
-import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -9,7 +8,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Drives one-time license bootstrap in onprem mode:
@@ -17,9 +15,10 @@ import java.util.UUID;
  *   2. Verify it
  *   3. Reconcile with the cache (use whichever has the later exp)
  *   4. Construct LicenseStateMachine
- *   5. Pin TenantContextHolder to the licensed tenantId for the
- *      booting thread (per-request pinning is handled by
- *      OnpremTenantPinFilter)
+ *
+ * The licensed tenant is applied per-request by OnpremTenantPinFilter;
+ * this bootstrap does not pin the booting thread (no boot-time work reads
+ * the tenant context — see the note at the end of the @Bean method).
  *
  * Bootstrap failure -> Spring application context fails to start
  * (intentional: an onprem server with no valid license must not run).
@@ -59,11 +58,16 @@ public class LicenseBootstrap {
             }
         }
 
-        // Pin tenant for the booting thread (Liquibase, schema validation, etc.).
-        // Per-request pinning is handled by OnpremTenantPinFilter so request
-        // threads see the same tenant context.
-        TenantContextHolder.set(UUID.fromString(effective.tenantId()));
-        log.info("onprem mode: pinned tenant to {} (per-request pinning via OnpremTenantPinFilter)",
+        // No boot-thread tenant pin: nothing executed synchronously after this
+        // @Bean returns reads TenantContextHolder. Flyway migrations run via raw
+        // JDBC and the signing-key bootstrap uses a definer-rights PL/SQL package
+        // — neither consults the Hibernate tenantFilter. The only boot-time
+        // @PostConstruct (SigningKeyProvider) reads the non-tenant signing_key
+        // table. Per-request pinning is handled by OnpremTenantPinFilter, so
+        // request threads always see the licensed tenant. Setting (and never
+        // clearing) the ThreadLocal here would leak the tenant onto the boot
+        // thread without any consumer needing it.
+        log.info("onprem mode: licensed tenant {} (per-request pinning via OnpremTenantPinFilter)",
                 effective.tenantId());
 
         return new LicenseStateMachine(effective, verifiedAt, clock::instant);

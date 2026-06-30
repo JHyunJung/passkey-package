@@ -1,5 +1,6 @@
 package com.crosscert.passkey.webauthn.mds;
 
+import com.crosscert.passkey.webauthn.JsonMappers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -16,7 +17,7 @@ import java.util.UUID;
  */
 public final class MdsBlobParser {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JsonMappers.secure();
 
     private MdsBlobParser() {}
 

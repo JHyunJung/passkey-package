@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.*;
@@ -72,6 +73,22 @@ class IdTokenVerifierAlgTest {
                 .build();
     }
 
+    private static String signedTokenWithAmr(List<?> amr) throws Exception {
+        Instant now = Instant.now();
+        JWTClaimsSet c = new JWTClaimsSet.Builder()
+                .issuer("https://issuer.example.com")
+                .subject("dXNlckhhbmRsZQ")
+                .audience("ck_test_apikey")
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plus(Duration.ofMinutes(15))))
+                .claim("amr", amr)
+                .build();
+        SignedJWT jwt = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(KID).build(), c);
+        jwt.sign(new RSASSASigner(rsaKey));
+        return jwt.serialize();
+    }
+
     @Test
     void acceptsRs256Token() throws Exception {
         // given: a legitimate RS256 token issued exactly as production issues them.
@@ -103,5 +120,33 @@ class IdTokenVerifierAlgTest {
         assertThatThrownBy(() -> verifier.verify(jwt.serialize()))
                 .isInstanceOf(PasskeyIdTokenException.class)
                 .hasMessageContaining("Unexpected JWS algorithm");
+    }
+
+    @Test
+    void amr_withNonStringElement_normalizedNotPolluted() throws Exception {
+        // given: amr = ["pin", 7] — a JSON array whose second element is a number.
+        // Before F29 this would sit in a List<String> as a raw Integer (heap pollution),
+        // surfacing as a deferred ClassCastException at the first String use site.
+        String jwt = signedTokenWithAmr(List.of("pin", 7));
+
+        // when: verify returns claims with the amr list.
+        IdTokenClaims out = verifier.verify(jwt);
+
+        // then: every element is an actual String at runtime (no heap pollution).
+        // Iterate as raw Object so a polluted Integer would be observable.
+        for (Object e : (List<?>) out.amr()) {
+            assertThat(e).isInstanceOf(String.class);
+        }
+        assertThat(out.amr()).containsExactly("pin", "7");
+    }
+
+    @Test
+    void amr_withAllStringElements_unchanged() throws Exception {
+        // given: a normal amr = ["pin"] token (the production-shaped case).
+        String jwt = signedTokenWithAmr(List.of("pin"));
+
+        // when / then: result is identical — regression guard for the happy path.
+        IdTokenClaims out = verifier.verify(jwt);
+        assertThat(out.amr()).containsExactly("pin");
     }
 }

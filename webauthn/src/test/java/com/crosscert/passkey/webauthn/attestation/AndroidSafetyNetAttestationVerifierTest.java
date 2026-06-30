@@ -140,6 +140,21 @@ class AndroidSafetyNetAttestationVerifierTest {
     }
 
     @Test
+    void rejectsAlgLeafKeyMismatch() throws Exception {
+        // header.alg=ES256 인데 leaf 가 RSA 키 → alg↔leaf 키타입 명시 핀에서 거부 (F32, 방어심화).
+        // JCA 도 결국 막지만(signature invalid), 여기서는 명시 거부 경로를 검증한다.
+        Fixture f = new Fixture();
+        byte[] response = f.buildEs256HeaderWithRsaLeaf();
+        CborMap attStmt = attStmt("17612000", response);
+
+        AttestationException ex = assertThrows(AttestationException.class,
+                () -> verifier.verify(f.authData, f.rawAuthData, attStmt, f.clientDataHash));
+        // 명시 핀(alg/leaf-key mismatch)에서 거부되어야 함 — 일반 "signature invalid" 흡수가 아니라.
+        assertTrue(ex.getMessage().contains("alg/leaf-key mismatch"),
+                "expected alg/leaf-key mismatch rejection, got: " + ex.getMessage());
+    }
+
+    @Test
     void rejectsMalformedBase64Jws() throws Exception {
         // 비-base64url 3파트 response → AttestationException (IllegalArgumentException 누출 아님) (codex P2).
         Fixture f = new Fixture();
@@ -219,6 +234,30 @@ class AndroidSafetyNetAttestationVerifierTest {
             byte[] rawSig = derToRaw(derSig); // JWS ES256은 raw R||S 64바이트
 
             String jws = signingInput + "." + b64Url(rawSig);
+            return jws.getBytes(StandardCharsets.UTF_8);
+        }
+
+        /**
+         * header.alg=ES256 으로 선언하지만 leaf 는 RSA 키인 alg-confusion JWS (F32 핀 검증).
+         * 서명은 RSA(SHA256withRSA)로 생성하나, alg↔leaf 키타입 핀이 서명 검증 이전에 거부한다.
+         */
+        byte[] buildEs256HeaderWithRsaLeaf() throws Exception {
+            KeyPairGenerator g = KeyPairGenerator.getInstance("RSA");
+            g.initialize(2048);
+            KeyPair kp = g.generateKeyPair();
+            X509Certificate leaf = selfSigned(kp, "attest.android.com", "SHA256withRSA");
+
+            String header = "{\"alg\":\"ES256\",\"x5c\":[\"" + b64Std(leaf.getEncoded()) + "\"]}";
+            String payload = payloadJson(true, false);
+            String signingInput = b64Url(header.getBytes(StandardCharsets.UTF_8))
+                    + "." + b64Url(payload.getBytes(StandardCharsets.UTF_8));
+
+            Signature s = Signature.getInstance("SHA256withRSA");
+            s.initSign(kp.getPrivate());
+            s.update(signingInput.getBytes(StandardCharsets.US_ASCII));
+            byte[] sig = s.sign();
+
+            String jws = signingInput + "." + b64Url(sig);
             return jws.getBytes(StandardCharsets.UTF_8);
         }
 
