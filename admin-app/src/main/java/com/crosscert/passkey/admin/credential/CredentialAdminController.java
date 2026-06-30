@@ -28,6 +28,7 @@ public class CredentialAdminController {
         this.admins = admins;
     }
 
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @GetMapping
     public ApiResponse<PageView<CredentialView>> list(
             @PathVariable UUID tenantId,
@@ -37,6 +38,7 @@ public class CredentialAdminController {
         return ApiResponse.ok(service.list(tenantId, page, size, q));
     }
 
+    @PreAuthorize("hasAnyRole('PLATFORM_OPERATOR','RP_ADMIN')")
     @GetMapping("/{credentialId}/auth-events")
     public ApiResponse<PageView<CredentialAdminDto.AuthEventView>> authEvents(
             @PathVariable UUID tenantId,
