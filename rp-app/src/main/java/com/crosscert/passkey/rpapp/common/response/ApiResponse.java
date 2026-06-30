@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
+/** 모든 JSON 응답의 공통 봉투. success/code/message/data/error/traceId/timestamp 를 담는다. ok()/error() 팩터리로 생성. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiResponse<T>(
         boolean success,
@@ -37,7 +38,7 @@ public record ApiResponse<T>(
     }
 
     public static ApiResponse<Void> error(ErrorCode code, List<FieldError> fieldErrors) {
-        // 원본 Kotlin 의 non-null `List<FieldError>` 파라미터 계약을 보존(null 시 fail-fast).
+        // fieldErrors 는 필수 — null 이면 즉시 실패시켜 호출 측 실수를 빨리 드러낸다.
         Objects.requireNonNull(fieldErrors, "fieldErrors");
         return new ApiResponse<>(false, code.code(), code.message(), null,
                 new ErrorDetail(code.code(), fieldErrors), MDC.get("traceId"), LocalDateTime.now());

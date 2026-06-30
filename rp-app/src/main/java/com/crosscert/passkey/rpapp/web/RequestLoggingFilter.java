@@ -19,27 +19,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 /**
- * rp-app local twin of core's {@code RequestLoggingFilter}. rp-app
- * does not depend on core (separate webapp), so the logic is duplicated.
+ * 요청 1건당 한 줄 요약(method/path/status/durMs)을 INFO/WARN/ERROR 로 남기는 필터.
+ * 요청·응답 본문은 별도 payload 로거에 DEBUG 로만 남기므로 운영(qa/prod)에서는 자동 억제된다.
+ * 본문은 2KB 로 자르고, {@link SecretMaskingConverter} 가 비밀값을 마스킹한다(다중 방어).
  *
- * <p>한 줄 요약(method/path/status/durMs)은 항상 INFO/WARN/ERROR 로 남기고,
- * request/response 본문은 전용 payload 로거에 DEBUG 로 남긴다. payload 로거는
- * logback 에서 local/dev 만 DEBUG 라 qa/prod 에선 자동 억제된다(레벨 게이트).
- * 본문은 2KB 로 캡하고, %msg SecretMaskingConverter 가 비밀값을 마스킹한다(삼중 방어).
- *
- * <p>Drift check: keep status-mapping + format + actorEmail handling
- * identical to core. Intentional diffs only in excluded-paths set
- * (rp-app does not expose {@code /.well-known/jwks.json}).
- *
- * <p>rp-app's own {@code TraceIdFilter} (under {@code common.filter})
- * runs at {@code HIGHEST_PRECEDENCE} and populates {@code traceId} MDC
- * before this filter logs. When rp-app calls passkey-app via the SDK,
- * {@code TraceIdPropagationInterceptor} carries the same {@code X-Trace-Id}
- * forward so the two servers' logs share one trace.
- *
- * <p>actorEmail is read from a request attribute set by an in-security-chain
- * filter (rp-app does not yet have one — all routes are permitAll —
- * so this slot stays empty, matching the demo's no-auth posture).
+ * <p>{@code TraceIdFilter} 가 먼저 traceId 를 MDC 에 넣고, SDK 호출 시 같은 X-Trace-Id 가
+ * passkey-app 으로 전파돼 두 서버 로그를 한 추적 단위로 묶는다.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
@@ -50,7 +35,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     private static final String MDC_ACTOR_EMAIL = "actorEmail";
 
-    /** Mirror of core's RequestLoggingFilter.ACTOR_EMAIL_ATTR. */
+    /** 인증 필터가 요청 속성에 넣은 사용자 이메일을 읽어 MDC actorEmail 로 남길 때 쓰는 키(데모는 미설정). */
     public static final String ACTOR_EMAIL_ATTR = "com.crosscert.passkey.actorEmail";
 
     private static final Set<String> EXCLUDED_PATHS = Set.of("/actuator/health");

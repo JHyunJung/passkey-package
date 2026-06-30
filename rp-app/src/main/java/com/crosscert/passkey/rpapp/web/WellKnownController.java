@@ -12,13 +12,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 네이티브 앱 패스키용 Well-Known URI 호스팅. OS/CDN(Google Play services, Apple CDN)
- * 이 직접 가져가 "도메인 → 앱" 소유를 검증하는 표준 wire format 이므로, JwksController
- * 처럼 ApiResponse envelope 없이 표준 JSON 을 직접 반환한다.
+ * 네이티브 앱 패스키용 Well-Known URI 호스팅. OS/CDN(Google Play services, Apple CDN)이
+ * 직접 가져가 "도메인 → 앱" 소유를 검증하는 표준 포맷이라, 공통 응답 봉투 없이 표준 JSON 을 직접 반환한다.
  *
- * 주의: apple-app-site-association 은 확장자가 없어 Spring 이 Content-Type 을
- * 추측하지 못한다(octet-stream 위험). produces = APPLICATION_JSON_VALUE 로 강제한다.
- * 검증 에이전트는 3xx/비-json 을 거부하므로 컨트롤러 직접 매핑으로 정확한 경로만 200 을 낸다.
+ * <p>주의: apple-app-site-association 은 확장자가 없어 {@code produces=APPLICATION_JSON_VALUE} 로
+ * Content-Type 을 강제한다. 고객사는 {@code rp-app.well-known.*} 설정만 자사 앱 값으로 바꾸면 된다.
  */
 @RestController
 public class WellKnownController {

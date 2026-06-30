@@ -6,10 +6,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.Map;
 
 /**
- * 값이 있는 MDC 키만 {@code [traceId=.. tenantId=.. ..]} 로 묶어 출력한다. 빈 키 생략, 전부 비면 "".
- *
- * <p>core 의 {@code com.crosscert.passkey.core.logging.CompactMdcConverter} Java 트윈
- * — rp-app 은 :core 비의존이라 중복. 두 파일 동작을 동일하게 유지할 것.
+ * 값이 있는 MDC 키만 {@code [traceId=.. tenantId=.. ..]} 형태로 묶어 로그에 출력한다.
+ * 빈 키는 생략하고, 전부 비면 빈 문자열. 값은 16자로 자른다.
  */
 public class CompactMdcConverter extends ClassicConverter {
 

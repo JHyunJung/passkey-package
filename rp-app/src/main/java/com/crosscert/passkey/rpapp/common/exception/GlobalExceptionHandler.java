@@ -21,6 +21,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import java.util.List;
 
+/** 모든 컨트롤러 예외를 표준 응답 봉투로 변환하는 전역 핸들러(입력 검증·SDK 업스트림 오류·예상 외 오류). */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -37,8 +38,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
-        // rejectedValue 를 echo 하지 않는다(core GlobalExceptionHandler 와 동일) —
-        // 필드명 + 메시지로 충분하고, 입력값 반사를 피한다.
+        // rejectedValue 를 응답에 그대로 내보내지 않는다 — 필드명 + 메시지로 충분하고, 입력값 반사를 피한다.
         List<FieldError> errors = e.getBindingResult().getFieldErrors().stream()
                 .map(fe -> new FieldError(fe.getField(), null, fe.getDefaultMessage()))
                 .toList();
