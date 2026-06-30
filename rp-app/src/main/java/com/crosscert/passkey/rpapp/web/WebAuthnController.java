@@ -13,7 +13,7 @@ import com.crosscert.passkey.rpapp.web.dto.LoginStartReq;
 import com.crosscert.passkey.rpapp.web.dto.RegisterCompleteReq;
 import com.crosscert.passkey.rpapp.web.dto.RegisterOptionsResp;
 import com.crosscert.passkey.rpapp.web.dto.RegisterStartReq;
-import com.crosscert.passkey.rpapp.web.relay.RegRelayCodec;
+import com.crosscert.passkey.sdk.relay.RegistrationRelayCodec;
 import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.dto.AuthenticationFinishRequest;
 import com.crosscert.passkey.sdk.dto.AuthenticationFinishResponse;
@@ -32,9 +32,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Objects;
-import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * 패스키 등록·인증의 RP 엔드포인트. 브라우저와 passkey-app 사이의 중계자다.
@@ -54,40 +51,18 @@ import java.util.regex.Pattern;
 public class WebAuthnController {
 
     private static final Logger log = LoggerFactory.getLogger(WebAuthnController.class);
-    private static final Pattern HEX32 = Pattern.compile("(?i)[0-9a-f]{32}");
 
     private final PasskeyClient passkey;
     private final InMemoryUserStore users;
     private final PasskeyProperties props;
-    private final RegRelayCodec relay;
+    private final RegistrationRelayCodec relay;
 
     public WebAuthnController(PasskeyClient passkey, InMemoryUserStore users,
-                             PasskeyProperties props, RegRelayCodec relay) {
+                             PasskeyProperties props, RegistrationRelayCodec relay) {
         this.passkey = passkey;
         this.users = users;
         this.props = props;
         this.relay = relay;
-    }
-
-    /**
-     * tenantId 를 표준 UUID 문자열(소문자+대시)로 정규화한다.
-     * 입력은 UUID 대시 형식(`7f00dead-0000-...`) 또는 RAW(16) hex 32자(`7F00DEAD...`)
-     * 모두 허용. 형식이 달라도 같은 테넌트면 같은 결과가 나오므로 iss/aud 비교가
-     * 표기 차이에 영향받지 않는다. 파싱 불가하면 입력을 그대로 반환(검증은 후속 비교에서).
-     */
-    public static String normalizeTenantId(String raw) {
-        if (raw == null) return null;
-        String s = raw.trim();
-        // 대시 없는 32자 hex → UUID 대시 형식으로
-        if (HEX32.matcher(s).matches()) {
-            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-" + s.substring(12, 16)
-                    + "-" + s.substring(16, 20) + "-" + s.substring(20);
-        }
-        try {
-            return UUID.fromString(s).toString(); // 항상 소문자+대시
-        } catch (IllegalArgumentException e) {
-            return raw; // UUID 가 아니면 원본 비교에 맡김
-        }
     }
 
     /** Last 12 chars of a base64url id for correlation — never the full id.
@@ -121,7 +96,7 @@ public class WebAuthnController {
 
     @PostMapping("/register/finish")
     public ApiResponse<RegistrationFinishResponse> registerComplete(@Valid @RequestBody RegisterCompleteReq req) {
-        RegRelayCodec.RegRelay r;
+        RegistrationRelayCodec.RegistrationRelay r;
         try {
             r = relay.decode(req.regRelayToken());
         } catch (IllegalArgumentException e) {
@@ -186,40 +161,24 @@ public class WebAuthnController {
         }
         IdTokenClaims claims;
         try {
-            claims = passkey.verifyIdToken(fin.idToken());
+            // issuerBase 가 설정돼 있어야 expectedIssuer 를 조립할 수 있으므로 누락 시 즉시 실패.
+            if (props.issuerBase() == null) {
+                throw new NullPointerException("passkey.issuer-base 미설정");
+            }
+            String expectedIssuer = props.issuerBase() + "/" + props.tenantId();
+            // 서명·exp + iss(prefix+tenant 정규화)·aud(정규화) 검증을 SDK 가 한 번에 수행.
+            claims = passkey.verifyIdToken(fin.idToken(), expectedIssuer, props.tenantId());
+        } catch (com.crosscert.passkey.sdk.exception.PasskeyIdTokenException e) {
+            // SDK 의 검증 실패(서명/exp/iss/aud)를 기존 RP 에러코드로 변환해 응답 호환을 보존한다.
+            log.warn("login/complete failed: reason=id-token-invalid cause={}", e.getMessage());
+            throw new BusinessException(ErrorCode.PASSKEY_ID_TOKEN, e.getMessage());
         } catch (RuntimeException e) {
             log.warn("login/complete failed: reason=id-token-verify-failed cause={}", e.toString());
             throw e;
         }
 
-        // passkey-app 의 IdTokenIssuer 는 issuer-base + "/" + tenantId 로 iss 를,
-        // tenantId 로 aud 를 발급한다. tenantId 는 표준 UUID(소문자+대시)로 들어가는데,
-        // 설정(PASSKEY_TENANT_ID)은 RAW(16) hex 32자로 들어올 수도 있다. 표기 차이로
-        // 인한 거짓 mismatch 를 막기 위해 비교 전 양쪽 tenantId 를 UUID 로 정규화한다.
-        String expectedTenant = normalizeTenantId(props.tenantId());
-
-        // iss = "<issuerBase>/<tenantId>". issuerBase 가 설정돼 있어야 검증할 수 있으므로 누락 시 즉시 실패시킨다.
-        if (props.issuerBase() == null) {
-            throw new NullPointerException("passkey.issuer-base 미설정");
-        }
-        String issPrefix = props.issuerBase().toString();
-        String tokenIss = claims.iss();
-        boolean issOk = tokenIss != null
-                && tokenIss.startsWith(issPrefix + "/")
-                && Objects.equals(
-                        normalizeTenantId(tokenIss.substring((issPrefix + "/").length())), expectedTenant);
-        if (!issOk) {
-            log.warn("login/complete failed: reason=iss-mismatch expectedPrefix={} expectedTenant={} got={}",
-                    issPrefix, expectedTenant, tokenIss);
-            throw new BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "iss mismatch");
-        }
-        if (!Objects.equals(expectedTenant, normalizeTenantId(claims.aud()))) {
-            log.warn("login/complete failed: reason=aud-mismatch expected={} got={}",
-                    expectedTenant, claims.aud());
-            throw new BusinessException(ErrorCode.PASSKEY_ID_TOKEN, "aud mismatch");
-        }
-
-        // 검증을 통과한 ID Token 은 항상 sub(opaque userHandle)를 갖는다(IdTokenVerifier 보장).
+        // sub(opaque userHandle)로 사용자를 조회한다. sub 가 없으면(null) 조회가 비어
+        // unknown sub(P004)로 거부된다 — fail-closed.
         RpAppUser user = users.findByUserHandle(claims.sub())
                 .orElseThrow(() -> {
                     log.warn("login/complete failed: reason=unknown-sub subTail={}", idTail(claims.sub()));

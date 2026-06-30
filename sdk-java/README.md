@@ -97,10 +97,46 @@ String issuer  = claims.iss();
 List<String> amr = claims.amr();
 ```
 
-`verifyIdToken` 은 ① alg=RS256 핀(alg-confusion/none/HS\* 다운그레이드 거부) ② JWKS(`/.well-known/jwks.json`,
+`verifyIdToken(idToken)` 은 ① alg=RS256 핀(alg-confusion/none/HS\* 다운그레이드 거부) ② JWKS(`/.well-known/jwks.json`,
 TTL 캐시) 로 서명 검증 ③ exp 만료 검사를 수행한다. 실패 시 `PasskeyIdTokenException`.
 
-## 7. 에러 처리
+**시맨틱 검증까지 한 번에(권장):** iss/aud 까지 검증하려면 3-인자 오버로드를 쓴다. RP 가 직접 iss/aud 를
+비교하다 실수하는 것을 막아준다.
+
+```java
+// expectedIssuer = "<issuer-base>/<tenantId>", expectedAudience = "<tenantId>"
+IdTokenClaims claims = client.verifyIdToken(
+        idToken, issuerBase + "/" + tenantId, tenantId);
+```
+
+위 ①②③ 에 더해 ④ iss 가 `<issuerBase>/<tenantId>` 와 일치(issuerBase prefix 정확 일치 + tenant 비교)
+⑤ aud 가 tenantId 와 일치를 검증한다. tenantId 표기는 hex32 ↔ 대시 UUID 가 동치로 정규화된다.
+`expectedIssuer` 가 tenant segment 없이 들어오면(오설정) fail-closed 로 거부한다. `sub` 는 검증하지 않고
+claims 에 담아 반환하므로, RP 가 자사 사용자 저장소 조회 키로 쓴다. 실패 시 `PasskeyIdTokenException`.
+
+## 7. 등록 릴레이 토큰 (RegistrationRelayCodec)
+
+무상태 RP 는 등록 begin 에서 발급한 userHandle 을 finish 까지 서버 세션 없이 이어야 한다.
+`RegistrationRelayCodec` 은 `{registrationToken, userHandle, username, displayName, exp}` 를 HMAC-SHA256
+으로 서명한 불투명 토큰을 만들고 검증한다 — 클라이언트가 userHandle 을 변조하면 서명이 깨져 거부된다.
+서명 비교는 상수시간(`MessageDigest.isEqual`)이다.
+
+```java
+RegistrationRelayCodec codec = new RegistrationRelayCodec(
+        relaySecret.getBytes(StandardCharsets.UTF_8), Duration.ofMinutes(5), Clock.systemUTC());
+
+// begin: 서명 토큰을 만들어 브라우저로 내려보냄
+String relayToken = codec.encode(registrationToken, userHandle, username, displayName);
+
+// finish: 브라우저가 돌려준 토큰을 검증·복원 (변조/만료/형식오류 시 IllegalArgumentException)
+RegistrationRelayCodec.RegistrationRelay r = codec.decode(relayToken);
+String uh = r.userHandle();
+```
+
+secret 은 운영에서 반드시 강한 키로 주입한다(키의 출처·보호는 RP 책임). ttl 은 passkey-app 의 challenge
+만료(기본 5분)에 맞춘다. `decode` 실패는 `IllegalArgumentException` 이다.
+
+## 8. 에러 처리
 
 | 예외 | 발생 조건 | 주요 필드 |
 |---|---|---|
@@ -122,16 +158,16 @@ try {
 }
 ```
 
-## 8. 관측성
+## 9. 관측성
 
 - **Trace 전파:** `traceIdProvider`(기본 `MDC.get("traceId")`)가 반환한 값이 `X-Trace-Id` 헤더로
   전파되어 백엔드 로그와 한 trace 로 묶인다. MDC 키 상수: `PasskeyClientConfig.MDC_TRACE_ID_KEY`.
 - **로그 마스킹:** DEBUG 로그에서 `idToken`, `clientDataJSON`/`attestationObject`/`authenticatorData`/`signature`,
   `X-API-Key` secret 꼬리는 자동 마스킹된다. 운영 환경은 `logging.level` 을 INFO 이하로 둘 것.
 
-## 9. 참조 통합 예제
+## 10. 참조 통합 예제
 
 `rp-app` 모듈이 이 SDK 의 레퍼런스 소비자다:
-- `rp-app/.../config/PasskeyClientConfiguration.kt` — Spring `@Bean` 으로 `PasskeyClient` 구성
-  (동적 API Key Supplier 핫리로드 포함).
-- `rp-app/.../web/WebAuthnController.kt` — 등록/인증 4종 + ID Token 검증 호출 흐름.
+- `rp-app/.../config/PasskeyClientConfiguration.java` — Spring `@Bean` 으로 `PasskeyClient` 와
+  `RegistrationRelayCodec` 구성(동적 API Key Supplier 핫리로드 포함).
+- `rp-app/.../web/WebAuthnController.java` — 등록/인증 4종 + 3-인자 `verifyIdToken`(iss/aud) 검증 호출 흐름.

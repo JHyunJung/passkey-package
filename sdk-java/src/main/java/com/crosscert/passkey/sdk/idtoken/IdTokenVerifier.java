@@ -19,6 +19,8 @@ public class IdTokenVerifier {
 
     private static final Logger log = LoggerFactory.getLogger(IdTokenVerifier.class);
 
+    private static final java.util.regex.Pattern HEX32 = java.util.regex.Pattern.compile("(?i)[0-9a-f]{32}");
+
     private final JwksCache jwks;
     private final Clock clock;
 
@@ -86,6 +88,79 @@ public class IdTokenVerifier {
             // Parse/structural failure (malformed JWT, JWK fetch error, etc.)
             log.warn("id-token verify failed: reason=parse cause={}", e.toString());
             throw new PasskeyIdTokenException("ID Token parsing failed", e);
+        }
+    }
+
+    /**
+     * 서명·exp 검증(1-인자 verify) 후 iss/aud 시맨틱 검증까지 수행한다.
+     *
+     * <p>expectedIssuer 는 {@code <issuerBase>/<tenantId>} 전체 문자열이다. 마지막 '/'
+     * 기준으로 issuerBase prefix(정확 일치 요구)와 tenant(UUID 정규화 비교)로 분해한다.
+     * expectedAudience(tenantId)는 토큰 aud 와 UUID 정규화 비교한다. hex32↔대시 표기
+     * 차이는 정규화로 동치 처리된다.
+     */
+    public IdTokenClaims verify(String compactJwt, String expectedIssuer, String expectedAudience) {
+        IdTokenClaims claims = verify(compactJwt);
+
+        if (expectedIssuer == null || expectedIssuer.isBlank()) {
+            log.warn("id-token verify failed: reason=config expectedIssuer-blank");
+            throw new PasskeyIdTokenException("expectedIssuer must not be blank");
+        }
+        if (expectedAudience == null || expectedAudience.isBlank()) {
+            log.warn("id-token verify failed: reason=config expectedAudience-blank");
+            throw new PasskeyIdTokenException("expectedAudience must not be blank");
+        }
+
+        // expectedIssuer 를 prefix(issuerBase) + tenant 로 분해.
+        int slash = expectedIssuer.lastIndexOf('/');
+        if (slash < 0) {
+            throw new PasskeyIdTokenException("expectedIssuer must be <issuerBase>/<tenantId>");
+        }
+        String issuerBase = expectedIssuer.substring(0, slash);
+        String tenantPart = expectedIssuer.substring(slash + 1);
+        // tenant segment 가 비어 있으면(issuerBase 만 넘어온 오설정) fail-closed.
+        // 또한 issuerBase 가 scheme 슬래시까지만 남는 경우(예: "https:/")를 막아,
+        // "https://issuer" 처럼 tenant 없는 expectedIssuer 가 잘못 통과하지 않게 한다.
+        if (tenantPart.isBlank() || issuerBase.endsWith(":/") || issuerBase.endsWith(":")) {
+            log.warn("id-token verify failed: reason=config expectedIssuer-no-tenant got={}", expectedIssuer);
+            throw new PasskeyIdTokenException("expectedIssuer must be <issuerBase>/<tenantId> with a tenant segment");
+        }
+        String expectedTenant = normalizeTenantId(tenantPart);
+
+        String tokenIss = claims.iss();
+        String prefix = issuerBase + "/";
+        boolean issOk = tokenIss != null
+                && tokenIss.startsWith(prefix)
+                && java.util.Objects.equals(
+                        normalizeTenantId(tokenIss.substring(prefix.length())), expectedTenant);
+        if (!issOk) {
+            log.warn("id-token verify failed: reason=iss-mismatch expectedPrefix={} got={}", prefix, tokenIss);
+            throw new PasskeyIdTokenException("iss mismatch");
+        }
+
+        if (!java.util.Objects.equals(normalizeTenantId(expectedAudience), normalizeTenantId(claims.aud()))) {
+            log.warn("id-token verify failed: reason=aud-mismatch expected={} got={}",
+                    expectedAudience, claims.aud());
+            throw new PasskeyIdTokenException("aud mismatch");
+        }
+        return claims;
+    }
+
+    /**
+     * tenantId 를 표준 UUID(소문자+대시)로 정규화한다. hex32(대시 없음) 또는 대시 UUID
+     * 모두 허용. 파싱 불가하면 trim 된 입력을 그대로 반환(원본 비교에 맡김).
+     */
+    private static String normalizeTenantId(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (HEX32.matcher(s).matches()) {
+            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-" + s.substring(12, 16)
+                    + "-" + s.substring(16, 20) + "-" + s.substring(20);
+        }
+        try {
+            return java.util.UUID.fromString(s).toString();
+        } catch (IllegalArgumentException e) {
+            return s;
         }
     }
 

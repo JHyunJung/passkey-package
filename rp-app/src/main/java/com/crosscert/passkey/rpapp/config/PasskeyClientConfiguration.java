@@ -2,9 +2,12 @@ package com.crosscert.passkey.rpapp.config;
 
 import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.PasskeyClientConfig;
+import com.crosscert.passkey.sdk.relay.RegistrationRelayCodec;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.function.Supplier;
 
@@ -23,6 +26,18 @@ public class PasskeyClientConfiguration {
     public Supplier<String> apiKeySupplier(PasskeyProperties props) {
         Duration reload = (props.apiKeyReload() != null) ? props.apiKeyReload() : Duration.ofSeconds(10);
         return new ReloadableApiKeySupplier(props.apiKeyFile(), reload, props.apiKey());
+    }
+
+    /**
+     * 등록 릴레이 토큰 코덱. SDK 의 Spring 비의존 프리미티브에 rp.relay.* 설정(secret, ttl)을
+     * 주입한다. secret 의 출처·데모키 거부는 RelayProperties/RelayKeyGuard(RP 책임)가 담당한다.
+     */
+    @Bean
+    public RegistrationRelayCodec registrationRelayCodec(RelayProperties relayProps) {
+        return new RegistrationRelayCodec(
+                relayProps.secret().getBytes(StandardCharsets.UTF_8),
+                relayProps.ttl(),
+                Clock.systemUTC());
     }
 
     @Bean
