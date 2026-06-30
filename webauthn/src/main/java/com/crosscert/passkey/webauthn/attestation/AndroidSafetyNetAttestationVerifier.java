@@ -95,8 +95,20 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
         X509Certificate leaf = chain.get(0);
 
         // 3) JWS 서명 검증 (leaf 공개키, signingInput = ASCII(parts[0].parts[1]))
+        //    서명 검증 직전에 header.alg ↔ leaf 공개키 타입을 명시 매칭한다(방어심화, F32).
+        //    JCA(Signature)가 키/alg 불일치를 어차피 예외로 막지만, 그 예외는 verifyJws에서
+        //    false로 흡수되어 "signature invalid"로만 보인다. alg-confusion(예: ES256 헤더에
+        //    RSA leaf) 회귀를 명시 거부로 표면화해 정상 검증 결과는 그대로 두고 거부 경로만 핀한다.
+        //    ES256/RS256 외 alg는 verifyJws에서 미지원으로 거부되므로 여기서도 둘만 매칭한다.
+        PublicKey leafKey = leaf.getPublicKey();
+        boolean algKeyMatch =
+                ("ES256".equals(alg) && leafKey instanceof java.security.interfaces.ECPublicKey)
+             || ("RS256".equals(alg) && leafKey instanceof java.security.interfaces.RSAPublicKey);
+        if (!algKeyMatch) {
+            throw new AttestationException("android-safetynet alg/leaf-key mismatch: alg=" + alg);
+        }
         byte[] signingInput = (parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII);
-        if (!verifyJws(alg, leaf.getPublicKey(), signingInput, signature)) {
+        if (!verifyJws(alg, leafKey, signingInput, signature)) {
             throw new AttestationException("android-safetynet JWS signature invalid");
         }
 
