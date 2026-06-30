@@ -60,12 +60,20 @@ public class IdTokenVerifier {
                 log.warn("id-token verify failed: reason=expired exp={} now={}", exp, now);
                 throw new PasskeyIdTokenException("ID Token expired (exp=" + exp + ", now=" + now + ")");
             }
-            // 원본 Kotlin 의 `as? List<String>` 와 동일: amr 이 List 가 아니면(또는 없으면)
-            // 예외 없이 null 로 폴백 → 아래에서 emptyList() 로 치환. 무조건 캐스트는
-            // 비-List amr 에서 ClassCastException → parse 실패로 의미가 바뀌므로 금지.
+            // 원본 Kotlin 의 `as? List<String>` 와 동일한 lenient 의도: amr 이 List 가
+            // 아니면(또는 없으면) 예외 없이 null 로 폴백 → 아래에서 emptyList() 로 치환.
+            // List 인 경우 각 원소를 String 으로 정규화한다. 무조건 캐스트는 (1) 비-List
+            // amr 에서 ClassCastException → parse 실패로 의미가 바뀌고, (2) List 라도
+            // 비-String 원소(숫자 등)가 섞이면 heap pollution → 첫 String 사용 지점에서
+            // 지연 ClassCastException 이 터지므로 금지.
             Object amrRaw = c.getClaim("amr");
-            @SuppressWarnings("unchecked")
-            List<String> amr = (amrRaw instanceof List<?>) ? (List<String>) amrRaw : null;
+            List<String> amr = null;
+            if (amrRaw instanceof List<?> rawList) {
+                amr = rawList.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(String::valueOf)
+                        .toList();
+            }
             long durMs = Duration.between(started, clock.instant()).toMillis();
             // sub is the opaque userHandle; truncate so logs don't leak the full id.
             String subShort = truncate(c.getSubject(), 8);
