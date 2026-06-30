@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 import java.util.TimeZone;
 
-/** rp-app 진입점. RP 데모 서버를 기동한다(패스키 등록/인증 릴레이 + ID Token 검증 + 네이티브 앱 well-known 호스팅). */
+/** rp-app 진입점. RP 데모 서버를 기동한다(패스키 등록/인증 릴레이 + SDK 기반 ID Token 검증 + 네이티브 앱 well-known 호스팅). */
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class RpAppApplication {
