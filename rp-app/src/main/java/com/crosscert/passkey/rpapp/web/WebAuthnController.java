@@ -44,7 +44,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>서버에 세션을 두지 않는다. begin 응답으로 받은 서명 토큰(regRelayToken / authenticationToken)을
  * finish 요청에 다시 실어 두 단계를 잇는다. 실제 WebAuthn 동작(ceremony)과 ID Token 발급은
- * passkey-app 이 맡고, rp-app 은 SDK 호출·사용자 매핑·ID Token(iss/aud/sub) 검증을 담당한다.
+ * passkey-app 이 맡고, rp-app 은 SDK 호출·사용자 매핑·sub 조회·ID Token 검증 오케스트레이션을
+ * 담당한다(서명·iss·aud 검증은 SDK 의 verifyIdToken 에 위임, 실패는 P004 로 변환).
  */
 @RestController
 @RequestMapping("/passkey")
