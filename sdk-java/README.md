@@ -106,17 +106,17 @@ null/blank 면 그 요청은 `PasskeyConfigurationException` 으로 fail-fast.
 
 ## 5. API 사용
 
-등록(2-step):
+등록(3-step):
 
 ```java
 // 1) start
 RegistrationStartResponse start = client.registrationStart(
-    new RegistrationStartRequest("userHandle", "홍길동", "gildong"));
+    new RegistrationStartRequest("uh-7f3a2b", "홍길동", "gildong"));
 JsonNode creationOptions = start.publicKeyCredentialCreationOptions(); // 브라우저로 전달
 
 // 2) begin 응답을 relay 로 서명해 브라우저로 (서버 세션 불필요)
 String regRelayToken = relay.encode(
-    start.registrationToken(), "userHandle", "gildong", "홍길동");
+    start.registrationToken(), "uh-7f3a2b", "gildong", "홍길동");
 // → creationOptions 와 regRelayToken 을 브라우저로 내려보낸다.
 
 // 3) (브라우저에서 navigator.credentials.create 수행 후) finish
