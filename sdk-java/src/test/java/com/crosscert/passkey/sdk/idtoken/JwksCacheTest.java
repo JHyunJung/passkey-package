@@ -219,4 +219,44 @@ class JwksCacheTest {
         assertThat(got2).isSameAs(first);
         assertThat(cache.fetchCount.get()).isEqualTo(1);
     }
+
+    @Test
+    void get_fetchFailureWithinStaleGrace_returnsStale() {
+        // given: 1회 성공으로 스냅샷 보유(TTL 5분).
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofMinutes(5), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.get(); // fetch 1
+        assertThat(cache.fetchCount.get()).isEqualTo(1);
+
+        // when: 장애가 stale 상한(TTL 5분 + grace 10분 = 15분) 이내(총 14분 경과)에서 발생.
+        clock.advance(Duration.ofMinutes(14));
+        cache.failNext = true;
+
+        // then: grace 이내이므로 가용성 보존을 위해 stale 스냅샷 반환(예외 X).
+        JWKSet got = cache.get(); // fetch 2 (실패, 상한 이내 → stale)
+        assertThat(got).isSameAs(first);
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+    }
+
+    @Test
+    void get_fetchFailureBeyondStaleGrace_failsClosed() {
+        // given: 1회 성공으로 스냅샷 보유(TTL 5분).
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofMinutes(5), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.get(); // fetch 1
+
+        // when: 장애가 stale 상한(TTL 5분 + grace 10분 = 15분)을 초과(총 16분 경과)해서 지속.
+        clock.advance(Duration.ofMinutes(16));
+        cache.failNext = true;
+
+        // then: 상한 초과 → 무한 stale을 막기 위해 fail-closed(예외).
+        //   폐기된 키를 TTL 넘어 무한 신뢰하는 폐기 윈도우 우회를 차단한다.
+        assertThatThrownBy(cache::get)
+                .isInstanceOf(PasskeyIdTokenException.class)
+                .hasMessageContaining("JWKS fetch failure");
+    }
 }

@@ -16,6 +16,17 @@ public class JwksCache {
     /** fetch 실패 후 직전 스냅샷이 있을 때 다음 재시도를 억제하는 짧은 백오프. */
     private static final Duration BACKOFF = Duration.ofSeconds(5);
 
+    /**
+     * stale-if-error 허용 상한(grace). fetch 실패 시 직전 스냅샷을 무제한 반환하면, 키
+     * compromise로 회전된 직후 JWKS 서버 장애가 겹칠 때 폐기된 키를 TTL 넘어 무한 신뢰
+     * (폐기 윈도우 우회)하게 된다. 따라서 stale 허용을 {@code fetchedAt + ttl + STALE_GRACE}
+     * 이내로 제한하고, 초과하면 fail-closed(예외).
+     *
+     * <p>운영 TTL이 5분일 때 grace 10분 → 장애 중 폐기 키 신뢰는 최대 TTL+grace=15분으로 bounded.
+     * 짧은 장애는 가용성을 위해 stale 허용, 장기 장애는 보안(폐기 타이밍 보호)을 우선한다.
+     */
+    private static final Duration STALE_GRACE = Duration.ofMinutes(10);
+
     private final URL jwksUrl;
     private final Duration ttl;
     private final Clock clock;
@@ -65,16 +76,20 @@ public class JwksCache {
                 snapshot.set(new Snapshot(fresh, fetchedAt));
                 return fresh;
             } catch (PasskeyIdTokenException e) {
-                // 직전 유효 스냅샷이 있으면 가용성 보존을 위해 그것을 반환하고 백오프 기록.
-                // 만료된 JWKS가 아니라 *직전 유효* JWKS이므로 토큰 검증 의미는 보존된다.
-                if (again != null) {
-                    // 백오프 기준은 fetch 시작 전 시각(n2)이 아니라 *실패가 반환된 그 순간*.
-                    // fetch(블로킹 I/O)가 BACKOFF보다 오래 걸려 실패하면 n2+BACKOFF는 이미
-                    // 과거가 돼 negative-cache가 무력화(retry storm 재현)되므로, 실패 시각부터 센다.
-                    nextRetryAfter = clock.instant().plus(BACKOFF);
+                // 직전 유효 스냅샷이 있고 stale-if-error 상한(TTL+grace) 이내면 가용성 보존을
+                // 위해 그것을 반환하고 백오프 기록. 만료된 JWKS가 아니라 *직전 유효* JWKS이므로
+                // 토큰 검증 의미는 보존된다.
+                Instant failedAt = clock.instant(); // 실패가 반환된 그 순간(P2와 동일 기준)
+                if (again != null
+                        && again.fetchedAt().plus(ttl).plus(STALE_GRACE).isAfter(failedAt)) {
+                    // 백오프 기준은 fetch 시작 전 시각(n2)이 아니라 실패 시각. fetch(블로킹 I/O)가
+                    // BACKOFF보다 오래 걸려 실패하면 n2+BACKOFF는 이미 과거가 돼 negative-cache가
+                    // 무력화(retry storm 재현)되므로, 실패 시각부터 센다.
+                    nextRetryAfter = failedAt.plus(BACKOFF);
                     return again.jwks();
                 }
-                // 최초 부팅 실패(폴백 스냅샷 없음)는 기존대로 예외 전파(동작 보존).
+                // 폴백 스냅샷이 없거나(최초 부팅 실패) stale 상한을 초과하면 fail-closed(예외).
+                // 후자는 폐기된 키를 무한 신뢰하는 폐기 윈도우 우회를 차단한다.
                 throw e;
             }
         }
