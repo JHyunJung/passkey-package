@@ -37,7 +37,7 @@ class CredentialSelfServiceTest {
         byte[] uh = {1, 2};
         byte[] cid = {9};
         Credential c = mock(Credential.class);
-        when(creds.findOwned(cid, uh)).thenReturn(Optional.of(c));
+        when(creds.findOwnedForUpdate(cid, uh)).thenReturn(Optional.of(c));
 
         CredentialSelfService svc = new CredentialSelfService(creds);
         svc.rename(uh, cid, "iPhone");
@@ -70,7 +70,7 @@ class CredentialSelfServiceTest {
 
     @Test
     void rename_throwsWhenNotOwned() {
-        when(creds.findOwned(any(), any())).thenReturn(Optional.empty());
+        when(creds.findOwnedForUpdate(any(), any())).thenReturn(Optional.empty());
         CredentialSelfService svc = new CredentialSelfService(creds);
         assertThatThrownBy(() -> svc.rename(new byte[]{1}, new byte[]{2}, "iPhone"))
                 .isInstanceOf(BusinessException.class)

@@ -107,14 +107,4 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     @Query("select c from Credential c where c.credentialId = :credentialId and c.userHandle = :userHandle")
     Optional<Credential> findOwnedForUpdate(@Param("credentialId") byte[] credentialId,
                                             @Param("userHandle") byte[] userHandle);
-
-    /**
-     * F22: self-service rename — credentialId + userHandle 동시 일치 (소유권 확인).
-     * {@link #findOwnedForUpdate(byte[], byte[])} 와 동일한 조회지만 PESSIMISTIC 락이 없다.
-     * 라벨 변경은 @Transactional dirty-checking 으로 저장되므로 read-check-update 직렬화가
-     * 필요 없어 불필요한 행 락을 피한다 (delete 는 락 유지).
-     */
-    @Query("select c from Credential c where c.credentialId = :credentialId and c.userHandle = :userHandle")
-    Optional<Credential> findOwned(@Param("credentialId") byte[] credentialId,
-                                   @Param("userHandle") byte[] userHandle);
 }
