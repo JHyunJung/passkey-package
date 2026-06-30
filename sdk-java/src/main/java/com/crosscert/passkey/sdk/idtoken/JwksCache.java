@@ -57,7 +57,12 @@ public class JwksCache {
             }
             try {
                 JWKSet fresh = fetch();
-                snapshot.set(new Snapshot(fresh, n2));
+                // fetchedAt 기준은 fetch 시작 전 시각(n2)이 아니라 *fetch 완료 시각*.
+                // fetch(블로킹 I/O)가 TTL보다 오래 걸리면 n2+TTL이 이미 과거가 돼 방금
+                // 갱신한 스냅샷이 즉시 만료로 판정 → 대기하던 스레드들이 각자 또 fetch
+                // (single-flight 무력화). 완료 시각으로 찍어 TTL 윈도우를 정확히 시작한다.
+                Instant fetchedAt = clock.instant();
+                snapshot.set(new Snapshot(fresh, fetchedAt));
                 return fresh;
             } catch (PasskeyIdTokenException e) {
                 // 직전 유효 스냅샷이 있으면 가용성 보존을 위해 그것을 반환하고 백오프 기록.

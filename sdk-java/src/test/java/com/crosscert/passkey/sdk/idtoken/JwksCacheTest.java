@@ -192,4 +192,31 @@ class JwksCacheTest {
         assertThat(recovered).isSameAs(second);
         assertThat(cache.fetchCount.get()).isEqualTo(3);
     }
+
+    @Test
+    void get_slowSuccessfulFetch_fetchedAtMeasuredFromCompletionNotStart() {
+        // given: 짧은 TTL(10s), 그런데 fetch(성공)가 TTL보다 오래(20s) 걸리는 stall 상황.
+        //   회귀 버그(n2 기준)였다면 갱신 직후 스냅샷이 fetchedAt(=fetch 시작시각)+10s 가
+        //   이미 과거라 즉시 만료로 판정 → 다음 호출/대기 스레드가 또 fetch(single-flight 무력화).
+        //   수정본은 *완료 시각* 기준이라 갱신 직후 TTL 윈도우가 온전히 살아 있어야 한다.
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofSeconds(10), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.fetchDuration = Duration.ofSeconds(20); // TTL(10s)보다 긴 느린 성공
+
+        JWKSet got1 = cache.get(); // fetch 1 (완료 시점에 시계가 +20s)
+        assertThat(got1).isSameAs(first);
+        assertThat(cache.fetchCount.get()).isEqualTo(1);
+
+        // when: 완료 직후(TTL 이내) 다음 호출.
+        cache.fetchDuration = Duration.ZERO;
+        clock.advance(Duration.ofSeconds(3)); // 완료시각 + 3s < TTL(10s)
+        JWKSet got2 = cache.get();
+
+        // then: 동일 스냅샷 반환 + 재 fetch 없음(single-flight·TTL 윈도우 보존).
+        //   (회귀 버그였다면 fetchCount가 2로 늘어 갱신 직후 재fetch storm을 재현했을 것)
+        assertThat(got2).isSameAs(first);
+        assertThat(cache.fetchCount.get()).isEqualTo(1);
+    }
 }
