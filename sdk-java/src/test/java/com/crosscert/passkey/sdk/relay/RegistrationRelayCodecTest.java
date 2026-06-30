@@ -58,7 +58,7 @@ class RegistrationRelayCodecTest {
     void decode_rejectsTamperedSignature() {
         RegistrationRelayCodec codec = codec("test-secret-2", Duration.ofMinutes(5));
         String token = codec.encode("rt", "uh", "un", "dn");
-        int dot = token.lastIndexOf('.');
+        int dot = token.indexOf('.');
         String p64 = token.substring(0, dot);
         byte[] sig = B64D.decode(token.substring(dot + 1));
         sig[0] ^= 0x01;
@@ -73,7 +73,7 @@ class RegistrationRelayCodecTest {
         String secret = "test-secret-payload";
         RegistrationRelayCodec codec = codec(secret, Duration.ofMinutes(5));
         String token = codec.encode("rt", "victim-handle", "victim-user", "Victim");
-        int dot = token.lastIndexOf('.');
+        int dot = token.indexOf('.');
         String origSig = token.substring(dot + 1);
         String payloadJson = new String(B64D.decode(token.substring(0, dot)), StandardCharsets.UTF_8);
         assertThat(payloadJson).contains("victim-handle");
@@ -89,7 +89,7 @@ class RegistrationRelayCodecTest {
         String secret = "test-secret-username";
         RegistrationRelayCodec codec = codec(secret, Duration.ofMinutes(5));
         String token = codec.encode("rt", "uh", "victim-user", "Victim");
-        int dot = token.lastIndexOf('.');
+        int dot = token.indexOf('.');
         String origSig = token.substring(dot + 1);
         String payloadJson = new String(B64D.decode(token.substring(0, dot)), StandardCharsets.UTF_8);
         assertThat(payloadJson).contains("victim-user");
@@ -117,6 +117,7 @@ class RegistrationRelayCodecTest {
     void decode_rejectsLegacyPayloadMissingUsernameAndDisplayName() {
         String secret = "test-secret-legacy";
         RegistrationRelayCodec codec = codec(secret, Duration.ofMinutes(5));
+        // 300s = 코덱 TTL(5분) 내, 즉 미만료 — 거부 사유는 만료가 아니라 불완전 payload임을 분명히
         long futureExp = FIXED.instant().getEpochSecond() + 300;
         String payloadJson = "{\"rt\":\"rt\",\"uh\":\"uh\",\"exp\":" + futureExp + "}";
         String p64 = B64.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));

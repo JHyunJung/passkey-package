@@ -36,8 +36,9 @@ public final class RegistrationRelayCodec {
     private static final String HMAC_ALG = "HmacSHA256";
     private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder B64D = Base64.getUrlDecoder();
+    // ObjectMapper 는 설정 완료 후 thread-safe 라 인스턴스마다 만들 필요 없이 공유한다(Jackson 권장).
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final ObjectMapper mapper = new ObjectMapper();
     private final byte[] key;
     private final long ttlSeconds;
     private final Clock clock;
@@ -54,7 +55,7 @@ public final class RegistrationRelayCodec {
         Payload p = new Payload(registrationToken, userHandle, username, displayName, exp);
         byte[] payload;
         try {
-            payload = mapper.writeValueAsBytes(p);
+            payload = MAPPER.writeValueAsBytes(p);
         } catch (Exception e) {
             throw new IllegalStateException("relay encode failed", e);
         }
@@ -83,7 +84,7 @@ public final class RegistrationRelayCodec {
         }
         Payload p;
         try {
-            p = mapper.readValue(B64D.decode(p64), Payload.class);
+            p = MAPPER.readValue(B64D.decode(p64), Payload.class);
         } catch (Exception e) {
             throw new IllegalArgumentException("relay token bad payload");
         }
