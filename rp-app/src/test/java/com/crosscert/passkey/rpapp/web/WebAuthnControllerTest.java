@@ -1,17 +1,18 @@
 package com.crosscert.passkey.rpapp.web;
 
+import com.crosscert.passkey.rpapp.common.exception.ErrorCode;
 import com.crosscert.passkey.rpapp.config.CorsProperties;
 import com.crosscert.passkey.rpapp.config.PasskeyProperties;
 import com.crosscert.passkey.rpapp.config.WebSecurityConfig;
 import com.crosscert.passkey.rpapp.user.InMemoryUserStore;
 import com.crosscert.passkey.rpapp.user.RpAppUser;
-import com.crosscert.passkey.rpapp.web.relay.RegRelayCodec;
 import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.dto.AuthenticationFinishResponse;
 import com.crosscert.passkey.sdk.dto.AuthenticationStartResponse;
 import com.crosscert.passkey.sdk.dto.RegistrationFinishResponse;
 import com.crosscert.passkey.sdk.dto.RegistrationStartResponse;
 import com.crosscert.passkey.sdk.idtoken.IdTokenClaims;
+import com.crosscert.passkey.sdk.relay.RegistrationRelayCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>authenticate/finish 가 id-token/JWT 를 응답에 노출하지 않는다(회귀 가드).</li>
  *   <li>register/finish 가 클라이언트 userHandle 을 받지 않고 relay.decode 결과만 신뢰한다.</li>
  *   <li>relay/auth 토큰 누락 시 Bean Validation 으로 400 을 낸다.</li>
+ *   <li>iss/aud 불일치 시 SDK PasskeyIdTokenException 이 PASSKEY_ID_TOKEN(P004, 401) 으로 변환된다.</li>
  * </ul>
  *
  * 실제 {@link WebSecurityConfig}(STATELESS + CSRF disable + CORS 화이트리스트)를 함께
@@ -66,7 +68,7 @@ class WebAuthnControllerTest {
     @MockBean
     PasskeyProperties props;
     @MockBean
-    RegRelayCodec relay;
+    RegistrationRelayCodec relay;
 
     @TestConfiguration
     static class FixtureConfig {
@@ -120,7 +122,8 @@ class WebAuthnControllerTest {
         String jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJoYW5kbGUtYWxpY2UifQ.SIGPART";
         given(passkey.authenticationFinish(any())).willReturn(
                 new AuthenticationFinishResponse(jwt, "Bearer", 300L));
-        given(passkey.verifyIdToken(jwt)).willReturn(new IdTokenClaims(
+        // 3-인자 verifyIdToken 으로 stub: iss/aud 검증은 SDK 책임이므로 검증 통과 claims 반환.
+        given(passkey.verifyIdToken(eq(jwt), any(), any())).willReturn(new IdTokenClaims(
                 "https://issuer.example.com/7f00dead-0000-0000-0000-000000000001",
                 "handle-alice",
                 "7f00dead-0000-0000-0000-000000000001",
@@ -208,7 +211,7 @@ class WebAuthnControllerTest {
         // relay 토큰만이 userHandle 의 출처. body 에 클라이언트가 임의 userHandle 을 끼워넣어도
         // RegisterCompleteReq 에 해당 필드가 없어 무시되고, confirmRegistration 은 relay 의 값으로 호출된다.
         given(relay.decode("opaque.relay")).willReturn(
-                new RegRelayCodec.RegRelay("reg-token-upstream", "relay-handle", "relay-user", "Relay User"));
+                new RegistrationRelayCodec.RegistrationRelay("reg-token-upstream", "relay-handle", "relay-user", "Relay User"));
         given(passkey.registrationFinish(any())).willReturn(new RegistrationFinishResponse(
                 "cred-abc", "aaguid", "packed", "2026-01-01T00:00:00Z"));
 
@@ -231,7 +234,7 @@ class WebAuthnControllerTest {
     void registerFinish_usernameTakenByOther_rejectsBeforeUpstreamFinish() throws Exception {
         // relay 의 username 이 이미 다른 handle 로 점유됨 → upstream finish 호출 전 USERNAME_TAKEN.
         given(relay.decode("opaque.relay")).willReturn(
-                new RegRelayCodec.RegRelay("reg-token-upstream", "relay-handle", "taken-user", "Taken User"));
+                new RegistrationRelayCodec.RegistrationRelay("reg-token-upstream", "relay-handle", "taken-user", "Taken User"));
         given(users.isUsernameTakenByOther("taken-user", "relay-handle")).willReturn(true);
 
         mvc.perform(post("/passkey/register/finish")
@@ -245,5 +248,25 @@ class WebAuthnControllerTest {
         // 핵심: upstream 에 credential 을 만들지 않고(불일치 방지), 확정도 일어나지 않는다.
         verify(passkey, never()).registrationFinish(any());
         verify(users, never()).confirmRegistration(any(), any(), any(), any());
+    }
+
+    // ── 7. id-token iss/aud mismatch → PASSKEY_ID_TOKEN (SDK 예외 변환 보존) ────
+
+    @Test
+    void authenticateFinish_idTokenInvalid_mapsToPasskeyIdTokenError() throws Exception {
+        String jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJoIn0.SIG";
+        given(passkey.authenticationFinish(any())).willReturn(
+                new AuthenticationFinishResponse(jwt, "Bearer", 300L));
+        given(props.tenantId()).willReturn("7f00dead-0000-0000-0000-000000000001");
+        given(props.issuerBase()).willReturn(URI.create("https://issuer.example.com"));
+        // SDK 가 iss/aud 불일치로 던지는 예외를 흉내낸다.
+        given(passkey.verifyIdToken(eq(jwt), any(), any()))
+                .willThrow(new com.crosscert.passkey.sdk.exception.PasskeyIdTokenException("aud mismatch"));
+
+        mvc.perform(post("/passkey/authenticate/finish")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"publicKeyCredential\":{\"id\":\"x\"},\"authenticationToken\":\"auth-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PASSKEY_ID_TOKEN.code()));
     }
 }
