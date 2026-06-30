@@ -10,12 +10,10 @@ import java.time.Duration;
 import java.util.function.Supplier;
 
 /**
- * API Key 를 파일에서 핫리로드하는 Supplier. SDK 의 RedactingRequestInterceptor
- * 가 요청마다 get() 을 호출하므로, 운영자가 키 파일만 바꾸면 재기동 없이 다음 요청부터
- * 새 키가 반영된다.
+ * API Key 를 파일에서 핫리로드하는 공급자. SDK 가 요청마다 get() 을 호출하므로, 운영자가 키 파일만 바꾸면
+ * 재기동 없이 다음 요청부터 새 키가 반영된다(서버의 무중단 키 교체와 짝지어 쓴다).
  *
- * 스레드 안전: 캐시 상태(cachedKey + lastModified)를 불변 holder 로 묶어 단일 volatile
- * 참조로 발행한다. lastPollAt 의 race 는 무해하므로 별도 volatile.
+ * <p>스레드 안전: 캐시 상태(키 + 파일 수정시각)를 불변 객체로 묶어 단일 volatile 참조로 발행한다.
  */
 public class ReloadableApiKeySupplier implements Supplier<String> {
 

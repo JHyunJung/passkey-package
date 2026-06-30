@@ -14,10 +14,11 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * 등록 relay 토큰 코덱(spec §5). {registrationToken, userHandle, username, displayName, exp} 를
- * HMAC-SHA256 으로 서명한 불투명 토큰 "base64url(payloadJson).base64url(hmac)" 을 만들고 검증한다.
- * 서명이 맞아야 payload 를 신뢰 → 클라이언트가 userHandle 을 조작할 수 없다. 무상태(자기완결).
- * username/displayName 을 함께 봉인해 finish 가 pending 없이도 결정적으로 user 를 확정할 수 있다(P0-4).
+ * 등록 릴레이 토큰 코덱. {registrationToken, userHandle, username, displayName, exp} 를 HMAC-SHA256 으로
+ * 서명해 "base64url(payloadJson).base64url(hmac)" 형태의 불투명 토큰을 만들고 검증한다.
+ *
+ * <p>서명이 맞아야 payload 를 신뢰하므로 클라이언트가 userHandle 을 조작할 수 없다. 토큰이 자기완결적이라
+ * 서버에 pending 상태를 두지 않고도 finish 단계에서 사용자를 확정할 수 있다(무상태 설계).
  */
 @Component
 public class RegRelayCodec {
@@ -86,10 +87,8 @@ public class RegRelayCodec {
         if (p.exp() < Instant.now().getEpochSecond()) {
             throw new IllegalArgumentException("relay token expired");
         }
-        // 필수 4필드 검증. 배포 직전 발급된 레거시 토큰(un/dn 없음)이 TTL 내에 finish 되면
-        // un/dn 이 null 로 역직렬화되는데, 그대로 두면 upstream finish 후 confirmRegistration 의
-        // byUsername.put(null,..) 에서 NPE(500) → credential 은 생성됐는데 매핑 누락. upstream
-        // 호출 전 여기서 거부해 클라이언트가 등록을 깨끗이 재시작하게 한다(P0-4 무상태 계약).
+        // 필수 4필드 검증. 값이 빠진 토큰을 upstream 호출 전에 거부해, 매핑 누락으로 인한 오류를 막고
+        // 클라이언트가 등록을 처음부터 깨끗이 다시 시작하게 한다.
         if (p.rt() == null || p.uh() == null || p.un() == null || p.dn() == null) {
             throw new IllegalArgumentException("relay token incomplete payload");
         }
@@ -106,10 +105,7 @@ public class RegRelayCodec {
         }
     }
 
-    /**
-     * 직렬화 payload. 필드명을 짧게(rt/uh/un/dn/exp) 유지. @JsonProperty 로 생성자 바인딩을
-     * 명시해 jackson-module-kotlin 유무와 무관하게 record 와 동일 복원.
-     */
+    /** 직렬화 payload. 필드명을 짧게(rt/uh/un/dn/exp) 유지하고 {@code @JsonProperty} 로 매핑을 명시한다. */
     record ObjectNodePayload(
             @JsonProperty("rt") String rt,
             @JsonProperty("uh") String uh,

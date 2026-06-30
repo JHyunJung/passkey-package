@@ -23,11 +23,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * username ↔ userHandle ↔ credential 매핑 저장소.
+ * username ↔ userHandle ↔ credentialId 매핑 저장소.
  *
- * 맵은 in-memory 캐시이고, 확정 등록된 user(credentialId ≠ null)만 JSON 파일에
- * 미러링한다. pending user 는 메모리에만 두어 재기동 시 자연 정리된다. 단일 인스턴스
- * 데모를 가정하며 파일 락은 두지 않는다.
+ * <p><b>⚠️ 데모용 인메모리 구현이다.</b> 확정 등록된 사용자만 JSON 파일에 미러링하고, 단일 인스턴스를
+ * 가정하며 파일 락을 두지 않는다. <b>고객사는 이 클래스를 자사 DB/영속 계층(JPA·MyBatis 등)으로
+ * 교체</b>해야 한다 — 컨트롤러가 의존하는 메서드(createPending / isUsernameTakenByOther /
+ * confirmRegistration / findByUserHandle / findByUsername)만 동일하게 제공하면 된다.
  */
 @Component
 public class InMemoryUserStore {
@@ -109,13 +110,12 @@ public class InMemoryUserStore {
     }
 
     /**
-     * username 으로 새 userHandle (32B base64url) 발급 + pending 상태로 저장.
+     * username 으로 새 userHandle(32바이트 base64url)을 발급하고 pending 상태로 저장한다.
      *
-     * begin 단계에서는 username 을 점유하지 **않는다**(byUsername 매핑을 만들지 않음).
-     * begin 만 하고 finish 를 못 한 사용자(다이얼로그 취소·페이지 이탈·네트워크 단절)가 같은
-     * username 으로 영구히 재시도하지 못하던 W001 버그를 막기 위함. 진짜 username 충돌 방지는
-     * confirmRegistration 의 putIfAbsent(최종 권위) + 컨트롤러의 isUsernameTakenByOther
-     * 선검사가 처리하므로, begin 점유는 정상 재시도를 차단하는 부작용만 있었다.
+     * <p>begin 단계에서는 username 을 선점하지 않는다(byUsername 매핑을 만들지 않음).
+     * begin 만 하고 finish 를 못 한 사용자(다이얼로그 취소·이탈·네트워크 단절)가 같은 username 으로
+     * 다시 시도할 수 있게 하기 위함이다. 실제 username 충돌 방지는 confirmRegistration 의
+     * putIfAbsent(최종 권위) + 컨트롤러의 isUsernameTakenByOther 선검사가 담당한다.
      */
     public String createPending(String username, String displayName) {
         byte[] raw = new byte[32];
@@ -141,7 +141,7 @@ public class InMemoryUserStore {
     /**
      * registration/finish 성공 후 확정. userHandle 이 (pending 으로) 있으면 credentialId 를 채우고,
      * 없으면(재시작·다중 인스턴스로 pending 유실) relay 의 서명된 username/displayName 로 user 를
-     * 결정적으로 생성해 확정한다. 어느 경로든 확정 user 는 파일에 영속화된다(완전 무상태, P0-4).
+     * 결정적으로 생성해 확정한다. 어느 경로든 확정 user 는 파일에 영속화된다(서버에 pending 상태를 두지 않는 무상태 설계).
      *
      * 방어(이중): username 이 이미 다른 userHandle 로 점유돼 있으면 거부(탈취/충돌 방지).
      * putIfAbsent 로 원자적 점유 검사 + 같은-handle 재확정(idempotent)은 허용. HMAC 은 "유효

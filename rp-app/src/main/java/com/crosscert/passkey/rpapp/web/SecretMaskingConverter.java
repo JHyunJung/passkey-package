@@ -4,22 +4,12 @@ import ch.qos.logback.classic.pattern.MessageConverter;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 
 /**
- * Pattern-based defense-in-depth redaction applied to every formatted log
- * message. If a developer accidentally emits a raw API key, JWT, or password
- * in log.info, this converter strips the secret tail at output time.
+ * 모든 콘솔 로그 메시지에 비밀값 마스킹을 적용하는 logback MessageConverter.
+ * 개발자가 실수로 API key·JWT·password 를 로그에 남겨도 출력 시점에 가린다.
  *
- * <p>Used as a custom MessageConverter in logback-spring.xml:
- * <pre>
- *   &lt;conversionRule conversionWord="msg" converterClass="...SecretMaskingConverter"/&gt;
- * </pre>
- * which overrides the default %msg behavior across all CONSOLE output.
- *
- * <p>Redaction logic is shared with JSON output via {@link SecretRedactor} —
- * both text and JSON paths call the same {@code redact()} function.
- *
- * <p>Sample-rp copy of {@code com.crosscert.passkey.core.logging.SecretMaskingConverter}
- * — rp-app does not depend on :core, so the class is duplicated here. Keep
- * the two in sync.
+ * <p>logback-spring.xml 에서 {@code %msg} 변환 규칙으로 등록된다:
+ * <pre>{@code <conversionRule conversionWord="msg" converterClass="...SecretMaskingConverter"/>}</pre>
+ * 마스킹 로직은 {@link SecretRedactor} 를 공유한다.
  */
 public class SecretMaskingConverter extends MessageConverter {
 

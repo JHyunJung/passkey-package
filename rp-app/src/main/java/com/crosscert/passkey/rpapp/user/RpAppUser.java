@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.time.Instant;
 
+/** rp-app 이 보관하는 사용자 레코드. username ↔ userHandle ↔ credentialId 매핑의 한 행. credentialId 가 null 이면 등록 미완(pending). */
 public record RpAppUser(
         @JsonProperty("userHandle") String userHandle,
         @JsonProperty("username") String username,

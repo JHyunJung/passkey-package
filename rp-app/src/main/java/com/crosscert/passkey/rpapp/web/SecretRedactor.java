@@ -3,12 +3,9 @@ package com.crosscert.passkey.rpapp.web;
 import java.util.regex.Pattern;
 
 /**
- * 로그 메시지에서 비밀값(API key/JWT/password/bcrypt)을 마스킹하는 공유 헬퍼.
- * 텍스트 출력의 {@link SecretMaskingConverter} 와 JSON 출력의 RedactingMessageJsonProvider 가
- * 같은 로직을 공유해 drift 를 막는다.
- *
- * <p>Mirror of {@code com.crosscert.passkey.core.logging.SecretRedactor} — rp-app does not
- * depend on :core, so the class is duplicated here. Keep the two in sync.
+ * 로그 메시지에서 비밀값(API key / JWT / password / bcrypt / 토큰 필드)을 마스킹하는 공유 헬퍼.
+ * 텍스트 로그({@link SecretMaskingConverter})와 JSON 로그({@link RedactingMessageJsonProvider})가
+ * 같은 로직을 공유한다. 고객사는 자사 로그에 노출될 수 있는 비밀 패턴을 여기에 맞춰 조정한다.
  */
 public final class SecretRedactor {
 

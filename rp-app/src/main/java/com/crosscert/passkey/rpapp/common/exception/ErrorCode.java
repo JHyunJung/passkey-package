@@ -2,6 +2,7 @@ package com.crosscert.passkey.rpapp.common.exception;
 
 import org.springframework.http.HttpStatus;
 
+/** rp-app 의 표준 에러 코드. HTTP 상태 + 코드 문자열 + 기본 메시지를 묶는다(공통/인증/WebAuthn/업스트림). */
 public enum ErrorCode {
     // Common
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "C001", "Invalid input value"),

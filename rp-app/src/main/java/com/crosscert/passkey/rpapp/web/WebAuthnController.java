@@ -36,6 +36,19 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+/**
+ * 패스키 등록·인증의 RP 엔드포인트. 브라우저와 passkey-app 사이의 중계자다.
+ *
+ * <p>등록·인증 두 플로우가 각각 begin → finish 2단계로 동작한다(총 4개 엔드포인트):
+ * <ul>
+ *   <li>{@code POST /passkey/register/begin} → {@code /register/finish}</li>
+ *   <li>{@code POST /passkey/authenticate/begin} → {@code /authenticate/finish}</li>
+ * </ul>
+ *
+ * <p>서버에 세션을 두지 않는다. begin 응답으로 받은 서명 토큰(regRelayToken / authenticationToken)을
+ * finish 요청에 다시 실어 두 단계를 잇는다. 실제 WebAuthn 동작(ceremony)과 ID Token 발급은
+ * passkey-app 이 맡고, rp-app 은 SDK 호출·사용자 매핑·ID Token(iss/aud/sub) 검증을 담당한다.
+ */
 @RestController
 @RequestMapping("/passkey")
 public class WebAuthnController {
@@ -116,12 +129,9 @@ public class WebAuthnController {
             throw new BusinessException(ErrorCode.PENDING_REG_MISSING, e.getMessage());
         }
         log.info("register/complete entry: userHandle={}", idTail(r.userHandle()));
-        // upstream finish 전 username 점유 선검사: 유효 begin 에서 온(HMAC 증명) username 이라도
-        // finish 시점에 다른 사용자에게 확정돼 있으면 typed-login 탈취/충돌을 막는다. 단일 인스턴스
-        // (이 store 의 설계 전제)에선 upstream credential 을 만들기 전에 거부해 rp-app↔passkey-app
-        // 불일치도 피한다. confirmRegistration 의 putIfAbsent 가 최종 권위(이중 방어) — 다중
-        // 인스턴스 동시 finish 같은 좁은 race 에선 선검사를 통과한 패자가 store 확정 단계에서 거부될 수
-        // 있고, 그 경우 upstream credential 만 남는다(단일 인스턴스 데모 전제상 허용 범위).
+        // finish 전에 username 선점 여부를 검사한다. 유효한 begin(HMAC 으로 증명된) 에서 온 username 이라도
+        // finish 시점에 다른 사용자에게 확정돼 있으면 typed-login 탈취/충돌을 막기 위해 거부한다.
+        // 최종 권위는 confirmRegistration 의 putIfAbsent(원자적 점유)이고, 이 선검사는 upstream 호출 전 조기 차단이다.
         if (users.isUsernameTakenByOther(r.username(), r.userHandle())) {
             log.warn("register/complete failed: reason=username-taken userHandle={}", idTail(r.userHandle()));
             throw new BusinessException(ErrorCode.USERNAME_TAKEN);
@@ -188,8 +198,7 @@ public class WebAuthnController {
         // 인한 거짓 mismatch 를 막기 위해 비교 전 양쪽 tenantId 를 UUID 로 정규화한다.
         String expectedTenant = normalizeTenantId(props.tenantId());
 
-        // iss = "<issuerBase>/<tenantId>" — issuerBase prefix 와 tenantId 를 분리해 검증.
-        // 원본 Java(props.issuerBase().toString())는 issuerBase 누락 시 NPE→500 으로 fail-fast.
+        // iss = "<issuerBase>/<tenantId>". issuerBase 가 설정돼 있어야 검증할 수 있으므로 누락 시 즉시 실패시킨다.
         if (props.issuerBase() == null) {
             throw new NullPointerException("passkey.issuer-base 미설정");
         }

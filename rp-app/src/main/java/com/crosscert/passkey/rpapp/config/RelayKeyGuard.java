@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
-/** non-dev/local 프로필에서 relay 데모 키 사용을 차단(P2-a, spec §5). */
+/** 운영(또는 프로필 미지정) 환경에서 relay 데모 기본 키 사용을 막는 가드. 기동 시 검사해 위반이면 실패시킨다. */
 @Component
 public class RelayKeyGuard {
 

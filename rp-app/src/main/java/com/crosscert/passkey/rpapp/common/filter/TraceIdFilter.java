@@ -14,9 +14,8 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * X-Trace-Id 헤더가 있으면 사용, 없으면 새로 발급. MDC 키 "traceId" 는
- * SDK 의 PasskeyClientConfig.MDC_TRACE_ID_KEY 와 반드시 동일해야 한다 — SDK 의
- * 기본 traceIdProvider 가 같은 키를 읽음.
+ * 요청마다 추적 ID 를 준비하는 필터. X-Trace-Id 헤더가 오면 그대로 쓰고, 없으면 새로 발급해
+ * MDC "traceId" 와 응답 헤더에 넣는다. 이 MDC 키는 SDK 가 passkey-app 으로 전파하는 키와 같아야 한다.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)

@@ -3,9 +3,9 @@ package com.crosscert.passkey.rpapp.web.dto;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
- * register/begin 응답. 무상태 릴레이를 위해 registrationToken·userHandle 을 HMAC 서명한
- * 불투명 regRelayToken(spec §5)을 반환한다. 클라이언트는 register/finish 에 이 토큰을
- * 다시 실어 보낸다(userHandle 조작 불가).
+ * 등록 시작 응답. {@code POST /passkey/register/begin} 이 돌려준다.
+ * publicKeyCredentialCreationOptions 는 브라우저 navigator.credentials.create() 에 그대로 넘기고,
+ * regRelayToken 은 finish 요청에 다시 실어 보낸다(서버 세션 없이 begin↔finish 를 잇는 서명 토큰).
  */
 public record RegisterOptionsResp(
         JsonNode publicKeyCredentialCreationOptions,

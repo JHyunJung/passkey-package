@@ -5,13 +5,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 
 /**
- * 등록 relay 토큰 HMAC 서명 설정(spec §5). registrationToken↔userHandle 바인딩용.
- * secret 은 운영 시 환경변수로 주입(데모 기본값은 비밀 아님). ttl 은 passkey-app
- * challenge TTL(5분)과 정렬.
- *
- * 생성자 파라미터(nullable)를 받아 정규화한 non-null 값을 노출한다. @ConfigurationPropertiesScan
- * 으로만 등록되므로 Spring 이 VALUE_OBJECT(생성자) 바인딩을 쓴다 — derived 필드라도 정상 바인딩.
- * RelayKeyGuardTest 는 new RelayProperties(null, ..) 로 DEMO_SECRET 폴백을 검증한다.
+ * 등록 릴레이 토큰의 HMAC 서명 설정({@code rp.relay.*}). registrationToken↔userHandle 바인딩에 쓴다.
+ * <b>secret 은 운영에서 반드시 강한 키로 주입</b>한다(미설정이면 데모 기본 키가 쓰이고, RelayKeyGuard 가
+ * 운영 프로필에서 기동을 차단한다). ttl 은 passkey-app 의 challenge 만료(기본 5분)와 맞춘다.
  */
 @ConfigurationProperties(prefix = "rp.relay")
 public class RelayProperties {
@@ -20,7 +16,7 @@ public class RelayProperties {
     private final Duration ttl;
 
     public RelayProperties(String secret, Duration ttl) {
-        // 데모 폴백. non-dev 프로필에선 RelayKeyGuard 가 차단(P2-a).
+        // 미설정/빈 값이면 데모 기본 키로 폴백한다. 운영 프로필에서는 RelayKeyGuard 가 이 기본 키를 거부한다.
         this.secret = (secret == null || secret.isBlank()) ? RelayKeyGuard.DEMO_SECRET : secret;
         this.ttl = (ttl == null) ? Duration.ofMinutes(5) : ttl;
     }
