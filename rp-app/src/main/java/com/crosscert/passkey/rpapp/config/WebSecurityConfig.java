@@ -11,6 +11,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
+/** rp-app 보안 설정. 무상태 클라이언트 전제로 세션·CSRF 를 끄고 /passkey 경로에 CORS 를 건다(데모는 모든 경로 permitAll). */
 @Configuration
 public class WebSecurityConfig {
 
@@ -41,9 +42,9 @@ public class WebSecurityConfig {
     }
 
     /**
-     * /passkey/ 경로(**)에만 적용되는 CORS 정책.
-     * ⚠️ 정확한 origin 목록만 허용(reflected-origin·와일드카드 금지, spec §3).
-     * allowedOrigins 가 비면(기본) 매칭 origin 이 없으므로 cross-origin 요청은 막힌다(같은-origin 데모만).
+     * {@code /passkey/**} 경로에만 적용되는 CORS 정책.
+     * ⚠️ 정확한 origin 목록만 허용(요청 Origin 반사·와일드카드 금지).
+     * allowedOrigins 가 비면 매칭 origin 이 없어 cross-origin 요청은 막힌다(같은-origin 데모만).
      * 자격증명(쿠키)을 보내지 않으므로 allowCredentials=false.
      */
     private CorsConfigurationSource corsConfigurationSource() {

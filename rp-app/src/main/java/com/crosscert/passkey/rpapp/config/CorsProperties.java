@@ -5,23 +5,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.List;
 
 /**
- * cross-origin 웹 SPA 를 위한 정확한 origin 화이트리스트.
- * ⚠️ reflected-origin(요청 Origin 반사)·와일드카드 금지(spec §3). 정확한 origin 목록만.
- * 이 목록은 passkey-app tenant 의 allowed-origins 와 일치시킬 것(드리프트 방지).
- * 설정: rp.cors.allowed-origins (콤마 구분 또는 YAML 리스트). 비면 CORS 비활성.
- *
- * 모든 @ConfigurationProperties 가 @ConfigurationPropertiesScan(VALUE_OBJECT 생성자
- * 바인딩) 으로만 등록되므로 Java record 로 외부 yml override 가 정상 동작한다.
- * (WebAuthnControllerTest 가 CorsProperties 를 fixture @Bean 으로 주입한다.)
+ * cross-origin 웹 클라이언트를 위한 허용 origin 화이트리스트({@code rp.cors.allowed-origins}).
+ * ⚠️ 정확한 origin 목록만 허용한다 — 와일드카드·요청 Origin 반사는 금지. 비우면 CORS 가 비활성(같은-origin 만).
+ * 고객사는 자사 웹 origin 을 passkey-app 테넌트의 allowed-origins 와 동일하게 맞춘다.
  */
 @ConfigurationProperties(prefix = "rp.cors")
 public record CorsProperties(
         List<String> allowedOrigins
 ) {
     public CorsProperties {
-        // "no wildcard" 규칙을 문서가 아니라 부팅 시 강제한다(spec §3).
-        // 와일드카드(*)·패턴(*.example.com)·빈 값을 거부 → 잘못된 설정으로 cross-origin 이
-        // 무차별 허용되는 일을 차단. 비면(목록 없음) CORS 자체가 비활성이므로 정상.
+        // 와일드카드(*)·패턴(*.example.com)·빈 값을 거부한다 — 잘못된 설정으로 cross-origin 이
+        // 무차별 허용되는 것을 부팅 시점에 차단한다. 비면(목록 없음) CORS 자체가 비활성이라 정상.
         if (allowedOrigins != null) {
             for (String origin : allowedOrigins) {
                 if (origin.isBlank()) {
