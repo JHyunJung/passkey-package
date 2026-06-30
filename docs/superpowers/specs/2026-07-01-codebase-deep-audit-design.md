@@ -8,6 +8,29 @@
 - **요구 제약**: "기존 작동하는 기능에는 변화가 없게" → **A그룹(동작 불변 14건)만 구현**,
   B그룹(동작 변경 16건)은 본 문서에 백로그로 기록만 한다.
 
+## 실행 결과 (2026-07-01, worktree deep-audit-groupA, base de32596)
+
+A그룹 14건을 subagent-driven 3-gate(spec+quality+codex)로 실행. **11건 구현 완료, 3건 B그룹 이관.**
+
+| Task | 결과 | 비고 |
+|------|------|------|
+| F12 @PreAuthorize | ✅ | codex P1=false positive(TenantBoundary 반환이 Optional이라 Mockito 기본 empty), 방어 stub 추가 |
+| F17 canonicalAaguid 가드 | ✅ | 순수 단위테스트 |
+| F36 fido-u2f ES256 | ✅ | defense-in-depth(파서 부수효과 의존 분리) |
+| F29 amr 정규화 | ✅ | 7→Long heap pollution 재현·차단 |
+| F09 activity slug 배치 | ✅ | deleted fallback IT 신규, Testcontainers green |
+| F19 challenge freshness | ✅ | Redis TTL과 동일 윈도우 공유, 정상경로 불변 |
+| F34 CertPath 시각주입 | ✅ | 3-인자 오버로드, 2-인자는 Instant.now() 위임(호출부 불변) |
+| F32 SafetyNet alg핀 | ✅ | alg-confusion 회귀 표면 차단 |
+| F33 TPM alg검증 | ✅ | F32와 동형 |
+| F37 ObjectMapper 통일 | ✅ | JsonMappers.secure(), 설정 강화는 안 함(동작 불변) |
+| F16 LicenseBootstrap set 제거 | ✅ | 부트 소비처 0 검증(case B) |
+| **F22 rename 비잠금** | **⛔ 롤백→B그룹** | codex P1 적발: Credential에 @Version/@DynamicUpdate 부재→전체컬럼 UPDATE가 동시 /authentication/finish의 signCount를 lost-update(replay 보호 약화). spec/quality 2명 놓침. **동작 불변 아님** |
+| **F21 scope 캐시** | **⏭ B그룹 이관** | Caffeine 의존 부재(도입=동작불변 밖) + scope mutation이 admin-app 별프로세스라 cross-process evict 불가→TTL stale=동작변경 |
+| **F27 JWKS 복원력** | ✅ (단 ⚠) | single-flight+stale 폴백. codex 4라운드 수렴(백오프 실패시각·성공 timestamp·stale 무한→TTL+grace 15분 상한·backoff 경로 일관화). **⚠ JWKS 서버 장애 시 동작 변경**(기존 예외 전파→stale 폴백 bounded). happy path·최초부팅 실패는 불변. 사용자 승인하 유지 |
+
+**핵심 교훈**: ① Credential 락 제거는 전체컬럼 UPDATE 모델에서 항상 lost-update 의심(F22). ② codex 독립 게이트가 spec/quality 공유 맹점을 2회 적발(F22 lost-update, F27 백오프/stale 엣지). ③ "동작 불변" 판정은 정상경로뿐 아니라 장애·동시성 경로까지 봐야 정확(F27이 장애시 변경).
+
 ## 제거된 후보 (검증 기록)
 
 - **F23 (REJECTED, 거짓양성)** — RegistrationFinishService:107 의 포맷 재검사는 verifier가
