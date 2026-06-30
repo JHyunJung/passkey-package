@@ -57,13 +57,22 @@ implementation("com.crosscert.passkey:sdk-java:1.0.0")
 ```java
 import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.PasskeyClientConfig;
+import com.crosscert.passkey.sdk.relay.RegistrationRelayCodec;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
 
 PasskeyClient client = PasskeyClient.of(
     PasskeyClientConfig.builder(
         URI.create("https://passkey.example.com"),
         () -> System.getenv("PASSKEY_API_KEY")   // Supplier<String>: 매 요청마다 호출됨
     ).build());
+
+// 등록 릴레이 코덱(무상태 RP 필수). secret 은 강한 키로 주입한다(출처·보호는 RP 책임).
+RegistrationRelayCodec relay = new RegistrationRelayCodec(
+    System.getenv("RELAY_SECRET").getBytes(StandardCharsets.UTF_8),
+    Duration.ofMinutes(5), Clock.systemUTC());
 ```
 
 `PasskeyClientConfig.defaults(baseUrl, apiKeySupplier)` 는 모든 선택값에 기본값을 적용한
@@ -86,6 +95,14 @@ PasskeyClient client = PasskeyClient.of(
 **동적 API Key:** `apiKeySupplier` 는 부팅 시 1회가 아니라 **매 요청 시점**에 호출된다. 따라서
 Supplier 뒤편(파일/시크릿 매니저)에서 키를 교체하면 재기동 없이 다음 요청부터 반영된다. 반환값이
 null/blank 면 그 요청은 `PasskeyConfigurationException` 으로 fail-fast.
+
+**RegistrationRelayCodec 생성자 인자** — `new RegistrationRelayCodec(secret, ttl, clock)`:
+
+| 인자 | 타입 | 설명 |
+|---|---|---|
+| secret (필수) | `byte[]` | HMAC 키 raw bytes. 강한 키 주입(출처·보호는 RP 책임). null 금지(fail-fast). |
+| ttl (필수) | `Duration` | 릴레이 토큰 만료. passkey-app challenge 만료(기본 5분)에 맞춘다. |
+| clock (필수) | `Clock` | 만료 기준 시계. 운영은 `Clock.systemUTC()`. |
 
 ## 5. API 사용
 
