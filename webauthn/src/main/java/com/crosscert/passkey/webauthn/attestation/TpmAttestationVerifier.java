@@ -106,7 +106,18 @@ public final class TpmAttestationVerifier implements AttestationVerifier {
         // 5. AIK 공개키로 certInfo 서명 검증
         List<X509Certificate> chain = parseChain(arr);
         X509Certificate aik = chain.get(0);
-        if (!verifySignature(coseAlg.jcaSignatureName(), aik.getPublicKey(), certInfoBytes, signature)) {
+        // alg 핀을 입력(attStmt.alg)에서 인증서(AIK 공개키 타입)로 고정하는 방어심화(F33):
+        // attStmt.alg가 가리키는 알고리즘과 AIK 공개키 종류가 어긋나면(예: alg=RS256인데
+        // AIK가 EC 키) 명시적으로 거부한다. JCA도 키/alg 불일치를 거부하지만, 거부 경로를
+        // 입력 검증 단계에서 분명히 한다(정상 TPM은 ES256↔EC, RS256↔RSA로 항상 통과).
+        PublicKey aikKey = aik.getPublicKey();
+        boolean algKeyMatch =
+                (coseAlg == CoseAlgorithm.ES256 && aikKey instanceof ECPublicKey)
+             || (coseAlg == CoseAlgorithm.RS256 && aikKey instanceof RSAPublicKey);
+        if (!algKeyMatch) {
+            throw new AttestationException("tpm alg/AIK-key mismatch: alg=" + coseAlg);
+        }
+        if (!verifySignature(coseAlg.jcaSignatureName(), aikKey, certInfoBytes, signature)) {
             throw new AttestationException("tpm certInfo signature invalid");
         }
 
