@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.api.PageView;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.Metamodel;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -110,6 +111,19 @@ class CredentialAdminControllerSecurityTest {
 
     private static final String LIST_PATH = "/admin/api/tenants/" + TENANT_ID + "/credentials";
     private static final String AUTH_EVENTS_PATH = LIST_PATH + "/" + CREDENTIAL_ID + "/auth-events";
+
+    /**
+     * AdminSecurityConfig 가 설치하는 TenantContextAdminFilter 는 컨트롤러 진입 전
+     * tenantBoundary.currentTenantScope() 를 호출해 scope().ifPresent(...) 한다.
+     * Optional 반환이라 unstubbed mock 의 Mockito 기본값(ReturnsEmptyValues)이 이미
+     * Optional.empty() 라 NPE 는 안 나지만, 그 암묵적 기본값에 기대지 않도록 의도를
+     * 명시 고정한다(테스트 견고성 — role-gate 검증이 필터 NPE 로 오염되지 않게).
+     */
+    @BeforeEach
+    void stubTenantBoundaryScope() {
+        org.mockito.Mockito.when(tenantBoundary.currentTenantScope())
+                .thenReturn(java.util.Optional.empty());
+    }
 
     // ---------------------------------------------------------------
     // list (GET /admin/api/tenants/{tenantId}/credentials)
