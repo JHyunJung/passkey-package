@@ -25,32 +25,44 @@ final class TestCa {
     }
 
     static TestCa create() throws Exception {
+        return createWithValidity(
+                new Date(System.currentTimeMillis() - 86400_000L),
+                new Date(System.currentTimeMillis() + 86400_000L));
+    }
+
+    /** 검증 시각 주입 테스트용 — 루트 유효기간을 넓게 잡아 과거/현재 양쪽 검증에 anchor가 유효하도록 한다. */
+    static TestCa createWithValidity(Date rootNotBefore, Date rootNotAfter) throws Exception {
         KeyPair kp = ecKeyPair();
-        X509Certificate root = selfSign(kp, "CN=test-root");
+        X509Certificate root = selfSign(kp, "CN=test-root", rootNotBefore, rootNotAfter);
         return new TestCa(kp, root);
     }
 
     X509Certificate root() { return root; }
 
     X509Certificate issueLeaf(String subjectDn) throws Exception {
+        return issueLeaf(subjectDn,
+                new Date(System.currentTimeMillis() - 86400_000L),
+                new Date(System.currentTimeMillis() + 86400_000L));
+    }
+
+    /** notBefore/notAfter를 명시해 leaf를 발급(만료된 leaf 등 시각 의존 케이스 테스트용). */
+    X509Certificate issueLeaf(String subjectDn, Date notBefore, Date notAfter) throws Exception {
         KeyPair leafKp = ecKeyPair();
         X500Name issuer = new X500Name("CN=test-root");
         X500Name subject = new X500Name(subjectDn);
         var builder = new JcaX509v3CertificateBuilder(
                 issuer, BigInteger.valueOf(2),
-                new Date(System.currentTimeMillis() - 86400_000L),
-                new Date(System.currentTimeMillis() + 86400_000L),
+                notBefore, notAfter,
                 subject, leafKp.getPublic());
         ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(rootKeyPair.getPrivate());
         return new JcaX509CertificateConverter().getCertificate(builder.build(signer));
     }
 
-    private static X509Certificate selfSign(KeyPair kp, String dn) throws Exception {
+    private static X509Certificate selfSign(KeyPair kp, String dn, Date notBefore, Date notAfter) throws Exception {
         X500Name name = new X500Name(dn);
         var builder = new JcaX509v3CertificateBuilder(
                 name, BigInteger.ONE,
-                new Date(System.currentTimeMillis() - 86400_000L),
-                new Date(System.currentTimeMillis() + 86400_000L),
+                notBefore, notAfter,
                 name, kp.getPublic());
         builder.addExtension(
                 org.bouncycastle.asn1.x509.Extension.basicConstraints, true,
