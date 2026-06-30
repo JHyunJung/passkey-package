@@ -39,12 +39,4 @@ public enum ErrorCode {
     public HttpStatus status() { return status; }
     public String code() { return code; }
     public String message() { return message; }
-
-    // JavaBean getters — required so still-Kotlin callers (e.g. ApiResponse.kt
-    // using `code.code` / `code.message` property syntax) compile. Kotlin only
-    // synthesizes properties from getX() getters, not from the record-style
-    // accessors above. Behavior-identical; remove once all callers are Java.
-    public HttpStatus getStatus() { return status; }
-    public String getCode() { return code; }
-    public String getMessage() { return message; }
 }
