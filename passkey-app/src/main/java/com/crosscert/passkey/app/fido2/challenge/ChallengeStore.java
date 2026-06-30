@@ -14,7 +14,12 @@ public class ChallengeStore {
 
     static final String REG_PREFIX = "challenge:reg:";
     static final String AUTH_PREFIX = "challenge:auth:";
-    static final Duration TTL = Duration.ofMinutes(5);
+    /**
+     * Challenge 의 Redis 만료 기간. /finish 경로의 앱-레벨 freshness 가드
+     * (F19)도 이 값을 기준으로 issuedAt 을 검증하므로 두 방어가 동일한
+     * 만료 경계를 공유하도록 public 으로 노출한다.
+     */
+    public static final Duration TTL = Duration.ofMinutes(5);
 
     // Spring's auto-configured ObjectMapper already has JavaTimeModule
     // registered by CoreJacksonConfig. We trust the caller's mapper;
