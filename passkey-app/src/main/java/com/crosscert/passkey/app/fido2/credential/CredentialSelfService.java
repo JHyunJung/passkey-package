@@ -31,7 +31,7 @@ public class CredentialSelfService {
 
     @Transactional
     public void rename(byte[] userHandle, byte[] credentialId, String label) {
-        Credential c = creds.findOwnedForUpdate(credentialId, userHandle)
+        Credential c = creds.findOwned(credentialId, userHandle)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENTITY_NOT_FOUND,
                         "credential not found or not owned"));
         c.setLabel(label);
