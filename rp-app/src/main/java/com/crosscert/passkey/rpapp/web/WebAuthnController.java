@@ -13,7 +13,7 @@ import com.crosscert.passkey.rpapp.web.dto.LoginStartReq;
 import com.crosscert.passkey.rpapp.web.dto.RegisterCompleteReq;
 import com.crosscert.passkey.rpapp.web.dto.RegisterOptionsResp;
 import com.crosscert.passkey.rpapp.web.dto.RegisterStartReq;
-import com.crosscert.passkey.rpapp.web.relay.RegRelayCodec;
+import com.crosscert.passkey.sdk.relay.RegistrationRelayCodec;
 import com.crosscert.passkey.sdk.PasskeyClient;
 import com.crosscert.passkey.sdk.dto.AuthenticationFinishRequest;
 import com.crosscert.passkey.sdk.dto.AuthenticationFinishResponse;
@@ -59,10 +59,10 @@ public class WebAuthnController {
     private final PasskeyClient passkey;
     private final InMemoryUserStore users;
     private final PasskeyProperties props;
-    private final RegRelayCodec relay;
+    private final RegistrationRelayCodec relay;
 
     public WebAuthnController(PasskeyClient passkey, InMemoryUserStore users,
-                             PasskeyProperties props, RegRelayCodec relay) {
+                             PasskeyProperties props, RegistrationRelayCodec relay) {
         this.passkey = passkey;
         this.users = users;
         this.props = props;
@@ -121,7 +121,7 @@ public class WebAuthnController {
 
     @PostMapping("/register/finish")
     public ApiResponse<RegistrationFinishResponse> registerComplete(@Valid @RequestBody RegisterCompleteReq req) {
-        RegRelayCodec.RegRelay r;
+        RegistrationRelayCodec.RegistrationRelay r;
         try {
             r = relay.decode(req.regRelayToken());
         } catch (IllegalArgumentException e) {
