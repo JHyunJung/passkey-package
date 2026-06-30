@@ -42,6 +42,9 @@ public class MdsAaguidCache {
 
     /** AAGUID = 16-byte raw → UUID canonical form. */
     public static UUID canonicalAaguid(byte[] aaguid) {
+        if (aaguid == null || aaguid.length != 16) {
+            throw new IllegalArgumentException("aaguid must be 16 bytes");
+        }
         long msb = 0, lsb = 0;
         for (int i = 0; i < 8; i++) msb = (msb << 8) | (aaguid[i] & 0xff);
         for (int i = 8; i < 16; i++) lsb = (lsb << 8) | (aaguid[i] & 0xff);
