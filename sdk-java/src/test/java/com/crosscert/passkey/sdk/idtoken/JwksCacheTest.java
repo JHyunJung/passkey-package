@@ -259,4 +259,33 @@ class JwksCacheTest {
                 .isInstanceOf(PasskeyIdTokenException.class)
                 .hasMessageContaining("JWKS fetch failure");
     }
+
+    @Test
+    void get_backoffWindowBeyondStaleGrace_failsClosed() {
+        // given: 1회 성공(TTL 5분, stale 상한 = 5+10 = 15분).
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofMinutes(5), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.get(); // fetch 1
+        assertThat(cache.fetchCount.get()).isEqualTo(1);
+
+        // when: 상한 직전(14분59초)에 실패 → catch 경로는 아직 grace 이내라 stale 반환하고
+        //   nextRetryAfter = 14:59 + BACKOFF(5s) = 15:04 로 backoff 윈도우를 연다.
+        clock.advance(Duration.ofSeconds(14 * 60 + 59));
+        cache.failNext = true;
+        JWKSet stale = cache.get(); // fetch 2 (상한 이내 → stale, backoff 진입)
+        assertThat(stale).isSameAs(first);
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+
+        // and: 그 backoff 윈도우 안(15:01 < nextRetryAfter 15:04)이지만 stale 상한(15:00)은
+        //   이미 초과한 시점에 호출. 가드 없는 회귀 버전이라면 fetch를 건너뛰고 stale을 반환해
+        //   상한을 몇 초 새어 나갔을 것. 수정본은 backoff 경로도 상한을 강제해 fail-closed.
+        clock.advance(Duration.ofSeconds(2)); // 15:01
+        assertThatThrownBy(cache::get)
+                .isInstanceOf(PasskeyIdTokenException.class)
+                .hasMessageContaining("stale-if-error max age exceeded");
+        // fetch는 backoff 윈도우라 시도조차 안 함(상한 초과로 곧장 fail-closed).
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+    }
 }

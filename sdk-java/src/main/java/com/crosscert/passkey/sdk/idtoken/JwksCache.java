@@ -62,9 +62,16 @@ public class JwksCache {
             if (again != null && again.fetchedAt().plus(ttl).isAfter(n2)) {
                 return again.jwks();
             }
-            // 직전 실패로 백오프 중이고 폴백할 스냅샷이 있으면 fetch 없이 stale 반환.
+            // 직전 실패로 백오프 중이면 fetch를 건너뛴다. 단 catch 경로와 동일한 stale-grace
+            // 상한을 강제: 상한 이내면 stale 반환, 초과면 fail-closed(폐기 윈도우 우회 차단).
+            // (이 가드가 없으면 경계 직전 실패로 설정된 backoff 윈도우 동안 상한을 몇 초 넘겨
+            //  stale을 허용해 fail-closed 경계가 살짝 새어 나간다.)
             if (again != null && n2.isBefore(nextRetryAfter)) {
-                return again.jwks();
+                if (withinStaleGrace(again, n2)) {
+                    return again.jwks();
+                }
+                throw new PasskeyIdTokenException(
+                        "JWKS fetch failure: stale-if-error max age exceeded (no refresh)");
             }
             try {
                 JWKSet fresh = fetch();
@@ -80,8 +87,7 @@ public class JwksCache {
                 // 위해 그것을 반환하고 백오프 기록. 만료된 JWKS가 아니라 *직전 유효* JWKS이므로
                 // 토큰 검증 의미는 보존된다.
                 Instant failedAt = clock.instant(); // 실패가 반환된 그 순간(P2와 동일 기준)
-                if (again != null
-                        && again.fetchedAt().plus(ttl).plus(STALE_GRACE).isAfter(failedAt)) {
+                if (again != null && withinStaleGrace(again, failedAt)) {
                     // 백오프 기준은 fetch 시작 전 시각(n2)이 아니라 실패 시각. fetch(블로킹 I/O)가
                     // BACKOFF보다 오래 걸려 실패하면 n2+BACKOFF는 이미 과거가 돼 negative-cache가
                     // 무력화(retry storm 재현)되므로, 실패 시각부터 센다.
@@ -93,6 +99,15 @@ public class JwksCache {
                 throw e;
             }
         }
+    }
+
+    /**
+     * stale-if-error 상한 검사: 스냅샷이 {@code fetchedAt + ttl + STALE_GRACE} 이내인가.
+     * catch(실제 fetch 실패)·backoff(fetch 생략) 두 경로가 공유해 상한 판정을 일관화하고
+     * 드리프트를 막는다.
+     */
+    private boolean withinStaleGrace(Snapshot s, Instant now) {
+        return s.fetchedAt().plus(ttl).plus(STALE_GRACE).isAfter(now);
     }
 
     protected JWKSet fetch() {
