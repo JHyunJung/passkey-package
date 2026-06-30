@@ -63,7 +63,10 @@ public class JwksCache {
                 // 직전 유효 스냅샷이 있으면 가용성 보존을 위해 그것을 반환하고 백오프 기록.
                 // 만료된 JWKS가 아니라 *직전 유효* JWKS이므로 토큰 검증 의미는 보존된다.
                 if (again != null) {
-                    nextRetryAfter = n2.plus(BACKOFF);
+                    // 백오프 기준은 fetch 시작 전 시각(n2)이 아니라 *실패가 반환된 그 순간*.
+                    // fetch(블로킹 I/O)가 BACKOFF보다 오래 걸려 실패하면 n2+BACKOFF는 이미
+                    // 과거가 돼 negative-cache가 무력화(retry storm 재현)되므로, 실패 시각부터 센다.
+                    nextRetryAfter = clock.instant().plus(BACKOFF);
                     return again.jwks();
                 }
                 // 최초 부팅 실패(폴백 스냅샷 없음)는 기존대로 예외 전파(동작 보존).

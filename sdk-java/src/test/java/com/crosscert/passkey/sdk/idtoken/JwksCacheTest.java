@@ -43,12 +43,22 @@ class JwksCacheTest {
         final AtomicInteger fetchCount = new AtomicInteger();
         volatile boolean failNext = false;
         volatile JWKSet nextResult = new JWKSet();
+        /** fetch가 반환/예외 전 소모하는 시간(블로킹 I/O 시뮬레이션). null이면 0. */
+        private final MutableClock clock;
+        volatile Duration fetchDuration = Duration.ZERO;
 
-        ProgrammableCache(Duration ttl, Clock clock) { super(BASE, ttl, clock); }
+        ProgrammableCache(Duration ttl, MutableClock clock) {
+            super(BASE, ttl, clock);
+            this.clock = clock;
+        }
 
         @Override
         protected JWKSet fetch() {
             fetchCount.incrementAndGet();
+            // fetch가 시간을 소모하도록 시계를 전진(느린 네트워크 I/O 모사).
+            if (!fetchDuration.isZero()) {
+                clock.advance(fetchDuration);
+            }
             if (failNext) {
                 // 실 fetch()가 IOException을 환산하는 것과 동일한 예외 타입을 던진다.
                 throw new PasskeyIdTokenException("simulated JWKS fetch failure",
@@ -141,6 +151,45 @@ class JwksCacheTest {
         // then: 재 fetch가 일어나고 새 스냅샷으로 갱신된다.
         JWKSet got = cache.get();
         assertThat(got).isSameAs(second); // fetch 3
+        assertThat(cache.fetchCount.get()).isEqualTo(3);
+    }
+
+    @Test
+    void get_slowFetchFailure_backoffMeasuredFromFailureMomentNotFetchStart() {
+        // given: 1회 성공으로 스냅샷 보유.
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofMinutes(5), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.get(); // fetch 1
+        assertThat(cache.fetchCount.get()).isEqualTo(1);
+
+        // when: TTL 만료 후, fetch가 BACKOFF(5s)보다 오래(10s) 걸린 뒤 실패.
+        //   회귀 버그(n2 기준)였다면 nextRetryAfter = (fetch 시작시각)+5s 가 이미 과거가 돼
+        //   백오프가 무력화된다. 수정본은 *실패 시각* 기준이라 백오프가 유효해야 한다.
+        clock.advance(Duration.ofMinutes(6));
+        cache.failNext = true;
+        cache.fetchDuration = Duration.ofSeconds(10); // BACKOFF(5s)보다 긴 느린 실패
+
+        JWKSet staleA = cache.get(); // fetch 2 (느린 실패 → stale 폴백 + 백오프)
+        assertThat(staleA).isSameAs(first);
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+
+        // then: 실패 직후 짧은 시간(BACKOFF 미만) 경과 시 즉시 재시도하지 않고 stale 반환.
+        //   (회귀 버그였다면 여기서 fetchCount가 3으로 늘어 retry storm을 재현했을 것)
+        cache.fetchDuration = Duration.ZERO;
+        clock.advance(Duration.ofSeconds(2)); // 실패 시각 + 2s < BACKOFF(5s)
+        JWKSet staleB = cache.get();
+        assertThat(staleB).isSameAs(first);
+        assertThat(cache.fetchCount.get()).isEqualTo(2); // 백오프 honor — 재시도 없음
+
+        // and: 실패 시각 기준 BACKOFF 경과 후에는 다시 재시도가 허용된다.
+        clock.advance(Duration.ofSeconds(4)); // 누적 실패+6s > BACKOFF(5s)
+        cache.failNext = false;
+        JWKSet second = new JWKSet();
+        cache.nextResult = second;
+        JWKSet recovered = cache.get(); // fetch 3
+        assertThat(recovered).isSameAs(second);
         assertThat(cache.fetchCount.get()).isEqualTo(3);
     }
 }
