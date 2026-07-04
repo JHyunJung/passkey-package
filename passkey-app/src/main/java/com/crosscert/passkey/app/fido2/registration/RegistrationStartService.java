@@ -72,7 +72,7 @@ public class RegistrationStartService {
                 throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
             }
 
-            byte[] userHandle = Base64.getUrlDecoder().decode(req.userHandle());
+            byte[] userHandle = decodeAndValidateUserHandle(req.userHandle());
             byte[] challenge = challenges.newChallengeBytes();
             String token = challenges.newToken();
 
@@ -114,6 +114,37 @@ public class RegistrationStartService {
             ceremonyMetrics.recordFailure("registration", "start");
             throw e;
         }
+    }
+
+    /**
+     * G18: WebAuthn 스펙상 {@code user.id}(userHandle) 는 1..64 바이트여야 한다
+     * (https://www.w3.org/TR/webauthn-3/#dom-publickeycredentialuserentity-id).
+     * 검증 없이 디코드만 하면 65바이트+ userHandle 도 start 를 통과해 finish 저장 시
+     * Oracle {@code credential.user_handle RAW(64)} 컬럼 오버플로(ORA-12899)로
+     * DataIntegrityViolationException → 500 이 노출된다. 여기서 fail-fast 400 으로 거부한다.
+     * base64url 문자셋(RFC 4648 §5) 밖의 문자도 여기서 함께 거부해 오염이 finish 까지
+     * 전파되지 않도록 한다.
+     */
+    private static byte[] decodeAndValidateUserHandle(String userHandleB64) {
+        if (userHandleB64 == null || !userHandleB64.chars().allMatch(RegistrationStartService::isBase64UrlChar)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "userHandle must be valid base64url");
+        }
+        byte[] userHandle;
+        try {
+            userHandle = Base64.getUrlDecoder().decode(userHandleB64);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "userHandle must be valid base64url");
+        }
+        if (userHandle.length < 1 || userHandle.length > 64) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "userHandle must decode to 1..64 bytes (WebAuthn user.id cap), was " + userHandle.length);
+        }
+        return userHandle;
+    }
+
+    private static boolean isBase64UrlChar(int c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                || c == '-' || c == '_';
     }
 
     /** Returns the last 8 chars of the token for correlation only — never the full secret. */
