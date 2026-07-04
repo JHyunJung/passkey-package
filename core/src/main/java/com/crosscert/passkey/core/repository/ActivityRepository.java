@@ -109,52 +109,75 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
      *   <li>both: combined.</li>
      * </ul>
      *
-     * <p>Unlike {@link #feedRaw(UUID, Pageable)}, this variant compares against an
-     * {@link Instant} directly (no subquery to look up the cursor row), because
-     * {@code before} comes from the client as an ISO-8601 timestamp on the URL.
-     * Tuple-precision concerns ({@code (createdAt, id)}) do not apply for
-     * paginate-backward — the client passes the oldest visible {@code createdAt}
-     * and a tiny duplicate-row overlap is acceptable for a 24h dashboard.
-     *
-     * <p>The {@code action IN} filter is intentionally omitted here. Phase F5 wires
-     * {@code ?before=} / {@code ?tenantId=} only for the unfiltered feed path; if a
-     * combined {@code category} + {@code before} flow is needed later, a parallel
-     * {@code feedFilteredPageRaw} variant should be added rather than overloading
-     * this one with more nullable params.
+     * <p><b>F07 fix:</b> when {@code beforeId} is supplied (the id of the last row
+     * on the previous page), the WHERE clause compares against the
+     * {@code (createdAt, id)} tuple of that row — mirroring {@link #feedRaw}'s
+     * sinceId subquery approach — instead of the strict {@code createdAt < before}
+     * check. Oracle TIMESTAMP columns are microsecond-precision, so concurrent
+     * bursts (e.g. many ADMIN_LOGIN rows in one microsecond) can share an exact
+     * {@code createdAt}; the strict-instant comparison used when only
+     * {@code before} is supplied permanently drops whichever boundary row wasn't
+     * already returned (it fails {@code < before} on this page and every later
+     * page, since they all use smaller {@code before} values still equal to that
+     * same instant). {@code beforeId} is optional for backward compatibility —
+     * old callers that pass only {@code before} keep the previous approximate
+     * behavior (acceptable tiny overlap, still no permanent drop risk reduction);
+     * new callers should always pass both.
      */
     @Query("""
         SELECT a FROM AuditLog a
         WHERE (:tenantId IS NULL OR a.tenantId = :tenantId)
-          AND (:before IS NULL OR a.createdAt < :before)
+          AND (:beforeId IS NOT NULL AND (
+                   a.createdAt < (SELECT b.createdAt FROM AuditLog b WHERE b.id = :beforeId)
+                   OR (a.createdAt = (SELECT b.createdAt FROM AuditLog b WHERE b.id = :beforeId)
+                       AND a.id < (SELECT b.id FROM AuditLog b WHERE b.id = :beforeId)))
+               OR (:beforeId IS NULL AND (:before IS NULL OR a.createdAt < :before)))
         ORDER BY a.createdAt DESC, a.id DESC
     """)
     List<AuditLog> feedPageRaw(@Param("tenantId") UUID tenantId,
                                @Param("before") OffsetDateTime before,
+                               @Param("beforeId") UUID beforeId,
                                Pageable limit);
 
     default List<AuditLog> feedPage(UUID tenantId, OffsetDateTime before, int n) {
-        return feedPageRaw(tenantId, before, PageRequest.of(0, n));
+        return feedPageRaw(tenantId, before, null, PageRequest.of(0, n));
+    }
+
+    /** F07 — tuple-cursor variant. Prefer this over {@link #feedPage(UUID, OffsetDateTime, int)}. */
+    default List<AuditLog> feedPage(UUID tenantId, OffsetDateTime before, UUID beforeId, int n) {
+        return feedPageRaw(tenantId, before, beforeId, PageRequest.of(0, n));
     }
 
     /**
-     * Phase F5 — {@link #feedPage(UUID, Instant, int)} with action category filter.
+     * Phase F5 — {@link #feedPage(UUID, OffsetDateTime, int)} with action category filter.
      * Mirrors {@link #feedFilteredRaw} but uses the (before, tenantId) cursor
-     * pattern instead of (sinceId).
+     * pattern instead of (sinceId). See {@link #feedPageRaw} for the F07
+     * {@code beforeId} tuple-cursor rationale.
      */
     @Query("""
         SELECT a FROM AuditLog a
         WHERE a.action IN :actions
           AND (:tenantId IS NULL OR a.tenantId = :tenantId)
-          AND (:before IS NULL OR a.createdAt < :before)
+          AND (:beforeId IS NOT NULL AND (
+                   a.createdAt < (SELECT b.createdAt FROM AuditLog b WHERE b.id = :beforeId)
+                   OR (a.createdAt = (SELECT b.createdAt FROM AuditLog b WHERE b.id = :beforeId)
+                       AND a.id < (SELECT b.id FROM AuditLog b WHERE b.id = :beforeId)))
+               OR (:beforeId IS NULL AND (:before IS NULL OR a.createdAt < :before)))
         ORDER BY a.createdAt DESC, a.id DESC
     """)
     List<AuditLog> feedFilteredPageRaw(@Param("actions") Set<String> actions,
                                        @Param("tenantId") UUID tenantId,
                                        @Param("before") OffsetDateTime before,
+                                       @Param("beforeId") UUID beforeId,
                                        Pageable limit);
 
     default List<AuditLog> feedFilteredPage(Set<String> actions, UUID tenantId, OffsetDateTime before, int n) {
-        return feedFilteredPageRaw(actions, tenantId, before, PageRequest.of(0, n));
+        return feedFilteredPageRaw(actions, tenantId, before, null, PageRequest.of(0, n));
+    }
+
+    /** F07 — tuple-cursor variant. Prefer this over {@link #feedFilteredPage(Set, UUID, OffsetDateTime, int)}. */
+    default List<AuditLog> feedFilteredPage(Set<String> actions, UUID tenantId, OffsetDateTime before, UUID beforeId, int n) {
+        return feedFilteredPageRaw(actions, tenantId, before, beforeId, PageRequest.of(0, n));
     }
 
     record TenantRow(UUID tenantId, long count) {}

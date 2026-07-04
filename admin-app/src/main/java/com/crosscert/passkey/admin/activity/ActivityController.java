@@ -33,6 +33,15 @@ public class ActivityController {
      * cursors. {@code sinceId} (forward polling) and {@code before} (backward
      * pagination) are mutually exclusive — when both are supplied,
      * {@code sinceId} wins (matches dashboard polling contract).
+     *
+     * <p>F07 — added optional {@code beforeId}, the {@code id} of the last row
+     * from the previous page (i.e. {@code feed[feed.length-1].id}). When
+     * supplied alongside {@code before}, backward pagination uses the
+     * {@code (createdAt, id)} tuple cursor instead of a strict-instant
+     * comparison, so a row sharing the exact microsecond timestamp as the
+     * cursor is not permanently dropped. Optional for clients that only send
+     * {@code before} (backward compatible, keeps the prior approximate
+     * behavior).
      */
     @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
     @GetMapping
@@ -41,8 +50,9 @@ public class ActivityController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false)
                 @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
+            @RequestParam(required = false) UUID beforeId,
             @RequestParam(required = false) UUID tenantId) {
-        return ApiResponse.ok(service.snapshot(sinceId, category, before, tenantId));
+        return ApiResponse.ok(service.snapshot(sinceId, category, before, beforeId, tenantId));
     }
 
     /** 행 클릭 시 단건 상세 — payload 포함. PLATFORM_OPERATOR 전용(피드와 동일 경계). */

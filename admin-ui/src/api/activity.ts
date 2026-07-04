@@ -17,11 +17,17 @@ export const activityApi = {
     category?: ActivityCategory,
     before?: string,
     tenantId?: string,
+    beforeId?: string,
   ): Promise<ActivityView> => {
     const q = new URLSearchParams();
     if (sinceId) q.set('sinceId', sinceId);
     if (category && category !== 'all') q.set('category', category);
     if (before) q.set('before', before);
+    // F07: beforeId is the id of the oldest row from the previous page. Sent
+    // alongside `before` so the server can use the (createdAt, id) tuple
+    // cursor instead of a strict-instant comparison, which drops rows that
+    // share the exact microsecond boundary timestamp.
+    if (beforeId) q.set('beforeId', beforeId);
     if (tenantId) q.set('tenantId', tenantId);
     const qs = q.toString();
     return api.get<ActivityView>(`/admin/api/activity${qs ? `?${qs}` : ''}`);
