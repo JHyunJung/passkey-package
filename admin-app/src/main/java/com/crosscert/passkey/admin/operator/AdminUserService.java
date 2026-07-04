@@ -81,6 +81,12 @@ public class AdminUserService {
         user.setRole(req.role());
         user.setStatus("PENDING");
         user.setCreatedBy(invitedBy);
+        // G03: ENABLED is the actual login gate (DefaultPreAuthenticationChecks
+        // reads isEnabled(), not STATUS). AdminUser.create() defaults
+        // enabledFlag="Y" for the general case, but a freshly-invited PENDING
+        // account has no password yet — it must not satisfy the gate until
+        // the invitee accepts and sets one (see InvitationService.accept()).
+        user.setEnabled(false);
         AdminUser saved = userRepo.save(user);
 
         for (UUID tid : new LinkedHashSet<>(tenantIds)) {   // 중복 멱등

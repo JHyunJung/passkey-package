@@ -8,6 +8,7 @@ import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Clock;
 import java.util.List;
@@ -191,6 +192,38 @@ class AdminUserServiceTest {
                 UUID.randomUUID(), "alice@x.com");
 
         verify(audit).append(any(AuditAppendRequest.class));
+    }
+
+    @Test
+    void inviteCreatesDisabledPendingUser() {
+        // G03: PENDING accounts (no password set yet) must not satisfy the
+        // ENABLED login gate. AdminUser.create() defaults enabledFlag="Y",
+        // so invite() must explicitly disable the freshly-created user
+        // before it is persisted.
+        when(userRepo.findByEmail(any())).thenReturn(Optional.empty());
+        // AdminUser.getId() is populated by Hibernate's @UuidGenerator on
+        // persist — a mocked repo.save() never runs that lifecycle. Return a
+        // mock standing in for the persisted row (stubbed getId() only) so
+        // invite()'s post-save code (mapping rows, audit) doesn't NPE, while
+        // capturing the *actual* pre-save AdminUser passed into save() to
+        // assert on its real enabled-flag state.
+        UUID savedId = UUID.randomUUID();
+        AdminUser savedStandIn = mock(AdminUser.class);
+        when(savedStandIn.getId()).thenReturn(savedId);
+        when(savedStandIn.getEmail()).thenReturn("new@x.com");
+        when(savedStandIn.getRole()).thenReturn("PLATFORM_OPERATOR");
+        when(savedStandIn.getStatus()).thenReturn("PENDING");
+        when(savedStandIn.isMfaEnabled()).thenReturn(false);
+        when(userRepo.save(any())).thenReturn(savedStandIn);
+        when(invitationService.createInvitation(any(), any(), any()))
+                .thenReturn(new AdminUserDto.InvitationInfo("prefix12", "plain", "url", null));
+
+        service.invite(new AdminUserDto.InviteRequest("new@x.com", "PLATFORM_OPERATOR", List.of()),
+                UUID.randomUUID(), "alice@x.com");
+
+        ArgumentCaptor<AdminUser> captor = ArgumentCaptor.forClass(AdminUser.class);
+        verify(userRepo).save(captor.capture());
+        assertThat(captor.getValue().isEnabled()).isFalse();
     }
 
     @Test

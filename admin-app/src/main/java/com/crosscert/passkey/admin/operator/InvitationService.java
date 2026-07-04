@@ -121,6 +121,11 @@ public class InvitationService {
                 .orElseThrow(() -> new IllegalStateException("user not found"));
         user.setBcryptHash(passwordEncoder.encode(password));
         user.setStatus("ACTIVE");
+        // G03: invite() creates PENDING users with enabled=false (no password
+        // set yet). Now that the invitee has set a password and the account
+        // is being activated, restore ENABLED — the actual login gate — or
+        // the user could never pass /admin/login despite a valid password.
+        user.setEnabled(true);
         log.info("invitation accepted: email={} tokenPrefix={}",
                 CryptoUtils.maskEmail(user.getEmail()), inv.getTokenPrefix());
     }

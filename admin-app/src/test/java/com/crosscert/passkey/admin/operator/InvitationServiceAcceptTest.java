@@ -82,6 +82,22 @@ class InvitationServiceAcceptTest {
     }
 
     @Test
+    void accept_reenablesLoginForPendingUser() {
+        // G03: invite() now creates PENDING users with enabled=false. Once
+        // the invitee actually sets a password, the account must be
+        // re-enabled — otherwise a successfully-onboarded user could never
+        // pass the login gate.
+        AdminUser user = stubLookup();
+        when(passwordEncoder.encode(anyString())).thenReturn("bcrypt$hash");
+
+        service.accept("inv_token", "aVeryLongPassword1");
+
+        InOrder order = inOrder(user);
+        order.verify(user).setBcryptHash("bcrypt$hash");
+        order.verify(user).setEnabled(true);
+    }
+
+    @Test
     void accept_secondConcurrentCallLosesRaceAndIsRejected() {
         // G09: two concurrent accept() calls for the same token both pass the
         // in-memory lookupValid() check (isAccepted()==false) before either
