@@ -82,11 +82,7 @@ public class AdminSecurityConfig {
                                                 DynamicCorsConfigurationSource corsSource,
                                                 Optional<LicenseGuardFilter> licenseGuard,
                                                 TenantBoundary tenantBoundary) throws Exception {
-        // CookieCsrfTokenRepository.withHttpOnlyFalse() lets the SPA
-        // read the XSRF-TOKEN cookie via document.cookie and echo it
-        // back in X-XSRF-TOKEN. Path=/admin scopes the cookie.
-        var csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        csrfRepo.setCookiePath("/admin");
+        var csrfRepo = buildCsrfTokenRepository();
         var csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null); // emit token on every response
 
@@ -174,6 +170,31 @@ public class AdminSecurityConfig {
             // in finally to prevent thread-pool context leakage.
             .addFilterAfter(new TenantContextAdminFilter(tenantBoundary), MfaPendingFilter.class);
         return http.build();
+    }
+
+    /**
+     * XSRF-TOKEN 쿠키 저장소. {@code withHttpOnlyFalse()} 로 SPA 가
+     * {@code document.cookie} 로 읽어 {@code X-XSRF-TOKEN} 헤더로 echo 하게 하고,
+     * {@code Path=/admin} 으로 쿠키를 스코프한다.
+     *
+     * <p><b>F-cookieSecure</b>: {@code Secure} 플래그는 명시적으로 세팅하지 않는다
+     * (기본값 {@code null} → {@link org.springframework.security.web.csrf.CookieCsrfTokenRepository}
+     * 가 매 요청마다 {@code request.isSecure()} 로 자동 판정). 이게 프로필별
+     * 하드코딩보다 root-cause: {@code server.forward-headers-strategy=framework}
+     * (G13 이 함께 적용) 가 켜지면 LB 뒤 TLS 종단 요청은 {@code X-Forwarded-Proto}
+     * 로 {@code isSecure()=true} 가 정확히 반영되어 Secure 쿠키가 자동 발급되고,
+     * dev/local 처럼 헤더가 없는 순수 http 환경은 {@code isSecure()=false} 라 로그인이
+     * 깨지지 않는다. {@code SameSite=Lax} 는 {@code cookieCustomizer} 로 명시 설정
+     * (spring-security-web 6.5 에는 {@code setSameSite} 가 없다) — Spring Session 의
+     * {@code DefaultCookieSerializer} 는 기본값이 이미 Lax 이지만 이 저장소는
+     * 명시하지 않으면 SameSite 속성 자체가 빠진다(세션 쿠키와의 일관성 확보).
+     * customizer 는 {@code .secure(...)} 를 건드리지 않으므로 위 자동판정은 그대로 유지된다.
+     */
+    static CookieCsrfTokenRepository buildCsrfTokenRepository() {
+        var repo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repo.setCookiePath("/admin");
+        repo.setCookieCustomizer(cookie -> cookie.sameSite("Lax"));
+        return repo;
     }
 
     /**

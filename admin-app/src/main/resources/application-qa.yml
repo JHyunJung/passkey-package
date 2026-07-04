@@ -36,6 +36,13 @@ server:
     key-store-password: ${SERVER_SSL_KEY_STORE_PASSWORD:}
     key-store-type:     ${SERVER_SSL_KEY_STORE_TYPE:}
     key-alias:          ${SERVER_SSL_KEY_ALIAS:}
+  servlet:
+    session:
+      cookie:
+        # F-cookieSecure: prod 와 동일 — forward-headers-strategy 기반 자동판정에
+        # 더해 명시적으로 강제(방어심층). qa 도 LB 뒤에서 TLS 종단되는 토폴로지.
+        secure: true
+        same-site: lax
 
 passkey:
   key-envelope:

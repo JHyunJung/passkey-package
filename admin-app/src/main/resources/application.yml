@@ -38,7 +38,18 @@ spring:
       # generated security password" startup log line.
       password: "____disabled____never-used-loaded-from-db-instead____"
 
-server.port: 8081
+server:
+  port: 8081
+  # G13/F-cookieSecure: prod 토폴로지는 앞단 LB/리버스프록시가 TLS 종단 후 앱에는
+  # 평문 HTTP 로 전달한다(application-prod.yml 참고). forward-headers-strategy 가
+  # NONE(기본값)이면 request.getRemoteAddr()/isSecure() 가 프록시 TCP peer/스킴만
+  # 보고 X-Forwarded-For/-Proto 를 무시 — 감사 로그 IP 가 전부 LB IP로 찍히고
+  # (G13), 세션/CSRF 쿠키의 Secure 자동판정(request.isSecure() 기반, 각 저장소
+  # 기본 동작)도 항상 false 가 된다(F-cookieSecure). FRAMEWORK 로 켜면 Spring 의
+  # ForwardedHeaderFilter 가 신뢰할 수 있는 X-Forwarded-* 헤더를 반영해 두 문제를
+  # 함께 해결한다. dev/local 처럼 프록시가 없는 환경은 헤더 자체가 없으니 안전한
+  # no-op(getRemoteAddr/isSecure 그대로) — 전 프로필 공통으로 켜도 무해하다.
+  forward-headers-strategy: framework
 
 management:
   metrics:
