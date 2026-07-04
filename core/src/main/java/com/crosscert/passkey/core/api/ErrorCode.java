@@ -36,6 +36,7 @@ public enum ErrorCode {
     AUTHENTICATION_FAILED(HttpStatus.UNAUTHORIZED, "F003", "Authentication verification failed"),
     ATTESTATION_REJECTED(HttpStatus.FORBIDDEN, "F004", "Attestation rejected by policy"),
     AAGUID_REVOKED(HttpStatus.FORBIDDEN, "F005", "Authenticator revoked"),
+    CREDENTIAL_DUPLICATE(HttpStatus.CONFLICT, "F006", "Credential already registered"),
 
     // License (L)
     LICENSE_EXPIRED(HttpStatus.SERVICE_UNAVAILABLE, "L001", "License expired or not yet valid"),
