@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,9 +51,9 @@ public class AdminUserService {
         // G17: single IN-query for all mappings instead of one query per user
         // (F09 activity-feed findAllById batch pattern).
         List<UUID> userIds = users.stream().map(AdminUser::getId).toList();
-        Map<UUID, List<UUID>> tenantIdsByUser = new java.util.HashMap<>();
+        Map<UUID, List<UUID>> tenantIdsByUser = new HashMap<>();
         for (AdminUserTenant m : mappingRepo.findByAdminUserIdIn(userIds)) {
-            tenantIdsByUser.computeIfAbsent(m.getAdminUserId(), k -> new java.util.ArrayList<>())
+            tenantIdsByUser.computeIfAbsent(m.getAdminUserId(), k -> new ArrayList<>())
                     .add(m.getTenantId());
         }
         return users.stream()
