@@ -8,6 +8,7 @@ import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
@@ -41,11 +42,12 @@ class InvitationServiceAcceptTest {
     private final AdminUserTenantRepository mappingRepo = mock(AdminUserTenantRepository.class);
     private final MailSender mailSender = mock(MailSender.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+    private final Environment env = mock(Environment.class);
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-20T09:00:00Z"), KstTime.ZONE);
 
     private final InvitationService service = new InvitationService(
-            invitationRepo, userRepo, mappingRepo, mailSender, passwordEncoder, clock);
+            invitationRepo, userRepo, mappingRepo, mailSender, passwordEncoder, clock, env);
 
     private AdminUser stubLookup() {
         UUID userId = UUID.randomUUID();

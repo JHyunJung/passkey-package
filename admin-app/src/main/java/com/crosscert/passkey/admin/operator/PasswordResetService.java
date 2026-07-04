@@ -6,8 +6,10 @@ import com.crosscert.passkey.core.mail.MailSender;
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +37,7 @@ public class PasswordResetService {
     private final MailSender mail;
     private final PasswordEncoder encoder;
     private final Clock clock;
+    private final Environment env;
 
     @Value("${admin.invite.base-url:http://localhost:5173}")
     private String baseUrl;
@@ -43,12 +46,25 @@ public class PasswordResetService {
                                 AdminUserRepository users,
                                 MailSender mail,
                                 PasswordEncoder encoder,
-                                Clock clock) {
+                                Clock clock,
+                                Environment env) {
         this.tokens = tokens;
         this.users = users;
         this.mail = mail;
         this.encoder = encoder;
         this.clock = clock;
+        this.env = env;
+    }
+
+    /**
+     * G11 fail-fast — see {@link BaseUrlValidation} and
+     * {@link InvitationService#validateBaseUrlForProd()} for the shared
+     * rationale (this service reads the same admin.invite.base-url property
+     * to build its own reset-password link).
+     */
+    @PostConstruct
+    void validateBaseUrlForProd() {
+        BaseUrlValidation.assertNotLocalhostFallbackInProd(env, baseUrl, "admin.invite.base-url");
     }
 
     @Transactional
