@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -39,7 +40,18 @@ public class AdminUserService {
 
     @Transactional(readOnly = true)
     public List<AdminUserDto.View> list() {
-        return userRepo.findAll().stream().map(this::toView).toList();
+        List<AdminUser> users = userRepo.findAll();
+        // G17: single IN-query for all mappings instead of one query per user
+        // (F09 activity-feed findAllById batch pattern) — avoids 1+N queries.
+        List<UUID> userIds = users.stream().map(AdminUser::getId).toList();
+        Map<UUID, List<UUID>> tenantIdsByUser = new java.util.HashMap<>();
+        for (AdminUserTenant m : mappingRepo.findByAdminUserIdIn(userIds)) {
+            tenantIdsByUser.computeIfAbsent(m.getAdminUserId(), k -> new java.util.ArrayList<>())
+                    .add(m.getTenantId());
+        }
+        return users.stream()
+                .map(u -> toView(u, tenantIdsByUser.getOrDefault(u.getId(), List.of())))
+                .toList();
     }
 
     @Transactional
@@ -73,7 +85,7 @@ public class AdminUserService {
         var inv = invitationService.createInvitation(saved.getId(), invitedBy, req.email());
         log.info("admin invite issued: emailMasked={} role={} tenantCount={}",
                 mask(req.email()), req.role(), tenantIds.size());
-        return new AdminUserDto.InviteResponse(toView(saved), inv);
+        return new AdminUserDto.InviteResponse(toView(saved, tenantIds), inv);
     }
 
     @Transactional
@@ -158,6 +170,10 @@ public class AdminUserService {
 
     AdminUserDto.View toView(AdminUser u) {
         List<UUID> tids = mappingRepo.findTenantIdsByAdminUserId(u.getId());
+        return toView(u, tids);
+    }
+
+    private AdminUserDto.View toView(AdminUser u, List<UUID> tids) {
         return new AdminUserDto.View(
                 u.getId(), u.getEmail(), u.getRole(),
                 u.getStatus() != null ? u.getStatus() : "ACTIVE",
