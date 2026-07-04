@@ -19,9 +19,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -65,7 +68,26 @@ public class CredentialAdminService {
 
         log.debug("list credentials tenant={} page={} size={} q={} totalElements={}",
                 tenantId, page, cappedSize, q, rows.getTotalElements());
-        return PageView.from(rows.map(this::toView));
+
+        // G15: collect the page's distinct AAGUIDs and resolve authenticatorName
+        // for all of them in a single Redis round-trip (MGET), instead of
+        // toView issuing one GET per row (up to 200 sequential round-trips per
+        // page). Same batching shape as ActivityService.snapshot's
+        // findAllById(tenantIds) — see toView below.
+        Map<UUID, MdsAaguidCache.Entry> authenticatorNames = lookupAuthenticatorNames(rows.getContent());
+        return PageView.from(rows.map(c -> toView(c, authenticatorNames)));
+    }
+
+    /** Distinct, order-preserving AAGUIDs across the page → one multiLookup call. */
+    private Map<UUID, MdsAaguidCache.Entry> lookupAuthenticatorNames(List<Credential> rows) {
+        Map<UUID, byte[]> distinctByUuid = new LinkedHashMap<>();
+        for (Credential c : rows) {
+            byte[] aaguid = c.getAaguid();
+            if (aaguid == null) continue;
+            distinctByUuid.putIfAbsent(MdsAaguidCache.canonicalAaguid(aaguid), aaguid);
+        }
+        if (distinctByUuid.isEmpty()) return Map.of();
+        return mds.multiLookup(new ArrayList<>(distinctByUuid.values()));
     }
 
     @Transactional(readOnly = true)
@@ -146,14 +168,17 @@ public class CredentialAdminService {
         return "..." + id.substring(id.length() - 12);
     }
 
-    private CredentialView toView(Credential c) {
+    private CredentialView toView(Credential c, Map<UUID, MdsAaguidCache.Entry> authenticatorNames) {
         byte[] aaguid = c.getAaguid();
         String aaguidHex = aaguid == null ? null : HexFormat.of().formatHex(aaguid);
-        String authName = aaguid == null
+        // Batched lookup (G15): authenticatorNames was resolved once for the whole
+        // page via MdsAaguidCache.multiLookup — no per-row Redis round-trip here.
+        MdsAaguidCache.Entry entry = aaguid == null
                 ? null
-                : mds.lookup(aaguid)
-                     .map(entry -> entry.statuses().isEmpty() ? null : String.join(",", entry.statuses()))
-                     .orElse(null);
+                : authenticatorNames.get(MdsAaguidCache.canonicalAaguid(aaguid));
+        String authName = entry == null || entry.statuses().isEmpty()
+                ? null
+                : String.join(",", entry.statuses());
         return new CredentialView(
                 Base64.getUrlEncoder().withoutPadding().encodeToString(c.getCredentialId()),
                 Base64.getUrlEncoder().withoutPadding().encodeToString(c.getUserHandle()),
