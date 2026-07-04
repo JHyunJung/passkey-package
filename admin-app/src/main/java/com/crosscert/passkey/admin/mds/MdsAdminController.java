@@ -3,13 +3,14 @@ package com.crosscert.passkey.admin.mds;
 import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.entity.MdsBlobCache;
 import org.springframework.core.env.Environment;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/admin/api/mds")
@@ -43,10 +44,13 @@ public class MdsAdminController {
         // "mds:aaguid:*" (populated by MdsSchedulerService after each BLOB
         // fetch). No dedicated table holds them. Best-effort count — if
         // Redis is unreachable, fall back to 0 instead of failing the call.
+        //
+        // G16: SCAN (cursor-based, non-blocking) instead of KEYS — KEYS walks
+        // the entire keyspace on Redis's single thread, blocking every other
+        // client (auth cache lookups, challenge lookups, ...) for the duration.
         int trustAnchorCount;
         try {
-            Set<String> keys = redis.keys("mds:aaguid:*");
-            trustAnchorCount = keys == null ? 0 : keys.size();
+            trustAnchorCount = countKeys("mds:aaguid:*");
         } catch (RuntimeException e) {
             trustAnchorCount = 0;
         }
@@ -91,5 +95,23 @@ public class MdsAdminController {
     public ApiResponse<List<MdsHistoryView>> history(
             @RequestParam(name = "limit", defaultValue = "5") int limit) {
         return ApiResponse.ok(historyService.recent(limit));
+    }
+
+    /**
+     * Counts keys matching {@code pattern} via SCAN (cursor-based) instead of
+     * KEYS. KEYS blocks the single-threaded Redis server for the duration of
+     * a full keyspace walk; SCAN incrementally iterates in small batches so
+     * other clients are never blocked, at the cost of an O(N) client-side
+     * count instead of a single O(N) server-side one.
+     */
+    private int countKeys(String pattern) {
+        int count = 0;
+        try (Cursor<String> cursor = redis.scan(ScanOptions.scanOptions().match(pattern).count(500).build())) {
+            while (cursor.hasNext()) {
+                cursor.next();
+                count++;
+            }
+        }
+        return count;
     }
 }
