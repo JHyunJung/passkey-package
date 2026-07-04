@@ -44,8 +44,9 @@ final class DeploymentModeGuard {
                             + "(case-insensitive) — got '" + rawMode + "'. An unrecognized value "
                             + "silently disables ALL onprem license enforcement "
                             + "(LicenseGuardFilter/LicenseBootstrap/OnpremTenantPinFilter/"
-                            + "LicenseHeartbeatScheduler/FeatureGateAspect are gated on the exact "
-                            + "string 'onprem' and simply do not register). Refusing to boot.");
+                            + "LicenseHeartbeatScheduler/FeatureGateAspect/LicenseHealthIndicator "
+                            + "are gated on the exact string 'onprem' and simply do not register). "
+                            + "Refusing to boot.");
         }
     }
 }
