@@ -68,11 +68,13 @@ public class MfaController {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
 
-        // Brute-force lockout: reuse the primary-login lockout fields so a
-        // throttle exists on the second factor too. A locked account is
-        // refused before any code check (fail-closed). The lock also gates
-        // primary login via AdminUserDetails.isAccountNonLocked — acceptable
-        // because reaching here means the password is already compromised.
+        // Brute-force lockout: MFA failures accrue against their OWN counter
+        // (mfaFailedCount, G05) so a password-only login success can never
+        // reset second-factor brute-force progress — only trips the shared
+        // lockedUntil field on threshold. A locked account is refused before
+        // any code check (fail-closed). The lock also gates primary login via
+        // AdminUserDetails.isAccountNonLocked — acceptable because reaching
+        // here means the password is already compromised.
         if (u != null && u.isLocked(OffsetDateTime.now(clock))) {
             log.warn("admin mfa verify blocked (locked): email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -87,9 +89,9 @@ public class MfaController {
         }
         if (!totpOk && !recoveryOk) {
             if (u != null) {
-                u.recordFailedLogin(OffsetDateTime.now(clock), maxAttempts, lockDuration);
+                u.recordFailedMfa(OffsetDateTime.now(clock), maxAttempts, lockDuration);
                 users.save(u);
-                // recordFailedLogin auto-locks once maxAttempts is reached. The
+                // recordFailedMfa auto-locks once maxAttempts is reached. The
                 // entry guard above already refused any already-locked account,
                 // so reaching a locked state here means this failure tripped it.
                 if (u.isLocked(OffsetDateTime.now(clock))) {
@@ -102,7 +104,7 @@ public class MfaController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
         }
-        u.recordSuccessfulLogin();   // reset shared failed-login counter on success
+        u.recordSuccessfulMfa();   // reset only the MFA counter on success (G05)
         users.save(u);
         var session = req.getSession(false);
         if (session != null) {

@@ -109,7 +109,7 @@ class MfaControllerTest {
     @Test
     void verify_whenLocked_rejectsEvenCorrectCode() {
         AdminUser u = enrolledUser();
-        u.recordFailedLogin(OffsetDateTime.now(clock), 1, Duration.ofMinutes(15)); // already locked
+        u.recordFailedMfa(OffsetDateTime.now(clock), 1, Duration.ofMinutes(15)); // already locked
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
         when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
         when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);   // correct code
@@ -121,9 +121,9 @@ class MfaControllerTest {
     }
 
     @Test
-    void verify_success_resetsFailedCount() {
+    void verify_success_resetsMfaFailedCount() {
         AdminUser u = enrolledUser();
-        u.recordFailedLogin(OffsetDateTime.now(clock), 5, Duration.ofMinutes(15)); // 1 fail, not locked
+        u.recordFailedMfa(OffsetDateTime.now(clock), 5, Duration.ofMinutes(15)); // 1 fail, not locked
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
         when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
         when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);
@@ -133,7 +133,41 @@ class MfaControllerTest {
                 new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(u.getMfaFailedCount()).isEqualTo(0);
         assertThat(u.isLocked(OffsetDateTime.now(clock))).isFalse();
+    }
+
+    // ---- G05: MFA lockout counter independent of password login success ---
+
+    @Test
+    void verify_repeatedFailure_incrementsMfaFailedCount_notPasswordFailedLoginCount() {
+        AdminUser u = enrolledUser();
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        when(totp.matchedCounter(any(), any(), anyLong())).thenReturn(OptionalLong.empty());
+        when(recoveryCodes.consume(any(), any())).thenReturn(false);
+
+        controller.verify(new MfaController.VerifyRequest("000000"), auth(), pendingRequest(true));
+
+        assertThat(u.getMfaFailedCount()).isEqualTo(1);
+        assertThat(u.getFailedLoginCount()).isEqualTo(0);
+    }
+
+    @Test
+    void passwordLoginSuccess_doesNotResetMfaBruteForceProgress() {
+        // G05 repro: 4 sub-threshold MFA failures accrue, then a password-only
+        // re-login (recordSuccessfulLogin) must NOT wipe that progress — that
+        // was the bypass that let an attacker cycle indefinitely without ever
+        // tripping the MFA lock.
+        AdminUser u = enrolledUser();
+        for (int i = 0; i < 4; i++) {
+            u.recordFailedMfa(OffsetDateTime.now(clock), 5, Duration.ofMinutes(15));
+        }
+        assertThat(u.getMfaFailedCount()).isEqualTo(4);
+
+        u.recordSuccessfulLogin(); // simulates AdminSecurityConfig's password-login success handler
+
+        assertThat(u.getMfaFailedCount()).isEqualTo(4); // unchanged — the fix
     }
 
     // ---- F02: TOTP replay guard (RFC 6238 §5.2) --------------------------
