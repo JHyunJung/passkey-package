@@ -35,6 +35,18 @@ public class IdTokenIssuer {
                          @Value("${passkey.id-token.ttl:PT15M}")
                          Duration tokenTtl,
                          Clock clock) {
+        // Fail-fast: prod/qa yml define this key with an empty env-var default
+        // (${PASSKEY_ID_TOKEN_ISSUER_BASE:}) so an unset env var resolves to "".
+        // Without this guard the app boots successfully and issues ID Tokens with
+        // iss="/{tenantId}" — a structurally invalid issuer (no scheme/host) that
+        // either slips past a symmetrically-misconfigured SDK verifier (fail-open)
+        // or silently breaks auth relay against a correctly-configured RP.
+        if (issuerBase == null || issuerBase.isBlank()) {
+            throw new IllegalStateException(
+                    "passkey.id-token.issuer-base must not be blank — "
+                            + "set PASSKEY_ID_TOKEN_ISSUER_BASE to the absolute "
+                            + "scheme://host issuer URL for this deployment");
+        }
         this.signingKeys = signingKeys;
         this.issuerBase = issuerBase;
         this.tokenTtl = tokenTtl;
