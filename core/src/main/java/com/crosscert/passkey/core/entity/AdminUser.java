@@ -47,6 +47,12 @@ public class AdminUser extends BaseEntity {
     @Column(name = "LOCKED_UNTIL")
     private OffsetDateTime lockedUntil;
 
+    // RFC 6238 §5.2 replay guard: the TOTP time-step counter last accepted by
+    // verify/confirm/disable. NULL means no step has ever been consumed (first
+    // verification is never blocked). See V2__admin_user_totp_replay_guard.sql.
+    @Column(name = "MFA_LAST_TOTP_STEP")
+    private Long mfaLastTotpStep;
+
     protected AdminUser() {}
 
     /** No-arg constructor for programmatic creation via setters (e.g. invite flow). */
@@ -122,5 +128,18 @@ public class AdminUser extends BaseEntity {
     public void recordSuccessfulLogin() {
         this.failedLoginCount = 0;
         this.lockedUntil = null;
+    }
+
+    public Long getMfaLastTotpStep() { return mfaLastTotpStep; }
+    public void setMfaLastTotpStep(Long v) { this.mfaLastTotpStep = v; }
+
+    /**
+     * RFC 6238 §5.2 replay guard: true when {@code step} has already been
+     * consumed by a prior successful verify/confirm/disable (i.e. {@code step
+     * <= mfaLastTotpStep}). NULL {@code mfaLastTotpStep} means nothing has
+     * been consumed yet, so nothing is rejected.
+     */
+    public boolean isTotpStepReplayed(long step) {
+        return mfaLastTotpStep != null && step <= mfaLastTotpStep;
     }
 }

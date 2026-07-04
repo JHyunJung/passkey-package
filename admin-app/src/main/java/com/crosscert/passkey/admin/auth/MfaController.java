@@ -224,14 +224,30 @@ public class MfaController {
 
     /**
      * Shared TOTP gate for verify/confirm/disable: true only when the user row
-     * exists, has an enrolled secret, a code was supplied, and the code matches
-     * the current time window. Centralised so the security-critical predicate
-     * cannot drift between the three call sites.
+     * exists, has an enrolled secret, a code was supplied, the code matches
+     * the current time window, AND the matched time-step has not already been
+     * consumed by an earlier successful check (RFC 6238 §5.2 replay guard —
+     * F02). Centralised so the security-critical predicate cannot drift
+     * between the three call sites.
+     *
+     * <p>On a fresh match this advances {@code u.mfaLastTotpStep} in memory;
+     * callers persist it via the {@code users.save(u)} they already perform on
+     * their success path. A replayed step (matched counter {@code <=} the
+     * stored high-water mark) is treated exactly like a wrong code — this
+     * method returns {@code false} and does not mutate {@code u}.
      */
     private boolean validCode(AdminUser u, String code) {
         if (u == null || u.getMfaSecret() == null || code == null) return false;
         String plain = secretCipher.open(u.getMfaSecret());
-        return totp.verifyAt(plain, code, clock.millis());
+        var matched = totp.matchedCounter(plain, code, clock.millis());
+        if (matched.isEmpty()) return false;
+        long step = matched.getAsLong();
+        if (u.isTotpStepReplayed(step)) {
+            log.warn("admin mfa code replay rejected: email={}", mask(u.getEmail()));
+            return false;
+        }
+        u.setMfaLastTotpStep(step);
+        return true;
     }
 
     private static String enc(String s) {
