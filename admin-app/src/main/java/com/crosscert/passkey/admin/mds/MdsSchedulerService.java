@@ -90,13 +90,17 @@ public class MdsSchedulerService {
             // BLOB 메타데이터(version/next_update/fetched_at) 저장.
             store.store(blob);
 
-            // Invalidate AAGUID cache so passkey-app sees fresh data.
-            // T16 immediately repopulates these keys with the new entries.
-            Set<String> keys = redis.keys("mds:aaguid:*");
-            int previousCount = keys == null ? 0 : keys.size();
-            if (keys != null && !keys.isEmpty()) {
-                redis.delete(keys);
-            }
+            // G07: record the pre-cycle key set but do NOT delete it yet.
+            // Deleting before repopulating opened a window where every
+            // "mds:aaguid:*" key was absent from Redis — any lookup landing
+            // in that window (registration/finish for an mdsRequired
+            // tenant) missed the cache and failed closed. Populate-first,
+            // stale-cleanup-after removes that window entirely: a key that
+            // existed before the cycle either still holds its previous
+            // (possibly stale-but-valid) value or has already been
+            // overwritten with the fresh one — it is never simply gone.
+            Set<String> previousKeys = redis.keys("mds:aaguid:*");
+            int previousCount = previousKeys == null ? 0 : previousKeys.size();
 
             // Populate per-AAGUID cache entries (mirrors passkey-app's
             // MdsAaguidCache key format: "mds:aaguid:<UUID>" → CSV of
@@ -105,10 +109,11 @@ public class MdsSchedulerService {
             // the last entry per FIDO MDS spec §5.4.
             //
             // TTL 7h > scheduler cadence of 6h: entries stay live until
-            // the next sync cycle invalidates + repopulates them. A 30min
-            // TTL would leave a ~5.5h stale-miss window that fails closed.
+            // the next sync cycle repopulates them. A 30min TTL would leave
+            // a ~5.5h stale-miss window that fails closed.
             int populated = 0;
             int skippedLegacy = 0;
+            Set<String> freshKeys = new java.util.HashSet<>();
             for (com.crosscert.passkey.webauthn.mds.MdsBlobEntry entry : blob.entries()) {
                 if (entry.aaguid() == null) {
                     skippedLegacy++; // legacy U2F
@@ -124,11 +129,25 @@ public class MdsSchedulerService {
                         .reduce((a, b) -> a + "," + b)
                         .orElse("");
                 if (!csv.isBlank()) {
-                    redis.opsForValue().set("mds:aaguid:" + uuid, csv,
-                            java.time.Duration.ofHours(7));
+                    String key = "mds:aaguid:" + uuid;
+                    redis.opsForValue().set(key, csv, java.time.Duration.ofHours(7));
+                    freshKeys.add(key);
                     populated++;
                 }
             }
+
+            // Stale-key cleanup: only AAGUIDs present before this cycle but
+            // absent from the new BLOB (revoked/dropped entries) are removed —
+            // and only now, after every surviving/updated key has already
+            // been (re)written above.
+            if (previousKeys != null && !previousKeys.isEmpty()) {
+                Set<String> staleKeys = new java.util.HashSet<>(previousKeys);
+                staleKeys.removeAll(freshKeys);
+                if (!staleKeys.isEmpty()) {
+                    redis.delete(staleKeys);
+                }
+            }
+
             // Diff approximation: previousCount = AAGUID keys present
             // before this cycle; populated = entries written this cycle.
             // Net delta surfaces churn even without a per-entry compare.
