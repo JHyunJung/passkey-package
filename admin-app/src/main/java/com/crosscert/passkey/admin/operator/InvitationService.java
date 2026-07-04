@@ -87,11 +87,22 @@ public class InvitationService {
     public void accept(String plaintext, String password) {
         OffsetDateTime now = OffsetDateTime.now(clock);
         var inv = lookupValid(plaintext, now);
+        // G09: conditional atomic UPDATE (accepted_at IS NULL -> now) instead
+        // of read-check-then-dirty-checking-update. Two concurrent accept()
+        // calls for the same token both pass lookupValid()'s in-memory
+        // isAccepted() check before either commits; without this DB-level
+        // predicate, both would proceed and the token would be consumed
+        // twice (last-writer-wins password). acceptIfPending() serializes
+        // the race: only the winner gets 1 row affected.
+        int updated = invitationRepo.acceptIfPending(inv.getId(), now);
+        if (updated == 0) {
+            log.warn("invitation used: tokenPrefix={}", inv.getTokenPrefix());
+            throw new IllegalStateException("Token already used");
+        }
         var user = userRepo.findById(inv.getAdminUserId())
                 .orElseThrow(() -> new IllegalStateException("user not found"));
         user.setBcryptHash(passwordEncoder.encode(password));
         user.setStatus("ACTIVE");
-        inv.accept(now);
         log.info("invitation accepted: email={} tokenPrefix={}",
                 CryptoUtils.maskEmail(user.getEmail()), inv.getTokenPrefix());
     }

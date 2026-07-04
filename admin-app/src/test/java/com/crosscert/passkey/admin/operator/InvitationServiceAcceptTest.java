@@ -17,10 +17,13 @@ import com.crosscert.passkey.core.config.KstTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -52,6 +55,10 @@ class InvitationServiceAcceptTest {
         when(inv.isAccepted()).thenReturn(false);
         when(inv.getExpiresAt()).thenReturn(OffsetDateTime.now().plusSeconds(3600));
         when(invitationRepo.findByTokenHash(anyString())).thenReturn(Optional.of(inv));
+        // G09: accept() now wins the race via a conditional atomic UPDATE
+        // (acceptIfPending) rather than the in-memory isAccepted() check
+        // alone. 1 = this call is the (only) winner.
+        when(invitationRepo.acceptIfPending(any(), any())).thenReturn(1);
 
         AdminUser user = mock(AdminUser.class);
         when(user.getEmail()).thenReturn("invitee@example.com");
@@ -70,5 +77,30 @@ class InvitationServiceAcceptTest {
         InOrder order = inOrder(user);
         order.verify(user).setBcryptHash("bcrypt$hash");
         order.verify(user).setStatus("ACTIVE");
+    }
+
+    @Test
+    void accept_secondConcurrentCallLosesRaceAndIsRejected() {
+        // G09: two concurrent accept() calls for the same token both pass the
+        // in-memory lookupValid() check (isAccepted()==false) before either
+        // commits. The conditional atomic UPDATE (acceptIfPending) is what
+        // actually serializes them — simulate the second (losing) caller by
+        // stubbing acceptIfPending to return 0 (already consumed by the
+        // first caller's UPDATE).
+        UUID userId = UUID.randomUUID();
+        AdminUserInvitation inv = mock(AdminUserInvitation.class);
+        when(inv.getAdminUserId()).thenReturn(userId);
+        when(inv.isExpired(any())).thenReturn(false);
+        when(inv.isAccepted()).thenReturn(false);
+        when(inv.getExpiresAt()).thenReturn(OffsetDateTime.now().plusSeconds(3600));
+        when(invitationRepo.findByTokenHash(anyString())).thenReturn(Optional.of(inv));
+        when(invitationRepo.acceptIfPending(any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.accept("inv_token", "anotherPassword1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already used");
+
+        // The loser must never mutate the user (no password/status change).
+        verify(userRepo, never()).findById(any());
     }
 }
