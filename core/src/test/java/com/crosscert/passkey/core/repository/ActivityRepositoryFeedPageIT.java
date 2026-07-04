@@ -23,6 +23,7 @@ import org.testcontainers.utility.MountableFile;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -133,8 +134,12 @@ class ActivityRepositoryFeedPageIT {
     }
 
     private AuditLog row(byte[] hash, OffsetDateTime createdAt) {
+        return row(hash, createdAt, "ADMIN_LOGIN");
+    }
+
+    private AuditLog row(byte[] hash, OffsetDateTime createdAt, String action) {
         return new AuditLog(null, hash, null, "actor@example.com",
-                "ADMIN_LOGIN", null, null, null, null, null, "{}", createdAt);
+                action, null, null, null, null, null, "{}", createdAt);
     }
 
     /**
@@ -206,6 +211,64 @@ class ActivityRepositoryFeedPageIT {
                         + "sharing the same microsecond timestamp")
                 .extracting(AuditLog::getId)
                 .contains(lowestIdAtT);
+        assertThat(nextPage)
+                .as("tuple cursor must not re-include rows already returned on the first page")
+                .extracting(AuditLog::getId)
+                .doesNotContain(firstPage.stream().map(AuditLog::getId).toArray(UUID[]::new));
+    }
+
+    /**
+     * F07 fix proof for the category-filtered path: {@code feedFilteredPageRaw}
+     * mirrors {@link #feedPageRaw_tupleCursor_includesBoundaryRow} but is what
+     * admin-ui actually calls when the Activity feed has a category filter
+     * applied and the user pages backward. Rows outside the filtered action
+     * set are interleaved at the exact same {@code createdAt} to prove the
+     * tuple cursor's boundary-row fix survives the {@code action IN :actions}
+     * predicate rather than being coincidentally satisfied by the unfiltered
+     * query.
+     */
+    @Test
+    void feedFilteredPageRaw_tupleCursor_includesBoundaryRow() {
+        OffsetDateTime t = OffsetDateTime.now(ZoneOffset.UTC).withNano(456_000_000);
+        Set<String> filterActions = Set.of("ADMIN_LOGIN");
+
+        // Interleave in-filter (ADMIN_LOGIN) and out-of-filter (MFA_CHALLENGE)
+        // rows sharing the exact same microsecond timestamp t.
+        AuditLog r1 = auditLogRepository.save(row(new byte[]{11}, t, "ADMIN_LOGIN"));
+        AuditLog r2 = auditLogRepository.save(row(new byte[]{12}, t, "MFA_CHALLENGE"));
+        AuditLog r3 = auditLogRepository.save(row(new byte[]{13}, t, "ADMIN_LOGIN"));
+        AuditLog r4 = auditLogRepository.save(row(new byte[]{14}, t, "MFA_CHALLENGE"));
+        AuditLog r5 = auditLogRepository.save(row(new byte[]{15}, t, "ADMIN_LOGIN"));
+
+        List<UUID> filteredIdsDesc = List.of(r1.getId(), r3.getId(), r5.getId()).stream()
+                .sorted((a, b) -> b.compareTo(a))
+                .toList();
+        UUID lowestFilteredIdAtT = filteredIdsDesc.get(filteredIdsDesc.size() - 1);
+
+        // First filtered page of size 2: the two highest-id ADMIN_LOGIN rows at T.
+        List<AuditLog> firstPage = activityRepository.feedFilteredPageRaw(
+                filterActions, null, null, null, PageRequest.of(0, 2));
+        assertThat(firstPage)
+                .as("first page must only contain the filtered action")
+                .extracting(AuditLog::getAction)
+                .containsOnly("ADMIN_LOGIN");
+        assertThat(firstPage).hasSize(2);
+        assertThat(firstPage).extracting(AuditLog::getId).doesNotContain(lowestFilteredIdAtT);
+        UUID lastOnFirstPage = firstPage.get(firstPage.size() - 1).getId();
+
+        // Client sends before (createdAt) and beforeId (id) of the last visible filtered row.
+        List<AuditLog> nextPage = activityRepository.feedFilteredPageRaw(
+                filterActions, null, t, lastOnFirstPage, PageRequest.of(0, 50));
+
+        assertThat(nextPage)
+                .as("category-filtered tuple cursor must include the boundary row "
+                        + "sharing the same microsecond timestamp")
+                .extracting(AuditLog::getId)
+                .contains(lowestFilteredIdAtT);
+        assertThat(nextPage)
+                .as("category filter must still exclude out-of-filter rows at the same instant")
+                .extracting(AuditLog::getAction)
+                .containsOnly("ADMIN_LOGIN");
         assertThat(nextPage)
                 .as("tuple cursor must not re-include rows already returned on the first page")
                 .extracting(AuditLog::getId)
