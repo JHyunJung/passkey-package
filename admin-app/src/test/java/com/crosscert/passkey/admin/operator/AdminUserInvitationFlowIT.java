@@ -203,7 +203,7 @@ class AdminUserInvitationFlowIT {
         // ── 2. 초대 생성 — RP_ADMIN 로 tenant 에 묶기 ─────────────────
         AdminUserDto.InviteRequest inviteReq = new AdminUserDto.InviteRequest(
                 "newadmin@example.com", "RP_ADMIN", List.of(tenantId));
-        AdminUserDto.InviteResponse inviteResponse = adminUserService.invite(inviteReq, ALICE_EMAIL);
+        AdminUserDto.InviteResponse inviteResponse = adminUserService.invite(inviteReq, ALICE_ID, ALICE_EMAIL);
 
         assertThat(inviteResponse).isNotNull();
         assertThat(inviteResponse.user().email()).isEqualTo("newadmin@example.com");
@@ -257,7 +257,7 @@ class AdminUserInvitationFlowIT {
     void suspend_selfSuspend_throwsIllegalState() {
         // alice 가 자기 자신을 suspend 하려는 시도
         // assertNotLockingOut: user.getEmail().equals(byUser) → throws
-        assertThatThrownBy(() -> adminUserService.suspend(ALICE_ID, ALICE_EMAIL))
+        assertThatThrownBy(() -> adminUserService.suspend(ALICE_ID, SECURITY_CTX_ACTOR_ID, ALICE_EMAIL))
                 .as("자기 자신 suspend 시도는 IllegalStateException 이어야 한다")
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("yourself");
@@ -276,12 +276,12 @@ class AdminUserInvitationFlowIT {
         String bobEmail = "bob@crosscert.com";
 
         // bob 을 먼저 suspend (alice 가, 2명이므로 통과해야 함)
-        assertThatCode(() -> adminUserService.suspend(bobId, ALICE_EMAIL))
+        assertThatCode(() -> adminUserService.suspend(bobId, SECURITY_CTX_ACTOR_ID, ALICE_EMAIL))
                 .as("alice 가 bob 을 suspend 하는 것은 2명 중 1명이므로 통과해야 한다")
                 .doesNotThrowAnyException();
 
         // 이제 alice 만 ACTIVE PO — 가상 actor charlie 가 alice 를 suspend 시도
-        assertThatThrownBy(() -> adminUserService.suspend(ALICE_ID, "charlie@example.com"))
+        assertThatThrownBy(() -> adminUserService.suspend(ALICE_ID, SECURITY_CTX_ACTOR_ID, "charlie@example.com"))
                 .as("마지막 ACTIVE PLATFORM_OPERATOR 를 suspend 하면 IllegalStateException 이어야 한다")
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("last active PLATFORM_OPERATOR");

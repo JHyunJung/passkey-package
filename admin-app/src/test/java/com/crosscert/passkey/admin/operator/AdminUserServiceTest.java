@@ -1,5 +1,7 @@
 package com.crosscert.passkey.admin.operator;
 
+import com.crosscert.passkey.admin.audit.AuditAppendRequest;
+import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.entity.AdminUserTenant;
 import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
@@ -23,17 +25,19 @@ class AdminUserServiceTest {
     private final AdminUserInvitationRepository invitationRepo = mock(AdminUserInvitationRepository.class);
     private final InvitationService invitationService = mock(InvitationService.class);
     private final AdminUserTenantRepository mappingRepo = mock(AdminUserTenantRepository.class);
+    private final AuditLogService audit = mock(AuditLogService.class);
     private final Clock clock = Clock.systemUTC();
 
     private final AdminUserService service = new AdminUserService(
-            userRepo, invitationRepo, invitationService, mappingRepo, clock);
+            userRepo, invitationRepo, invitationService, mappingRepo, audit, clock);
 
     @Test
     void rpAdminInviteRequiresAtLeastOneTenant() {
         when(userRepo.findByEmail(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.invite(
-                new AdminUserDto.InviteRequest("rp@x.com", "RP_ADMIN", List.of()), "alice"))
+                new AdminUserDto.InviteRequest("rp@x.com", "RP_ADMIN", List.of()),
+                UUID.randomUUID(), "alice"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("RP_ADMIN requires at least one tenant");
     }
@@ -44,7 +48,7 @@ class AdminUserServiceTest {
 
         assertThatThrownBy(() -> service.invite(
                 new AdminUserDto.InviteRequest("po@x.com", "PLATFORM_OPERATOR",
-                        List.of(UUID.randomUUID())), "alice"))
+                        List.of(UUID.randomUUID())), UUID.randomUUID(), "alice"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("PLATFORM_OPERATOR must not have tenant");
     }
@@ -57,11 +61,167 @@ class AdminUserServiceTest {
         AdminUser user = AdminUser.create();
         user.setRole("RP_ADMIN");
         when(userRepo.findById(adminId)).thenReturn(Optional.of(user));
-        when(mappingRepo.countByAdminUserId(adminId)).thenReturn(1L);
+        when(mappingRepo.findByAdminUserIdForUpdate(adminId))
+                .thenReturn(List.of(AdminUserTenant.of(adminId, tenantId, "alice")));
 
-        assertThatThrownBy(() -> service.removeTenant(adminId, tenantId, "alice"))
+        assertThatThrownBy(() -> service.removeTenant(adminId, tenantId, UUID.randomUUID(), "alice"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cannot remove last tenant of RP_ADMIN");
+    }
+
+    @Test
+    void removeTenantLocksMappingRowsBeforeCounting() {
+        // G08: count-then-delete must be serialized by a pessimistic lock on
+        // the admin's mapping rows (findByAdminUserIdForUpdate), not the
+        // lock-free countByAdminUserId — otherwise two concurrent removals
+        // of distinct tenants both observe count=2 and both proceed
+        // (write-skew leaving 0 tenants).
+        UUID adminId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        UUID otherTenantId = UUID.randomUUID();
+        AdminUser user = AdminUser.create();
+        user.setRole("RP_ADMIN");
+        when(userRepo.findById(adminId)).thenReturn(Optional.of(user));
+        when(mappingRepo.findByAdminUserIdForUpdate(adminId)).thenReturn(List.of(
+                AdminUserTenant.of(adminId, tenantId, "alice"),
+                AdminUserTenant.of(adminId, otherTenantId, "alice")));
+
+        service.removeTenant(adminId, tenantId, UUID.randomUUID(), "alice");
+
+        verify(mappingRepo, times(1)).findByAdminUserIdForUpdate(adminId);
+        verify(mappingRepo, never()).countByAdminUserId(any());
+        verify(mappingRepo).deleteByAdminUserIdAndTenantId(adminId, tenantId);
+    }
+
+    @Test
+    void suspendDisablesLoginAndAppendsAuditEntry() {
+        // G03 + G04: suspend must flip ENABLED=false (the actual login gate)
+        // and append a tamper-evident audit row — not just flip STATUS.
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        AdminUser actor = AdminUser.create();
+        actor.setEmail("alice@x.com");
+        actor.setRole("PLATFORM_OPERATOR");
+        AdminUser target = AdminUser.create();
+        target.setEmail("bob@x.com");
+        target.setRole("RP_ADMIN");
+        when(userRepo.findById(targetId)).thenReturn(Optional.of(target));
+
+        service.suspend(targetId, actorId, "alice@x.com");
+
+        assertThat(target.getStatus()).isEqualTo("SUSPENDED");
+        assertThat(target.isEnabled()).isFalse();
+        verify(audit).append(any(AuditAppendRequest.class));
+    }
+
+    @Test
+    void activateReenablesLogin() {
+        UUID targetId = UUID.randomUUID();
+        AdminUser target = AdminUser.create();
+        target.setEmail("bob@x.com");
+        target.setStatus("SUSPENDED");
+        target.setEnabled(false);
+        when(userRepo.findById(targetId)).thenReturn(Optional.of(target));
+
+        service.activate(targetId, UUID.randomUUID(), "alice@x.com");
+
+        assertThat(target.getStatus()).isEqualTo("ACTIVE");
+        assertThat(target.isEnabled()).isTrue();
+        verify(audit).append(any(AuditAppendRequest.class));
+    }
+
+    @Test
+    void suspendLastActivePlatformOperatorLocksBeforeCounting() {
+        // G06: the last-PO lockout guard must count under a pessimistic lock
+        // on the active-PO row set (findActivePlatformOperatorsForUpdate),
+        // not a lock-free findAll() scan — otherwise two concurrent suspends
+        // of distinct operators both observe count=2 and both proceed.
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        AdminUser actor = AdminUser.create();
+        actor.setEmail("alice@x.com");
+        actor.setRole("PLATFORM_OPERATOR");
+        AdminUser target = AdminUser.create();
+        target.setEmail("bob@x.com");
+        target.setRole("PLATFORM_OPERATOR");
+        when(userRepo.findById(targetId)).thenReturn(Optional.of(target));
+        when(userRepo.findActivePlatformOperatorsForUpdate()).thenReturn(List.of(actor, target));
+
+        service.suspend(targetId, actorId, "alice@x.com");
+
+        verify(userRepo, times(1)).findActivePlatformOperatorsForUpdate();
+        verify(userRepo, never()).findAll();
+    }
+
+    @Test
+    void suspendLastActivePlatformOperatorRejected() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        AdminUser target = AdminUser.create();
+        target.setEmail("bob@x.com");
+        target.setRole("PLATFORM_OPERATOR");
+        when(userRepo.findById(targetId)).thenReturn(Optional.of(target));
+        when(userRepo.findActivePlatformOperatorsForUpdate()).thenReturn(List.of(target));
+
+        assertThatThrownBy(() -> service.suspend(targetId, actorId, "someoneelse@x.com"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("last active PLATFORM_OPERATOR");
+    }
+
+    @Test
+    void inviteAppendsAuditEntry() {
+        when(userRepo.findByEmail(any())).thenReturn(Optional.empty());
+        // AdminUser.getId() is populated by Hibernate's @UuidGenerator on
+        // persist — a mocked repo.save() never runs that lifecycle, so a
+        // plain AdminUser.create() has a null id. Mock the entity itself to
+        // stub getId() to a fixed UUID (invite() needs saved.getId() for
+        // both the audit targetId and the mapping rows).
+        UUID savedId = UUID.randomUUID();
+        AdminUser saved = mock(AdminUser.class);
+        when(saved.getId()).thenReturn(savedId);
+        when(saved.getEmail()).thenReturn("new@x.com");
+        when(saved.getRole()).thenReturn("PLATFORM_OPERATOR");
+        when(saved.getStatus()).thenReturn("PENDING");
+        when(saved.isMfaEnabled()).thenReturn(false);
+        when(userRepo.save(any())).thenReturn(saved);
+        when(invitationService.createInvitation(any(), any(), any()))
+                .thenReturn(new AdminUserDto.InvitationInfo("prefix12", "plain", "url", null));
+
+        service.invite(new AdminUserDto.InviteRequest("new@x.com", "PLATFORM_OPERATOR", List.of()),
+                UUID.randomUUID(), "alice@x.com");
+
+        verify(audit).append(any(AuditAppendRequest.class));
+    }
+
+    @Test
+    void addTenantAppendsAuditEntry() {
+        UUID adminId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        AdminUser user = AdminUser.create();
+        user.setRole("RP_ADMIN");
+        when(userRepo.findById(adminId)).thenReturn(Optional.of(user));
+        when(mappingRepo.existsByAdminUserIdAndTenantId(adminId, tenantId)).thenReturn(false);
+
+        service.addTenant(adminId, tenantId, UUID.randomUUID(), "alice@x.com");
+
+        verify(audit).append(any(AuditAppendRequest.class));
+    }
+
+    @Test
+    void removeTenantAppendsAuditEntry() {
+        UUID adminId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        UUID otherTenantId = UUID.randomUUID();
+        AdminUser user = AdminUser.create();
+        user.setRole("RP_ADMIN");
+        when(userRepo.findById(adminId)).thenReturn(Optional.of(user));
+        when(mappingRepo.findByAdminUserIdForUpdate(adminId)).thenReturn(List.of(
+                AdminUserTenant.of(adminId, tenantId, "alice"),
+                AdminUserTenant.of(adminId, otherTenantId, "alice")));
+
+        service.removeTenant(adminId, tenantId, UUID.randomUUID(), "alice@x.com");
+
+        verify(audit).append(any(AuditAppendRequest.class));
     }
 
     @Test

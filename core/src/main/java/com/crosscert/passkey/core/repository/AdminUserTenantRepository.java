@@ -2,7 +2,9 @@ package com.crosscert.passkey.core.repository;
 
 import com.crosscert.passkey.core.entity.AdminUserTenant;
 import com.crosscert.passkey.core.entity.AdminUserTenantId;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,23 @@ public interface AdminUserTenantRepository
     boolean existsByAdminUserIdAndTenantId(UUID adminUserId, UUID tenantId);
 
     long countByAdminUserId(UUID adminUserId);
+
+    /**
+     * G08 fix — locks every mapping row for this admin (SELECT ... FOR UPDATE)
+     * before the caller counts them. Two concurrent removeTenant calls for
+     * different tenants of the SAME admin now serialize: the second
+     * transaction's FOR UPDATE blocks until the first commits its DELETE, so
+     * it observes the post-delete row set instead of a stale pre-delete
+     * snapshot. Without this, count-then-delete is a classic write-skew (two
+     * disjoint DELETEs, no row-level conflict, both guards pass).
+     *
+     * <p>Returns rows (not a COUNT) because Oracle rejects {@code SELECT
+     * count(*) ... FOR UPDATE} (ORA-01786) — aggregates have no single row to
+     * lock. The caller uses {@code .size()} instead.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from AdminUserTenant m where m.adminUserId = :adminUserId")
+    List<AdminUserTenant> findByAdminUserIdForUpdate(@Param("adminUserId") UUID adminUserId);
 
     @Transactional
     long deleteByAdminUserIdAndTenantId(UUID adminUserId, UUID tenantId);

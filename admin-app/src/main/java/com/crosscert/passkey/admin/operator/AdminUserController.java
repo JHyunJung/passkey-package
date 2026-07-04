@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.operator;
 
+import com.crosscert.passkey.admin.auth.AdminUserDetails;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,6 +23,11 @@ public class AdminUserController {
 
     public record TenantRef(@NotNull UUID tenantId) {}
 
+    /** actorId(UUID) — G04 audit trail anchor; actorEmail changes, actorId doesn't. */
+    private static UUID actorId(Authentication auth) {
+        return ((AdminUserDetails) auth.getPrincipal()).getId();
+    }
+
     @GetMapping
     public List<AdminUserDto.View> list() {
         return service.list();
@@ -30,17 +36,17 @@ public class AdminUserController {
     @PostMapping
     public AdminUserDto.InviteResponse invite(@Valid @RequestBody AdminUserDto.InviteRequest req,
                                                Authentication auth) {
-        return service.invite(req, auth.getName());
+        return service.invite(req, actorId(auth), auth.getName());
     }
 
     @PostMapping("/{id}/suspend")
     public void suspend(@PathVariable UUID id, Authentication auth) {
-        service.suspend(id, auth.getName());
+        service.suspend(id, actorId(auth), auth.getName());
     }
 
     @PostMapping("/{id}/activate")
-    public void activate(@PathVariable UUID id) {
-        service.activate(id);
+    public void activate(@PathVariable UUID id, Authentication auth) {
+        service.activate(id, actorId(auth), auth.getName());
     }
 
     @PostMapping("/{id}/invitation/resend")
@@ -54,13 +60,13 @@ public class AdminUserController {
     public void addTenant(@PathVariable UUID id,
                           @Valid @RequestBody TenantRef body,
                           Authentication auth) {
-        service.addTenant(id, body.tenantId(), auth.getName());
+        service.addTenant(id, body.tenantId(), actorId(auth), auth.getName());
     }
 
     @DeleteMapping("/{id}/tenants/{tenantId}")
     public void removeTenant(@PathVariable UUID id,
                              @PathVariable UUID tenantId,
                              Authentication auth) {
-        service.removeTenant(id, tenantId, auth.getName());
+        service.removeTenant(id, tenantId, actorId(auth), auth.getName());
     }
 }
