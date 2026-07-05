@@ -122,11 +122,14 @@ public class RegistrationStartService {
      * 검증 없이 디코드만 하면 65바이트+ userHandle 도 start 를 통과해 finish 저장 시
      * Oracle {@code credential.user_handle RAW(64)} 컬럼 오버플로(ORA-12899)로
      * DataIntegrityViolationException → 500 이 노출된다. 여기서 fail-fast 400 으로 거부한다.
-     * base64url 문자셋(RFC 4648 §5) 밖의 문자도 여기서 함께 거부해 오염이 finish 까지
-     * 전파되지 않도록 한다.
+     * 문자셋 검증은 {@link Base64.Decoder#decode(String)} 이 이미 수행하므로(비-base64url
+     * 문자는 {@link IllegalArgumentException}) 별도 사전검사를 두지 않는다 — RFC 4648 §5 는
+     * 패딩(  {@code =}  )을 허용하며 JDK 표준 디코더는 패딩 유무 둘 다 정상 처리하므로,
+     * 문자셋 사전검사에서 패딩을 빠뜨리면 표준 인코더(패딩 포함)로 만든 정상 userHandle 을
+     * 오탐 거부하는 회귀가 된다.
      */
     private static byte[] decodeAndValidateUserHandle(String userHandleB64) {
-        if (userHandleB64 == null || !userHandleB64.chars().allMatch(RegistrationStartService::isBase64UrlChar)) {
+        if (userHandleB64 == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "userHandle must be valid base64url");
         }
         byte[] userHandle;
@@ -140,11 +143,6 @@ public class RegistrationStartService {
                     "userHandle must decode to 1..64 bytes (WebAuthn user.id cap), was " + userHandle.length);
         }
         return userHandle;
-    }
-
-    private static boolean isBase64UrlChar(int c) {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
-                || c == '-' || c == '_';
     }
 
     /** Returns the last 8 chars of the token for correlation only — never the full secret. */

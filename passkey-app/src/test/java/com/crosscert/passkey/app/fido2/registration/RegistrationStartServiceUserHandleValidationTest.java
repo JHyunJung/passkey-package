@@ -106,6 +106,58 @@ class RegistrationStartServiceUserHandleValidationTest {
     }
 
     @Test
+    void start_rejectsWhitespaceUserHandle_withInvalidInput() {
+        UUID tenantId = UUID.randomUUID();
+        stubTenant(tenantId);
+        RegistrationStartRequest req = new RegistrationStartRequest("abc def!", "Disp", "alice");
+
+        assertThatThrownBy(() -> newService().start(req))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    /**
+     * Regression guard: RFC 4648 §5 base64url permits padding ('='), and the JDK's
+     * {@link Base64.Decoder} accepts padded input just fine. A prior fix introduced a
+     * charset pre-check that rejected '=' outright, which broke any RP client using a
+     * standard padded URL-safe encoder (e.g. {@code Base64.getUrlEncoder()} without
+     * {@code withoutPadding()}) — a regression against "normal input keeps working".
+     * This test must pass both before and after the pre-check removal; it existed as a
+     * FAILING case against the pre-check implementation, proving the regression, and now
+     * passes against the decoder-exception-based implementation.
+     */
+    @Test
+    void start_acceptsPadded64ByteUserHandle_standardUrlEncoder() {
+        UUID tenantId = UUID.randomUUID();
+        stubTenant(tenantId);
+        byte[] atMax = new byte[64];
+        String userHandleB64 = Base64.getUrlEncoder().encodeToString(atMax); // padded, e.g. ends with "=="
+        assertThat(userHandleB64).endsWith("=");
+        when(credentials.findCredentialIdsByUserHandle(atMax)).thenReturn(List.of());
+        RegistrationStartRequest req = new RegistrationStartRequest(userHandleB64, "Disp", "alice");
+
+        var resp = newService().start(req);
+
+        assertThat(resp).isNotNull();
+    }
+
+    @Test
+    void start_rejectsPadded65ByteUserHandle_withInvalidInput() {
+        UUID tenantId = UUID.randomUUID();
+        stubTenant(tenantId);
+        byte[] oversized = new byte[65];
+        String userHandleB64 = Base64.getUrlEncoder().encodeToString(oversized); // padded
+
+        RegistrationStartRequest req = new RegistrationStartRequest(userHandleB64, "Disp", "alice");
+
+        assertThatThrownBy(() -> newService().start(req))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    @Test
     void start_accepts64ByteUserHandle_atSpecMax() {
         UUID tenantId = UUID.randomUUID();
         stubTenant(tenantId);
