@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +59,7 @@ public class InMemoryUserStore {
     private final int maxPending;
     private final Duration pendingTtl;
 
+    @Autowired
     public InMemoryUserStore(
             ObjectMapper mapper,
             @Value("${rp-app.user-store.file:./data/rp-app-users.json}") String file) {
