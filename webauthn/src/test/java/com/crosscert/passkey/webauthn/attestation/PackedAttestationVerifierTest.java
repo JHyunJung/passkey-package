@@ -208,6 +208,46 @@ class PackedAttestationVerifierTest {
                 () -> verifier.verify(authData, rawAuthData, attStmt, clientDataHash));
     }
 
+    @Test
+    void rejectsX5cWithOverflowingAaguidExtensionLength() throws Exception {
+        // G14: 안쪽 OCTET STRING 길이를 4바이트 long-form 0x84 7F FF FF FF(len=0x7FFFFFFF)로
+        // 조작한다. idx(6 = tag 1 + len-byte 1 + length-octets 4) + len(0x7FFFFFFF)이 부호있는
+        // int 오버플로로 음수가 되어(옛 additive 경계검사 `idx + len > der.length`를 우회),
+        // 패치 전에는 Arrays.copyOfRange에서 OutOfMemoryError/RuntimeException이 상위로 샌다.
+        // 패치 후에는 subtraction-form(`len > der.length - idx`)이 오버플로 없이 항상 거부한다.
+        byte[] overflowingInner = new byte[]{0x04, (byte) 0x84, 0x7F, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+
+        java.security.KeyPairGenerator g = java.security.KeyPairGenerator.getInstance("EC");
+        g.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        java.security.KeyPair leafKp = g.generateKeyPair();
+        java.security.cert.X509Certificate leaf = makeLeafCertWithRawAaguidExt(leafKp, overflowingInner);
+
+        java.security.KeyPair credKp = g.generateKeyPair();
+        java.security.interfaces.ECPublicKey credPub =
+                (java.security.interfaces.ECPublicKey) credKp.getPublic();
+        byte[] cose = es256Cose(fixed32(credPub.getW().getAffineX()), fixed32(credPub.getW().getAffineY()));
+        byte[] rawAuthData = authDataWithCredential(cose);
+        AuthenticatorData authData = AuthenticatorDataParser.parse(rawAuthData);
+
+        byte[] clientDataHash = new byte[32];
+        java.security.Signature sig = java.security.Signature.getInstance("SHA256withECDSA");
+        sig.initSign(leafKp.getPrivate());
+        sig.update(rawAuthData);
+        sig.update(clientDataHash);
+        byte[] signature = sig.sign();
+
+        Map<CborValue, CborValue> m = new LinkedHashMap<>();
+        m.put(new CborText("alg"), new CborInt(-7));
+        m.put(new CborText("sig"), new CborBytes(signature));
+        m.put(new CborText("x5c"), new CborArray(java.util.List.of(new CborBytes(leaf.getEncoded()))));
+        CborMap attStmt = new CborMap(m);
+
+        // 반드시 AttestationException(fail-closed)만 허용 — OutOfMemoryError/기타 Error/
+        // 비검사 RuntimeException 누출은 이 테스트 자체가 실패로 취급해야 한다.
+        assertThrows(AttestationException.class,
+                () -> verifier.verify(authData, rawAuthData, attStmt, clientDataHash));
+    }
+
     private static java.security.cert.X509Certificate makeLeafCert(
             java.security.KeyPair kp, byte[] aaguidExtValue) throws Exception {
         org.bouncycastle.asn1.x500.X500Name name =
@@ -227,6 +267,35 @@ class PackedAttestationVerifierTest {
                     false,
                     new org.bouncycastle.asn1.DEROctetString(aaguidExtValue));
         }
+        org.bouncycastle.operator.ContentSigner signer =
+                new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withECDSA")
+                        .build(kp.getPrivate());
+        return new org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
+                .getCertificate(builder.build(signer));
+    }
+
+    /**
+     * id-fido-gen-ce-aaguid extension value를 바이트 레벨에서 직접 조작한 leaf cert를 만든다
+     * (BouncyCastle의 DEROctetString은 항상 유효한 DER만 생성하므로 쓸 수 없음).
+     * {@code innerRawBytes}가 그대로 extnValue(바깥 OCTET STRING)의 value로 들어간다
+     * — {@code cert.getExtensionValue()}가 반환하는 DER은 {@code 04 <len> innerRawBytes}
+     * 형태이므로, 바깥 OCTET STRING을 언랩하면 innerRawBytes가 그대로 나온다(G14 재현용).
+     */
+    private static java.security.cert.X509Certificate makeLeafCertWithRawAaguidExt(
+            java.security.KeyPair kp, byte[] innerRawBytes) throws Exception {
+        org.bouncycastle.asn1.x500.X500Name name =
+                new org.bouncycastle.asn1.x500.X500Name("CN=packed-leaf");
+        var builder = new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                name, java.math.BigInteger.valueOf(12),
+                new java.util.Date(System.currentTimeMillis() - 86400_000L),
+                new java.util.Date(System.currentTimeMillis() + 86400_000L),
+                name, kp.getPublic());
+        builder.addExtension(org.bouncycastle.asn1.x509.Extension.basicConstraints, true,
+                new org.bouncycastle.asn1.x509.BasicConstraints(false));
+        // byte[] 오버로드: 넘긴 바이트를 그대로 extnValue(바깥 OCTET STRING)의 value로 사용 (BC가 태그/길이 자동 계산).
+        builder.addExtension(
+                new org.bouncycastle.asn1.ASN1ObjectIdentifier("1.3.6.1.4.1.45724.1.1.4"),
+                false, innerRawBytes);
         org.bouncycastle.operator.ContentSigner signer =
                 new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withECDSA")
                         .build(kp.getPrivate());
