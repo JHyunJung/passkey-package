@@ -26,6 +26,7 @@ public final class NativeMetadataBlobVerifier implements MetadataBlobVerifier {
      * {@code asOf}보다 과거이면 stale blob으로 간주해 거부한다(fail-closed) — 검증 시각을
      * 외부에서 주입해 결정적 검증·테스트 가능성을 확보한다(CertPathVerifier와 동일 패턴).
      */
+    @Override
     public MdsBlob verify(String rawJwt, Set<TrustAnchor> trustAnchors, Instant asOf) throws MdsException {
         MdsJws jws = MdsJws.parse(rawJwt);
         jwsVerifier.verify(jws, trustAnchors);   // 서명·체인 실패 시 throw (파싱 전에 중단)
