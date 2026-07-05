@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -15,9 +16,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -29,23 +33,49 @@ import java.util.concurrent.ConcurrentMap;
  * 가정하며 파일 락을 두지 않는다. <b>고객사는 이 클래스를 자사 DB/영속 계층(JPA·MyBatis 등)으로
  * 교체</b>해야 한다 — 컨트롤러가 의존하는 메서드(createPending / isUsernameTakenByOther /
  * confirmRegistration / findByUserHandle / findByUsername)만 동일하게 제공하면 된다.
+ *
+ * <p><b>pending 정리 정책(만료·상한):</b> 인증되지 않은 {@code /register/begin} 호출마다
+ * {@link #createPending}이 새 pending 항목을 만든다. 공격자가 이 엔드포인트를 무한 반복하면
+ * pending 항목이 끝없이 쌓여 힙 고갈 DoS 로 이어질 수 있다. 자사 DB 로 교체할 때도 동일한 문제가
+ * 있으므로 반드시 만료(TTL)와 상한을 함께 적용해야 한다 — 이 클래스는 그 최소 예시로 TTL 기반
+ * opportunistic cleanup + 상한 초과 시 가장 오래된 pending 제거(FIFO eviction)를 구현한다.
+ * {@link ConcurrentHashMap} 기반의 best-effort 구현이라 다중 스레드에서 동시 유입이 몰리면
+ * 상한을 일시적으로 소폭 넘을 수 있다(엄격한 상한 보장이 필요하면 원자적 카운터나 DB 제약으로
+ * 교체 권장). 확정(credentialId != null) 사용자는 이 정리 대상에서 제외하는 것을 의도하나,
+ * 동시 confirm 과 완전히 원자적이지는 않다 — 다만 TTL(기본 30분)에 비해 confirm 은 즉시
+ * 일어나므로 실전에서 겹칠 가능성은 낮다.
  */
 @Component
 public class InMemoryUserStore {
 
     private static final Logger log = LoggerFactory.getLogger(InMemoryUserStore.class);
 
+    /** pending(미확정) 항목 상한 기본값. 이 이상은 가장 오래된 pending 부터 제거한다. */
+    private static final int DEFAULT_MAX_PENDING = 10_000;
+    /** pending 항목 TTL 기본값. relay 토큰 TTL(기본 5분, RelayProperties 참고)보다 넉넉히 잡는다. */
+    private static final Duration DEFAULT_PENDING_TTL = Duration.ofMinutes(30);
+
     private final ObjectMapper mapper;
     private final ConcurrentMap<String, RpAppUser> byHandle = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String> byUsername = new ConcurrentHashMap<>();
     private final SecureRandom rng = new SecureRandom();
     private final Path file;
+    private final int maxPending;
+    private final Duration pendingTtl;
 
+    @Autowired
     public InMemoryUserStore(
             ObjectMapper mapper,
             @Value("${rp-app.user-store.file:./data/rp-app-users.json}") String file) {
+        this(mapper, file, DEFAULT_MAX_PENDING, DEFAULT_PENDING_TTL);
+    }
+
+    /** 테스트/커스터마이징 용. maxPending·pendingTtl 을 명시적으로 지정한다. */
+    InMemoryUserStore(ObjectMapper mapper, String file, int maxPending, Duration pendingTtl) {
         this.mapper = mapper;
         this.file = Path.of(file);
+        this.maxPending = maxPending;
+        this.pendingTtl = pendingTtl;
         load();
     }
 
@@ -118,6 +148,7 @@ public class InMemoryUserStore {
      * putIfAbsent(최종 권위) + 컨트롤러의 isUsernameTakenByOther 선검사가 담당한다.
      */
     public String createPending(String username, String displayName) {
+        cleanupPending();
         byte[] raw = new byte[32];
         rng.nextBytes(raw);
         String userHandle = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
@@ -125,6 +156,39 @@ public class InMemoryUserStore {
         // byHandle 에만 pending 을 둔다(username 미점유). 영속화하지 않음 — 재기동 시 자연 정리.
         byHandle.put(userHandle, user);
         return userHandle;
+    }
+
+    /**
+     * pending(미인증 begin) 항목 정리: DoS 방어.
+     *
+     * <p>1) TTL 을 지난 pending 을 우선 제거한다(opportunistic — 별도 스케줄러 없이 매
+     * createPending 호출 시점에 정리). 2) 그래도 pending 개수가 maxPending 이상이면 가장
+     * 오래된 pending(FIFO)부터 제거해 상한에 맞춘다. 확정(credentialId != null) 사용자는
+     * 대상에서 제외하도록 필터링하지만, 이 메서드는 잠금 없이(non-synchronized) 동작하는
+     * best-effort soft cap 이다 — 여러 스레드가 동시에 createPending 을 호출하면 카운트
+     * 확인과 eviction 사이에 경쟁이 생겨 maxPending 을 일시적으로 소폭 넘을 수 있다.
+     */
+    private void cleanupPending() {
+        Instant now = Instant.now();
+        byHandle.entrySet().removeIf(e -> {
+            RpAppUser u = e.getValue();
+            return u.credentialId() == null
+                    && u.createdAt() != null
+                    && Duration.between(u.createdAt(), now).compareTo(pendingTtl) > 0;
+        });
+
+        long pendingCount = byHandle.values().stream().filter(u -> u.credentialId() == null).count();
+        if (pendingCount < maxPending) {
+            return;
+        }
+        // 상한 도달 — 가장 오래된 pending 부터 제거해 이번 신규 발급분이 들어갈 여유를 만든다.
+        long toEvict = pendingCount - maxPending + 1;
+        byHandle.entrySet().stream()
+                .filter(e -> e.getValue().credentialId() == null)
+                .sorted(Comparator.comparing(e -> e.getValue().createdAt()))
+                .limit(toEvict)
+                .map(Map.Entry::getKey)
+                .forEach(byHandle::remove);
     }
 
     /**

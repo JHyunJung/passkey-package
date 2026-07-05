@@ -4,7 +4,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,6 +34,40 @@ public class MdsAaguidCache {
         String csv = redis.opsForValue().get(key);
         if (csv == null || csv.isBlank()) return Optional.empty();
         return Optional.of(new Entry(List.of(csv.split(","))));
+    }
+
+    /**
+     * G15: batch lookup for N distinct AAGUIDs in a single Redis round-trip
+     * (MGET), instead of the caller issuing one {@link #lookup} GET per row.
+     * Used by CredentialAdminService.toView when rendering a page of up to
+     * 200 credentials — one round-trip regardless of page size.
+     *
+     * <p>Order-preserving: {@code aaguids} and the MGET result list share
+     * the same index, mirroring Redis MGET semantics (missing key → null
+     * at that position). The returned map omits any AAGUID whose cached
+     * value is absent or blank — callers should treat a missing map entry
+     * the same way {@link #lookup} treats {@link Optional#empty()}.
+     */
+    public Map<UUID, Entry> multiLookup(List<byte[]> aaguids) {
+        if (aaguids == null || aaguids.isEmpty()) return Map.of();
+
+        List<UUID> uuids = new ArrayList<>(aaguids.size());
+        List<String> keys = new ArrayList<>(aaguids.size());
+        for (byte[] aaguid : aaguids) {
+            UUID uuid = canonicalAaguid(aaguid);
+            uuids.add(uuid);
+            keys.add("mds:aaguid:" + uuid);
+        }
+
+        List<String> values = redis.opsForValue().multiGet(keys);
+        Map<UUID, Entry> result = new LinkedHashMap<>();
+        if (values == null) return result;
+        for (int i = 0; i < uuids.size() && i < values.size(); i++) {
+            String csv = values.get(i);
+            if (csv == null || csv.isBlank()) continue;
+            result.put(uuids.get(i), new Entry(List.of(csv.split(","))));
+        }
+        return result;
     }
 
     public void put(byte[] aaguid, Entry entry, Duration ttl) {

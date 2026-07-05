@@ -523,13 +523,18 @@ export default function ActivityPage() {
           >
             <button className="btn btn--sm" onClick={async () => {
               if (!events || events.length === 0) return;
-              const oldest = events[events.length - 1].ts;
+              const oldestEvent = events[events.length - 1];
+              const oldest = oldestEvent.ts;
               try {
                 const more = await activityApi.fetch(
                   null,
                   categoryFilter === 'all' ? undefined : categoryFilter,
                   oldest,
                   selectedTenant,
+                  // F07: send the oldest visible row's id as the tuple-cursor
+                  // partner to `before` so a row sharing the exact same
+                  // microsecond timestamp as `oldest` is not dropped.
+                  oldestEvent.id,
                 );
                 const adapted = adaptServerView(more);
                 setEvents([...events, ...adapted.events]);

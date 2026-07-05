@@ -62,7 +62,8 @@ public class PasskeyClient {
                 .build();
 
         this.idTokenVerifier = new IdTokenVerifier(
-                new JwksCache(config.baseUrl(), config.jwksCacheTtl(), config.clock()),
+                new JwksCache(config.baseUrl(), config.jwksCacheTtl(), config.clock(),
+                        config.connectTimeout(), config.readTimeout()),
                 config.clock());
     }
 

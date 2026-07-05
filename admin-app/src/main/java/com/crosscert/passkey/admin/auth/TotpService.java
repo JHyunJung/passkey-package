@@ -51,23 +51,44 @@ public class TotpService {
      * comparison against each candidate to avoid leaking which window matched.
      */
     public boolean verifyAt(String secretBase32, String code, long epochMillis) {
-        if (code == null) return false;
+        return matchedCounter(secretBase32, code, epochMillis).isPresent();
+    }
+
+    /**
+     * Verify {@code code} the same way as {@link #verifyAt}, but return the
+     * matched time-step counter instead of a boolean so the caller can persist
+     * it as a replay-guard high-water mark (RFC 6238 §5.2: "the validation
+     * system should not accept the second attempt of the OTP after the first
+     * successful validation").
+     *
+     * <p>Every candidate window is still evaluated (no early return) to avoid
+     * a timing oracle; when more than one window matches (only possible if
+     * {@code code} were to collide across adjacent steps, which does not
+     * happen for a well-formed HOTP), the highest counter is returned so the
+     * stored high-water mark only ever advances.
+     */
+    public java.util.OptionalLong matchedCounter(String secretBase32, String code, long epochMillis) {
+        if (code == null) return java.util.OptionalLong.empty();
         String trimmed = code.trim();
-        if (trimmed.length() != DIGITS) return false;
+        if (trimmed.length() != DIGITS) return java.util.OptionalLong.empty();
         byte[] key;
         try {
             key = base32Decode(secretBase32);
         } catch (RuntimeException ex) {
-            return false;
+            return java.util.OptionalLong.empty();
         }
         long counter = Math.floorDiv(epochMillis, STEP_MILLIS);
-        boolean match = false;
+        boolean matched = false;
+        long matchedStep = Long.MIN_VALUE;
         for (long c = counter - SKEW_STEPS; c <= counter + SKEW_STEPS; c++) {
             String candidate = generateForCounter(key, c);
-            // OR-accumulate so every window is evaluated (no early return → no timing oracle).
-            match |= constantTimeEquals(candidate, trimmed);
+            // Evaluate every window regardless of prior matches (no early return → no timing oracle).
+            if (constantTimeEquals(candidate, trimmed)) {
+                matched = true;
+                matchedStep = Math.max(matchedStep, c);
+            }
         }
-        return match;
+        return matched ? java.util.OptionalLong.of(matchedStep) : java.util.OptionalLong.empty();
     }
 
     /** Test-only hook: expose the decoded secret length to assert entropy size. */

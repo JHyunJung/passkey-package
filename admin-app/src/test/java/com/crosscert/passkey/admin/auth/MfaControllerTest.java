@@ -23,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.OptionalLong;
 
 class MfaControllerTest {
 
@@ -108,7 +109,7 @@ class MfaControllerTest {
     @Test
     void verify_whenLocked_rejectsEvenCorrectCode() {
         AdminUser u = enrolledUser();
-        u.recordFailedLogin(OffsetDateTime.now(clock), 1, Duration.ofMinutes(15)); // already locked
+        u.recordFailedMfa(OffsetDateTime.now(clock), 1, Duration.ofMinutes(15)); // already locked
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
         when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
         when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);   // correct code
@@ -120,17 +121,121 @@ class MfaControllerTest {
     }
 
     @Test
-    void verify_success_resetsFailedCount() {
+    void verify_success_resetsMfaFailedCount() {
         AdminUser u = enrolledUser();
-        u.recordFailedLogin(OffsetDateTime.now(clock), 5, Duration.ofMinutes(15)); // 1 fail, not locked
+        u.recordFailedMfa(OffsetDateTime.now(clock), 5, Duration.ofMinutes(15)); // 1 fail, not locked
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
         when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
         when(totp.verifyAt(any(), any(), anyLong())).thenReturn(true);
+        when(totp.matchedCounter(any(), any(), anyLong())).thenReturn(OptionalLong.of(100L));
 
         ResponseEntity<?> resp = controller.verify(
                 new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(u.getMfaFailedCount()).isEqualTo(0);
         assertThat(u.isLocked(OffsetDateTime.now(clock))).isFalse();
+    }
+
+    // ---- G05: MFA lockout counter independent of password login success ---
+
+    @Test
+    void verify_repeatedFailure_incrementsMfaFailedCount_notPasswordFailedLoginCount() {
+        AdminUser u = enrolledUser();
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        when(totp.matchedCounter(any(), any(), anyLong())).thenReturn(OptionalLong.empty());
+        when(recoveryCodes.consume(any(), any())).thenReturn(false);
+
+        controller.verify(new MfaController.VerifyRequest("000000"), auth(), pendingRequest(true));
+
+        assertThat(u.getMfaFailedCount()).isEqualTo(1);
+        assertThat(u.getFailedLoginCount()).isEqualTo(0);
+    }
+
+    @Test
+    void passwordLoginSuccess_doesNotResetMfaBruteForceProgress() {
+        // G05 repro: 4 sub-threshold MFA failures accrue, then a password-only
+        // re-login (recordSuccessfulLogin) must NOT wipe that progress — that
+        // was the bypass that let an attacker cycle indefinitely without ever
+        // tripping the MFA lock.
+        AdminUser u = enrolledUser();
+        for (int i = 0; i < 4; i++) {
+            u.recordFailedMfa(OffsetDateTime.now(clock), 5, Duration.ofMinutes(15));
+        }
+        assertThat(u.getMfaFailedCount()).isEqualTo(4);
+
+        u.recordSuccessfulLogin(); // simulates AdminSecurityConfig's password-login success handler
+
+        assertThat(u.getMfaFailedCount()).isEqualTo(4); // unchanged — the fix
+    }
+
+    // ---- F02: TOTP replay guard (RFC 6238 §5.2) --------------------------
+
+    @Test
+    void verify_success_persistsMatchedCounterAsLastTotpStep() {
+        AdminUser u = enrolledUser();
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        when(totp.matchedCounter(any(), any(), anyLong())).thenReturn(OptionalLong.of(56789012345L));
+
+        ResponseEntity<?> resp = controller.verify(
+                new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(u.getMfaLastTotpStep()).isEqualTo(56789012345L);
+    }
+
+    @Test
+    void verify_replayedStep_is401_andDoesNotClearMfaPending() {
+        AdminUser u = enrolledUser();
+        u.setMfaLastTotpStep(56789012345L); // already consumed by a prior verify
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        // Code still matches the current window (correct code, but reused).
+        when(totp.matchedCounter(any(), any(), anyLong())).thenReturn(OptionalLong.of(56789012345L));
+        when(recoveryCodes.consume(any(), any())).thenReturn(false);
+
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        HttpSession session = mock(HttpSession.class);
+        when(req.getSession(false)).thenReturn(session);
+        when(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).thenReturn(Boolean.TRUE);
+
+        ResponseEntity<?> resp = controller.verify(
+                new MfaController.VerifyRequest("123456"), auth(), req);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(session, never()).removeAttribute(MfaPendingFilter.MFA_PENDING_ATTR);
+    }
+
+    @Test
+    void verify_stepOlderThanLast_is401() {
+        AdminUser u = enrolledUser();
+        u.setMfaLastTotpStep(56789012345L);
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        // Skew-window match on an older step than the stored high-water mark.
+        when(totp.matchedCounter(any(), any(), anyLong())).thenReturn(OptionalLong.of(56789012344L));
+        when(recoveryCodes.consume(any(), any())).thenReturn(false);
+
+        ResponseEntity<?> resp = controller.verify(
+                new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void verify_newerStepThanLast_isAccepted_andAdvancesHighWaterMark() {
+        AdminUser u = enrolledUser();
+        u.setMfaLastTotpStep(100L);
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+        when(cipher.open("sealed-secret")).thenReturn("PLAINSECRET");
+        when(totp.matchedCounter(any(), any(), anyLong())).thenReturn(OptionalLong.of(101L));
+
+        ResponseEntity<?> resp = controller.verify(
+                new MfaController.VerifyRequest("123456"), auth(), pendingRequest(true));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(u.getMfaLastTotpStep()).isEqualTo(101L);
     }
 }

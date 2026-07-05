@@ -12,7 +12,6 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,7 +89,12 @@ public class FunnelService {
             Instant dayInstant = dayCol instanceof Timestamp ts
                     ? ts.toInstant()
                     : ((java.util.Date) dayCol).toInstant();
-            LocalDate day = dayInstant.atZone(ZoneOffset.UTC).toLocalDate();
+            // F06: reinterpret in KST — the same timezone the DB session used to
+            // compute TRUNC(created_at) (JVM TZ=Asia/Seoul, hibernate.jdbc.time_zone=
+            // Asia/Seoul). Reinterpreting in UTC shifted every daily bucket back by
+            // one day and, for KST 00:00–09:00 queries, pushed today's freshest
+            // data out of the rendering window below entirely.
+            LocalDate day = dayInstant.atZone(KstTime.ZONE).toLocalDate();
             String action = (String) row[1];
             long count = ((Number) row[2]).longValue();
             long[] cell = byDay.computeIfAbsent(day, k -> new long[]{0L, 0L});
@@ -101,7 +105,7 @@ public class FunnelService {
             }
         }
         List<FunnelDto.DailyPoint> series = new ArrayList<>(windowDays);
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = LocalDate.now(KstTime.ZONE);
         for (int i = windowDays - 1; i >= 0; i--) {
             LocalDate d = today.minusDays(i);
             long[] cell = byDay.getOrDefault(d, new long[]{0L, 0L});

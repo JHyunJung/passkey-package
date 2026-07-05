@@ -2,6 +2,7 @@ package com.crosscert.passkey.sdk;
 
 import com.crosscert.passkey.sdk.dto.*;
 import com.crosscert.passkey.sdk.exception.PasskeyAuthException;
+import com.crosscert.passkey.sdk.exception.PasskeyRateLimitException;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -128,6 +129,83 @@ class PasskeyClientContractIT {
                     });
         } finally {
             // Reset scenario so this test's state change doesn't affect other tests
+            wm.resetScenarios();
+        }
+    }
+
+    // ── 429 → PasskeyRateLimitException (F25: Retry-After 형식 방어) ──
+
+    @Test
+    void on429_withNumericRetryAfter_throwsPasskeyRateLimitException_withParsedSeconds() throws Exception {
+        wm.stubFor(post(urlEqualTo("/api/v1/rp/registration/start"))
+                .inScenario("rateLimit").whenScenarioStateIs("numeric")
+                .willReturn(aResponse().withStatus(429)
+                        .withHeader("Retry-After", "30")
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody(read("contract/error-401.json"))));
+        wm.setScenarioState("rateLimit", "numeric");
+
+        try {
+            assertThatThrownBy(() ->
+                    client.registrationStart(new RegistrationStartRequest("u", "A", "a@b.c")))
+                    .isInstanceOf(PasskeyRateLimitException.class)
+                    .satisfies(e -> {
+                        var re = (PasskeyRateLimitException) e;
+                        assertThat(re.getHttpStatus()).isEqualTo(429);
+                        assertThat(re.getRetryAfterSeconds()).isEqualTo(30L);
+                    });
+        } finally {
+            wm.resetScenarios();
+        }
+    }
+
+    @Test
+    void on429_withHttpDateRetryAfter_throwsPasskeyRateLimitException_notNumberFormatException() throws Exception {
+        // RFC 7231 은 Retry-After 로 delay-seconds 뿐 아니라 HTTP-date 형식도 허용한다.
+        // 수정 전에는 Long.parseLong 이 그대로 이 값을 받아 NumberFormatException 이 handleError 를
+        // 탈출 → 429 의미가 소실되고 상위(rp-app)에서 500 으로 관측된다.
+        wm.stubFor(post(urlEqualTo("/api/v1/rp/registration/start"))
+                .inScenario("rateLimit").whenScenarioStateIs("httpDate")
+                .willReturn(aResponse().withStatus(429)
+                        .withHeader("Retry-After", "Wed, 21 Oct 2025 07:28:00 GMT")
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody(read("contract/error-401.json"))));
+        wm.setScenarioState("rateLimit", "httpDate");
+
+        try {
+            assertThatThrownBy(() ->
+                    client.registrationStart(new RegistrationStartRequest("u", "A", "a@b.c")))
+                    .isInstanceOf(PasskeyRateLimitException.class)
+                    .satisfies(e -> {
+                        var re = (PasskeyRateLimitException) e;
+                        assertThat(re.getHttpStatus()).isEqualTo(429);
+                        // 파싱 불가 형식은 안전 폴백(0)으로 처리하고 예외로 새지 않아야 한다.
+                        assertThat(re.getRetryAfterSeconds()).isEqualTo(0L);
+                    });
+        } finally {
+            wm.resetScenarios();
+        }
+    }
+
+    @Test
+    void on429_withoutRetryAfterHeader_throwsPasskeyRateLimitException_withZero() throws Exception {
+        wm.stubFor(post(urlEqualTo("/api/v1/rp/registration/start"))
+                .inScenario("rateLimit").whenScenarioStateIs("absent")
+                .willReturn(aResponse().withStatus(429)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody(read("contract/error-401.json"))));
+        wm.setScenarioState("rateLimit", "absent");
+
+        try {
+            assertThatThrownBy(() ->
+                    client.registrationStart(new RegistrationStartRequest("u", "A", "a@b.c")))
+                    .isInstanceOf(PasskeyRateLimitException.class)
+                    .satisfies(e -> {
+                        var re = (PasskeyRateLimitException) e;
+                        assertThat(re.getHttpStatus()).isEqualTo(429);
+                        assertThat(re.getRetryAfterSeconds()).isEqualTo(0L);
+                    });
+        } finally {
             wm.resetScenarios();
         }
     }

@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -141,7 +142,17 @@ public class RegistrationFinishService {
             if (result.transports() != null && !result.transports().isEmpty()) {
                 cred.setTransports(String.join(",", result.transports()));
             }
-            credentials.saveAndFlush(cred);
+            try {
+                // G01: saveAndFlush 로 INSERT 를 즉시 flush 해 unique 제약 위반(동일
+                // credentialId 재등록)을 이 catch 안에서 잡는다. save 만 쓰면 INSERT 가
+                // commit 까지 지연돼 이 try/catch 를 벗어난 뒤 위반이 터질 수 있다.
+                credentials.saveAndFlush(cred);
+            } catch (DataIntegrityViolationException e) {
+                log.warn("registration/finish rejected: duplicate credential for tenant {}",
+                        ch.tenantId());
+                throw new BusinessException(ErrorCode.CREDENTIAL_DUPLICATE,
+                        "credential already registered");
+            }
 
             String credentialIdB64 = b64url(credentialId);
             log.info("registration/finish ok: credentialIdTail={} aaguid={} format={}",

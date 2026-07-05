@@ -47,6 +47,22 @@ public class AdminUser extends BaseEntity {
     @Column(name = "LOCKED_UNTIL")
     private OffsetDateTime lockedUntil;
 
+    // G05: MFA-verify failures accrue against their own counter so a
+    // password-only login success (recordSuccessfulLogin) cannot reset
+    // brute-force progress made against the second factor. Both counters
+    // still trip the SAME lockedUntil (defense-in-depth: an MFA-triggered
+    // lock also blocks primary login via AdminUserDetails.isAccountNonLocked —
+    // acceptable because reaching MFA verify means the password already
+    // matched). See V3__admin_user_mfa_lockout_counter.sql.
+    @Column(name = "MFA_FAILED_COUNT", nullable = false)
+    private int mfaFailedCount = 0;
+
+    // RFC 6238 §5.2 replay guard: the TOTP time-step counter last accepted by
+    // verify/confirm/disable. NULL means no step has ever been consumed (first
+    // verification is never blocked). See V2__admin_user_totp_replay_guard.sql.
+    @Column(name = "MFA_LAST_TOTP_STEP")
+    private Long mfaLastTotpStep;
+
     protected AdminUser() {}
 
     /** No-arg constructor for programmatic creation via setters (e.g. invite flow). */
@@ -111,6 +127,8 @@ public class AdminUser extends BaseEntity {
         return lockedUntil != null && now.isBefore(lockedUntil);
     }
 
+    public int getFailedLoginCount() { return failedLoginCount; }
+
     public void recordFailedLogin(OffsetDateTime now, int maxAttempts, java.time.Duration lockDuration) {
         this.failedLoginCount++;
         if (this.failedLoginCount >= maxAttempts) {
@@ -119,8 +137,58 @@ public class AdminUser extends BaseEntity {
         }
     }
 
+    /**
+     * Password-login success. Resets ONLY the password failure counter (G05:
+     * previously this also reset the counter MFA verify shared, letting a
+     * password-holding attacker restart the second-factor brute-force cycle
+     * indefinitely). {@code mfaFailedCount} is untouched — see
+     * {@link #recordFailedMfa} / {@link #recordSuccessfulMfa}.
+     *
+     * <p>Clearing {@code lockedUntil} here is safe, not a lock bypass: Spring
+     * Security's {@code DaoAuthenticationProvider} checks {@code
+     * AdminUserDetails.isAccountNonLocked()} (backed by this same field)
+     * BEFORE the success handler ever runs, so reaching here while genuinely
+     * locked is impossible — this only clears an already-expired timestamp.
+     */
     public void recordSuccessfulLogin() {
         this.failedLoginCount = 0;
         this.lockedUntil = null;
+    }
+
+    public int getMfaFailedCount() { return mfaFailedCount; }
+
+    /**
+     * MFA-verify failure. Accrues against its own counter (independent of
+     * {@link #recordFailedLogin}) so a password-only login success cannot
+     * reset second-factor brute-force progress (G05). Trips the SAME
+     * {@code lockedUntil} as the password counter on threshold — an
+     * MFA-triggered lock still blocks primary login (defense-in-depth,
+     * unchanged from before this fix).
+     */
+    public void recordFailedMfa(OffsetDateTime now, int maxAttempts, java.time.Duration lockDuration) {
+        this.mfaFailedCount++;
+        if (this.mfaFailedCount >= maxAttempts) {
+            this.lockedUntil = now.plus(lockDuration);
+            this.mfaFailedCount = 0;
+        }
+    }
+
+    /** MFA-verify success. Resets only the MFA counter — password counter is untouched. */
+    public void recordSuccessfulMfa() {
+        this.mfaFailedCount = 0;
+        this.lockedUntil = null;
+    }
+
+    public Long getMfaLastTotpStep() { return mfaLastTotpStep; }
+    public void setMfaLastTotpStep(Long v) { this.mfaLastTotpStep = v; }
+
+    /**
+     * RFC 6238 §5.2 replay guard: true when {@code step} has already been
+     * consumed by a prior successful verify/confirm/disable (i.e. {@code step
+     * <= mfaLastTotpStep}). NULL {@code mfaLastTotpStep} means nothing has
+     * been consumed yet, so nothing is rejected.
+     */
+    public boolean isTotpStepReplayed(long step) {
+        return mfaLastTotpStep != null && step <= mfaLastTotpStep;
     }
 }

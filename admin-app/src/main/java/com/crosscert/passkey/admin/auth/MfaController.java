@@ -68,11 +68,13 @@ public class MfaController {
         String email = auth.getName();
         AdminUser u = users.findByEmail(email).orElse(null);
 
-        // Brute-force lockout: reuse the primary-login lockout fields so a
-        // throttle exists on the second factor too. A locked account is
-        // refused before any code check (fail-closed). The lock also gates
-        // primary login via AdminUserDetails.isAccountNonLocked — acceptable
-        // because reaching here means the password is already compromised.
+        // Brute-force lockout: MFA failures accrue against their OWN counter
+        // (mfaFailedCount, G05) so a password-only login success can never
+        // reset second-factor brute-force progress — only trips the shared
+        // lockedUntil field on threshold. A locked account is refused before
+        // any code check (fail-closed). The lock also gates primary login via
+        // AdminUserDetails.isAccountNonLocked — acceptable because reaching
+        // here means the password is already compromised.
         if (u != null && u.isLocked(OffsetDateTime.now(clock))) {
             log.warn("admin mfa verify blocked (locked): email={}", mask(email));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -87,9 +89,9 @@ public class MfaController {
         }
         if (!totpOk && !recoveryOk) {
             if (u != null) {
-                u.recordFailedLogin(OffsetDateTime.now(clock), maxAttempts, lockDuration);
+                u.recordFailedMfa(OffsetDateTime.now(clock), maxAttempts, lockDuration);
                 users.save(u);
-                // recordFailedLogin auto-locks once maxAttempts is reached. The
+                // recordFailedMfa auto-locks once maxAttempts is reached. The
                 // entry guard above already refused any already-locked account,
                 // so reaching a locked state here means this failure tripped it.
                 if (u.isLocked(OffsetDateTime.now(clock))) {
@@ -102,7 +104,7 @@ public class MfaController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "invalid_code"));
         }
-        u.recordSuccessfulLogin();   // reset shared failed-login counter on success
+        u.recordSuccessfulMfa();   // reset only the MFA counter on success (G05)
         users.save(u);
         var session = req.getSession(false);
         if (session != null) {
@@ -224,14 +226,30 @@ public class MfaController {
 
     /**
      * Shared TOTP gate for verify/confirm/disable: true only when the user row
-     * exists, has an enrolled secret, a code was supplied, and the code matches
-     * the current time window. Centralised so the security-critical predicate
-     * cannot drift between the three call sites.
+     * exists, has an enrolled secret, a code was supplied, the code matches
+     * the current time window, AND the matched time-step has not already been
+     * consumed by an earlier successful check (RFC 6238 §5.2 replay guard —
+     * F02). Centralised so the security-critical predicate cannot drift
+     * between the three call sites.
+     *
+     * <p>On a fresh match this advances {@code u.mfaLastTotpStep} in memory;
+     * callers persist it via the {@code users.save(u)} they already perform on
+     * their success path. A replayed step (matched counter {@code <=} the
+     * stored high-water mark) is treated exactly like a wrong code — this
+     * method returns {@code false} and does not mutate {@code u}.
      */
     private boolean validCode(AdminUser u, String code) {
         if (u == null || u.getMfaSecret() == null || code == null) return false;
         String plain = secretCipher.open(u.getMfaSecret());
-        return totp.verifyAt(plain, code, clock.millis());
+        var matched = totp.matchedCounter(plain, code, clock.millis());
+        if (matched.isEmpty()) return false;
+        long step = matched.getAsLong();
+        if (u.isTotpStepReplayed(step)) {
+            log.warn("admin mfa code replay rejected: email={}", mask(u.getEmail()));
+            return false;
+        }
+        u.setMfaLastTotpStep(step);
+        return true;
     }
 
     private static String enc(String s) {

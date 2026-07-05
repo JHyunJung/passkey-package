@@ -72,7 +72,7 @@ public class RegistrationStartService {
                 throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
             }
 
-            byte[] userHandle = Base64.getUrlDecoder().decode(req.userHandle());
+            byte[] userHandle = decodeAndValidateUserHandle(req.userHandle());
             byte[] challenge = challenges.newChallengeBytes();
             String token = challenges.newToken();
 
@@ -114,6 +114,35 @@ public class RegistrationStartService {
             ceremonyMetrics.recordFailure("registration", "start");
             throw e;
         }
+    }
+
+    /**
+     * G18: WebAuthn 스펙상 {@code user.id}(userHandle) 는 1..64 바이트여야 한다
+     * (https://www.w3.org/TR/webauthn-3/#dom-publickeycredentialuserentity-id).
+     * 검증 없이 디코드만 하면 65바이트+ userHandle 도 start 를 통과해 finish 저장 시
+     * Oracle {@code credential.user_handle RAW(64)} 컬럼 오버플로(ORA-12899)로
+     * DataIntegrityViolationException → 500 이 노출된다. 여기서 fail-fast 400 으로 거부한다.
+     * 문자셋 검증은 {@link Base64.Decoder#decode(String)} 이 이미 수행하므로(비-base64url
+     * 문자는 {@link IllegalArgumentException}) 별도 사전검사를 두지 않는다 — RFC 4648 §5 는
+     * 패딩(  {@code =}  )을 허용하며 JDK 표준 디코더는 패딩 유무 둘 다 정상 처리하므로,
+     * 문자셋 사전검사에서 패딩을 빠뜨리면 표준 인코더(패딩 포함)로 만든 정상 userHandle 을
+     * 오탐 거부하는 회귀가 된다.
+     */
+    private static byte[] decodeAndValidateUserHandle(String userHandleB64) {
+        if (userHandleB64 == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "userHandle must be valid base64url");
+        }
+        byte[] userHandle;
+        try {
+            userHandle = Base64.getUrlDecoder().decode(userHandleB64);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "userHandle must be valid base64url");
+        }
+        if (userHandle.length < 1 || userHandle.length > 64) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "userHandle must decode to 1..64 bytes (WebAuthn user.id cap), was " + userHandle.length);
+        }
+        return userHandle;
     }
 
     /** Returns the last 8 chars of the token for correlation only — never the full secret. */

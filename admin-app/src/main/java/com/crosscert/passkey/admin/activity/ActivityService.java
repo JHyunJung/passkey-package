@@ -49,7 +49,7 @@ public class ActivityService {
 
     @Transactional(readOnly = true)
     public ActivityView snapshot(UUID sinceId, String category) {
-        return snapshot(sinceId, category, null, null);
+        return snapshot(sinceId, category, null, null, null);
     }
 
     /**
@@ -74,9 +74,18 @@ public class ActivityService {
      *       (backward pagination, tenant-scoped) — or neither (newest 50 for that
      *       tenant).</li>
      * </ul>
+     *
+     * <p>F07 — {@code beforeId} (optional) is the {@code id} of the last row
+     * from the previous page (i.e. {@code events[events.size()-1].id}). When
+     * supplied, backward pagination compares the {@code (createdAt, id)} tuple
+     * of that row instead of the strict {@code createdAt < before} check —
+     * mirroring the {@code sinceId} forward-polling cursor — so a boundary row
+     * sharing the exact same microsecond timestamp as the cursor is not
+     * permanently dropped. {@code beforeId} is optional for backward
+     * compatibility with callers that only have {@code before}.
      */
     @Transactional(readOnly = true)
-    public ActivityView snapshot(UUID sinceId, String category, OffsetDateTime before, UUID tenantId) {
+    public ActivityView snapshot(UUID sinceId, String category, OffsetDateTime before, UUID beforeId, UUID tenantId) {
         OffsetDateTime since = OffsetDateTime.now(clock).minus(WINDOW);
 
         long events24h    = activity.countSince(since);
@@ -98,7 +107,7 @@ public class ActivityService {
             case "security" -> SECURITY_ACTIONS;
             default         -> Set.of();
         };
-        List<AuditLog> feed = resolveFeed(sinceId, before, tenantId, actionFilter);
+        List<AuditLog> feed = resolveFeed(sinceId, before, beforeId, tenantId, actionFilter);
 
         // 페이지에 등장한 distinct tenantId 들을 한 번의 IN 쿼리(findAllById)로 로드 —
         // incident 의 buildLookups 와 동일한 배치 패턴. per-tenant findById N+1 제거.
@@ -139,8 +148,14 @@ public class ActivityService {
      * (backward pagination). They are not designed to be combined — a polling
      * client asks "what's new since X", a pagination client asks "what came
      * before Y". The dashboard never sends both.
+     *
+     * <p>F07 — {@code beforeId} (optional) is threaded through to
+     * {@link ActivityRepository#feedPage(UUID, OffsetDateTime, UUID, int)} /
+     * {@link ActivityRepository#feedFilteredPage(Set, UUID, OffsetDateTime, UUID, int)}
+     * so backward pagination uses the {@code (createdAt, id)} tuple cursor
+     * instead of the strict-instant comparison.
      */
-    private List<AuditLog> resolveFeed(UUID sinceId, OffsetDateTime before, UUID tenantId,
+    private List<AuditLog> resolveFeed(UUID sinceId, OffsetDateTime before, UUID beforeId, UUID tenantId,
                                        Set<String> actionFilter) {
         if (sinceId != null) {
             // Forward polling path. tenantId composes — null means global,
@@ -150,12 +165,12 @@ public class ActivityService {
                     ? activity.feed(sinceId, tenantId, FEED_PAGE)
                     : activity.feedFiltered(actionFilter, sinceId, tenantId, FEED_PAGE);
         }
-        // No sinceId → use the (before, tenantId) page path. Both may be null,
-        // in which case feedPage returns the newest FEED_PAGE rows globally
+        // No sinceId → use the (before, beforeId, tenantId) page path. All may be
+        // null, in which case feedPage returns the newest FEED_PAGE rows globally
         // (equivalent to feed(null, FEED_PAGE) but expressed via the new query).
         return actionFilter.isEmpty()
-                ? activity.feedPage(tenantId, before, FEED_PAGE)
-                : activity.feedFilteredPage(actionFilter, tenantId, before, FEED_PAGE);
+                ? activity.feedPage(tenantId, before, beforeId, FEED_PAGE)
+                : activity.feedFilteredPage(actionFilter, tenantId, before, beforeId, FEED_PAGE);
     }
 
     /**

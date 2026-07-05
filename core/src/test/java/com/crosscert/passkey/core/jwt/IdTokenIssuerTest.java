@@ -115,4 +115,28 @@ class IdTokenIssuerTest {
         JWSVerifier verifier = new RSASSAVerifier(signingKeys.signingKey().toPublicJWK());
         assertThat(parsed.verify(verifier)).isTrue();
     }
+
+    // G10-issuerBlank: prod/qa yml define passkey.id-token.issuer-base with an
+    // empty env-var default (${PASSKEY_ID_TOKEN_ISSUER_BASE:}). If the env var
+    // is not injected, issuerBase resolves to "" and — without a guard — the app
+    // boots successfully and issues ID Tokens with iss="/{tenantId}" (no scheme,
+    // no host). Fail fast at construction instead of shipping structurally
+    // invalid issuer tokens.
+    @Test
+    void constructorRejectsBlankIssuerBase() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> new IdTokenIssuer(signingKeys, "", Duration.ofMinutes(15), Clock.systemUTC()));
+    }
+
+    @Test
+    void constructorRejectsNullIssuerBase() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> new IdTokenIssuer(signingKeys, null, Duration.ofMinutes(15), Clock.systemUTC()));
+    }
+
+    @Test
+    void constructorRejectsWhitespaceOnlyIssuerBase() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> new IdTokenIssuer(signingKeys, "   ", Duration.ofMinutes(15), Clock.systemUTC()));
+    }
 }

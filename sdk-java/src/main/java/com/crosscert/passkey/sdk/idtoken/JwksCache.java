@@ -27,24 +27,68 @@ public class JwksCache {
      */
     private static final Duration STALE_GRACE = Duration.ofMinutes(10);
 
+    /**
+     * F26: kid-miss 강제 refetch(getForceRefresh)의 쿨다운. kid-miss 자체는 fetch
+     * 실패가 아니므로 BACKOFF(실패 백오프)와는 별도 트랙으로 관리한다. 이 쿨다운이
+     * 없으면 공격자가 무작위/회전된 kid를 계속 흘려보내 매 요청마다 강제 refetch를
+     * 유발하는 refetch storm(JWKS 오리진 부하 유발 DoS)이 가능해진다.
+     */
+    private static final Duration KID_MISS_REFETCH_COOLDOWN = Duration.ofSeconds(5);
+
+    /** JWKS 응답 본문 크기 상한(바이트). 정상 JWKS는 수 KB 수준이라 넉넉히 잡는다. */
+    private static final int JWKS_SIZE_LIMIT_BYTES = 50 * 1024;
+
+    /** timeout 인자를 생략한 생성자가 쓰는 기본값(PasskeyClientConfig 기본값과 동일). */
+    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(10);
+
     private final URL jwksUrl;
     private final Duration ttl;
     private final Clock clock;
+    private final int connectTimeoutMs;
+    private final int readTimeoutMs;
     private final AtomicReference<Snapshot> snapshot = new AtomicReference<>();
 
     /** TTL 만료 시 동시 갱신을 1회로 직렬화(single-flight)하는 락. */
     private final Object refreshLock = new Object();
     /** 직전 fetch 실패 시 이 시각 이전에는 재시도하지 않고 stale 스냅샷을 반환. */
     private volatile Instant nextRetryAfter = Instant.MIN;
+    /** F26: 이 시각 이전에는 kid-miss 강제 refetch를 다시 시도하지 않는다(폭주 방지). */
+    private volatile Instant nextKidMissRefetchAfter = Instant.MIN;
 
+    /** 하위 호환: timeout 미지정 시 SDK 기본값(connect 3s/read 10s)을 적용. */
     public JwksCache(URI baseUrl, Duration ttl, Clock clock) {
+        this(baseUrl, ttl, clock, DEFAULT_CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT);
+    }
+
+    /**
+     * G19: JWKS fetch에 connect/read timeout을 강제한다. hung JWKS 엔드포인트가
+     * (timeout=0=무제한이던 이전 동작처럼) single-flight 락을 쥔 채 전체 id-token
+     * 검증을 무한 차단하지 않도록, 유한 시간 내에 fail-fast 시켜 stale-if-error
+     * 경로(F27)가 정상적으로 개입할 수 있게 한다.
+     */
+    public JwksCache(URI baseUrl, Duration ttl, Clock clock,
+                      Duration connectTimeout, Duration readTimeout) {
         this.ttl = ttl;
         this.clock = clock;
+        this.connectTimeoutMs = toMillisInt(connectTimeout, DEFAULT_CONNECT_TIMEOUT);
+        this.readTimeoutMs = toMillisInt(readTimeout, DEFAULT_READ_TIMEOUT);
         try {
             this.jwksUrl = baseUrl.resolve("/.well-known/jwks.json").toURL();
         } catch (Exception e) {
             throw new IllegalArgumentException("Bad baseUrl for JWKS", e);
         }
+    }
+
+    private static int toMillisInt(Duration d, Duration fallback) {
+        Duration effective = (d != null) ? d : fallback;
+        long ms = effective.toMillis();
+        if (ms <= 0) {
+            // 0 이하는 JWKSet.load 에서 "무제한"을 의미하므로 timeout 강제라는
+            // 목적을 무력화한다. 방어적으로 fallback을 적용한다.
+            ms = fallback.toMillis();
+        }
+        return (int) Math.min(ms, Integer.MAX_VALUE);
     }
 
     public JWKSet get() {
@@ -54,12 +98,59 @@ public class JwksCache {
         if (cur != null && cur.fetchedAt().plus(ttl).isAfter(now)) {
             return cur.jwks();
         }
-        // 만료 경로: single-flight — 한 스레드만 fetch, 나머지는 락 안에서 재확인.
+        return refreshLocked(false);
+    }
+
+    /**
+     * F26: kid-miss 강제 refetch 전용 진입점. TTL이 아직 유효해도(회전 직후 stale
+     * 캐시가 새 kid를 못 가진 경우) 강제로 refresh를 시도한다. 단, single-flight
+     * 락과 기존 실패 백오프(nextRetryAfter)는 {@link #get()}과 동일하게 존중하고,
+     * 여기에 더해 kid-miss 전용 쿨다운(KID_MISS_REFETCH_COOLDOWN)을 적용한다 —
+     * 그렇지 않으면 회전 공격자가 unknown kid를 계속 흘려보내 매 요청마다 강제
+     * refetch를 유발하는 refetch storm이 가능해진다. 쿨다운 중에는 강제 refetch를
+     * 생략하고 현재 스냅샷을 그대로 반환한다(호출부는 여전히 kid-miss로 실패 처리).
+     *
+     * <p>쿨다운 판정 + 타임스탬프 갱신 + (통과 시) 실제 fetch를 전부 동일한
+     * {@code synchronized(refreshLock)} 블록 안에서 원자적으로 수행한다. 판정만
+     * 락 밖에서 하면, 쿨다운이 막 만료된 순간 여러 스레드가 동시에 판정을 통과해
+     * 각자 갱신+refetch를 수행하는 TOCTOU 레이스로 쿨다운이 storm을 막지 못한다.
+     * {@link #refreshLocked}도 같은 {@code refreshLock}을 잡지만 {@code synchronized}는
+     * 재진입 가능(reentrant)하므로 같은 스레드가 여기서 이미 락을 쥔 채 호출해도
+     * 데드락 없이 그대로 진행된다.
+     */
+    JWKSet getForceRefresh() {
+        synchronized (refreshLock) {
+            Instant now = clock.instant();
+            if (now.isBefore(nextKidMissRefetchAfter)) {
+                Snapshot cur = snapshot.get();
+                if (cur != null) {
+                    return cur.jwks();
+                }
+                // 폴백할 스냅샷조차 없으면(최초 부팅 kid-miss) 정상 경로로 폴백해
+                // fail-closed 예외 처리를 그대로 따르게 한다.
+            }
+            nextKidMissRefetchAfter = now.plus(KID_MISS_REFETCH_COOLDOWN);
+            return refreshLocked(true);
+        }
+    }
+
+    /**
+     * 만료 경로(및 F26 강제 refetch)의 공유 로직: single-flight — 한 스레드만
+     * fetch, 나머지는 락 안에서 재확인.
+     *
+     * @param force true면 "락 대기 중 남이 이미 갱신"한 유효 스냅샷이 있어도
+     *              그것을 그대로 반환하지 않고 fetch를 강제한다(단, 아래 백오프
+     *              체크는 그대로 적용되어 실패 backoff 우회는 없다).
+     */
+    private JWKSet refreshLocked(boolean force) {
         synchronized (refreshLock) {
             Snapshot again = snapshot.get();
             Instant n2 = clock.instant();
             // 다른 스레드가 락 대기 중 이미 갱신했으면 그 결과 사용(중복 fetch 제거).
-            if (again != null && again.fetchedAt().plus(ttl).isAfter(n2)) {
+            // force=true(kid-miss 강제 refetch)일 때는 이 재확인을 건너뛰고 실제로
+            // fetch를 한 번 더 시도한다 — 그렇지 않으면 "이미 유효한(하지만 새 kid가
+            // 없는) 스냅샷"을 그대로 되돌려줘 강제 refetch가 무의미해진다.
+            if (!force && again != null && again.fetchedAt().plus(ttl).isAfter(n2)) {
                 return again.jwks();
             }
             // 직전 실패로 백오프 중이면 fetch를 건너뛴다. 단 catch 경로와 동일한 stale-grace
@@ -112,7 +203,7 @@ public class JwksCache {
 
     protected JWKSet fetch() {
         try {
-            return JWKSet.load(jwksUrl);
+            return JWKSet.load(jwksUrl, connectTimeoutMs, readTimeoutMs, JWKS_SIZE_LIMIT_BYTES);
         } catch (IOException | ParseException e) {
             throw new PasskeyIdTokenException("JWKS fetch failed: " + jwksUrl, e);
         }

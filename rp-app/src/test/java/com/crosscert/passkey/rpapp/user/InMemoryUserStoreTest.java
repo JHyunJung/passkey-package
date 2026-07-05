@@ -207,6 +207,73 @@ class InMemoryUserStoreTest {
         assertThat(store.findByUsername("x")).isEmpty();
     }
 
+    /**
+     * 회귀 가드: 미인증 /register/begin 반복(pending 무한 누적)은 힙 고갈 DoS 로
+     * 이어진다. pending 개수가 상한(maxPending)을 넘으면 가장 오래된 pending 부터 제거되어
+     * 맵이 상한 이상으로 자라지 않아야 한다. 확정(credentialId != null) 사용자는 보호 대상이
+     * 아니므로 이 테스트에서 건드리지 않는다.
+     */
+    @Test
+    void createPending_evictsOldestPendingWhenOverCapacity(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        int maxPending = 3;
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString(), maxPending, java.time.Duration.ofMinutes(30));
+
+        String h1 = store.createPending("u1", "U1");
+        String h2 = store.createPending("u2", "U2");
+        String h3 = store.createPending("u3", "U3");
+        // 상한(3) 도달 후 4번째 begin → 가장 오래된 h1 이 제거되어야 한다.
+        String h4 = store.createPending("u4", "U4");
+
+        assertThat(store.findByUserHandle(h1)).isEmpty();
+        assertThat(store.findByUserHandle(h2)).isPresent();
+        assertThat(store.findByUserHandle(h3)).isPresent();
+        assertThat(store.findByUserHandle(h4)).isPresent();
+    }
+
+    /**
+     * 확정된(credentialId != null) 사용자는 pending 상한 계산에서 제외되고
+     * evict 대상도 아니다 — 상한은 "미완료 등록"의 무한 누적만 막는 것이 목적이다.
+     */
+    @Test
+    void createPending_confirmedUsersAreNeverEvicted(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        int maxPending = 2;
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString(), maxPending, java.time.Duration.ofMinutes(30));
+
+        String confirmedHandle = store.createPending("confirmed-user", "Confirmed");
+        store.confirmRegistration(confirmedHandle, "confirmed-user", "Confirmed", "cred-1");
+
+        // pending 을 상한(2)만큼 추가로 채워도 확정 user 는 살아있어야 한다.
+        store.createPending("p1", "P1");
+        store.createPending("p2", "P2");
+        store.createPending("p3", "P3"); // 상한 초과 → p1 evict, confirmed 는 무관
+
+        assertThat(store.findByUserHandle(confirmedHandle)).isPresent();
+        assertThat(store.findByUserHandle(confirmedHandle).get().credentialId()).isEqualTo("cred-1");
+    }
+
+    /**
+     * TTL: 만료 시간을 지난 pending 은 상한에 도달하지 않아도 다음 createPending
+     * 호출 시 정리(opportunistic cleanup)되어야 한다.
+     */
+    @Test
+    void createPending_expiresStalePendingByTtl(@TempDir Path dir) {
+        Path file = dir.resolve("users.json");
+        // TTL 을 0 에 가깝게 주어 방금 만든 pending 도 "지난 것"으로 취급되게 한다.
+        InMemoryUserStore store = new InMemoryUserStore(mapper(), file.toString(), 100, java.time.Duration.ofNanos(1));
+
+        String stale = store.createPending("old", "Old");
+        try {
+            Thread.sleep(5);
+        } catch (InterruptedException ignore) {
+            Thread.currentThread().interrupt();
+        }
+        store.createPending("new", "New"); // opportunistic cleanup 트리거
+
+        assertThat(store.findByUserHandle(stale)).isEmpty();
+    }
+
     @Test
     void corruptFileIsQuarantinedNotOverwrittenOnNextConfirm(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("users.json");

@@ -250,6 +250,35 @@ class WebAuthnControllerTest {
         verify(users, never()).confirmRegistration(any(), any(), any(), any());
     }
 
+    // ── 8. register/begin: oversized username/displayName → 400 ──
+
+    /**
+     * 회귀 가드: username/displayName 에 상한이 없으면 공격자가 초대형 문자열을
+     * 반복 전송해 pending 맵의 힙 사용량을 증폭시킬 수 있다. @Size(max)
+     * 로 Bean Validation 단계에서 조기 거부되어야 한다(컨트롤러·store 진입 전 400).
+     */
+    @Test
+    void registerBegin_oversizedUsername_returns400() throws Exception {
+        String oversized = "u".repeat(300);
+        mvc.perform(post("/passkey/register/begin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + oversized + "\",\"displayName\":\"Alice\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(users, never()).createPending(any(), any());
+    }
+
+    @Test
+    void registerBegin_oversizedDisplayName_returns400() throws Exception {
+        String oversized = "d".repeat(300);
+        mvc.perform(post("/passkey/register/begin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"alice\",\"displayName\":\"" + oversized + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(users, never()).createPending(any(), any());
+    }
+
     // ── 7. id-token iss/aud mismatch → PASSKEY_ID_TOKEN (SDK 예외 변환 보존) ────
 
     @Test

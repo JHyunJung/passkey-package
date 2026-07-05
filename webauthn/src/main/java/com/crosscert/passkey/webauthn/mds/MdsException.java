@@ -3,7 +3,7 @@ package com.crosscert.passkey.webauthn.mds;
 /** MDS3 BLOB 검증·파싱 실패. */
 public final class MdsException extends Exception {
 
-    public enum Reason { MALFORMED_JWS, BAD_SIGNATURE, UNTRUSTED_CHAIN, MALFORMED_PAYLOAD }
+    public enum Reason { MALFORMED_JWS, BAD_SIGNATURE, UNTRUSTED_CHAIN, MALFORMED_PAYLOAD, STALE }
 
     private final Reason reason;
 

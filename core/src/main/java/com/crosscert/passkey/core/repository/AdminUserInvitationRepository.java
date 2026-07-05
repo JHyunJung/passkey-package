@@ -17,6 +17,25 @@ public interface AdminUserInvitationRepository extends JpaRepository<AdminUserIn
     List<AdminUserInvitation> findByAdminUserIdAndAcceptedAtIsNull(UUID adminUserId);
 
     /**
+     * G09 fix — conditional atomic UPDATE, marking this invitation accepted
+     * only if it is still pending ({@code accepted_at IS NULL}). Two
+     * concurrent accept(token, ...) calls for the same token now serialize at
+     * the DB level: only the first UPDATE affects a row (returns 1); the
+     * second sees {@code accepted_at IS NOT NULL} and affects 0 rows, so the
+     * caller can reject it as "already used" instead of both succeeding
+     * (double-accept / last-writer-wins password). Same pattern as
+     * {@code AdminUserRecoveryCodeRepository.markUsed} and
+     * {@code SecurityIncidentRepository.resolveIfOpen}.
+     *
+     * @return 1 if this call won the race (invitation was pending), 0 if it
+     *         was already accepted by a concurrent/earlier call.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("update AdminUserInvitation i set i.acceptedAt = :now "
+            + "where i.id = :id and i.acceptedAt is null")
+    int acceptIfPending(@Param("id") Long id, @Param("now") OffsetDateTime now);
+
+    /**
      * P1-4 retention: 완료(수락) 또는 만료된 invitation 중 그 시점이 cutoff 이전인 것 삭제.
      * pending(미수락·미만료)은 쿼리 조건상 절대 매칭 안 됨(활성 보존).
      *

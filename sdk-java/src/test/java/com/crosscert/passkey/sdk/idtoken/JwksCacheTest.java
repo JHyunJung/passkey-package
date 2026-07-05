@@ -288,4 +288,91 @@ class JwksCacheTest {
         // fetch는 backoff 윈도우라 시도조차 안 함(상한 초과로 곧장 fail-closed).
         assertThat(cache.fetchCount.get()).isEqualTo(2);
     }
+
+    // ---- F26: kid-miss 강제 refetch(getForceRefresh) ----
+
+    @Test
+    void getForceRefresh_withinTtl_stillTriggersRefetch() {
+        // given: TTL 이내(재fetch 불필요한 상태)에서 스냅샷 보유.
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofMinutes(5), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.get(); // fetch 1
+        assertThat(cache.fetchCount.get()).isEqualTo(1);
+
+        // when: TTL이 한참 남아 get()이라면 재fetch 없이 캐시를 반환했을 시점에
+        // 강제 refetch를 호출한다(회전 직후 kid-miss 시나리오).
+        clock.advance(Duration.ofSeconds(30)); // TTL(5분) 이내
+        JWKSet second = new JWKSet();
+        cache.nextResult = second;
+        JWKSet got = cache.getForceRefresh();
+
+        // then: TTL이 유효함에도 fetch가 실제로 한 번 더 일어나고 새 스냅샷을 반환한다.
+        assertThat(got).isSameAs(second);
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+
+        // and: 강제 refetch 직후의 일반 get()은 갱신된 스냅샷을 그대로 재사용한다(회귀 없음).
+        JWKSet got2 = cache.get();
+        assertThat(got2).isSameAs(second);
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+    }
+
+    @Test
+    void getForceRefresh_duringFailureBackoff_doesNotBypassBackoff() {
+        // given: 성공→실패(stale 폴백 + 백오프 진입) 상태 — F27 계약.
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofMinutes(5), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.get(); // fetch 1
+
+        clock.advance(Duration.ofMinutes(6));
+        cache.failNext = true;
+        cache.get(); // fetch 2 (실패, stale 폴백 + 백오프 진입)
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+
+        // when: 백오프 윈도우(5s) 안에서 강제 refetch를 시도한다(예: kid-miss 공격자가
+        // refetch storm으로 backoff를 우회하려는 시도를 흉내).
+        clock.advance(Duration.ofSeconds(1)); // 백오프(5s) 이내
+        JWKSet stale = cache.getForceRefresh();
+
+        // then: 강제 refetch라도 F27의 실패 백오프를 우회하지 못한다 — fetch를 다시
+        // 시도하지 않고 stale 스냅샷을 그대로 반환한다.
+        assertThat(stale).isSameAs(first);
+        assertThat(cache.fetchCount.get()).isEqualTo(2); // 재시도 없음(backoff 존중)
+    }
+
+    @Test
+    void getForceRefresh_repeatedWithinCooldown_doesNotRefetchStorm() {
+        // given: 스냅샷 보유(TTL 이내).
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-01T00:00:00Z"));
+        ProgrammableCache cache = new ProgrammableCache(Duration.ofMinutes(5), clock);
+        JWKSet first = new JWKSet();
+        cache.nextResult = first;
+        cache.get(); // fetch 1
+
+        // when: kid-miss 공격자가 연속으로 강제 refetch를 유발한다(회전된 kid 무한 반복).
+        JWKSet second = new JWKSet();
+        cache.nextResult = second;
+        JWKSet r1 = cache.getForceRefresh(); // fetch 2 — 최초 강제 refetch는 허용.
+        assertThat(r1).isSameAs(second);
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+
+        clock.advance(Duration.ofSeconds(1)); // 쿨다운(5s) 이내
+        JWKSet third = new JWKSet();
+        cache.nextResult = third;
+        JWKSet r2 = cache.getForceRefresh();
+
+        // then: 쿨다운 이내이므로 fetch가 다시 일어나지 않고 직전 스냅샷을 반환한다
+        // (refetch storm 방지).
+        assertThat(r2).isSameAs(second);
+        assertThat(cache.fetchCount.get()).isEqualTo(2);
+
+        // and: 쿨다운 경과 후에는 다시 강제 refetch가 허용된다.
+        clock.advance(Duration.ofSeconds(5)); // 누적 6s > 쿨다운(5s)
+        JWKSet r3 = cache.getForceRefresh();
+        assertThat(r3).isSameAs(third);
+        assertThat(cache.fetchCount.get()).isEqualTo(3);
+    }
 }

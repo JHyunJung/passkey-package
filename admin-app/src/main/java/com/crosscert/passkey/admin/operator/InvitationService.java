@@ -6,8 +6,10 @@ import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,7 @@ public class InvitationService {
     private final MailSender mailSender;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
+    private final Environment env;
 
     @Value("${admin.invite.base-url:http://localhost:5173}")
     private String baseUrl;
@@ -40,13 +43,28 @@ public class InvitationService {
                              AdminUserTenantRepository mappingRepo,
                              MailSender mailSender,
                              PasswordEncoder passwordEncoder,
-                             Clock clock) {
+                             Clock clock,
+                             Environment env) {
         this.invitationRepo = invitationRepo;
         this.userRepo = userRepo;
         this.mappingRepo = mappingRepo;
         this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
+        this.env = env;
+    }
+
+    /**
+     * G11 fail-fast — prod profile must not boot with the localhost dev
+     * default for admin.invite.base-url. Without this, a prod deployment
+     * that forgets to set ADMIN_INVITE_BASE_URL boots successfully but
+     * mails out invite/reset links pointing at http://localhost:5173 (the
+     * operator's own loopback), which never reaches the real front-end —
+     * a broken-link lockout that looks fine until an operator clicks it.
+     */
+    @PostConstruct
+    void validateBaseUrlForProd() {
+        BaseUrlValidation.assertNotLocalhostFallbackInProd(env, baseUrl, "admin.invite.base-url");
     }
 
     @Transactional
@@ -87,11 +105,27 @@ public class InvitationService {
     public void accept(String plaintext, String password) {
         OffsetDateTime now = OffsetDateTime.now(clock);
         var inv = lookupValid(plaintext, now);
+        // G09: conditional atomic UPDATE (accepted_at IS NULL -> now) instead
+        // of read-check-then-dirty-checking-update. Two concurrent accept()
+        // calls for the same token both pass lookupValid()'s in-memory
+        // isAccepted() check before either commits; without this DB-level
+        // predicate, both would proceed and the token would be consumed
+        // twice (last-writer-wins password). acceptIfPending() serializes
+        // the race: only the winner gets 1 row affected.
+        int updated = invitationRepo.acceptIfPending(inv.getId(), now);
+        if (updated == 0) {
+            log.warn("invitation used: tokenPrefix={}", inv.getTokenPrefix());
+            throw new IllegalStateException("Token already used");
+        }
         var user = userRepo.findById(inv.getAdminUserId())
                 .orElseThrow(() -> new IllegalStateException("user not found"));
         user.setBcryptHash(passwordEncoder.encode(password));
         user.setStatus("ACTIVE");
-        inv.accept(now);
+        // G03: invite() creates PENDING users with enabled=false (no password
+        // set yet). Now that the invitee has set a password and the account
+        // is being activated, restore ENABLED — the actual login gate — or
+        // the user could never pass /admin/login despite a valid password.
+        user.setEnabled(true);
         log.info("invitation accepted: email={} tokenPrefix={}",
                 CryptoUtils.maskEmail(user.getEmail()), inv.getTokenPrefix());
     }

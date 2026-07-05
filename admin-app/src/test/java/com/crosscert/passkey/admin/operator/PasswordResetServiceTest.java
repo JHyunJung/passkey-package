@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
@@ -33,12 +34,13 @@ class PasswordResetServiceTest {
     @Mock AdminUserRepository users;
     @Mock MailSender mail;
     @Mock PasswordEncoder encoder;
+    @Mock Environment env;
     Clock clock = Clock.fixed(Instant.parse("2026-05-30T00:00:00Z"), KstTime.ZONE);
     PasswordResetService service;
 
     @BeforeEach
     void setUp() {
-        service = new PasswordResetService(tokens, users, mail, encoder, clock);
+        service = new PasswordResetService(tokens, users, mail, encoder, clock, env);
     }
 
     @Test

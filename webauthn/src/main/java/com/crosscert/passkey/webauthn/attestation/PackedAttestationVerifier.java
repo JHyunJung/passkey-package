@@ -126,13 +126,18 @@ public final class PackedAttestationVerifier implements AttestationVerifier {
         int len = der[idx++] & 0xff;
         if (len >= 0x80) {
             int numBytes = len & 0x7f;
-            if (numBytes == 0 || numBytes > 4 || idx + numBytes > der.length) {
+            // 뺄셈 형태 (오버플로 방지) — AndroidKey/Apple 파서와 동일한 경계 검사 형태.
+            if (numBytes == 0 || numBytes > 4 || numBytes > der.length - idx) {
                 throw new AttestationException("invalid DER length in AAGUID extension");
             }
             len = 0;
             for (int i = 0; i < numBytes; i++) len = (len << 8) | (der[idx++] & 0xff);
+            if (len < 0) {
+                throw new AttestationException("DER OCTET STRING length overflow in AAGUID extension");
+            }
         }
-        if (idx + len > der.length || len < 0) {
+        // 뺄셈 형태 (오버플로 방지): idx는 항상 der.length 이하이므로 der.length - idx는 음수가 아니다.
+        if (len < 0 || len > der.length - idx) {
             throw new AttestationException("DER OCTET STRING length overrun in AAGUID extension");
         }
         return Arrays.copyOfRange(der, idx, idx + len);
