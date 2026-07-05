@@ -109,25 +109,29 @@ public class JwksCache {
      * 그렇지 않으면 회전 공격자가 unknown kid를 계속 흘려보내 매 요청마다 강제
      * refetch를 유발하는 refetch storm이 가능해진다. 쿨다운 중에는 강제 refetch를
      * 생략하고 현재 스냅샷을 그대로 반환한다(호출부는 여전히 kid-miss로 실패 처리).
+     *
+     * <p>쿨다운 판정 + 타임스탬프 갱신 + (통과 시) 실제 fetch를 전부 동일한
+     * {@code synchronized(refreshLock)} 블록 안에서 원자적으로 수행한다. 판정만
+     * 락 밖에서 하면, 쿨다운이 막 만료된 순간 여러 스레드가 동시에 판정을 통과해
+     * 각자 갱신+refetch를 수행하는 TOCTOU 레이스로 쿨다운이 storm을 막지 못한다.
+     * {@link #refreshLocked}도 같은 {@code refreshLock}을 잡지만 {@code synchronized}는
+     * 재진입 가능(reentrant)하므로 같은 스레드가 여기서 이미 락을 쥔 채 호출해도
+     * 데드락 없이 그대로 진행된다.
      */
     JWKSet getForceRefresh() {
-        Instant now = clock.instant();
-        if (now.isBefore(nextKidMissRefetchAfter)) {
-            Snapshot cur = snapshot.get();
-            if (cur != null) {
-                return cur.jwks();
-            }
-            // 폴백할 스냅샷조차 없으면(최초 부팅 kid-miss) 정상 경로로 폴백해
-            // fail-closed 예외 처리를 그대로 따르게 한다.
-        }
         synchronized (refreshLock) {
-            // 쿨다운 갱신은 락 안에서: 동시에 몰린 kid-miss 호출들이 쿨다운 없이
-            // 각자 refreshLocked(true)에 진입해 fetch 자체는 (single-flight로) 1회로
-            // 직렬화되지만, 그 fetch가 이미 실패 backoff 없이 TTL이 유효한 상태에서도
-            // 계속 트리거될 수 있으므로 쿨다운 마킹을 lock 보호 하에 확정한다.
-            nextKidMissRefetchAfter = clock.instant().plus(KID_MISS_REFETCH_COOLDOWN);
+            Instant now = clock.instant();
+            if (now.isBefore(nextKidMissRefetchAfter)) {
+                Snapshot cur = snapshot.get();
+                if (cur != null) {
+                    return cur.jwks();
+                }
+                // 폴백할 스냅샷조차 없으면(최초 부팅 kid-miss) 정상 경로로 폴백해
+                // fail-closed 예외 처리를 그대로 따르게 한다.
+            }
+            nextKidMissRefetchAfter = now.plus(KID_MISS_REFETCH_COOLDOWN);
+            return refreshLocked(true);
         }
-        return refreshLocked(true);
     }
 
     /**
