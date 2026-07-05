@@ -151,6 +151,23 @@ F30(인증경로 BE/BS)·F35(CBOR non-canonical).
 BE/BS 인증경로(F30과 별개 판정)·tenant suspend 재검사·X-Trace-Id 반영·License Clock 미사용·
 ApiKey findAll·RelayKeyGuard 지연·packed/android-key alg 핀 — 반박 검증에서 재현 경로 불성립 또는 이미 방어 존재로 refuted.
 
+### 실행 결과 (2026-07-05 완료)
+
+**confirmed 33건 중 32건 구현 완료, F01만 백로그**(프론트+백 크로스커팅 기능이라 별도 spec).
+10개 배치(A~J) 각각 spec+quality+codex 3-gate 리뷰. **codex성 게이트가 실질 결함 2건 적발**:
+- 배치 E: G18 userHandle 문자셋 사전검사가 패딩 포함 표준 base64url 정상 입력을 거부하는
+  **회귀** → 디코더 예외 기반으로 전환.
+- 배치 J: G21 MDS 신선도 검사가 인터페이스 미노출로 **프로덕션에서 실행 안 되는 죽은 코드**
+  → 인터페이스 default + MdsBlobClient Clock 배선으로 활성화.
+
+whole-branch 최종 리뷰(opus): **Ready to merge**. 크로스커팅 정합성 전부 통과
+(ErrorCode F006 충돌 없음, V2/V3 마이그레이션 정합, @Version 부재는 세션당 순차라 실위협 아님,
+동일 파일 다중 배치 상호 훼손 없음, 실행 경계 위반 없음). 배포 체크리스트 1건 격상:
+**forward-headers=framework는 앞단 프록시가 X-Forwarded-* 스트립을 전제**(followups 참조).
+
+미실행·후속: `docs/superpowers/followups/2026-07-04-zero-base-reaudit-followups.md`
+(F01 별도 spec, 미재발견 8건 맹점, 배치별 Minor·CI 대기·배포 조건).
+
 ### 구현 배치 (Task A~J, 파일·도메인 그룹)
 
 - **A** [admin operator]: AdminUserService 5건(G03/G04/G06/G08/G17) + InvitationService(G09) + PasswordResetService(G11)
