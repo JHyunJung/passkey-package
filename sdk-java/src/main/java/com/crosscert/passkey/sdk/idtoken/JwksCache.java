@@ -27,9 +27,18 @@ public class JwksCache {
      */
     private static final Duration STALE_GRACE = Duration.ofMinutes(10);
 
+    /** JWKS 응답 본문 크기 상한(바이트). 정상 JWKS는 수 KB 수준이라 넉넉히 잡는다. */
+    private static final int JWKS_SIZE_LIMIT_BYTES = 50 * 1024;
+
+    /** timeout 인자를 생략한 생성자가 쓰는 기본값(PasskeyClientConfig 기본값과 동일). */
+    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(10);
+
     private final URL jwksUrl;
     private final Duration ttl;
     private final Clock clock;
+    private final int connectTimeoutMs;
+    private final int readTimeoutMs;
     private final AtomicReference<Snapshot> snapshot = new AtomicReference<>();
 
     /** TTL 만료 시 동시 갱신을 1회로 직렬화(single-flight)하는 락. */
@@ -37,14 +46,39 @@ public class JwksCache {
     /** 직전 fetch 실패 시 이 시각 이전에는 재시도하지 않고 stale 스냅샷을 반환. */
     private volatile Instant nextRetryAfter = Instant.MIN;
 
+    /** 하위 호환: timeout 미지정 시 SDK 기본값(connect 3s/read 10s)을 적용. */
     public JwksCache(URI baseUrl, Duration ttl, Clock clock) {
+        this(baseUrl, ttl, clock, DEFAULT_CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT);
+    }
+
+    /**
+     * G19: JWKS fetch에 connect/read timeout을 강제한다. hung JWKS 엔드포인트가
+     * (timeout=0=무제한이던 이전 동작처럼) single-flight 락을 쥔 채 전체 id-token
+     * 검증을 무한 차단하지 않도록, 유한 시간 내에 fail-fast 시켜 stale-if-error
+     * 경로(F27)가 정상적으로 개입할 수 있게 한다.
+     */
+    public JwksCache(URI baseUrl, Duration ttl, Clock clock,
+                      Duration connectTimeout, Duration readTimeout) {
         this.ttl = ttl;
         this.clock = clock;
+        this.connectTimeoutMs = toMillisInt(connectTimeout, DEFAULT_CONNECT_TIMEOUT);
+        this.readTimeoutMs = toMillisInt(readTimeout, DEFAULT_READ_TIMEOUT);
         try {
             this.jwksUrl = baseUrl.resolve("/.well-known/jwks.json").toURL();
         } catch (Exception e) {
             throw new IllegalArgumentException("Bad baseUrl for JWKS", e);
         }
+    }
+
+    private static int toMillisInt(Duration d, Duration fallback) {
+        Duration effective = (d != null) ? d : fallback;
+        long ms = effective.toMillis();
+        if (ms <= 0) {
+            // 0 이하는 JWKSet.load 에서 "무제한"을 의미하므로 timeout 강제라는
+            // 목적을 무력화한다. 방어적으로 fallback을 적용한다.
+            ms = fallback.toMillis();
+        }
+        return (int) Math.min(ms, Integer.MAX_VALUE);
     }
 
     public JWKSet get() {
@@ -112,7 +146,7 @@ public class JwksCache {
 
     protected JWKSet fetch() {
         try {
-            return JWKSet.load(jwksUrl);
+            return JWKSet.load(jwksUrl, connectTimeoutMs, readTimeoutMs, JWKS_SIZE_LIMIT_BYTES);
         } catch (IOException | ParseException e) {
             throw new PasskeyIdTokenException("JWKS fetch failed: " + jwksUrl, e);
         }
