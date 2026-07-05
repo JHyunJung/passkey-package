@@ -220,5 +220,5 @@ try {
 
 `rp-app` 모듈이 이 SDK 의 레퍼런스 소비자다:
 - `rp-app/.../config/PasskeyClientConfiguration.java` — Spring `@Bean` 으로 `PasskeyClient` 와
-  `RegistrationRelayCodec` 구성(동적 API Key Supplier 핫리로드 포함).
+  `RegistrationRelayCodec` 구성(`apiKeySupplier` 는 기동 시 env 키를 1회 읽어 고정 공급).
 - `rp-app/.../web/WebAuthnController.java` — 등록/인증 4종 + 3-인자 `verifyIdToken`(iss/aud) 검증 호출 흐름.

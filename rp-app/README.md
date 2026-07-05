@@ -38,7 +38,7 @@ passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 �
 인증 마지막 단계(`/passkey/authenticate/finish`)에서 iss mismatch(P004)로 실패한다.
 
 자사 환경에서는 아래 설정을 주입한다:
-`passkey.base-url`, `passkey.api-key`(또는 `api-key-file`), `passkey.tenant-id`, `passkey.issuer-base`
+`passkey.base-url`, `passkey.api-key`, `passkey.tenant-id`, `passkey.issuer-base`
 (이때도 passkey-app 의 issuer-base 와 일치시킬 것).
 
 ## 4. 요청 흐름
@@ -65,7 +65,7 @@ passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 �
 | `rp.relay.secret` | 운영용 강한 키 주입 | 미설정 시 데모 키 → dev/local 외 프로필에선 RelayKeyGuard 가 기동 차단 |
 | `rp.cors.allowed-origins` | 자사 웹 origin 정확 목록 | 와일드카드·반사 금지 |
 | `rp-app.well-known.*` | 자사 앱 패키지/지문/App ID | 네이티브 앱 패스키 동작 조건 |
-| `passkey.api-key` / `api-key-file` | 발급받은 API Key | passkey-app 인증 |
+| `passkey.api-key` | 발급받은 API Key | passkey-app 인증 |
 | `passkey.tenant-id` / `issuer-base` | 자사 테넌트 값 | ID Token iss/aud 검증 |
 
 ## 6. 설정 레퍼런스
@@ -75,9 +75,7 @@ passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 �
 | 키 | 기본값 | 의미 |
 |---|---|---|
 | `passkey.base-url` | `http://localhost:8080` | passkey-app 주소 |
-| `passkey.api-key` | (빈 값) | X-API-Key |
-| `passkey.api-key-file` | (빈 값) | 키 파일 핫리로드 경로(설정 시 `api-key` 보다 우선) |
-| `passkey.api-key-reload` | `10s` | 키 파일 mtime 폴링 주기 |
+| `passkey.api-key` | (빈 값) | X-API-Key. 기동 시 1회 읽어 고정(교체 시 재기동) |
 | `passkey.tenant-id` | (빈 값) | 테넌트 UUID |
 | `passkey.issuer-base` | `http://localhost:8080` | ID Token iss prefix |
 | `passkey.connect-timeout` | `3s` | SDK connect 타임아웃 |
