@@ -56,7 +56,10 @@ public class IdTokenVerifier {
                 // 최신이 아닐 수 있다는 신호다. 1회 강제 refetch 후 재조회한다.
                 // JwksCache.getForceRefresh() 자체에 쿨다운이 있어 unknown-kid를
                 // 미끼로 한 refetch storm은 캐시 레벨에서 억제된다.
-                log.warn("id-token verify failed: reason=kid-miss kid={} action=force-refresh", kid);
+                // action=force-refresh-attempt: 쿨다운 중이면 JwksCache가 내부적으로
+                // 실제 refetch를 생략하고 스냅샷을 그대로 반환할 수 있어(F26 쿨다운),
+                // 이 로그 시점에는 아직 실제 refetch 여부가 확정되지 않는다.
+                log.warn("id-token verify failed: reason=kid-miss kid={} action=force-refresh-attempt", kid);
                 key = jwks.getForceRefresh().getKeyByKeyId(kid);
             }
             if (!(key instanceof RSAKey rsa)) {
