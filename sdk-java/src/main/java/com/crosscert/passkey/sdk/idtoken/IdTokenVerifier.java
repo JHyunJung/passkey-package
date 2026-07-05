@@ -51,6 +51,14 @@ public class IdTokenVerifier {
             }
             String kid = jwt.getHeader().getKeyID();
             JWK key = jwks.get().getKeyByKeyId(kid);
+            if (key == null) {
+                // F26: kid-miss는 캐시된 JWKS가 TTL 이내라도 (키 회전 직후처럼)
+                // 최신이 아닐 수 있다는 신호다. 1회 강제 refetch 후 재조회한다.
+                // JwksCache.getForceRefresh() 자체에 쿨다운이 있어 unknown-kid를
+                // 미끼로 한 refetch storm은 캐시 레벨에서 억제된다.
+                log.warn("id-token verify failed: reason=kid-miss kid={} action=force-refresh", kid);
+                key = jwks.getForceRefresh().getKeyByKeyId(kid);
+            }
             if (!(key instanceof RSAKey rsa)) {
                 log.warn("id-token verify failed: reason=unknown-kid kid={}", kid);
                 throw new PasskeyIdTokenException("Unknown or non-RSA kid: " + kid);
