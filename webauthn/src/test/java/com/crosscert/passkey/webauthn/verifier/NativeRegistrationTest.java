@@ -121,6 +121,43 @@ class NativeRegistrationTest {
     }
 
     @Test
+    void rejectsRawIdMismatchWithAttestedCredentialId() throws Exception {
+        // F31: 클라이언트 top-level rawId가 attestationObject 내부 attestedCredentialData의
+        // credentialId와 다르면 거부해야 한다 (인증 경로 rejectsCredentialIdMismatch와 대칭).
+        // authDataWithCredential/buildAuthData는 credId={0x01}(base64url "AQ")을 심는다.
+        String rpId = "example.com";
+        String origin = "https://example.com";
+        byte[] challenge = "reg-challenge".getBytes(StandardCharsets.UTF_8);
+
+        String clientData = "{\"type\":\"webauthn.create\",\"challenge\":\""
+                + B64.encodeToString(challenge) + "\",\"origin\":\"" + origin + "\"}";
+        byte[] clientDataBytes = clientData.getBytes(StandardCharsets.UTF_8);
+
+        byte[] rpIdHash = MessageDigest.getInstance("SHA-256").digest(rpId.getBytes(StandardCharsets.UTF_8));
+        byte[] cose = TestCose.es256();
+        byte[] authData = buildAuthData(rpIdHash, cose); // attested credentialId = {0x01}
+
+        byte[] ao = TestAttestationObject.none(authData);
+
+        // top-level rawId를 attested credentialId({0x01}, "AQ")와 다른 값({0x02}, "Ag")으로 조작.
+        String mismatchedRawId = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(new byte[]{0x02});
+        String credJson = "{\"id\":\"" + mismatchedRawId + "\",\"rawId\":\"" + mismatchedRawId + "\","
+                + "\"type\":\"public-key\",\"response\":{"
+                + "\"clientDataJSON\":\"" + B64.encodeToString(clientDataBytes) + "\","
+                + "\"attestationObject\":\"" + B64.encodeToString(ao) + "\"}}";
+
+        RegistrationInput input = new RegistrationInput(
+                credJson, challenge, Set.of(origin), rpId,
+                false, Set.of(COSEAlgorithm.ES256), Set.of("none"),
+                AttestationTrustPolicy.NONE_ONLY);
+
+        WebAuthnVerificationException ex = assertThrows(WebAuthnVerificationException.class,
+                () -> verifier.verifyRegistration(input));
+        assertEquals(WebAuthnVerificationException.Reason.MALFORMED_INPUT, ex.reason());
+    }
+
+    @Test
     void rejectsBackupStateWithoutEligibility() throws Exception {
         String rpId = "example.com";
         String origin = "https://example.com";

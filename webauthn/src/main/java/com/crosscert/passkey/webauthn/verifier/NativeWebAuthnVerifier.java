@@ -102,6 +102,13 @@ public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
         if (acd == null) {
             throw fail(Reason.MALFORMED_INPUT, "registration authData has no attestedCredentialData");
         }
+        // 클라이언트가 보낸 top-level rawId가 attested credentialId와 일치하는지 (WebAuthn §7.1).
+        // 인증 경로(verifyAuthentication의 rawId↔storedCredential 대조, defense-in-depth)와
+        // 대칭을 맞춘다 — 등록 경로만 이 대조가 빠져 있으면 클라이언트 구현 오류/변조를
+        // 조용히 통과시킨다 (codex F31).
+        if (!MessageDigest.isEqual(parsed.rawId(), acd.credentialId())) {
+            throw fail(Reason.MALFORMED_INPUT, "asserted rawId does not match attested credentialId");
+        }
         // 6) credential 알고리즘이 허용 목록에 있는지
         CoseKey credKey;
         try {
