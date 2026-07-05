@@ -8,24 +8,24 @@ import org.springframework.context.annotation.Configuration;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
-import java.time.Duration;
 import java.util.function.Supplier;
 
 /**
  * SDK {@link PasskeyClient} 빈 구성. 고객사 RP 의 SDK 연동 레퍼런스다.
- * baseUrl·apiKey 등 {@code passkey.*} 설정을 읽어 클라이언트를 만든다. API Key 는 핫리로드 가능한 공급자로 주입한다.
+ * baseUrl·apiKey 등 {@code passkey.*} 설정을 읽어 클라이언트를 만든다. API Key 는 기동 시 env(api-key)에서 읽어 고정 공급한다.
  */
 @Configuration
 public class PasskeyClientConfiguration {
 
     /**
-     * 재기동 없이 API Key 를 교체/회수 반영하기 위한 동적 키 소스.
-     * api-key-file 이 설정되면 그 파일을 핫리로드하고, 아니면 api-key(env)를 폴백한다.
+     * SDK 는 매 요청 get() 을 호출하지만(런타임 키 교체를 허용하는 계약), RP 레퍼런스는
+     * 기동 시 env(passkey.api-key)를 한 번 읽어 고정 공급한다. 따라서 키를 교체하려면
+     * PASSKEY_API_KEY(또는 application.yml 의 api-key)를 바꾼 뒤 애플리케이션을 재기동한다.
      */
     @Bean
     public Supplier<String> apiKeySupplier(PasskeyProperties props) {
-        Duration reload = (props.apiKeyReload() != null) ? props.apiKeyReload() : Duration.ofSeconds(10);
-        return new ReloadableApiKeySupplier(props.apiKeyFile(), reload, props.apiKey());
+        String key = props.apiKey();
+        return () -> key;
     }
 
     /**
