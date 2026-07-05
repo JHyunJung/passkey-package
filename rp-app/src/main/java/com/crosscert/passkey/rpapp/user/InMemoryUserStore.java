@@ -39,7 +39,11 @@ import java.util.concurrent.ConcurrentMap;
  * pending 항목이 끝없이 쌓여 힙 고갈 DoS 로 이어질 수 있다. 자사 DB 로 교체할 때도 동일한 문제가
  * 있으므로 반드시 만료(TTL)와 상한을 함께 적용해야 한다 — 이 클래스는 그 최소 예시로 TTL 기반
  * opportunistic cleanup + 상한 초과 시 가장 오래된 pending 제거(FIFO eviction)를 구현한다.
- * 확정(credentialId != null) 사용자는 이 정리 대상에서 제외된다.
+ * {@link ConcurrentHashMap} 기반의 best-effort 구현이라 다중 스레드에서 동시 유입이 몰리면
+ * 상한을 일시적으로 소폭 넘을 수 있다(엄격한 상한 보장이 필요하면 원자적 카운터나 DB 제약으로
+ * 교체 권장). 확정(credentialId != null) 사용자는 이 정리 대상에서 제외하는 것을 의도하나,
+ * 동시 confirm 과 완전히 원자적이지는 않다 — 다만 TTL(기본 30분)에 비해 confirm 은 즉시
+ * 일어나므로 실전에서 겹칠 가능성은 낮다.
  */
 @Component
 public class InMemoryUserStore {
@@ -155,12 +159,14 @@ public class InMemoryUserStore {
     }
 
     /**
-     * pending(미인증 begin) 항목 정리: DoS 방어(rp-pendingCap).
+     * pending(미인증 begin) 항목 정리: DoS 방어.
      *
      * <p>1) TTL 을 지난 pending 을 우선 제거한다(opportunistic — 별도 스케줄러 없이 매
      * createPending 호출 시점에 정리). 2) 그래도 pending 개수가 maxPending 이상이면 가장
-     * 오래된 pending(FIFO)부터 제거해 상한을 넘지 못하게 한다. 확정(credentialId != null)
-     * 사용자는 대상에서 제외된다.
+     * 오래된 pending(FIFO)부터 제거해 상한에 맞춘다. 확정(credentialId != null) 사용자는
+     * 대상에서 제외하도록 필터링하지만, 이 메서드는 잠금 없이(non-synchronized) 동작하는
+     * best-effort soft cap 이다 — 여러 스레드가 동시에 createPending 을 호출하면 카운트
+     * 확인과 eviction 사이에 경쟁이 생겨 maxPending 을 일시적으로 소폭 넘을 수 있다.
      */
     private void cleanupPending() {
         Instant now = Instant.now();

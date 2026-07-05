@@ -208,7 +208,7 @@ class InMemoryUserStoreTest {
     }
 
     /**
-     * rp-pendingCap 회귀 가드: 미인증 /register/begin 반복(pending 무한 누적)은 힙 고갈 DoS 로
+     * 회귀 가드: 미인증 /register/begin 반복(pending 무한 누적)은 힙 고갈 DoS 로
      * 이어진다. pending 개수가 상한(maxPending)을 넘으면 가장 오래된 pending 부터 제거되어
      * 맵이 상한 이상으로 자라지 않아야 한다. 확정(credentialId != null) 사용자는 보호 대상이
      * 아니므로 이 테스트에서 건드리지 않는다.
@@ -232,7 +232,7 @@ class InMemoryUserStoreTest {
     }
 
     /**
-     * rp-pendingCap: 확정된(credentialId != null) 사용자는 pending 상한 계산에서 제외되고
+     * 확정된(credentialId != null) 사용자는 pending 상한 계산에서 제외되고
      * evict 대상도 아니다 — 상한은 "미완료 등록"의 무한 누적만 막는 것이 목적이다.
      */
     @Test
@@ -254,7 +254,7 @@ class InMemoryUserStoreTest {
     }
 
     /**
-     * rp-pendingCap TTL: 만료 시간을 지난 pending 은 상한에 도달하지 않아도 다음 createPending
+     * TTL: 만료 시간을 지난 pending 은 상한에 도달하지 않아도 다음 createPending
      * 호출 시 정리(opportunistic cleanup)되어야 한다.
      */
     @Test
