@@ -51,6 +51,9 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 - Docker (Oracle + Redis 컨테이너 용)
 - Node.js 18+ (admin-ui 개발 시)
 
+> **운영 배포는 컨테이너로 합니다** — [`deploy/README.md`](deploy/README.md).
+> 아래는 로컬 개발 절차입니다(호스트 JDK + `gradlew bootRun`).
+
 ### 1) 인프라 기동
 
 ```bash
