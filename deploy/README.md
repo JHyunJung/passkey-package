@@ -74,13 +74,8 @@ docker build -t rp-app:0.0.1-SNAPSHOT      -f rp-app/Dockerfile .    # QA 만
 않는다.** 이 지시자를 넣으면 buildx 가 `docker.io` 에서 별도 프론트엔드 이미지를
 pull 하는데, 이 환경에서는 그 pull 이 `DeadlineExceeded` 로 실패해 Dockerfile
 파싱 이전 단계에서 빌드가 막힌다. 세 이미지는 `RUN --mount`, `COPY --link` 같은
-BuildKit 전용 문법을 쓰지 않으므로 지시자가 없어도 잃는 기능이 없다.
-
-> ⚠️ **현재 트리 상태**: `admin-app/Dockerfile`, `rp-app/Dockerfile` 은 이 원칙대로
-> syntax 지시자가 없다. 그러나 `passkey-app/Dockerfile` (아직 커밋 전, 작업 중)에는
-> 이 글을 쓰는 시점에 1번째 줄에 `# syntax=docker/dockerfile:1` 이 남아 있다 —
-> 위 원칙과 어긋나므로 커밋 전에 제거해야 한다. Task 9 는 Dockerfile 을 수정할
-> 권한이 없어 여기 기록만 남긴다.
+BuildKit 전용 문법을 쓰지 않으므로 지시자가 없어도 잃는 기능이 없다. 앞으로
+Dockerfile 을 수정할 때도 이 지시자를 다시 넣지 않도록 주의한다.
 
 ## 2. 이미지 전달
 
@@ -214,7 +209,7 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 - [ ] prod 에서 `qa` profile 미지정 (rp-app 배제)
 - [ ] `.env` 권한 600, `git status` 에 나타나지 않음
 - [ ] DNS: passkey 서브도메인이 LB 를 가리킴
-- [ ] `passkey-app/Dockerfile` 에 `# syntax=` 지시자가 남아 있지 않은지 확인 (§1 참고)
+- [ ] 세 Dockerfile 에 `# syntax=` 지시자가 재도입되지 않았는지 확인 (§1 참고)
 
 ## 7. 알려진 한계
 
