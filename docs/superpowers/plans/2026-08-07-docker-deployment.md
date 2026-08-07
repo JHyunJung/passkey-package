@@ -91,7 +91,8 @@ deploy/
 # 제외되면 그 안의 파일은 재포함 불가). 그래서 디렉터리가 아닌 '내용물'을 무시한다.
 deploy/*
 # 단, 컨테이너 배포 자산은 버전 관리한다
-# (기존 *.env 패턴은 'foo.env' 형태만 잡고 '.env' 자체는 못 잡으므로 명시)
+# (deploy/.env 는 상위 *.env 로도 잡히지만, ! 재포함 목록 옆에 두어
+#  "이것만은 예외가 아니다" 라는 의도를 명확히 한다)
 !deploy/docker-compose.yml
 !deploy/docker-compose.redis.yml
 !deploy/.env.example
@@ -140,11 +141,35 @@ deploy/*.jar
 docs/
 scripts/
 *.md
+
+# 시크릿 — .gitignore 로는 막을 수 없다(git 은 커밋만 막고 빌드 컨텍스트는
+# 그대로 실린다). 운영 서버에서 build 하면 그 서버의 deploy/.env 가 이미지
+# 레이어에 남으므로 여기서도 반드시 제외한다.
+**/.env
+**/.env.*
+!**/.env.example
+
 !admin-ui/package.json
 !admin-ui/package-lock.json
 ```
 
 `docs/`·`scripts/`·`*.md` 제외 주의: `admin-app/build.gradle.kts` 의 `processTestResources` 가 `scripts/bootstrap-schema.sql` 을 참조하지만 이는 **테스트 리소스**이고, 이미지 빌드는 `bootJar` 만 실행하므로 영향이 없다.
+
+**`.env` 제외는 보안상 필수다(실측 확인).** 이 규칙이 없으면
+`docker build` 시 `deploy/.env` 가 컨텍스트에 실려 이미지 안에서
+`cat /ctx/deploy/.env` 로 마스터키가 평문 노출된다. 구현 시 아래로 검증한다:
+
+```bash
+mkdir -p deploy && echo "MASTER_KEY=SECRET_TEST" > deploy/.env
+printf 'FROM busybox\nCOPY . /ctx\n' > .ctxtest.Dockerfile
+docker build -q -f .ctxtest.Dockerfile -t ctxtest . >/dev/null
+docker run --rm ctxtest sh -c 'cat /ctx/deploy/.env 2>/dev/null || echo "(없음 — 안전)"'
+# 기대: "(없음 — 안전)"
+rm -f deploy/.env .ctxtest.Dockerfile; rmdir deploy; docker rmi -f ctxtest
+```
+
+`.ctxtest.Dockerfile` 은 반드시 리포지토리 안에 만든다 — `/tmp` 에 두면 Docker 가
+`/tmp` 전체를 읽으려다 xattr 권한 오류로 실패한다.
 
 - [ ] **Step 5: 임시 파일 정리 후 커밋**
 
