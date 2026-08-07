@@ -223,8 +223,10 @@ deploy/ 가 통째로 gitignore 되어 컨테이너 배포 자산(compose/nginx/
 - [ ] **Step 1: Dockerfile 작성**
 
 ```dockerfile
-# syntax=docker/dockerfile:1
 # passkey-app — WebAuthn 등록/인증 서버. 무상태이므로 N개로 스케일 가능.
+# syntax 지시자는 쓰지 않는다 — BuildKit 전용 문법(RUN --mount, COPY --link 등)을
+# 사용하지 않으므로 docker/dockerfile 프론트엔드 이미지를 받아올 이유가 없다.
+# 실제로 이 환경에서는 그 pull 이 DeadlineExceeded 로 실패해 빌드가 막혔다.
 # 빌드 컨텍스트는 리포지토리 루트다(멀티모듈: core/webauthn 소스가 필요).
 #   docker build -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
 
@@ -316,8 +318,8 @@ Task 2 와 구조는 같지만 **admin-ui 빌드가 추가로 일어난다.** `b
 - [ ] **Step 1: Dockerfile 작성**
 
 ```dockerfile
-# syntax=docker/dockerfile:1
 # admin-app — 운영 콘솔 + Flyway 마이그레이션 책임. 1개만 기동한다(스케줄러 리스).
+# syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
 # admin-ui(React)는 build.gradle.kts 의 buildUi 태스크가 Node 18 을 자동
 # 다운로드해 빌드하고 jar 의 static/admin 에 번들한다 — 별도 Node 설치 불필요.
 #   docker build -t admin-app:0.0.1-SNAPSHOT -f admin-app/Dockerfile .
@@ -393,8 +395,8 @@ buildUi 태스크가 Node 18 을 자동 다운로드해 admin-ui 를 jar 의 sta
 - [ ] **Step 1: Dockerfile 작성**
 
 ```dockerfile
-# syntax=docker/dockerfile:1
 # rp-app — 고객사 연동 샘플 앱. QA 환경에서만 기동한다(prod 스택 제외).
+# syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
 # 고객사는 이 앱을 참고해 자사 서비스에 맞게 변형하므로 배포용 이미지가 아니다.
 #   docker build -t rp-app:0.0.1-SNAPSHOT -f rp-app/Dockerfile .
 
