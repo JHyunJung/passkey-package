@@ -1,6 +1,12 @@
 # 빌드 컨텍스트 축소 — 리포지토리 루트가 컨텍스트라 필수
 .git/
 .gradle/
+# 모듈 하위 .gradle/ 도 반드시 제외한다. admin-app 의 buildUi 태스크가 Node 를
+# admin-app/.gradle/nodejs/ 에 받는데, 호스트가 macOS 면 darwin-arm64 바이너리가
+# 들어간다. 이게 컨텍스트에 실리면 리눅스 컨테이너 안에서 Gradle 이 그걸
+# 재사용하려다 깨진 심볼릭 링크로 빌드가 실패한다(실측):
+#   Couldn't follow symbolic link '.../node-v18.20.0-darwin-arm64/bin/npx'
+**/.gradle/
 build/
 */build/
 **/node_modules/
