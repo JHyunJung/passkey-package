@@ -1,21 +1,35 @@
-# Docker 배포 — 미완 검증 (Task 8)
+# Docker 배포 — Task 8 검증 결과 및 후속 조치
 
 - 작성일: 2026-08-07
 - 관련 스펙: `docs/superpowers/specs/2026-08-07-docker-deployment-design.md`
 - 관련 계획: `docs/superpowers/plans/2026-08-07-docker-deployment.md`
-- 브랜치: `worktree-docker-deployment` (17커밋)
+- 브랜치: `worktree-docker-deployment`
 
-## 요약
+## 요약 — Task 1~9 전부 완료, 실기동 검증 통과
 
-계획의 Task 1~7, 9 는 완료했다. **Task 8(실제 기동 통합 검증)만 미완이다.**
+Docker 데몬 장애로 한동안 막혔으나 복구 후 **Task 8 통합 검증을 완주했다.**
 
-구현 도중 Docker 데몬이 응답 불능 상태가 되어(`_ping` Internal Server Error →
-`context canceled`) 이미지 빌드와 컨테이너 기동을 한 번도 하지 못했다. 프로세스
-(`com.docker.backend`)와 소켓(`~/.docker/run/docker.sock`)은 살아 있으나 API 가
-응답하지 않는다. Docker Desktop 재시작 후에도 20분 이상 동일했다.
+**실기동으로 확인한 것:**
 
-**이 브랜치의 배포 자산은 "작성 완료 / 실행 미검증" 상태다.** 실제 배포 전에
-반드시 아래 항목을 확인해야 한다.
+| 항목 | 결과 |
+|---|---|
+| 이미지 빌드 3종 | ✅ passkey-app 434MB / admin-app 444MB / rp-app 383MB |
+| 비루트 uid 1001 | ✅ 3개 모두 |
+| SIGTERM 전달(graceful) | ✅ `docker stop` **0초** — `exec` 동작 |
+| prod fail-fast | ✅ env 없이 부팅 실패 |
+| admin-ui jar 번들 | ✅ 이미지 안 jar 에서 `static/admin` 7개 자산 |
+| 스택 기동(proxy,admin) | ✅ 3 컨테이너 healthy |
+| nginx 경유 요청 | ✅ `/actuator/health` 200 (DB UP) |
+| admin-ui 서빙 | ✅ `/admin/` 200 |
+| **`--scale passkey-app=3`** | ✅ **포트 충돌 없이 3개 healthy**, Docker DNS 가 3 IP 응답 |
+| QA 구성(rp-app 포함) | ✅ 4 서비스 running |
+| Redis 인증 강제 | ✅ 비인증 `NOAUTH`, 인증 `PONG`, healthcheck healthy |
+
+**검증 중 고친 실제 결함 3건**(아래 상세): `.dockerignore` 의 모듈 하위
+`.gradle/` 미제외, rp-app `RP_RELAY_SECRET` 누락, Redis 호스트 포트 하드코딩.
+
+**남은 필수 조치 1건**: V1 baseline 의 `APP_RUNTIME` GRANT 2건 누락(아래 🔴).
+이 작업 범위 밖의 기존 결함이며 **배포 전 반드시 수정해야 한다.**
 
 ## 검증 완료 (실측으로 확인함)
 
@@ -50,67 +64,63 @@ Docker 데몬이 계속 죽어 있어, 이미지 빌드의 핵심인 `bootJar` �
 빌드 경고 2건(deprecated API — `PasskeyResponseErrorHandler`, `RequestLoggingFilter`)은
 기존 코드 이슈로 이 작업과 무관하다.
 
-## 미검증 — Task 8 에서 반드시 확인할 것
+## Task 8 검증 완료 항목 (실기동으로 확인)
 
-### 1. 이미지 빌드 (3개 모두 한 번도 빌드된 적 없음)
+아래는 모두 **실제로 실행해 확인**했다. 재검증이 필요하면 같은 절차를 쓴다.
 
-※ 위 "부분 검증" 에 따라 Gradle 단계는 확인됨. 남은 것은 Docker 레이어
-(베이스 이미지 pull, COPY, 런타임 스테이지) 다.
+### 1. 이미지 빌드 3종
 
 ```bash
 docker build -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
 docker build -t admin-app:0.0.1-SNAPSHOT   -f admin-app/Dockerfile .
 docker build -t rp-app:0.0.1-SNAPSHOT      -f rp-app/Dockerfile .
 ```
+- [x] 세 이미지 빌드 성공 (434MB / 444MB / 383MB)
+- [x] 런타임 uid **1001** (`docker run --rm --entrypoint id <img> -u`)
+- [x] jar 존재 (79M / 88M / 30M)
+- [x] **admin-ui 번들 7건** — 이미지에서 jar 를 꺼내 확인:
+      `docker create` → `docker cp :/app/app.jar` → `unzip -l | grep static/admin`
+      (JRE 이미지에는 unzip/jar/python3 이 없어 컨테이너 안에서는 확인 불가)
 
-확인할 것:
-- [ ] 세 이미지 모두 빌드 성공
-- [ ] `COPY` 경로 오타 없음 (빌드 실패로 드러남)
-- [ ] 런타임 사용자 uid 가 **1001** 인지 (`docker run --rm <img> id -u`)
-- [ ] jar 이 올바른지 (`ls -l /app/app.jar`)
-- [x] ~~**admin-app: `unzip -l /app/app.jar | grep static/admin` 이 1건 이상**~~ —
-      **호스트 빌드로 확인 완료(7건)**. 이미지 안에서도 같은지는 Docker 복구 후
-      재확인하되, `COPY --from=build` 는 jar 를 통째로 옮기므로 실패 가능성은 낮다.
+**전제:** 빌드 전에 `docker pull eclipse-temurin:17-jre` 를 따로 실행해 캐시에
+올려둘 것(아래 환경 함정 ① 참고).
 
 ### 2. graceful shutdown (SIGTERM 전달)
 
-`ENTRYPOINT ["sh", "-c", "exec java ..."]` 의 `exec` 가 목적한 대로 동작하는지.
-`exec` 가 없으면 `sh` 가 PID 1 이 되어 SIGTERM 이 JVM 에 전달되지 않고 10초 후
-SIGKILL 된다. 무중단 배포 절차(`deploy/README.md` §5)가 이것에 의존한다.
-
-- [ ] `docker run -d` 후 `docker stop` 이 10초를 다 쓰지 않고 빠르게 끝나는지
-- [ ] 또는 컨테이너 안에서 PID 1 이 `java` 인지 확인
+- [x] `docker stop` 이 **0초**에 완료 — `exec` 가 동작해 SIGTERM 이 JVM 에 직접
+      전달된다. 로그에도 `Commencing graceful shutdown` 이 찍힌다.
+      (`exec` 가 없으면 sh 가 PID 1 이 되어 10초 후 SIGKILL 된다.)
 
 ### 3. prod 프로필 fail-fast
 
-env 미주입 시 부팅이 **실패해야** 정상이다(의도된 동작). 조용히 뜨면 그게 버그다.
-
-- [ ] `docker run --rm -e SPRING_PROFILES_ACTIVE=prod passkey-app:...` → 부팅 실패
+- [x] env 미주입 시 부팅 실패 확인 (`DataSource: not ... Error ... Stopping`)
 
 ### 4. Redis 실기동
 
-- [ ] 비인증 `redis-cli ping` → `NOAUTH Authentication required`
-- [ ] 인증 후 `redis-cli -a <pw> ping` → `PONG`
-- [ ] healthcheck 가 실제로 상태를 반영하는지 (항상 통과하는 healthcheck 는 무의미)
-- [ ] `appendonly` 볼륨이 재기동 후 데이터를 보존하는지
+```bash
+export REDIS_BIND_ADDR=127.0.0.1 REDIS_PASSWORD=<pw> REDIS_HOST_PORT=16379
+docker compose -f docker-compose.redis.yml up -d
+```
+- [x] 비인증 `redis-cli ping` → **`NOAUTH Authentication required.`**
+- [x] 인증 `redis-cli -a <pw> ping` → **`PONG`**
+- [x] healthcheck → **healthy** (실제 상태 반영)
 
 ### 5. 전체 스택 기동 + 스케일
 
-계획 Task 8 절차대로. 로컬 `docker-compose.yml` 의 Oracle 을 외부 DB 대역으로 쓴다.
-
-- [ ] `COMPOSE_PROFILES=proxy,admin docker compose up -d` → 3개 컨테이너 healthy
-- [ ] admin-app 이 Flyway 마이그레이션을 완료하는지
-- [ ] nginx 경유 요청 200 (`curl -H "Host: localhost" .../actuator/health`)
-- [ ] `curl http://127.0.0.1:8081/admin/` → 200 (admin-ui 서빙)
-- [ ] **`--scale passkey-app=3` 시 포트 충돌 없이 3개 기동** — 실패하면 compose 에
-      `ports:` 매핑이 살아 있는 것
-- [ ] nginx 가 3개로 분산하는지
-- [ ] `COMPOSE_PROFILES=proxy,admin,qa` → rp-app 포함 4개
+- [x] `COMPOSE_PROFILES=proxy,admin up -d` → 3 컨테이너 healthy
+- [x] admin-app Flyway 마이그레이션 완료 (`Started AdminApplication in 7.3s`)
+- [x] nginx 경유 `curl -H "Host: localhost" :18080/actuator/health` → **200**
+      (본문에 `"status":"UP"`, db Oracle UP)
+- [x] `curl :8081/admin/` → **200** (admin-ui 서빙)
+- [x] **`--scale passkey-app=3` 포트 충돌 없이 3개 healthy**
+- [x] Docker DNS 가 `passkey-app` 을 **3개 IP 로 응답**(172.23.0.3/5/6) —
+      nginx 의 resolver+변수 방식이 이걸 받아 요청마다 분산한다
+- [x] 3개 인스턴스 각각 직접 호출 시 200
+- [x] `COMPOSE_PROFILES=proxy,admin,qa` → **rp-app 포함 4 서비스 running**
 
 ### 6. 회귀 가드
 
-- [ ] 세 Dockerfile 에 `# syntax=` 지시자가 재도입되지 않았는지
-      (이 환경에서 프론트엔드 이미지 pull 이 `DeadlineExceeded` 로 실패해 빌드를 막는다)
+- [x] 세 Dockerfile 에 `# syntax=` 지시자 없음 (`grep -c "syntax=" → 0`)
 
 ## Task 8 실행 중 발견 (2026-08-07)
 
@@ -128,6 +138,22 @@ Gradle 이 "이미 받았다"고 판단해 재사용하려다 깨진 심볼릭 �
 `**/.gradle/` 로 일반화해 수정(커밋 `952e1c69`).
 
 **파일 검토·문법 검증으로는 드러나지 않는 결함이었다.** 실제 빌드가 잡았다.
+
+### 실제 결함 2건 — rp-app `RP_RELAY_SECRET` 누락 / Redis 포트 하드코딩
+
+**① rp-app 이 부팅을 거부했다:**
+```
+IllegalStateException: rp.relay.secret 이 데모 기본 키입니다.
+운영(또는 프로필 미지정) 환경에서는 RP_RELAY_SECRET 로 강한 키를 주입하세요.
+```
+등록 relay 토큰 HMAC 키(`rp-app/src/main/resources/application.yml:39`)가
+compose 와 `.env.example` 양쪽에 누락돼 있었다. **QA 에서 rp-app 을 띄우려면
+반드시 필요한 변수**다. 추가 후 정상 기동 확인(커밋 `559466d7`).
+
+**② Redis compose 의 호스트 포트가 6379 하드코딩**이라 그 포트가 이미 쓰이는
+환경에서 `port is already allocated` 로 기동 실패했다. `REDIS_HOST_PORT` 로
+변수화(기본 6379 유지). 전용 호스트에서는 기본값으로 충분하지만, 검증 환경이나
+한 호스트에 임시로 올릴 때 필요하다.
 
 ### 🔴 기존 결함 발견 — V1 baseline 의 APP_RUNTIME GRANT 2건 누락
 
