@@ -86,7 +86,10 @@ deploy/
 
 ```gitignore
 # bootJar 배포 산출물(루트 deploy/ 로 모음)
-deploy/
+# 주의: 'deploy/' 처럼 디렉터리 자체를 무시하면 git 이 그 안을 순회하지 않아
+# 아래 '!' 예외 규칙이 전혀 동작하지 않는다(gitignore(5): 부모 디렉터리가
+# 제외되면 그 안의 파일은 재포함 불가). 그래서 디렉터리가 아닌 '내용물'을 무시한다.
+deploy/*
 # 단, 컨테이너 배포 자산은 버전 관리한다
 # (기존 *.env 패턴은 'foo.env' 형태만 잡고 '.env' 자체는 못 잡으므로 명시)
 !deploy/docker-compose.yml
@@ -94,9 +97,17 @@ deploy/
 !deploy/.env.example
 !deploy/README.md
 !deploy/nginx/
-!deploy/nginx/*
 deploy/.env
 ```
+
+**`deploy/` 가 아니라 `deploy/*` 여야 하는 이유(실측 확인):** `deploy/` 로
+디렉터리 노드를 무시하면 git 이 순회 단계에서 통째로 잘라내므로 이후의 `!`
+패턴이 평가조차 되지 않는다. 실제로 `deploy/` 를 쓰고 Step 3 를 실행하면
+`.gitignore:20:deploy/` 로 여전히 차단된다. `deploy/*` 는 내용물만 무시하므로
+git 이 디렉터리 안으로 들어가 negation 을 적용할 수 있다.
+
+`!deploy/nginx/` 로 디렉터리를 재포함하면 그 아래 파일은 별도 패턴이 다시
+제외하지 않는 한 자동으로 추적 대상이 되므로 `!deploy/nginx/*` 는 불필요하다.
 
 - [ ] **Step 3: 규칙이 의도대로 동작하는지 검증**
 
