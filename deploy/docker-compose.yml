@@ -101,4 +101,7 @@ services:
       PASSKEY_ISSUER_BASE: ${ISSUER_BASE}
       PASSKEY_API_KEY: ${RP_API_KEY}
       PASSKEY_TENANT_ID: ${RP_TENANT_ID}
+      # 등록 relay 토큰 HMAC 키. rp-app 은 데모 기본값이면 부팅을 거부한다
+      # (IllegalStateException: rp.relay.secret 이 데모 기본 키입니다).
+      RP_RELAY_SECRET: ${RP_RELAY_SECRET}
       JAVA_OPTS: ${RP_JAVA_OPTS:--XX:MaxRAMPercentage=75}
