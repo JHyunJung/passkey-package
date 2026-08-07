@@ -16,3 +16,13 @@ scripts/
 *.md
 !admin-ui/package.json
 !admin-ui/package-lock.json
+
+# 시크릿 — .gitignore 는 git 만 막고 Docker 빌드 컨텍스트는 못 막는다.
+# deploy/.env(DB 비밀번호, PASSKEY_KEY_ENVELOPE_MASTER_KEY 등)가 그대로 있으면
+# `docker build` 시 컨텍스트에 실려 이미지 레이어에 평문으로 남는다.
+# .env.example 은 템플릿이라 시크릿이 아니지만 이미지 빌드에 필요하지도
+# 않으므로 굳이 재포함하지 않고 전부 제외한다.
+.env
+**/.env
+*.env
+**/*.env
