@@ -145,12 +145,20 @@ scripts/
 # 시크릿 — .gitignore 로는 막을 수 없다(git 은 커밋만 막고 빌드 컨텍스트는
 # 그대로 실린다). 운영 서버에서 build 하면 그 서버의 deploy/.env 가 이미지
 # 레이어에 남으므로 여기서도 반드시 제외한다.
+#
+# 패턴이 세 갈래인 이유(전부 실측 확인):
+#   .env / **/.env      → 이름이 정확히 '.env' 인 파일
+#   *.env / **/*.env    → 'prod.env' 처럼 .env 로 끝나는 파일
+#   .env.* / **/.env.*  → '.env.local', '.env.production' 처럼 접미사가 붙은 형태.
+#                         앞 두 갈래로는 안 잡힌다 — 이게 없으면 실제로 유출된다.
 # .env.example 은 시크릿이 아니지만 Gradle 빌드도 Dockerfile COPY 도 참조하지
 # 않으므로(확인함) 재포함하지 않고 함께 제외한다 — 규칙을 단순하게 유지한다.
 .env
 **/.env
 *.env
 **/*.env
+.env.*
+**/.env.*
 
 !admin-ui/package.json
 !admin-ui/package-lock.json
@@ -163,12 +171,23 @@ scripts/
 `cat /ctx/deploy/.env` 로 마스터키가 평문 노출된다. 구현 시 아래로 검증한다:
 
 ```bash
-mkdir -p deploy && echo "MASTER_KEY=SECRET_TEST" > deploy/.env
+# 시크릿 파일의 여러 형태를 한 번에 검증한다 — 하나만 테스트하면 접미사
+# 형태(.env.local 등)가 뚫리는 것을 놓친다(실제로 놓쳤던 항목).
+mkdir -p deploy rp-app
+for f in deploy/.env deploy/.env.local deploy/.env.production deploy/prod.env .env rp-app/.env.staging; do
+  echo "K=LEAK" > "$f"
+done
 printf 'FROM busybox\nCOPY . /ctx\n' > .ctxtest.Dockerfile
 docker build -q -f .ctxtest.Dockerfile -t ctxtest . >/dev/null
-docker run --rm ctxtest sh -c 'cat /ctx/deploy/.env 2>/dev/null || echo "(없음 — 안전)"'
-# 기대: "(없음 — 안전)"
-rm -f deploy/.env .ctxtest.Dockerfile; rmdir deploy; docker rmi -f ctxtest
+docker run --rm ctxtest sh -c 'n=0; for f in /ctx/.env /ctx/deploy/.env /ctx/deploy/.env.local /ctx/deploy/.env.production /ctx/deploy/prod.env /ctx/rp-app/.env.staging; do [ -e "$f" ] && { echo "!!! 유출 $f"; n=1; }; done; [ $n -eq 0 ] && echo "전부 차단됨 — 안전"'
+# 기대: "전부 차단됨 — 안전"
+
+# 같은 이미지로 빌드 필수 파일 회귀도 확인한다
+docker run --rm ctxtest sh -c 'm=0; for f in gradlew gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties settings.gradle.kts build.gradle.kts gradle/libs.versions.toml admin-ui/package.json admin-ui/package-lock.json admin-ui/src admin-ui/index.html admin-ui/vite.config.ts admin-app/build.gradle.kts core/src/main passkey-app/src/main rp-app/src/main webauthn/src/main sdk-java/src/main lombok.config; do [ -e "/ctx/$f" ] || { echo "MISSING $f"; m=1; }; done; [ $m -eq 0 ] && echo "18종 전부 존재 — 빌드 안전"'
+# 기대: "18종 전부 존재 — 빌드 안전"
+
+rm -f deploy/.env deploy/.env.local deploy/.env.production deploy/prod.env .env rp-app/.env.staging .ctxtest.Dockerfile
+rmdir deploy 2>/dev/null; docker rmi -f ctxtest
 ```
 
 `.ctxtest.Dockerfile` 은 반드시 리포지토리 안에 만든다 — `/tmp` 에 두면 Docker 가

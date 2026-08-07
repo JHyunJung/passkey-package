@@ -20,9 +20,17 @@ scripts/
 # 시크릿 — .gitignore 는 git 만 막고 Docker 빌드 컨텍스트는 못 막는다.
 # deploy/.env(DB 비밀번호, PASSKEY_KEY_ENVELOPE_MASTER_KEY 등)가 그대로 있으면
 # `docker build` 시 컨텍스트에 실려 이미지 레이어에 평문으로 남는다.
-# .env.example 은 템플릿이라 시크릿이 아니지만 이미지 빌드에 필요하지도
-# 않으므로 굳이 재포함하지 않고 전부 제외한다.
+#
+# 패턴이 세 갈래인 이유(전부 실측으로 확인):
+#   .env / **/.env      → 이름이 정확히 '.env' 인 파일 (루트 / 하위 전 경로)
+#   *.env / **/*.env    → 'prod.env' 처럼 .env 로 끝나는 파일
+#   .env.* / **/.env.*  → '.env.local', '.env.production' 처럼 접미사가 붙은 형태.
+#                         위 두 갈래로는 안 잡힌다 — 이게 없으면 실제로 유출된다.
+# .env.example 은 시크릿이 아니지만 Gradle 빌드도 Dockerfile COPY 도 참조하지
+# 않으므로 재포함하지 않고 함께 제외한다(규칙을 단순하게 유지).
 .env
 **/.env
 *.env
 **/*.env
+.env.*
+**/.env.*
