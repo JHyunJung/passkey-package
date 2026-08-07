@@ -129,6 +129,52 @@ Gradle 이 "이미 받았다"고 판단해 재사용하려다 깨진 심볼릭 �
 
 **파일 검토·문법 검증으로는 드러나지 않는 결함이었다.** 실제 빌드가 잡았다.
 
+### 🔴 기존 결함 발견 — V1 baseline 의 APP_RUNTIME GRANT 2건 누락
+
+**이 작업(컨테이너화) 범위 밖의 기존 문제이며, 배포 전 반드시 수정해야 한다.**
+
+`V1__baseline_schema.sql` 의 GRANT 섹션(123건)에서 두 테이블이 `APP_RUNTIME` 에
+누락돼 있다:
+
+| 테이블 | APP_ADMIN | APP_RUNTIME |
+|---|---|---|
+| `security_incident` | ✅ SELECT/INSERT/UPDATE | ❌ **없음** |
+| `mds_sync_history` | ✅ (seq 는 RUNTIME 에 있음) | ❌ **없음** |
+
+`mds_sync_history_seq` 는 `APP_RUNTIME` 에 GRANT 돼 있는데 **정작 테이블은 빠져
+있다** — 시퀀스만 주고 테이블을 안 준 형태라 단순 누락으로 보인다.
+
+**증상:** passkey-app 이 `APP_RUNTIME_USER` 로 접속하고 `hibernate.ddl-auto: validate`
+(`core/src/main/resources/application-common.yml:31`)를 쓰므로, 엔티티는 `core` 에
+있어 스캔되는데 권한이 없어 테이블이 안 보인다:
+```
+Schema-validation: missing table [security_incident]
+```
+**부팅이 아예 실패한다.**
+
+**왜 지금까지 안 드러났나(추정):** 로컬 dev 는 볼륨을 재생성하지 않고 오래 써온
+DB 를 쓰거나, `APP_OWNER` 로 접속해 admin-app 만 띄우는 흐름이 많았을 수 있다.
+**빈 스키마 + `APP_RUNTIME_USER` + prod/dev 조합에서는 재현된다**(이번에 재현함).
+dev 프로필도 같은 유저·같은 validate 설정을 쓰므로 동일하게 실패할 것이다.
+
+**임시 조치(검증용으로만 적용함):**
+```sql
+GRANT SELECT, INSERT ON security_incident TO APP_RUNTIME;
+GRANT SELECT, INSERT ON mds_sync_history  TO APP_RUNTIME;
+```
+
+**근본 수정 필요:** V1 은 이미 배포된 마이그레이션이라 수정하면 체크섬이 깨진다.
+신규 마이그레이션(V4)으로 GRANT 를 추가하는 것이 맞다. 다만 **passkey-app 이
+이 두 테이블을 정말 읽어야 하는지** 먼저 확인할 것 — 필요 없다면 GRANT 대신
+엔티티 스캔 범위를 좁히는 쪽이 최소권한 원칙에 맞는다.
+
+권한 누락 전수 조사 방법:
+```sql
+SELECT t.table_name FROM user_tables t
+WHERE NOT EXISTS (SELECT 1 FROM user_tab_privs_made p
+                  WHERE p.table_name = t.table_name AND p.grantee = 'APP_RUNTIME');
+```
+
 ### 배포 순서 의존성 — 최초 기동 시 passkey-app 이 먼저 실패한다
 
 `COMPOSE_PROFILES=proxy,admin docker compose up -d` 로 한 번에 띄우면 passkey-app 이
