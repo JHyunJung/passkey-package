@@ -34,3 +34,7 @@ scripts/
 **/*.env
 .env.*
 **/.env.*
+# 이 프로젝트의 또 다른 시크릿 규약 — .gitignore 에도 같은 패턴이 있다.
+# 앱 설정에 DB 비밀번호 등이 들어가므로 이미지에 실리면 안 된다.
+application-secret*.yml
+**/application-secret*.yml

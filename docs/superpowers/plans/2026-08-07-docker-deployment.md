@@ -159,6 +159,9 @@ scripts/
 **/*.env
 .env.*
 **/.env.*
+# 이 프로젝트의 또 다른 시크릿 규약 — .gitignore 에도 같은 패턴이 있다
+application-secret*.yml
+**/application-secret*.yml
 
 !admin-ui/package.json
 !admin-ui/package-lock.json
