@@ -45,8 +45,15 @@ logs/
 *.log
 
 # Secrets
+# '*.env' 는 '.env' 와 'prod.env' 를 잡지만 '.env.production' 같은 접미사
+# 형태는 못 잡는다(실측 확인 — 이전에 .env.production / rp-app/.env.staging 이
+# 추적 대상으로 남아 있었다). 접미사 형태를 일반화해 함께 막는다.
 *.env
-*.env.local
+.env.*
+**/.env.*
+# 단 .env.example 은 시크릿이 아닌 템플릿이므로 커밋한다
+!.env.example
+!**/.env.example
 application-secret*.yml
 
 # Phase 2 admin-ui build outputs
