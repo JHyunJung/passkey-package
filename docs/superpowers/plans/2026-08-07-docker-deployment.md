@@ -145,9 +145,12 @@ scripts/
 # 시크릿 — .gitignore 로는 막을 수 없다(git 은 커밋만 막고 빌드 컨텍스트는
 # 그대로 실린다). 운영 서버에서 build 하면 그 서버의 deploy/.env 가 이미지
 # 레이어에 남으므로 여기서도 반드시 제외한다.
+# .env.example 은 시크릿이 아니지만 Gradle 빌드도 Dockerfile COPY 도 참조하지
+# 않으므로(확인함) 재포함하지 않고 함께 제외한다 — 규칙을 단순하게 유지한다.
+.env
 **/.env
-**/.env.*
-!**/.env.example
+*.env
+**/*.env
 
 !admin-ui/package.json
 !admin-ui/package-lock.json
