@@ -112,6 +112,80 @@ env 미주입 시 부팅이 **실패해야** 정상이다(의도된 동작). 조
 - [ ] 세 Dockerfile 에 `# syntax=` 지시자가 재도입되지 않았는지
       (이 환경에서 프론트엔드 이미지 pull 이 `DeadlineExceeded` 로 실패해 빌드를 막는다)
 
+## Task 8 실행 중 발견 (2026-08-07)
+
+### 실제 결함 1건 — `.dockerignore` 모듈 하위 `.gradle/` 미제외
+
+admin-app 이미지 빌드가 실패했다:
+```
+Execution failed for task ':admin-app:nodeSetup'.
+> Couldn't follow symbolic link
+  '/src/admin-app/.gradle/nodejs/node-v18.20.0-darwin-arm64/bin/npx'
+```
+기존 규칙이 루트 `.gradle/` 만 제외해, 호스트(macOS)에서 `bootJar` 를 돌릴 때
+생긴 **darwin-arm64 Node 바이너리**가 컨텍스트에 실려 리눅스 컨테이너로 들어갔다.
+Gradle 이 "이미 받았다"고 판단해 재사용하려다 깨진 심볼릭 링크에서 실패한다.
+`**/.gradle/` 로 일반화해 수정(커밋 `952e1c69`).
+
+**파일 검토·문법 검증으로는 드러나지 않는 결함이었다.** 실제 빌드가 잡았다.
+
+### 배포 순서 의존성 — 최초 기동 시 passkey-app 이 먼저 실패한다
+
+`COMPOSE_PROFILES=proxy,admin docker compose up -d` 로 한 번에 띄우면 passkey-app 이
+반드시 몇 차례 실패하고 재시작한다:
+```
+Schema-validation: missing table [security_incident]
+Schema-validation: missing column [mfa_failed_count] in table [admin_user]
+```
+**admin-app 이 Flyway 마이그레이션을 끝내기 전에 passkey-app 이 스키마를 검증**하기
+때문이다. `restart: unless-stopped` 덕분에 admin-app 이 마이그레이션을 끝내면
+passkey-app 도 결국 올라오지만, **최초 기동 로그에 에러가 찍히는 것은 정상 동작**이다.
+
+빈 스키마에 처음 올릴 때는 admin-app 을 먼저 기동해 healthy 를 확인한 뒤
+passkey-app 을 띄우는 편이 로그가 깨끗하다:
+```bash
+COMPOSE_PROFILES=admin docker compose up -d admin-app   # 마이그레이션 수행
+# healthy 확인 후
+COMPOSE_PROFILES=proxy,admin docker compose up -d
+```
+`deploy/README.md` 에 반영할 값어치가 있다.
+
+### 검증 중 만난 prod 안전장치 2건 (앱의 의도된 동작 — 결함 아님)
+
+**① `MASTER_KEY` 는 정확히 32바이트여야 한다.** 33바이트를 넣었더니
+`KeyEnvelope` 생성자에서 부팅이 실패했다. `openssl rand -base64 32` 로 만든 값
+(base64 44자)을 쓴다. 계획서에 넣었던 예시 값이 33바이트라 잘못됐다.
+
+**② `ADMIN_INVITE_BASE_URL` 이 localhost 기본값이면 prod 는 부팅을 거부한다.**
+```
+IllegalStateException: prod profile requires admin.invite.base-url to be set to
+the real front-end origin — refusing to boot with the localhost dev default
+(http://localhost:5173). Set ADMIN_INVITE_BASE_URL.
+```
+초대 메일의 수락 링크가 localhost 로 나가는 사고를 막는 fail-closed 가드다.
+`.env.example` 의 값을 반드시 실제 프론트엔드 origin 으로 바꿔야 한다.
+
+### 환경 함정 2건 (코드 결함 아님)
+
+**① 베이스 이미지 pull 이 빌드 중에는 타임아웃된다.** Docker VM 내부 네트워크가
+느려 `FROM eclipse-temurin:17-jre` 단계에서 `DeadlineExceeded` 로 실패했다.
+호스트 `curl registry-1.docker.io` 는 0.68초로 정상이었다 — VM 내부만 느리다.
+**해결: 빌드 전에 `docker pull eclipse-temurin:17-jre` 를 따로 실행**해 캐시에
+올려두면 빌드가 그 단계를 건너뛴다. 배포 문서 트러블슈팅에 넣을 값어치가 있다.
+
+**② dev/local 시드가 남은 DB 에 prod 프로필을 붙이면 Flyway 가 거부한다.**
+```
+Detected applied migration not resolved locally: seed local tenant.
+Detected applied migration not resolved locally: seed operators.
+```
+prod 는 `classpath:db/migration,classpath:db/prod` 만 읽으므로 dev 시드(`R__`)를
+찾지 못해 `validate-on-migrate: true` 가 실패시킨다. **이는 prod 프로필의 의도된
+동작이다**(스키마 오염 방지). 검증 시에는 볼륨까지 재생성해야 한다:
+`docker compose -p passkey2 down -v && up -d` → `wait-for-oracle` → `run-bootstrap`.
+
+실 운영 DB 에 이 문제가 있다면 `flyway repair` 로 해소하되, **왜 dev 시드가
+운영 DB 에 적용됐는지**를 먼저 확인해야 한다.
+
 ## 배경: 이 구현에서 겪은 함정
 
 향후 유사 작업에서 반복하지 않도록 기록한다.

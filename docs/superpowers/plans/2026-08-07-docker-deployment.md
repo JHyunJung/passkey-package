@@ -966,12 +966,21 @@ DB_ADMIN_PASSWORD=admin_pw
 DB_OWNER_PASSWORD=app_owner_pw
 REDIS_HOST=host.docker.internal
 REDIS_PASSWORD=
-MASTER_KEY=dGVzdC1tYXN0ZXIta2V5LWZvci1sb2NhbC12ZXJpZnkxMg==
 PASSKEY_SERVER_NAME=localhost
 ISSUER_BASE=http://localhost
 NGINX_HOST_PORT=18080
+# prod 는 localhost 기본값을 거부한다(초대 링크가 localhost 로 나가는 사고 방지).
+# 검증용이라도 localhost 가 아닌 값을 넣어야 부팅한다.
+ADMIN_INVITE_BASE_URL=https://admin.verify.example.com
 EOF
+
+# MASTER_KEY 는 반드시 정확히 32바이트여야 한다(33바이트를 넣으면 KeyEnvelope
+# 생성자에서 부팅 실패). 하드코딩하지 말고 생성해서 넣는다.
+echo "MASTER_KEY=$(openssl rand -base64 32)" >> .env
 ```
+
+**검증 전 확인:** `grep '^MASTER_KEY=' .env | sed 's/^MASTER_KEY=//' | tr -d '\n' | base64 -d | wc -c`
+가 **32** 여야 한다.
 
 위 비밀번호는 실측값이다 — `scripts/bootstrap-schema.sql:72` 가
 `APP_RUNTIME_USER IDENTIFIED BY runtime_pw`, `:82` 가
