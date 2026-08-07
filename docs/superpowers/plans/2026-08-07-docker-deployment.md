@@ -394,6 +394,25 @@ git commit -m "feat(deploy): rp-app 멀티스테이지 Dockerfile 추가 (QA 전
 - Consumes: Task 2·4 의 이미지가 노출하는 포트 (passkey-app:8080, rp-app:9090)
 - Produces: compose 서비스명 `passkey-app` / `rp-app` 으로 라우팅하는 nginx 설정. Task 6 의 compose 가 이 파일을 `/etc/nginx/conf.d/default.conf` 로 마운트한다.
 
+**⚠️ 실측으로 확정된 제약 (이 계획 작성 중 검증함):**
+
+`upstream` 블록이나 `proxy_pass` 에 호스트명을 **직접** 쓰면 nginx 는 **기동
+시점에** DNS 를 해석하고, 대상이 없으면 다음과 같이 기동 자체가 실패한다:
+
+```
+[emerg] host not found in upstream "passkey-app:8080" in /etc/nginx/conf.d/default.conf:1
+nginx: configuration file /etc/nginx/nginx.conf test failed
+```
+
+`depends_on` 이 있어도 이는 운영상 실질적 위험이다 — passkey-app 이 전부 죽은
+상태에서 nginx 가 재기동되면 nginx 도 뜨지 못하고, `restart: unless-stopped`
+때문에 **무한 재시작 루프**에 빠진다. rp-app 은 prod 에 아예 없으므로 더
+확실히 실패한다.
+
+따라서 **두 서버 블록 모두 `resolver` + 변수 방식(지연 해석)을 쓴다.** 변수를
+쓰면 nginx 가 요청 시점에 이름을 해석하므로 백엔드 부재가 기동을 막지 않고
+502 를 반환할 뿐이다.
+
 - [ ] **Step 1: nginx.conf 작성**
 
 ```nginx
@@ -403,19 +422,25 @@ git commit -m "feat(deploy): rp-app 멀티스테이지 Dockerfile 추가 (QA 전
 # WebAuthn rpId 는 도메인 기준으로 묶이고 포트를 무시하므로, passkey 서버와
 # RP 서버를 포트가 아닌 서브도메인으로 분리해야 신뢰 경계가 명확해진다
 # (docs/single-instance-deployment.md 참고).
-
-upstream passkey_backend {
-    # compose 서비스명. Docker 내장 DNS 가 --scale 로 뜬 N개 컨테이너 IP
-    # 전부로 응답하므로, 스케일을 바꿔도 이 설정은 수정할 필요가 없다.
-    server passkey-app:8080;
-}
+#
+# proxy_pass 에 호스트명을 직접 쓰지 않고 resolver + 변수를 쓰는 이유:
+# 직접 쓰면 nginx 가 기동 시점에 DNS 를 해석해, 백엔드가 아직/이미 없으면
+# 'host not found in upstream' 으로 nginx 자체가 뜨지 못한다(실측 확인).
+# 변수를 쓰면 요청 시점에 해석되므로 백엔드 부재는 502 일 뿐 기동을 막지 않는다.
 
 server {
     listen 80;
     server_name ${PASSKEY_SERVER_NAME};
 
+    # 127.0.0.11 은 Docker 내장 DNS. valid=10s 로 재해석 주기를 짧게 두어
+    # --scale 로 인스턴스가 늘거나 줄면 10초 내에 반영된다.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    # compose 서비스명. Docker DNS 가 --scale 로 뜬 N개 컨테이너 IP 전부로
+    # 응답하므로, 스케일을 바꿔도 이 설정은 수정할 필요가 없다.
+    set $passkey_upstream "passkey-app:8080";
+
     location / {
-        proxy_pass http://passkey_backend;
+        proxy_pass http://$passkey_upstream;
         proxy_set_header Host $host;
         # X-Forwarded-Proto 는 LB 가 보낸 원본을 그대로 전달한다.
         # $scheme 을 쓰면 nginx 가 받은 'http' 로 덮어써서 앱이 평문으로
@@ -426,49 +451,14 @@ server {
     }
 }
 
-# --- QA 전용: rp-app. prod 에서는 rp-app 컨테이너가 뜨지 않으므로
-# --- 이 server 블록은 502 를 반환한다(무해, 라우팅 대상 없음).
+# --- QA 전용: rp-app. prod 에서는 rp-app 컨테이너가 뜨지 않으며,
+# --- 지연 해석 덕분에 이 블록이 있어도 nginx 기동에 영향이 없다(502 반환).
 server {
     listen 80;
     server_name ${RP_SERVER_NAME};
 
-    location / {
-        proxy_pass http://rp-app:9090;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-`${PASSKEY_SERVER_NAME}` / `${RP_SERVER_NAME}`: nginx 공식 이미지는 `/etc/nginx/templates/*.template` 를 `envsubst` 로 치환한다. Task 6 에서 이 파일을 **템플릿 경로로 마운트**해 환경변수가 채워지게 한다.
-
-**prod 에서 rp-app server 블록이 남는 문제:** rp-app 컨테이너가 없으면 nginx 가 기동 시 `host not found in upstream` 으로 **실패할 수 있다.** `upstream` 블록이 아닌 `proxy_pass` 에 직접 쓰고 `resolver` 를 지정하면 지연 해석되어 기동은 성공한다. Step 2 에서 이를 검증한다.
-
-- [ ] **Step 2: prod 구성(rp-app 없음)에서 nginx 가 뜨는지 검증**
-
-```bash
-cd /Users/jhyun/Git/10-work/crosscert/Passkey2
-docker run --rm --name nginx-syntax-test \
-  -e PASSKEY_SERVER_NAME=passkey.example.com \
-  -e RP_SERVER_NAME=rp.example.com \
-  -v "$PWD/deploy/nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro" \
-  nginx:1.27-alpine nginx -t 2>&1 | tail -20
-```
-
-Expected: `nginx: configuration file /etc/nginx/nginx.conf test is successful`
-
-만약 `host not found in upstream "rp-app"` 으로 실패하면, rp-app server 블록을 아래로 교체한다 (지연 해석):
-
-```nginx
-server {
-    listen 80;
-    server_name ${RP_SERVER_NAME};
-    # Docker 내장 DNS. 변수를 쓰면 nginx 가 기동 시점이 아니라 요청 시점에
-    # 이름을 해석하므로, rp-app 이 없는 prod 에서도 기동에 실패하지 않는다.
-    resolver 127.0.0.11 valid=10s;
-    set $rp_upstream rp-app:9090;
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $rp_upstream "rp-app:9090";
 
     location / {
         proxy_pass http://$rp_upstream;
@@ -480,7 +470,55 @@ server {
 }
 ```
 
-교체 후 Step 2 명령을 다시 실행해 성공을 확인한다.
+`${PASSKEY_SERVER_NAME}` / `${RP_SERVER_NAME}`: nginx 공식 이미지는
+`/etc/nginx/templates/*.template` 를 `envsubst` 로 치환해
+`/etc/nginx/conf.d/` 에 생성한다(실측 확인). Task 6 에서 이 파일을 **템플릿
+경로로 마운트**한다.
+
+**주의 — `set` 의 값은 반드시 따옴표로 감싼다.** envsubst 는 `${VAR}` 형태만
+치환하므로 `$passkey_upstream` 같은 nginx 변수는 건드리지 않는다. 다만
+가독성과 오치환 방지를 위해 따옴표를 유지한다.
+
+- [ ] **Step 2: 백엔드가 하나도 없는 상태에서 nginx 가 뜨는지 검증 (핵심)**
+
+이 검증의 목적은 문법 확인이 아니라 **지연 해석이 실제로 동작하는가**다.
+컨테이너가 전혀 없는 격리 환경에서 실행해 백엔드 부재를 재현한다.
+
+```bash
+cd /Users/jhyun/Git/10-work/crosscert/Passkey2
+docker run --rm \
+  -e PASSKEY_SERVER_NAME=passkey.example.com \
+  -e RP_SERVER_NAME=rp.example.com \
+  -v "$PWD/deploy/nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro" \
+  nginx:1.27-alpine nginx -t 2>&1 | tail -10
+```
+
+Expected: `nginx: configuration file /etc/nginx/nginx.conf test is successful`
+
+`host not found in upstream` 이 나오면 지연 해석이 적용되지 않은 것이다 —
+`proxy_pass` 에 변수(`$passkey_upstream`)를 쓰고 있는지, `resolver` 가
+server 블록 안에 있는지 확인한다.
+
+- [ ] **Step 3: 치환된 설정 내용 확인**
+
+```bash
+cd /Users/jhyun/Git/10-work/crosscert/Passkey2
+docker run --rm \
+  -e PASSKEY_SERVER_NAME=passkey.example.com \
+  -e RP_SERVER_NAME=rp.example.com \
+  -v "$PWD/deploy/nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro" \
+  --entrypoint sh nginx:1.27-alpine -c \
+  '/docker-entrypoint.d/20-envsubst-on-templates.sh >/dev/null 2>&1; cat /etc/nginx/conf.d/default.conf'
+```
+
+Expected (실측 확인된 출력):
+- `server_name passkey.example.com;` / `server_name rp.example.com;` — 환경변수 치환됨
+- `set $passkey_upstream "passkey-app:8080";` — **nginx 변수는 그대로 보존**
+  (envsubst 는 `${VAR}` 형태만 치환하므로 `$foo` 는 건드리지 않는다)
+- `proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;` — **`$scheme` 이면 실패**
+
+`grep` 으로 `set $...` 를 찾을 때는 셸이 `$passkey_upstream` 을 빈 문자열로
+확장하지 않도록 주의한다. 위처럼 `cat` 으로 전문을 보는 편이 확실하다.
 
 - [ ] **Step 3: 커밋**
 
