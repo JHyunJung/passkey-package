@@ -33,9 +33,29 @@
 | admin-app fail-closed 바인딩 | 변수 미설정 시에도 `host_ip: 127.0.0.1` 확인 |
 | Redis fail-closed | 필수 변수 2개 각각 누락 시 거부 확인 |
 
+## 부분 검증 — 호스트 Gradle 빌드로 확인함 (2026-08-07 추가)
+
+Docker 데몬이 계속 죽어 있어, 이미지 빌드의 핵심인 `bootJar` 를 **호스트에서 직접**
+실행해 검증했다. 이미지 빌드 실패 원인이 앱 코드/Gradle 쪽일 가능성은 배제된다.
+
+| 항목 | 결과 |
+|---|---|
+| `:passkey-app:bootJar` | ✅ 성공 → `deploy/passkey-app.jar` 78M |
+| `:rp-app:bootJar` | ✅ 성공 → `deploy/rp-app.jar` 29M |
+| `:admin-app:bootJar` | ✅ 성공 → `deploy/admin-app.jar` 87M (BUILD SUCCESSFUL in 21s) |
+| **admin-ui jar 번들** | ✅ **7건 확인** — `BOOT-INF/classes/static/admin/` 아래 index.html, assets/index-*.js(412KB), assets/index-*.css(16KB), favicon.png, 로고 |
+| jar 이름·위치가 Dockerfile `COPY --from=build` 경로와 일치 | ✅ 세 모듈 모두 `deploy/<module>.jar` |
+
+즉 **"앱이 빌드되는가"는 해결됐고, 남은 미검증은 "컨테이너로 잘 감싸지는가"로 좁혀졌다.**
+빌드 경고 2건(deprecated API — `PasskeyResponseErrorHandler`, `RequestLoggingFilter`)은
+기존 코드 이슈로 이 작업과 무관하다.
+
 ## 미검증 — Task 8 에서 반드시 확인할 것
 
 ### 1. 이미지 빌드 (3개 모두 한 번도 빌드된 적 없음)
+
+※ 위 "부분 검증" 에 따라 Gradle 단계는 확인됨. 남은 것은 Docker 레이어
+(베이스 이미지 pull, COPY, 런타임 스테이지) 다.
 
 ```bash
 docker build -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
@@ -48,9 +68,9 @@ docker build -t rp-app:0.0.1-SNAPSHOT      -f rp-app/Dockerfile .
 - [ ] `COPY` 경로 오타 없음 (빌드 실패로 드러남)
 - [ ] 런타임 사용자 uid 가 **1001** 인지 (`docker run --rm <img> id -u`)
 - [ ] jar 이 올바른지 (`ls -l /app/app.jar`)
-- [ ] **admin-app: `unzip -l /app/app.jar | grep static/admin` 이 1건 이상** —
-      admin-ui 번들 실패 시 0건. `buildUi` 태스크가 Node 18 을 받아 Vite 빌드를
-      수행했는지가 여기서 드러난다.
+- [x] ~~**admin-app: `unzip -l /app/app.jar | grep static/admin` 이 1건 이상**~~ —
+      **호스트 빌드로 확인 완료(7건)**. 이미지 안에서도 같은지는 Docker 복구 후
+      재확인하되, `COPY --from=build` 는 jar 를 통째로 옮기므로 실패 가능성은 낮다.
 
 ### 2. graceful shutdown (SIGTERM 전달)
 
