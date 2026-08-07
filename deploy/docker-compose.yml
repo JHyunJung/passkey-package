@@ -1,0 +1,104 @@
+# 배포용 앱 스택 — 서버 A / 서버 B / QA 가 이 파일 하나를 공유하고
+# COMPOSE_PROFILES 와 .env 로 역할을 분기한다.
+#
+#   서버 A: COMPOSE_PROFILES=proxy,admin docker compose up -d --scale passkey-app=3
+#   서버 B: COMPOSE_PROFILES=proxy       docker compose up -d --scale passkey-app=3
+#   QA    : COMPOSE_PROFILES=proxy,admin,qa docker compose up -d
+#
+# DB(외부 Oracle)와 Redis(서버 C)는 이 스택 밖에 있다.
+# 루트 docker-compose.yml 은 로컬 개발용(Oracle+Redis)이며 이 파일과 무관하다.
+
+name: passkey-deploy
+
+services:
+  nginx:
+    profiles: ["proxy"]
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HOST_PORT:-80}:80"
+    volumes:
+      # 공식 이미지가 templates/ 의 파일을 envsubst 로 치환해
+      # /etc/nginx/conf.d/ 에 생성한다.
+      - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      PASSKEY_SERVER_NAME: ${PASSKEY_SERVER_NAME}
+      RP_SERVER_NAME: ${RP_SERVER_NAME:-rp.invalid}
+    depends_on:
+      - passkey-app
+
+  passkey-app:
+    image: passkey-app:${IMAGE_TAG:-0.0.1-SNAPSHOT}
+    restart: unless-stopped
+    # ports 매핑 없음 — nginx 가 compose 내부 네트워크로 접근한다.
+    # 호스트 포트를 잡지 않아야 --scale 시 충돌이 나지 않는다.
+    # nginx 를 빼고 호스트 nginx 를 쓸 경우에만 아래를 주석 해제한다
+    # (단, 그 경우 --scale 은 1 로 제한된다).
+    #ports:
+    #  - "${PASSKEY_HOST_PORT:-8080}:8080"
+    mem_limit: ${PASSKEY_MEM_LIMIT:-1g}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${DB_RUNTIME_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_RUNTIME_PASSWORD}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      PASSKEY_KEY_ENVELOPE_MASTER_KEY: ${MASTER_KEY}
+      PASSKEY_ID_TOKEN_ISSUER_BASE: ${ISSUER_BASE}
+      JAVA_OPTS: ${PASSKEY_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  admin-app:
+    profiles: ["admin"]
+    image: admin-app:${IMAGE_TAG:-0.0.1-SNAPSHOT}
+    restart: unless-stopped
+    deploy:
+      replicas: 1        # 스케줄러 리스가 있어 늘려도 안전하나, 1개로 고정한다
+    ports:
+      # 내부망 전용 — 외부 노출 금지. 호스트 내부 IP 에만 바인딩한다.
+      - "${ADMIN_BIND_ADDR:-127.0.0.1}:${ADMIN_HOST_PORT:-8081}:8081"
+    mem_limit: ${ADMIN_MEM_LIMIT:-1g}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${DB_ADMIN_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_ADMIN_PASSWORD}
+      # Flyway 는 admin-app 에만 주입한다. passkey-app 에 주면 --scale 로 늘어난
+      # 인스턴스들이 동시에 마이그레이션을 시도한다.
+      SPRING_FLYWAY_USER: ${DB_OWNER_USER}
+      SPRING_FLYWAY_PASSWORD: ${DB_OWNER_PASSWORD}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # 서버 A·B 가 같은 값이어야 한다. 다르면 한쪽 암호화 데이터를
+      # 다른 쪽이 복호화하지 못한다.
+      PASSKEY_KEY_ENVELOPE_MASTER_KEY: ${MASTER_KEY}
+      PASSKEY_MDS_LEASE_HOLDER: ${MDS_LEASE_HOLDER:-admin-a}
+      ADMIN_INVITE_BASE_URL: ${ADMIN_INVITE_BASE_URL}
+      JAVA_OPTS: ${ADMIN_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  rp-app:
+    profiles: ["qa"]     # prod 에서는 이 profile 을 지정하지 않아 기동되지 않는다
+    image: rp-app:${IMAGE_TAG:-0.0.1-SNAPSHOT}
+    restart: unless-stopped
+    mem_limit: ${RP_MEM_LIMIT:-1g}
+    environment:
+      SPRING_PROFILES_ACTIVE: ${RP_PROFILE:-qa}
+      PASSKEY_BASE_URL: ${RP_PASSKEY_BASE_URL}
+      PASSKEY_ISSUER_BASE: ${ISSUER_BASE}
+      PASSKEY_API_KEY: ${RP_API_KEY}
+      PASSKEY_TENANT_ID: ${RP_TENANT_ID}
+      JAVA_OPTS: ${RP_JAVA_OPTS:--XX:MaxRAMPercentage=75}
