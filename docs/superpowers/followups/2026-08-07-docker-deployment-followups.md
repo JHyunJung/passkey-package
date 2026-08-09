@@ -28,10 +28,11 @@ Docker 데몬 장애로 한동안 막혔으나 복구 후 **Task 8 통합 검증
 **검증 중 고친 실제 결함 3건**(아래 상세): `.dockerignore` 의 모듈 하위
 `.gradle/` 미제외, rp-app `RP_RELAY_SECRET` 누락, Redis 호스트 포트 하드코딩.
 
-**남은 필수 조치 1건**: passkey-app 이 자기가 쓰지 않는 엔티티
-(`security_incident`, `mds_sync_history`)까지 스키마 검증해 **빈 스키마에서
-부팅이 실패한다**(아래 🔴). 조사 결과 GRANT 추가가 아니라 **엔티티 스캔 범위
-축소**가 맞는 해법이다. 이 작업 범위 밖이며 **배포 전 판단·수정이 필요하다.**
+**남은 필수 조치 1건**: passkey-app 이 자기가 쓰지 않는 `SecurityIncident`
+엔티티까지 스키마 검증해 **빈 스키마에서 부팅이 실패한다**(아래 🔴).
+`APP_RUNTIME` 에 그 테이블 권한이 없기 때문인데, 조사 결과 **권한을 주는 것이
+아니라 스캔에서 빼는 쪽이 맞다**(passkey-app 은 이 테이블을 읽지 않는다).
+이 작업 범위 밖이며 **배포 전 판단·수정이 필요하다.**
 
 ## 검증 완료 (실측으로 확인함)
 
@@ -191,35 +192,56 @@ GRANT SELECT, INSERT ON security_incident TO APP_RUNTIME;
 GRANT SELECT, INSERT ON mds_sync_history  TO APP_RUNTIME;
 ```
 
-**근본 수정 방향 — 조사 결과 GRANT 추가는 잘못된 해법이다.**
+**추가 조사 결과 — 실제 문제는 엔티티 1개뿐이고, GRANT 추가는 잘못된 해법이다.**
 
-passkey-app 이 두 테이블을 정말 쓰는지 확인했다:
+먼저 범위를 정정한다. 위 표는 권한 조사 쿼리 결과라 테이블 2개를 나열했지만,
+**스키마 검증에 실제로 걸리는 것은 `security_incident` 하나다:**
+
+| 테이블 | JPA 엔티티 | 스키마 검증 대상 |
+|---|---|---|
+| `security_incident` | ✅ `core/entity/SecurityIncident.java` | **예 — 부팅 실패 원인** |
+| `mds_sync_history` | ❌ 없음 (raw-JDBC 전용, `MdsHistoryService`) | 아니오 |
+
+`mds_sync_history` 는 엔티티가 없어 Hibernate 검증 대상이 아니다. 검증 중
+예방적으로 GRANT 했으나 불필요했다.
+
+그리고 passkey-app 이 `SecurityIncident` 를 쓰는지 확인했다:
 
 | 확인 | 결과 |
 |---|---|
-| passkey-app 코드의 `SecurityIncident`/`MdsSyncHistory` 참조 | **0건** |
-| `SecurityIncidentRepository` 사용 모듈 | **admin-app 만** (`admin/audit/SecurityIncidentService.java`) |
-| `MdsSyncHistoryRepository` | **존재하지 않음** |
+| passkey-app 코드의 `SecurityIncident` 참조 | **0건** |
+| `SecurityIncidentRepository` 사용 모듈 | **admin-app 만**(`SecurityIncidentService`, `AuditChainMonitorController`) |
+| passkey-app 이 쓰는 core 리포지토리 | `ApiKeyScope`, `Credential`, `Tenant` **3개뿐** |
+| `SecurityIncident` 의 다른 엔티티와의 연관관계 | **없음** (V1 주석: "독립 — 실DB에서 tenant FK 없음") |
 
-즉 **passkey-app 은 두 테이블을 읽지 않는다.** GRANT 를 주면 안 쓰는 테이블에
-불필요한 권한을 열어주는 셈이라 최소권한 원칙에 어긋난다. V1 의 GRANT 누락은
-**의도된 설계였을 가능성이 높다** — 보안 인시던트와 MDS 동기화 이력은 관리
-기능이므로 런타임 서버가 볼 이유가 없다.
+즉 **passkey-app 은 이 테이블을 읽지 않고, 빼도 다른 매핑이 깨지지 않는다.**
+GRANT 를 주면 안 쓰는 테이블에 불필요한 권한을 열어주는 셈이라 최소권한
+원칙에 어긋난다. V1 의 GRANT 누락은 **의도된 설계로 보인다** — 보안 인시던트는
+관리 기능이므로 런타임 서버가 볼 이유가 없다.
 
 **진짜 문제는 passkey-app 이 자기가 쓰지 않는 엔티티까지 스키마 검증한다는 것이다.**
 엔티티가 `core` 에 있고 passkey-app 이 `@EntityScan` 으로 core 를 통째로 스캔하기
 때문이다(`PasskeyApplication.java`).
 
-권장 해법(우선순위 순):
-1. **passkey-app 의 엔티티 스캔 범위를 좁힌다** — 안 쓰는 엔티티를 제외.
-   최소권한을 지키면서 근본 원인을 없앤다. 단 core 엔티티 패키지 구조 조정이
-   필요할 수 있어 영향 범위 확인 필요.
-2. passkey-app 만 `hibernate.ddl-auto: none` 으로 두고 검증은 admin-app 에 맡긴다.
-   간단하지만 스키마 드리프트 감지를 잃는다.
-3. (비권장) V4 로 GRANT 추가 — 동작은 하지만 불필요한 권한이 늘어난다.
+**제약:** core 엔티티 23개가 `core.entity` **한 패키지에 모여 있어**
+`@EntityScan("com.crosscert.passkey.core.entity")` 로는 선택적 제외가 안 된다
+(passkey-app / admin-app 둘 다 동일하게 통째로 스캔한다).
 
-**어느 쪽이든 이 작업(컨테이너화) 범위 밖이며, 별도 판단이 필요하다.**
-검증 진행을 위해 적용한 임시 GRANT 는 검증용 로컬 DB 에만 있고 커밋되지 않았다.
+해법 후보:
+
+| 안 | 방법 | 평가 |
+|---|---|---|
+| **A** | `SecurityIncident` 를 `core.entity.admin` 같은 하위 패키지로 옮기고, passkey-app 의 `@EntityScan` 을 나머지 패키지로 한정 | 근본적·최소권한 유지. 다만 엔티티 이동 + 양쪽 앱 스캔 설정 변경이라 영향 범위가 있다 |
+| **B** | passkey-app 만 `hibernate.ddl-auto: none` | 한 줄이면 끝나지만 **스키마 드리프트 감지를 통째로 잃는다** — 배포 시 스키마 불일치를 조기에 못 잡는다. 권장하지 않음 |
+| **C** | V4 마이그레이션으로 `security_incident` 를 `APP_RUNTIME` 에 GRANT | 가장 간단하고 위험이 낮지만, **안 쓰는 테이블에 권한을 여는 것**이라 최소권한에 어긋난다 |
+
+**A 를 권장**하되, 엔티티 재배치는 다른 코드에 영향을 줄 수 있으므로 별도
+작업으로 다루는 것이 맞다. 급하면 C 로 배포를 풀고 A 를 후속으로 잡는 선택도
+합리적이다 — 열리는 권한이 `security_incident` SELECT 하나뿐이라 위험이 제한적이다.
+
+**이 작업(컨테이너화) 범위 밖이며, 별도 판단이 필요하다.**
+검증 중 적용한 임시 GRANT 는 로컬 검증 DB 에만 있고 커밋되지 않았다.
+`mds_sync_history` GRANT 는 애초에 불필요했다(엔티티 없음).
 
 권한 누락 전수 조사 방법:
 ```sql
