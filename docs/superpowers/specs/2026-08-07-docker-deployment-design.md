@@ -178,19 +178,44 @@ rp-app/Dockerfile                     ← 신규
 커밋되지 않는다. 다음 예외 규칙을 추가한다:
 
 ```gitignore
-deploy/
+# 'deploy/' 가 아니라 'deploy/*' 여야 한다 — 아래 설명 참고
+deploy/*
 !deploy/docker-compose.yml
 !deploy/docker-compose.redis.yml
 !deploy/.env.example
+!deploy/README.md
 !deploy/nginx/
 deploy/.env
 ```
 
-또한 기존 `*.env` 패턴은 `foo.env` 형태만 매칭하고 `.env` 파일 자체는 잡지
-않는다. `deploy/.env` 를 명시적으로 추가해야 시크릿이 커밋되지 않는다.
+**디렉터리가 아니라 내용물을 무시해야 한다(구현 중 실측 확인).** `deploy/` 로
+디렉터리 노드를 무시하면 git 이 순회 단계에서 그 디렉터리를 통째로 잘라내므로
+이후의 `!` 예외 패턴이 평가조차 되지 않는다 — gitignore(5) 의 "It is not
+possible to re-include a file if a parent directory of that file is excluded"
+가 이것이다. `deploy/*` 는 내용물만 무시하므로 git 이 안으로 들어가 negation 을
+적용할 수 있다. `deploy/*` 로 바꿔도 bootJar 산출물(`deploy/*.jar`)은 그대로
+무시되므로 원래 목적은 보존된다.
 
-구현 시 `git check-ignore -v deploy/docker-compose.yml` 로 규칙이 의도대로
-동작하는지 검증한다.
+`deploy/.env` 는 상위 `*.env` 패턴으로도 이미 무시된다(실측: `git check-ignore`
+가 `.gitignore:1:*.env` 로 매칭). 그럼에도 `deploy/*` 블록 안에 명시하는 것은
+`!` 재포함 목록 바로 옆에서 "이것만은 예외가 아니다" 라는 의도를 드러내기
+위해서다.
+
+### 5.2 `.gitignore` 만으로는 시크릿을 지킬 수 없다
+
+git 은 **커밋**을 막을 뿐 **Docker 빌드 컨텍스트**는 막지 못한다. 운영 서버에서
+`docker build` 를 하면 그 서버의 `deploy/.env`(DB 비밀번호·마스터키)가 컨텍스트에
+실려 이미지 레이어에 그대로 남는다. 실측으로 재현했다 — `.dockerignore` 에
+`.env` 제외가 없던 상태에서 이미지 안의 `/ctx/deploy/.env` 를 `cat` 하면 평문이
+나왔다.
+
+따라서 `.dockerignore` 에도 `.env` 계열 제외가 **반드시** 있어야 한다. 이는
+`.gitignore` 수정과 별개의 방어선이며, 둘 중 하나만으로는 불충분하다.
+
+검증에는 `git add --dry-run` 을 쓴다. `git check-ignore -v` 는 여러 경로를
+한꺼번에 넘기면 negation 이 마지막 매칭일 때 종료코드 해석이 헷갈릴 수 있다 —
+실제로 스테이징 가능한지가 우리가 알고 싶은 것이므로 `git add --dry-run` 이
+모호하지 않다.
 
 ## 6. 이미지 빌드 전략
 

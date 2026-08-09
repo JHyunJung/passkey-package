@@ -86,17 +86,29 @@ deploy/
 
 ```gitignore
 # bootJar 배포 산출물(루트 deploy/ 로 모음)
-deploy/
+# 주의: 'deploy/' 처럼 디렉터리 자체를 무시하면 git 이 그 안을 순회하지 않아
+# 아래 '!' 예외 규칙이 전혀 동작하지 않는다(gitignore(5): 부모 디렉터리가
+# 제외되면 그 안의 파일은 재포함 불가). 그래서 디렉터리가 아닌 '내용물'을 무시한다.
+deploy/*
 # 단, 컨테이너 배포 자산은 버전 관리한다
-# (기존 *.env 패턴은 'foo.env' 형태만 잡고 '.env' 자체는 못 잡으므로 명시)
+# (deploy/.env 는 상위 *.env 로도 잡히지만, ! 재포함 목록 옆에 두어
+#  "이것만은 예외가 아니다" 라는 의도를 명확히 한다)
 !deploy/docker-compose.yml
 !deploy/docker-compose.redis.yml
 !deploy/.env.example
 !deploy/README.md
 !deploy/nginx/
-!deploy/nginx/*
 deploy/.env
 ```
+
+**`deploy/` 가 아니라 `deploy/*` 여야 하는 이유(실측 확인):** `deploy/` 로
+디렉터리 노드를 무시하면 git 이 순회 단계에서 통째로 잘라내므로 이후의 `!`
+패턴이 평가조차 되지 않는다. 실제로 `deploy/` 를 쓰고 Step 3 를 실행하면
+`.gitignore:20:deploy/` 로 여전히 차단된다. `deploy/*` 는 내용물만 무시하므로
+git 이 디렉터리 안으로 들어가 negation 을 적용할 수 있다.
+
+`!deploy/nginx/` 로 디렉터리를 재포함하면 그 아래 파일은 별도 패턴이 다시
+제외하지 않는 한 자동으로 추적 대상이 되므로 `!deploy/nginx/*` 는 불필요하다.
 
 - [ ] **Step 3: 규칙이 의도대로 동작하는지 검증**
 
@@ -129,11 +141,60 @@ deploy/*.jar
 docs/
 scripts/
 *.md
+
+# 시크릿 — .gitignore 로는 막을 수 없다(git 은 커밋만 막고 빌드 컨텍스트는
+# 그대로 실린다). 운영 서버에서 build 하면 그 서버의 deploy/.env 가 이미지
+# 레이어에 남으므로 여기서도 반드시 제외한다.
+#
+# 패턴이 세 갈래인 이유(전부 실측 확인):
+#   .env / **/.env      → 이름이 정확히 '.env' 인 파일
+#   *.env / **/*.env    → 'prod.env' 처럼 .env 로 끝나는 파일
+#   .env.* / **/.env.*  → '.env.local', '.env.production' 처럼 접미사가 붙은 형태.
+#                         앞 두 갈래로는 안 잡힌다 — 이게 없으면 실제로 유출된다.
+# .env.example 은 시크릿이 아니지만 Gradle 빌드도 Dockerfile COPY 도 참조하지
+# 않으므로(확인함) 재포함하지 않고 함께 제외한다 — 규칙을 단순하게 유지한다.
+.env
+**/.env
+*.env
+**/*.env
+.env.*
+**/.env.*
+# 이 프로젝트의 또 다른 시크릿 규약 — .gitignore 에도 같은 패턴이 있다
+application-secret*.yml
+**/application-secret*.yml
+
 !admin-ui/package.json
 !admin-ui/package-lock.json
 ```
 
 `docs/`·`scripts/`·`*.md` 제외 주의: `admin-app/build.gradle.kts` 의 `processTestResources` 가 `scripts/bootstrap-schema.sql` 을 참조하지만 이는 **테스트 리소스**이고, 이미지 빌드는 `bootJar` 만 실행하므로 영향이 없다.
+
+**`.env` 제외는 보안상 필수다(실측 확인).** 이 규칙이 없으면
+`docker build` 시 `deploy/.env` 가 컨텍스트에 실려 이미지 안에서
+`cat /ctx/deploy/.env` 로 마스터키가 평문 노출된다. 구현 시 아래로 검증한다:
+
+```bash
+# 시크릿 파일의 여러 형태를 한 번에 검증한다 — 하나만 테스트하면 접미사
+# 형태(.env.local 등)가 뚫리는 것을 놓친다(실제로 놓쳤던 항목).
+mkdir -p deploy rp-app
+for f in deploy/.env deploy/.env.local deploy/.env.production deploy/prod.env .env rp-app/.env.staging; do
+  echo "K=LEAK" > "$f"
+done
+printf 'FROM busybox\nCOPY . /ctx\n' > .ctxtest.Dockerfile
+docker build -q -f .ctxtest.Dockerfile -t ctxtest . >/dev/null
+docker run --rm ctxtest sh -c 'n=0; for f in /ctx/.env /ctx/deploy/.env /ctx/deploy/.env.local /ctx/deploy/.env.production /ctx/deploy/prod.env /ctx/rp-app/.env.staging; do [ -e "$f" ] && { echo "!!! 유출 $f"; n=1; }; done; [ $n -eq 0 ] && echo "전부 차단됨 — 안전"'
+# 기대: "전부 차단됨 — 안전"
+
+# 같은 이미지로 빌드 필수 파일 회귀도 확인한다
+docker run --rm ctxtest sh -c 'm=0; for f in gradlew gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties settings.gradle.kts build.gradle.kts gradle/libs.versions.toml admin-ui/package.json admin-ui/package-lock.json admin-ui/src admin-ui/index.html admin-ui/vite.config.ts admin-app/build.gradle.kts core/src/main passkey-app/src/main rp-app/src/main webauthn/src/main sdk-java/src/main lombok.config; do [ -e "/ctx/$f" ] || { echo "MISSING $f"; m=1; }; done; [ $m -eq 0 ] && echo "18종 전부 존재 — 빌드 안전"'
+# 기대: "18종 전부 존재 — 빌드 안전"
+
+rm -f deploy/.env deploy/.env.local deploy/.env.production deploy/prod.env .env rp-app/.env.staging .ctxtest.Dockerfile
+rmdir deploy 2>/dev/null; docker rmi -f ctxtest
+```
+
+`.ctxtest.Dockerfile` 은 반드시 리포지토리 안에 만든다 — `/tmp` 에 두면 Docker 가
+`/tmp` 전체를 읽으려다 xattr 권한 오류로 실패한다.
 
 - [ ] **Step 5: 임시 파일 정리 후 커밋**
 
@@ -162,8 +223,10 @@ deploy/ 가 통째로 gitignore 되어 컨테이너 배포 자산(compose/nginx/
 - [ ] **Step 1: Dockerfile 작성**
 
 ```dockerfile
-# syntax=docker/dockerfile:1
 # passkey-app — WebAuthn 등록/인증 서버. 무상태이므로 N개로 스케일 가능.
+# syntax 지시자는 쓰지 않는다 — BuildKit 전용 문법(RUN --mount, COPY --link 등)을
+# 사용하지 않으므로 docker/dockerfile 프론트엔드 이미지를 받아올 이유가 없다.
+# 실제로 이 환경에서는 그 pull 이 DeadlineExceeded 로 실패해 빌드가 막혔다.
 # 빌드 컨텍스트는 리포지토리 루트다(멀티모듈: core/webauthn 소스가 필요).
 #   docker build -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
 
@@ -255,8 +318,8 @@ Task 2 와 구조는 같지만 **admin-ui 빌드가 추가로 일어난다.** `b
 - [ ] **Step 1: Dockerfile 작성**
 
 ```dockerfile
-# syntax=docker/dockerfile:1
 # admin-app — 운영 콘솔 + Flyway 마이그레이션 책임. 1개만 기동한다(스케줄러 리스).
+# syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
 # admin-ui(React)는 build.gradle.kts 의 buildUi 태스크가 Node 18 을 자동
 # 다운로드해 빌드하고 jar 의 static/admin 에 번들한다 — 별도 Node 설치 불필요.
 #   docker build -t admin-app:0.0.1-SNAPSHOT -f admin-app/Dockerfile .
@@ -332,8 +395,8 @@ buildUi 태스크가 Node 18 을 자동 다운로드해 admin-ui 를 jar 의 sta
 - [ ] **Step 1: Dockerfile 작성**
 
 ```dockerfile
-# syntax=docker/dockerfile:1
 # rp-app — 고객사 연동 샘플 앱. QA 환경에서만 기동한다(prod 스택 제외).
+# syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
 # 고객사는 이 앱을 참고해 자사 서비스에 맞게 변형하므로 배포용 이미지가 아니다.
 #   docker build -t rp-app:0.0.1-SNAPSHOT -f rp-app/Dockerfile .
 
@@ -903,12 +966,21 @@ DB_ADMIN_PASSWORD=admin_pw
 DB_OWNER_PASSWORD=app_owner_pw
 REDIS_HOST=host.docker.internal
 REDIS_PASSWORD=
-MASTER_KEY=dGVzdC1tYXN0ZXIta2V5LWZvci1sb2NhbC12ZXJpZnkxMg==
 PASSKEY_SERVER_NAME=localhost
 ISSUER_BASE=http://localhost
 NGINX_HOST_PORT=18080
+# prod 는 localhost 기본값을 거부한다(초대 링크가 localhost 로 나가는 사고 방지).
+# 검증용이라도 localhost 가 아닌 값을 넣어야 부팅한다.
+ADMIN_INVITE_BASE_URL=https://admin.verify.example.com
 EOF
+
+# MASTER_KEY 는 반드시 정확히 32바이트여야 한다(33바이트를 넣으면 KeyEnvelope
+# 생성자에서 부팅 실패). 하드코딩하지 말고 생성해서 넣는다.
+echo "MASTER_KEY=$(openssl rand -base64 32)" >> .env
 ```
+
+**검증 전 확인:** `grep '^MASTER_KEY=' .env | sed 's/^MASTER_KEY=//' | tr -d '\n' | base64 -d | wc -c`
+가 **32** 여야 한다.
 
 위 비밀번호는 실측값이다 — `scripts/bootstrap-schema.sql:72` 가
 `APP_RUNTIME_USER IDENTIFIED BY runtime_pw`, `:82` 가
