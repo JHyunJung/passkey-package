@@ -1,0 +1,39 @@
+-- ============================================================
+-- V4 — security_incident 를 APP_RUNTIME 에 SELECT GRANT.
+--
+-- 문제: 빈 스키마에 passkey-app 을 붙이면 부팅이 실패한다.
+--   Schema-validation: missing table [security_incident]
+--   → Application run failed
+--
+-- 원인 사슬:
+--   ① passkey-app 은 최소권한 원칙에 따라 APP_RUNTIME_USER 로 접속한다.
+--   ② V1 의 GRANT 123건에서 security_incident 는 APP_ADMIN 에만 부여됐다
+--      (보안 인시던트는 관리 기능이므로 런타임에 안 준 것으로 보인다).
+--   ③ 그런데 passkey-app 의 @EntityScan 이 core.entity 패키지를 통째로
+--      스캔하고(엔티티 23개가 한 패키지에 있어 선택 제외 불가),
+--      hibernate.ddl-auto: validate 가 그 전부에 대해 테이블 존재를 검증한다.
+--      권한이 없으면 테이블이 안 보이므로 검증에 실패한다.
+--
+-- 즉 passkey-app 이 읽지도 않는 테이블 때문에 부팅이 막힌다. 실제로 이
+-- 테이블을 쓰는 것은 admin-app 뿐이다(SecurityIncidentService,
+-- AuditChainMonitorController).
+--
+-- 왜 이제야 드러났나: 로컬 개발은 오래 써온 DB 를 재사용하거나 APP_OWNER 로
+-- 붙는 흐름이 많아 재현되지 않았다. 컨테이너 배포처럼 **빈 스키마에 처음
+-- 올리는** 시나리오에서 바로 걸린다(dev 프로필도 같은 유저·같은 validate
+-- 설정이라 동일하게 실패한다).
+--
+-- 해법 선택: "DB 스키마가 완전해야 앱이 뜬다" 는 성질을 유지하는 쪽으로
+-- 정했다. 대안이었던 (a) 엔티티 스캔 범위 축소는 그 테이블이 실제로 없어도
+-- passkey-app 이 뜨게 만들고, (b) ddl-auto: none 은 스키마 드리프트 감지를
+-- 통째로 잃는다. GRANT 는 검증이 실제 스키마를 확인한 뒤 통과하게 한다.
+--
+-- 권한은 SELECT 만 준다 — passkey-app 은 이 테이블을 읽지도 쓰지도 않으며,
+-- Hibernate 스키마 검증이 메타데이터를 조회할 수 있으면 충분하다.
+-- INSERT/UPDATE 는 계속 APP_ADMIN 전용으로 남긴다.
+--
+-- 참고: mds_sync_history 도 APP_RUNTIME 권한이 없으나 JPA 엔티티가 아니라
+-- raw-JDBC 전용(MdsHistoryService)이므로 검증 대상이 아니다 — GRANT 불필요.
+-- ============================================================
+
+GRANT SELECT ON security_incident TO APP_RUNTIME;

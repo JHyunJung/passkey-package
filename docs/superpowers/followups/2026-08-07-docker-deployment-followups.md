@@ -28,11 +28,15 @@ Docker 데몬 장애로 한동안 막혔으나 복구 후 **Task 8 통합 검증
 **검증 중 고친 실제 결함 3건**(아래 상세): `.dockerignore` 의 모듈 하위
 `.gradle/` 미제외, rp-app `RP_RELAY_SECRET` 누락, Redis 호스트 포트 하드코딩.
 
-**남은 필수 조치 1건**: passkey-app 이 자기가 쓰지 않는 `SecurityIncident`
-엔티티까지 스키마 검증해 **빈 스키마에서 부팅이 실패한다**(아래 🔴).
-`APP_RUNTIME` 에 그 테이블 권한이 없기 때문인데, 조사 결과 **권한을 주는 것이
-아니라 스캔에서 빼는 쪽이 맞다**(passkey-app 은 이 테이블을 읽지 않는다).
-이 작업 범위 밖이며 **배포 전 판단·수정이 필요하다.**
+**후속 조치 완료**: 빈 스키마에서 passkey-app 이 부팅 실패하던 건
+(`Schema-validation: missing table [security_incident]`)은 **V4 마이그레이션으로
+해소**했다 — `GRANT SELECT ON security_incident TO APP_RUNTIME`.
+
+해법 선택 근거: **"DB 스키마가 완전해야 앱이 뜬다"는 성질을 유지**하는 쪽으로
+정했다. 대안이던 엔티티 스캔 축소는 그 테이블이 실제로 없어도 passkey-app 이
+뜨게 만들고, `ddl-auto: none` 은 스키마 드리프트 감지를 통째로 잃는다.
+GRANT 는 검증이 실제 스키마를 확인한 뒤 통과하게 한다. 권한은 SELECT 만 부여
+(passkey-app 은 읽지도 쓰지도 않으며 메타데이터 조회만 필요).
 
 ## 검증 완료 (실측으로 확인함)
 
@@ -227,21 +231,26 @@ GRANT 를 주면 안 쓰는 테이블에 불필요한 권한을 열어주는 셈
 `@EntityScan("com.crosscert.passkey.core.entity")` 로는 선택적 제외가 안 된다
 (passkey-app / admin-app 둘 다 동일하게 통째로 스캔한다).
 
-해법 후보:
+검토한 세 가지 안:
 
-| 안 | 방법 | 평가 |
+| 안 | 방법 | 판단 |
 |---|---|---|
-| **A** | `SecurityIncident` 를 `core.entity.admin` 같은 하위 패키지로 옮기고, passkey-app 의 `@EntityScan` 을 나머지 패키지로 한정 | 근본적·최소권한 유지. 다만 엔티티 이동 + 양쪽 앱 스캔 설정 변경이라 영향 범위가 있다 |
-| **B** | passkey-app 만 `hibernate.ddl-auto: none` | 한 줄이면 끝나지만 **스키마 드리프트 감지를 통째로 잃는다** — 배포 시 스키마 불일치를 조기에 못 잡는다. 권장하지 않음 |
-| **C** | V4 마이그레이션으로 `security_incident` 를 `APP_RUNTIME` 에 GRANT | 가장 간단하고 위험이 낮지만, **안 쓰는 테이블에 권한을 여는 것**이라 최소권한에 어긋난다 |
+| A | `SecurityIncident` 를 하위 패키지로 옮기고 passkey-app 스캔에서 제외 | **채택 안 함** — 그 테이블이 실제로 없어도 passkey-app 이 뜨게 된다. "스키마가 완전해야 부팅"이라는 성질이 약해진다 |
+| B | passkey-app 만 `ddl-auto: none` | **채택 안 함** — 스키마 드리프트 감지를 통째로 잃는다 |
+| **C** | **V4 마이그레이션으로 `APP_RUNTIME` 에 SELECT GRANT** | **✅ 채택** — 검증이 실제 스키마를 확인한 뒤 통과한다 |
 
-**A 를 권장**하되, 엔티티 재배치는 다른 코드에 영향을 줄 수 있으므로 별도
-작업으로 다루는 것이 맞다. 급하면 C 로 배포를 풀고 A 를 후속으로 잡는 선택도
-합리적이다 — 열리는 권한이 `security_incident` SELECT 하나뿐이라 위험이 제한적이다.
+**결정: C.** "DB 스키마가 완전해야 앱이 뜬다"는 성질을 유지하는 것이 판단 기준이었다.
+A/B 는 검증을 우회하거나 끄는 방향이라 그 성질을 훼손한다.
 
-**이 작업(컨테이너화) 범위 밖이며, 별도 판단이 필요하다.**
-검증 중 적용한 임시 GRANT 는 로컬 검증 DB 에만 있고 커밋되지 않았다.
-`mds_sync_history` GRANT 는 애초에 불필요했다(엔티티 없음).
+권한은 **SELECT 만** 부여했다 — passkey-app 은 이 테이블을 읽지도 쓰지도 않고,
+Hibernate 검증이 메타데이터를 조회할 수 있으면 충분하다. INSERT/UPDATE 는 계속
+`APP_ADMIN` 전용으로 남는다.
+
+마이그레이션: `core/src/main/resources/db/migration/V4__grant_security_incident_to_app_runtime.sql`
+
+`mds_sync_history` 는 GRANT 하지 않았다 — JPA 엔티티가 없어(raw-JDBC 전용)
+검증 대상이 아니므로 불필요하다. 검증 중 임시로 준 GRANT 는 로컬 DB 에만
+있었고 커밋되지 않았다.
 
 권한 누락 전수 조사 방법:
 ```sql
