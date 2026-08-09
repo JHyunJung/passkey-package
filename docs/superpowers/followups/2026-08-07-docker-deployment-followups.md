@@ -28,8 +28,10 @@ Docker 데몬 장애로 한동안 막혔으나 복구 후 **Task 8 통합 검증
 **검증 중 고친 실제 결함 3건**(아래 상세): `.dockerignore` 의 모듈 하위
 `.gradle/` 미제외, rp-app `RP_RELAY_SECRET` 누락, Redis 호스트 포트 하드코딩.
 
-**남은 필수 조치 1건**: V1 baseline 의 `APP_RUNTIME` GRANT 2건 누락(아래 🔴).
-이 작업 범위 밖의 기존 결함이며 **배포 전 반드시 수정해야 한다.**
+**남은 필수 조치 1건**: passkey-app 이 자기가 쓰지 않는 엔티티
+(`security_incident`, `mds_sync_history`)까지 스키마 검증해 **빈 스키마에서
+부팅이 실패한다**(아래 🔴). 조사 결과 GRANT 추가가 아니라 **엔티티 스캔 범위
+축소**가 맞는 해법이다. 이 작업 범위 밖이며 **배포 전 판단·수정이 필요하다.**
 
 ## 검증 완료 (실측으로 확인함)
 
@@ -155,7 +157,7 @@ compose 와 `.env.example` 양쪽에 누락돼 있었다. **QA 에서 rp-app 을
 변수화(기본 6379 유지). 전용 호스트에서는 기본값으로 충분하지만, 검증 환경이나
 한 호스트에 임시로 올릴 때 필요하다.
 
-### 🔴 기존 결함 발견 — V1 baseline 의 APP_RUNTIME GRANT 2건 누락
+### 🔴 기존 결함 — passkey-app 이 안 쓰는 엔티티까지 스키마 검증한다
 
 **이 작업(컨테이너화) 범위 밖의 기존 문제이며, 배포 전 반드시 수정해야 한다.**
 
@@ -189,10 +191,35 @@ GRANT SELECT, INSERT ON security_incident TO APP_RUNTIME;
 GRANT SELECT, INSERT ON mds_sync_history  TO APP_RUNTIME;
 ```
 
-**근본 수정 필요:** V1 은 이미 배포된 마이그레이션이라 수정하면 체크섬이 깨진다.
-신규 마이그레이션(V4)으로 GRANT 를 추가하는 것이 맞다. 다만 **passkey-app 이
-이 두 테이블을 정말 읽어야 하는지** 먼저 확인할 것 — 필요 없다면 GRANT 대신
-엔티티 스캔 범위를 좁히는 쪽이 최소권한 원칙에 맞는다.
+**근본 수정 방향 — 조사 결과 GRANT 추가는 잘못된 해법이다.**
+
+passkey-app 이 두 테이블을 정말 쓰는지 확인했다:
+
+| 확인 | 결과 |
+|---|---|
+| passkey-app 코드의 `SecurityIncident`/`MdsSyncHistory` 참조 | **0건** |
+| `SecurityIncidentRepository` 사용 모듈 | **admin-app 만** (`admin/audit/SecurityIncidentService.java`) |
+| `MdsSyncHistoryRepository` | **존재하지 않음** |
+
+즉 **passkey-app 은 두 테이블을 읽지 않는다.** GRANT 를 주면 안 쓰는 테이블에
+불필요한 권한을 열어주는 셈이라 최소권한 원칙에 어긋난다. V1 의 GRANT 누락은
+**의도된 설계였을 가능성이 높다** — 보안 인시던트와 MDS 동기화 이력은 관리
+기능이므로 런타임 서버가 볼 이유가 없다.
+
+**진짜 문제는 passkey-app 이 자기가 쓰지 않는 엔티티까지 스키마 검증한다는 것이다.**
+엔티티가 `core` 에 있고 passkey-app 이 `@EntityScan` 으로 core 를 통째로 스캔하기
+때문이다(`PasskeyApplication.java`).
+
+권장 해법(우선순위 순):
+1. **passkey-app 의 엔티티 스캔 범위를 좁힌다** — 안 쓰는 엔티티를 제외.
+   최소권한을 지키면서 근본 원인을 없앤다. 단 core 엔티티 패키지 구조 조정이
+   필요할 수 있어 영향 범위 확인 필요.
+2. passkey-app 만 `hibernate.ddl-auto: none` 으로 두고 검증은 admin-app 에 맡긴다.
+   간단하지만 스키마 드리프트 감지를 잃는다.
+3. (비권장) V4 로 GRANT 추가 — 동작은 하지만 불필요한 권한이 늘어난다.
+
+**어느 쪽이든 이 작업(컨테이너화) 범위 밖이며, 별도 판단이 필요하다.**
+검증 진행을 위해 적용한 임시 GRANT 는 검증용 로컬 DB 에만 있고 커밋되지 않았다.
 
 권한 누락 전수 조사 방법:
 ```sql
