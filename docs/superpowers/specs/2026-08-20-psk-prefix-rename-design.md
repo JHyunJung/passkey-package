@@ -100,10 +100,13 @@ V1/V4 를 직접 수정해 히스토리를 깨끗하게 유지한다.
 
 ```yaml
 # core/src/main/resources/application-common.yml
-app:
+passkey:
   db:
-    schema: ${DB_SCHEMA:PSK_APP_OWNER}
+    schema: ${PASSKEY_DB_SCHEMA:PSK_APP_OWNER}
 ```
+
+프로퍼티명은 기존 `passkey.*` 네임스페이스 관행을 따른다
+(`passkey.admin`, `passkey.key-envelope` 등과 동일 계층).
 
 ```java
 // AS-IS
@@ -113,8 +116,9 @@ app:
 "SELECT ... FROM " + schema + ".mds_sync_history "
 ```
 
-주입 방식은 각 클래스가 이미 쓰는 생성자 주입을 따른다
-(`@Value("${app.db.schema}") String schema`).
+주입 방식은 각 클래스가 이미 쓰는 생성자 주입을 따른다. 값은
+`DbSchemaProperties`(`@Value("${passkey.db.schema}")`) 가 보유하고,
+각 서비스는 이 빈을 생성자로 받아 `schema()` 를 읽는다.
 
 **SQL 인젝션 우려 없음**: 값의 출처가 배포자가 통제하는 설정 파일이며
 사용자 입력이 아니다. 다만 방어적으로 부팅 시 식별자 패턴
