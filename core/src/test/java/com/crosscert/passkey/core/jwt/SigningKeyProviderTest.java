@@ -1,5 +1,6 @@
 package com.crosscert.passkey.core.jwt;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -91,7 +92,8 @@ class SigningKeyProviderTest {
                 .thenAnswer(inv -> null);  // PL/SQL call: no-op
 
         SigningKeyProvider p6 = new SigningKeyProvider(
-                repo, envelope, mapper, clock, jdbcCapture, new JwksAssembler(repo));
+                repo, envelope, mapper, clock, jdbcCapture, new JwksAssembler(repo),
+                new DbSchemaProperties("PSK_APP_OWNER"));
 
         // Set up: first call returns empty, second (after bootstrap) returns a key.
         // We prime repo to return empty first, then a fresh key second.

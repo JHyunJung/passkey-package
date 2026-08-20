@@ -349,8 +349,8 @@ origin 검증이 깨진다. LB → nginx → 앱 2단 프록시의 핵심 함정
 | 변수 | passkey-app | admin-app |
 |---|---|---|
 | `SPRING_DATASOURCE_URL` | 외부 Oracle | 외부 Oracle |
-| `SPRING_DATASOURCE_USERNAME` | `APP_RUNTIME_USER` | `APP_ADMIN_USER` |
-| `SPRING_FLYWAY_USER` / `_PASSWORD` | — (주입 금지) | `APP_OWNER` |
+| `SPRING_DATASOURCE_USERNAME` | `PSK_APP_RUNTIME_USER` | `PSK_APP_ADMIN_USER` |
+| `SPRING_FLYWAY_USER` / `_PASSWORD` | — (주입 금지) | `PSK_APP_OWNER` |
 | `SPRING_DATA_REDIS_HOST` | 서버 C | 서버 C |
 | `SPRING_DATA_REDIS_PASSWORD` | 필수 | 필수 |
 | `PASSKEY_ID_TOKEN_ISSUER_BASE` | `https://dev-passkey...` | — |
@@ -439,7 +439,7 @@ admin-app 은 1개라 이 방식이 불가능하다. 재기동 시 수 초~수�
 
 ## 11. 배포 체크리스트
 
-- [ ] 외부 Oracle 에 `APP_OWNER` / `APP_RUNTIME_USER` / `APP_ADMIN_USER` 부트스트랩 완료
+- [ ] 외부 Oracle 에 `PSK_APP_OWNER` / `PSK_APP_RUNTIME_USER` / `PSK_APP_ADMIN_USER` 부트스트랩 완료
       (`scripts/bootstrap-external.sql` 또는 `scripts/init-db-external.sh`)
 - [ ] 서버 A·B 의 `PASSKEY_KEY_ENVELOPE_MASTER_KEY` 가 **동일한 값**인지 확인
 - [ ] 앞단 LB 가 클라이언트발 `X-Forwarded-*` 헤더를 스트립하는지 확인

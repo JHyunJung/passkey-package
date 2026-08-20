@@ -81,7 +81,7 @@ cat core/src/main/resources/application-local-shared.yml
 #
 # 활성화: SPRING_PROFILES_ACTIVE=dev
 #
-# 포함: localhost Oracle/Redis + APP_ADMIN_USER credential + dev key-envelope
+# 포함: localhost Oracle/Redis + PSK_APP_ADMIN_USER credential + dev key-envelope
 #       master + DEBUG 로깅 + db/dev 시드 (R__dev_seed.sql)
 #
 # 기존 local / local-shared 가 흡수됨 — 더 이상 spring.config.import chain 사용 안 함.
@@ -90,7 +90,7 @@ spring:
   datasource:
     url: jdbc:oracle:thin:@localhost:1521/XEPDB1
     driver-class-name: oracle.jdbc.OracleDriver
-    username: APP_ADMIN_USER
+    username: PSK_APP_ADMIN_USER
     password: admin_pw
   data:
     redis:
@@ -160,7 +160,7 @@ cat passkey-app/src/main/resources/application-local.yml
 # 활성화: SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
 #         --args="--passkey.id-token.issuer-base=http://localhost:8080"
 #
-# 포함: localhost Oracle/Redis + APP_RUNTIME_USER credential + dev key-envelope
+# 포함: localhost Oracle/Redis + PSK_APP_RUNTIME_USER credential + dev key-envelope
 #       master + DEBUG 로깅
 #
 # 기존 local / local-shared 가 흡수됨 — 더 이상 spring.config.import chain 사용 안 함.
@@ -169,7 +169,7 @@ spring:
   datasource:
     url: jdbc:oracle:thin:@localhost:1521/XEPDB1
     driver-class-name: oracle.jdbc.OracleDriver
-    username: APP_RUNTIME_USER
+    username: PSK_APP_RUNTIME_USER
     password: runtime_pw
   data:
     redis:

@@ -142,20 +142,20 @@ EXCEPTION
 END;
 /
 
-GRANT SELECT, INSERT ON mds_sync_history TO APP_ADMIN;
-GRANT SELECT ON mds_sync_history_seq TO APP_ADMIN;
+GRANT SELECT, INSERT ON mds_sync_history TO PSK_APP_ADMIN;
+GRANT SELECT ON mds_sync_history_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Apply via sqlplus**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 < core/src/main/resources/db/migration/V34__mds_sync_history.sql
+docker exec -i passkey-oracle sqlplus -s PSK_APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 < core/src/main/resources/db/migration/V34__mds_sync_history.sql
 ```
 
 - [ ] **Step 3: Verify**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -s PSK_APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
 SELECT table_name FROM user_tables WHERE table_name = 'MDS_SYNC_HISTORY';
 SELECT sequence_name FROM user_sequences WHERE sequence_name = 'MDS_SYNC_HISTORY_SEQ';
 SELECT grantee, privilege FROM user_tab_privs WHERE table_name = 'MDS_SYNC_HISTORY';
@@ -541,7 +541,7 @@ public class SystemInfoService {
         try {
             dbBanner = jdbc.queryForObject(
                     "SELECT banner FROM v$version WHERE ROWNUM=1", String.class);
-        } catch (Exception ignore) { /* APP_ADMIN may lack SELECT on v$version */ }
+        } catch (Exception ignore) { /* PSK_APP_ADMIN may lack SELECT on v$version */ }
         components.add(new SystemInfoView.Component(
                 "Oracle DB", dbBanner == null ? "unknown" : dbBanner, "OK", 1, "primary"));
         components.add(new SystemInfoView.Component(
@@ -612,7 +612,7 @@ git add admin-app/src/main/java/com/crosscert/passkey/admin/system/ \
         admin-app/build.gradle.kts
 ```
 
-Codex prompt: "codex review SystemInfoController/Service/View + buildInfo enablement. Verify: (1) Actuator NOT required (uses BuildProperties + Environment + JDBC), (2) p95/avg/p99/uptimePercent nullable per execution policy (actuator not configured), (3) components include admin-app/passkey-app/Oracle DB/MDS scheduler, (4) RBAC matches read-only pattern (PLATFORM_OPERATOR + RP_ADMIN), (5) DB version query has try/catch (APP_ADMIN may lack SELECT). Must-fix only."
+Codex prompt: "codex review SystemInfoController/Service/View + buildInfo enablement. Verify: (1) Actuator NOT required (uses BuildProperties + Environment + JDBC), (2) p95/avg/p99/uptimePercent nullable per execution policy (actuator not configured), (3) components include admin-app/passkey-app/Oracle DB/MDS scheduler, (4) RBAC matches read-only pattern (PLATFORM_OPERATOR + RP_ADMIN), (5) DB version query has try/catch (PSK_APP_ADMIN may lack SELECT). Must-fix only."
 
 ```bash
 git commit -m "feat(admin-app): SystemInfo backend (Gap #19)"

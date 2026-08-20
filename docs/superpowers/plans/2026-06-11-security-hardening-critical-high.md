@@ -4,7 +4,7 @@
 
 **Goal:** 2026-06-10 감사 confirmed 19건 중 최우선 4건(CRITICAL #1 MFA 재등록 우회, HIGH #4 MFA verify 브루트포스, HIGH #3 런타임 GRANT ALL, HIGH #2 외부 부트스트랩 비번)을 TDD로 닫는다.
 
-**Architecture:** 2개 독립 묶음. **A(앱)**: `MfaPendingFilter` 허용 경로 축소 + `MfaController` 핸들러 이중 방어 + verify에 기존 lockout 재사용. **B(인프라)**: Flyway를 `APP_OWNER`로 분리 실행, 런타임 `APP_ADMIN_USER`는 DDL 0·audit_log SELECT+INSERT만, 외부 부트스트랩 비번 DEFINE 외부화.
+**Architecture:** 2개 독립 묶음. **A(앱)**: `MfaPendingFilter` 허용 경로 축소 + `MfaController` 핸들러 이중 방어 + verify에 기존 lockout 재사용. **B(인프라)**: Flyway를 `PSK_APP_OWNER`로 분리 실행, 런타임 `PSK_APP_ADMIN_USER`는 DDL 0·audit_log SELECT+INSERT만, 외부 부트스트랩 비번 DEFINE 외부화.
 
 **Tech Stack:** Java 21, Spring Boot 3.5.14, Spring Security, JUnit5 + Mockito + AssertJ(슬라이스), Testcontainers Oracle XE 21(IT), Oracle VPD/Flyway, sqlplus.
 
@@ -21,10 +21,10 @@
 - Create(test): `admin-app/src/test/java/com/crosscert/passkey/admin/auth/MfaControllerTest.java` — verify lockout + 핸들러 pending 거부
 
 **묶음 B (인프라):**
-- Modify: `scripts/bootstrap-vpd.sql` — GRANT ALL 제거, APP_OWNER에 CREATE VIEW, V8 EXEMPT grant 흡수
+- Modify: `scripts/bootstrap-vpd.sql` — GRANT ALL 제거, PSK_APP_OWNER에 CREATE VIEW, V8 EXEMPT grant 흡수
 - Modify: `scripts/bootstrap-external.sql` — 위 + 비번 DEFINE 외부화 + 빈 값 가드
 - Modify: `scripts/init-db-external.sh` — env→DEFINE 주입, `:93-94` 하드코딩 제거
-- Modify: `core/src/main/resources/db/migration/V8__api_key_vpd_policy.sql` — `GRANT EXEMPT ACCESS POLICY TO APP_OWNER` 제거(부트스트랩으로 이동)
+- Modify: `core/src/main/resources/db/migration/V8__api_key_vpd_policy.sql` — `GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER` 제거(부트스트랩으로 이동)
 - Modify: `admin-app/src/main/resources/application.yml` — `spring.flyway.user/password` 분리
 - Modify(test): `admin-app/src/test/java/com/crosscert/passkey/admin/AdminFlowIT.java` — flyway 자격증명 추가 + audit_log DDL 거부 회귀
 
@@ -483,14 +483,14 @@ Run: `/codex:review` (스테이징된 묶음 A diff 대상). P1 발견 시 해�
 **Files:**
 - Modify: `admin-app/src/test/java/com/crosscert/passkey/admin/AdminFlowIT.java`
 
-- [ ] **Step 1: 런타임 계정(APP_ADMIN_USER)이 audit_log를 변조 못 한다는 테스트 추가**
+- [ ] **Step 1: 런타임 계정(PSK_APP_ADMIN_USER)이 audit_log를 변조 못 한다는 테스트 추가**
 
-`AdminFlowIT`는 이미 런타임 풀(`jdbc`, APP_ADMIN_USER)과 owner 풀(`ownerPool`, APP_OWNER)을 가진다. 런타임 풀로 audit_log UPDATE/DELETE/DROP을 시도해 **모두 ORA 권한 오류**가 나는지 검증하는 테스트를 추가:
+`AdminFlowIT`는 이미 런타임 풀(`jdbc`, PSK_APP_ADMIN_USER)과 owner 풀(`ownerPool`, PSK_APP_OWNER)을 가진다. 런타임 풀로 audit_log UPDATE/DELETE/DROP을 시도해 **모두 ORA 권한 오류**가 나는지 검증하는 테스트를 추가:
 
 ```java
     @Test
     void runtimeUser_cannotTamperAuditLog() {
-        // APP_ADMIN_USER (admin-app runtime) must hold SELECT+INSERT only on
+        // PSK_APP_ADMIN_USER (admin-app runtime) must hold SELECT+INSERT only on
         // audit_log — V10's append-only design. GRANT ALL would break this.
         // This is the regression guard for finding #3.
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
@@ -515,7 +515,7 @@ Run: `/codex:review` (스테이징된 묶음 A diff 대상). P1 발견 시 해�
     }
 ```
 
-> `jdbc` 필드는 APP_ADMIN_USER 풀(`AdminFlowIT:131-132` 주석 "App-scoped pool (APP_ADMIN_USER)"). `tenant`/`api_key`는 런타임이 DML하는 테이블이라 SELECT 가능해야 한다.
+> `jdbc` 필드는 PSK_APP_ADMIN_USER 풀(`AdminFlowIT:131-132` 주석 "App-scoped pool (PSK_APP_ADMIN_USER)"). `tenant`/`api_key`는 런타임이 DML하는 테이블이라 SELECT 가능해야 한다.
 
 - [ ] **Step 2: 테스트 실행 — 현재 상태에서 빨강 확인**
 
@@ -533,51 +533,51 @@ git commit -m "test(admin): audit_log DDL 변조 거부 회귀 (#3, 현재 GRANT
 
 ---
 
-### Task B2: V8에서 EXEMPT grant 제거 + 부트스트랩에 APP_OWNER EXEMPT/CREATE VIEW 추가
+### Task B2: V8에서 EXEMPT grant 제거 + 부트스트랩에 PSK_APP_OWNER EXEMPT/CREATE VIEW 추가
 
 **Files:**
 - Modify: `core/src/main/resources/db/migration/V8__api_key_vpd_policy.sql:55`
 - Modify: `scripts/bootstrap-vpd.sql`
 - Modify: `scripts/bootstrap-external.sql`
 
-- [ ] **Step 1: V8의 `GRANT EXEMPT ACCESS POLICY TO APP_OWNER` 제거**
+- [ ] **Step 1: V8의 `GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER` 제거**
 
 `V8__api_key_vpd_policy.sql:55`의 정확한 라인:
 ```sql
-GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
+GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER;
 ```
 이 한 줄을 삭제하고 같은 자리에 주석으로 교체:
 ```sql
--- EXEMPT ACCESS POLICY for APP_OWNER moved to bootstrap SQL (bootstrap-vpd.sql /
--- bootstrap-external.sql). When Flyway runs as APP_OWNER it cannot grant a
+-- EXEMPT ACCESS POLICY for PSK_APP_OWNER moved to bootstrap SQL (bootstrap-vpd.sql /
+-- bootstrap-external.sql). When Flyway runs as PSK_APP_OWNER it cannot grant a
 -- system privilege to itself, so SYS must grant it during bootstrap. The
--- definer-rights api_key_lookup_pkg below still relies on APP_OWNER holding it.
+-- definer-rights api_key_lookup_pkg below still relies on PSK_APP_OWNER holding it.
 ```
 
-> ⚠️ **Flyway 체크섬 주의.** V8이 이미 적용된 환경에서 본문 변경은 체크섬 충돌을 일으킨다. Testcontainers IT는 매번 새 DB라 무영향. dogfooding/운영 DB는 B5 이후 `flyway repair`로 체크섬 갱신하거나, 이미 APP_OWNER가 EXEMPT를 보유하므로(부트스트랩이 부여) 재적용 불필요 — V8은 이미 실행된 상태로 남고 새 부트스트랩만 권한을 보강한다. 이 plan은 **신규 DB 기준 깨끗한 상태**를 정의하고, 기존 환경 마이그레이션은 B5 IT 통과 후 별도 운영 단계로 처리.
+> ⚠️ **Flyway 체크섬 주의.** V8이 이미 적용된 환경에서 본문 변경은 체크섬 충돌을 일으킨다. Testcontainers IT는 매번 새 DB라 무영향. dogfooding/운영 DB는 B5 이후 `flyway repair`로 체크섬 갱신하거나, 이미 PSK_APP_OWNER가 EXEMPT를 보유하므로(부트스트랩이 부여) 재적용 불필요 — V8은 이미 실행된 상태로 남고 새 부트스트랩만 권한을 보강한다. 이 plan은 **신규 DB 기준 깨끗한 상태**를 정의하고, 기존 환경 마이그레이션은 B5 IT 통과 후 별도 운영 단계로 처리.
 
-- [ ] **Step 2: bootstrap-vpd.sql — GRANT ALL 제거 + APP_OWNER 권한 보강**
+- [ ] **Step 2: bootstrap-vpd.sql — GRANT ALL 제거 + PSK_APP_OWNER 권한 보강**
 
 `bootstrap-vpd.sql`에서:
-- `GRANT ALL PRIVILEGES TO APP_ADMIN_USER;`(90행) **삭제**
-- APP_OWNER privileges 블록(현재 CREATE TABLE/SEQUENCE/... 나열부)에 추가:
+- `GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER;`(90행) **삭제**
+- PSK_APP_OWNER privileges 블록(현재 CREATE TABLE/SEQUENCE/... 나열부)에 추가:
 
 ```sql
-GRANT CREATE VIEW         TO APP_OWNER;
-GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
+GRANT CREATE VIEW         TO PSK_APP_OWNER;
+GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER;
 ```
 
-> APP_ADMIN_USER는 `GRANT APP_ADMIN TO APP_ADMIN_USER`(기존)로 audit_log SELECT+INSERT 등 객체 권한을 롤 경유로 받는다. GRANT ALL 제거 후에도 마이그레이션이 부여하는 객체 GRANT로 런타임 DML이 충족된다(B5에서 검증).
+> PSK_APP_ADMIN_USER는 `GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER`(기존)로 audit_log SELECT+INSERT 등 객체 권한을 롤 경유로 받는다. GRANT ALL 제거 후에도 마이그레이션이 부여하는 객체 GRANT로 런타임 DML이 충족된다(B5에서 검증).
 
 - [ ] **Step 3: bootstrap-external.sql — 동일 변경**
 
 `bootstrap-external.sql`에서:
-- `GRANT ALL PRIVILEGES TO APP_ADMIN_USER;`(89행) **삭제**
-- APP_OWNER privileges 블록(61-68행)에 추가:
+- `GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER;`(89행) **삭제**
+- PSK_APP_OWNER privileges 블록(61-68행)에 추가:
 
 ```sql
-GRANT CREATE VIEW         TO APP_OWNER;
-GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
+GRANT CREATE VIEW         TO PSK_APP_OWNER;
+GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER;
 ```
 
 - [ ] **Step 4: 커밋**
@@ -585,12 +585,12 @@ GRANT EXEMPT ACCESS POLICY TO APP_OWNER;
 ```bash
 git add core/src/main/resources/db/migration/V8__api_key_vpd_policy.sql \
         scripts/bootstrap-vpd.sql scripts/bootstrap-external.sql
-git commit -m "fix(db): 런타임 GRANT ALL 제거 + APP_OWNER에 CREATE VIEW/EXEMPT (#3 Approach A)"
+git commit -m "fix(db): 런타임 GRANT ALL 제거 + PSK_APP_OWNER에 CREATE VIEW/EXEMPT (#3 Approach A)"
 ```
 
 ---
 
-### Task B3: Flyway를 APP_OWNER로 분리 실행 (앱 설정 + IT 설정)
+### Task B3: Flyway를 PSK_APP_OWNER로 분리 실행 (앱 설정 + IT 설정)
 
 **Files:**
 - Modify: `admin-app/src/main/resources/application.yml:10-14`
@@ -603,9 +603,9 @@ git commit -m "fix(db): 런타임 GRANT ALL 제거 + APP_OWNER에 CREATE VIEW/EX
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
-    # APP_OWNER schema already contains the CTX_PKG package and APP_CTX
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
+    # PSK_APP_OWNER schema already contains the CTX_PKG package and APP_CTX
     # context created by scripts/bootstrap-vpd.sql before Flyway ever
     # runs. baseline-on-migrate lets Flyway record V0 in its history
     # table on first run instead of refusing to start because the
@@ -613,14 +613,14 @@ git commit -m "fix(db): 런타임 GRANT ALL 제거 + APP_OWNER에 CREATE VIEW/EX
     baseline-on-migrate: true
 ```
 
-`default-schema: APP_OWNER` 다음 줄에 user/password 3줄을 삽입(기존 블록 보존, env 폴백):
+`default-schema: PSK_APP_OWNER` 다음 줄에 user/password 3줄을 삽입(기존 블록 보존, env 폴백):
 ```yaml
-    default-schema: APP_OWNER
+    default-schema: PSK_APP_OWNER
     # Finding #3 (Approach A): Flyway runs as the schema OWNER, not the
     # runtime datasource user. This lets us strip ALL DDL power from the
-    # runtime APP_ADMIN_USER while migrations still create/alter objects.
+    # runtime PSK_APP_ADMIN_USER while migrations still create/alter objects.
     # url is omitted → Flyway falls back to spring.datasource.url (same DB).
-    user: ${SPRING_FLYWAY_USER:APP_OWNER}
+    user: ${SPRING_FLYWAY_USER:PSK_APP_OWNER}
     password: ${SPRING_FLYWAY_PASSWORD:app_owner_pw}
 ```
 
@@ -629,31 +629,31 @@ git commit -m "fix(db): 런타임 GRANT ALL 제거 + APP_OWNER에 CREATE VIEW/EX
 `AdminFlowIT.java`의 `registerProps`(93-119행), `spring.datasource.*` 등록 직후에 추가:
 
 ```java
-        // Flyway runs as the schema OWNER (APP_OWNER), runtime as APP_ADMIN_USER.
+        // Flyway runs as the schema OWNER (PSK_APP_OWNER), runtime as PSK_APP_ADMIN_USER.
         // Finding #3 (Approach A): the runtime user no longer holds DDL power.
         reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD); // APP_OWNER pw == SYS_PASSWORD here
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD); // PSK_APP_OWNER pw == SYS_PASSWORD here
 ```
 
-> `SYS_PASSWORD`는 `AdminFlowIT:79`에서 `"app_owner_pw"`이고 OracleContainer가 APP_OWNER 비번으로도 씀(주석 74-78). 따라서 APP_OWNER 접속 비번 = `SYS_PASSWORD`.
+> `SYS_PASSWORD`는 `AdminFlowIT:79`에서 `"app_owner_pw"`이고 OracleContainer가 PSK_APP_OWNER 비번으로도 씀(주석 74-78). 따라서 PSK_APP_OWNER 접속 비번 = `SYS_PASSWORD`.
 
 - [ ] **Step 3: IT 실행 — B1의 빨강이 초록으로 전환되는지 확인**
 
 Run: `./gradlew :admin-app:test --tests 'com.crosscert.passkey.admin.AdminFlowIT'`
 Expected:
-- `runtimeUser_cannotTamperAuditLog` → **PASS** (GRANT ALL 제거 + Flyway=APP_OWNER로 APP_ADMIN_USER는 DDL 0)
+- `runtimeUser_cannotTamperAuditLog` → **PASS** (GRANT ALL 제거 + Flyway=PSK_APP_OWNER로 PSK_APP_ADMIN_USER는 DDL 0)
 - `runtimeUser_canStillWriteAdminTables` → PASS
-- 기존 `operatorFlowEndToEnd` 11단계 → PASS (Flyway가 APP_OWNER로 완주, V40 뷰 생성 포함)
+- 기존 `operatorFlowEndToEnd` 11단계 → PASS (Flyway가 PSK_APP_OWNER로 완주, V40 뷰 생성 포함)
 
-만약 Flyway가 권한 부족으로 실패하면(예: 특정 마이그레이션이 APP_OWNER 미보유 권한 요구) — 스택트레이스의 ORA 권한명을 확인해 `bootstrap-vpd.sql`의 APP_OWNER privileges 블록에 해당 `GRANT ...`를 추가하고 재실행(반복). spec이 예고한 비-단순 마이그레이션: V3(DBMS_RLS), V19(DROP 패키지/정책), V35(VPD), V40(뷰).
+만약 Flyway가 권한 부족으로 실패하면(예: 특정 마이그레이션이 PSK_APP_OWNER 미보유 권한 요구) — 스택트레이스의 ORA 권한명을 확인해 `bootstrap-vpd.sql`의 PSK_APP_OWNER privileges 블록에 해당 `GRANT ...`를 추가하고 재실행(반복). spec이 예고한 비-단순 마이그레이션: V3(DBMS_RLS), V19(DROP 패키지/정책), V35(VPD), V40(뷰).
 
 - [ ] **Step 4: 커밋**
 
 ```bash
 git add admin-app/src/main/resources/application.yml \
         admin-app/src/test/java/com/crosscert/passkey/admin/AdminFlowIT.java
-git commit -m "fix(db): Flyway를 APP_OWNER로 분리 실행 (#3) — 런타임 APP_ADMIN_USER는 DDL 0"
+git commit -m "fix(db): Flyway를 PSK_APP_OWNER로 분리 실행 (#3) — 런타임 PSK_APP_ADMIN_USER는 DDL 0"
 ```
 
 ---
@@ -666,7 +666,7 @@ git commit -m "fix(db): Flyway를 APP_OWNER로 분리 실행 (#3) — 런타임 
 
 - [ ] **Step 1: bootstrap-external.sql 상단(첫 CREATE USER 앞)에 DEFINE + 빈 값 가드 삽입**
 
-`bootstrap-external.sql`의 `ALTER SESSION SET CONTAINER` 직후, **APP_OWNER CREATE USER(28행) 앞**에 삽입:
+`bootstrap-external.sql`의 `ALTER SESSION SET CONTAINER` 직후, **PSK_APP_OWNER CREATE USER(28행) 앞**에 삽입:
 
 ```sql
 -- ============================================================
@@ -692,9 +692,9 @@ END;
 - [ ] **Step 2: CREATE USER 3곳을 치환 변수로 교체**
 
 `bootstrap-external.sql`의 비번 리터럴 교체:
-- `CREATE USER APP_OWNER IDENTIFIED BY app_owner_pw` → `CREATE USER APP_OWNER IDENTIFIED BY "&&app_owner_pw"`
-- `CREATE USER APP_RUNTIME_USER IDENTIFIED BY runtime_pw` → `... IDENTIFIED BY "&&runtime_pw"`
-- `CREATE USER APP_ADMIN_USER IDENTIFIED BY admin_pw` → `... IDENTIFIED BY "&&admin_pw"`
+- `CREATE USER PSK_APP_OWNER IDENTIFIED BY app_owner_pw` → `CREATE USER PSK_APP_OWNER IDENTIFIED BY "&&app_owner_pw"`
+- `CREATE USER PSK_APP_RUNTIME_USER IDENTIFIED BY runtime_pw` → `... IDENTIFIED BY "&&runtime_pw"`
+- `CREATE USER PSK_APP_ADMIN_USER IDENTIFIED BY admin_pw` → `... IDENTIFIED BY "&&admin_pw"`
 
 > `EXECUTE IMMEDIATE 'CREATE USER ... IDENTIFIED BY "&&pw"'` 내부에서도 sqlplus 치환은 작은따옴표 문자열 안에서 동작(sqlplus가 Oracle 파싱 전에 치환). 큰따옴표로 감싸 특수문자 허용. 단, 비번에 `&`가 있으면 충돌 — env 주입 비번은 `&` 회피 권장(주석 명시).
 
@@ -761,9 +761,9 @@ git commit -m "fix(db): 외부 부트스트랩 비번 DEFINE 외부화 + fail-fa
 - [ ] **Step 1: 영향받는 Testcontainers IT 전체 실행**
 
 Run: `./gradlew :admin-app:test --tests '*IT' && ./gradlew :core:test --tests '*IT'`
-Expected: PASS — `AdminFlowIT`(audit DDL 거부 + 런타임 DML + 전체 플로우), VPD IT들(`VpdIsolationIT`/`AppLevelIsolationIT` 등 — bootstrap-vpd.sql 변경 영향), `KeyRotationIT`/`MdsSchedulerIT` 모두 그린. Flyway가 APP_OWNER로 완주.
+Expected: PASS — `AdminFlowIT`(audit DDL 거부 + 런타임 DML + 전체 플로우), VPD IT들(`VpdIsolationIT`/`AppLevelIsolationIT` 등 — bootstrap-vpd.sql 변경 영향), `KeyRotationIT`/`MdsSchedulerIT` 모두 그린. Flyway가 PSK_APP_OWNER로 완주.
 
-> 다른 IT들도 `bootstrap-vpd.sql`을 쓰므로(예: `VpdIsolationIT`) GRANT 변경의 광범위 영향을 여기서 잡는다. 실패 시 ORA 권한명 확인 → bootstrap APP_OWNER 권한 보강 → 재실행.
+> 다른 IT들도 `bootstrap-vpd.sql`을 쓰므로(예: `VpdIsolationIT`) GRANT 변경의 광범위 영향을 여기서 잡는다. 실패 시 ORA 권한명 확인 → bootstrap PSK_APP_OWNER 권한 보강 → 재실행.
 
 - [ ] **Step 2: 전체 빌드 (양 묶음 통합 회귀)**
 

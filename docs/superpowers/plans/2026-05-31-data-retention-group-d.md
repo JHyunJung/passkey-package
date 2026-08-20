@@ -120,7 +120,7 @@ git commit -m "feat(retention): 토큰3+snapshot bulk DELETE 메서드 — 활�
 
 ## Task 2: MdsHistoryService.purgeStartedBefore (native DELETE)
 
-mds_sync_history는 JPA 엔티티가 없고 `MdsHistoryService`가 JdbcTemplate로 관리(`APP_OWNER.` prefix). 그 패턴대로 purge 추가.
+mds_sync_history는 JPA 엔티티가 없고 `MdsHistoryService`가 JdbcTemplate로 관리(`PSK_APP_OWNER.` prefix). 그 패턴대로 purge 추가.
 
 **Files:**
 - Modify: `admin-app/src/main/java/com/crosscert/passkey/admin/mds/MdsHistoryService.java`
@@ -131,12 +131,12 @@ mds_sync_history는 JPA 엔티티가 없고 `MdsHistoryService`가 JdbcTemplate�
 ```java
     /**
      * P1-4 retention: started_at 이 cutoff 이전인 sync 이력 삭제. 삭제 건수 반환.
-     * MdsBlobStore/recent() 와 동일하게 APP_OWNER. 스키마 prefix 명시(JdbcTemplate raw SQL).
+     * MdsBlobStore/recent() 와 동일하게 PSK_APP_OWNER. 스키마 prefix 명시(JdbcTemplate raw SQL).
      */
     @Transactional
     public int purgeStartedBefore(java.time.Instant cutoff) {
         return jdbc.update(
-                "DELETE FROM APP_OWNER.mds_sync_history WHERE started_at < ?",
+                "DELETE FROM PSK_APP_OWNER.mds_sync_history WHERE started_at < ?",
                 java.sql.Timestamp.from(cutoff));
     }
 ```

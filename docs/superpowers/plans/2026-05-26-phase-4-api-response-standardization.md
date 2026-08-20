@@ -1447,7 +1447,7 @@ Find scenario 3 (`rotateRejectsConcurrentWithConflict`). Replace the try/catch:
 ```java
 @Test
 void rotateRejectsConcurrentWithConflict() {
-    jdbc.update("INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
+    jdbc.update("INSERT INTO PSK_APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                 "VALUES ('key-rotation', 'somebody-else', SYSTIMESTAMP + INTERVAL '5' MINUTE)");
 
     assertThatThrownBy(() -> rotation.rotate(0L, "(test)"))

@@ -4,7 +4,7 @@
 
 **Goal:** `:passkey-app`과 `:admin-app`이 각자 독립된 Spring Boot bootJar로 기동되고, Oracle 19c + Redis 7과 연결되며, Oracle VPD에 의해 테넌트 격리가 실제로 동작하는 것을 자동 테스트로 증명하는 토대를 만든다.
 
-**Architecture:** Gradle 멀티모듈(Kotlin DSL)로 `:core`(공용 도메인·인프라) + `:passkey-app` + `:admin-app` 3개 모듈을 구성한다. Oracle VPD를 `APP_RUNTIME`/`APP_ADMIN` 두 개의 DB 롤로 분리해 적용하고, `TenantAwareDataSource`가 HikariCP connection borrow/return 시점에 `ctx_pkg.set_tenant`/`clear_tenant`를 호출해 컨텍스트를 주입한다. Flyway는 admin-app에서만 활성화되어 스키마를 관리한다.
+**Architecture:** Gradle 멀티모듈(Kotlin DSL)로 `:core`(공용 도메인·인프라) + `:passkey-app` + `:admin-app` 3개 모듈을 구성한다. Oracle VPD를 `PSK_APP_RUNTIME`/`PSK_APP_ADMIN` 두 개의 DB 롤로 분리해 적용하고, `TenantAwareDataSource`가 HikariCP connection borrow/return 시점에 `ctx_pkg.set_tenant`/`clear_tenant`를 호출해 컨텍스트를 주입한다. Flyway는 admin-app에서만 활성화되어 스키마를 관리한다.
 
 **Tech Stack:** Java 17, Spring Boot 3.5.x, Gradle Kotlin DSL, Oracle 19c (XE in docker), Redis 7, Spring Data JPA, Flyway, HikariCP, Testcontainers (Oracle XE).
 
@@ -370,8 +370,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
 
 server.port: 8081
 ```
@@ -412,7 +412,7 @@ services:
     container_name: passkey-oracle
     environment:
       ORACLE_PASSWORD: oracle
-      APP_USER: APP_OWNER
+      APP_USER: PSK_APP_OWNER
       APP_USER_PASSWORD: app_owner_pw
     ports:
       - "1521:1521"
@@ -439,7 +439,7 @@ volumes:
   oracle-data:
 ```
 
-`gvenzl/oracle-xe` 이미지는 `APP_USER` 환경변수로 추가 유저(`APP_OWNER`)를 자동 생성. 이게 스키마/객체 소유자가 된다.
+`gvenzl/oracle-xe` 이미지는 `APP_USER` 환경변수로 추가 유저(`PSK_APP_OWNER`)를 자동 생성. 이게 스키마/객체 소유자가 된다.
 
 - [ ] **Step 2: wait-for-oracle.sh 작성**
 
@@ -492,39 +492,39 @@ git commit -m "build: add docker-compose with Oracle XE and Redis 7"
 
 ```sql
 -- 이 스크립트는 SYS(SYSDBA) 권한으로 1회 실행.
--- APP_OWNER 유저는 docker-compose의 APP_USER 환경변수로 이미 생성되어 있음.
+-- PSK_APP_OWNER 유저는 docker-compose의 APP_USER 환경변수로 이미 생성되어 있음.
 
 ALTER SESSION SET CONTAINER = XEPDB1;
 
--- APP_RUNTIME 롤: 일반 트랜잭션 — VPD policy 적용 대상
-CREATE ROLE APP_RUNTIME;
-GRANT CREATE SESSION TO APP_RUNTIME;
+-- PSK_APP_RUNTIME 롤: 일반 트랜잭션 — VPD policy 적용 대상
+CREATE ROLE PSK_APP_RUNTIME;
+GRANT CREATE SESSION TO PSK_APP_RUNTIME;
 
--- APP_ADMIN 롤: 스케줄러/마이그레이션 — VPD 우회
-CREATE ROLE APP_ADMIN;
-GRANT CREATE SESSION TO APP_ADMIN;
-GRANT EXEMPT ACCESS POLICY TO APP_ADMIN;
+-- PSK_APP_ADMIN 롤: 스케줄러/마이그레이션 — VPD 우회
+CREATE ROLE PSK_APP_ADMIN;
+GRANT CREATE SESSION TO PSK_APP_ADMIN;
+GRANT EXEMPT ACCESS POLICY TO PSK_APP_ADMIN;
 
--- APP_OWNER에 객체 생성/관리 권한 부여 (스키마 소유자)
+-- PSK_APP_OWNER에 객체 생성/관리 권한 부여 (스키마 소유자)
 GRANT CREATE TABLE, CREATE SEQUENCE, CREATE PROCEDURE, CREATE TRIGGER,
       CREATE CONTEXT, CREATE PUBLIC SYNONYM, DROP PUBLIC SYNONYM,
-      UNLIMITED TABLESPACE TO APP_OWNER;
-GRANT EXECUTE ON DBMS_RLS TO APP_OWNER;
-GRANT EXECUTE ON DBMS_SESSION TO APP_OWNER;
+      UNLIMITED TABLESPACE TO PSK_APP_OWNER;
+GRANT EXECUTE ON DBMS_RLS TO PSK_APP_OWNER;
+GRANT EXECUTE ON DBMS_SESSION TO PSK_APP_OWNER;
 
 -- 런타임 유저 생성
-CREATE USER APP_RUNTIME_USER IDENTIFIED BY runtime_pw;
-GRANT APP_RUNTIME TO APP_RUNTIME_USER;
+CREATE USER PSK_APP_RUNTIME_USER IDENTIFIED BY runtime_pw;
+GRANT PSK_APP_RUNTIME TO PSK_APP_RUNTIME_USER;
 
-CREATE USER APP_ADMIN_USER IDENTIFIED BY admin_pw;
-GRANT APP_ADMIN TO APP_ADMIN_USER;
--- ADMIN은 Flyway/DDL을 위해 APP_OWNER 객체에 광범위 권한 필요
-GRANT ALL PRIVILEGES TO APP_ADMIN_USER;
+CREATE USER PSK_APP_ADMIN_USER IDENTIFIED BY admin_pw;
+GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER;
+-- ADMIN은 Flyway/DDL을 위해 PSK_APP_OWNER 객체에 광범위 권한 필요
+GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER;
 
--- APP_OWNER로 컨텍스트와 패키지 생성
-CONNECT APP_OWNER/app_owner_pw@XEPDB1;
+-- PSK_APP_OWNER로 컨텍스트와 패키지 생성
+CONNECT PSK_APP_OWNER/app_owner_pw@XEPDB1;
 
-CREATE OR REPLACE CONTEXT APP_CTX USING APP_OWNER.CTX_PKG;
+CREATE OR REPLACE CONTEXT APP_CTX USING PSK_APP_OWNER.CTX_PKG;
 
 CREATE OR REPLACE PACKAGE CTX_PKG AS
   PROCEDURE set_tenant(p_tid IN VARCHAR2);
@@ -544,8 +544,8 @@ CREATE OR REPLACE PACKAGE BODY CTX_PKG AS
 END;
 /
 
-GRANT EXECUTE ON CTX_PKG TO APP_RUNTIME;
-GRANT EXECUTE ON CTX_PKG TO APP_ADMIN;
+GRANT EXECUTE ON CTX_PKG TO PSK_APP_RUNTIME;
+GRANT EXECUTE ON CTX_PKG TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: run-bootstrap.sh 작성**
@@ -565,11 +565,11 @@ chmod +x scripts/run-bootstrap.sh
 
 Expected: SQL 출력에서 `Role created.`, `User created.`, `Package created.` 등이 보이고 마지막에 `Grant succeeded.`.
 
-검증 — APP_RUNTIME_USER로 접속해 컨텍스트 호출이 되는지:
+검증 — PSK_APP_RUNTIME_USER로 접속해 컨텍스트 호출이 되는지:
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_RUNTIME_USER/runtime_pw@localhost:1521/XEPDB1 <<EOF
-BEGIN APP_OWNER.CTX_PKG.set_tenant('T_TEST'); END;
+docker exec -i passkey-oracle sqlplus -S PSK_APP_RUNTIME_USER/runtime_pw@localhost:1521/XEPDB1 <<EOF
+BEGIN PSK_APP_OWNER.CTX_PKG.set_tenant('T_TEST'); END;
 /
 SELECT SYS_CONTEXT('APP_CTX','TENANT_ID') FROM dual;
 EOF
@@ -581,7 +581,7 @@ Expected: 결과에 `T_TEST` 출력.
 
 ```bash
 git add scripts/bootstrap-vpd.sql scripts/run-bootstrap.sh
-git commit -m "build: add DBA bootstrap for APP_RUNTIME/APP_ADMIN roles + ctx_pkg"
+git commit -m "build: add DBA bootstrap for PSK_APP_RUNTIME/PSK_APP_ADMIN roles + ctx_pkg"
 ```
 
 ---
@@ -597,7 +597,7 @@ git commit -m "build: add DBA bootstrap for APP_RUNTIME/APP_ADMIN roles + ctx_pk
 
 ```sql
 -- Platform-scoped 테이블: tenant_id 없음, VPD 미적용
--- APP_OWNER 스키마에 생성됨.
+-- PSK_APP_OWNER 스키마에 생성됨.
 
 CREATE TABLE tenant (
   id              VARCHAR2(64)  NOT NULL,
@@ -628,14 +628,14 @@ CREATE TABLE mds_blob_cache (
 );
 
 -- 런타임/관리자 롤에 권한 부여
-GRANT SELECT ON tenant TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant TO APP_ADMIN;
+GRANT SELECT ON tenant TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant TO PSK_APP_ADMIN;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON scheduler_lease TO APP_ADMIN;
+GRANT SELECT, INSERT, UPDATE, DELETE ON scheduler_lease TO PSK_APP_ADMIN;
 
-GRANT SELECT ON mds_blob_cache TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON mds_blob_cache TO APP_ADMIN;
-GRANT SELECT ON mds_blob_cache_seq TO APP_ADMIN;
+GRANT SELECT ON mds_blob_cache TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON mds_blob_cache TO PSK_APP_ADMIN;
+GRANT SELECT ON mds_blob_cache_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Commit**
@@ -685,10 +685,10 @@ CREATE TABLE credential (
 
 CREATE INDEX ix_credential_tenant_user ON credential(tenant_id, user_handle);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON credential TO APP_RUNTIME;
-GRANT SELECT ON credential_seq TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON credential TO APP_ADMIN;
-GRANT SELECT ON credential_seq TO APP_ADMIN;
+GRANT SELECT, INSERT, UPDATE, DELETE ON credential TO PSK_APP_RUNTIME;
+GRANT SELECT ON credential_seq TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON credential TO PSK_APP_ADMIN;
+GRANT SELECT ON credential_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Commit**
@@ -723,10 +723,10 @@ END tenant_predicate;
 -- credential 테이블에 정책 부착
 BEGIN
   DBMS_RLS.ADD_POLICY(
-    object_schema   => 'APP_OWNER',
+    object_schema   => 'PSK_APP_OWNER',
     object_name     => 'CREDENTIAL',
     policy_name     => 'CREDENTIAL_TENANT_ISOLATION',
-    function_schema => 'APP_OWNER',
+    function_schema => 'PSK_APP_OWNER',
     policy_function => 'TENANT_PREDICATE',
     statement_types => 'SELECT,INSERT,UPDATE,DELETE',
     update_check    => TRUE
@@ -1214,8 +1214,8 @@ import java.util.logging.Logger;
  */
 public class TenantAwareDataSource implements DataSource {
 
-    private static final String SET_SQL = "{ call APP_OWNER.ctx_pkg.set_tenant(?) }";
-    private static final String CLEAR_SQL = "{ call APP_OWNER.ctx_pkg.clear_tenant() }";
+    private static final String SET_SQL = "{ call PSK_APP_OWNER.ctx_pkg.set_tenant(?) }";
+    private static final String CLEAR_SQL = "{ call PSK_APP_OWNER.ctx_pkg.clear_tenant() }";
 
     private final DataSource delegate;
 
@@ -1340,7 +1340,7 @@ public class CoreDataSourceConfig {
 
 핵심: Spring Boot의 자동 DataSource 생성을 누르고, `@Primary`인 `dataSource()`가 wrapped 인스턴스를 반환. JPA·Flyway·Health 모두 이 빈을 사용.
 
-다만 Flyway가 DDL을 돌릴 때는 ThreadLocal에 tenant가 없으므로 ctx_pkg.set_tenant도 호출되지 않음. → APP_ADMIN 우회와 함께 안전.
+다만 Flyway가 DDL을 돌릴 때는 ThreadLocal에 tenant가 없으므로 ctx_pkg.set_tenant도 호출되지 않음. → PSK_APP_ADMIN 우회와 함께 안전.
 
 - [ ] **Step 2: Commit**
 
@@ -1539,25 +1539,25 @@ spring:
       port: 6379
 ```
 
-- [ ] **Step 2: passkey-app local 프로파일 (APP_RUNTIME 계정)**
+- [ ] **Step 2: passkey-app local 프로파일 (PSK_APP_RUNTIME 계정)**
 
 `passkey-app/src/main/resources/application-local.yml`:
 
 ```yaml
 spring:
   datasource:
-    username: APP_RUNTIME_USER
+    username: PSK_APP_RUNTIME_USER
     password: runtime_pw
 ```
 
-- [ ] **Step 3: admin-app local 프로파일 (APP_ADMIN 계정)**
+- [ ] **Step 3: admin-app local 프로파일 (PSK_APP_ADMIN 계정)**
 
 `admin-app/src/main/resources/application-local.yml`:
 
 ```yaml
 spring:
   datasource:
-    username: APP_ADMIN_USER
+    username: PSK_APP_ADMIN_USER
     password: admin_pw
 ```
 
@@ -1585,7 +1585,7 @@ Expected: 두 앱 모두 health 응답이 다음과 같음:
 마이그레이션 결과를 sqlplus로 확인:
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
 SELECT table_name FROM user_tables ORDER BY table_name;
 SELECT policy_name, object_name FROM user_policies;
 EOF
@@ -1621,8 +1621,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
   jpa:
     hibernate.ddl-auto: validate
 ```
@@ -1664,7 +1664,7 @@ class VpdIsolationIT {
     @Container
     static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-xe:21-slim-faststart")
             .withDatabaseName("XEPDB1")
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword("app_owner_pw")
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-vpd.sql"),
@@ -1680,7 +1680,7 @@ class VpdIsolationIT {
             throw new RuntimeException("bootstrap failed", e);
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
     }
 
@@ -1690,7 +1690,7 @@ class VpdIsolationIT {
     @BeforeEach
     void seed() {
         TenantContextHolder.clear();
-        // APP_ADMIN_USER로 두 테넌트 + 각 1 credential을 INSERT
+        // PSK_APP_ADMIN_USER로 두 테넌트 + 각 1 credential을 INSERT
         tenants.save(new Tenant("T_A", "Tenant A"));
         tenants.save(new Tenant("T_B", "Tenant B"));
         credentials.save(new Credential("T_A", "user_a".getBytes(), "cred_a".getBytes(),
@@ -1710,7 +1710,7 @@ class VpdIsolationIT {
     class WithAppAdminUser_BypassesPolicy {
         @Test
         void seesAllRows() {
-            // 현재 datasource는 APP_ADMIN_USER. EXEMPT ACCESS POLICY 적용.
+            // 현재 datasource는 PSK_APP_ADMIN_USER. EXEMPT ACCESS POLICY 적용.
             TenantContextHolder.clear();
             List<Credential> all = credentials.findAll();
             assertThat(all).hasSize(2);
@@ -1718,8 +1718,8 @@ class VpdIsolationIT {
     }
 
     /*
-     * APP_RUNTIME 시나리오는 별도 datasource로 검증해야 한다.
-     * Test profile에서 추가 DataSource를 만들어 APP_RUNTIME_USER로 접속한다.
+     * PSK_APP_RUNTIME 시나리오는 별도 datasource로 검증해야 한다.
+     * Test profile에서 추가 DataSource를 만들어 PSK_APP_RUNTIME_USER로 접속한다.
      */
     @Nested
     class WithAppRuntimeUser_PolicyEnforced {
@@ -1800,7 +1800,7 @@ public class RuntimeDsHelper {
     public RuntimeDsHelper(@Value("${spring.datasource.url}") String url) {
         HikariDataSource ds = new HikariDataSource();
         ds.setJdbcUrl(url);
-        ds.setUsername("APP_RUNTIME_USER");
+        ds.setUsername("PSK_APP_RUNTIME_USER");
         ds.setPassword("runtime_pw");
         DataSource wrapped = new TenantAwareDataSource(ds);
         this.runtimeJdbc = new JdbcTemplate(wrapped);
@@ -1808,14 +1808,14 @@ public class RuntimeDsHelper {
 
     public List<Object[]> selectAllCredentialsAsRuntime() {
         return runtimeJdbc.query(
-                "SELECT id, tenant_id FROM APP_OWNER.credential",
+                "SELECT id, tenant_id FROM PSK_APP_OWNER.credential",
                 (rs, i) -> new Object[]{rs.getLong("id"), rs.getString("tenant_id")});
     }
 
     public void insertCredentialAs(String tenantId, String userHandle, String credentialId, String publicKey) {
         runtimeJdbc.update(
-                "INSERT INTO APP_OWNER.credential (id, tenant_id, user_handle, credential_id, public_key) " +
-                "VALUES (APP_OWNER.credential_seq.NEXTVAL, ?, UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?))",
+                "INSERT INTO PSK_APP_OWNER.credential (id, tenant_id, user_handle, credential_id, public_key) " +
+                "VALUES (PSK_APP_OWNER.credential_seq.NEXTVAL, ?, UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?), UTL_RAW.CAST_TO_RAW(?))",
                 tenantId, userHandle, credentialId, publicKey);
     }
 }
@@ -1922,15 +1922,15 @@ spec 대비 plan 커버리지를 점검:
 | §7 로컬 개발 환경 | Task 3, 15 |
 | §8.1 Hello World | Task 15, 17 |
 | §8.2 VPD 격리 자동 테스트 | Task 16 |
-| §11 위험 요소 | Task 11(connection 초기화), Task 4(APP_ADMIN), Task 14(profile 분리) 곳곳에 반영 |
+| §11 위험 요소 | Task 11(connection 초기화), Task 4(PSK_APP_ADMIN), Task 14(profile 분리) 곳곳에 반영 |
 
 **Placeholder scan:** TBD/TODO/"fill in later"/"add appropriate" 없음. 모든 step에 실제 코드와 명령이 들어 있음.
 
 **Type consistency:**
 - `TenantContextHolder.set/get/clear` — Task 10, 11, 14, 16 전체에서 일관.
 - `TenantAwareDataSource(DataSource delegate)` — Task 11 정의, Task 12, 16에서 사용 — 동일 시그니처.
-- `APP_RUNTIME_USER`/`APP_ADMIN_USER` 계정명 + `runtime_pw`/`admin_pw` — Task 4 정의, Task 15, 16에서 사용 — 동일.
-- Flyway 스키마 명 `APP_OWNER` — Task 2(yml), 4(bootstrap), 5/6/7(DDL), 16(test yml) 일관.
+- `PSK_APP_RUNTIME_USER`/`PSK_APP_ADMIN_USER` 계정명 + `runtime_pw`/`admin_pw` — Task 4 정의, Task 15, 16에서 사용 — 동일.
+- Flyway 스키마 명 `PSK_APP_OWNER` — Task 2(yml), 4(bootstrap), 5/6/7(DDL), 16(test yml) 일관.
 
 **Scope check:** Phase 0 단일 구현 계획으로 적정. 후속 Phase 작업은 명시적으로 제외(spec §9 + plan §10 미사용 — 의도적).
 

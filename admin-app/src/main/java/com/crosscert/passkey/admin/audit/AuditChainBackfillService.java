@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,10 +30,13 @@ public class AuditChainBackfillService {
     private final AuditLogRepository repo;
     private final EntityManager em;
     private final ObjectMapper canonical;
+    private final String schema;
 
-    public AuditChainBackfillService(AuditLogRepository repo, EntityManager em, ObjectMapper baseMapper) {
+    public AuditChainBackfillService(AuditLogRepository repo, EntityManager em, ObjectMapper baseMapper,
+                                     DbSchemaProperties dbSchema) {
         this.repo = repo;
         this.em = em;
+        this.schema = dbSchema.schema();
         this.canonical = baseMapper.copy()
                 .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
     }
@@ -42,7 +46,7 @@ public class AuditChainBackfillService {
     @Transactional
     public Summary backfill() {
         em.createNativeQuery(
-                "SELECT 1 FROM APP_OWNER.scheduler_lease WHERE name = :n FOR UPDATE")
+                "SELECT 1 FROM " + schema + ".scheduler_lease WHERE name = :n FOR UPDATE")
             .setParameter("n", AuditLogService.CHAIN_LOCK_NAME)
             .getSingleResult();
 
@@ -80,9 +84,9 @@ public class AuditChainBackfillService {
                 // Use native SQL UPDATE targeting only tenant_hash + tenant_prev_hash so that
                 // we need only the column-level UPDATE grant on those two columns (V46),
                 // not a full-row UPDATE. This avoids triggering ORA-01031 on the other columns
-                // that APP_ADMIN intentionally cannot update (V10 append-only design).
+                // that PSK_APP_ADMIN intentionally cannot update (V10 append-only design).
                 em.createNativeQuery(
-                                "UPDATE APP_OWNER.audit_log"
+                                "UPDATE " + schema + ".audit_log"
                                 + " SET tenant_prev_hash = :prevHash,"
                                 + "     tenant_hash      = :hash"
                                 + " WHERE id = :id")

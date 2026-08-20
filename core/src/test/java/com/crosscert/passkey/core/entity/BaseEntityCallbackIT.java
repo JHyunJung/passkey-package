@@ -70,14 +70,14 @@ class BaseEntityCallbackIT {
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
 
     // OracleContainer.configure() pushes withPassword(...) to BOTH
-    // ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (gvenzl APP_OWNER),
+    // ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (gvenzl PSK_APP_OWNER),
     // so the same secret authenticates the bootstrap SYS connect.
     private static final String SYS_PASSWORD = "app_owner_pw";
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE =
             new OracleContainer(ORACLE_IMAGE)
-                    .withUsername("APP_OWNER")
+                    .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
                             MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -86,7 +86,7 @@ class BaseEntityCallbackIT {
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         // Bootstrap MUST complete before Spring opens a connection — Spring
-        // is told to connect as APP_ADMIN_USER which the bootstrap creates.
+        // is told to connect as PSK_APP_ADMIN_USER which the bootstrap creates.
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
@@ -98,16 +98,16 @@ class BaseEntityCallbackIT {
                             + "STDERR:\n" + exec.getStderr());
         }
 
-        // Connect as APP_ADMIN_USER — runtime user.
+        // Connect as PSK_APP_ADMIN_USER — runtime user.
         // V22 (and subsequent migrations) will have run before Hibernate
         // validates ADMIN_USER's new updated_at column.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Finding #3 (Approach A): Flyway runs as APP_OWNER (schema owner)
-        // so that migrations can GRANT on APP_OWNER objects without error.
+        // Finding #3 (Approach A): Flyway runs as PSK_APP_OWNER (schema owner)
+        // so that migrations can GRANT on PSK_APP_OWNER objects without error.
         reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
         reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
@@ -121,27 +121,27 @@ class BaseEntityCallbackIT {
     EntityManager em;
 
     /**
-     * Returns a JdbcTemplate connected as APP_OWNER (schema owner) for
-     * test cleanup that requires privileges beyond APP_ADMIN_USER's runtime
+     * Returns a JdbcTemplate connected as PSK_APP_OWNER (schema owner) for
+     * test cleanup that requires privileges beyond PSK_APP_ADMIN_USER's runtime
      * grants (e.g. DELETE on admin_user). Finding #3 removed GRANT ALL
-     * PRIVILEGES from APP_ADMIN_USER; cleanup that needs broader rights must
+     * PRIVILEGES from PSK_APP_ADMIN_USER; cleanup that needs broader rights must
      * use the owner connection, as done in AdminFlowIT.resetState().
      */
     private JdbcTemplate ownerJdbc() throws SQLException {
         OracleDataSource ds = new OracleDataSource();
         ds.setURL(ORACLE.getJdbcUrl());
-        ds.setUser("APP_OWNER");
+        ds.setUser("PSK_APP_OWNER");
         ds.setPassword(SYS_PASSWORD);
         return new JdbcTemplate(ds);
     }
 
     @AfterEach
     void cleanup() throws SQLException {
-        // APP_ADMIN role has no DELETE on admin_user (never needed at runtime).
+        // PSK_APP_ADMIN role has no DELETE on admin_user (never needed at runtime).
         // Use the schema-owner connection for teardown — same pattern as
         // AdminFlowIT.resetState() after finding #3 removed GRANT ALL.
-        ownerJdbc().update("DELETE FROM APP_OWNER.admin_user");
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.admin_user");
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
     }
 
     /** BCrypt-shaped hash exactly 60 chars long (matches V9 column width). */

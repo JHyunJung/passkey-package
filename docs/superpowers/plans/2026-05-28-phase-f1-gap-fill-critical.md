@@ -128,9 +128,9 @@ VALUES (1, 30, 12, 'Y', '[]', SYSTIMESTAMP, 'system');
 
 COMMIT;
 
--- 3. Grants to APP_ADMIN (split per V29 pattern)
-GRANT SELECT ON security_policy TO APP_ADMIN;
-GRANT UPDATE ON security_policy TO APP_ADMIN;
+-- 3. Grants to PSK_APP_ADMIN (split per V29 pattern)
+GRANT SELECT ON security_policy TO PSK_APP_ADMIN;
+GRANT UPDATE ON security_policy TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Apply migration**
@@ -146,14 +146,14 @@ Boot log should show: `Migrating schema "APP" to version "31 - security policy"`
 
 **Option B (faster, when admin-app is already running elsewhere): apply via sqlplus**
 ```bash
-docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 < core/src/main/resources/db/migration/V31__security_policy.sql
+docker exec -i passkey-oracle sqlplus -s PSK_APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 < core/src/main/resources/db/migration/V31__security_policy.sql
 ```
 Then verify Flyway records the version on next admin-app boot (idempotent guards ensure no duplicate execution error).
 
 - [ ] **Step 3: Verify schema**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -s PSK_APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
 SET PAGESIZE 50
 SET LINESIZE 200
 SELECT id, session_idle_timeout_minutes, password_min_length, mfa_required FROM security_policy;
@@ -894,7 +894,7 @@ Same two options as Task 1 Step 2 (admin-app boot or direct sqlplus). On admin-a
 - [ ] **Step 3: Verify**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -s PSK_APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
 SELECT email, mfa_enabled FROM admin_user ORDER BY email;
 SQL
 ```

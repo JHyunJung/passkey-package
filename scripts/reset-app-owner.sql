@@ -1,6 +1,6 @@
--- reset-app-owner.sql — APP_OWNER 스키마의 모든 객체를 SYS(SYSDBA) 세션에서 DROP 한다.
+-- reset-app-owner.sql — PSK_APP_OWNER 스키마의 모든 객체를 SYS(SYSDBA) 세션에서 DROP 한다.
 --
--- 컨테이너/볼륨/유저(APP_OWNER, APP_RUNTIME_USER, APP_ADMIN_USER)/role 은 건드리지
+-- 컨테이너/볼륨/유저(PSK_APP_OWNER, PSK_APP_RUNTIME_USER, PSK_APP_ADMIN_USER)/role 은 건드리지
 -- 않는다. 스키마 안의 테이블·시퀀스·패키지·컨텍스트·트리거·뷰·과거 EE 잔재 VPD 정책만 비운다.
 -- 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect) 전담 (VPD/DBMS_RLS 미사용, SE2 호환).
 -- 실행 후에는 run-bootstrap.sh 로 스키마/role 을 재생성하고 Flyway 로 다시 마이그레이션한다.
@@ -23,7 +23,7 @@ ALTER SESSION SET CONTAINER = &ora_service;
 SET SERVEROUTPUT ON SIZE UNLIMITED
 
 DECLARE
-  v_owner CONSTANT VARCHAR2(30) := 'APP_OWNER';
+  v_owner CONSTANT VARCHAR2(30) := 'PSK_APP_OWNER';
   v_cnt   PLS_INTEGER := 0;
 
   -- 동적 DDL 한 건 실행 + "이미 없음" 류 오류만 무시.
@@ -111,17 +111,17 @@ BEGIN
   -- 6) APP_CTX 컨텍스트(과거 VPD 잔재). 남아 있으면 정리(bootstrap 은 더 이상 복구하지 않음).
   try_ddl('DROP CONTEXT APP_CTX');
 
-  -- 7) APP_OWNER 휴지통만 비운다. SYS 로 'PURGE DBA_RECYCLEBIN' 을 하면 PDB 전역
+  -- 7) PSK_APP_OWNER 휴지통만 비운다. SYS 로 'PURGE DBA_RECYCLEBIN' 을 하면 PDB 전역
   --    휴지통(다른 스키마의 복구 가능 객체 포함)이 날아가므로 절대 쓰지 않는다
   --    (codex P1). 테이블 DROP 이 이미 PURGE 라 보통은 비어 있지만 방어적으로.
-  --    USER_RECYCLEBIN 은 현재 SYS 세션 기준이므로 APP_OWNER 객체를 직접 PURGE.
+  --    USER_RECYCLEBIN 은 현재 SYS 세션 기준이므로 PSK_APP_OWNER 객체를 직접 PURGE.
   FOR r IN (
     SELECT object_name FROM dba_recyclebin WHERE owner = v_owner
   ) LOOP
     try_ddl('PURGE TABLE ' || v_owner || '."' || r.object_name || '"');
   END LOOP;
 
-  -- 8) 최종 검증: APP_OWNER 에 사용자 객체나 VPD 정책이 남아 있으면 실패로 종료.
+  -- 8) 최종 검증: PSK_APP_OWNER 에 사용자 객체나 VPD 정책이 남아 있으면 실패로 종료.
   --    조용히 넘어가면 stale 상태 위에 부트스트랩·Flyway 가 돌아 거짓 성공이 난다
   --    (codex P1). 객체(SYS_*/BIN$* 제외)와 정책 양쪽을 확인한다.
   SELECT COUNT(*) INTO v_cnt
@@ -131,16 +131,16 @@ BEGIN
     AND  object_name NOT LIKE 'BIN$%';
   IF v_cnt > 0 THEN
     RAISE_APPLICATION_ERROR(-20099,
-      'APP_OWNER reset incomplete: ' || v_cnt || ' object(s) remain. Aborting.');
+      'PSK_APP_OWNER reset incomplete: ' || v_cnt || ' object(s) remain. Aborting.');
   END IF;
 
   SELECT COUNT(*) INTO v_cnt FROM dba_policies WHERE object_owner = v_owner;
   IF v_cnt > 0 THEN
     RAISE_APPLICATION_ERROR(-20098,
-      'APP_OWNER reset incomplete: ' || v_cnt || ' VPD policy/policies remain. Aborting.');
+      'PSK_APP_OWNER reset incomplete: ' || v_cnt || ' VPD policy/policies remain. Aborting.');
   END IF;
 
-  DBMS_OUTPUT.PUT_LINE('==> APP_OWNER reset done. 0 objects, 0 policies remain.');
+  DBMS_OUTPUT.PUT_LINE('==> PSK_APP_OWNER reset done. 0 objects, 0 policies remain.');
 END;
 /
 
@@ -148,7 +148,7 @@ END;
 SET HEADING ON
 SELECT object_type, COUNT(*) AS remaining
 FROM   dba_objects
-WHERE  owner = 'APP_OWNER'
+WHERE  owner = 'PSK_APP_OWNER'
   AND  object_name NOT LIKE 'SYS_%'
   AND  object_name NOT LIKE 'BIN$%'
 GROUP  BY object_type

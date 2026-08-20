@@ -31,7 +31,7 @@
 
 ## 3. QW-1 — Cross-tenant 회귀 방지 (security)
 
-admin-app은 VPD-EXEMPT(`APP_ADMIN_USER`)로 접속하므로 cross-tenant 격리가 `TenantBoundary` 단일 app-layer 계층에만 의존한다(`sec-admin-vpd-exempt-sole-layer`). 한 줄 누락 회귀를 막는다.
+admin-app은 VPD-EXEMPT(`PSK_APP_ADMIN_USER`)로 접속하므로 cross-tenant 격리가 `TenantBoundary` 단일 app-layer 계층에만 의존한다(`sec-admin-vpd-exempt-sole-layer`). 한 줄 누락 회귀를 막는다.
 
 ### 3.1 WebauthnDiffService self-guard (`sec-webauthndiff-no-boundary-fragile`)
 - `admin-app/.../tenant/WebauthnDiffService.java`의 `diff(tenantId, ...)` 첫 줄에 `tenantBoundary.assertCanAccessTenant(tenantId)` 추가.

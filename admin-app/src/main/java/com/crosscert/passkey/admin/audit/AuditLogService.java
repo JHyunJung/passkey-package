@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
@@ -78,13 +79,16 @@ public class AuditLogService {
     private final EntityManager em;
     private final ObjectMapper canonical;
     private final Clock clock;
+    private final String schema;
 
     public AuditLogService(AuditLogRepository repo,
                            EntityManager em,
                            ObjectMapper baseMapper,
-                           Clock clock) {
+                           Clock clock,
+                           DbSchemaProperties dbSchema) {
         this.repo = repo;
         this.em = em;
+        this.schema = dbSchema.schema();
         // Defensive copy so the global Jackson mapper's settings are
         // untouched. ORDER_MAP_ENTRIES_BY_KEYS makes the serialized
         // form deterministic, which is what makes the hash reproducible.
@@ -110,11 +114,11 @@ public class AuditLogService {
         // Oracle's FOR UPDATE blocks the second concurrent appender until
         // this transaction commits.
         // Schema-qualified because this is a native SQL query — Hibernate's
-        // default_schema (APP_OWNER) does not rewrite ad-hoc native table
+        // default_schema does not rewrite ad-hoc native table
         // references, so we must qualify explicitly to avoid ORA-00942 when
-        // the DB session is connected as APP_ADMIN_USER.
+        // the DB session is connected as PSK_APP_ADMIN_USER.
         em.createNativeQuery(
-                "SELECT 1 FROM APP_OWNER.scheduler_lease WHERE name = :n FOR UPDATE")
+                "SELECT 1 FROM " + schema + ".scheduler_lease WHERE name = :n FOR UPDATE")
             .setParameter("n", CHAIN_LOCK_NAME)
             .getSingleResult();
 

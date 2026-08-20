@@ -243,7 +243,7 @@ git status --short
 **Files:**
 - Create: `core/src/main/resources/db/migration/V7__api_key_table.sql`
 
-**Architectural note:** the inbound X-API-Key header has no tenant id; the auth filter must look up the row by `key_prefix` without yet knowing the tenant. With VPD active, a direct `SELECT` would return zero rows. To resolve this without leaking tenant data, V7 makes `key_prefix` **globally unique** (not per-tenant), and V8 adds a definer-rights PL/SQL package that bypasses VPD safely. APP_RUNTIME's `UPDATE` privilege is column-scoped to `last_used_at` only — preventing a hijacked runtime path from rotating `key_hash` or undoing revocation on a same-tenant row.
+**Architectural note:** the inbound X-API-Key header has no tenant id; the auth filter must look up the row by `key_prefix` without yet knowing the tenant. With VPD active, a direct `SELECT` would return zero rows. To resolve this without leaking tenant data, V7 makes `key_prefix` **globally unique** (not per-tenant), and V8 adds a definer-rights PL/SQL package that bypasses VPD safely. PSK_APP_RUNTIME's `UPDATE` privilege is column-scoped to `last_used_at` only — preventing a hijacked runtime path from rotating `key_hash` or undoing revocation on a same-tenant row.
 
 - [ ] **Step 1: Write the migration**
 
@@ -277,14 +277,14 @@ CREATE TABLE api_key (
   CONSTRAINT ck_api_key_scopes_json CHECK (scopes IS JSON)
 );
 
--- Grants. APP_RUNTIME has SELECT (VPD-filtered) + column-scoped
+-- Grants. PSK_APP_RUNTIME has SELECT (VPD-filtered) + column-scoped
 -- UPDATE on last_used_at only. INSERT/DELETE and broader UPDATE
 -- are admin-app jobs.
-GRANT SELECT ON api_key TO APP_RUNTIME;
-GRANT UPDATE(last_used_at) ON api_key TO APP_RUNTIME;
-GRANT SELECT ON api_key_seq TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON api_key TO APP_ADMIN;
-GRANT SELECT ON api_key_seq TO APP_ADMIN;
+GRANT SELECT ON api_key TO PSK_APP_RUNTIME;
+GRANT UPDATE(last_used_at) ON api_key TO PSK_APP_RUNTIME;
+GRANT SELECT ON api_key_seq TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON api_key TO PSK_APP_ADMIN;
+GRANT SELECT ON api_key_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Stage**
@@ -305,9 +305,9 @@ V8 does two things:
 
 1. Attach the standard VPD policy `API_KEY_TENANT_ISOLATION` to api_key, mirroring V3's credential policy. Normal queries are tenant-isolated; cross-tenant writes are rejected with ORA-28115.
 
-2. Add a definer-rights PL/SQL package `APP_OWNER.api_key_lookup_pkg` that solves the chicken-and-egg problem: the auth filter needs to look up an api_key row by `key_prefix` BEFORE TenantContextHolder is set. The package runs as `APP_OWNER` (which gets `EXEMPT ACCESS POLICY` here), so its `SELECT` bypasses VPD. The function returns `(found, id, tenant_id, key_hash, expires_at, revoked_at)` via OUT params — JDBC `CallableStatement` binds cleanly.
+2. Add a definer-rights PL/SQL package `PSK_APP_OWNER.api_key_lookup_pkg` that solves the chicken-and-egg problem: the auth filter needs to look up an api_key row by `key_prefix` BEFORE TenantContextHolder is set. The package runs as `PSK_APP_OWNER` (which gets `EXEMPT ACCESS POLICY` here), so its `SELECT` bypasses VPD. The function returns `(found, id, tenant_id, key_hash, expires_at, revoked_at)` via OUT params — JDBC `CallableStatement` binds cleanly.
 
-`touch_last_used` in the package explicitly constrains its `UPDATE` with `WHERE id = p_id AND tenant_id = SYS_CONTEXT('APP_CTX','TENANT_ID')` — even though APP_OWNER's `EXEMPT ACCESS POLICY` would technically let it touch any row, this layered guard means a hijacked package call cannot silently update another tenant's key.
+`touch_last_used` in the package explicitly constrains its `UPDATE` with `WHERE id = p_id AND tenant_id = SYS_CONTEXT('APP_CTX','TENANT_ID')` — even though PSK_APP_OWNER's `EXEMPT ACCESS POLICY` would technically let it touch any row, this layered guard means a hijacked package call cannot silently update another tenant's key.
 
 - [ ] **Step 1: Write the migration**
 
@@ -316,9 +316,9 @@ See the committed file `core/src/main/resources/db/migration/V8__api_key_vpd_pol
 ```sql
 -- 1. Standard VPD policy via DBMS_RLS.ADD_POLICY (same shape as V3
 --    credential policy, on API_KEY).
--- 2. GRANT EXEMPT ACCESS POLICY TO APP_OWNER so the next step's
+-- 2. GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER so the next step's
 --    package can bypass VPD inside its body.
--- 3. CREATE OR REPLACE PACKAGE APP_OWNER.api_key_lookup_pkg with
+-- 3. CREATE OR REPLACE PACKAGE PSK_APP_OWNER.api_key_lookup_pkg with
 --    AUTHID DEFINER (Oracle default for packages). Spec:
 --      PROCEDURE find_by_prefix(p_prefix, OUT p_found, OUT p_id,
 --                               OUT p_tenant_id, OUT p_key_hash,
@@ -328,7 +328,7 @@ See the committed file `core/src/main/resources/db/migration/V8__api_key_vpd_pol
 --    key_prefix = p_prefix, catches NO_DATA_FOUND, sets p_found=0.
 --    touch_last_used UPDATEs WHERE id=p_id AND tenant_id matches
 --    SYS_CONTEXT (defense-in-depth).
--- 5. GRANT EXECUTE on the package to APP_RUNTIME and APP_ADMIN.
+-- 5. GRANT EXECUTE on the package to PSK_APP_RUNTIME and PSK_APP_ADMIN.
 ```
 
 - [ ] **Step 2: Stage**
@@ -567,12 +567,12 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, Long> {
      * SYS_CONTEXT, so this call only returns a row when the calling
      * session has already set TenantContextHolder to the same tenant
      * that owns the key. Useful from admin endpoints (Phase 2) and
-     * test fixtures (where APP_ADMIN bypasses VPD).
+     * test fixtures (where PSK_APP_ADMIN bypasses VPD).
      *
      * <p>Phase 1 auth filter does NOT use this — auth runs before
      * tenant context exists. See {@code ApiKeyLookupService} (T16)
      * which calls a definer-rights PL/SQL package
-     * ({@code APP_OWNER.api_key_lookup_pkg.find_by_prefix}) that
+     * ({@code PSK_APP_OWNER.api_key_lookup_pkg.find_by_prefix}) that
      * bypasses VPD safely.
      */
     Optional<ApiKey> findByKeyPrefix(String keyPrefix);
@@ -1600,7 +1600,7 @@ git add passkey-app/src/main/java/com/crosscert/passkey/app/api/v1/rp/dto/
 **Architectural note (Codex review caught this — chicken-and-egg):**
 The inbound `X-API-Key` header carries no tenant id. The auth filter looks up the key by its prefix to discover the tenant. But VPD on `api_key` filters by `tenant_id = SYS_CONTEXT(...)`, which is unset at the start of the request. A plain `ApiKeyRepository.findByKeyPrefix(...)` would return zero rows.
 
-Phase 1 fix (V7 + V8): `key_prefix` is GLOBALLY unique, and V8 defines a definer-rights PL/SQL package `APP_OWNER.api_key_lookup_pkg.find_by_prefix(...)` that bypasses VPD safely (`APP_OWNER` has `EXEMPT ACCESS POLICY`, granted in V8). The filter invokes that package via JdbcTemplate against the SAME `TenantAwareDataSource` — the wrapper's `set_tenant` is a no-op when TenantContextHolder is null, so the call sees `APP_CTX` unset and the package's APP_OWNER context bypasses the policy.
+Phase 1 fix (V7 + V8): `key_prefix` is GLOBALLY unique, and V8 defines a definer-rights PL/SQL package `PSK_APP_OWNER.api_key_lookup_pkg.find_by_prefix(...)` that bypasses VPD safely (`PSK_APP_OWNER` has `EXEMPT ACCESS POLICY`, granted in V8). The filter invokes that package via JdbcTemplate against the SAME `TenantAwareDataSource` — the wrapper's `set_tenant` is a no-op when TenantContextHolder is null, so the call sees `APP_CTX` unset and the package's PSK_APP_OWNER context bypasses the policy.
 
 After lookup and BCrypt verify, the filter calls `TenantContextHolder.set(tenantId)` and the chain proceeds with VPD active for the resolved tenant.
 
@@ -1815,7 +1815,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Calls the V8-installed PL/SQL package APP_OWNER.api_key_lookup_pkg
+ * Calls the V8-installed PL/SQL package PSK_APP_OWNER.api_key_lookup_pkg
  * for the two operations the auth filter needs:
  *
  * <ul>
@@ -1847,7 +1847,7 @@ public class ApiKeyLookupService {
     public Optional<ApiKeyAuthRow> findByPrefix(String keyPrefix) {
         return jdbc.execute((ConnectionCallback<Optional<ApiKeyAuthRow>>) conn -> {
             try (CallableStatement cs = conn.prepareCall(
-                    "{ call APP_OWNER.api_key_lookup_pkg.find_by_prefix(?, ?, ?, ?, ?, ?, ?) }")) {
+                    "{ call PSK_APP_OWNER.api_key_lookup_pkg.find_by_prefix(?, ?, ?, ?, ?, ?, ?) }")) {
                 cs.setString(1, keyPrefix);
                 cs.registerOutParameter(2, Types.NUMERIC);     // p_found
                 cs.registerOutParameter(3, Types.NUMERIC);     // p_id
@@ -1880,7 +1880,7 @@ public class ApiKeyLookupService {
         try {
             jdbc.execute((ConnectionCallback<Void>) conn -> {
                 try (CallableStatement cs = conn.prepareCall(
-                        "{ call APP_OWNER.api_key_lookup_pkg.touch_last_used(?, ?) }")) {
+                        "{ call PSK_APP_OWNER.api_key_lookup_pkg.touch_last_used(?, ?) }")) {
                     cs.setLong(1, apiKeyId);
                     cs.setTimestamp(2, Timestamp.from(now));
                     cs.execute();
@@ -3135,7 +3135,7 @@ Expected: `Successfully applied 3 migrations` (V6, V7, V8) or `Successfully vali
 - [ ] **Step 3: sqlplus verification**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
 SELECT table_name FROM user_tables ORDER BY table_name;
 SELECT policy_name, object_name FROM user_policies ORDER BY object_name;
 EOF
@@ -3187,8 +3187,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
   jpa:
@@ -3196,7 +3196,7 @@ spring:
     properties:
       hibernate.dialect: org.hibernate.dialect.OracleDialect
       hibernate.jdbc.time_zone: UTC
-      hibernate.default_schema: APP_OWNER
+      hibernate.default_schema: PSK_APP_OWNER
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
 
@@ -3323,7 +3323,7 @@ class Fido2EndToEndIT {
     @Container
     static final OracleContainer ORACLE = new OracleContainer(
             "gvenzl/oracle-xe:21-slim-faststart")
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(APP_USER_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-vpd.sql"),
@@ -3338,7 +3338,7 @@ class Fido2EndToEndIT {
             throw new RuntimeException("bootstrap failed: " + exec.getStdout() + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
     }
 

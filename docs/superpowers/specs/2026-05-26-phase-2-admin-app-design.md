@@ -127,7 +127,7 @@ CREATE TABLE admin_user (
 ```
 
 - VPD 없음 (platform-scoped).
-- GRANT SELECT, UPDATE(last_login_at) TO APP_ADMIN_USER. APP_RUNTIME 권한 없음.
+- GRANT SELECT, UPDATE(last_login_at) TO PSK_APP_ADMIN_USER. PSK_APP_RUNTIME 권한 없음.
 
 ### 5.2 audit_log (V10)
 
@@ -150,7 +150,7 @@ CREATE INDEX audit_log_target_ix     ON audit_log(target_type, target_id, create
 ```
 
 - VPD 없음 (cross-tenant 운영 활동 한 chain).
-- GRANT SELECT, INSERT TO APP_ADMIN_USER. UPDATE/DELETE 금지.
+- GRANT SELECT, INSERT TO PSK_APP_ADMIN_USER. UPDATE/DELETE 금지.
 
 ### 5.3 Hash chain 계산
 

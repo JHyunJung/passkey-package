@@ -59,7 +59,7 @@ CREATE UNIQUE INDEX ux_incident_open_per_tenant
 함수 기반 부분 유니크 인덱스. status='OPEN'인 행만 tenant_id 유일 → 동시 요청에도
 DB가 두 번째를 거부(애플리케이션 레벨 체크보다 안전).
 
-**그랜트:** 기존 패턴대로 `APP_ADMIN`에 SELECT/INSERT/UPDATE 부여. DELETE는
+**그랜트:** 기존 패턴대로 `PSK_APP_ADMIN`에 SELECT/INSERT/UPDATE 부여. DELETE는
 부여하지 않음(incident는 영구 보존, 삭제 안 함).
 
 **VPD:** `security_incident`는 `tenant_id`를 갖지만 **PLATFORM_OPERATOR 전용

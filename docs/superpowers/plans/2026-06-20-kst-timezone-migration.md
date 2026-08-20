@@ -754,7 +754,7 @@ git commit -m "test: KST 전환에 맞춰 Clock fixed zone + 타임스탬프 단
 
 - [ ] **Step 1: dev 프로파일로 로컬 부팅**
 
-메모리 절차 준수: `SPRING_PROFILES_ACTIVE=local`(또는 dev) env, APP_OWNER 접속, Oracle/Redis 컨테이너 기동, flyway 소문자 식별자, 필요 시 V8 repair. admin-app 부팅.
+메모리 절차 준수: `SPRING_PROFILES_ACTIVE=local`(또는 dev) env, PSK_APP_OWNER 접속, Oracle/Redis 컨테이너 기동, flyway 소문자 식별자, 필요 시 V8 repair. admin-app 부팅.
 Run: `SPRING_PROFILES_ACTIVE=local ./gradlew :admin-app:bootRun` (또는 프로젝트 표준 기동 스크립트)
 Expected: V49 포함 Flyway 적용 성공, 부팅 완료.
 

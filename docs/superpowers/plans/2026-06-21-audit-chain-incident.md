@@ -26,7 +26,7 @@
 - Create: `core/src/main/resources/db/migration/V50__security_incident.sql`
 
 **Interfaces:**
-- Produces: 테이블 `security_incident` (컬럼 아래 SQL 참조), 부분 유니크 인덱스 `ux_incident_open_per_tenant`, APP_ADMIN 그랜트.
+- Produces: 테이블 `security_incident` (컬럼 아래 SQL 참조), 부분 유니크 인덱스 `ux_incident_open_per_tenant`, PSK_APP_ADMIN 그랜트.
 
 - [ ] **Step 1: 마이그레이션 SQL 작성**
 
@@ -83,10 +83,10 @@ EXCEPTION
 END;
 /
 
--- 3. Grants (one per statement; APP_ADMIN 런타임 계정)
-GRANT SELECT ON security_incident TO APP_ADMIN;
-GRANT INSERT ON security_incident TO APP_ADMIN;
-GRANT UPDATE ON security_incident TO APP_ADMIN;
+-- 3. Grants (one per statement; PSK_APP_ADMIN 런타임 계정)
+GRANT SELECT ON security_incident TO PSK_APP_ADMIN;
+GRANT INSERT ON security_incident TO PSK_APP_ADMIN;
+GRANT UPDATE ON security_incident TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Testcontainers Oracle 로 마이그레이션 실행 검증**

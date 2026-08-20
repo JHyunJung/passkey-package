@@ -175,7 +175,7 @@ import가 부족하면 추가: `import java.util.UUID;`는 이미 있음. `org.s
         // demo-rp 테넌트(...C0DE)에 payload 있는 행 1건 직접 삽입.
         String idHex = "0000000000000000000000000000DA01";
         ownerJdbc().update("""
-                INSERT INTO APP_OWNER.audit_log
+                INSERT INTO PSK_APP_OWNER.audit_log
                     (id, prev_hash, hash, actor_id, actor_email, action,
                      target_type, target_id, payload, created_at, updated_at,
                      tenant_id, tenant_prev_hash, tenant_hash)
@@ -202,7 +202,7 @@ import가 부족하면 추가: `import java.util.UUID;`는 이미 있음. `org.s
     void detail_isForbidden_forRpAdmin() {
         String idHex = "0000000000000000000000000000DA02";
         ownerJdbc().update("""
-                INSERT INTO APP_OWNER.audit_log
+                INSERT INTO PSK_APP_OWNER.audit_log
                     (id, prev_hash, hash, actor_id, actor_email, action,
                      target_type, target_id, payload, created_at, updated_at,
                      tenant_id, tenant_prev_hash, tenant_hash)

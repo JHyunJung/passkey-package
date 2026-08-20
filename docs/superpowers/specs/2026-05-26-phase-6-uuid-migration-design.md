@@ -109,7 +109,7 @@ DROP + 재생성 흐름 (운영 데이터 없음 전제):
 7. FK 재생성 (RAW(16))
 8. 함수 기반 unique index 재생성 (signing_key one_active_uix 등)
 9. mds_blob_cache 싱글톤 seed row (id=새 UUID, version=0)
-10. APP_RUNTIME GRANTs 재부여
+10. PSK_APP_RUNTIME GRANTs 재부여
 11. (V11 등에서 만든 admin_user seed 2명도 V19에서 재seed — `alice@crosscert.com`, `bob@crosscert.com`)
 
 `signing_key_bootstrap_pkg` 재작성은 별도 task T18에서 진행 — PL/SQL 변경은 SigningKey entity migration과 함께 통합 검증.

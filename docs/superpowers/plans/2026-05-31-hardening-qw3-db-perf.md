@@ -363,16 +363,16 @@ Add JDBC batching + batch-fetch sizing to the shared `spring.jpa.properties`. Qu
 ### Steps
 
 **Step 3.1 — Add the two batch keys (3 min).**
-Insert under `spring.jpa.properties`, at 6-space indent, immediately after `hibernate.default_schema: APP_OWNER` (line 18). Edit `core/src/main/resources/application-common.yml`:
+Insert under `spring.jpa.properties`, at 6-space indent, immediately after `hibernate.default_schema: PSK_APP_OWNER` (line 18). Edit `core/src/main/resources/application-common.yml`:
 
 Old:
 ```yaml
-      hibernate.default_schema: APP_OWNER
+      hibernate.default_schema: PSK_APP_OWNER
     hibernate.ddl-auto: validate
 ```
 New:
 ```yaml
-      hibernate.default_schema: APP_OWNER
+      hibernate.default_schema: PSK_APP_OWNER
       # Phase QW-3: JDBC 배치 + 배치 페치 사이징.
       # batch_size: 같은 flush 에 쌓인 동종 INSERT/UPDATE 를 30개 단위로 한 번에
       #   JDBC 전송 — 라운드트립만 줄고 DML 결과는 불변.

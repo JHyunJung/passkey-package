@@ -37,7 +37,7 @@ reset-app-owner.sh ──► reset-app-owner.sql
 - `run-bootstrap.sh` — `bootstrap-schema.sql`을 실행하는 러너(작업 디렉토리 무관 sibling 해석).
 - `wait-for-oracle.sh` — docker healthcheck가 healthy 될 때까지 대기.
 - `init-dev-db.sh` — `docker compose down -v` 후 위 셋을 묶어 풀 초기화(분 단위).
-- `reset-app-owner.sh` + `reset-app-owner.sql` — 컨테이너 유지한 채 APP_OWNER 스키마만 빠른
+- `reset-app-owner.sh` + `reset-app-owner.sql` — 컨테이너 유지한 채 PSK_APP_OWNER 스키마만 빠른
   리셋(초 단위). dev/local 프로필 가드.
 
 ### 클러스터 B — 외부/원격 Oracle dev, Docker 없음 (전부 유지)
@@ -46,14 +46,14 @@ reset-app-owner.sh ──► reset-app-owner.sql
 init-db-external.sh ──► bootstrap-external-body.sql   (sqlplus DEFINE 주입)
                    └──► Flyway 적용
 bootstrap-external.sql (DBeaver wrapper) ──► bootstrap-external-body.sql
-reset-app-owner-external.sql (DBeaver, APP_OWNER 계정 self-service)
+reset-app-owner-external.sql (DBeaver, PSK_APP_OWNER 계정 self-service)
 ```
 
 - `init-db-external.sh` — 도커 없이 이미 떠 있는 Oracle(로컬 설치/원격 dev 서버)에 부트스트랩+
   Flyway 적용. sqlplus로 `bootstrap-external-body.sql` 실행.
 - `bootstrap-external.sql` — DBeaver 등 DEFINE 미지원 클라이언트용 wrapper.
 - `bootstrap-external-body.sql` — 실제 부트스트랩 body. sqlplus/init-db-external.sh가 직접 호출.
-- `reset-app-owner-external.sql` — 외부 SE의 APP_OWNER 스키마를 DBeaver에서 APP_OWNER 계정으로
+- `reset-app-owner-external.sql` — 외부 SE의 PSK_APP_OWNER 스키마를 DBeaver에서 PSK_APP_OWNER 계정으로
   리셋(SYSDBA·sqlplus 불필요). [[project_external_se_db_reset]] 메모리의 그 스크립트.
 
 이 클러스터는 운영 dev 서버(SE2, Docker 부재) 배포·초기화에 쓰이므로 전부 유지한다.

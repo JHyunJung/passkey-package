@@ -11,20 +11,20 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
-    # Flyway runs as schema owner APP_OWNER (same as admin-app / core ITs),
+    # Flyway runs as schema owner PSK_APP_OWNER (same as admin-app / core ITs),
     # so it can apply all migrations (including the V3/V8/V52 no-op/cleanup
     # migrations left over from the removed Oracle VPD).
-    # The runtime Spring DataSource below logs in as APP_RUNTIME_USER, the
+    # The runtime Spring DataSource below logs in as PSK_APP_RUNTIME_USER, the
     # production-realistic least-privilege runtime user, so the request path
     # exercises the same app-level @Filter isolation as production — the
     # whole point of the cross-tenant-isolation scenario. Split credentials
     # via spring.flyway.user/password keep migration and runtime separate
     # within a single Spring Boot context.
-    user: APP_OWNER
+    user: PSK_APP_OWNER
     password: app_owner_pw
   jpa:
     hibernate:

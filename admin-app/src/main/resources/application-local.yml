@@ -11,7 +11,7 @@ spring:
   datasource:
     url: jdbc:oracle:thin:@localhost:1521/XEPDB1
     driver-class-name: oracle.jdbc.OracleDriver
-    username: APP_ADMIN_USER
+    username: PSK_APP_ADMIN_USER
     password: admin_pw
   data:
     redis:

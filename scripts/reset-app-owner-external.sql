@@ -1,20 +1,20 @@
--- reset-app-owner-external.sql — 외부 Oracle SE 의 APP_OWNER 스키마를 DBeaver 에서
--- APP_OWNER 계정으로 비운다. SYSDBA·sqlplus 불필요.
+-- reset-app-owner-external.sql — 외부 Oracle SE 의 PSK_APP_OWNER 스키마를 DBeaver 에서
+-- PSK_APP_OWNER 계정으로 비운다. SYSDBA·sqlplus 불필요.
 --
--- ⚠️ 파괴적: APP_OWNER 의 모든 테이블·데이터(테넌트·계정·패스키·인증기록)를 삭제한다.
+-- ⚠️ 파괴적: PSK_APP_OWNER 의 모든 테이블·데이터(테넌트·계정·패스키·인증기록)를 삭제한다.
 -- ⚠️ dev/qa 전용. prod 에는 절대 실행하지 말 것.
 --
 -- VPD 제거됨: 테넌트 격리는 앱 레벨 Hibernate @Filter 가 전담한다. 이 스크립트는
 --   더 이상 CTX_PKG 를 보존하지 않는다(seed 가 set_tenant 를 호출하지 않으므로 패키지
---   DROP 루프에서 함께 정리). APP_CTX 컨텍스트는 APP_OWNER 에 DROP CONTEXT 권한이
+--   DROP 루프에서 함께 정리). APP_CTX 컨텍스트는 PSK_APP_OWNER 에 DROP CONTEXT 권한이
 --   없어 남지만 무해(참조 패키지 부재로 동작 불가).
 -- SE 노트: SE 는 VPD 미지원이라 user_policies 가 보통 0건이다(아래 루프는 빈 채 통과).
 --   과거 EE 잔재로 정책이 남아있으면 DBMS_RLS.DROP_POLICY(동적 SQL)로 분리한다.
 --
--- 사용법(DBeaver, APP_OWNER 로 접속한 SQL 에디터에 전체 붙여넣고 실행):
+-- 사용법(DBeaver, PSK_APP_OWNER 로 접속한 SQL 에디터에 전체 붙여넣고 실행):
 --   1) 먼저 아래 확인 쿼리로 대상 DB/스키마를 눈으로 확인한다.
 --   2) PL/SQL 블록 안의 c_confirm 을 'NO' → 'RESET' 으로 바꾼다(안전장치).
---   3) PL/SQL 블록을 실행한다. (USER 가 APP_OWNER 가 아니면 자동 중단)
+--   3) PL/SQL 블록을 실행한다. (USER 가 PSK_APP_OWNER 가 아니면 자동 중단)
 
 -- [실행 전 확인] 어느 DB·어느 스키마에 붙어있는지 반드시 확인.
 SELECT USER AS current_schema, ORA_DATABASE_NAME AS database FROM dual;
@@ -52,10 +52,10 @@ DECLARE
   END try_ddl;
 BEGIN
   -- 0) 런타임 가드 — 파괴 루프 이전에 두 가지를 검사한다.
-  --    (a) 접속 USER 가 APP_OWNER 가 아니면 즉시 중단(실수로 prod 스키마 접속 차단).
-  IF USER <> 'APP_OWNER' THEN
+  --    (a) 접속 USER 가 PSK_APP_OWNER 가 아니면 즉시 중단(실수로 prod 스키마 접속 차단).
+  IF USER <> 'PSK_APP_OWNER' THEN
     RAISE_APPLICATION_ERROR(-20097,
-      'aborting: connected as "' || USER || '", not APP_OWNER. 이 스크립트는 APP_OWNER 전용입니다.');
+      'aborting: connected as "' || USER || '", not PSK_APP_OWNER. 이 스크립트는 PSK_APP_OWNER 전용입니다.');
   END IF;
   --    (b) 확인 플래그. c_confirm 을 RESET 으로 바꿔야만 진행(기본 NO 는 안전 중단).
   --        NULL fail-closed: Oracle 에선 빈 문자열이 NULL 이고 NULL <> 'RESET' 는 unknown 이라
@@ -67,7 +67,7 @@ BEGIN
 
   -- 1) VPD 정책 분리(SE 면 0건; 과거 EE 잔재가 있으면 청소).
   --    ⚠️ DBMS_RLS 를 EXECUTE IMMEDIATE 동적 SQL 로 호출한다. VPD 제거 후 bootstrap
-  --    이 APP_OWNER 에 EXECUTE ON DBMS_RLS 를 더 이상 GRANT 하지 않으므로, 정적
+  --    이 PSK_APP_OWNER 에 EXECUTE ON DBMS_RLS 를 더 이상 GRANT 하지 않으므로, 정적
   --    참조하면 권한 없을 때 PLS-00201 로 블록 컴파일이 깨진다(루프가 0회여도 발생).
   --    동적 SQL 은 런타임 해석이라 권한/객체 부재를 SQLCODE 로 잡아 멱등 처리한다.
   FOR p IN (SELECT object_name, policy_name FROM user_policies) LOOP
@@ -134,10 +134,10 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 6) APP_CTX 컨텍스트: APP_OWNER 에 DROP CONTEXT 권한이 없어 남는다(무해 — 참조
+  -- 6) APP_CTX 컨텍스트: PSK_APP_OWNER 에 DROP CONTEXT 권한이 없어 남는다(무해 — 참조
   --    패키지 CTX_PKG 가 step 5 에서 제거돼 동작 불가 상태로만 잔존). 손대지 않음.
 
-  -- 7) 휴지통: APP_OWNER 자기 것만 PURGE(전역 PURGE 금지).
+  -- 7) 휴지통: PSK_APP_OWNER 자기 것만 PURGE(전역 PURGE 금지).
   FOR r IN (SELECT object_name FROM user_recyclebin) LOOP
     try_ddl('PURGE TABLE ' || q(r.object_name));
   END LOOP;

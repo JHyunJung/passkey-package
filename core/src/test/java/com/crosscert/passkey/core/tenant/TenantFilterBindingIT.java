@@ -59,7 +59,7 @@ class TenantFilterBindingIT {
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE =
             new OracleContainer(ORACLE_IMAGE)
-                    .withUsername("APP_OWNER")
+                    .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
                             MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -78,12 +78,12 @@ class TenantFilterBindingIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Finding #3 (Approach A): Flyway runs as APP_OWNER (schema owner)
-        // so that migrations can GRANT on APP_OWNER objects without error.
+        // Finding #3 (Approach A): Flyway runs as PSK_APP_OWNER (schema owner)
+        // so that migrations can GRANT on PSK_APP_OWNER objects without error.
         reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
         reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
@@ -103,10 +103,10 @@ class TenantFilterBindingIT {
     void cleanup() {
         TenantContextHolder.clear();
         // Clear admin_user_tenant mapping before deleting tenants (FK admin_user_tenant.tenant_id → tenant)
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-        jdbc.update("DELETE FROM APP_OWNER.credential");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
     }
 
     /**

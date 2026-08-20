@@ -253,7 +253,7 @@ passkey-app 의 import 갱신. admin-app 이 같은 클래스 공유. 회귀는 
 
 - 모든 신규 endpoint: 세션 인증 (기존 `/admin/api/**` 패턴, `.authenticated()`)
 - `PUT /tenants/{id}` + `DELETE /credentials/{id}` 는 `@PreAuthorize("hasRole('ADMIN')")` — VIEWER 는 read-only
-- VPD: admin-app 은 `APP_ADMIN_USER` 로 접속해 VPD 비활성 → credential 조회 시 `tenant_id = :tid` 명시 필터가 멀티테넌트 boundary 의 단일 방어선
+- VPD: admin-app 은 `PSK_APP_ADMIN_USER` 로 접속해 VPD 비활성 → credential 조회 시 `tenant_id = :tid` 명시 필터가 멀티테넌트 boundary 의 단일 방어선
 
 ## 3. admin-ui — 컴포넌트, 라우트, 데이터 흐름
 

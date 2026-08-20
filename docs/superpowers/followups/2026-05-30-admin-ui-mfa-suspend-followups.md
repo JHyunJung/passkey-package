@@ -47,5 +47,5 @@
 ---
 
 ## 4. 검증 메모 (코드 이슈 아님)
-- dogfooding 중 "alice mfa_enabled UPDATE가 반영 안 됨"은 캐싱 버그가 아니라 **schema-qualified 누락**(APP_ADMIN_USER 세션에서 unqualified `admin_user` → ORA-00942). `APP_OWNER.admin_user`로 qualified UPDATE 후 즉시 반영됨. `MeController`는 매 요청 fresh read — 정상.
+- dogfooding 중 "alice mfa_enabled UPDATE가 반영 안 됨"은 캐싱 버그가 아니라 **schema-qualified 누락**(PSK_APP_ADMIN_USER 세션에서 unqualified `admin_user` → ORA-00942). `PSK_APP_OWNER.admin_user`로 qualified UPDATE 후 즉시 반영됨. `MeController`는 매 요청 fresh read — 정상.
 - admin-app IT(Oracle Testcontainers)는 이 환경에서 ORA-12541로 실패(환경적). 단위/슬라이스 테스트는 전부 green.

@@ -45,9 +45,9 @@
 
 ```
 1. 깨끗한 Oracle 컨테이너 기동 (gvenzl/oracle-xe:21-slim-faststart)
-   + bootstrap-schema.sql 로 APP_OWNER 계정/역할/권한 설정
+   + bootstrap-schema.sql 로 PSK_APP_OWNER 계정/역할/권한 설정
 2. 현재 V1~V52 + R__seed_operators 를 Flyway 로 끝까지 적용 → "정답 스키마" 확보
-3. DBMS_METADATA.GET_DDL 로 APP_OWNER 스키마 추출
+3. DBMS_METADATA.GET_DDL 로 PSK_APP_OWNER 스키마 추출
    (테이블 · 시퀀스 · 뷰 · 인덱스 · 제약 · 트리거 · PL/SQL 패키지)
    - SET_TRANSFORM_PARAM 으로 STORAGE / TABLESPACE / SEGMENT_ATTRIBUTES = false
      → SE2-clean · 환경중립 (스토리지절/세그먼트속성 제거)

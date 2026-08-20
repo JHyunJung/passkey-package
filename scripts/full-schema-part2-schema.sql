@@ -2,10 +2,10 @@
 -- ############################################################################
 -- ############################################################################
 --
---   PART 2 — 테이블 / 인덱스 / 뷰 / 패키지 / 객체권한   ★ APP_OWNER 로 실행 ★
+--   PART 2 — 테이블 / 인덱스 / 뷰 / 패키지 / 객체권한   ★ PSK_APP_OWNER 로 실행 ★
 --
 --   ⚠️ 선행 조건: scripts/full-schema-part1-accounts.sql 이 먼저 실행돼
---      APP_OWNER / APP_RUNTIME / APP_ADMIN 롤·유저가 있어야 한다.
+--      PSK_APP_OWNER / PSK_APP_RUNTIME / PSK_APP_ADMIN 롤·유저가 있어야 한다.
 --
 --   출처: V1__baseline_schema.sql (전체) + V2/V3 (ALTER) + V4 (GRANT)
 --
@@ -655,145 +655,145 @@ END signing_key_bootstrap_pkg;
 
 
 -- ============================================================
--- 6. GRANT (123건 — APP_ADMIN / APP_RUNTIME 객체 권한)
+-- 6. GRANT (123건 — PSK_APP_ADMIN / PSK_APP_RUNTIME 객체 권한)
 -- ============================================================
 
-GRANT DELETE ON admin_password_reset_token TO APP_ADMIN;
-GRANT INSERT ON admin_password_reset_token TO APP_ADMIN;
-GRANT SELECT ON admin_password_reset_token TO APP_ADMIN;
-GRANT UPDATE ON admin_password_reset_token TO APP_ADMIN;
-GRANT SELECT ON admin_password_reset_token TO APP_RUNTIME;
-GRANT SELECT ON admin_password_reset_token_seq TO APP_ADMIN;
-GRANT SELECT ON admin_password_reset_token_seq TO APP_RUNTIME;
-GRANT INSERT ON admin_user TO APP_ADMIN;
-GRANT SELECT ON admin_user TO APP_ADMIN;
-GRANT UPDATE ON admin_user TO APP_ADMIN;
-GRANT SELECT ON admin_user TO APP_RUNTIME;
-GRANT SELECT ON admin_user_tenant TO APP_ADMIN;
-GRANT INSERT ON admin_user_tenant TO APP_ADMIN;
-GRANT UPDATE ON admin_user_tenant TO APP_ADMIN;
-GRANT DELETE ON admin_user_tenant TO APP_ADMIN;
-GRANT SELECT ON admin_user_tenant TO APP_RUNTIME;
-GRANT INSERT ON admin_user_invitation TO APP_ADMIN;
-GRANT SELECT ON admin_user_invitation TO APP_ADMIN;
-GRANT UPDATE ON admin_user_invitation TO APP_ADMIN;
-GRANT SELECT ON admin_user_invitation TO APP_RUNTIME;
-GRANT SELECT ON admin_user_invitation_seq TO APP_ADMIN;
-GRANT SELECT ON admin_user_invitation_seq TO APP_RUNTIME;
-GRANT DELETE ON admin_user_recovery_code TO APP_ADMIN;
-GRANT INSERT ON admin_user_recovery_code TO APP_ADMIN;
-GRANT SELECT ON admin_user_recovery_code TO APP_ADMIN;
-GRANT UPDATE ON admin_user_recovery_code TO APP_ADMIN;
-GRANT SELECT ON admin_user_recovery_code TO APP_RUNTIME;
-GRANT DELETE ON api_key TO APP_ADMIN;
-GRANT INSERT ON api_key TO APP_ADMIN;
-GRANT SELECT ON api_key TO APP_ADMIN;
-GRANT UPDATE ON api_key TO APP_ADMIN;
-GRANT SELECT ON api_key TO APP_RUNTIME;
-GRANT DELETE ON api_key_scope TO APP_ADMIN;
-GRANT INSERT ON api_key_scope TO APP_ADMIN;
-GRANT SELECT ON api_key_scope TO APP_ADMIN;
-GRANT UPDATE ON api_key_scope TO APP_ADMIN;
-GRANT SELECT ON api_key_scope TO APP_RUNTIME;
-GRANT INSERT ON audit_log TO APP_ADMIN;
-GRANT SELECT ON audit_log TO APP_ADMIN;
-GRANT SELECT ON audit_log TO APP_RUNTIME;
-GRANT DELETE ON ceremony_event TO APP_ADMIN;
-GRANT INSERT ON ceremony_event TO APP_ADMIN;
-GRANT SELECT ON ceremony_event TO APP_ADMIN;
-GRANT INSERT ON ceremony_event TO APP_RUNTIME;
-GRANT SELECT ON ceremony_event TO APP_RUNTIME;
-GRANT DELETE ON credential TO APP_ADMIN;
-GRANT INSERT ON credential TO APP_ADMIN;
-GRANT SELECT ON credential TO APP_ADMIN;
-GRANT UPDATE ON credential TO APP_ADMIN;
-GRANT DELETE ON credential TO APP_RUNTIME;
-GRANT INSERT ON credential TO APP_RUNTIME;
-GRANT SELECT ON credential TO APP_RUNTIME;
-GRANT UPDATE ON credential TO APP_RUNTIME;
-GRANT DELETE ON credential_auth_event TO APP_ADMIN;
-GRANT INSERT ON credential_auth_event TO APP_ADMIN;
-GRANT SELECT ON credential_auth_event TO APP_ADMIN;
-GRANT INSERT ON credential_auth_event TO APP_RUNTIME;
-GRANT SELECT ON credential_auth_event TO APP_RUNTIME;
-GRANT DELETE ON mds_blob_cache TO APP_ADMIN;
-GRANT INSERT ON mds_blob_cache TO APP_ADMIN;
-GRANT SELECT ON mds_blob_cache TO APP_ADMIN;
-GRANT UPDATE ON mds_blob_cache TO APP_ADMIN;
-GRANT SELECT ON mds_blob_cache TO APP_RUNTIME;
-GRANT INSERT ON mds_sync_history TO APP_ADMIN;
-GRANT SELECT ON mds_sync_history TO APP_ADMIN;
-GRANT SELECT ON mds_sync_history_seq TO APP_ADMIN;
-GRANT SELECT ON mds_sync_history_seq TO APP_RUNTIME;
-GRANT DELETE ON scheduler_lease TO APP_ADMIN;
-GRANT INSERT ON scheduler_lease TO APP_ADMIN;
-GRANT SELECT ON scheduler_lease TO APP_ADMIN;
-GRANT UPDATE ON scheduler_lease TO APP_ADMIN;
-GRANT SELECT ON scheduler_lease TO APP_RUNTIME;
-GRANT INSERT ON security_incident TO APP_ADMIN;
-GRANT SELECT ON security_incident TO APP_ADMIN;
-GRANT SELECT ON security_policy TO APP_ADMIN;
-GRANT UPDATE ON security_policy TO APP_ADMIN;
-GRANT SELECT ON security_policy TO APP_RUNTIME;
-GRANT INSERT ON signing_key TO APP_ADMIN;
-GRANT SELECT ON signing_key TO APP_ADMIN;
-GRANT SELECT ON signing_key TO APP_RUNTIME;
-GRANT EXECUTE ON signing_key_bootstrap_pkg TO APP_ADMIN;
-GRANT EXECUTE ON signing_key_bootstrap_pkg TO APP_RUNTIME;
-GRANT DELETE ON tenant TO APP_ADMIN;
-GRANT INSERT ON tenant TO APP_ADMIN;
-GRANT SELECT ON tenant TO APP_ADMIN;
-GRANT UPDATE ON tenant TO APP_ADMIN;
-GRANT SELECT ON tenant TO APP_RUNTIME;
-GRANT DELETE ON tenant_aaguid_policy TO APP_ADMIN;
-GRANT INSERT ON tenant_aaguid_policy TO APP_ADMIN;
-GRANT SELECT ON tenant_aaguid_policy TO APP_ADMIN;
-GRANT UPDATE ON tenant_aaguid_policy TO APP_ADMIN;
-GRANT SELECT ON tenant_aaguid_policy TO APP_RUNTIME;
-GRANT DELETE ON tenant_aaguid_policy_entry TO APP_ADMIN;
-GRANT INSERT ON tenant_aaguid_policy_entry TO APP_ADMIN;
-GRANT SELECT ON tenant_aaguid_policy_entry TO APP_ADMIN;
-GRANT UPDATE ON tenant_aaguid_policy_entry TO APP_ADMIN;
-GRANT SELECT ON tenant_aaguid_policy_entry TO APP_RUNTIME;
-GRANT DELETE ON tenant_accepted_format TO APP_ADMIN;
-GRANT INSERT ON tenant_accepted_format TO APP_ADMIN;
-GRANT SELECT ON tenant_accepted_format TO APP_ADMIN;
-GRANT UPDATE ON tenant_accepted_format TO APP_ADMIN;
-GRANT SELECT ON tenant_accepted_format TO APP_RUNTIME;
-GRANT DELETE ON tenant_allowed_origin TO APP_ADMIN;
-GRANT INSERT ON tenant_allowed_origin TO APP_ADMIN;
-GRANT SELECT ON tenant_allowed_origin TO APP_ADMIN;
-GRANT UPDATE ON tenant_allowed_origin TO APP_ADMIN;
-GRANT SELECT ON tenant_allowed_origin TO APP_RUNTIME;
-GRANT INSERT ON tenant_webauthn_snapshot TO APP_ADMIN;
-GRANT SELECT ON tenant_webauthn_snapshot TO APP_ADMIN;
-GRANT SELECT ON tenant_webauthn_snapshot TO APP_RUNTIME;
-GRANT SELECT ON tenant_webauthn_snapshot_seq TO APP_ADMIN;
-GRANT SELECT ON tenant_webauthn_snapshot_seq TO APP_RUNTIME;
-GRANT SELECT ON v_admin_user TO APP_ADMIN;
-GRANT SELECT ON v_admin_user TO APP_RUNTIME;
-GRANT SELECT ON v_api_key TO APP_ADMIN;
-GRANT SELECT ON v_api_key TO APP_RUNTIME;
-GRANT SELECT ON v_audit_log TO APP_ADMIN;
-GRANT SELECT ON v_audit_log TO APP_RUNTIME;
-GRANT SELECT ON v_credential TO APP_ADMIN;
-GRANT SELECT ON v_credential TO APP_RUNTIME;
-GRANT SELECT ON v_tenant_aaguid_policy TO APP_ADMIN;
-GRANT SELECT ON v_tenant_aaguid_policy TO APP_RUNTIME;
-GRANT SELECT ON v_tenant_accepted_format TO APP_ADMIN;
-GRANT SELECT ON v_tenant_accepted_format TO APP_RUNTIME;
-GRANT SELECT ON v_tenant_allowed_origin TO APP_ADMIN;
-GRANT SELECT ON v_tenant_allowed_origin TO APP_RUNTIME;
-GRANT SELECT ON v_tenant_webauthn_snapshot TO APP_ADMIN;
-GRANT SELECT ON v_tenant_webauthn_snapshot TO APP_RUNTIME;
+GRANT DELETE ON admin_password_reset_token TO PSK_APP_ADMIN;
+GRANT INSERT ON admin_password_reset_token TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_password_reset_token TO PSK_APP_ADMIN;
+GRANT UPDATE ON admin_password_reset_token TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_password_reset_token TO PSK_APP_RUNTIME;
+GRANT SELECT ON admin_password_reset_token_seq TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_password_reset_token_seq TO PSK_APP_RUNTIME;
+GRANT INSERT ON admin_user TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user TO PSK_APP_ADMIN;
+GRANT UPDATE ON admin_user TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user TO PSK_APP_RUNTIME;
+GRANT SELECT ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT INSERT ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT UPDATE ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT DELETE ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_tenant TO PSK_APP_RUNTIME;
+GRANT INSERT ON admin_user_invitation TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_invitation TO PSK_APP_ADMIN;
+GRANT UPDATE ON admin_user_invitation TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_invitation TO PSK_APP_RUNTIME;
+GRANT SELECT ON admin_user_invitation_seq TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_invitation_seq TO PSK_APP_RUNTIME;
+GRANT DELETE ON admin_user_recovery_code TO PSK_APP_ADMIN;
+GRANT INSERT ON admin_user_recovery_code TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_recovery_code TO PSK_APP_ADMIN;
+GRANT UPDATE ON admin_user_recovery_code TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_recovery_code TO PSK_APP_RUNTIME;
+GRANT DELETE ON api_key TO PSK_APP_ADMIN;
+GRANT INSERT ON api_key TO PSK_APP_ADMIN;
+GRANT SELECT ON api_key TO PSK_APP_ADMIN;
+GRANT UPDATE ON api_key TO PSK_APP_ADMIN;
+GRANT SELECT ON api_key TO PSK_APP_RUNTIME;
+GRANT DELETE ON api_key_scope TO PSK_APP_ADMIN;
+GRANT INSERT ON api_key_scope TO PSK_APP_ADMIN;
+GRANT SELECT ON api_key_scope TO PSK_APP_ADMIN;
+GRANT UPDATE ON api_key_scope TO PSK_APP_ADMIN;
+GRANT SELECT ON api_key_scope TO PSK_APP_RUNTIME;
+GRANT INSERT ON audit_log TO PSK_APP_ADMIN;
+GRANT SELECT ON audit_log TO PSK_APP_ADMIN;
+GRANT SELECT ON audit_log TO PSK_APP_RUNTIME;
+GRANT DELETE ON ceremony_event TO PSK_APP_ADMIN;
+GRANT INSERT ON ceremony_event TO PSK_APP_ADMIN;
+GRANT SELECT ON ceremony_event TO PSK_APP_ADMIN;
+GRANT INSERT ON ceremony_event TO PSK_APP_RUNTIME;
+GRANT SELECT ON ceremony_event TO PSK_APP_RUNTIME;
+GRANT DELETE ON credential TO PSK_APP_ADMIN;
+GRANT INSERT ON credential TO PSK_APP_ADMIN;
+GRANT SELECT ON credential TO PSK_APP_ADMIN;
+GRANT UPDATE ON credential TO PSK_APP_ADMIN;
+GRANT DELETE ON credential TO PSK_APP_RUNTIME;
+GRANT INSERT ON credential TO PSK_APP_RUNTIME;
+GRANT SELECT ON credential TO PSK_APP_RUNTIME;
+GRANT UPDATE ON credential TO PSK_APP_RUNTIME;
+GRANT DELETE ON credential_auth_event TO PSK_APP_ADMIN;
+GRANT INSERT ON credential_auth_event TO PSK_APP_ADMIN;
+GRANT SELECT ON credential_auth_event TO PSK_APP_ADMIN;
+GRANT INSERT ON credential_auth_event TO PSK_APP_RUNTIME;
+GRANT SELECT ON credential_auth_event TO PSK_APP_RUNTIME;
+GRANT DELETE ON mds_blob_cache TO PSK_APP_ADMIN;
+GRANT INSERT ON mds_blob_cache TO PSK_APP_ADMIN;
+GRANT SELECT ON mds_blob_cache TO PSK_APP_ADMIN;
+GRANT UPDATE ON mds_blob_cache TO PSK_APP_ADMIN;
+GRANT SELECT ON mds_blob_cache TO PSK_APP_RUNTIME;
+GRANT INSERT ON mds_sync_history TO PSK_APP_ADMIN;
+GRANT SELECT ON mds_sync_history TO PSK_APP_ADMIN;
+GRANT SELECT ON mds_sync_history_seq TO PSK_APP_ADMIN;
+GRANT SELECT ON mds_sync_history_seq TO PSK_APP_RUNTIME;
+GRANT DELETE ON scheduler_lease TO PSK_APP_ADMIN;
+GRANT INSERT ON scheduler_lease TO PSK_APP_ADMIN;
+GRANT SELECT ON scheduler_lease TO PSK_APP_ADMIN;
+GRANT UPDATE ON scheduler_lease TO PSK_APP_ADMIN;
+GRANT SELECT ON scheduler_lease TO PSK_APP_RUNTIME;
+GRANT INSERT ON security_incident TO PSK_APP_ADMIN;
+GRANT SELECT ON security_incident TO PSK_APP_ADMIN;
+GRANT SELECT ON security_policy TO PSK_APP_ADMIN;
+GRANT UPDATE ON security_policy TO PSK_APP_ADMIN;
+GRANT SELECT ON security_policy TO PSK_APP_RUNTIME;
+GRANT INSERT ON signing_key TO PSK_APP_ADMIN;
+GRANT SELECT ON signing_key TO PSK_APP_ADMIN;
+GRANT SELECT ON signing_key TO PSK_APP_RUNTIME;
+GRANT EXECUTE ON signing_key_bootstrap_pkg TO PSK_APP_ADMIN;
+GRANT EXECUTE ON signing_key_bootstrap_pkg TO PSK_APP_RUNTIME;
+GRANT DELETE ON tenant TO PSK_APP_ADMIN;
+GRANT INSERT ON tenant TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant TO PSK_APP_ADMIN;
+GRANT UPDATE ON tenant TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant TO PSK_APP_RUNTIME;
+GRANT DELETE ON tenant_aaguid_policy TO PSK_APP_ADMIN;
+GRANT INSERT ON tenant_aaguid_policy TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_aaguid_policy TO PSK_APP_ADMIN;
+GRANT UPDATE ON tenant_aaguid_policy TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_aaguid_policy TO PSK_APP_RUNTIME;
+GRANT DELETE ON tenant_aaguid_policy_entry TO PSK_APP_ADMIN;
+GRANT INSERT ON tenant_aaguid_policy_entry TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_aaguid_policy_entry TO PSK_APP_ADMIN;
+GRANT UPDATE ON tenant_aaguid_policy_entry TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_aaguid_policy_entry TO PSK_APP_RUNTIME;
+GRANT DELETE ON tenant_accepted_format TO PSK_APP_ADMIN;
+GRANT INSERT ON tenant_accepted_format TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_accepted_format TO PSK_APP_ADMIN;
+GRANT UPDATE ON tenant_accepted_format TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_accepted_format TO PSK_APP_RUNTIME;
+GRANT DELETE ON tenant_allowed_origin TO PSK_APP_ADMIN;
+GRANT INSERT ON tenant_allowed_origin TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_allowed_origin TO PSK_APP_ADMIN;
+GRANT UPDATE ON tenant_allowed_origin TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_allowed_origin TO PSK_APP_RUNTIME;
+GRANT INSERT ON tenant_webauthn_snapshot TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_webauthn_snapshot TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_webauthn_snapshot TO PSK_APP_RUNTIME;
+GRANT SELECT ON tenant_webauthn_snapshot_seq TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_webauthn_snapshot_seq TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_admin_user TO PSK_APP_ADMIN;
+GRANT SELECT ON v_admin_user TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_api_key TO PSK_APP_ADMIN;
+GRANT SELECT ON v_api_key TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_audit_log TO PSK_APP_ADMIN;
+GRANT SELECT ON v_audit_log TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_credential TO PSK_APP_ADMIN;
+GRANT SELECT ON v_credential TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_tenant_aaguid_policy TO PSK_APP_ADMIN;
+GRANT SELECT ON v_tenant_aaguid_policy TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_tenant_accepted_format TO PSK_APP_ADMIN;
+GRANT SELECT ON v_tenant_accepted_format TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_tenant_allowed_origin TO PSK_APP_ADMIN;
+GRANT SELECT ON v_tenant_allowed_origin TO PSK_APP_RUNTIME;
+GRANT SELECT ON v_tenant_webauthn_snapshot TO PSK_APP_ADMIN;
+GRANT SELECT ON v_tenant_webauthn_snapshot TO PSK_APP_RUNTIME;
 
 -- 컬럼 스코프 UPDATE GRANT (원본 V7/V15/V19/V22/V46/V50 — 최소권한 유지, 테이블 전체로 넓히지 말 것)
-GRANT UPDATE(status, rotated_at, revoked_at) ON signing_key TO APP_ADMIN;
-GRANT UPDATE(updated_at) ON signing_key TO APP_ADMIN;
-GRANT UPDATE(last_used_at) ON api_key TO APP_RUNTIME;
-GRANT UPDATE(updated_at) ON api_key TO APP_RUNTIME;
-GRANT UPDATE (tenant_hash, tenant_prev_hash) ON audit_log TO APP_ADMIN;
-GRANT UPDATE (status, resolved_at, resolved_by, resolution_note) ON security_incident TO APP_ADMIN;
+GRANT UPDATE(status, rotated_at, revoked_at) ON signing_key TO PSK_APP_ADMIN;
+GRANT UPDATE(updated_at) ON signing_key TO PSK_APP_ADMIN;
+GRANT UPDATE(last_used_at) ON api_key TO PSK_APP_RUNTIME;
+GRANT UPDATE(updated_at) ON api_key TO PSK_APP_RUNTIME;
+GRANT UPDATE (tenant_hash, tenant_prev_hash) ON audit_log TO PSK_APP_ADMIN;
+GRANT UPDATE (status, resolved_at, resolved_by, resolution_note) ON security_incident TO PSK_APP_ADMIN;
 
 
 -- ============================================================
@@ -858,7 +858,7 @@ ALTER TABLE admin_user ADD (mfa_last_totp_step NUMBER(19,0));
 ALTER TABLE admin_user ADD (mfa_failed_count NUMBER DEFAULT 0 NOT NULL);
 
 -- ------------------------------------------------------------
--- V4 — security_incident 를 APP_RUNTIME 에 SELECT GRANT
+-- V4 — security_incident 를 PSK_APP_RUNTIME 에 SELECT GRANT
 --
 -- passkey-app 은 이 테이블을 읽지 않지만, @EntityScan 이 core.entity 를 통째로
 -- 스캔하고 hibernate.ddl-auto=validate 가 그 전부의 테이블 존재를 검증한다.
@@ -866,9 +866,9 @@ ALTER TABLE admin_user ADD (mfa_failed_count NUMBER DEFAULT 0 NOT NULL);
 --   Schema-validation: missing table [security_incident]
 --
 -- SELECT 만 부여 — 검증이 메타데이터를 조회할 수 있으면 충분하다.
--- INSERT/UPDATE 는 APP_ADMIN 전용으로 유지한다.
+-- INSERT/UPDATE 는 PSK_APP_ADMIN 전용으로 유지한다.
 -- ------------------------------------------------------------
-GRANT SELECT ON security_incident TO APP_RUNTIME;
+GRANT SELECT ON security_incident TO PSK_APP_RUNTIME;
 
 PROMPT
 PROMPT ============================================================

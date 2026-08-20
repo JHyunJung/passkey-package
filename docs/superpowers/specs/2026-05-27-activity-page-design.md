@@ -165,7 +165,7 @@ public record AuditAppendRequest(
 ```java
 @Transactional
 public AuditLog append(AuditAppendRequest req) {
-    em.createNativeQuery("SELECT 1 FROM APP_OWNER.scheduler_lease WHERE name = 'AUDIT_CHAIN_LOCK' FOR UPDATE")
+    em.createNativeQuery("SELECT 1 FROM PSK_APP_OWNER.scheduler_lease WHERE name = 'AUDIT_CHAIN_LOCK' FOR UPDATE")
       .getSingleResult();
 
     Optional<AuditLog> latest = repo.findLatestForUpdate();

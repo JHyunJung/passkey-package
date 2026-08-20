@@ -4,8 +4,8 @@
 # 서버)에 스키마+시드를 적용한다. docker compose 를 쓰지 않는다.
 #
 # 두 단계:
-#   1. bootstrap-external.sql 을 SYSDBA 로 실행 — APP_OWNER 스키마 유저 +
-#      APP_ADMIN/APP_RUNTIME role + GRANT 생성.
+#   1. bootstrap-external.sql 을 SYSDBA 로 실행 — PSK_APP_OWNER 스키마 유저 +
+#      PSK_APP_ADMIN/PSK_APP_RUNTIME role + GRANT 생성.
 #      (VPD 제거됨 — CTX_PKG/APP_CTX/DBMS_RLS GRANT 는 더 이상 만들지 않는다.)
 #   2. admin-app 을 그 Oracle 의 JDBC URL 로 부팅 — Flyway 가 V1~ 마이그레이션
 #      (테이블/시퀀스 + V52 의 VPD 잔재 청소) + 프로필 시드(R__) 를 적용.
@@ -29,7 +29,7 @@
 #   PROFILE: dev(기본) | local | qa.  대상 DB 가 비어 있다고 가정.
 #
 #   [이미 우리 잔재가 있는 외부 SE DB 를 비우고 재적용하는 절차]
-#     1) DBeaver 에서 APP_OWNER 로 접속해 scripts/reset-app-owner-external.sql 실행
+#     1) DBeaver 에서 PSK_APP_OWNER 로 접속해 scripts/reset-app-owner-external.sql 실행
 #        (스크립트 상단 c_confirm 을 RESET 으로 바꿔야 동작. 테이블·데이터 삭제.
 #         VPD 제거됨 — CTX_PKG 도 함께 정리되고 APP_CTX 는 DROP 권한 부재로 무해하게 잔존).
 #     2) 아래처럼 SKIP_BOOTSTRAP=1 로 Flyway 만 재적용:
@@ -41,7 +41,7 @@
 #     앱 런타임은 어떤 VPD 설정도 읽지 않는다.
 #
 # ⚠️ 멱등하지만 파괴적이지 않다 — Flyway 가 관리하는 테이블/시퀀스/마이그레이션
-#    이력(flyway_schema_history)은 비어 있어야 한다. bootstrap 산출물(APP_OWNER/role)
+#    이력(flyway_schema_history)은 비어 있어야 한다. bootstrap 산출물(PSK_APP_OWNER/role)
 #    은 남아 있어도 무방하다(SKIP_BOOTSTRAP 재적용 경로 전제).
 #    빈 스키마든, reset-app-owner-external.sql 로 Flyway 객체만 비운 스키마든 적용 가능.
 #
@@ -51,7 +51,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 계정 비밀번호는 환경변수 필수 — 하드코딩 제거(보안 감사 #2).
-# ADMIN_PW: APP_ADMIN_USER 비번 — 항상 필요 (runtime datasource).
+# ADMIN_PW: PSK_APP_ADMIN_USER 비번 — 항상 필요 (runtime datasource).
 # APP_OWNER_PW: Flyway datasource 비번 — 항상 필요 (bootstrap 및 Flyway).
 : "${ADMIN_PW:?ADMIN_PW 환경변수 필요 (강한 비번)}"
 : "${APP_OWNER_PW:?APP_OWNER_PW 환경변수 필요 (강한 비번)}"
@@ -77,7 +77,7 @@ echo ""
 # ---- 단계 1: 부트스트랩 (SKIP_BOOTSTRAP=1 이면 건너뜀) ----
 if [ "${SKIP_BOOTSTRAP}" = "1" ]; then
   echo "==> [1/2] 부트스트랩 건너뜀 (SKIP_BOOTSTRAP=1) — 이미 부트스트랩된 DB 전제."
-  echo "    (APP_OWNER/role 이 이미 있어야 합니다. 없으면 DBeaver 로"
+  echo "    (PSK_APP_OWNER/role 이 이미 있어야 합니다. 없으면 DBeaver 로"
   echo "     bootstrap-external.sql 을 먼저 실행하세요.)"
 else
   if ! command -v sqlplus >/dev/null 2>&1; then
@@ -88,7 +88,7 @@ else
   fi
   # RUNTIME_PW: bootstrap 전용 — SKIP_BOOTSTRAP=1 이면 불필요.
   : "${RUNTIME_PW:?RUNTIME_PW 환경변수 필요 (강한 비번)}"
-  echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role"
+  echo "==> [1/2] 부트스트랩 (SYSDBA): PSK_APP_OWNER 유저 + role"
   # ⚠️ 비번에 "(큰따옴표)가 있으면 heredoc DEFINE 줄이 파괴됨. 비번에 " 미사용 권장.
   sqlplus -S "${SYS_CONN}" <<SQL
 DEFINE app_owner_pw = "${APP_OWNER_PW}"
@@ -108,9 +108,9 @@ echo "==> [2/2] Flyway 마이그레이션 + ${PROFILE} 시드 (admin-app 부팅 
 LOG="$(mktemp -t init-db-external.XXXXXX.log)"
 cd "${REPO_ROOT}"
 SPRING_DATASOURCE_URL="${JDBC_URL}" \
-SPRING_DATASOURCE_USERNAME='APP_ADMIN_USER' \
+SPRING_DATASOURCE_USERNAME='PSK_APP_ADMIN_USER' \
 SPRING_DATASOURCE_PASSWORD="${ADMIN_PW}" \
-SPRING_FLYWAY_USER='APP_OWNER' \
+SPRING_FLYWAY_USER='PSK_APP_OWNER' \
 SPRING_FLYWAY_PASSWORD="${APP_OWNER_PW}" \
 SPRING_DATA_REDIS_HOST="${REDIS_HOST:-localhost}" \
 PASSKEY_KEY_ENVELOPE_MASTER_KEY="${PASSKEY_KEY_ENVELOPE_MASTER_KEY:-jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM=}" \

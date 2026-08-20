@@ -1,5 +1,6 @@
 package com.crosscert.passkey.app.security;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -35,11 +36,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * tenant context, and that {@code touchLastUsed} keeps tenant isolation via an
  * explicit {@code tenant_id} WHERE predicate.
  *
- * <h2>Why APP_ADMIN_USER</h2>
+ * <h2>Why PSK_APP_ADMIN_USER</h2>
  * The native {@code findByPrefix} lookup runs as a plain {@link JdbcTemplate}
  * SELECT — it does NOT pass through Hibernate's {@code @Filter}. It also must
  * return a row even though no tenant context is set at authentication time.
- * This IT connects as {@code APP_ADMIN_USER}, the production runtime user, so
+ * This IT connects as {@code PSK_APP_ADMIN_USER}, the production runtime user, so
  * the native query observes the row regardless of session context — exactly
  * the production behavior now that Oracle VPD is removed (no DB-kernel row
  * filter exists, so the plain SQL query already sees all rows).
@@ -79,7 +80,9 @@ class ApiKeyLookupServiceIT {
     static class ServiceConfig {
         @Bean
         ApiKeyLookupService apiKeyLookupService(DataSource dataSource) {
-            return new ApiKeyLookupService(dataSource);
+            // 이 IT 컨테이너는 아직 구 계정명(PSK_APP_OWNER)으로 부트스트랩된다.
+            // 스키마명을 명시해 IT 자체의 SQL(위 seed/verify 쿼리)과 일치시킨다.
+            return new ApiKeyLookupService(dataSource, new DbSchemaProperties("PSK_APP_OWNER"));
         }
     }
 
@@ -90,7 +93,7 @@ class ApiKeyLookupServiceIT {
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE =
             new OracleContainer(ORACLE_IMAGE)
-                    .withUsername("APP_OWNER")
+                    .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
                             MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -108,15 +111,15 @@ class ApiKeyLookupServiceIT {
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
-        // Runtime DataSource → APP_ADMIN_USER, the production runtime user, so
+        // Runtime DataSource → PSK_APP_ADMIN_USER, the production runtime user, so
         // the native SELECT mirrors the post-VPD-removal state (no DB row filter).
-        // APP_ADMIN also holds full DML on api_key/tenant for seeding.
+        // PSK_APP_ADMIN also holds full DML on api_key/tenant for seeding.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Flyway runs as APP_OWNER (schema owner) — same split as the core ITs.
+        // Flyway runs as PSK_APP_OWNER (schema owner) — same split as the core ITs.
         reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
         reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
@@ -150,7 +153,7 @@ class ApiKeyLookupServiceIT {
         // allowed_origins/attestation_policy were normalized into child tables
         // (V21); the boolean flags carry DB defaults so they are omitted here.
         jdbc.update(
-                "INSERT INTO APP_OWNER.tenant "
+                "INSERT INTO PSK_APP_OWNER.tenant "
                         + "(id, display_name, status, slug, rp_id, rp_name) "
                         + "VALUES (?, ?, 'active', ?, ?, ?)",
                 ps -> {
@@ -163,7 +166,7 @@ class ApiKeyLookupServiceIT {
         // api_key. scopes was normalized into api_key_scope (V21); last_used_at
         // left NULL so the touchLastUsed assertions start from a clean slate.
         jdbc.update(
-                "INSERT INTO APP_OWNER.api_key "
+                "INSERT INTO PSK_APP_OWNER.api_key "
                         + "(id, tenant_id, key_prefix, key_hash, name) "
                         + "VALUES (?, ?, ?, ?, ?)",
                 ps -> {
@@ -178,8 +181,8 @@ class ApiKeyLookupServiceIT {
     @AfterEach
     void cleanup() {
         TenantContextHolder.clear();
-        jdbc.update("DELETE FROM APP_OWNER.api_key");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
     }
 
     // ── Test 1: native lookup works WITHOUT tenant context ───────────────────
@@ -243,7 +246,7 @@ class ApiKeyLookupServiceIT {
         // ── Wrong tenant: must NOT update (0 rows matched) ────────────────
         service.touchLastUsed(API_KEY_ID, OTHER_TENANT_ID, now);
         Timestamp afterWrong = jdbc.queryForObject(
-                "SELECT last_used_at FROM APP_OWNER.api_key WHERE id = ?",
+                "SELECT last_used_at FROM PSK_APP_OWNER.api_key WHERE id = ?",
                 Timestamp.class, toBytes(API_KEY_ID));
         assertThat(afterWrong)
                 .as("touchLastUsed with the wrong tenant_id must leave last_used_at NULL")
@@ -252,7 +255,7 @@ class ApiKeyLookupServiceIT {
         // ── Correct tenant: must update ───────────────────────────────────
         service.touchLastUsed(API_KEY_ID, TENANT_ID, now);
         Timestamp afterRight = jdbc.queryForObject(
-                "SELECT last_used_at FROM APP_OWNER.api_key WHERE id = ?",
+                "SELECT last_used_at FROM PSK_APP_OWNER.api_key WHERE id = ?",
                 Timestamp.class, toBytes(API_KEY_ID));
         assertThat(afterRight)
                 .as("touchLastUsed with the correct tenant_id must set last_used_at")

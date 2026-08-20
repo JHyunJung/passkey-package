@@ -38,8 +38,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Follows the {@code @SpringBootTest + @Testcontainers} shape of
  * {@code AppLevelIsolationIT} / {@code BaseEntityCallbackIT}: real Oracle XE 21,
- * {@code bootstrap-schema.sql} run as SYS, Flyway applies V1–V48 as APP_OWNER, and
- * the Spring datasource connects as APP_ADMIN_USER (INSERT grant on the table),
+ * {@code bootstrap-schema.sql} run as SYS, Flyway applies V1–V48 as PSK_APP_OWNER, and
+ * the Spring datasource connects as PSK_APP_ADMIN_USER (INSERT grant on the table),
  * so direct JDBC INSERTs exercise the CHECK constraint. With Oracle VPD removed
  * there is no DB-kernel row filter — the app-level @Filter is ORM-only and does
  * not affect raw JDBC.
@@ -73,14 +73,14 @@ class TenantAllowedOriginAndroidCheckIT {
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
 
     // OracleContainer.configure() pushes withPassword(...) to BOTH
-    // ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (gvenzl APP_OWNER),
+    // ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (gvenzl PSK_APP_OWNER),
     // so the same secret authenticates the bootstrap SYS connect.
     private static final String SYS_PASSWORD = "app_owner_pw";
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE =
             new OracleContainer(ORACLE_IMAGE)
-                    .withUsername("APP_OWNER")
+                    .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
                             MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -89,7 +89,7 @@ class TenantAllowedOriginAndroidCheckIT {
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         // Bootstrap MUST complete before Spring opens a connection — Spring is
-        // told to connect as APP_ADMIN_USER which the bootstrap creates.
+        // told to connect as PSK_APP_ADMIN_USER which the bootstrap creates.
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
@@ -101,14 +101,14 @@ class TenantAllowedOriginAndroidCheckIT {
                             + "STDERR:\n" + exec.getStderr());
         }
 
-        // Runtime datasource = APP_ADMIN_USER.
+        // Runtime datasource = PSK_APP_ADMIN_USER.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Flyway runs as the schema OWNER (APP_OWNER) so migrations can GRANT
-        // on APP_OWNER objects. APP_OWNER pw == SYS_PASSWORD in the container.
+        // Flyway runs as the schema OWNER (PSK_APP_OWNER) so migrations can GRANT
+        // on PSK_APP_OWNER objects. PSK_APP_OWNER pw == SYS_PASSWORD in the container.
         reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
         reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
@@ -144,22 +144,22 @@ class TenantAllowedOriginAndroidCheckIT {
     private void resetState() {
         // Clear admin_user_tenant mapping before deleting tenants (FK admin_user_tenant.tenant_id → tenant).
         // fk_tao_tenant has ON DELETE CASCADE, so deleting the tenant clears our allowed_origin rows.
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
     }
 
     /** Direct JDBC INSERT of a tenant_allowed_origin row with the given origin. */
     private void insertOrigin(String origin) {
         jdbc.update(
-                "INSERT INTO APP_OWNER.tenant_allowed_origin (tenant_id, origin, sort_order) "
+                "INSERT INTO PSK_APP_OWNER.tenant_allowed_origin (tenant_id, origin, sort_order) "
                         + "VALUES (HEXTORAW(?), ?, 0)",
                 tenantHex, origin);
     }
 
     private long countOrigins() {
         Long n = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.tenant_allowed_origin WHERE tenant_id = HEXTORAW(?)",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.tenant_allowed_origin WHERE tenant_id = HEXTORAW(?)",
                 Long.class, tenantHex);
         return n == null ? 0L : n;
     }

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 #
-# reset-app-owner.sh — APP_OWNER 스키마만 완전 초기화한다(컨테이너/볼륨은 유지).
+# reset-app-owner.sh — PSK_APP_OWNER 스키마만 완전 초기화한다(컨테이너/볼륨은 유지).
 #
 # init-dev-db.sh 와의 차이:
 #   init-dev-db.sh  : docker compose down -v 로 Oracle 볼륨까지 날리고 재부트스트랩(분 단위).
-#   reset-app-owner : 컨테이너는 그대로 두고 APP_OWNER 스키마 객체만 DROP(초 단위).
+#   reset-app-owner : 컨테이너는 그대로 두고 PSK_APP_OWNER 스키마 객체만 DROP(초 단위).
 #                     "내가 원할 때만" 빠르게 데이터+스키마를 초기 상태로 되돌린다.
 #
 # 절차:
 #   1. (가드) 프로필이 dev/local 인지 확인 — qa/prod 면 거부.
 #   2. (가드) 'RESET' 을 직접 타이핑해야 진행 (--yes 로 우회).
-#   3. reset-app-owner.sql  : SYS 세션에서 APP_OWNER 객체 전부 DROP(테이블·시퀀스·
+#   3. reset-app-owner.sql  : SYS 세션에서 PSK_APP_OWNER 객체 전부 DROP(테이블·시퀀스·
 #                             뷰·패키지·트리거 + 과거 VPD 잔재(정책·CTX_PKG·APP_CTX) 청소).
 #   4. run-bootstrap.sh     : role/스키마 재생성(VPD 제거됨 — CTX_PKG/APP_CTX/VPD GRANT 안 만듦).
 #   5. admin-app(Flyway)    : V1~ 마이그레이션 + ${PROFILE} 시드(R__) 적용 후 종료.
 #
-# 결과: 컨테이너 재기동 없이, ${PROFILE} 시드가 들어간 깨끗한 APP_OWNER 스키마.
+# 결과: 컨테이너 재기동 없이, ${PROFILE} 시드가 들어간 깨끗한 PSK_APP_OWNER 스키마.
 #
-# ⚠️ 파괴적: APP_OWNER 의 모든 데이터(테넌트·계정·패스키·인증기록 전부)를 삭제한다.
+# ⚠️ 파괴적: PSK_APP_OWNER 의 모든 데이터(테넌트·계정·패스키·인증기록 전부)를 삭제한다.
 #
 # 사용법:
 #   scripts/reset-app-owner.sh              # 'RESET' 타이핑 확인 후 실행 (profile=local)
@@ -68,9 +68,9 @@ if [ "${CONTAINER_PROJECT}" != "passkey2" ]; then
   exit 1
 fi
 
-echo "==> APP_OWNER 스키마 초기화 (profile=${PROFILE}, container=${ORACLE_CONTAINER})"
+echo "==> PSK_APP_OWNER 스키마 초기화 (profile=${PROFILE}, container=${ORACLE_CONTAINER})"
 echo "    repo: ${REPO_ROOT}"
-echo "    ⚠️  APP_OWNER 의 모든 데이터(테넌트·계정·패스키·인증기록)가 삭제됩니다."
+echo "    ⚠️  PSK_APP_OWNER 의 모든 데이터(테넌트·계정·패스키·인증기록)가 삭제됩니다."
 echo "    (컨테이너/볼륨/유저/role 은 유지됩니다.)"
 
 # --- 가드 3: 'RESET' 타이핑 확인 ---
@@ -84,7 +84,7 @@ fi
 
 cd "${REPO_ROOT}"
 
-echo "==> [1/3] APP_OWNER 객체 DROP (SYS 세션)"
+echo "==> [1/3] PSK_APP_OWNER 객체 DROP (SYS 세션)"
 { echo "DEFINE ora_service = ${ORA_SERVICE}"; cat "${SCRIPT_DIR}/reset-app-owner.sql"; } | \
   docker exec -i "${ORACLE_CONTAINER}" \
     sqlplus -S sys/oracle@localhost:1521/${ORA_SERVICE} as sysdba
@@ -166,7 +166,7 @@ if [ -n "${STALE_PIDS}" ]; then
 fi
 
 if [ "${ok}" = "true" ]; then
-  echo "==> ✅ 완료. ${PROFILE} 시드가 적용된 깨끗한 APP_OWNER 스키마 준비됨."
+  echo "==> ✅ 완료. ${PROFILE} 시드가 적용된 깨끗한 PSK_APP_OWNER 스키마 준비됨."
   echo "    로그: ${LOG}"
   echo "    이제 서버를 띄우세요:"
   echo "      ./gradlew :admin-app:bootRun   --args='--spring.profiles.active=${PROFILE}'"

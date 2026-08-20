@@ -152,12 +152,12 @@ END;
 
 -- ------------------------------------------------------------
 -- 권한
---   APP_ADMIN: admin-app 이 reset 토큰 발급/검증/소비 → SELECT,INSERT,UPDATE,DELETE.
---   APP_RUNTIME: passkey-app @EntityScan ddl-validate 통과용 SELECT (V30/V31 invariant).
+--   PSK_APP_ADMIN: admin-app 이 reset 토큰 발급/검증/소비 → SELECT,INSERT,UPDATE,DELETE.
+--   PSK_APP_RUNTIME: passkey-app @EntityScan ddl-validate 통과용 SELECT (V30/V31 invariant).
 -- ------------------------------------------------------------
-GRANT SELECT, INSERT, UPDATE, DELETE ON admin_password_reset_token TO APP_ADMIN;
-GRANT SELECT ON admin_password_reset_token TO APP_RUNTIME;
-GRANT SELECT ON admin_password_reset_token_seq TO APP_ADMIN;
+GRANT SELECT, INSERT, UPDATE, DELETE ON admin_password_reset_token TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_password_reset_token TO PSK_APP_RUNTIME;
+GRANT SELECT ON admin_password_reset_token_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: AdminUserRecoveryCode 엔티티 작성**

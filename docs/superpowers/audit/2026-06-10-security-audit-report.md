@@ -70,16 +70,16 @@
 - **STRIDE**: S, E, I · **경계**: 공급망·설정 · **온프레미스에서 직접 악용**
 - **위치**: `scripts/bootstrap-external.sql:29,75,83,89`, `scripts/init-db-external.sh:93-95`, `scripts/bootstrap-vpd.sql:69,79`
 
-고객사 외부 Oracle을 초기화하는 **문서화된 유일한 경로**가 APP_OWNER/APP_RUNTIME_USER/APP_ADMIN_USER 세 계정을 저장소에 공개된 고정 평문 비밀번호로 생성한다. 비밀번호는 `EXECUTE IMMEDIATE`의 SQL 리터럴이라 부트스트랩 시점에 env/치환 메커니즘이 없다. 더해 `bootstrap-external.sql:89`가 APP_ADMIN_USER에 `GRANT ALL PRIVILEGES`를 부여한다(스크립트 주석도 known-issue로 자인). 내부망 침투자가 DB 리스너에 도달하면 공개 `admin_pw`로 로그인 → 사실상 DBA → 전 테넌트 덤프·변조·VPD 우회. 강한 비밀번호를 강제하는 forcing function이 전무하다.
+고객사 외부 Oracle을 초기화하는 **문서화된 유일한 경로**가 PSK_APP_OWNER/PSK_APP_RUNTIME_USER/PSK_APP_ADMIN_USER 세 계정을 저장소에 공개된 고정 평문 비밀번호로 생성한다. 비밀번호는 `EXECUTE IMMEDIATE`의 SQL 리터럴이라 부트스트랩 시점에 env/치환 메커니즘이 없다. 더해 `bootstrap-external.sql:89`가 PSK_APP_ADMIN_USER에 `GRANT ALL PRIVILEGES`를 부여한다(스크립트 주석도 known-issue로 자인). 내부망 침투자가 DB 리스너에 도달하면 공개 `admin_pw`로 로그인 → 사실상 DBA → 전 테넌트 덤프·변조·VPD 우회. 강한 비밀번호를 강제하는 forcing function이 전무하다.
 
-**개선 방향.** 계정 비밀번호를 외부 입력(sqlplus DEFINE/env 치환/필수 인자)으로 받고 디폴트가 비면 fail-fast. APP_ADMIN_USER의 GRANT ALL을 Flyway DDL·DBMS_RLS 운영에 필요한 최소 권한으로 축소. docker-compose 디폴트와 분리.
+**개선 방향.** 계정 비밀번호를 외부 입력(sqlplus DEFINE/env 치환/필수 인자)으로 받고 디폴트가 비면 fail-fast. PSK_APP_ADMIN_USER의 GRANT ALL을 Flyway DDL·DBMS_RLS 운영에 필요한 최소 권한으로 축소. docker-compose 디폴트와 분리.
 
 ### 3. `dp-admin-user-grant-all-privileges` — 런타임 GRANT ALL이 audit append-only를 무력화
 
 - **STRIDE**: E, R, T · **경계**: 데이터 보호 · **SaaS/온프렘 둘 다**
 - **위치**: `scripts/bootstrap-vpd.sql:90`, `scripts/bootstrap-external.sql:89`, `core/.../db/migration/V10__audit_log_table.sql:15-16,39`, `V9__admin_user_table.sql:27`
 
-Flyway 마이그레이션은 감사로그를 tamper-evident로 설계한다 — V10:15-16 주석이 "APP_ADMIN gets SELECT + INSERT only. NO UPDATE, NO DELETE … Tampering requires DBA-level privilege"라 명시하고 V10:39도 `GRANT SELECT, INSERT`만 부여한다. 그러나 두 부트스트랩이 admin-app이 접속하는 APP_ADMIN_USER에 `GRANT ALL PRIVILEGES`를 줘서 컬럼·DML 단위 GRANT가 전부 무의미해진다. admin-app 런타임 principal이 사실상 DBA다. admin-app 침해(SQLi/RCE/자격증명 유출) 시 audit_log를 DELETE한 뒤 해시체인을 재계산·UPDATE하여 위조 가능 — `AuditChainVerifier`는 저장 필드로 재계산해 비교하므로 prevention도 detection도 우회된다. (cross-tenant 관리에 EXEMPT ACCESS POLICY가 필요해 admin-app은 VPD 바인딩 계정을 못 쓰고 이 계정만 쓴다.)
+Flyway 마이그레이션은 감사로그를 tamper-evident로 설계한다 — V10:15-16 주석이 "PSK_APP_ADMIN gets SELECT + INSERT only. NO UPDATE, NO DELETE … Tampering requires DBA-level privilege"라 명시하고 V10:39도 `GRANT SELECT, INSERT`만 부여한다. 그러나 두 부트스트랩이 admin-app이 접속하는 PSK_APP_ADMIN_USER에 `GRANT ALL PRIVILEGES`를 줘서 컬럼·DML 단위 GRANT가 전부 무의미해진다. admin-app 런타임 principal이 사실상 DBA다. admin-app 침해(SQLi/RCE/자격증명 유출) 시 audit_log를 DELETE한 뒤 해시체인을 재계산·UPDATE하여 위조 가능 — `AuditChainVerifier`는 저장 필드로 재계산해 비교하므로 prevention도 detection도 우회된다. (cross-tenant 관리에 EXEMPT ACCESS POLICY가 필요해 admin-app은 VPD 바인딩 계정을 못 쓰고 이 계정만 쓴다.)
 
 **개선 방향.** 런타임 계정에서 GRANT ALL 제거, 마이그레이션의 컬럼·DML 단위 GRANT만으로 동작하도록 축소. Flyway DDL 권한은 별도 마이그레이션 전용 계정으로 분리, 런타임은 audit_log에 SELECT+INSERT만. "런타임 계정은 audit_log UPDATE/DELETE 불가" Testcontainers 회귀 테스트 추가.
 
@@ -111,7 +111,7 @@ Flyway 마이그레이션은 감사로그를 tamper-evident로 설계한다 — 
 `WebAuthnController.java:43-60`이 upstream 호출보다 먼저 `users.createPending()`을 호출하고, `InMemoryUserStore.java:120-128`이 매 호출마다 TTL/eviction 없이 맵에 적재(재기동 시에만 정리). `/passkey/**`가 permitAll이고 rp-app 자체 rate-limit이 없어 비인증 flood로 힙 고갈 + upstream registration/start 60/min 예산 소진. 단일 테넌트 가용성 한정(upstream IP/key 버킷이 코어·타 테넌트는 보호). **방향**: pending 엔트리 TTL/상한 + begin 엔드포인트 IP throttle, RegisterStartReq에 `@Size` 상한.
 
 ### 10. `dp-runtime-overgrant-admin-secret-tables` — passkey-app이 admin 자격증명 테이블 SELECT + 마스터키 공존
-인터넷 노출 passkey-app이 접속하는 APP_RUNTIME 계정에 `admin_user`(bcrypt_hash·mfa_secret 포함), recovery_code, reset_token에 테이블 단위 `GRANT SELECT`가 있다(`V19:188` 등). 마이그레이션 주석이 밝히듯 Hibernate ddl-validate 통과용일 뿐 실제로 읽지 않는다. 동시에 passkey-app은 서명키를 열기 위해 KeyEnvelope 마스터키(`application-prod.yml:38`)를 메모리에 보유한다. passkey-app 침해 시 (1) bcrypt·recovery·reset 해시 직접 SELECT, (2) 마스터키로 `enc:v1:` mfa_secret 복호화 → at-rest 봉투 격리 무력화. admin_user는 플랫폼 전역이라 한 곳 침해로 전 운영자 자격증명 노출. **방향**: 엔티티 스캔 범위 축소 또는 민감 컬럼 제외 읽기전용 뷰에만 SELECT, 마스터키 주입 경로 재검토.
+인터넷 노출 passkey-app이 접속하는 PSK_APP_RUNTIME 계정에 `admin_user`(bcrypt_hash·mfa_secret 포함), recovery_code, reset_token에 테이블 단위 `GRANT SELECT`가 있다(`V19:188` 등). 마이그레이션 주석이 밝히듯 Hibernate ddl-validate 통과용일 뿐 실제로 읽지 않는다. 동시에 passkey-app은 서명키를 열기 위해 KeyEnvelope 마스터키(`application-prod.yml:38`)를 메모리에 보유한다. passkey-app 침해 시 (1) bcrypt·recovery·reset 해시 직접 SELECT, (2) 마스터키로 `enc:v1:` mfa_secret 복호화 → at-rest 봉투 격리 무력화. admin_user는 플랫폼 전역이라 한 곳 침해로 전 운영자 자격증명 노출. **방향**: 엔티티 스캔 범위 축소 또는 민감 컬럼 제외 읽기전용 뷰에만 SELECT, 마스터키 주입 경로 재검토.
 
 ---
 

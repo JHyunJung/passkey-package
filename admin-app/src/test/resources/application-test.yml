@@ -9,16 +9,16 @@ spring:
     # that log in as alice are not gated by MfaPendingFilter). This location
     # exists only under src/test/resources, so it never ships to prod.
     locations: classpath:db/migration,classpath:db/testfix
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
-    # Finding #3 (Approach A): Flyway runs as the schema OWNER (APP_OWNER), not
-    # the runtime datasource user (APP_ADMIN_USER, which now holds ZERO DDL).
+    # Finding #3 (Approach A): Flyway runs as the schema OWNER (PSK_APP_OWNER), not
+    # the runtime datasource user (PSK_APP_ADMIN_USER, which now holds ZERO DDL).
     # url is omitted → Flyway falls back to spring.datasource.url (the per-IT
-    # Testcontainers URL). All ITs share the same APP_OWNER password because the
-    # OracleContainer uses it as both SYS and APP_OWNER secret.
-    user: APP_OWNER
+    # Testcontainers URL). All ITs share the same PSK_APP_OWNER password because the
+    # OracleContainer uses it as both SYS and PSK_APP_OWNER secret.
+    user: PSK_APP_OWNER
     password: app_owner_pw
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver

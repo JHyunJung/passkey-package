@@ -23,12 +23,12 @@
 - **`TenantContextHolder`** (ThreadLocal) — VPD 전용 아님, 18개 파일이 의존하는 공유 컨텍스트.
 - **`TenantFilterAspect` + 엔티티 `@Filter`/`@FilterDef`** — passkey-app 격리의 단일 계층이 됨.
 - **admin-app의 명시 `tenantId` 일치 검사** — PLATFORM_OPERATOR cross-tenant는 의도적으로 `@Filter` 미적용.
-- **DB 유저 3분할** (APP_OWNER/APP_RUNTIME/APP_ADMIN) — 유지(아래 결정 참조). EXEMPT ACCESS POLICY 권한만 무의미해짐(무해).
+- **DB 유저 3분할** (PSK_APP_OWNER/PSK_APP_RUNTIME/PSK_APP_ADMIN) — 유지(아래 결정 참조). EXEMPT ACCESS POLICY 권한만 무의미해짐(무해).
 
 ## 2. 승인된 결정 사항
 
 1. **범위**: 전부 제거 + 과거 마이그레이션까지 재작성(흔적 0).
-2. **DB 유저**: APP_OWNER/APP_RUNTIME/APP_ADMIN 3분할 **유지**. 최소권한 원칙상 가치 있음(테이블별 GRANT, DDL 격리). EXEMPT ACCESS POLICY GRANT만 무의미해짐.
+2. **DB 유저**: PSK_APP_OWNER/PSK_APP_RUNTIME/PSK_APP_ADMIN 3분할 **유지**. 최소권한 원칙상 가치 있음(테이블별 GRANT, DDL 격리). EXEMPT ACCESS POLICY GRANT만 무의미해짐.
 3. **ApiKey 룩업**: VPD 우회용 PL/SQL 패키지 `api_key_lookup_pkg`(AUTHID DEFINER) **제거 → 앱 네이티브 쿼리로 교체**.
 4. **기배포 DB**: 과거 마이그레이션 재작성 + `flyway repair` 절차 문서화.
 5. **패키지 리네임**: `core/.../vpd/` → `core/.../tenant/` (VPD 흔적 0 취지).
@@ -99,10 +99,10 @@ ORA-04043 객체없음 / ORA-00439 SE2 미지원 / ORA-01031 권한없음 삼킴
   TENANT_ALLOWED_ORIGIN_ISOLATION, TENANT_ACCEPTED_FORMAT_ISOLATION,
   TENANT_AAGUID_POLICY_ISOLATION, TENANT_AAGUID_ENTRY_ISOLATION,
   TENANT_WEBAUTHN_SNAPSHOT_ISOLATION.
-- `DROP FUNCTION APP_OWNER.tenant_predicate`
-- `DROP PACKAGE APP_OWNER.api_key_lookup_pkg`
-- `DROP PACKAGE APP_OWNER.CTX_PKG` + `DROP CONTEXT APP_CTX`
-  — **권한 가드 필수**: APP_OWNER는 `DROP CONTEXT` 권한이 없을 수 있다(ORA-01031).
+- `DROP FUNCTION PSK_APP_OWNER.tenant_predicate`
+- `DROP PACKAGE PSK_APP_OWNER.api_key_lookup_pkg`
+- `DROP PACKAGE PSK_APP_OWNER.CTX_PKG` + `DROP CONTEXT APP_CTX`
+  — **권한 가드 필수**: PSK_APP_OWNER는 `DROP CONTEXT` 권한이 없을 수 있다(ORA-01031).
   EXCEPTION으로 삼켜 보존(외부 SE 운영 환경 교훈). SE는 애초 정책 없어 전부 no-op 통과.
 
 **멱등 가드는 fail-closed로**: Oracle 3치 논리(`NULL <> x` = unknown) 함정 회피 위해

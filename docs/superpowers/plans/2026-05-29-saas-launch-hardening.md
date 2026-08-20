@@ -64,7 +64,7 @@
 **Files:**
 - Create: `core/src/main/resources/db/migration/V35__tenant_child_vpd_policies.sql`
 
-> **주의:** 이 테이블들은 admin-app(EXEMPT ACCESS POLICY 가진 APP_ADMIN role)에서 주로 접근하므로 admin 경로는 정책 영향을 받지 않는다. passkey-app(APP_RUNTIME)이 ceremony 중 읽을 때만 tenant 격리가 적용된다. ceremony 시점에는 `ApiKeyAuthFilter`가 이미 tenant context를 set 하므로 정상 동작한다.
+> **주의:** 이 테이블들은 admin-app(EXEMPT ACCESS POLICY 가진 PSK_APP_ADMIN role)에서 주로 접근하므로 admin 경로는 정책 영향을 받지 않는다. passkey-app(PSK_APP_RUNTIME)이 ceremony 중 읽을 때만 tenant 격리가 적용된다. ceremony 시점에는 `ApiKeyAuthFilter`가 이미 tenant context를 set 하므로 정상 동작한다.
 
 - [ ] **Step 1: 대상 테이블의 컬럼명 확인**
 
@@ -78,11 +78,11 @@ Create `core/src/main/resources/db/migration/V35__tenant_child_vpd_policies.sql`
 ```sql
 -- P0-1: Extend VPD row-level isolation to tenant child tables that were
 -- previously protected only at the application layer. Reuses the existing
--- APP_OWNER.tenant_predicate function (V20) — '1=0' when no tenant context,
+-- PSK_APP_OWNER.tenant_predicate function (V20) — '1=0' when no tenant context,
 -- else tenant_id = HEXTORAW(SYS_CONTEXT('APP_CTX','TENANT_ID')).
 --
--- admin-app runs as APP_ADMIN (EXEMPT ACCESS POLICY) so these policies do
--- not affect admin queries; they enforce isolation for APP_RUNTIME
+-- admin-app runs as PSK_APP_ADMIN (EXEMPT ACCESS POLICY) so these policies do
+-- not affect admin queries; they enforce isolation for PSK_APP_RUNTIME
 -- (passkey-app) reads during ceremonies.
 --
 -- Idempotent: each ADD_POLICY is wrapped so a re-run (policy already exists,
@@ -92,10 +92,10 @@ DECLARE
   PROCEDURE add_tenant_policy(p_table IN VARCHAR2, p_policy IN VARCHAR2) IS
   BEGIN
     DBMS_RLS.ADD_POLICY(
-      object_schema   => 'APP_OWNER',
+      object_schema   => 'PSK_APP_OWNER',
       object_name     => p_table,
       policy_name     => p_policy,
-      function_schema => 'APP_OWNER',
+      function_schema => 'PSK_APP_OWNER',
       policy_function => 'TENANT_PREDICATE',
       statement_types => 'SELECT,INSERT,UPDATE,DELETE',
       update_check    => TRUE
@@ -600,8 +600,8 @@ CREATE TABLE ADMIN_USER_RECOVERY_CODE (
 );
 CREATE INDEX IX_RECOVERY_ADMIN_USER ON ADMIN_USER_RECOVERY_CODE (ADMIN_USER_ID);
 
--- APP_RUNTIME 은 credential.label 을 읽고 쓸 수 있어야 한다 (self-service API).
--- recovery code 테이블은 admin-app(APP_ADMIN)만 접근 — runtime grant 불필요.
+-- PSK_APP_RUNTIME 은 credential.label 을 읽고 쓸 수 있어야 한다 (self-service API).
+-- recovery code 테이블은 admin-app(PSK_APP_ADMIN)만 접근 — runtime grant 불필요.
 GRANT SELECT, INSERT, UPDATE, DELETE ON CREDENTIAL TO APP_RUNTIME_ROLE;
 ```
 

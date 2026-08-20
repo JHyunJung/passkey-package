@@ -131,8 +131,8 @@ V41(ceremony_event) 의 idempotent 패턴을 따른다: 테이블/인덱스 ORA-
 -- tenant+action 집계라 credential 단위 추적이 불가능하다. hash chain 없는 경량
 -- 테이블을 따로 둔다(ceremony_event 와 동일 철학).
 --
--- 기록자: passkey-app (APP_RUNTIME) — INSERT.  조회자: admin-app (APP_ADMIN) — SELECT.
--- retention purge: admin-app (APP_ADMIN) — DELETE (RetentionPurgeJob).
+-- 기록자: passkey-app (PSK_APP_RUNTIME) — INSERT.  조회자: admin-app (PSK_APP_ADMIN) — SELECT.
+-- retention purge: admin-app (PSK_APP_ADMIN) — DELETE (RetentionPurgeJob).
 -- FK: credential(id) ON DELETE CASCADE — credential 회수(DELETE) 시 이벤트 동반 삭제.
 -- VPD: ceremony_event 와 동일하게 미적용(앱 레벨 tenant 격리). 단순 기록 지표.
 --
@@ -185,13 +185,13 @@ END;
 /
 
 -- 런타임 GRANT (각 GRANT 개별 블록 — 멱등·부분 적용 안전)
-BEGIN EXECUTE IMMEDIATE 'GRANT INSERT ON credential_auth_event TO APP_RUNTIME';
+BEGIN EXECUTE IMMEDIATE 'GRANT INSERT ON credential_auth_event TO PSK_APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /
-BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON credential_auth_event TO APP_RUNTIME';
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON credential_auth_event TO PSK_APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /
-BEGIN EXECUTE IMMEDIATE 'GRANT SELECT, INSERT, DELETE ON credential_auth_event TO APP_ADMIN';
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT, INSERT, DELETE ON credential_auth_event TO PSK_APP_ADMIN';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /
 ```

@@ -51,8 +51,8 @@
 -- 직렬화하므로 고빈도 ceremony 기록에 부적합하다. hash chain 없는 단순 카운트
 -- 테이블을 따로 둔다.
 --
--- 기록자: passkey-app (APP_RUNTIME) — INSERT.  집계자: admin-app (APP_ADMIN) — SELECT.
--- 테이블 소유자는 APP_OWNER(Flyway 실행 스키마)이며 양 런타임 유저에 GRANT.
+-- 기록자: passkey-app (PSK_APP_RUNTIME) — INSERT.  집계자: admin-app (PSK_APP_ADMIN) — SELECT.
+-- 테이블 소유자는 PSK_APP_OWNER(Flyway 실행 스키마)이며 양 런타임 유저에 GRANT.
 --
 -- Idempotency: 객체 생성은 ORA-00955(name already used)/ORA-00942 를 swallow.
 -- 패턴: V24/V25/V38(EXCEPTION 가드), V13/V28(런타임 GRANT) 와 동일.
@@ -87,18 +87,18 @@ END;
 /
 
 -- 런타임 GRANT (각 GRANT 를 개별 블록으로 — 멱등·부분 적용 안전)
-BEGIN EXECUTE IMMEDIATE 'GRANT INSERT ON ceremony_event TO APP_RUNTIME';
+BEGIN EXECUTE IMMEDIATE 'GRANT INSERT ON ceremony_event TO PSK_APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /
-BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON ceremony_event TO APP_RUNTIME';
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON ceremony_event TO PSK_APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /
-BEGIN EXECUTE IMMEDIATE 'GRANT SELECT, INSERT ON ceremony_event TO APP_ADMIN';
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT, INSERT ON ceremony_event TO PSK_APP_ADMIN';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -1917 OR SQLCODE = -942 THEN NULL; ELSE RAISE; END IF; END;
 /
 ```
 
-> 참고: `updated_at`은 BaseEntity 정책(모든 엔티티 createdAt/updatedAt NOT NULL)을 만족시키기 위해 포함한다. ceremony_event는 append-only지만 BaseEntity의 `@PrePersist`가 둘 다 채운다. GRANT의 `-1917`은 ORA-01917(user/role does not exist) — dev 단일 유저 환경에서 APP_RUNTIME/APP_ADMIN 롤이 없을 때를 swallow(기존 V28 등과 동일 방어).
+> 참고: `updated_at`은 BaseEntity 정책(모든 엔티티 createdAt/updatedAt NOT NULL)을 만족시키기 위해 포함한다. ceremony_event는 append-only지만 BaseEntity의 `@PrePersist`가 둘 다 채운다. GRANT의 `-1917`은 ORA-01917(user/role does not exist) — dev 단일 유저 환경에서 PSK_APP_RUNTIME/PSK_APP_ADMIN 롤이 없을 때를 swallow(기존 V28 등과 동일 방어).
 
 - [ ] **Step 2: 마이그레이션 SQL 문법 자체 검증(빌드로 확인)**
 

@@ -57,8 +57,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *   <li>⑧ Alice revokes the API Key via DELETE /admin/api/api-keys/{id}.</li>
  *   <li>⑨ api_key.revoked_at is now populated for that row.</li>
  *   <li>⑩ Bob (VIEWER) can list tenants (200) but cannot create one (403).</li>
- *   <li>⑪ Direct JDBC UPDATE of an audit_log payload (run as APP_OWNER —
- *       the schema owner — because V10 deliberately grants APP_ADMIN only
+ *   <li>⑪ Direct JDBC UPDATE of an audit_log payload (run as PSK_APP_OWNER —
+ *       the schema owner — because V10 deliberately grants PSK_APP_ADMIN only
  *       SELECT+INSERT to make tampering require DBA-level access) flips
  *       /verify to ok=false with brokenAt populated.</li>
  * </ol>
@@ -74,15 +74,15 @@ class AdminFlowIT {
 
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
     // OracleContainer.configure() copies the single password field into
-    // BOTH ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (APP_OWNER).
+    // BOTH ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (PSK_APP_OWNER).
     // We reuse the same secret here so sqlplus can connect as SYS-AS-SYSDBA
-    // AND so the AdminFlowIT can later log in as APP_OWNER for the tamper
+    // AND so the AdminFlowIT can later log in as PSK_APP_OWNER for the tamper
     // step in scenario ⑪.
     private static final String SYS_PASSWORD = "app_owner_pw";
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -95,7 +95,7 @@ class AdminFlowIT {
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         // Run scripts/bootstrap-schema.sql before Spring opens its first
-        // pool connection — APP_ADMIN_USER must exist before Hikari
+        // pool connection — PSK_APP_ADMIN_USER must exist before Hikari
         // tries to authenticate. Same pattern as :passkey-app's
         // Fido2EndToEndIT and :core's AppLevelIsolationIT.
         Container.ExecResult exec = ORACLE.execInContainer(
@@ -108,18 +108,18 @@ class AdminFlowIT {
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
-        // admin-app's runtime DataSource → APP_ADMIN_USER (Flyway + DML on
+        // admin-app's runtime DataSource → PSK_APP_ADMIN_USER (Flyway + DML on
         // platform-scoped tables). admin-app does NOT enable the app-level
         // @Filter on the request path (it intentionally manages cross-tenant
         // resources), so we don't need a separate runtime user like passkey-app.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Flyway runs as the schema OWNER (APP_OWNER), runtime as APP_ADMIN_USER.
+        // Flyway runs as the schema OWNER (PSK_APP_OWNER), runtime as PSK_APP_ADMIN_USER.
         // Finding #3 (Approach A): the runtime user no longer holds DDL power.
         reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD); // APP_OWNER pw == SYS_PASSWORD
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD); // PSK_APP_OWNER pw == SYS_PASSWORD
 
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -135,13 +135,13 @@ class AdminFlowIT {
     @Autowired DataSource ds;
     @Autowired RedisConnectionFactory redisFactory;
 
-    /** App-scoped pool (APP_ADMIN_USER), used for read assertions + cleanup. */
+    /** App-scoped pool (PSK_APP_ADMIN_USER), used for read assertions + cleanup. */
     JdbcTemplate jdbc;
 
     /**
-     * APP_OWNER (schema owner) pool used ONLY by step ⑪ to simulate
+     * PSK_APP_OWNER (schema owner) pool used ONLY by step ⑪ to simulate
      * a DBA-level tamper. V10 deliberately withholds UPDATE on
-     * audit_log from APP_ADMIN — the whole point is that runtime
+     * audit_log from PSK_APP_ADMIN — the whole point is that runtime
      * credentials cannot rewrite the chain. The schema owner can,
      * because GRANTs do not restrict the owner.
      *
@@ -161,48 +161,48 @@ class AdminFlowIT {
         // use ON DELETE CASCADE from their parent FKs, so deleting the
         // parent rows implicitly removes children too.
         //
-        // audit_log: V10 deliberately withholds DELETE from APP_ADMIN (append-only
+        // audit_log: V10 deliberately withholds DELETE from PSK_APP_ADMIN (append-only
         // design for tamper evidence). Use the schema-owner pool for cleanup so
         // the regression guard runtimeUser_cannotTamperAuditLog stays consistent.
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
-        jdbc.update("DELETE FROM APP_OWNER.api_key");
-        jdbc.update("DELETE FROM APP_OWNER.credential");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
         // admin_user_tenant 매핑 먼저 삭제 (FK: admin_user_tenant.tenant_id → tenant.id)
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role <> 'PLATFORM_OPERATOR'");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role <> 'PLATFORM_OPERATOR'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
         // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
         // bob (RP_ADMIN) needs this tenant to exist and be assigned to him.
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
+                INSERT INTO PSK_APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
                     require_user_verification, mds_required, created_at, updated_at)
                 VALUES (HEXTORAW('0000000000000000000000000000C0DE'),
                     'demo-rp', 'Demo RP', 'localhost', 'Demo RP', 'active', 'Y', 'N',
                     SYSTIMESTAMP, SYSTIMESTAMP)
                 """);
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
+                INSERT INTO PSK_APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'http://localhost:9090', 0)
                 """);
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                INSERT INTO PSK_APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'none')
                 """);
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                INSERT INTO PSK_APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
                 """);
         // bob 을 demo-rp 의 RP_ADMIN 으로 재할당 (role + admin_user_tenant 매핑)
         jdbc.update("""
-                UPDATE APP_OWNER.admin_user
+                UPDATE PSK_APP_OWNER.admin_user
                    SET role = 'RP_ADMIN'
                  WHERE email = 'bob@crosscert.com'
                 """);
         jdbc.update("""
-                MERGE INTO APP_OWNER.admin_user_tenant t
+                MERGE INTO PSK_APP_OWNER.admin_user_tenant t
                 USING (SELECT HEXTORAW('00000000000000000000000000000011') AS aid,
                               HEXTORAW('0000000000000000000000000000C0DE') AS tid FROM dual) s
                    ON (t.admin_user_id = s.aid AND t.tenant_id = s.tid)
@@ -255,7 +255,7 @@ class AdminFlowIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("admin-it-owner");
@@ -418,7 +418,7 @@ class AdminFlowIT {
 
         // ⑤ The issued prefix is registered (durable admin write).
         Long count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.api_key WHERE key_prefix=?",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.api_key WHERE key_prefix=?",
                 Long.class, prefix);
         assertThat(count).isEqualTo(1L);
 
@@ -456,7 +456,7 @@ class AdminFlowIT {
         // api_key.id is RAW(16) — pass byte[] representation of the UUID.
         byte[] keyIdBytes = uuidToBytes(UUID.fromString(keyId));
         Long revokedCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.api_key WHERE id=? AND revoked_at IS NOT NULL",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.api_key WHERE id=? AND revoked_at IS NOT NULL",
                 Long.class, keyIdBytes);
         assertThat(revokedCount).isEqualTo(1L);
 
@@ -497,17 +497,17 @@ class AdminFlowIT {
                 .isEqualTo(403);
 
         // ⑪ Tamper one audit row's payload — verify must return ok=false.
-        // Connect as APP_OWNER (schema owner) because V10 deliberately
-        // withholds UPDATE on audit_log from APP_ADMIN; the whole point
+        // Connect as PSK_APP_OWNER (schema owner) because V10 deliberately
+        // withholds UPDATE on audit_log from PSK_APP_ADMIN; the whole point
         // of the chain is that runtime credentials cannot rewrite it.
-        // The schema owner can — but in production APP_OWNER's password
+        // The schema owner can — but in production PSK_APP_OWNER's password
         // is never embedded in any application (bootstrap.sh is the
         // only consumer). Simulating a DBA-level tamper is the correct
         // adversary model for the chain verifier.
         JdbcTemplate owner = ownerJdbc();
         int updated = owner.update(
-                "UPDATE APP_OWNER.audit_log SET payload='{\"x\":\"tampered\"}' " +
-                "WHERE id=(SELECT MIN(id) FROM APP_OWNER.audit_log)");
+                "UPDATE PSK_APP_OWNER.audit_log SET payload='{\"x\":\"tampered\"}' " +
+                "WHERE id=(SELECT MIN(id) FROM PSK_APP_OWNER.audit_log)");
         assertThat(updated).isEqualTo(1);
 
         ResponseEntity<JsonNode> verifyBroken = rest.exchange(
@@ -522,17 +522,17 @@ class AdminFlowIT {
     }
 
     // ------------------------------------------------------------
-    // Security regression guards (#3: GRANT ALL on APP_ADMIN_USER)
+    // Security regression guards (#3: GRANT ALL on PSK_APP_ADMIN_USER)
     // ------------------------------------------------------------
 
     /**
-     * APP_ADMIN_USER (admin-app runtime) holds SELECT+INSERT, plus column-level
+     * PSK_APP_ADMIN_USER (admin-app runtime) holds SELECT+INSERT, plus column-level
      * UPDATE on tenant_hash/tenant_prev_hash only (V46). payload/hash/prev_hash/
      * action UPDATE and DELETE/DROP remain denied (V10 append-only). This is the
      * regression guard for finding #3.
      *
      * <p>Originally this test was <em>intentionally RED</em> while bootstrap-schema.sql
-     * contained {@code GRANT ALL PRIVILEGES TO APP_ADMIN_USER} (finding #3).
+     * contained {@code GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER} (finding #3).
      * Task B3 removed that GRANT, which turned this test GREEN.
      *
      * <p>V46 then opened a narrow column-level UPDATE on the two V25 tenant-chain
@@ -552,33 +552,33 @@ class AdminFlowIT {
         // ── Still denied: the original append-only columns (V10) ──────────────
         // action: a forensic field — runtime must never rewrite it.
         assertThatThrownBy(() ->
-                jdbc.execute("UPDATE APP_OWNER.audit_log SET action = 'X' WHERE 1=0"))
+                jdbc.execute("UPDATE PSK_APP_OWNER.audit_log SET action = 'X' WHERE 1=0"))
             .rootCause().hasMessageContaining("ORA-");
         // payload: the tamper target the chain protects.
         assertThatThrownBy(() ->
-                jdbc.execute("UPDATE APP_OWNER.audit_log SET payload = payload WHERE 1=0"))
+                jdbc.execute("UPDATE PSK_APP_OWNER.audit_log SET payload = payload WHERE 1=0"))
             .rootCause().hasMessageContaining("ORA-");
         // hash / prev_hash: the global chain columns — rewriting them would let a
         // forger re-link the chain. V46 deliberately leaves these denied.
         assertThatThrownBy(() ->
-                jdbc.execute("UPDATE APP_OWNER.audit_log SET hash = hash WHERE 1=0"))
+                jdbc.execute("UPDATE PSK_APP_OWNER.audit_log SET hash = hash WHERE 1=0"))
             .rootCause().hasMessageContaining("ORA-");
         assertThatThrownBy(() ->
-                jdbc.execute("UPDATE APP_OWNER.audit_log SET prev_hash = prev_hash WHERE 1=0"))
+                jdbc.execute("UPDATE PSK_APP_OWNER.audit_log SET prev_hash = prev_hash WHERE 1=0"))
             .rootCause().hasMessageContaining("ORA-");
         // DELETE / DROP: append-only — never allowed.
         assertThatThrownBy(() ->
-                jdbc.execute("DELETE FROM APP_OWNER.audit_log WHERE 1=0"))
+                jdbc.execute("DELETE FROM PSK_APP_OWNER.audit_log WHERE 1=0"))
             .rootCause().hasMessageContaining("ORA-");
         assertThatThrownBy(() ->
-                jdbc.execute("DROP TABLE APP_OWNER.audit_log"))
+                jdbc.execute("DROP TABLE PSK_APP_OWNER.audit_log"))
             .rootCause().hasMessageContaining("ORA-");
 
         // ── Now allowed: column-level UPDATE on the two V25 tenant-chain columns ─
         // (V46). Self-assignment with WHERE 1=0 proves the UPDATE privilege exists
         // without mutating any row.
         assertThatNoException().isThrownBy(() ->
-                jdbc.execute("UPDATE APP_OWNER.audit_log "
+                jdbc.execute("UPDATE PSK_APP_OWNER.audit_log "
                         + "SET tenant_hash = tenant_hash, tenant_prev_hash = tenant_prev_hash "
                         + "WHERE 1=0"));
     }
@@ -589,9 +589,9 @@ class AdminFlowIT {
      */
     @Test
     void runtimeUser_canStillWriteAdminTables() {
-        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM APP_OWNER.tenant", Integer.class);
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM PSK_APP_OWNER.tenant", Integer.class);
         assertThat(n).isNotNull();
-        Integer k = jdbc.queryForObject("SELECT COUNT(*) FROM APP_OWNER.api_key", Integer.class);
+        Integer k = jdbc.queryForObject("SELECT COUNT(*) FROM PSK_APP_OWNER.api_key", Integer.class);
         assertThat(k).isNotNull();
     }
 

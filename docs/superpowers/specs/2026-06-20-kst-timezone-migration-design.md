@@ -107,7 +107,7 @@
 - 세션 타임존·DB 변경은 **실제 Oracle Testcontainers로 검증**(inspection이 못 잡는 함정 다수).
 
 ### 5.4 실DB 부팅 최종 검증
-- dev 부팅 절차(`SPRING_PROFILES_ACTIVE` env, APP_OWNER 접속, flyway 소문자 식별자, V8 repair)로 로컬 1회 부팅.
+- dev 부팅 절차(`SPRING_PROFILES_ACTIVE` env, PSK_APP_OWNER 접속, flyway 소문자 식별자, V8 repair)로 로컬 1회 부팅.
 - **DBeaver로 실제 컬럼값이 KST(+09:00)로 보이는지 육안 확인** — 2-B 목표 달성의 최종 증거.
 
 ## 6. 비목표 (Out of Scope)

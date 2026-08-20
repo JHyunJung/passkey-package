@@ -60,7 +60,7 @@
 | TIMESTAMP WITH TIME ZONE / CLOB / BLOB / CHECK / FK | 전수 | — | 🟢 |
 
 ### 🟡 주의 1-A — 기배포 EE → SE2 전환 시 V52의 ORA-01031
-`V52__drop_vpd.sql`이 `DROP CONTEXT APP_CTX`를 시도할 때 APP_OWNER에 `DROP ANY CONTEXT` 권한이 없어 ORA-01031이 날 수 있다. **스크립트가 이미 ORA-01031을 관용하고 경고만 로그**하므로 무해(참조 패키지 CTX_PKG는 이미 제거되어 APP_CTX는 빈 객체). 완전 정리는 SYSDBA가 수동 `DROP CONTEXT APP_CTX`.
+`V52__drop_vpd.sql`이 `DROP CONTEXT APP_CTX`를 시도할 때 PSK_APP_OWNER에 `DROP ANY CONTEXT` 권한이 없어 ORA-01031이 날 수 있다. **스크립트가 이미 ORA-01031을 관용하고 경고만 로그**하므로 무해(참조 패키지 CTX_PKG는 이미 제거되어 APP_CTX는 빈 객체). 완전 정리는 SYSDBA가 수동 `DROP CONTEXT APP_CTX`.
 
 ### 🟡 주의 1-B — V44 데이터손실 가드의 이론적 우회
 `V44`의 `SELECT COUNT(*) FROM credential` 데이터손실 가드는, **기배포 EE DB에 VPD 정책이 남아 있고 + APP_CTX가 unset인 경우**에만 술어 UNKNOWN으로 0행을 보여 우회될 수 있다. **신규 SE2 배포는 V52가 VPD를 완전 제거하므로 이 경로 자체가 발생 불가.** 기배포 EE→SE2 전환 시에는 V52가 V44보다 먼저(낮은 버전이므로 자연히) 실행됨을 확인.
@@ -75,11 +75,11 @@
 
 | 검사항목 | 근거 | 판정 |
 |---|---|:---:|
-| APP_OWNER 생성 (외부 경로) | `bootstrap-external-body.sql:28-35` 표준 CREATE USER | 🟢 |
-| APP_RUNTIME / APP_ADMIN 생성 | `bootstrap-schema.sql:70-88` 멱등 EXCEPTION 가드 | 🟢 |
+| PSK_APP_OWNER 생성 (외부 경로) | `bootstrap-external-body.sql:28-35` 표준 CREATE USER | 🟢 |
+| PSK_APP_RUNTIME / PSK_APP_ADMIN 생성 | `bootstrap-schema.sql:70-88` 멱등 EXCEPTION 가드 | 🟢 |
 | 권한 부여 | 전부 표준 객체권한(SELECT/INSERT/...) + 스키마 소유자 권한(CREATE TABLE/SEQUENCE/...). **시스템 권한(CREATE ANY, EXECUTE ON DBMS_RLS) 의존 0** | 🟢 |
 | DBMS_RLS / EXEMPT ACCESS POLICY 부여 | 부트스트랩에서 제거됨 | 🟢 |
-| APP_OWNER 자동생성(gvenzl `APP_USER` env) | `docker-compose.yml:7` — **gvenzl 전용**, 운영 SE2엔 없음 | 🟡 |
+| PSK_APP_OWNER 자동생성(gvenzl `APP_USER` env) | `docker-compose.yml:7` — **gvenzl 전용**, 운영 SE2엔 없음 | 🟡 |
 | 서비스명 `XEPDB1` 하드코드 | `bootstrap-schema.sql:21`, `run-bootstrap.sh:7`, `reset-app-owner.sql:20` | 🟡 |
 | DROP CONTEXT 권한 | `V52` ORA-01031 경고만 (= 주의 1-A) | 🟡 |
 
@@ -87,7 +87,7 @@
 로컬 dev 경로(`bootstrap-schema.sql`, `run-bootstrap.sh`, `reset-app-owner.sql`)에 `XEPDB1`이 고정. 운영 SE2의 PDB/서비스명이 다르면 연결 실패. **단 외부 배포 경로 `init-db-external.sh`는 `ORA_SERVICE` 환경변수로 매개변수화되어 있음** → 운영은 이 경로를 쓰면 됨. (선택 개선: 로컬 스크립트도 `${ORA_SERVICE:-XEPDB1}`로 매개변수화)
 
 ### 🟡 주의 2-B — gvenzl 자동생성 부재
-운영 SE2는 gvenzl의 `APP_USER` 자동 계정 생성이 없으므로, DBA가 APP_OWNER를 수동 생성하거나 `bootstrap-external.sql`을 SYSDBA로 1회 실행해야 한다(아래 운영 체크리스트 참조).
+운영 SE2는 gvenzl의 `APP_USER` 자동 계정 생성이 없으므로, DBA가 PSK_APP_OWNER를 수동 생성하거나 `bootstrap-external.sql`을 SYSDBA로 1회 실행해야 한다(아래 운영 체크리스트 참조).
 
 **영역 2 결론: 🟢 SE2 호환. 운영 시 계정 생성·서비스명만 수동/환경변수로 처리.**
 
@@ -122,7 +122,7 @@
 | `v$version` SELECT | `SystemInfoService.java:50-54` | 🟡 |
 
 ### 🟡 주의 4-A — `v$version` SELECT 권한
-관리 대시보드가 `SELECT banner FROM v$version`으로 DB 배너를 표시하나, **try-catch로 보호**되어 권한 없으면 "Oracle (unknown)"으로 폴백 → 무해. 배너를 띄우려면(선택) APP_ADMIN_USER에 `GRANT SELECT ON v$version` 부여.
+관리 대시보드가 `SELECT banner FROM v$version`으로 DB 배너를 표시하나, **try-catch로 보호**되어 권한 없으면 "Oracle (unknown)"으로 폴백 → 무해. 배너를 띄우려면(선택) PSK_APP_ADMIN_USER에 `GRANT SELECT ON v$version` 부여.
 
 **영역 4 결론: 🟢 SE2 중립. 모든 SQL/ORM이 에디션 무관.**
 
@@ -144,9 +144,9 @@
 ## 운영 SE2 배포 체크리스트
 
 부트스트랩(DBA, 1회):
-- [ ] APP_OWNER 계정 생성 — DBA가 직접 `CREATE USER` 하거나 `bootstrap-external.sql`을 SYSDBA로 실행 (gvenzl 자동생성 없음)
-- [ ] APP_RUNTIME / APP_ADMIN 계정 + 권한 부여 (bootstrap 스크립트가 멱등 처리)
-- [ ] (선택) APP_ADMIN_USER에 `GRANT SELECT ON v$version` — 대시보드 배너용
+- [ ] PSK_APP_OWNER 계정 생성 — DBA가 직접 `CREATE USER` 하거나 `bootstrap-external.sql`을 SYSDBA로 실행 (gvenzl 자동생성 없음)
+- [ ] PSK_APP_RUNTIME / PSK_APP_ADMIN 계정 + 권한 부여 (bootstrap 스크립트가 멱등 처리)
+- [ ] (선택) PSK_APP_ADMIN_USER에 `GRANT SELECT ON v$version` — 대시보드 배너용
 
 마이그레이션 적용:
 - [ ] `init-db-external.sh` 사용 + `ORA_SERVICE=<운영 PDB명>` 지정 (XEPDB1 하드코드 경로 회피)

@@ -60,7 +60,7 @@ class FunnelIT {
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -83,7 +83,7 @@ class FunnelIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -244,7 +244,7 @@ class FunnelIT {
         byte[] tenantBytes = uuidToBytes(tenant);
         for (int i = 0; i < count; i++) {
             jdbc.update(
-                    "INSERT INTO APP_OWNER.ceremony_event "
+                    "INSERT INTO PSK_APP_OWNER.ceremony_event "
                             + "(tenant_id, action, created_at, updated_at) "
                             + "VALUES (?, ?, SYSTIMESTAMP, SYSTIMESTAMP)",
                     tenantBytes, action);

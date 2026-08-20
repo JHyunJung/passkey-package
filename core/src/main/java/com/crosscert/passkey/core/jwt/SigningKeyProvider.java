@@ -1,5 +1,6 @@
 package com.crosscert.passkey.core.jwt;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,7 +31,7 @@ import java.util.List;
  * the persisted row.
  *
  * <p>Concurrent first boots are race-tolerant via the definer-rights
- * PL/SQL package {@code APP_OWNER.signing_key_bootstrap_pkg} (V18),
+ * PL/SQL package {@code PSK_APP_OWNER.signing_key_bootstrap_pkg} (V18),
  * which only allows INSERT when no ACTIVE row exists. The
  * function-based {@code signing_key_one_active_uix} unique index (V15)
  * is a belt-and-suspenders safety net at the storage layer.
@@ -56,6 +57,7 @@ public class SigningKeyProvider {
     private final Clock clock;
     private final JdbcTemplate jdbc;
     private final JwksAssembler jwksAssembler;
+    private final String schema;
     private volatile RSAKey cachedActive;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -64,27 +66,31 @@ public class SigningKeyProvider {
                               ObjectMapper mapper,
                               Clock clock,
                               JdbcTemplate jdbc,
-                              JwksAssembler jwksAssembler) {
+                              JwksAssembler jwksAssembler,
+                              DbSchemaProperties dbSchema) {
         this.repo = repo;
         this.envelope = envelope;
         this.mapper = mapper;
         this.clock = clock;
         this.jdbc = jdbc;
         this.jwksAssembler = jwksAssembler;
+        this.schema = dbSchema.schema();
     }
 
     /**
      * Backward-compatible 4-arg constructor for unit tests that don't
      * exercise the createInitialKey PL/SQL path. Tests construct with
      * a mocked repo that returns a pre-existing ACTIVE key, so jdbc is
-     * never touched. Spring DI uses the @Autowired 6-arg variant.
-     * Internally self-wires a {@link JwksAssembler} backed by the same repo.
+     * never touched. Spring DI uses the @Autowired 7-arg variant.
+     * Internally self-wires a {@link JwksAssembler} backed by the same repo
+     * and the default schema name (unused on this path, since jdbc is null).
      */
     public SigningKeyProvider(SigningKeyRepository repo,
                               KeyEnvelope envelope,
                               ObjectMapper mapper,
                               Clock clock) {
-        this(repo, envelope, mapper, clock, null, new JwksAssembler(repo));
+        this(repo, envelope, mapper, clock, null, new JwksAssembler(repo),
+             new DbSchemaProperties("PSK_APP_OWNER"));
     }
 
     @PostConstruct
@@ -118,14 +124,14 @@ public class SigningKeyProvider {
                             + "already exists in the mocked repository.");
         }
         SigningKey generated = generate();
-        // Call the definer-rights PL/SQL package APP_OWNER.signing_key_bootstrap_pkg
-        // (V18). It allows the caller (APP_ADMIN or APP_RUNTIME) to
+        // Call the definer-rights PL/SQL package PSK_APP_OWNER.signing_key_bootstrap_pkg
+        // (V18). It allows the caller (PSK_APP_ADMIN or PSK_APP_RUNTIME) to
         // INSERT the first ACTIVE row ONLY when none exists. This
         // narrows the runtime DB principal's attack surface compared
         // to a plain GRANT INSERT (codex review T6-followup Medium).
         jdbc.execute((java.sql.Connection conn) -> {
             try (java.sql.CallableStatement cs = conn.prepareCall(
-                    "{ call APP_OWNER.signing_key_bootstrap_pkg.bootstrap_active(?,?,?,?,?) }")) {
+                    "{ call " + schema + ".signing_key_bootstrap_pkg.bootstrap_active(?,?,?,?,?) }")) {
                 cs.setString(1, generated.getKid());
                 cs.setString(2, generated.getAlg());
                 cs.setString(3, generated.getPublicJwk());

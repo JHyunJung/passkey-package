@@ -30,7 +30,7 @@ Docker 데몬 장애로 한동안 막혔으나 복구 후 **Task 8 통합 검증
 
 **후속 조치 완료**: 빈 스키마에서 passkey-app 이 부팅 실패하던 건
 (`Schema-validation: missing table [security_incident]`)은 **V4 마이그레이션으로
-해소**했다 — `GRANT SELECT ON security_incident TO APP_RUNTIME`.
+해소**했다 — `GRANT SELECT ON security_incident TO PSK_APP_RUNTIME`.
 
 해법 선택 근거: **"DB 스키마가 완전해야 앱이 뜬다"는 성질을 유지**하는 쪽으로
 정했다. 대안이던 엔티티 스캔 축소는 그 테이블이 실제로 없어도 passkey-app 이
@@ -166,18 +166,18 @@ compose 와 `.env.example` 양쪽에 누락돼 있었다. **QA 에서 rp-app 을
 
 **이 작업(컨테이너화) 범위 밖의 기존 문제이며, 배포 전 반드시 수정해야 한다.**
 
-`V1__baseline_schema.sql` 의 GRANT 섹션(123건)에서 두 테이블이 `APP_RUNTIME` 에
+`V1__baseline_schema.sql` 의 GRANT 섹션(123건)에서 두 테이블이 `PSK_APP_RUNTIME` 에
 누락돼 있다:
 
-| 테이블 | APP_ADMIN | APP_RUNTIME |
+| 테이블 | PSK_APP_ADMIN | PSK_APP_RUNTIME |
 |---|---|---|
 | `security_incident` | ✅ SELECT/INSERT/UPDATE | ❌ **없음** |
 | `mds_sync_history` | ✅ (seq 는 RUNTIME 에 있음) | ❌ **없음** |
 
-`mds_sync_history_seq` 는 `APP_RUNTIME` 에 GRANT 돼 있는데 **정작 테이블은 빠져
+`mds_sync_history_seq` 는 `PSK_APP_RUNTIME` 에 GRANT 돼 있는데 **정작 테이블은 빠져
 있다** — 시퀀스만 주고 테이블을 안 준 형태라 단순 누락으로 보인다.
 
-**증상:** passkey-app 이 `APP_RUNTIME_USER` 로 접속하고 `hibernate.ddl-auto: validate`
+**증상:** passkey-app 이 `PSK_APP_RUNTIME_USER` 로 접속하고 `hibernate.ddl-auto: validate`
 (`core/src/main/resources/application-common.yml:31`)를 쓰므로, 엔티티는 `core` 에
 있어 스캔되는데 권한이 없어 테이블이 안 보인다:
 ```
@@ -186,14 +186,14 @@ Schema-validation: missing table [security_incident]
 **부팅이 아예 실패한다.**
 
 **왜 지금까지 안 드러났나(추정):** 로컬 dev 는 볼륨을 재생성하지 않고 오래 써온
-DB 를 쓰거나, `APP_OWNER` 로 접속해 admin-app 만 띄우는 흐름이 많았을 수 있다.
-**빈 스키마 + `APP_RUNTIME_USER` + prod/dev 조합에서는 재현된다**(이번에 재현함).
+DB 를 쓰거나, `PSK_APP_OWNER` 로 접속해 admin-app 만 띄우는 흐름이 많았을 수 있다.
+**빈 스키마 + `PSK_APP_RUNTIME_USER` + prod/dev 조합에서는 재현된다**(이번에 재현함).
 dev 프로필도 같은 유저·같은 validate 설정을 쓰므로 동일하게 실패할 것이다.
 
 **임시 조치(검증용으로만 적용함):**
 ```sql
-GRANT SELECT, INSERT ON security_incident TO APP_RUNTIME;
-GRANT SELECT, INSERT ON mds_sync_history  TO APP_RUNTIME;
+GRANT SELECT, INSERT ON security_incident TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT ON mds_sync_history  TO PSK_APP_RUNTIME;
 ```
 
 **추가 조사 결과 — 실제 문제는 엔티티 1개뿐이고, GRANT 추가는 잘못된 해법이다.**
@@ -237,14 +237,14 @@ GRANT 를 주면 안 쓰는 테이블에 불필요한 권한을 열어주는 셈
 |---|---|---|
 | A | `SecurityIncident` 를 하위 패키지로 옮기고 passkey-app 스캔에서 제외 | **채택 안 함** — 그 테이블이 실제로 없어도 passkey-app 이 뜨게 된다. "스키마가 완전해야 부팅"이라는 성질이 약해진다 |
 | B | passkey-app 만 `ddl-auto: none` | **채택 안 함** — 스키마 드리프트 감지를 통째로 잃는다 |
-| **C** | **V4 마이그레이션으로 `APP_RUNTIME` 에 SELECT GRANT** | **✅ 채택** — 검증이 실제 스키마를 확인한 뒤 통과한다 |
+| **C** | **V4 마이그레이션으로 `PSK_APP_RUNTIME` 에 SELECT GRANT** | **✅ 채택** — 검증이 실제 스키마를 확인한 뒤 통과한다 |
 
 **결정: C.** "DB 스키마가 완전해야 앱이 뜬다"는 성질을 유지하는 것이 판단 기준이었다.
 A/B 는 검증을 우회하거나 끄는 방향이라 그 성질을 훼손한다.
 
 권한은 **SELECT 만** 부여했다 — passkey-app 은 이 테이블을 읽지도 쓰지도 않고,
 Hibernate 검증이 메타데이터를 조회할 수 있으면 충분하다. INSERT/UPDATE 는 계속
-`APP_ADMIN` 전용으로 남는다.
+`PSK_APP_ADMIN` 전용으로 남는다.
 
 마이그레이션: `core/src/main/resources/db/migration/V4__grant_security_incident_to_app_runtime.sql`
 
@@ -256,7 +256,7 @@ Hibernate 검증이 메타데이터를 조회할 수 있으면 충분하다. INS
 ```sql
 SELECT t.table_name FROM user_tables t
 WHERE NOT EXISTS (SELECT 1 FROM user_tab_privs_made p
-                  WHERE p.table_name = t.table_name AND p.grantee = 'APP_RUNTIME');
+                  WHERE p.table_name = t.table_name AND p.grantee = 'PSK_APP_RUNTIME');
 ```
 
 ### 배포 순서 의존성 — 최초 기동 시 passkey-app 이 먼저 실패한다

@@ -4,9 +4,9 @@
 #
 # 절차(수동 4단계를 자동화):
 #   1. docker compose down -v && up -d  — Oracle/Redis 컨테이너 + 볼륨 재생성
-#      (gvenzl/oracle-xe 가 APP_OWNER 스키마/유저만 자동 생성)
+#      (gvenzl/oracle-xe 가 PSK_APP_OWNER 스키마/유저만 자동 생성)
 #   2. wait-for-oracle               — healthcheck 가 healthy 될 때까지 대기
-#   3. run-bootstrap.sh              — APP_ADMIN/APP_RUNTIME role + 스키마 생성
+#   3. run-bootstrap.sh              — PSK_APP_ADMIN/PSK_APP_RUNTIME role + 스키마 생성
 #                                      (VPD 제거됨 — CTX_PKG/APP_CTX/VPD GRANT 안 만듦)
 #   4. admin-app(dev) 부팅           — Flyway 가 V1~ 마이그레이션 + dev 시드(R__) 적용 후 종료
 #

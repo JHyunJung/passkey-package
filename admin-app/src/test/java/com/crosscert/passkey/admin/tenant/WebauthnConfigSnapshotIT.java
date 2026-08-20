@@ -55,7 +55,7 @@ class WebauthnConfigSnapshotIT {
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -78,7 +78,7 @@ class WebauthnConfigSnapshotIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -98,7 +98,7 @@ class WebauthnConfigSnapshotIT {
     private static final UUID ACTOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ACTOR_EMAIL = "alice@crosscert.com";
 
-    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    /** PSK_APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
     private static HikariDataSource ownerPool;
 
     @AfterAll
@@ -113,7 +113,7 @@ class WebauthnConfigSnapshotIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("snapshot-it-owner");
@@ -131,20 +131,20 @@ class WebauthnConfigSnapshotIT {
         jdbc = new JdbcTemplate(ds);
 
         // Delete in FK-safe order — new Phase C tables first
-        jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy_entry");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy");
-        // tenant_webauthn_snapshot: APP_ADMIN has SELECT+INSERT only (V27) — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.tenant_webauthn_snapshot");
-        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
-        jdbc.update("DELETE FROM APP_OWNER.api_key");
-        jdbc.update("DELETE FROM APP_OWNER.credential");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_aaguid_policy_entry");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_aaguid_policy");
+        // tenant_webauthn_snapshot: PSK_APP_ADMIN has SELECT+INSERT only (V27) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.tenant_webauthn_snapshot");
+        // audit_log: PSK_APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
 
         // Inject PLATFORM_OPERATOR into SecurityContext so TenantBoundary passes
         AdminUserDetails operator = new AdminUserDetails(

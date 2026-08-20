@@ -199,7 +199,7 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 
 ## 6. 배포 체크리스트
 
-- [ ] 외부 Oracle 에 APP_OWNER / APP_RUNTIME_USER / APP_ADMIN_USER 부트스트랩 완료
+- [ ] 외부 Oracle 에 PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER 부트스트랩 완료
       (`scripts/init-db-external.sh` 또는 `scripts/bootstrap-external.sql`)
 - [ ] 서버 A·B 의 `MASTER_KEY` 가 **동일한 값**인지 확인
 - [ ] 앞단 LB 가 클라이언트발 `X-Forwarded-*` 헤더를 스트립하는지 확인

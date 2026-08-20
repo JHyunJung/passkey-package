@@ -68,7 +68,7 @@ passkey-app(등록/인증 ceremony) → audit_log 기록 → admin FunnelService
 
 ## 4. 데이터 모델
 
-### 4.1 테이블 (Flyway `V41__ceremony_event.sql`, core, APP_OWNER 스키마)
+### 4.1 테이블 (Flyway `V41__ceremony_event.sql`, core, PSK_APP_OWNER 스키마)
 
 ```sql
 CREATE TABLE ceremony_event (

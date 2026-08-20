@@ -138,7 +138,7 @@ COMMIT;
 - [ ] **Step 2: Apply via sqlplus**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 < core/src/main/resources/db/migration/V33__tenant_webauthn_extra.sql
+docker exec -i passkey-oracle sqlplus -s PSK_APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 < core/src/main/resources/db/migration/V33__tenant_webauthn_extra.sql
 ```
 
 Expected: 4 anonymous PL/SQL blocks succeed, Commit complete.
@@ -146,7 +146,7 @@ Expected: 4 anonymous PL/SQL blocks succeed, Commit complete.
 - [ ] **Step 3: Verify**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -s APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -s PSK_APP_OWNER/app_owner_pw@//localhost:1521/XEPDB1 <<'SQL'
 SET LINESIZE 200
 SELECT column_name, data_type, data_default, nullable FROM user_tab_columns
   WHERE table_name = 'TENANT' AND column_name IN ('ATTESTATION_CONVEYANCE','WEBAUTHN_TIMEOUT_MS');

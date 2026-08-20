@@ -4,7 +4,7 @@ services:
     container_name: passkey-oracle
     environment:
       ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle}
-      APP_USER: APP_OWNER
+      APP_USER: PSK_APP_OWNER
       APP_USER_PASSWORD: ${APP_USER_PASSWORD:-app_owner_pw}
     ports:
       - "1521:1521"

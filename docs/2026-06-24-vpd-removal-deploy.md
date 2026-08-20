@@ -21,11 +21,11 @@ forward-only 로 제거합니다.
    체크섬으로 재정렬한다.
 3. `flyway migrate` — `V52__drop_vpd.sql` 이 7개 정책 + `tenant_predicate` 함수 +
    `api_key_lookup_pkg` + `CTX_PKG` 패키지 + `APP_CTX` 컨텍스트를 제거한다.
-4. 검증 쿼리 (APP_OWNER 또는 SYS):
+4. 검증 쿼리 (PSK_APP_OWNER 또는 SYS):
    - `SELECT COUNT(*) FROM user_policies;` → **0** (VPD 정책 0)
    - `SELECT object_name FROM user_objects WHERE object_name IN ('TENANT_PREDICATE','API_KEY_LOOKUP_PKG','CTX_PKG');` → **0행**
    - `SELECT COUNT(*) FROM all_context WHERE namespace='APP_CTX';` → **0** 이면 완전 제거.
-     **1** 이면 APP_OWNER 에 `DROP CONTEXT` 권한이 없어 빈 컨텍스트가 잔존하는 것이다
+     **1** 이면 PSK_APP_OWNER 에 `DROP CONTEXT` 권한이 없어 빈 컨텍스트가 잔존하는 것이다
      (무해 — 참조하던 `CTX_PKG` 패키지가 제거돼 동작 불가 상태로만 남는다). 이 경우
      V52 로그에 `[V52][WARN]` 가 출력된다. 완전 제거하려면 SYSDBA 로
      `DROP CONTEXT APP_CTX;` 를 수동 실행한다.
@@ -57,8 +57,8 @@ forward-only 로 제거합니다.
 - `bootstrap-vpd.sql` → `bootstrap-schema.sql` 로 리네임되었다. 운영 프로비저닝
   스크립트/문서가 옛 이름을 참조하면 갱신이 필요하다. (외부 DB 경로는
   `bootstrap-external.sql` / `bootstrap-external-body.sql`.)
-- DB 유저 3분할(APP_OWNER / APP_RUNTIME_USER / APP_ADMIN_USER)은 그대로 유지한다
+- DB 유저 3분할(PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER)은 그대로 유지한다
   (최소권한 원칙). VPD 제거는 격리 메커니즘만 앱 레벨로 옮긴 것이고 권한 분리는
   보존된다.
 - 기존 외부 SE DB 를 비우고 재적용하려면 `scripts/reset-app-owner-external.sql`
-  (DBeaver, APP_OWNER 세션)을 쓴다 — VPD 잔재(정책/CTX_PKG)도 함께 청소한다.
+  (DBeaver, PSK_APP_OWNER 세션)을 쓴다 — VPD 잔재(정책/CTX_PKG)도 함께 청소한다.
