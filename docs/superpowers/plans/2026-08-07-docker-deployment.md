@@ -735,12 +735,12 @@ IMAGE_TAG=0.0.1-SNAPSHOT
 
 # ---- 외부 Oracle DB ----
 DB_URL=jdbc:oracle:thin:@//db.example.com:1521/ORCLPDB1
-DB_RUNTIME_USER=APP_RUNTIME_USER
+DB_RUNTIME_USER=PSK_APP_RUNTIME_USER
 DB_RUNTIME_PASSWORD=
-DB_ADMIN_USER=APP_ADMIN_USER
+DB_ADMIN_USER=PSK_APP_ADMIN_USER
 DB_ADMIN_PASSWORD=
 # Flyway 전용(admin-app 만 사용)
-DB_OWNER_USER=APP_OWNER
+DB_OWNER_USER=PSK_APP_OWNER
 DB_OWNER_PASSWORD=
 
 # ---- Redis (서버 C) ----
@@ -946,7 +946,7 @@ bash scripts/wait-for-oracle.sh
 bash scripts/run-bootstrap.sh
 ```
 
-Expected: Oracle healthy, 부트스트랩 성공 (APP_OWNER/APP_RUNTIME_USER/APP_ADMIN_USER 생성)
+Expected: Oracle healthy, 부트스트랩 성공 (PSK_APP_OWNER/PSK_APP_RUNTIME_USER/PSK_APP_ADMIN_USER 생성)
 
 `-p passkey2`: worktree 에서 실행해도 컨테이너 이름이 충돌하지 않게 project name 을 고정한다(`scripts/init-dev-db.sh` 와 동일한 이유).
 
@@ -983,8 +983,8 @@ echo "MASTER_KEY=$(openssl rand -base64 32)" >> .env
 가 **32** 여야 한다.
 
 위 비밀번호는 실측값이다 — `scripts/bootstrap-schema.sql:72` 가
-`APP_RUNTIME_USER IDENTIFIED BY runtime_pw`, `:82` 가
-`APP_ADMIN_USER IDENTIFIED BY admin_pw` 로 생성한다. `APP_OWNER` 는 루트
+`PSK_APP_RUNTIME_USER IDENTIFIED BY runtime_pw`, `:82` 가
+`PSK_APP_ADMIN_USER IDENTIFIED BY admin_pw` 로 생성한다. `PSK_APP_OWNER` 는 루트
 `docker-compose.yml` 의 `APP_USER_PASSWORD:-app_owner_pw` 기본값을 따른다.
 
 로컬 Redis 는 인증이 없으므로 `REDIS_PASSWORD=` 를 빈 값으로 둔다.
@@ -1198,7 +1198,7 @@ admin-app 은 1개라 이 방식이 불가능하다. 재기동 시 수 초~수�
 
 ## 6. 배포 체크리스트
 
-- [ ] 외부 Oracle 에 APP_OWNER / APP_RUNTIME_USER / APP_ADMIN_USER 부트스트랩 완료
+- [ ] 외부 Oracle 에 PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER 부트스트랩 완료
       (`scripts/init-db-external.sh` 또는 `scripts/bootstrap-external.sql`)
 - [ ] 서버 A·B 의 `MASTER_KEY` 가 **동일한 값**인지 확인
 - [ ] 앞단 LB 가 클라이언트발 `X-Forwarded-*` 헤더를 스트립하는지 확인

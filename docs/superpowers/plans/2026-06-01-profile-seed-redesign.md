@@ -16,7 +16,7 @@
 
 ## 중요 사전 지식 (구현자 필독)
 
-1. **VPD 컨텍스트**: `api_key` 테이블은 VPD 정책(V8/V20)이 걸려 있어, INSERT 전에 `APP_OWNER.CTX_PKG.set_tenant('<RAW16 hex 대시없음>')`를 호출하고 INSERT 후 `CTX_PKG.clear_tenant`를 호출해야 한다. `tenant`/`tenant_allowed_origin`/`tenant_accepted_format`/`api_key_scope`는 VPD 없음(컨텍스트 불필요). PL/SQL BEGIN/END 블록은 Flyway가 `/` 구분자로 파싱한다.
+1. **VPD 컨텍스트**: `api_key` 테이블은 VPD 정책(V8/V20)이 걸려 있어, INSERT 전에 `PSK_APP_OWNER.CTX_PKG.set_tenant('<RAW16 hex 대시없음>')`를 호출하고 INSERT 후 `CTX_PKG.clear_tenant`를 호출해야 한다. `tenant`/`tenant_allowed_origin`/`tenant_accepted_format`/`api_key_scope`는 VPD 없음(컨텍스트 불필요). PL/SQL BEGIN/END 블록은 Flyway가 `/` 구분자로 파싱한다.
 
 2. **tenant_aaguid_policy / tenant_webauthn_snapshot 백필**: V26/V27은 "기존 모든 tenant에 default policy/snapshot 자동 생성"하는 **마이그레이션 백필**이다(시드 아님). 새 R__ 시드가 tenant를 만들면 V26/V27은 이미 적용 완료라 따라오지 않으므로, **R__ 시드에서 aaguid_policy와 snapshot도 직접 INSERT**해야 한다.
 
@@ -206,7 +206,7 @@ WHERE t.slug = 'demo-rp'
 
 -- 6. api_key (VPD 컨텍스트 필요)
 BEGIN
-  APP_OWNER.CTX_PKG.set_tenant('0000000000000000000000000000C0DE');
+  PSK_APP_OWNER.CTX_PKG.set_tenant('0000000000000000000000000000C0DE');
 END;
 /
 
@@ -226,7 +226,7 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE id = HEXTORAW('000000000000000000000000
   );
 
 BEGIN
-  APP_OWNER.CTX_PKG.clear_tenant;
+  PSK_APP_OWNER.CTX_PKG.clear_tenant;
 END;
 /
 
@@ -406,7 +406,7 @@ WHERE t.slug = 'dev-passkey'
 
 -- 6. api_key (VPD)
 BEGIN
-  APP_OWNER.CTX_PKG.set_tenant('7F00DEAD000000000000000DE7000001');
+  PSK_APP_OWNER.CTX_PKG.set_tenant('7F00DEAD000000000000000DE7000001');
 END;
 /
 
@@ -426,7 +426,7 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE id = HEXTORAW('7F00DEAD000000000000000D
   );
 
 BEGIN
-  APP_OWNER.CTX_PKG.clear_tenant;
+  PSK_APP_OWNER.CTX_PKG.clear_tenant;
 END;
 /
 
@@ -670,7 +670,7 @@ spring:
   datasource:
     url: jdbc:oracle:thin:@localhost:1521/XEPDB1
     driver-class-name: oracle.jdbc.OracleDriver
-    username: APP_ADMIN_USER
+    username: PSK_APP_ADMIN_USER
     password: admin_pw
   data:
     redis:
@@ -723,7 +723,7 @@ Expected: BUILD SUCCESSFUL (SQL은 컴파일 대상 아님 — 클래스만 확�
 dev로 부팅 후 dev-passkey 테넌트와 alice 계정 확인:
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_ADMIN_USER/admin_pw@localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_ADMIN_USER/admin_pw@localhost:1521/XEPDB1 <<'SQL'
 SELECT slug, rp_id FROM app_owner.tenant ORDER BY slug;
 SELECT email, role FROM app_owner.admin_user ORDER BY email;
 SELECT key_prefix FROM app_owner.api_key ORDER BY key_prefix;
@@ -737,7 +737,7 @@ Expected (dev): tenant `dev-passkey`(rp_id=dev-passkey.crosscert.com), admin `al
 # 컨테이너 재생성 또는 clean 후 local 로 부팅
 ./gradlew :admin-app:bootRun --args='--spring.profiles.active=local' > /tmp/seed-local.log 2>&1 &
 # 부팅 후:
-docker exec -i passkey-oracle sqlplus -S APP_ADMIN_USER/admin_pw@localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_ADMIN_USER/admin_pw@localhost:1521/XEPDB1 <<'SQL'
 SELECT slug, rp_id FROM app_owner.tenant ORDER BY slug;
 SQL
 ```
@@ -748,7 +748,7 @@ Expected (local): tenant `demo-rp`(rp_id=localhost). alice 계정. api_key `pk_d
 ```bash
 # clean 후 prod 로 부팅
 ./gradlew :admin-app:bootRun --args='--spring.profiles.active=prod ...(prod env)' > /tmp/seed-prod.log 2>&1 &
-docker exec -i passkey-oracle sqlplus -S APP_ADMIN_USER/admin_pw@localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_ADMIN_USER/admin_pw@localhost:1521/XEPDB1 <<'SQL'
 SELECT COUNT(*) AS tenants FROM app_owner.tenant;
 SELECT COUNT(*) AS admins FROM app_owner.admin_user;
 SQL
@@ -898,7 +898,7 @@ git commit -m "docs: sample-rp 기동 env 를 새 dev-passkey 시드 값으로 �
 
 부팅 검증에서 계획에 없던 3개 버그를 발견·수정했다(커밋 3645b86):
 1. **snapshot 컬럼명**: 계획이 `allowed_origins_json`/`accepted_formats_json`로 썼으나 V27 실제 컬럼은 `allowed_origins`/`accepted_formats`(+ `taken_by`). → 수정.
-2. **snapshot 시퀀스 접두사**: Flyway 세션(APP_ADMIN_USER)에서 `tenant_webauthn_snapshot_seq.NEXTVAL`이 접두사 없이는 ORA-02289. → `APP_OWNER.` 접두사 추가.
+2. **snapshot 시퀀스 접두사**: Flyway 세션(PSK_APP_ADMIN_USER)에서 `tenant_webauthn_snapshot_seq.NEXTVAL`이 접두사 없이는 ORA-02289. → `PSK_APP_OWNER.` 접두사 추가.
 3. **admin_user.id 타입**: V19 이후 RAW(16)이고 `admin_user_seq`는 죽은 시퀀스(GRANT 없음). → seed-common/testfix에서 `admin_user_seq.NEXTVAL` 대신 고정 RAW(alice 0x...0010, bob 0x...0011) 사용.
 
 **검증 운영 노트:** 같은 Oracle 인스턴스를 여러 프로필로 번갈아 부팅하면 repeatable 시드 "not resolved locally" validate 충돌이 난다(dev 시드 history가 남은 DB를 local로 부팅 시). 따라서 각 프로필 검증은 컨테이너 재생성(깨끗한 DB)에서 수행했다. **prod 실부팅은 "non-empty schema + no history → baseline 거부"(의도된 fail-fast)로 단독 검증 불가** — prod 격리는 코드 레벨(flyway locations에 seed 미포함 + db/migration 시드 INSERT 0 + db/prod no-op)로 보장 확인.

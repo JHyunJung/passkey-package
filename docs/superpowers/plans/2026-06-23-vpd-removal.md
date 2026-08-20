@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 격리 무손실: 작업 후에도 cross-tenant 누출이 없어야 한다. 검증 게이트는 `AppLevelIsolationIT`.
-- DB 유저 3분할(APP_OWNER/APP_RUNTIME/APP_ADMIN) **유지**. EXEMPT ACCESS POLICY GRANT만 제거(무의미).
+- DB 유저 3분할(PSK_APP_OWNER/PSK_APP_RUNTIME/PSK_APP_ADMIN) **유지**. EXEMPT ACCESS POLICY GRANT만 제거(무의미).
 - 과거 마이그레이션 파일은 **삭제 금지** — 내용을 no-op으로 비우고 버전/파일명 보존(신규 환경 Flyway 버전 점프·후속 의존 보호).
 - 신규 정리 마이그레이션은 `V52__drop_vpd.sql`. 모든 DROP에 멱등 가드(ORA-28101 정책없음 / ORA-04043 객체없음 / ORA-00439 SE2 / ORA-01031 권한없음 삼킴). 가드는 fail-closed(`SQLCODE = -코드` 양성 매칭).
 - `api_key` PK·tenant_id는 RAW(16) (UUID 바이너리). `key_prefix`는 전역 UNIQUE(V7).
@@ -349,7 +349,7 @@ Expected: PASS. 3개 테스트(context 없이 룩업 / unknown empty / tenant �
 
 - [ ] **Step 5: ApiKeyRepository javadoc 갱신 (패키지 참조 제거)**
 
-`core/src/main/java/com/crosscert/passkey/core/repository/ApiKeyRepository.java`의 `findByKeyPrefix` javadoc에서 "VPD filters by tenant_id = SYS_CONTEXT" 및 "definer-rights PL/SQL package (APP_OWNER.api_key_lookup_pkg.find_by_prefix)" 언급을 "app-level @Filter 가 tenant 로 격리하므로 tenant context 설정 후에만 행을 반환. 인증 필터는 native 쿼리(ApiKeyLookupService)로 context 전에 룩업"으로 수정.
+`core/src/main/java/com/crosscert/passkey/core/repository/ApiKeyRepository.java`의 `findByKeyPrefix` javadoc에서 "VPD filters by tenant_id = SYS_CONTEXT" 및 "definer-rights PL/SQL package (PSK_APP_OWNER.api_key_lookup_pkg.find_by_prefix)" 언급을 "app-level @Filter 가 tenant 로 격리하므로 tenant context 설정 후에만 행을 반환. 인증 필터는 native 쿼리(ApiKeyLookupService)로 context 전에 룩업"으로 수정.
 
 - [ ] **Step 6: passkey-app 컴파일 + 관련 테스트 확인**
 
@@ -491,7 +491,7 @@ Expected: 비었으면 `rmdir` (git은 빈 디렉토리 추적 안 하므로 자
 
 - [ ] **Step 5: RuntimeDsHelper 점검**
 
-`RuntimeDsHelper.java`가 APP_RUNTIME_USER DataSource로 VPD 정책 동작을 검증하던 헬퍼면, VPD 제거 후 쓰임을 확인. AppLevelIsolationIT가 여전히 참조하면 유지, VpdIsolationIT/VpdToggleIT 전용이었으면 `git rm`.
+`RuntimeDsHelper.java`가 PSK_APP_RUNTIME_USER DataSource로 VPD 정책 동작을 검증하던 헬퍼면, VPD 제거 후 쓰임을 확인. AppLevelIsolationIT가 여전히 참조하면 유지, VpdIsolationIT/VpdToggleIT 전용이었으면 `git rm`.
 
 Run: `grep -rln "RuntimeDsHelper" core/src/test --include=*.java`
 Expected: 참조처가 0이면 삭제, AppLevelIsolationIT 등이 참조하면 유지.
@@ -530,7 +530,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: 없음(독립). DB 유저 구조는 유지 결정.
-- Produces: 부트스트랩이 3-user(APP_OWNER/APP_RUNTIME_USER/APP_ADMIN_USER)와 테이블 GRANT만 설정. VPD 컨텍스트/정책 권한 없음.
+- Produces: 부트스트랩이 3-user(PSK_APP_OWNER/PSK_APP_RUNTIME_USER/PSK_APP_ADMIN_USER)와 테이블 GRANT만 설정. VPD 컨텍스트/정책 권한 없음.
 
 - [ ] **Step 1: bootstrap-vpd.sql 리네임**
 
@@ -541,10 +541,10 @@ git mv scripts/bootstrap-vpd.sql scripts/bootstrap-schema.sql
 - [ ] **Step 2: bootstrap-schema.sql 에서 VPD 부분 제거**
 
 `scripts/bootstrap-schema.sql`에서:
-- **삭제**: 라인 45 `GRANT EXEMPT ACCESS POLICY TO APP_ADMIN;`, 라인 58 `GRANT CREATE ANY CONTEXT TO APP_OWNER;`, 라인 60 `GRANT EXECUTE ON DBMS_RLS TO APP_OWNER;`, 라인 63 `GRANT EXEMPT ACCESS POLICY TO APP_OWNER;`
-- **삭제**: 라인 90~123 전체 (CTX_PKG 패키지 정의 + `CREATE OR REPLACE CONTEXT APP_CTX` + `GRANT EXECUTE ON APP_OWNER.CTX_PKG` 2건)
-- **유지**: 롤 생성(APP_RUNTIME/APP_ADMIN), 유저 생성(APP_RUNTIME_USER/APP_ADMIN_USER), CREATE SESSION/TABLE/SEQUENCE/PROCEDURE/TRIGGER/VIEW/UNLIMITED TABLESPACE GRANT, 롤 부여.
-- **검토**: `GRANT EXECUTE ON DBMS_SESSION TO APP_OWNER`(라인 61) — CTX_PKG가 사라지면 set_tenant용 DBMS_SESSION도 불필요. 다른 용도 없으면 삭제.
+- **삭제**: 라인 45 `GRANT EXEMPT ACCESS POLICY TO PSK_APP_ADMIN;`, 라인 58 `GRANT CREATE ANY CONTEXT TO PSK_APP_OWNER;`, 라인 60 `GRANT EXECUTE ON DBMS_RLS TO PSK_APP_OWNER;`, 라인 63 `GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER;`
+- **삭제**: 라인 90~123 전체 (CTX_PKG 패키지 정의 + `CREATE OR REPLACE CONTEXT APP_CTX` + `GRANT EXECUTE ON PSK_APP_OWNER.CTX_PKG` 2건)
+- **유지**: 롤 생성(PSK_APP_RUNTIME/PSK_APP_ADMIN), 유저 생성(PSK_APP_RUNTIME_USER/PSK_APP_ADMIN_USER), CREATE SESSION/TABLE/SEQUENCE/PROCEDURE/TRIGGER/VIEW/UNLIMITED TABLESPACE GRANT, 롤 부여.
+- **검토**: `GRANT EXECUTE ON DBMS_SESSION TO PSK_APP_OWNER`(라인 61) — CTX_PKG가 사라지면 set_tenant용 DBMS_SESSION도 불필요. 다른 용도 없으면 삭제.
 - 파일 상단 헤더 주석에서 VPD 설명을 "스키마 소유자 + 런타임/어드민 유저·권한 부트스트랩(VPD 없음, 격리는 앱 레벨)"으로 갱신.
 
 - [ ] **Step 3: bootstrap-external-body.sql 에서 CTX_PKG 제거**
@@ -627,7 +627,7 @@ Expected: V3/V20/V35는 전부 VPD(함수+정책)라 통째로 no-op. V19는 테
 
 ```sql
 -- V3 — (의도적 no-op) VPD(DBMS_RLS) 정책은 제거되었습니다.
--- 원래 이 마이그레이션은 APP_OWNER.tenant_predicate 함수와
+-- 원래 이 마이그레이션은 PSK_APP_OWNER.tenant_predicate 함수와
 -- CREDENTIAL_TENANT_ISOLATION 정책을 생성했습니다. 테넌트 격리는 이제
 -- 앱 레벨 Hibernate @Filter(TenantFilterAspect)가 전담합니다.
 -- 기배포 DB의 실제 객체 제거는 V52__drop_vpd.sql 가 수행합니다.
@@ -687,7 +687,7 @@ DECLARE
   PROCEDURE drop_policy(p_table IN VARCHAR2, p_policy IN VARCHAR2) IS
   BEGIN
     DBMS_RLS.DROP_POLICY(
-      object_schema => 'APP_OWNER',
+      object_schema => 'PSK_APP_OWNER',
       object_name   => p_table,
       policy_name   => p_policy);
   EXCEPTION
@@ -711,7 +711,7 @@ END;
 
 -- 2) tenant_predicate 함수 제거 (멱등)
 BEGIN
-  EXECUTE IMMEDIATE 'DROP FUNCTION APP_OWNER.tenant_predicate';
+  EXECUTE IMMEDIATE 'DROP FUNCTION PSK_APP_OWNER.tenant_predicate';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE = -4043 THEN NULL;        -- ORA-04043: 객체 없음
@@ -722,7 +722,7 @@ END;
 
 -- 3) api_key_lookup_pkg 패키지 제거 (앱 native 쿼리로 대체됨)
 BEGIN
-  EXECUTE IMMEDIATE 'DROP PACKAGE APP_OWNER.api_key_lookup_pkg';
+  EXECUTE IMMEDIATE 'DROP PACKAGE PSK_APP_OWNER.api_key_lookup_pkg';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE = -4043 THEN NULL;
@@ -733,7 +733,7 @@ END;
 
 -- 4) CTX_PKG 패키지 제거
 BEGIN
-  EXECUTE IMMEDIATE 'DROP PACKAGE APP_OWNER.CTX_PKG';
+  EXECUTE IMMEDIATE 'DROP PACKAGE PSK_APP_OWNER.CTX_PKG';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE = -4043 THEN NULL;
@@ -743,7 +743,7 @@ END;
 /
 
 -- 5) APP_CTX 컨텍스트 제거
---    주의: APP_OWNER 가 DROP CONTEXT 권한(DROP ANY CONTEXT)을 가지지 못하는
+--    주의: PSK_APP_OWNER 가 DROP CONTEXT 권한(DROP ANY CONTEXT)을 가지지 못하는
 --    배포(외부 SE)에서는 ORA-01031 이 난다 → 삼켜서 보존(무해, 참조 패키지가
 --    이미 사라져 컨텍스트는 동작 불가 상태로 남을 뿐).
 BEGIN

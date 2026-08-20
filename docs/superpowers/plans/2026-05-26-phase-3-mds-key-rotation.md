@@ -114,9 +114,9 @@ CREATE TABLE signing_key (
 
 CREATE INDEX signing_key_status_ix ON signing_key(status);
 
-GRANT SELECT, INSERT ON signing_key TO APP_ADMIN;
-GRANT UPDATE(status, rotated_at, revoked_at) ON signing_key TO APP_ADMIN;
-GRANT SELECT ON signing_key_seq TO APP_ADMIN;
+GRANT SELECT, INSERT ON signing_key TO PSK_APP_ADMIN;
+GRANT UPDATE(status, rotated_at, revoked_at) ON signing_key TO PSK_APP_ADMIN;
+GRANT SELECT ON signing_key_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Boot admin-app to apply V15**
@@ -130,12 +130,12 @@ kill $ADMIN_PID
 wait $ADMIN_PID 2>/dev/null
 ```
 
-Expected: `Migrating schema "APP_OWNER" to version "15 - signing key table"` and `Successfully applied 1 migration`.
+Expected: `Migrating schema "PSK_APP_OWNER" to version "15 - signing key table"` and `Successfully applied 1 migration`.
 
 - [ ] **Step 3: Verify table + grants**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'SQL'
 SET PAGESIZE 0 FEEDBACK OFF HEADING OFF
 SELECT column_name||':'||data_type FROM user_tab_columns WHERE table_name='SIGNING_KEY' ORDER BY column_id;
 SELECT 'GRANT:'||grantee||':'||privilege FROM user_tab_privs WHERE table_name='SIGNING_KEY' ORDER BY grantee, privilege;
@@ -144,7 +144,7 @@ EXIT
 SQL
 ```
 
-Expected: 9 columns; APP_ADMIN INSERT + SELECT (table level) + UPDATE on status/rotated_at/revoked_at (column level).
+Expected: 9 columns; PSK_APP_ADMIN INSERT + SELECT (table level) + UPDATE on status/rotated_at/revoked_at (column level).
 
 - [ ] **Step 4: Codex review**
 
@@ -163,8 +163,8 @@ Schema:
 - created_at default SYSTIMESTAMP, updatable=false intent (no UPDATE grant).
 
 Grants:
-- APP_ADMIN: SELECT, INSERT, column-scoped UPDATE on (status, rotated_at, revoked_at).
-- APP_RUNTIME: no grant yet — added in V16 so passkey-app can read.
+- PSK_APP_ADMIN: SELECT, INSERT, column-scoped UPDATE on (status, rotated_at, revoked_at).
+- PSK_APP_RUNTIME: no grant yet — added in V16 so passkey-app can read.
 
 Review for:
 1. Column types — BLOB for envelope ciphertext, CLOB IS JSON for public_jwk.
@@ -193,7 +193,7 @@ git commit -m "feat(db): V15 — signing_key table (envelope-encrypted PKCS8 + s
 
 ---
 
-## Task 2: Flyway V16 — signing_key APP_RUNTIME grants
+## Task 2: Flyway V16 — signing_key PSK_APP_RUNTIME grants
 
 **Files:**
 - Create `core/src/main/resources/db/migration/V16__signing_key_runtime_grants.sql`
@@ -201,15 +201,15 @@ git commit -m "feat(db): V15 — signing_key table (envelope-encrypted PKCS8 + s
 - [ ] **Step 1: Write the migration**
 
 ```sql
--- passkey-app boots as APP_RUNTIME_USER and reads signing_key (and the
+-- passkey-app boots as PSK_APP_RUNTIME_USER and reads signing_key (and the
 -- public_jwk column) for JWKS construction + signing key load. It does
 -- NOT write — admin-app owns lifecycle transitions.
 --
 -- ddl-validate at passkey-app boot needs SELECT on the table + sequence
 -- (mirrors V12/V13 pattern from Phase 2 admin_user and audit_log).
 
-GRANT SELECT ON signing_key TO APP_RUNTIME;
-GRANT SELECT ON signing_key_seq TO APP_RUNTIME;
+GRANT SELECT ON signing_key TO PSK_APP_RUNTIME;
+GRANT SELECT ON signing_key_seq TO PSK_APP_RUNTIME;
 ```
 
 - [ ] **Step 2: Boot admin-app to apply V16**
@@ -222,14 +222,14 @@ grep -E "Migrating|Successfully" /tmp/v16-boot.log | tail -3
 kill $ADMIN_PID; wait $ADMIN_PID 2>/dev/null
 ```
 
-Expected: `Migrating schema "APP_OWNER" to version "16 - signing key runtime grants"` and `Successfully applied 1 migration`.
+Expected: `Migrating schema "PSK_APP_OWNER" to version "16 - signing key runtime grants"` and `Successfully applied 1 migration`.
 
 - [ ] **Step 3: Codex review**
 
 ```bash
 git add core/src/main/resources/db/migration/V16__signing_key_runtime_grants.sql
 cat > /tmp/codex-p3-t2.txt <<'PROMPT'
-Code review for V16 — APP_RUNTIME SELECT grants on signing_key + sequence.
+Code review for V16 — PSK_APP_RUNTIME SELECT grants on signing_key + sequence.
 
 Mirrors V12/V13 (admin_user, audit_log) pattern: passkey-app's
 @EntityScan covers core.entity package, so Hibernate ddl-validate at
@@ -258,7 +258,7 @@ cat /tmp/codex-p3-t2-out.txt
 - [ ] **Step 4: Commit**
 
 ```bash
-git commit -m "feat(db): V16 — APP_RUNTIME SELECT grants on signing_key"
+git commit -m "feat(db): V16 — PSK_APP_RUNTIME SELECT grants on signing_key"
 ```
 
 ---
@@ -296,7 +296,7 @@ COMMIT;
 ./gradlew :admin-app:bootRun --args='--spring.profiles.active=local' > /tmp/v17-boot.log 2>&1 &
 ADMIN_PID=$!
 until grep -qE "Started AdminApplication|APPLICATION FAILED" /tmp/v17-boot.log; do sleep 2; done
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'SQL'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'SQL'
 SET PAGESIZE 0 FEEDBACK OFF HEADING OFF
 SELECT id||':'||version||':'||LENGTH(blob_jwt) FROM mds_blob_cache;
 EXIT
@@ -1552,12 +1552,12 @@ public class SchedulerLeaseService {
         Instant now = clock.instant();
         Instant newExpiry = now.plus(ttl);
         Integer existing = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.scheduler_lease WHERE name=?",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.scheduler_lease WHERE name=?",
                 Integer.class, name);
         if (existing == null || existing == 0) {
             try {
                 jdbc.update(
-                        "INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
+                        "INSERT INTO PSK_APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                         "VALUES (?, ?, ?)",
                         name, holder, Timestamp.from(newExpiry));
                 return true;
@@ -1568,7 +1568,7 @@ public class SchedulerLeaseService {
         }
 
         int updated = jdbc.update(
-                "UPDATE APP_OWNER.scheduler_lease " +
+                "UPDATE PSK_APP_OWNER.scheduler_lease " +
                 "SET holder=?, expires_at=? " +
                 "WHERE name=? AND (holder=? OR expires_at < ?)",
                 holder, Timestamp.from(newExpiry),
@@ -1579,7 +1579,7 @@ public class SchedulerLeaseService {
     @Transactional
     public void release(String name, String holder) {
         jdbc.update(
-                "DELETE FROM APP_OWNER.scheduler_lease WHERE name=? AND holder=?",
+                "DELETE FROM PSK_APP_OWNER.scheduler_lease WHERE name=? AND holder=?",
                 name, holder);
     }
 }
@@ -1981,7 +1981,7 @@ public class MdsBlobStore {
         LocalDate nextUpdate = blob.getPayload().getNextUpdate();
         Instant now = clock.instant();
         jdbc.update(
-                "UPDATE APP_OWNER.mds_blob_cache " +
+                "UPDATE PSK_APP_OWNER.mds_blob_cache " +
                 "SET version=?, next_update=?, fetched_at=?, blob_jwt=? " +
                 "WHERE id=1",
                 version,
@@ -2383,7 +2383,7 @@ public class MdsAdminController {
                 "SELECT version AS \"version\", " +
                 "       next_update AS \"nextUpdate\", " +
                 "       fetched_at AS \"fetchedAt\" " +
-                "FROM APP_OWNER.mds_blob_cache WHERE id=1",
+                "FROM PSK_APP_OWNER.mds_blob_cache WHERE id=1",
                 (rs, n) -> Map.of(
                         "version", rs.getLong("version"),
                         "nextUpdate", rs.getDate("nextUpdate") == null
@@ -4293,7 +4293,7 @@ class MdsSchedulerIT {
 
     @Container
     static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-xe:21-slim-faststart")
-            .withUsername("APP_OWNER").withPassword("app_owner_pw")
+            .withUsername("PSK_APP_OWNER").withPassword("app_owner_pw")
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-vpd.sql"),
                     "/tmp/bootstrap-vpd.sql");
@@ -4310,7 +4310,7 @@ class MdsSchedulerIT {
             throw new RuntimeException("bootstrap-vpd failed: " + exec.getStdout() + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", REDIS::getFirstMappedPort);
@@ -4328,8 +4328,8 @@ class MdsSchedulerIT {
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("UPDATE APP_OWNER.mds_blob_cache SET version=0, " +
+        jdbc.update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("UPDATE PSK_APP_OWNER.mds_blob_cache SET version=0, " +
                     "blob_jwt='{}', fetched_at=TIMESTAMP '1970-01-01 00:00:00 +00:00' WHERE id=1");
         redisFactory.getConnection().serverCommands().flushAll();
     }
@@ -4352,7 +4352,7 @@ class MdsSchedulerIT {
 
         // DB row updated.
         Long version = jdbc.queryForObject(
-                "SELECT version FROM APP_OWNER.mds_blob_cache WHERE id=1", Long.class);
+                "SELECT version FROM PSK_APP_OWNER.mds_blob_cache WHERE id=1", Long.class);
         assertThat(version).isEqualTo(42L);
 
         // Redis AAGUID entries written.
@@ -4369,7 +4369,7 @@ class MdsSchedulerIT {
     @Test
     void runOnceSkipsWhenAnotherInstanceHoldsLease() {
         // Pre-acquire the lease by inserting a row that's not us.
-        jdbc.update("INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
+        jdbc.update("INSERT INTO PSK_APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                     "VALUES ('mds-sync', 'somebody-else', SYSTIMESTAMP + INTERVAL '1' HOUR)");
         when(client.fetch()).thenThrow(new RuntimeException("should not be called"));
 
@@ -4561,7 +4561,7 @@ class KeyRotationIT {
 
     @Container
     static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-xe:21-slim-faststart")
-            .withUsername("APP_OWNER").withPassword("app_owner_pw")
+            .withUsername("PSK_APP_OWNER").withPassword("app_owner_pw")
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-vpd.sql"),
                     "/tmp/bootstrap-vpd.sql");
@@ -4578,7 +4578,7 @@ class KeyRotationIT {
             throw new RuntimeException(exec.getStdout() + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", REDIS::getFirstMappedPort);
@@ -4597,8 +4597,8 @@ class KeyRotationIT {
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("DELETE FROM APP_OWNER.signing_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.signing_key");
         // Force provider to recreate ACTIVE key on next access by reload.
         provider.reload(); // will throw if no ACTIVE — that's why init() runs once.
     }
@@ -4661,7 +4661,7 @@ class KeyRotationIT {
 
         // Advance rotated_at to 31 minutes ago (past 30min grace).
         Instant past = Instant.now().minus(Duration.ofMinutes(31));
-        jdbc.update("UPDATE APP_OWNER.signing_key SET rotated_at=? WHERE id=?",
+        jdbc.update("UPDATE PSK_APP_OWNER.signing_key SET rotated_at=? WHERE id=?",
                 Timestamp.from(past), rotated.getId());
 
         // Run expiration job.
@@ -4682,7 +4682,7 @@ class KeyRotationIT {
             provider.init();
         }
         // Pre-acquire lease.
-        jdbc.update("INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
+        jdbc.update("INSERT INTO PSK_APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                     "VALUES ('key-rotation', 'somebody-else', SYSTIMESTAMP + INTERVAL '5' MINUTE)");
 
         try {

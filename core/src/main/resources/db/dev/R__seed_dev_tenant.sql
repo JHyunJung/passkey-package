@@ -82,7 +82,7 @@ INSERT INTO tenant_webauthn_snapshot (
   require_user_verification, mds_required, taken_at, taken_by
 )
 SELECT
-  APP_OWNER.tenant_webauthn_snapshot_seq.NEXTVAL,
+  PSK_APP_OWNER.tenant_webauthn_snapshot_seq.NEXTVAL,
   t.id, t.rp_id, t.rp_name,
   NVL(
     (SELECT '[' || LISTAGG('"' || o.origin || '"', ',') WITHIN GROUP (ORDER BY o.sort_order) || ']'

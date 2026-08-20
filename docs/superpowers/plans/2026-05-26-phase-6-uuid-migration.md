@@ -259,15 +259,15 @@ INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, created_at)
           '$2a$10$XnYj8jL2hZUaBoxV1cyx0ulNk1OEH..ec/M6.5T6dQNgQwoVqDmZi',
           'VIEWER', 'Y', SYSTIMESTAMP);
 
--- 6. APP_RUNTIME grants — same shape as V4 + V12 + V13 + V16, regenerated.
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant         TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON admin_user     TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON api_key        TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON credential     TO APP_RUNTIME;
-GRANT SELECT, INSERT                  ON audit_log     TO APP_RUNTIME;  -- no UPDATE/DELETE (chain immutability)
-GRANT SELECT                          ON signing_key   TO APP_RUNTIME;  -- INSERT via bootstrap_pkg only
-GRANT SELECT, INSERT, UPDATE          ON mds_blob_cache TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE  ON scheduler_lease TO APP_RUNTIME;
+-- 6. PSK_APP_RUNTIME grants — same shape as V4 + V12 + V13 + V16, regenerated.
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant         TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON admin_user     TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON api_key        TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON credential     TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT                  ON audit_log     TO PSK_APP_RUNTIME;  -- no UPDATE/DELETE (chain immutability)
+GRANT SELECT                          ON signing_key   TO PSK_APP_RUNTIME;  -- INSERT via bootstrap_pkg only
+GRANT SELECT, INSERT, UPDATE          ON mds_blob_cache TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE  ON scheduler_lease TO PSK_APP_RUNTIME;
 ```
 
 - [ ] **Step 2: Verify lint-free SQL**
@@ -350,13 +350,13 @@ Confirm CTX_PKG signature + VPD policy function literal.
 - [ ] **Step 2: Update `scripts/bootstrap-vpd.sql` CTX_PKG**
 
 ```sql
-CREATE OR REPLACE PACKAGE APP_OWNER.CTX_PKG AS
+CREATE OR REPLACE PACKAGE PSK_APP_OWNER.CTX_PKG AS
   PROCEDURE SET_TENANT(p_tenant_hex IN VARCHAR2);
   PROCEDURE CLEAR_TENANT;
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY APP_OWNER.CTX_PKG AS
+CREATE OR REPLACE PACKAGE BODY PSK_APP_OWNER.CTX_PKG AS
   PROCEDURE SET_TENANT(p_tenant_hex IN VARCHAR2) IS
   BEGIN
     -- p_tenant_hex is 32 hex chars (no dashes), exactly RAWTOHEX(RAW(16)).
@@ -382,7 +382,7 @@ END;
 -- Predicate now uses HEXTORAW() because tenant_id is RAW(16) but
 -- SYS_CONTEXT returns VARCHAR2.
 
-CREATE OR REPLACE FUNCTION APP_OWNER.vpd_tenant_predicate(
+CREATE OR REPLACE FUNCTION PSK_APP_OWNER.vpd_tenant_predicate(
   p_owner   IN VARCHAR2,
   p_object  IN VARCHAR2
 ) RETURN VARCHAR2 AS
@@ -399,10 +399,10 @@ END;
 -- Re-attach to credential
 BEGIN
   DBMS_RLS.ADD_POLICY(
-    object_schema    => 'APP_OWNER',
+    object_schema    => 'PSK_APP_OWNER',
     object_name      => 'credential',
     policy_name      => 'credential_tenant_isolation',
-    function_schema  => 'APP_OWNER',
+    function_schema  => 'PSK_APP_OWNER',
     policy_function  => 'vpd_tenant_predicate',
     statement_types  => 'SELECT,INSERT,UPDATE,DELETE',
     update_check     => TRUE);
@@ -412,10 +412,10 @@ END;
 -- Re-attach to api_key
 BEGIN
   DBMS_RLS.ADD_POLICY(
-    object_schema    => 'APP_OWNER',
+    object_schema    => 'PSK_APP_OWNER',
     object_name      => 'api_key',
     policy_name      => 'api_key_tenant_isolation',
-    function_schema  => 'APP_OWNER',
+    function_schema  => 'PSK_APP_OWNER',
     policy_function  => 'vpd_tenant_predicate',
     statement_types  => 'SELECT,INSERT,UPDATE,DELETE',
     update_check     => TRUE);
@@ -657,12 +657,12 @@ private static String toHex(UUID id) {
 // inside the call site:
 UUID tenantId = TenantContextHolder.getTenantId();
 if (tenantId != null) {
-    try (CallableStatement cs = conn.prepareCall("{ call APP_OWNER.CTX_PKG.SET_TENANT(?) }")) {
+    try (CallableStatement cs = conn.prepareCall("{ call PSK_APP_OWNER.CTX_PKG.SET_TENANT(?) }")) {
         cs.setString(1, toHex(tenantId));
         cs.execute();
     }
 } else {
-    try (CallableStatement cs = conn.prepareCall("{ call APP_OWNER.CTX_PKG.CLEAR_TENANT() }")) {
+    try (CallableStatement cs = conn.prepareCall("{ call PSK_APP_OWNER.CTX_PKG.CLEAR_TENANT() }")) {
         cs.execute();
     }
 }
@@ -1069,7 +1069,7 @@ git commit -m "refactor(core): IdTokenIssuer cred_id UUID base64url (Phase 6 T17
 Better: append to V19 (PL/SQL is part of the schema). The package signature:
 
 ```sql
-CREATE OR REPLACE PACKAGE APP_OWNER.signing_key_bootstrap_pkg
+CREATE OR REPLACE PACKAGE PSK_APP_OWNER.signing_key_bootstrap_pkg
   AUTHID DEFINER
 AS
   PROCEDURE bootstrap_active(

@@ -14,12 +14,12 @@
 
 - **작업 위치**: worktree `.claude/worktrees/psk-prefix-rename`, 브랜치 `psk-prefix-rename`. 모든 명령은 이 디렉터리에서 실행한다. 메인 저장소(`/Users/jhyun/Git/10-work/crosscert/Passkey2`)에 쓰지 않는다.
 - **식별자 매핑 (5개, 이 값 그대로)**:
-  - `APP_RUNTIME_USER` → `PSK_APP_RUNTIME_USER`
-  - `APP_ADMIN_USER` → `PSK_APP_ADMIN_USER`
-  - `APP_RUNTIME` → `PSK_APP_RUNTIME`
-  - `APP_ADMIN` → `PSK_APP_ADMIN`
-  - `APP_OWNER` → `PSK_APP_OWNER`
-- **치환 순서**: 반드시 위 순서(긴 이름 우선). `APP_ADMIN` 은 `APP_ADMIN_USER` 의 부분문자열이다.
+  - `PSK_APP_RUNTIME_USER` → `PSK_APP_RUNTIME_USER`
+  - `PSK_APP_ADMIN_USER` → `PSK_APP_ADMIN_USER`
+  - `PSK_APP_RUNTIME` → `PSK_APP_RUNTIME`
+  - `PSK_APP_ADMIN` → `PSK_APP_ADMIN`
+  - `PSK_APP_OWNER` → `PSK_APP_OWNER`
+- **치환 순서**: 반드시 위 순서(긴 이름 우선). `PSK_APP_ADMIN` 은 `PSK_APP_ADMIN_USER` 의 부분문자열이다.
 - **이중 접두사 금지**: 이미 `PSK_` 가 붙은 토큰은 재치환하지 않는다(`(?<!PSK_)` lookbehind).
 - **파일명은 바꾸지 않는다**: `V4__grant_security_incident_to_app_runtime.sql`, `reset-app-owner*.sql` 등 내용만 수정한다.
 - **프로퍼티명**: `passkey.db.schema` (기존 `passkey.admin`, `passkey.key-envelope` 등과 같은 계층)
@@ -48,7 +48,7 @@
 | `admin-app/src/main/resources/application.yml` | Flyway `schemas`/`default-schema`/`user` |
 | `admin-app/.../application-{dev,local}.yml`, `passkey-app/.../application-dev.yml` | datasource `username` |
 | `{core,admin-app,passkey-app}/src/test/resources/application-test.yml` | Flyway/hibernate 스키마 |
-| Java 7개 (아래 Task 4·5) | `APP_OWNER.` 하드코딩 → 주입된 스키마명 |
+| Java 7개 (아래 Task 4·5) | `PSK_APP_OWNER.` 하드코딩 → 주입된 스키마명 |
 | `scripts/` 9개 | DDL·bootstrap·reset |
 | 테스트 29개 + `docs/` 70개 + `deploy/`·루트 4개 | 기계적 치환 |
 
@@ -74,7 +74,7 @@
 """DB 계정·롤에 PSK_ 접두사를 붙이는 일괄 치환 도구.
 
 핵심 제약 두 가지를 코드로 보장한다.
-  1) 긴 이름 우선 — APP_ADMIN 은 APP_ADMIN_USER 의 부분문자열이라
+  1) 긴 이름 우선 — PSK_APP_ADMIN 은 PSK_APP_ADMIN_USER 의 부분문자열이라
      짧은 것부터 치환하면 PSK_APP_ADMIN_USER 가 아니라 깨진 이름이 된다.
   2) 이중 접두사 금지 — 이미 PSK_ 가 붙은 토큰은 건너뛴다.
 """
@@ -83,16 +83,16 @@ import sys
 
 # 순서가 곧 우선순위다. 긴 이름부터.
 MAPPING = [
-    ("APP_RUNTIME_USER", "PSK_APP_RUNTIME_USER"),
-    ("APP_ADMIN_USER",   "PSK_APP_ADMIN_USER"),
-    ("APP_RUNTIME",      "PSK_APP_RUNTIME"),
-    ("APP_ADMIN",        "PSK_APP_ADMIN"),
-    ("APP_OWNER",        "PSK_APP_OWNER"),
+    ("PSK_APP_RUNTIME_USER", "PSK_APP_RUNTIME_USER"),
+    ("PSK_APP_ADMIN_USER",   "PSK_APP_ADMIN_USER"),
+    ("PSK_APP_RUNTIME",      "PSK_APP_RUNTIME"),
+    ("PSK_APP_ADMIN",        "PSK_APP_ADMIN"),
+    ("PSK_APP_OWNER",        "PSK_APP_OWNER"),
 ]
 
 # (?<!PSK_) : 이미 접두사가 붙은 토큰 제외
 # (?<![A-Z0-9_]) / (?![A-Z0-9_]) : 단어 경계. \b 는 밑줄을 단어문자로 봐서
-#   APP_ADMIN_USER 안의 APP_ADMIN 을 걸러내지 못하므로 직접 명시한다.
+#   PSK_APP_ADMIN_USER 안의 PSK_APP_ADMIN 을 걸러내지 못하므로 직접 명시한다.
 PATTERNS = [
     (re.compile(r"(?<!PSK_)(?<![A-Z0-9_])" + old + r"(?![A-Z0-9_])"), new)
     for old, new in MAPPING
@@ -108,10 +108,10 @@ def convert(text: str) -> str:
 def self_test() -> int:
     cases = [
         # (입력, 기대)
-        ("GRANT SELECT ON t TO APP_ADMIN;", "GRANT SELECT ON t TO PSK_APP_ADMIN;"),
-        ("GRANT APP_ADMIN TO APP_ADMIN_USER;", "GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER;"),
-        ("username: APP_RUNTIME_USER", "username: PSK_APP_RUNTIME_USER"),
-        ("FROM APP_OWNER.mds_sync_history", "FROM PSK_APP_OWNER.mds_sync_history"),
+        ("GRANT SELECT ON t TO PSK_APP_ADMIN;", "GRANT SELECT ON t TO PSK_APP_ADMIN;"),
+        ("GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER;", "GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER;"),
+        ("username: PSK_APP_RUNTIME_USER", "username: PSK_APP_RUNTIME_USER"),
+        ("FROM PSK_APP_OWNER.mds_sync_history", "FROM PSK_APP_OWNER.mds_sync_history"),
         # 이미 치환된 것은 그대로 (멱등성)
         ("TO PSK_APP_ADMIN_USER;", "TO PSK_APP_ADMIN_USER;"),
         ("PSK_APP_OWNER.tenant", "PSK_APP_OWNER.tenant"),
@@ -126,7 +126,7 @@ def self_test() -> int:
             print(f"FAIL: {src!r}\n  expected {expected!r}\n  got      {got!r}")
             failed += 1
     # 멱등성: 두 번 돌려도 같아야 한다
-    sample = "GRANT APP_ADMIN TO APP_ADMIN_USER; FROM APP_OWNER.t"
+    sample = "GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER; FROM PSK_APP_OWNER.t"
     once = convert(sample)
     twice = convert(once)
     if once != twice:
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 Run: `python3 scripts/rename-psk-prefix.py --self-test`
 Expected: `self-test: OK (8 cases + idempotency)`
 
-`FAIL` 이 하나라도 나오면 다음 Task 로 넘어가지 않는다. 특히 `GRANT APP_ADMIN TO APP_ADMIN_USER;` 케이스가 부분문자열 충돌을 잡는 핵심이다.
+`FAIL` 이 하나라도 나오면 다음 Task 로 넘어가지 않는다. 특히 `GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER;` 케이스가 부분문자열 충돌을 잡는 핵심이다.
 
 - [ ] **Step 3: 커밋**
 
@@ -176,7 +176,7 @@ Expected: `self-test: OK (8 cases + idempotency)`
 git add scripts/rename-psk-prefix.py
 git commit -m "chore(scripts): PSK_ 접두사 일괄 치환 도구 추가
 
-부분문자열 충돌(APP_ADMIN ⊂ APP_ADMIN_USER)과 이중 접두사를
+부분문자열 충돌(PSK_APP_ADMIN ⊂ PSK_APP_ADMIN_USER)과 이중 접두사를
 코드로 막는다. self-test 8케이스 + 멱등성 검증 포함."
 ```
 
@@ -197,9 +197,9 @@ Flyway 가 아직 한 번도 실행되지 않았으므로 직접 수정한다(�
 - [ ] **Step 1: 치환 전 건수 기록**
 
 ```bash
-grep -c 'TO APP_ADMIN;' core/src/main/resources/db/migration/V1__baseline_schema.sql
-grep -c 'TO APP_RUNTIME;' core/src/main/resources/db/migration/V1__baseline_schema.sql
-grep -c 'TO APP_RUNTIME;' core/src/main/resources/db/migration/V4__grant_security_incident_to_app_runtime.sql
+grep -c 'TO PSK_APP_ADMIN;' core/src/main/resources/db/migration/V1__baseline_schema.sql
+grep -c 'TO PSK_APP_RUNTIME;' core/src/main/resources/db/migration/V1__baseline_schema.sql
+grep -c 'TO PSK_APP_RUNTIME;' core/src/main/resources/db/migration/V4__grant_security_incident_to_app_runtime.sql
 ```
 Expected: `93`, `41`, `1`
 
@@ -236,14 +236,14 @@ git add core/src/main/resources/db/migration/
 git commit -m "fix(db): V1/V4 GRANT 대상 롤을 PSK_ 접두사로 정정
 
 Flyway 미실행 상태라 체크섬 문제 없이 직접 수정한다.
-V1: TO APP_ADMIN 93건, TO APP_RUNTIME 41건. V4: 1건."
+V1: TO PSK_APP_ADMIN 93건, TO PSK_APP_RUNTIME 41건. V4: 1건."
 ```
 
 ---
 
 ### Task 3: 스키마 프로퍼티 도입
 
-`APP_OWNER` 는 스키마 소유자다. 이름이 바뀌면 스키마명이 바뀌고, JPA 전체(`hibernate.default_schema`)와 raw SQL 14곳이 함께 깨진다. 값을 한 곳에 모으고 주입한다.
+`PSK_APP_OWNER` 는 스키마 소유자다. 이름이 바뀌면 스키마명이 바뀌고, JPA 전체(`hibernate.default_schema`)와 raw SQL 14곳이 함께 깨진다. 값을 한 곳에 모으고 주입한다.
 
 **Files:**
 - Create: `core/src/main/java/com/crosscert/passkey/core/config/DbSchemaProperties.java`
@@ -275,13 +275,13 @@ class DbSchemaPropertiesTest {
     @Test
     void acceptsLegacyIdentifier() {
         // 이름은 배포자가 정한다. PSK_ 를 강제하지 않는다.
-        assertThat(new DbSchemaProperties("APP_OWNER").schema()).isEqualTo("APP_OWNER");
+        assertThat(new DbSchemaProperties("PSK_APP_OWNER").schema()).isEqualTo("PSK_APP_OWNER");
     }
 
     @Test
     void rejectsSqlInjectionAttempt() {
         // 값의 출처는 설정 파일이지만, 오설정을 부팅 시점에 잡는다.
-        assertThatThrownBy(() -> new DbSchemaProperties("APP_OWNER; DROP TABLE tenant"))
+        assertThatThrownBy(() -> new DbSchemaProperties("PSK_APP_OWNER; DROP TABLE tenant"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("passkey.db.schema");
     }
@@ -453,7 +453,7 @@ hibernate.default_schema 를 프로퍼티 참조로 바꾸고, 식별자 패턴�
                     "{ call " + schema + ".signing_key_bootstrap_pkg.bootstrap_active(?,?,?,?,?) }")) {
 ```
 
-주석 2곳(`APP_OWNER.signing_key_bootstrap_pkg`, `APP_ADMIN or APP_RUNTIME`)의 계정명도 `PSK_` 형태로 정정한다.
+주석 2곳(`PSK_APP_OWNER.signing_key_bootstrap_pkg`, `PSK_APP_ADMIN or PSK_APP_RUNTIME`)의 계정명도 `PSK_` 형태로 정정한다.
 
 - [ ] **Step 2: ApiKeyLookupService 수정**
 
@@ -489,7 +489,7 @@ Expected: 컴파일 성공, 테스트 PASS. 4-arg 생성자를 쓰는 기존 테
 - [ ] **Step 4: 잔존 검사**
 
 ```bash
-grep -n 'APP_OWNER' core/src/main/java/com/crosscert/passkey/core/jwt/SigningKeyProvider.java \
+grep -n 'PSK_APP_OWNER' core/src/main/java/com/crosscert/passkey/core/jwt/SigningKeyProvider.java \
                     passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyLookupService.java | grep -v PSK_
 echo "exit=$?"
 ```
@@ -546,7 +546,7 @@ SigningKeyProvider 1곳, ApiKeyLookupService 2곳. 4-arg 테스트
 
 - [ ] **Step 2: 실행 SQL 11곳 치환**
 
-`"... APP_OWNER.<table> ..."` 형태를 `"... " + schema + ".<table> ..."` 로 바꾼다. 대상은 아래와 같다.
+`"... PSK_APP_OWNER.<table> ..."` 형태를 `"... " + schema + ".<table> ..."` 로 바꾼다. 대상은 아래와 같다.
 
 | 파일 | 위치(대략) | 테이블 |
 |---|---|---|
@@ -556,7 +556,7 @@ SigningKeyProvider 1곳, ApiKeyLookupService 2곳. 4-arg 테스트
 | MdsBlobStore | 42 | `mds_blob_cache` |
 | MdsAdminController | 73 | `mds_blob_cache` |
 
-주의: `MdsHistoryService` 59행은 한 문자열에 `APP_OWNER.mds_sync_history_seq` 가 들어 있다. 시퀀스도 같은 스키마이므로 동일하게 치환한다.
+주의: `MdsHistoryService` 59행은 한 문자열에 `PSK_APP_OWNER.mds_sync_history_seq` 가 들어 있다. 시퀀스도 같은 스키마이므로 동일하게 치환한다.
 
 주석 3곳(MdsHistoryService)의 계정명도 정정한다.
 
@@ -568,7 +568,7 @@ Expected: BUILD SUCCESSFUL
 - [ ] **Step 4: 잔존 검사**
 
 ```bash
-grep -rn 'APP_OWNER' admin-app/src/main/java | grep -v PSK_; echo "exit=$?"
+grep -rn 'PSK_APP_OWNER' admin-app/src/main/java | grep -v PSK_; echo "exit=$?"
 ```
 Expected: 출력 없음 + `exit=1`
 
@@ -630,7 +630,7 @@ Expected: `hibernate.default_schema: ${passkey.db.schema}`
 - [ ] **Step 4: 잔존 검사**
 
 ```bash
-grep -rn 'APP_OWNER\|APP_ADMIN\|APP_RUNTIME' \
+grep -rn 'PSK_APP_OWNER\|PSK_APP_ADMIN\|PSK_APP_RUNTIME' \
   {core,admin-app,passkey-app}/src/{main,test}/resources/*.yml | grep -v PSK_; echo "exit=$?"
 ```
 Expected: 출력 없음 + `exit=1`
@@ -665,7 +665,7 @@ git commit -m "fix(config): datasource·Flyway 계정/스키마를 PSK_ 접두�
 git ls-files -z | xargs -0 grep -ohE '\bAPP_(OWNER|RUNTIME_USER|ADMIN_USER|RUNTIME|ADMIN)\b' \
   | sort | uniq -c | sort -rn
 ```
-기대 분포(참고): `APP_OWNER` 856, `APP_ADMIN` 371, `APP_RUNTIME` 201, `APP_ADMIN_USER` 192, `APP_RUNTIME_USER` 58. Task 2~6 에서 일부가 이미 치환됐으므로 숫자는 이보다 작다. **이 시점의 값을 적어 둔다.**
+기대 분포(참고): `PSK_APP_OWNER` 856, `PSK_APP_ADMIN` 371, `PSK_APP_RUNTIME` 201, `PSK_APP_ADMIN_USER` 192, `PSK_APP_RUNTIME_USER` 58. Task 2~6 에서 일부가 이미 치환됐으므로 숫자는 이보다 작다. **이 시점의 값을 적어 둔다.**
 
 - [ ] **Step 2: 남은 파일 전부 치환**
 
@@ -810,7 +810,7 @@ python3 scripts/rename-psk-prefix.py \
   "$B/README.md" "$B/CHECKLIST.md"
 ```
 
-`seed-admin-user.sql` 은 `APP_OWNER 로 실행` 안내가 `PSK_APP_OWNER` 로 바뀌었는지 확인한다.
+`seed-admin-user.sql` 은 `PSK_APP_OWNER 로 실행` 안내가 `PSK_APP_OWNER` 로 바뀌었는지 확인한다.
 
 - [ ] **Step 4: deploy 설정 동기화**
 

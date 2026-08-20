@@ -63,7 +63,7 @@ class AdminUserInvitationFlowIT {
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -86,7 +86,7 @@ class AdminUserInvitationFlowIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -113,7 +113,7 @@ class AdminUserInvitationFlowIT {
     // Fake actor for SecurityContext (PO, not bound to a real DB row — same pattern as other ITs)
     private static final UUID SECURITY_CTX_ACTOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    /** PSK_APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
     private static HikariDataSource ownerPool;
 
     @AfterAll
@@ -128,7 +128,7 @@ class AdminUserInvitationFlowIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("invitation-flow-it-owner");
@@ -146,27 +146,27 @@ class AdminUserInvitationFlowIT {
         jdbc = new JdbcTemplate(ds);
 
         // Delete in FK-safe order — Phase D tables first, then existing Phase C/B
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_invitation");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy_entry");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_aaguid_policy");
-        // tenant_webauthn_snapshot: APP_ADMIN has SELECT+INSERT only (V27) — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.tenant_webauthn_snapshot");
-        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
-        jdbc.update("DELETE FROM APP_OWNER.api_key");
-        jdbc.update("DELETE FROM APP_OWNER.credential");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_invitation");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_aaguid_policy_entry");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_aaguid_policy");
+        // tenant_webauthn_snapshot: PSK_APP_ADMIN has SELECT+INSERT only (V27) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.tenant_webauthn_snapshot");
+        // audit_log: PSK_APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
         // Remove any non-seed admin_user rows (PENDING/SUSPENDED created during tests)
-        // admin_user: APP_ADMIN has no DELETE grant — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.admin_user WHERE email NOT IN ('alice@crosscert.com','bob@crosscert.com')");
+        // admin_user: PSK_APP_ADMIN has no DELETE grant — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.admin_user WHERE email NOT IN ('alice@crosscert.com','bob@crosscert.com')");
         // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant)
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR', "
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR', "
                 + "status = 'ACTIVE', suspended_at = NULL, suspended_by = NULL "
                 + "WHERE email IN ('alice@crosscert.com','bob@crosscert.com')");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
 
         // Inject PLATFORM_OPERATOR into SecurityContext so TenantBoundary passes
         AdminUserDetails operator = new AdminUserDetails(

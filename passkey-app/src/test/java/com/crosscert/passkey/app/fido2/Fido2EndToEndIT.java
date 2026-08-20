@@ -78,13 +78,13 @@ class Fido2EndToEndIT {
 
     private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
     // OracleContainer.configure() copies the single password field into
-    // BOTH ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (APP_OWNER).
+    // BOTH ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (PSK_APP_OWNER).
     // We reuse the same secret here so sqlplus can connect as SYS-AS-SYSDBA.
     private static final String SYS_PASSWORD = "app_owner_pw";
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -100,7 +100,7 @@ class Fido2EndToEndIT {
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         // Run scripts/bootstrap-schema.sql before Spring opens its first
-        // pool connection — APP_ADMIN_USER must exist before Hikari
+        // pool connection — PSK_APP_ADMIN_USER must exist before Hikari
         // tries to authenticate. Same pattern as :core's AppLevelIsolationIT.
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
@@ -112,15 +112,15 @@ class Fido2EndToEndIT {
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
-        // Runtime DataSource → APP_RUNTIME_USER, the production-realistic
+        // Runtime DataSource → PSK_APP_RUNTIME_USER, the production-realistic
         // least-privilege runtime user (SELECT-only on tenant; see V1).
         // Cross-tenant isolation on the request path is enforced by the
         // app-level Hibernate @Filter (TenantFilterAspect), not the DB user.
-        // Flyway runs as APP_OWNER (the schema owner) via spring.flyway.user
+        // Flyway runs as PSK_APP_OWNER (the schema owner) via spring.flyway.user
         // in application-test.yml, so migrations run independently of the
         // runtime pool.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_RUNTIME_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_RUNTIME_USER");
         reg.add("spring.datasource.password", () -> "runtime_pw");
 
         reg.add("spring.data.redis.host", REDIS::getHost);
@@ -140,13 +140,13 @@ class Fido2EndToEndIT {
     @Autowired RedisConnectionFactory redisFactory;
 
     /**
-     * Independent APP_ADMIN_USER pool used ONLY by seed and cleanup.
-     * The primary Spring DataSource logs in as APP_RUNTIME_USER, the
+     * Independent PSK_APP_ADMIN_USER pool used ONLY by seed and cleanup.
+     * The primary Spring DataSource logs in as PSK_APP_RUNTIME_USER, the
      * production-realistic least-privilege runtime user, so the request
      * path exercises the same isolation the app enforces in production
-     * (the app-level Hibernate @Filter). But APP_RUNTIME lacks
+     * (the app-level Hibernate @Filter). But PSK_APP_RUNTIME lacks
      * INSERT/UPDATE/DELETE grants on the {@code tenant} table (V1 grants
-     * only SELECT to APP_RUNTIME), so seeding uses APP_ADMIN, which holds
+     * only SELECT to PSK_APP_RUNTIME), so seeding uses PSK_APP_ADMIN, which holds
      * full DML on the platform-scoped tables.
      */
     private static HikariDataSource adminPool;
@@ -202,19 +202,19 @@ class Fido2EndToEndIT {
         // Child tables have ON DELETE CASCADE FKs, so deleting parents
         // implicitly removes children; however explicit deletes are safer
         // when testing concurrent seeds.
-        adminJdbc.update("DELETE FROM APP_OWNER.credential");
-        adminJdbc.update("DELETE FROM APP_OWNER.api_key_scope");
-        adminJdbc.update("DELETE FROM APP_OWNER.api_key");
-        adminJdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
-        adminJdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
         // ceremony_event 는 tenant FK 가 없는 append-only 카운트 테이블이라
         // 별도 정리한다(다른 시나리오의 begin/finish 행이 happyPath 카운트 검증을
         // 오염시키지 않도록). FK 가 없으므로 순서 제약은 없다.
-        adminJdbc.update("DELETE FROM APP_OWNER.ceremony_event");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.ceremony_event");
         // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant).
-        adminJdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        adminJdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-        adminJdbc.update("DELETE FROM APP_OWNER.tenant");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        adminJdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+        adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
 
         seedTenant(TENANT_A_HEX, SLUG_A, "Tenant A", PREFIX_A, SECRET_A);
         seedTenant(TENANT_B_HEX, SLUG_B, "Tenant B", PREFIX_B, SECRET_B);
@@ -247,16 +247,16 @@ class Fido2EndToEndIT {
         // Same FK-aware order on cleanup. Use the admin pool so the DELETEs
         // run with full DML grants regardless of tenant context.
         if (adminJdbc != null) {
-            adminJdbc.update("DELETE FROM APP_OWNER.credential");
-            adminJdbc.update("DELETE FROM APP_OWNER.api_key_scope");
-            adminJdbc.update("DELETE FROM APP_OWNER.api_key");
-            adminJdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
-            adminJdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
-            adminJdbc.update("DELETE FROM APP_OWNER.ceremony_event");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.ceremony_event");
             // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant).
-            adminJdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-            adminJdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-            adminJdbc.update("DELETE FROM APP_OWNER.tenant");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+            adminJdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+            adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
         }
         // Redis is shared across scenarios — flush all challenge tokens
         // and rate-limit buckets so the next test starts clean.
@@ -264,7 +264,7 @@ class Fido2EndToEndIT {
     }
 
     /**
-     * Lazy-init the APP_ADMIN_USER pool on first seed. The JDBC URL is
+     * Lazy-init the PSK_APP_ADMIN_USER pool on first seed. The JDBC URL is
      * the same one Spring's primary DataSource uses; we read it from
      * the ORACLE container directly (no need to crack open the primary
      * Hikari to copy it).
@@ -273,7 +273,7 @@ class Fido2EndToEndIT {
         if (adminPool != null) return;
         adminPool = new HikariDataSource();
         adminPool.setJdbcUrl(ORACLE.getJdbcUrl());
-        adminPool.setUsername("APP_ADMIN_USER");
+        adminPool.setUsername("PSK_APP_ADMIN_USER");
         adminPool.setPassword("admin_pw");
         adminPool.setMaximumPoolSize(2);
         adminPool.setMinimumIdle(1);
@@ -282,7 +282,7 @@ class Fido2EndToEndIT {
     }
 
     /**
-     * Seeds one tenant + child config rows + one api_key + scope rows via the APP_ADMIN pool.
+     * Seeds one tenant + child config rows + one api_key + scope rows via the PSK_APP_ADMIN pool.
      *
      * <p>Phase 7: tenant no longer carries JSON CLOB columns. Origins and
      * accepted formats live in the {@code tenant_allowed_origin} and
@@ -297,8 +297,8 @@ class Fido2EndToEndIT {
      */
     private void seedTenant(String tenantHex, String slug, String displayName,
                              String prefix, String secret) {
-        // INSERT via raw JDBC as APP_ADMIN — raw JDBC does not pass through
-        // the app-level Hibernate @Filter, and APP_ADMIN has full DML on
+        // INSERT via raw JDBC as PSK_APP_ADMIN — raw JDBC does not pass through
+        // the app-level Hibernate @Filter, and PSK_APP_ADMIN has full DML on
         // tenant and api_key (V21 grants).
         //
         // Phase 6: id and tenant_id are RAW(16); HEXTORAW converts the
@@ -307,7 +307,7 @@ class Fido2EndToEndIT {
         // replace the attestation_policy CLOB. Origins and formats are in
         // child tables.
         adminJdbc.update(
-                "INSERT INTO APP_OWNER.tenant "
+                "INSERT INTO PSK_APP_OWNER.tenant "
                         + "(id, slug, display_name, status, rp_id, rp_name, "
                         + " require_user_verification, mds_required, "
                         + " created_at, updated_at) "
@@ -317,39 +317,39 @@ class Fido2EndToEndIT {
 
         // Seed allowed origin — must match origin() so WebAuthn4J accepts it.
         adminJdbc.update(
-                "INSERT INTO APP_OWNER.tenant_allowed_origin "
+                "INSERT INTO PSK_APP_OWNER.tenant_allowed_origin "
                         + "(id, tenant_id, origin, sort_order) "
                         + "VALUES (SYS_GUID(), HEXTORAW(?), ?, 0)",
                 tenantHex, origin());
 
         // Seed accepted formats (none + packed cover the test authenticator).
         adminJdbc.update(
-                "INSERT INTO APP_OWNER.tenant_accepted_format "
+                "INSERT INTO PSK_APP_OWNER.tenant_accepted_format "
                         + "(id, tenant_id, format) "
                         + "VALUES (SYS_GUID(), HEXTORAW(?), 'none')",
                 tenantHex);
         adminJdbc.update(
-                "INSERT INTO APP_OWNER.tenant_accepted_format "
+                "INSERT INTO PSK_APP_OWNER.tenant_accepted_format "
                         + "(id, tenant_id, format) "
                         + "VALUES (SYS_GUID(), HEXTORAW(?), 'packed')",
                 tenantHex);
 
         // Seed api_key (no scopes CLOB in Phase 7).
         adminJdbc.update(
-                "INSERT INTO APP_OWNER.api_key "
+                "INSERT INTO PSK_APP_OWNER.api_key "
                         + "(id, tenant_id, key_prefix, key_hash, name, created_at) "
                         + "VALUES (SYS_GUID(), HEXTORAW(?), ?, ?, 'primary', SYSTIMESTAMP)",
                 tenantHex, prefix, encoder.encode(secret));
 
         // Seed api_key_scope — re-fetch the api_key id we just inserted by prefix.
         adminJdbc.update(
-                "INSERT INTO APP_OWNER.api_key_scope (id, api_key_id, scope) "
-                        + "SELECT SYS_GUID(), id, 'registration' FROM APP_OWNER.api_key "
+                "INSERT INTO PSK_APP_OWNER.api_key_scope (id, api_key_id, scope) "
+                        + "SELECT SYS_GUID(), id, 'registration' FROM PSK_APP_OWNER.api_key "
                         + "WHERE key_prefix = ?",
                 prefix);
         adminJdbc.update(
-                "INSERT INTO APP_OWNER.api_key_scope (id, api_key_id, scope) "
-                        + "SELECT SYS_GUID(), id, 'authentication' FROM APP_OWNER.api_key "
+                "INSERT INTO PSK_APP_OWNER.api_key_scope (id, api_key_id, scope) "
+                        + "SELECT SYS_GUID(), id, 'authentication' FROM PSK_APP_OWNER.api_key "
                         + "WHERE key_prefix = ?",
                 prefix);
     }
@@ -455,13 +455,13 @@ class Fido2EndToEndIT {
 
     /**
      * Asserts the exact number of {@code ceremony_event} rows for one
-     * action. Reads via the APP_ADMIN pool (V41 grants APP_ADMIN SELECT on
-     * ceremony_event) and qualifies the table as APP_OWNER.* to match the
+     * action. Reads via the PSK_APP_ADMIN pool (V41 grants PSK_APP_ADMIN SELECT on
+     * ceremony_event) and qualifies the table as PSK_APP_OWNER.* to match the
      * schema-qualification convention used throughout this IT.
      */
     private void assertCeremonyEventCount(String action, long expected) {
         Long n = adminJdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.ceremony_event WHERE action = ?",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.ceremony_event WHERE action = ?",
                 Long.class, action);
         assertThat(n)
                 .as("ceremony_event count for action=%s", action)
@@ -594,7 +594,7 @@ class Fido2EndToEndIT {
         // authenticator will return on the next assertion. The
         // PackedAuthenticator increments by 1 per ceremony, so a
         // five-digit floor is comfortably out of reach.
-        adminJdbc.update("UPDATE APP_OWNER.credential SET sign_count = 99999");
+        adminJdbc.update("UPDATE PSK_APP_OWNER.credential SET sign_count = 99999");
 
         // Drive a fresh ceremony: new challenge token, new assertion.
         // webauthn4j-test will produce a counter around 1, which is

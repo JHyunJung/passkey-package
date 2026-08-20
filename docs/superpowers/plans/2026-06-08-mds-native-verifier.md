@@ -1223,7 +1223,7 @@ public class MdsBlobClient {
         LocalDate nextUpdate = blob.nextUpdate();
         Instant now = clock.instant();
         int updated = jdbc.update(
-                "UPDATE APP_OWNER.mds_blob_cache " +
+                "UPDATE PSK_APP_OWNER.mds_blob_cache " +
                 "SET version=?, next_update=?, fetched_at=?, blob_jwt=? " +
                 "WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
                 version,

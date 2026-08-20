@@ -1,10 +1,10 @@
-# 외부 DB(SE) APP_OWNER reset 구현 계획
+# 외부 DB(SE) PSK_APP_OWNER reset 구현 계획
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 우리 시스템 잔재가 남은 외부 Oracle SE 의 APP_OWNER 스키마를 DBeaver(APP_OWNER 계정)로 비우는 SQL 스크립트와, 그 후 Flyway 만 재적용하도록 init-db-external.sh 에 SKIP_BOOTSTRAP 옵션을 추가한다.
+**Goal:** 우리 시스템 잔재가 남은 외부 Oracle SE 의 PSK_APP_OWNER 스키마를 DBeaver(PSK_APP_OWNER 계정)로 비우는 SQL 스크립트와, 그 후 Flyway 만 재적용하도록 init-db-external.sh 에 SKIP_BOOTSTRAP 옵션을 추가한다.
 
-**Architecture:** SYSDBA·sqlplus 없이 APP_OWNER self-service 로 동작. `reset-app-owner-external.sql`(DBeaver 붙여넣기, user_* 딕셔너리 + DROP_POLICY(USER), CTX_PKG/APP_CTX 보존)로 스키마를 비우고, `init-db-external.sh SKIP_BOOTSTRAP=1 PASSKEY_VPD_ENABLED=false` 로 Flyway 만 재적용. 컨테이너 DB(외부와 동일 APP_OWNER 권한)로 검증한다.
+**Architecture:** SYSDBA·sqlplus 없이 PSK_APP_OWNER self-service 로 동작. `reset-app-owner-external.sql`(DBeaver 붙여넣기, user_* 딕셔너리 + DROP_POLICY(USER), CTX_PKG/APP_CTX 보존)로 스키마를 비우고, `init-db-external.sh SKIP_BOOTSTRAP=1 PASSKEY_VPD_ENABLED=false` 로 Flyway 만 재적용. 컨테이너 DB(외부와 동일 PSK_APP_OWNER 권한)로 검증한다.
 
 **Tech Stack:** Oracle SE, PL/SQL(DBMS_RLS), bash, Spring Boot Flyway, DBeaver(수동 실행), Docker(검증용 컨테이너).
 
@@ -14,10 +14,10 @@
 
 ## File Structure
 
-- **Create** `scripts/reset-app-owner-external.sql` — DBeaver 에 붙여넣어 APP_OWNER 가 자기 스키마를 비우는 PL/SQL. 테이블·VPD정책·시퀀스·뷰·기타패키지 DROP, CTX_PKG·APP_CTX 보존, 잔존 0 검증. sqlplus 지시어(`WHENEVER`, `ALTER SESSION ... CONTAINER`, `as sysdba`) 없음.
+- **Create** `scripts/reset-app-owner-external.sql` — DBeaver 에 붙여넣어 PSK_APP_OWNER 가 자기 스키마를 비우는 PL/SQL. 테이블·VPD정책·시퀀스·뷰·기타패키지 DROP, CTX_PKG·APP_CTX 보존, 잔존 0 검증. sqlplus 지시어(`WHENEVER`, `ALTER SESSION ... CONTAINER`, `as sysdba`) 없음.
 - **Modify** `scripts/init-db-external.sh` — `SKIP_BOOTSTRAP=1` 이면 sqlplus 단계를 건너뛰고 Flyway 단계만; 단계 2 에 `PASSKEY_VPD_ENABLED` 환경변수 전달.
 
-검증은 별도 테스트 파일 없이 컨테이너 DB 에 대해 `docker exec ... APP_OWNER` 로 SQL 을 실행해 결과를 단언한다(이 코드베이스는 SQL 단위테스트 프레임워크가 없고, 기존 reset-app-owner.sql 도 동일하게 실DB 실행으로 검증함).
+검증은 별도 테스트 파일 없이 컨테이너 DB 에 대해 `docker exec ... PSK_APP_OWNER` 로 SQL 을 실행해 결과를 단언한다(이 코드베이스는 SQL 단위테스트 프레임워크가 없고, 기존 reset-app-owner.sql 도 동일하게 실DB 실행으로 검증함).
 
 ---
 
@@ -28,23 +28,23 @@
 
 - [ ] **Step 1: 스크립트 작성**
 
-아래 내용을 그대로 작성한다. 컨테이너 APP_OWNER 세션에서 실행 검증된 형태다(VPD 정책 7개 분리 + 테이블/시퀀스/뷰 DROP + CTX_PKG·APP_CTX 보존 + 테이블0·정책0 검증 성공).
+아래 내용을 그대로 작성한다. 컨테이너 PSK_APP_OWNER 세션에서 실행 검증된 형태다(VPD 정책 7개 분리 + 테이블/시퀀스/뷰 DROP + CTX_PKG·APP_CTX 보존 + 테이블0·정책0 검증 성공).
 
 ```sql
--- reset-app-owner-external.sql — 외부 Oracle SE 의 APP_OWNER 스키마를 DBeaver 에서
--- APP_OWNER 계정으로 비운다. SYSDBA·sqlplus 불필요.
+-- reset-app-owner-external.sql — 외부 Oracle SE 의 PSK_APP_OWNER 스키마를 DBeaver 에서
+-- PSK_APP_OWNER 계정으로 비운다. SYSDBA·sqlplus 불필요.
 --
--- ⚠️ 파괴적: APP_OWNER 의 모든 테이블·데이터(테넌트·계정·패스키·인증기록)를 삭제한다.
+-- ⚠️ 파괴적: PSK_APP_OWNER 의 모든 테이블·데이터(테넌트·계정·패스키·인증기록)를 삭제한다.
 -- ⚠️ dev/qa 전용. prod 에는 절대 실행하지 말 것.
 --
 -- 보존: CTX_PKG(패키지+바디), APP_CTX(컨텍스트).
---   - APP_OWNER 는 DROP CONTEXT 권한이 없고(CREATE ANY CONTEXT 만 보유),
+--   - PSK_APP_OWNER 는 DROP CONTEXT 권한이 없고(CREATE ANY CONTEXT 만 보유),
 --     시드(R__)가 CTX_PKG.set_tenant 를 호출하므로 둘 다 남겨 재적용이 바로 되게 한다.
 --   - CTX_PKG 는 bootstrap 의 CREATE OR REPLACE 로 멱등 — 남아 있어도 무해.
 -- SE 노트: SE 는 VPD 미지원이라 user_policies 가 보통 0건이다(아래 루프는 빈 채 통과).
 --   EE 잔재로 정책이 남아있으면 DBMS_RLS.DROP_POLICY 로 분리한다.
 --
--- 사용법(DBeaver, APP_OWNER 로 접속한 SQL 에디터에 전체 붙여넣고 실행):
+-- 사용법(DBeaver, PSK_APP_OWNER 로 접속한 SQL 에디터에 전체 붙여넣고 실행):
 --   1) 먼저 아래 확인 쿼리로 대상 DB/스키마를 눈으로 확인한다.
 --   2) PL/SQL 블록을 실행한다.
 
@@ -116,7 +116,7 @@ BEGIN
 
   -- 6) APP_CTX 컨텍스트: 보존(DROP 권한 없음 + CREATE OR REPLACE 로 재사용). 손대지 않음.
 
-  -- 7) 휴지통: APP_OWNER 자기 것만 PURGE(전역 PURGE 금지).
+  -- 7) 휴지통: PSK_APP_OWNER 자기 것만 PURGE(전역 PURGE 금지).
   FOR r IN (SELECT object_name FROM user_recyclebin) LOOP
     try_ddl('PURGE TABLE "' || r.object_name || '"');
   END LOOP;
@@ -141,14 +141,14 @@ SELECT COUNT(*) AS remaining_tables FROM user_tables;
 SELECT object_name, object_type, status FROM user_objects WHERE object_name = 'CTX_PKG' ORDER BY object_type;
 ```
 
-- [ ] **Step 2: 컨테이너 APP_OWNER 로 실행 검증**
+- [ ] **Step 2: 컨테이너 PSK_APP_OWNER 로 실행 검증**
 
 컨테이너 DB 는 EE 라 VPD 정책 7개가 있으므로 "정책 분리 + 테이블/시퀀스/뷰 DROP + CTX_PKG 보존" 전 경로를 검증할 수 있다(SE 의 0-정책 경로는 이 경로의 부분집합).
 
 Run:
 ```bash
 cd /Users/jhyun/Git/10-work/crosscert/Passkey2
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 < scripts/reset-app-owner-external.sql 2>&1 | tail -25
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 < scripts/reset-app-owner-external.sql 2>&1 | tail -25
 ```
 Expected (정상):
 - `dropped policy ... on ...` 7줄 (컨테이너 EE 기준; SE 면 이 줄 없음)
@@ -166,14 +166,14 @@ Run:
 cd /Users/jhyun/Git/10-work/crosscert/Passkey2
 PROFILE=local timeout 300 bash scripts/reset-app-owner.sh --yes 2>&1 | grep -E "0 objects|✅ 완료|❌"
 ```
-Expected: `==> APP_OWNER reset done. 0 objects, 0 policies remain.` 와 `==> ✅ 완료. ...`
+Expected: `==> PSK_APP_OWNER reset done. 0 objects, 0 policies remain.` 와 `==> ✅ 완료. ...`
 
 - [ ] **Step 4: 커밋**
 
 ```bash
 cd /Users/jhyun/Git/10-work/crosscert/Passkey2
 git add scripts/reset-app-owner-external.sql
-git commit -m "feat(scripts): 외부 SE DB용 APP_OWNER reset SQL (DBeaver, CTX 보존)
+git commit -m "feat(scripts): 외부 SE DB용 PSK_APP_OWNER reset SQL (DBeaver, CTX 보존)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -206,7 +206,7 @@ PASSKEY_VPD_ENABLED="${PASSKEY_VPD_ENABLED:-false}"
 # ---- 단계 1: 부트스트랩 (SKIP_BOOTSTRAP=1 이면 건너뜀) ----
 if [ "${SKIP_BOOTSTRAP}" = "1" ]; then
   echo "==> [1/2] 부트스트랩 건너뜀 (SKIP_BOOTSTRAP=1) — 이미 부트스트랩된 DB 전제."
-  echo "    (APP_OWNER/role/CTX_PKG 가 이미 있어야 합니다. 없으면 DBeaver 로"
+  echo "    (PSK_APP_OWNER/role/CTX_PKG 가 이미 있어야 합니다. 없으면 DBeaver 로"
   echo "     bootstrap-external.sql 을 먼저 실행하세요.)"
 else
   if ! command -v sqlplus >/dev/null 2>&1; then
@@ -215,7 +215,7 @@ else
     echo "         (DBeaver, SYSDBA 또는 적절 권한) < ${SCRIPT_DIR}/bootstrap-external.sql" >&2
     exit 1
   fi
-  echo "==> [1/2] 부트스트랩 (SYSDBA): APP_OWNER 유저 + role + CTX_PKG"
+  echo "==> [1/2] 부트스트랩 (SYSDBA): PSK_APP_OWNER 유저 + role + CTX_PKG"
   sqlplus -S "${SYS_CONN}" < "${SCRIPT_DIR}/bootstrap-external.sql"
   echo "    부트스트랩 완료."
 fi
@@ -228,7 +228,7 @@ echo ""
 
 ```bash
 SPRING_DATASOURCE_URL="${JDBC_URL}" \
-SPRING_DATASOURCE_USERNAME='APP_ADMIN_USER' \
+SPRING_DATASOURCE_USERNAME='PSK_APP_ADMIN_USER' \
 SPRING_DATASOURCE_PASSWORD='admin_pw' \
 SPRING_DATA_REDIS_HOST="${REDIS_HOST:-localhost}" \
 PASSKEY_KEY_ENVELOPE_MASTER_KEY="${PASSKEY_KEY_ENVELOPE_MASTER_KEY:-jDKp21WXeDAwinZI91Hf+8L2zv4xlIQI15YPLhttyYM=}" \
@@ -278,7 +278,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```bash
 #
 #   [이미 우리 잔재가 있는 외부 SE DB 를 비우고 재적용하는 절차]
-#     1) DBeaver 에서 APP_OWNER 로 접속해 scripts/reset-app-owner-external.sql 실행
+#     1) DBeaver 에서 PSK_APP_OWNER 로 접속해 scripts/reset-app-owner-external.sql 실행
 #        (테이블·데이터 삭제, CTX_PKG/APP_CTX 보존).
 #     2) 아래처럼 SKIP_BOOTSTRAP=1 로 Flyway 만 재적용:
 #        SKIP_BOOTSTRAP=1 PASSKEY_VPD_ENABLED=false \
@@ -321,4 +321,4 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **3. Type consistency:** `reset-app-owner-external.sql` 의 검증 단언(user_tables=0, user_policies=0)과 DROP 루프 대상(user_tables/sequences/views/objects/policies/recyclebin)이 일관. CTX_PKG 제외 조건(`object_name <> 'CTX_PKG'`)이 보존 결정과 일치. init-db-external.sh 의 `SKIP_BOOTSTRAP`/`PASSKEY_VPD_ENABLED` 변수명이 Step 1 선언과 Step 2/3 사용에서 동일. ✅
 
-**검증 근거:** Task 1 의 SQL 은 설계 단계에서 컨테이너 APP_OWNER 세션으로 실제 실행해 "정책7 분리 + 테이블/시퀀스/뷰 DROP + CTX_PKG VALID 보존 + 테이블0/정책0" 을 확인한 코드와 동일하다.
+**검증 근거:** Task 1 의 SQL 은 설계 단계에서 컨테이너 PSK_APP_OWNER 세션으로 실제 실행해 "정책7 분리 + 테이블/시퀀스/뷰 DROP + CTX_PKG VALID 보존 + 테이블0/정책0" 을 확인한 코드와 동일하다.

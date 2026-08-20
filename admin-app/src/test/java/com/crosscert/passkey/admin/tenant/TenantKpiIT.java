@@ -53,7 +53,7 @@ class TenantKpiIT {
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -76,7 +76,7 @@ class TenantKpiIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));

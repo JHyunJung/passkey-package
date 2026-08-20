@@ -39,7 +39,7 @@
 - 결과물: `scratchpad/schema-A.txt` (정규화된 기존 스키마 덤프)
 
 **Interfaces:**
-- Produces: `dump-schema.sql` — APP_OWNER 스키마 전체를 정규화 텍스트로 출력하는 sqlplus 스크립트. 후속 Task가 동일 스크립트로 B를 덤프해 diff 한다.
+- Produces: `dump-schema.sql` — PSK_APP_OWNER 스키마 전체를 정규화 텍스트로 출력하는 sqlplus 스크립트. 후속 Task가 동일 스크립트로 B를 덤프해 diff 한다.
 
 - [ ] **Step 1: worktree 생성 (전체 작업 격리)**
 
@@ -51,7 +51,7 @@ REQUIRED SUB-SKILL: `superpowers:using-git-worktrees` 로 worktree 생성. 브�
 # worktree 루트에서
 docker compose down -v && docker compose up -d oracle
 bash scripts/wait-for-oracle.sh
-bash scripts/run-bootstrap.sh          # APP_OWNER 계정/역할/권한
+bash scripts/run-bootstrap.sh          # PSK_APP_OWNER 계정/역할/권한
 # 기존 V1~V52 + seed-common(alice) 적용 — admin-app Flyway 사용
 SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun --args='--spring.flyway.locations=classpath:db/migration,classpath:db/seed-common' &
 # 부팅 후 Flyway 적용 완료되면 종료 (또는 init-dev-db.sh 사용)
@@ -61,7 +61,7 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun --args='--spring.flyway.
 
 - [ ] **Step 3: 덤프 스크립트 작성**
 
-`dump-schema.sql` (sqlplus, APP_OWNER 접속) — 스키마 구조만 정규화 출력:
+`dump-schema.sql` (sqlplus, PSK_APP_OWNER 접속) — 스키마 구조만 정규화 출력:
 
 ```sql
 SET LONG 2000000 LONGCHUNKSIZE 2000000 PAGESIZE 0 LINESIZE 200 FEEDBACK OFF VERIFY OFF TRIMSPOOL ON
@@ -75,7 +75,7 @@ BEGIN
 END;
 /
 -- 객체 타입별, 이름순 정렬하여 결정적 출력 (flyway_schema_history 는 제외)
-SELECT DBMS_METADATA.GET_DDL(object_type, object_name, 'APP_OWNER')
+SELECT DBMS_METADATA.GET_DDL(object_type, object_name, 'PSK_APP_OWNER')
 FROM (
   SELECT object_type, object_name FROM user_objects
   WHERE object_type IN ('TABLE','SEQUENCE','VIEW','INDEX','PACKAGE','PACKAGE BODY','FUNCTION','PROCEDURE','TRIGGER','TYPE')
@@ -84,7 +84,7 @@ FROM (
 );
 -- 제약·GRANT 도 별도 추출 (DDL 에 inline 되지 않는 경우 대비)
 SELECT 'GRANT '||privilege||' ON '||table_name||' TO '||grantee
-FROM user_tab_privs_made WHERE grantee IN ('APP_RUNTIME','APP_ADMIN','APP_RUNTIME_USER','APP_ADMIN_USER')
+FROM user_tab_privs_made WHERE grantee IN ('PSK_APP_RUNTIME','PSK_APP_ADMIN','PSK_APP_RUNTIME_USER','PSK_APP_ADMIN_USER')
 ORDER BY table_name, grantee, privilege;
 EXIT
 ```
@@ -92,7 +92,7 @@ EXIT
 - [ ] **Step 4: A 덤프 생성**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 < scratchpad/dump-schema.sql > scratchpad/schema-A.txt
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 < scratchpad/dump-schema.sql > scratchpad/schema-A.txt
 # 후처리 정규화: 공백/빈줄 정리, 이름순 안정 정렬이 안 된 부분 보정
 grep -c "CREATE TABLE" scratchpad/schema-A.txt   # 21 근처여야 함 (테이블 21개)
 ```
@@ -128,11 +128,11 @@ Expected: `schema-A.txt`에 테이블 21·시퀀스 6·뷰 1·패키지 등이 �
 4. CREATE INDEX — PK/UNIQUE 외 보조 인덱스 (V38 api_key 등)
 5. CREATE VIEW — V40 UUID 디버깅 뷰
 6. CREATE PACKAGE / PACKAGE BODY — signing_key bootstrap 등 (AUTHID DEFINER 유지)
-7. GRANT 블록 — APP_RUNTIME/APP_ADMIN 객체 권한 (각 GRANT 개별 문장)
+7. GRANT 블록 — PSK_APP_RUNTIME/PSK_APP_ADMIN 객체 권한 (각 GRANT 개별 문장)
 8. 인프라 시드 INSERT — 아래 Step 2 참조
 ```
 
-DBMS_METADATA 출력의 `"APP_OWNER".` 스키마 한정자, 따옴표 식별자는 가독성을 위해 정리하되, 동작 동일성을 해치지 않는 선에서만(과한 손질로 오타 유발 금지). diff가 잡아주므로 보수적으로.
+DBMS_METADATA 출력의 `"PSK_APP_OWNER".` 스키마 한정자, 따옴표 식별자는 가독성을 위해 정리하되, 동작 동일성을 해치지 않는 선에서만(과한 손질로 오타 유발 금지). diff가 잡아주므로 보수적으로.
 
 - [ ] **Step 2: 인프라 시드만 baseline 끝에 추가**
 
@@ -216,7 +216,7 @@ SPRING_PROFILES_ACTIVE=dev DASH... ./gradlew :admin-app:flywayMigrate  # 또는 
 - [ ] **Step 2: B 덤프 생성**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 < scratchpad/dump-schema.sql > scratchpad/schema-B.txt
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 < scratchpad/dump-schema.sql > scratchpad/schema-B.txt
 ```
 
 - [ ] **Step 3: diff 비교**
@@ -345,10 +345,10 @@ ALTER SESSION SET CONTAINER = &ora_service;
 # 매개변수화 후에도 dev 부트스트랩이 동일 동작하는지
 docker compose down -v && docker compose up -d oracle && bash scripts/wait-for-oracle.sh
 bash scripts/run-bootstrap.sh   # 기본값 XEPDB1로 동작해야 함
-# APP_OWNER/역할/권한 생성 확인
+# PSK_APP_OWNER/역할/권한 생성 확인
 docker exec -i passkey-oracle sqlplus -S sys/oracle@localhost:1521/XEPDB1 as sysdba <<'SQL'
-SELECT username FROM dba_users WHERE username IN ('APP_OWNER','APP_RUNTIME_USER','APP_ADMIN_USER');
-SELECT role FROM dba_roles WHERE role IN ('APP_RUNTIME','APP_ADMIN');
+SELECT username FROM dba_users WHERE username IN ('PSK_APP_OWNER','PSK_APP_RUNTIME_USER','PSK_APP_ADMIN_USER');
+SELECT role FROM dba_roles WHERE role IN ('PSK_APP_RUNTIME','PSK_APP_ADMIN');
 EXIT
 SQL
 ```

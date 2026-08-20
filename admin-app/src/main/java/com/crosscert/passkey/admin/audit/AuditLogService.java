@@ -116,7 +116,7 @@ public class AuditLogService {
         // Schema-qualified because this is a native SQL query — Hibernate's
         // default_schema does not rewrite ad-hoc native table
         // references, so we must qualify explicitly to avoid ORA-00942 when
-        // the DB session is connected as APP_ADMIN_USER.
+        // the DB session is connected as PSK_APP_ADMIN_USER.
         em.createNativeQuery(
                 "SELECT 1 FROM " + schema + ".scheduler_lease WHERE name = :n FOR UPDATE")
             .setParameter("n", CHAIN_LOCK_NAME)

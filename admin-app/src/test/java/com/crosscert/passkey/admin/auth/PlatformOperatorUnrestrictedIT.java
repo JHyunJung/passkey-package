@@ -60,7 +60,7 @@ class PlatformOperatorUnrestrictedIT {
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -83,7 +83,7 @@ class PlatformOperatorUnrestrictedIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -104,7 +104,7 @@ class PlatformOperatorUnrestrictedIT {
 
     JdbcTemplate jdbc;
 
-    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    /** PSK_APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
     private static HikariDataSource ownerPool;
 
     @AfterAll
@@ -119,7 +119,7 @@ class PlatformOperatorUnrestrictedIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("platform-operator-it-owner");
@@ -135,35 +135,35 @@ class PlatformOperatorUnrestrictedIT {
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
-        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
-        jdbc.update("DELETE FROM APP_OWNER.api_key");
-        jdbc.update("DELETE FROM APP_OWNER.credential");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
+        // audit_log: PSK_APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
         // Clear admin_user_tenant mapping before deleting tenants (FK admin_user_tenant.tenant_id → tenant)
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
         // Re-seed demo-rp tenant (seeded by V23; deleted above for clean slate).
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
+                INSERT INTO PSK_APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
                     require_user_verification, mds_required, created_at, updated_at)
                 VALUES (HEXTORAW('0000000000000000000000000000C0DE'),
                     'demo-rp', 'Demo RP', 'localhost', 'Demo RP', 'active', 'Y', 'N',
                     SYSTIMESTAMP, SYSTIMESTAMP)
                 """);
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
+                INSERT INTO PSK_APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'http://localhost:9090', 0)
                 """);
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                INSERT INTO PSK_APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'none')
                 """);
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                INSERT INTO PSK_APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW('0000000000000000000000000000C0DE'), 'packed')
                 """);
         // Ensure alice is PLATFORM_OPERATOR with no tenant. (MFA is disabled
@@ -171,7 +171,7 @@ class PlatformOperatorUnrestrictedIT {
         // are not gated by MfaPendingFilter; see db/testfix.)
         // alice 는 PLATFORM_OPERATOR — 매핑 0개(전체 접근). tenant_id 컬럼 제거됨(N:M 전환).
         jdbc.update("""
-                UPDATE APP_OWNER.admin_user
+                UPDATE PSK_APP_OWNER.admin_user
                    SET role = 'PLATFORM_OPERATOR'
                  WHERE email = 'alice@crosscert.com'
                 """);

@@ -102,8 +102,8 @@ Passkey2/
 
 | 롤 | 사용 주체 | 권한 |
 |---|---|---|
-| `APP_RUNTIME` | passkey-app·admin-app의 일반 트랜잭션 | VPD policy 항상 적용. 테넌트 데이터만 자동 필터링. platform-scoped 테이블에 대한 쓰기 권한 없음. |
-| `APP_ADMIN` | admin-app의 스케줄러, Flyway 마이그레이션 | VPD policy 우회(`exempt access policy`). platform-scoped 테이블(`tenant`, `mds_blob_cache`, `scheduler_lease`) 쓰기. |
+| `PSK_APP_RUNTIME` | passkey-app·admin-app의 일반 트랜잭션 | VPD policy 항상 적용. 테넌트 데이터만 자동 필터링. platform-scoped 테이블에 대한 쓰기 권한 없음. |
+| `PSK_APP_ADMIN` | admin-app의 스케줄러, Flyway 마이그레이션 | VPD policy 우회(`exempt access policy`). platform-scoped 테이블(`tenant`, `mds_blob_cache`, `scheduler_lease`) 쓰기. |
 
 ### 4.2 Phase 0에서 생성하는 스키마 (V1 마이그레이션)
 
@@ -163,7 +163,7 @@ CREATE OR REPLACE PACKAGE BODY ctx_pkg AS
 END;
 /
 
-GRANT EXECUTE ON ctx_pkg TO APP_RUNTIME;
+GRANT EXECUTE ON ctx_pkg TO PSK_APP_RUNTIME;
 ```
 
 ### 4.4 VPD 정책 등록 예시
@@ -179,10 +179,10 @@ END;
 
 BEGIN
   DBMS_RLS.ADD_POLICY(
-    object_schema   => 'APP_OWNER',
+    object_schema   => 'PSK_APP_OWNER',
     object_name     => 'CREDENTIAL',
     policy_name     => 'CREDENTIAL_TENANT_ISOLATION',
-    function_schema => 'APP_OWNER',
+    function_schema => 'PSK_APP_OWNER',
     policy_function => 'TENANT_PREDICATE',
     statement_types => 'SELECT,INSERT,UPDATE,DELETE',
     update_check    => TRUE
@@ -196,7 +196,7 @@ END;
 - 마이그레이션 SQL은 `:core/src/main/resources/db/migration/`에 둔다 (스키마는 공유 자산).
 - **admin-app만 Flyway를 자동 실행**한다 (`spring.flyway.enabled=true`).
 - passkey-app은 Flyway 비활성 (`spring.flyway.enabled=false`). 마이그레이션은 admin 책임이며, passkey는 이미 준비된 스키마를 사용한다는 책임 분리.
-- Flyway는 `APP_ADMIN` 계정으로 실행하여 DDL/role grant/dbms_rls 호출이 가능하도록 한다.
+- Flyway는 `PSK_APP_ADMIN` 계정으로 실행하여 DDL/role grant/dbms_rls 호출이 가능하도록 한다.
 
 ### 4.6 테넌트 컨텍스트 주입 (Java 측)
 
@@ -257,14 +257,14 @@ docker-compose up -d
 
 `:core/src/test/java/.../vpd/VpdIsolationIT.java`에 `@SpringBootTest` 통합 테스트로:
 
-1. **준비**: `APP_ADMIN`으로 테넌트 `T_A`, `T_B` INSERT. 각각에 credential row 1개씩 INSERT.
-2. **격리 테스트 (APP_RUNTIME)**:
+1. **준비**: `PSK_APP_ADMIN`으로 테넌트 `T_A`, `T_B` INSERT. 각각에 credential row 1개씩 INSERT.
+2. **격리 테스트 (PSK_APP_RUNTIME)**:
    - 테넌트 컨텍스트를 `T_A`로 set → `SELECT * FROM credential` → row 1개(T_A의 것).
    - 같은 connection에서 컨텍스트를 `T_B`로 재set → row 1개(T_B의 것).
    - 컨텍스트를 clear → 0 rows.
-3. **우회 테스트 (APP_ADMIN)**:
+3. **우회 테스트 (PSK_APP_ADMIN)**:
    - 컨텍스트 없이 `SELECT * FROM credential` → 2 rows (T_A + T_B).
-4. **쓰기 강제 테스트 (APP_RUNTIME)**:
+4. **쓰기 강제 테스트 (PSK_APP_RUNTIME)**:
    - 컨텍스트 `T_A`로 set한 상태에서 `tenant_id='T_B'`인 row를 INSERT 시도 → `update_check=TRUE` 정책에 의해 실패.
 
 이 4개 시나리오가 모두 통과해야 한다.
@@ -300,5 +300,5 @@ Phase 0에서 결정하지 않고 다음 Phase에서 정한다:
 |---|---|
 | Oracle XE 컨테이너의 첫 부팅 시간이 길어 로컬 DX 저하 | `docker-compose.yml`에 healthcheck 등록, `wait-for-oracle.sh` 제공. dev 머신에 영구 볼륨 마운트. |
 | Hikari가 connection을 미리 워밍업할 때 ThreadLocal 미설정 → set_tenant 실패 | Pool 초기화 단계에서는 `ctx_pkg.set_tenant`를 호출하지 않도록 wrapper를 명시적으로 분기. `getConnection()` 시점에만 호출. |
-| Flyway 마이그레이션이 APP_RUNTIME 권한 부족으로 실패 | Flyway 실행 계정을 `APP_ADMIN`으로 명시. SQL 안에서 grant·dbms_rls 호출 가능. |
+| Flyway 마이그레이션이 PSK_APP_RUNTIME 권한 부족으로 실패 | Flyway 실행 계정을 `PSK_APP_ADMIN`으로 명시. SQL 안에서 grant·dbms_rls 호출 가능. |
 | dev stub Filter(`X-Tenant-Id` 헤더)가 운영에 유출 | `@Profile("!prod")`로 활성화 제한. prod 빌드에서는 빈 등록되지 않음. Phase 1의 정식 인증 Filter가 들어오면 자동으로 대체. |

@@ -158,7 +158,7 @@ Contents of `V9__admin_user_table.sql`:
 -- cross-tenant by design, and admin_user rows belong to the platform
 -- itself, not to any tenant.
 --
--- APP_RUNTIME never reads or writes this table. APP_ADMIN gets
+-- PSK_APP_RUNTIME never reads or writes this table. PSK_APP_ADMIN gets
 -- SELECT + INSERT + column-scoped UPDATE on last_login_at. Password
 -- changes / role changes are SQL maintenance for Phase 2 (admin
 -- self-service password change is a Phase 4 followup).
@@ -179,9 +179,9 @@ CREATE TABLE admin_user (
   CONSTRAINT ck_admin_user_enabled CHECK (enabled IN ('Y','N'))
 );
 
-GRANT SELECT, INSERT ON admin_user TO APP_ADMIN;
-GRANT UPDATE(last_login_at, bcrypt_hash, role, enabled) ON admin_user TO APP_ADMIN;
-GRANT SELECT ON admin_user_seq TO APP_ADMIN;
+GRANT SELECT, INSERT ON admin_user TO PSK_APP_ADMIN;
+GRANT UPDATE(last_login_at, bcrypt_hash, role, enabled) ON admin_user TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Verify it applies**
@@ -196,12 +196,12 @@ grep -E "Migrating schema|Successfully" /tmp/v9-boot.log | tail -5
 kill $ADMIN_PID
 ```
 
-Expected: log contains `Migrating schema "APP_OWNER" to version "9 - admin user table"` and `Successfully applied 1 migration` (only V9 is new at this point).
+Expected: log contains `Migrating schema "PSK_APP_OWNER" to version "9 - admin user table"` and `Successfully applied 1 migration` (only V9 is new at this point).
 
 - [ ] **Step 3: Verify table + grants via sqlplus**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
 SET PAGESIZE 0 FEEDBACK OFF HEADING OFF
 SELECT column_name||':'||data_type FROM user_tab_columns WHERE table_name='ADMIN_USER' ORDER BY column_id;
 SELECT 'GRANT:'||grantee||':'||privilege FROM user_tab_privs WHERE table_name='ADMIN_USER' ORDER BY grantee, privilege;
@@ -209,7 +209,7 @@ EXIT
 EOF
 ```
 
-Expected: 7 columns (id, email, bcrypt_hash, role, enabled, created_at, last_login_at); grants `APP_ADMIN:INSERT`, `APP_ADMIN:SELECT`, `APP_ADMIN:UPDATE`.
+Expected: 7 columns (id, email, bcrypt_hash, role, enabled, created_at, last_login_at); grants `PSK_APP_ADMIN:INSERT`, `PSK_APP_ADMIN:SELECT`, `PSK_APP_ADMIN:UPDATE`.
 
 - [ ] **Step 4: Commit**
 
@@ -244,8 +244,8 @@ Contents of `V10__audit_log_table.sql`:
 -- VPD: NONE. Audit is cross-tenant by design — we want one chain that
 -- captures every operator action across every tenant.
 --
--- Grants: APP_ADMIN gets SELECT + INSERT only. NO UPDATE, NO DELETE,
--- even from APP_ADMIN. Tampering requires DBA-level privilege.
+-- Grants: PSK_APP_ADMIN gets SELECT + INSERT only. NO UPDATE, NO DELETE,
+-- even from PSK_APP_ADMIN. Tampering requires DBA-level privilege.
 
 CREATE SEQUENCE audit_log_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
@@ -268,8 +268,8 @@ CREATE INDEX audit_log_created_at_ix ON audit_log(created_at);
 CREATE INDEX audit_log_actor_ix      ON audit_log(actor_id, created_at);
 CREATE INDEX audit_log_target_ix     ON audit_log(target_type, target_id, created_at);
 
-GRANT SELECT, INSERT ON audit_log TO APP_ADMIN;
-GRANT SELECT ON audit_log_seq TO APP_ADMIN;
+GRANT SELECT, INSERT ON audit_log TO PSK_APP_ADMIN;
+GRANT SELECT ON audit_log_seq TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Re-boot admin-app and verify V10 applies**
@@ -282,19 +282,19 @@ grep -E "Migrating schema|Successfully" /tmp/v10-boot.log | tail -3
 kill $ADMIN_PID
 ```
 
-Expected: `Migrating schema "APP_OWNER" to version "10 - audit log table"` and `Successfully applied 1 migration`.
+Expected: `Migrating schema "PSK_APP_OWNER" to version "10 - audit log table"` and `Successfully applied 1 migration`.
 
-- [ ] **Step 3: Verify no UPDATE/DELETE grant exists for APP_ADMIN**
+- [ ] **Step 3: Verify no UPDATE/DELETE grant exists for PSK_APP_ADMIN**
 
 ```bash
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
 SET PAGESIZE 0 FEEDBACK OFF HEADING OFF
 SELECT 'GRANT:'||grantee||':'||privilege FROM user_tab_privs WHERE table_name='AUDIT_LOG' ORDER BY grantee, privilege;
 EXIT
 EOF
 ```
 
-Expected: only `APP_ADMIN:INSERT` and `APP_ADMIN:SELECT` (no UPDATE, no DELETE).
+Expected: only `PSK_APP_ADMIN:INSERT` and `PSK_APP_ADMIN:SELECT` (no UPDATE, no DELETE).
 
 - [ ] **Step 4: Commit**
 
@@ -357,7 +357,7 @@ COMMIT;
 ./gradlew :admin-app:bootRun --args='--spring.profiles.active=local' > /tmp/v11-boot.log 2>&1 &
 ADMIN_PID=$!
 until grep -qE "Started AdminApplication|APPLICATION FAILED" /tmp/v11-boot.log; do sleep 2; done
-docker exec -i passkey-oracle sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
+docker exec -i passkey-oracle sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1 <<'EOF'
 SET PAGESIZE 0 FEEDBACK OFF HEADING OFF
 SELECT email||':'||role||':'||enabled FROM admin_user ORDER BY id;
 EXIT
@@ -3601,8 +3601,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
   datasource:
@@ -3702,7 +3702,7 @@ class AdminFlowIT {
 
     @Container
     static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-xe:21-slim-faststart")
-            .withUsername("APP_OWNER").withPassword("app_owner_pw")
+            .withUsername("PSK_APP_OWNER").withPassword("app_owner_pw")
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-vpd.sql"),
                     "/tmp/bootstrap-vpd.sql");
@@ -3719,7 +3719,7 @@ class AdminFlowIT {
             throw new RuntimeException("bootstrap-vpd failed: " + exec.getStdout() + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", REDIS::getFirstMappedPort);
@@ -3745,10 +3745,10 @@ class AdminFlowIT {
     @BeforeEach
     void resetState() {
         jdbc = new JdbcTemplate(ds);
-        jdbc.update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("DELETE FROM APP_OWNER.api_key");
-        jdbc.update("DELETE FROM APP_OWNER.credential");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
         // admin_user rows from V11 stay; we only clean Phase-1 tenant data.
         redisFactory.getConnection().serverCommands().flushAll();
     }
@@ -3830,7 +3830,7 @@ class AdminFlowIT {
         //   out of this test's classpath; this assertion proves the
         //   admin write is durable).
         Long count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.api_key WHERE key_prefix=?",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.api_key WHERE key_prefix=?",
                 Long.class, prefix);
         assertThat(count).isEqualTo(1L);
 
@@ -3853,13 +3853,13 @@ class AdminFlowIT {
                 new HttpEntity<>(aliceAuth), String.class);
         assertThat(del.getStatusCode().value()).isEqualTo(204);
         Long revokedCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.api_key WHERE id=? AND revoked_at IS NOT NULL",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.api_key WHERE id=? AND revoked_at IS NOT NULL",
                 Long.class, keyId);
         assertThat(revokedCount).isEqualTo(1L);
 
         // ⑨ Same key is now inactive (read directly via repository).
         var keyRow = jdbc.queryForMap(
-                "SELECT revoked_at FROM APP_OWNER.api_key WHERE id=?", keyId);
+                "SELECT revoked_at FROM PSK_APP_OWNER.api_key WHERE id=?", keyId);
         assertThat(keyRow.get("REVOKED_AT")).isNotNull();
 
         // ⑩ Bob (VIEWER) can list but cannot create tenant
@@ -3874,8 +3874,8 @@ class AdminFlowIT {
         assertThat(bobCreate.getStatusCode().value()).isEqualTo(403);
 
         // ⑪ Tamper one audit row's payload — verify must return {ok:false}
-        jdbc.update("UPDATE APP_OWNER.audit_log SET payload='{\"x\":\"tampered\"}' " +
-                    "WHERE id=(SELECT MIN(id) FROM APP_OWNER.audit_log)");
+        jdbc.update("UPDATE PSK_APP_OWNER.audit_log SET payload='{\"x\":\"tampered\"}' " +
+                    "WHERE id=(SELECT MIN(id) FROM PSK_APP_OWNER.audit_log)");
         ResponseEntity<JsonNode> verifyBroken = rest.exchange(
                 url("/admin/api/audit/verify"), HttpMethod.GET,
                 new HttpEntity<>(aliceAuth), JsonNode.class);

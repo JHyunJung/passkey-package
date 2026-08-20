@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * </ul>
  *
  * <p>위변조 유발은 {@link AuditChainPerTenantIT} 와 동일하게 {@link AuditLogService#append} 로 행을 시드한 뒤
- * APP_OWNER 풀로 payload 컬럼을 UPDATE 하여 체인 hash 를 깬다(APP_ADMIN 은 audit_log UPDATE 불가, V10).
+ * PSK_APP_OWNER 풀로 payload 컬럼을 UPDATE 하여 체인 hash 를 깬다(PSK_APP_ADMIN 은 audit_log UPDATE 불가, V10).
  * 깨진 row id 는 {@code verifyTenant().brokenAt()} 이고, 서버는 이를 incident.tamperedEntryId 로 도출한다.
  *
  * <p>테넌트 격리는 앱 레벨(Hibernate @Filter)이 담당하므로 DB 커널 차원의 별도
@@ -61,7 +61,7 @@ class SecurityIncidentIT {
 
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -84,7 +84,7 @@ class SecurityIncidentIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -109,7 +109,7 @@ class SecurityIncidentIT {
     private static final UUID ACTOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final String ACTOR_EMAIL = "alice@crosscert.com";
 
-    /** APP_OWNER (schema owner) pool — owner-only table cleanup + audit_log tamper (APP_ADMIN 은 UPDATE 불가). */
+    /** PSK_APP_OWNER (schema owner) pool — owner-only table cleanup + audit_log tamper (PSK_APP_ADMIN 은 UPDATE 불가). */
     private static HikariDataSource ownerPool;
 
     @AfterAll
@@ -124,7 +124,7 @@ class SecurityIncidentIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("security-incident-it-owner");
@@ -142,16 +142,16 @@ class SecurityIncidentIT {
         jdbc = new JdbcTemplate(ds);
 
         // FK-safe delete order (mirrors AuditChainPerTenantIT) + security_incident.
-        ownerJdbc().update("DELETE FROM APP_OWNER.security_incident");
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
-        jdbc.update("DELETE FROM APP_OWNER.api_key_scope");
-        jdbc.update("DELETE FROM APP_OWNER.api_key");
-        jdbc.update("DELETE FROM APP_OWNER.credential");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_allowed_origin");
-        jdbc.update("DELETE FROM APP_OWNER.tenant_accepted_format");
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-        jdbc.update("DELETE FROM APP_OWNER.tenant");
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.security_incident");
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.credential");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
 
         seedTenant(TAMPERED_TENANT_ID, "tenant-tampered", "Tampered Tenant");
         seedTenant(INTACT_TENANT_ID, "tenant-intact", "Intact Tenant");
@@ -167,23 +167,23 @@ class SecurityIncidentIT {
 
     private void seedTenant(UUID id, String slug, String displayName) {
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
+                INSERT INTO PSK_APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
                     require_user_verification, mds_required, created_at, updated_at)
                 VALUES (HEXTORAW(?), ?, ?, 'localhost', ?, 'active', 'Y', 'N', SYSTIMESTAMP, SYSTIMESTAMP)
                 """, uuidToHex(id), slug, displayName, displayName);
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
+                INSERT INTO PSK_APP_OWNER.tenant_allowed_origin (id, tenant_id, origin, sort_order)
                 VALUES (SYS_GUID(), HEXTORAW(?), 'http://localhost:9090', 0)
                 """, uuidToHex(id));
         jdbc.update("""
-                INSERT INTO APP_OWNER.tenant_accepted_format (id, tenant_id, format)
+                INSERT INTO PSK_APP_OWNER.tenant_accepted_format (id, tenant_id, format)
                 VALUES (SYS_GUID(), HEXTORAW(?), 'none')
                 """, uuidToHex(id));
     }
 
     /**
      * 한 테넌트의 audit_log 를 위변조 상태로 만든다(AuditChainPerTenantIT 와 동일 방식):
-     * 3행을 append 한 뒤 2번째 행의 payload 를 APP_OWNER 풀로 UPDATE 해 체인 hash 를 깬다.
+     * 3행을 append 한 뒤 2번째 행의 payload 를 PSK_APP_OWNER 풀로 UPDATE 해 체인 hash 를 깬다.
      *
      * @return 깨진 row id (= verifyTenant().brokenAt() = 서버가 도출할 tamperedEntryId)
      */
@@ -200,7 +200,7 @@ class SecurityIncidentIT {
 
         UUID tamperTargetId = row2.getId();
         int updated = ownerJdbc().update(
-                "UPDATE APP_OWNER.audit_log SET payload = '{\"tampered\":true}' WHERE id = HEXTORAW(?)",
+                "UPDATE PSK_APP_OWNER.audit_log SET payload = '{\"tampered\":true}' WHERE id = HEXTORAW(?)",
                 uuidToHex(tamperTargetId));
         assertThat(updated).as("tamper UPDATE should affect exactly 1 row").isEqualTo(1);
 
@@ -242,15 +242,15 @@ class SecurityIncidentIT {
                 .as("tamperedEntryId must be derived from verifyTenant().brokenAt()")
                 .isEqualTo(brokenRowId);
 
-        // DB 에 security_incident 행이 실제로 INSERT 됐는지(APP_ADMIN SELECT 경로).
+        // DB 에 security_incident 행이 실제로 INSERT 됐는지(PSK_APP_ADMIN SELECT 경로).
         Integer incidentRows = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.security_incident WHERE id = HEXTORAW(?) AND status = 'OPEN'",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.security_incident WHERE id = HEXTORAW(?) AND status = 'OPEN'",
                 Integer.class, uuidToHex(incident.getId()));
         assertThat(incidentRows).as("OPEN security_incident row must be persisted").isEqualTo(1);
 
         // audit_log 에 AUDIT_CHAIN_INCIDENT_CREATED 행이 추가됐는지.
         Integer createdAuditRows = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.audit_log WHERE action = 'AUDIT_CHAIN_INCIDENT_CREATED'"
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.audit_log WHERE action = 'AUDIT_CHAIN_INCIDENT_CREATED'"
                         + " AND target_id = ?",
                 Integer.class, incident.getId().toString());
         assertThat(createdAuditRows).as("AUDIT_CHAIN_INCIDENT_CREATED audit row must be appended").isEqualTo(1);
@@ -291,7 +291,7 @@ class SecurityIncidentIT {
         //     ux_incident_open_per_tenant ON (CASE WHEN status='OPEN' THEN tenant_id END) 가
         //     같은 테넌트의 두 번째 OPEN 행을 막는지 직접 검증한다(ORA-00001 unique constraint).
         assertThatThrownBy(() -> ownerJdbc().update("""
-                INSERT INTO APP_OWNER.security_incident
+                INSERT INTO PSK_APP_OWNER.security_incident
                     (id, tenant_id, type, severity, status, created_at, created_by)
                 VALUES (SYS_GUID(), HEXTORAW(?), 'AUDIT_CHAIN_TAMPER', 'CRITICAL', 'OPEN', SYSTIMESTAMP, HEXTORAW(?))
                 """, uuidToHex(TAMPERED_TENANT_ID), uuidToHex(ACTOR_ID)))
@@ -300,7 +300,7 @@ class SecurityIncidentIT {
 
         // 정확히 1건의 OPEN 행만 존재.
         Integer openRows = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.security_incident WHERE tenant_id = HEXTORAW(?) AND status = 'OPEN'",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.security_incident WHERE tenant_id = HEXTORAW(?) AND status = 'OPEN'",
                 Integer.class, uuidToHex(TAMPERED_TENANT_ID));
         assertThat(openRows).as("exactly one OPEN incident per tenant").isEqualTo(1);
     }
@@ -326,7 +326,7 @@ class SecurityIncidentIT {
         // DB 상태 — resolveIfOpen 원자 UPDATE 가 실DB 에 반영됐고 CHECK 제약(RESOLVED 시 resolved_* NOT NULL)을 충족.
         Map<String, Object> dbRow = jdbc.queryForMap(
                 "SELECT status, resolved_at, resolved_by, resolution_note"
-                        + " FROM APP_OWNER.security_incident WHERE id = HEXTORAW(?)",
+                        + " FROM PSK_APP_OWNER.security_incident WHERE id = HEXTORAW(?)",
                 uuidToHex(open.getId()));
         assertThat(dbRow.get("STATUS")).isEqualTo("RESOLVED");
         assertThat(dbRow.get("RESOLVED_AT")).as("resolved_at must be set (ck_security_incident_resolution)").isNotNull();
@@ -335,7 +335,7 @@ class SecurityIncidentIT {
 
         // audit_log 에 AUDIT_CHAIN_INCIDENT_RESOLVED 행.
         Integer resolvedAuditRows = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.audit_log WHERE action = 'AUDIT_CHAIN_INCIDENT_RESOLVED'"
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.audit_log WHERE action = 'AUDIT_CHAIN_INCIDENT_RESOLVED'"
                         + " AND target_id = ?",
                 Integer.class, open.getId().toString());
         assertThat(resolvedAuditRows).as("AUDIT_CHAIN_INCIDENT_RESOLVED audit row must be appended").isEqualTo(1);
@@ -383,11 +383,11 @@ class SecurityIncidentIT {
 
         // 이제 행은 2개: RESOLVED 1 + OPEN 1. OPEN 은 정확히 1건.
         Integer total = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.security_incident WHERE tenant_id = HEXTORAW(?)",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.security_incident WHERE tenant_id = HEXTORAW(?)",
                 Integer.class, uuidToHex(TAMPERED_TENANT_ID));
         assertThat(total).as("one RESOLVED + one OPEN").isEqualTo(2);
         Integer openRows = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_OWNER.security_incident WHERE tenant_id = HEXTORAW(?) AND status = 'OPEN'",
+                "SELECT COUNT(*) FROM PSK_APP_OWNER.security_incident WHERE tenant_id = HEXTORAW(?) AND status = 'OPEN'",
                 Integer.class, uuidToHex(TAMPERED_TENANT_ID));
         assertThat(openRows).as("still exactly one OPEN after re-create").isEqualTo(1);
     }

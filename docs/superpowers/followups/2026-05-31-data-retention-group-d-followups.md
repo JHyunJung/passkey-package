@@ -33,7 +33,7 @@ D-Task 4 리뷰에서 "첫 prod 실행(수개월 누적) 시 unbounded DELETE �
 
 ## 5. mds_sync_history는 JPA 엔티티 아님 (JdbcTemplate)
 
-`mds_sync_history`(V34)는 JPA 엔티티 없이 `MdsHistoryService`가 JdbcTemplate(`APP_OWNER.` prefix)로 관리. purge도 일관되게 native DELETE(`MdsHistoryService.purgeStartedBefore`). 다른 4개는 JPA repository native 쿼리(`{h-schema}`).
+`mds_sync_history`(V34)는 JPA 엔티티 없이 `MdsHistoryService`가 JdbcTemplate(`PSK_APP_OWNER.` prefix)로 관리. purge도 일관되게 native DELETE(`MdsHistoryService.purgeStartedBefore`). 다른 4개는 JPA repository native 쿼리(`{h-schema}`).
 
 ## 6. lease release 패턴 추가 (기존 job과 차이)
 

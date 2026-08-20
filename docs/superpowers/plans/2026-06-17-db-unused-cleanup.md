@@ -20,7 +20,7 @@
   git branch --show-current   # → worktree-db-unused-cleanup 이어야 함
   ```
 - **인프라**: Oracle(`passkey-oracle`, 1521) + Redis(`passkey-redis`, 6379) 컨테이너가 떠 있어야 함. 확인: `docker ps --format '{{.Names}}' | grep -E 'passkey-oracle|passkey-redis'`. 없으면 메인 repo에서 `docker compose up -d`.
-- **DB 접속**(검증용): `docker exec -i passkey-oracle bash -lc "sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1"`. heredoc은 `<<'EOF'`로 감싼다.
+- **DB 접속**(검증용): `docker exec -i passkey-oracle bash -lc "sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1"`. heredoc은 `<<'EOF'`로 감싼다.
 - **빌드 주의**: 전체 `./gradlew build`는 pre-existing 함정(SliceConfig 충돌·Oracle 경합)이 있어 머지 게이트로 쓰지 않는다. 영향 모듈만 타겟 컴파일/테스트한다.
 
 ---
@@ -134,7 +134,7 @@ git commit -m "feat(db): V47 미사용 컬럼 DROP — credential.backup_state, 
         LocalDate nextUpdate = blob.nextUpdate();
         Instant now = clock.instant();
         int updated = jdbc.update(
-                "UPDATE APP_OWNER.mds_blob_cache " +
+                "UPDATE PSK_APP_OWNER.mds_blob_cache " +
                 "SET version=?, next_update=?, fetched_at=?, blob_jwt=? " +
                 "WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
                 version,
@@ -170,7 +170,7 @@ Replace `store()` body (위 코드)를 다음으로:
         LocalDate nextUpdate = blob.nextUpdate();
         Instant now = clock.instant();
         int updated = jdbc.update(
-                "UPDATE APP_OWNER.mds_blob_cache " +
+                "UPDATE PSK_APP_OWNER.mds_blob_cache " +
                 "SET version=?, next_update=?, fetched_at=? " +
                 "WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
                 version,
@@ -368,10 +368,10 @@ Expected: 둘 다 Up. (oracle healthy.) 없으면 메인 repo에서 `docker comp
 - [ ] **Step 2: DROP 전 컬럼 존재 확인 (baseline)**
 
 ```bash
-docker exec -i passkey-oracle bash -lc "sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1" <<'EOF'
+docker exec -i passkey-oracle bash -lc "sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1" <<'EOF'
 SET PAGESIZE 50 FEEDBACK OFF
 SELECT table_name, column_name FROM all_tab_columns
- WHERE owner='APP_OWNER'
+ WHERE owner='PSK_APP_OWNER'
    AND ((table_name='CREDENTIAL' AND column_name='BACKUP_STATE')
      OR (table_name='MDS_BLOB_CACHE' AND column_name='BLOB_JWT'));
 EXIT
@@ -386,7 +386,7 @@ cd /Users/jhyun/Git/10-work/crosscert/Passkey2/.claude/worktrees/db-unused-clean
 SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun > /tmp/db-cleanup-boot.log 2>&1 &
 ```
 8081 오픈 또는 실패까지 대기(Monitor/until-loop). 부팅 성공 신호: 로그에 `Started AdminApplication`.
-Flyway 로그에 `Migrating schema "APP_OWNER" to version "47 - drop unused columns"` 또는 적용 흔적 확인:
+Flyway 로그에 `Migrating schema "PSK_APP_OWNER" to version "47 - drop unused columns"` 또는 적용 흔적 확인:
 ```bash
 grep -iE "V47|47 - drop|drop unused|Successfully applied" /tmp/db-cleanup-boot.log
 ```
@@ -394,14 +394,14 @@ grep -iE "V47|47 - drop|drop unused|Successfully applied" /tmp/db-cleanup-boot.l
 - [ ] **Step 4: DROP 후 컬럼 부재 확인**
 
 ```bash
-docker exec -i passkey-oracle bash -lc "sqlplus -S APP_OWNER/app_owner_pw@localhost:1521/XEPDB1" <<'EOF'
+docker exec -i passkey-oracle bash -lc "sqlplus -S PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1" <<'EOF'
 SET PAGESIZE 50 FEEDBACK OFF
 SELECT table_name, column_name FROM all_tab_columns
- WHERE owner='APP_OWNER'
+ WHERE owner='PSK_APP_OWNER'
    AND ((table_name='CREDENTIAL' AND column_name='BACKUP_STATE')
      OR (table_name='MDS_BLOB_CACHE' AND column_name='BLOB_JWT'));
 SELECT constraint_name FROM all_constraints
- WHERE owner='APP_OWNER' AND constraint_name='CK_CREDENTIAL_BACKUP_STATE';
+ WHERE owner='PSK_APP_OWNER' AND constraint_name='CK_CREDENTIAL_BACKUP_STATE';
 EXIT
 EOF
 ```

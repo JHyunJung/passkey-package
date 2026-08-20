@@ -4,7 +4,7 @@
 
 ## Goal
 
-admin-app은 VPD-EXEMPT(`APP_ADMIN_USER`)로 DB에 접속하므로 cross-tenant 행 격리가 **DB 레벨이 아니라 애플리케이션 `TenantBoundary` 단일 계층**에만 의존한다(`sec-admin-vpd-exempt-sole-layer`). 즉 어느 한 서비스 메서드가 `assertCanAccessTenant`/`currentTenantScope` 호출을 한 줄 빠뜨리면 즉시 cross-tenant 노출이 된다. 이 Phase는 **현재 동작/UI/응답을 일절 바꾸지 않으면서** 그 "한 줄 누락 회귀"를 막는 방어 인프라 3종을 추가한다:
+admin-app은 VPD-EXEMPT(`PSK_APP_ADMIN_USER`)로 DB에 접속하므로 cross-tenant 행 격리가 **DB 레벨이 아니라 애플리케이션 `TenantBoundary` 단일 계층**에만 의존한다(`sec-admin-vpd-exempt-sole-layer`). 즉 어느 한 서비스 메서드가 `assertCanAccessTenant`/`currentTenantScope` 호출을 한 줄 빠뜨리면 즉시 cross-tenant 노출이 된다. 이 Phase는 **현재 동작/UI/응답을 일절 바꾸지 않으면서** 그 "한 줄 누락 회귀"를 막는 방어 인프라 3종을 추가한다:
 
 1. `WebauthnDiffService.diff()` self-guard (`sec-webauthndiff-no-boundary-fragile`)
 2. `ApiKeyAuthFilter` 진입부 방어적 `TenantContextHolder.clear()` (`sec-apikeyfilter-no-defensive-clear`)
@@ -299,7 +299,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 /**
  * QW-1 (sec-admin-vpd-exempt-sole-layer) — cross-tenant 회귀 방지.
  *
- * <p>admin-app 은 VPD-EXEMPT(APP_ADMIN_USER)로 DB 에 접속하므로 cross-tenant
+ * <p>admin-app 은 VPD-EXEMPT(PSK_APP_ADMIN_USER)로 DB 에 접속하므로 cross-tenant
  * 격리가 애플리케이션 레벨 {@link com.crosscert.passkey.admin.auth.TenantBoundary}
  * 단일 계층에만 의존한다. 어느 tenant-scoped 서비스가 boundary 참조를 통째로
  * 잃으면 즉시 cross-tenant 노출이므로, 그 회귀를 빌드 시점에 잡는다.

@@ -101,5 +101,5 @@ PLATFORM_OPERATOR 가 Activity 한 화면에서:
 
 ## 검증 메모
 
-- 로컬 기동 절차·함정(SPRING_PROFILES_ACTIVE 환경변수, APP_OWNER 접속, flyway 소문자 식별자, V8 repair, RP_ADMIN 수동 시드)은 별도 기록. local 프로필 = demo-rp 테넌트.
+- 로컬 기동 절차·함정(SPRING_PROFILES_ACTIVE 환경변수, PSK_APP_OWNER 접속, flyway 소문자 식별자, V8 repair, RP_ADMIN 수동 시드)은 별도 기록. local 프로필 = demo-rp 테넌트.
 - 단건 조회가 hash chain 을 검증하지 않는 점은 의도적(Activity 는 조회 전용; chain 검증은 PLATFORM_OPERATOR 의 audit-chain 화면/AuditTab ChainVerify 별도 담당).

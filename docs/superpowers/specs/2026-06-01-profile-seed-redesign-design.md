@@ -157,7 +157,7 @@ placeholder만(`.gitkeep` 또는 주석 SQL). prod는 어떤 데모 데이터도
 
 현재 local 프로필 설정 파일이 없다. 신규 생성:
 
-- **DB 접속**: dev와 동일한 로컬 Oracle(`jdbc:oracle:thin:@localhost:1521/XEPDB1`, APP_ADMIN_USER/APP_RUNTIME_USER) 재사용.
+- **DB 접속**: dev와 동일한 로컬 Oracle(`jdbc:oracle:thin:@localhost:1521/XEPDB1`, PSK_APP_ADMIN_USER/PSK_APP_RUNTIME_USER) 재사용.
 - **master-key**: dev와 동일한 dev용 고정 키(`jDKp...`).
 - **flyway locations**: `db/migration,db/seed-common,db/local`.
 - **기타**: dev yml을 베이스로 하되 flyway locations만 다름. dev에만 있는 설정(있으면)도 복사.

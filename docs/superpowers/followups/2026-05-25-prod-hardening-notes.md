@@ -36,12 +36,12 @@ The same applies to T4's bootstrap SQL — it should be idempotent, but if you c
 
 ## From T4 — scripts/bootstrap-vpd.sql
 
-### Tighten APP_ADMIN_USER privileges
+### Tighten PSK_APP_ADMIN_USER privileges
 
-`GRANT ALL PRIVILEGES TO APP_ADMIN_USER` is broader than required. APP_ADMIN_USER needs:
-- Whatever Flyway needs to create/alter APP_OWNER objects (most of `CREATE ANY TABLE`, `CREATE ANY SEQUENCE`, `ALTER ANY TABLE`, `INSERT ANY TABLE` family — confirm exact set against actual migrations once T5/T6/T7 land).
+`GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER` is broader than required. PSK_APP_ADMIN_USER needs:
+- Whatever Flyway needs to create/alter PSK_APP_OWNER objects (most of `CREATE ANY TABLE`, `CREATE ANY SEQUENCE`, `ALTER ANY TABLE`, `INSERT ANY TABLE` family — confirm exact set against actual migrations once T5/T6/T7 land).
 - `EXECUTE ON DBMS_RLS` for VPD policy management.
-- The `APP_ADMIN` role grant gives it `CREATE SESSION` + `EXEMPT ACCESS POLICY`.
+- The `PSK_APP_ADMIN` role grant gives it `CREATE SESSION` + `EXEMPT ACCESS POLICY`.
 
 **Phase 0 verdict:** `GRANT ALL PRIVILEGES` is acceptable for local dev to unblock work. Codex flagged this as P2. Before any non-local deployment, replace with the tight privilege set.
 
@@ -68,7 +68,7 @@ Recommendation: Option A for Phase 3 simplicity. Drop `mds_blob_cache_seq` at th
 
 ### Add INDEX statement type for defense-in-depth
 
-V3 attaches the VPD policy with `statement_types => 'SELECT,INSERT,UPDATE,DELETE'`. Phase 0 risk model assumes only APP_ADMIN (with `EXEMPT ACCESS POLICY`) ever has index DDL privileges — and codex review confirmed APP_RUNTIME does not. So Phase 0 has no exposure.
+V3 attaches the VPD policy with `statement_types => 'SELECT,INSERT,UPDATE,DELETE'`. Phase 0 risk model assumes only PSK_APP_ADMIN (with `EXEMPT ACCESS POLICY`) ever has index DDL privileges — and codex review confirmed PSK_APP_RUNTIME does not. So Phase 0 has no exposure.
 
 Before any production rollout, add `INDEX` to `statement_types` for defense-in-depth: this protects against future code (or a forgotten grant) that lets a non-admin user create or rebuild indexes on `credential`. With `INDEX` enforcement, an index build cannot read rows of other tenants either.
 
@@ -78,7 +78,7 @@ Implementation: when modifying the policy later, prefer `DBMS_RLS.ALTER_POLICY` 
 
 ### Gate `flyway.baseline-on-migrate` by profile/env before prod
 
-`spring.flyway.baseline-on-migrate: true` is enabled unconditionally in `admin-app/src/main/resources/application.yml`. This is correct for Phase 0 because `bootstrap-vpd.sql` populates APP_OWNER with the CTX_PKG package before Flyway ever runs.
+`spring.flyway.baseline-on-migrate: true` is enabled unconditionally in `admin-app/src/main/resources/application.yml`. This is correct for Phase 0 because `bootstrap-vpd.sql` populates PSK_APP_OWNER with the CTX_PKG package before Flyway ever runs.
 
 In a production deployment, leaving `baseline-on-migrate: true` as an unconditional default would silently auto-baseline ANY non-empty schema without history — masking a real "this DB is already managed by another tool" warning. Before any non-local deploy:
 
@@ -88,13 +88,13 @@ In a production deployment, leaving `baseline-on-migrate: true` as an unconditio
 
 ### Boundary debt: SchedulerLease entity in :core
 
-`SchedulerLease` is admin-app's concern (the MDS scheduler in Phase 3). It currently lives in `core/entity` because :core is the only place Spring Data JPA + Hibernate scan from in T8/T9. The side effect: passkey-app must also scan SchedulerLease and APP_RUNTIME must have `SELECT` grant on `scheduler_lease` just to pass ddl-validate (V4 migration).
+`SchedulerLease` is admin-app's concern (the MDS scheduler in Phase 3). It currently lives in `core/entity` because :core is the only place Spring Data JPA + Hibernate scan from in T8/T9. The side effect: passkey-app must also scan SchedulerLease and PSK_APP_RUNTIME must have `SELECT` grant on `scheduler_lease` just to pass ddl-validate (V4 migration).
 
 Cleaner long-term shape (defer until at least Phase 3):
 
 - Move admin-only entities out of `:core/entity` into an `admin-app`-local package.
 - Narrow `@EntityScan` in PasskeyApplication to exclude admin entities, or add `@EntityScan({"com.crosscert.passkey.core.entity", "com.crosscert.passkey.app.entity"})`-style allow-lists.
-- Roll back the `GRANT SELECT ON scheduler_lease TO APP_RUNTIME` in V4 once passkey-app no longer scans the entity.
+- Roll back the `GRANT SELECT ON scheduler_lease TO PSK_APP_RUNTIME` in V4 once passkey-app no longer scans the entity.
 
 Cost-benefit: small. Phase 0 priority is "VPD works", not entity-package hygiene.
 
@@ -214,7 +214,7 @@ envelope is enough to make happyPath/signCountReplay green.
 ## From Phase 1 T26 — signCountReplay test isolation
 
 The IT exercises the strict-monotonic branch by inflating
-`APP_OWNER.credential.sign_count` to a five-digit floor via direct
+`PSK_APP_OWNER.credential.sign_count` to a five-digit floor via direct
 JDBC before the second `/authentication/finish`. This works because
 webauthn4j-test's PackedAuthenticator increments by 1 per ceremony.
 

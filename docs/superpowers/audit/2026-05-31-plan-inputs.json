@@ -105,7 +105,7 @@
       {
         "target": "application-common.yml spring.jpa.properties (batch_size 추가 위치)",
         "file": "core/src/main/resources/application-common.yml:8-19",
-        "currentCode": "  jpa:\n    open-in-view: false\n    properties:\n      hibernate.dialect: org.hibernate.dialect.OracleDialect\n      hibernate.jdbc.time_zone: UTC\n      # ... (default_schema 주석) ...\n      hibernate.default_schema: APP_OWNER\n    hibernate.ddl-auto: validate",
+        "currentCode": "  jpa:\n    open-in-view: false\n    properties:\n      hibernate.dialect: org.hibernate.dialect.OracleDialect\n      hibernate.jdbc.time_zone: UTC\n      # ... (default_schema 주석) ...\n      hibernate.default_schema: PSK_APP_OWNER\n    hibernate.ddl-auto: validate",
         "note": "spring.jpa.properties 는 line 10-18 (dot-key 평면 스타일: hibernate.dialect / hibernate.jdbc.time_zone / hibernate.default_schema). batch_size 추가 시 properties: 블록 안에 'hibernate.jdbc.batch_size: 30', 'hibernate.order_inserts: true', 'hibernate.order_updates: true' 를 hibernate.default_schema(line 18) 다음 줄에 동일 들여쓰기(6 spaces)로 추가. 주의: line 19 'hibernate.ddl-auto: validate' 는 properties 블록 밖(spring.jpa 직속, 4 spaces 들여쓰기) — Spring Boot 표준 키라 properties 안이 아님. batch_size 는 반드시 properties: 하위(6 spaces)에 둘 것. 현재 batch_size/order_inserts/order_updates 키 없음. open-in-view: false 이미 설정됨. 이 yml 은 core 모듈 공통이며 admin-app/api 양쪽에서 import(admin-app 은 별도 application.yml 에 Flyway default-schema 설정 있다고 주석 언급)."
       }
     ]

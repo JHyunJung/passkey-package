@@ -602,10 +602,10 @@ V3/V8/V20/V35의 ADD_POLICY를 fine-grained access control 가능 시에만 실�
 ```sql
 BEGIN
   DBMS_RLS.ADD_POLICY(
-    object_schema   => 'APP_OWNER',
+    object_schema   => 'PSK_APP_OWNER',
     object_name     => 'CREDENTIAL',
     policy_name     => 'CREDENTIAL_TENANT_ISOLATION',
-    function_schema => 'APP_OWNER',
+    function_schema => 'PSK_APP_OWNER',
     policy_function => 'TENANT_PREDICATE',
     statement_types => 'SELECT,INSERT,UPDATE,DELETE',
     update_check    => TRUE
@@ -622,10 +622,10 @@ BEGIN
    WHERE parameter = 'Fine-grained access control' AND value = 'TRUE';
   IF v_fgac = 1 THEN
     DBMS_RLS.ADD_POLICY(
-      object_schema   => 'APP_OWNER',
+      object_schema   => 'PSK_APP_OWNER',
       object_name     => 'CREDENTIAL',
       policy_name     => 'CREDENTIAL_TENANT_ISOLATION',
-      function_schema => 'APP_OWNER',
+      function_schema => 'PSK_APP_OWNER',
       policy_function => 'TENANT_PREDICATE',
       statement_types => 'SELECT,INSERT,UPDATE,DELETE',
       update_check    => TRUE

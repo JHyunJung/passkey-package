@@ -116,8 +116,8 @@ CREATE TABLE admin_user_invitation (
 CREATE INDEX ix_admin_user_invitation_user ON admin_user_invitation (admin_user_id);
 
 -- 3. 권한
-GRANT SELECT, INSERT, UPDATE ON admin_user_invitation TO APP_ADMIN;
-GRANT SELECT ON admin_user_invitation_seq TO APP_ADMIN;
+GRANT SELECT, INSERT, UPDATE ON admin_user_invitation TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_invitation_seq TO PSK_APP_ADMIN;
 ```
 
 ### AdminUser entity 변경

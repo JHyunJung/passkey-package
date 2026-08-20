@@ -24,67 +24,67 @@ END;
 /
 
 -- ============================================================
--- APP_OWNER 스키마 유저 (도커 compose 가 하던 것)
+-- PSK_APP_OWNER 스키마 유저 (도커 compose 가 하던 것)
 -- ============================================================
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE USER APP_OWNER IDENTIFIED BY "&&app_owner_pw"';
+  EXECUTE IMMEDIATE 'CREATE USER PSK_APP_OWNER IDENTIFIED BY "&&app_owner_pw"';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1920 THEN NULL; -- ORA-01920: user already exists
   ELSE RAISE;
   END IF;
 END;
 /
-GRANT CREATE SESSION TO APP_OWNER;
+GRANT CREATE SESSION TO PSK_APP_OWNER;
 
 -- ============================================================
 -- Roles
 -- ============================================================
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE ROLE APP_RUNTIME';
+  EXECUTE IMMEDIATE 'CREATE ROLE PSK_APP_RUNTIME';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1921 THEN NULL; ELSE RAISE; END IF;
 END;
 /
-GRANT CREATE SESSION TO APP_RUNTIME;
+GRANT CREATE SESSION TO PSK_APP_RUNTIME;
 
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE ROLE APP_ADMIN';
+  EXECUTE IMMEDIATE 'CREATE ROLE PSK_APP_ADMIN';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1921 THEN NULL; ELSE RAISE; END IF;
 END;
 /
-GRANT CREATE SESSION TO APP_ADMIN;
+GRANT CREATE SESSION TO PSK_APP_ADMIN;
 
 -- ============================================================
--- APP_OWNER privileges (schema owner) — one GRANT per privilege.
--- ⚠️ bootstrap-schema.sql 과 bootstrap-external.sql 의 APP_OWNER 권한 블록은
+-- PSK_APP_OWNER privileges (schema owner) — one GRANT per privilege.
+-- ⚠️ bootstrap-schema.sql 과 bootstrap-external.sql 의 PSK_APP_OWNER 권한 블록은
 --    항상 동기 상태를 유지할 것. 한 파일 수정 시 다른 파일도 함께 수정.
 -- ============================================================
-GRANT CREATE TABLE         TO APP_OWNER;
-GRANT CREATE SEQUENCE      TO APP_OWNER;
-GRANT CREATE PROCEDURE     TO APP_OWNER;
-GRANT CREATE TRIGGER       TO APP_OWNER;
-GRANT UNLIMITED TABLESPACE TO APP_OWNER;
-GRANT CREATE VIEW          TO APP_OWNER;
+GRANT CREATE TABLE         TO PSK_APP_OWNER;
+GRANT CREATE SEQUENCE      TO PSK_APP_OWNER;
+GRANT CREATE PROCEDURE     TO PSK_APP_OWNER;
+GRANT CREATE TRIGGER       TO PSK_APP_OWNER;
+GRANT UNLIMITED TABLESPACE TO PSK_APP_OWNER;
+GRANT CREATE VIEW          TO PSK_APP_OWNER;
 
 -- ============================================================
--- Users (runtime = APP_RUNTIME_USER, admin = APP_ADMIN_USER)
+-- Users (runtime = PSK_APP_RUNTIME_USER, admin = PSK_APP_ADMIN_USER)
 -- ============================================================
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE USER APP_RUNTIME_USER IDENTIFIED BY "&&runtime_pw"';
+  EXECUTE IMMEDIATE 'CREATE USER PSK_APP_RUNTIME_USER IDENTIFIED BY "&&runtime_pw"';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1920 THEN NULL; ELSE RAISE; END IF;
 END;
 /
-GRANT APP_RUNTIME TO APP_RUNTIME_USER;
+GRANT PSK_APP_RUNTIME TO PSK_APP_RUNTIME_USER;
 
 BEGIN
-  EXECUTE IMMEDIATE 'CREATE USER APP_ADMIN_USER IDENTIFIED BY "&&admin_pw"';
+  EXECUTE IMMEDIATE 'CREATE USER PSK_APP_ADMIN_USER IDENTIFIED BY "&&admin_pw"';
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -1920 THEN NULL; ELSE RAISE; END IF;
 END;
 /
-GRANT APP_ADMIN TO APP_ADMIN_USER;
+GRANT PSK_APP_ADMIN TO PSK_APP_ADMIN_USER;
 
 -- 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect) 전담 (CTX_PKG/APP_CTX 미생성).
 

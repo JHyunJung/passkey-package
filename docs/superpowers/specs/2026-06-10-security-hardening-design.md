@@ -94,43 +94,43 @@ verify는 enroll 직후 confirm 전에도 동작해야 하는 정상 흐름이 �
 
 ### #3 — 런타임 GRANT ALL 제거 (HIGH)
 
-> **codex 리뷰 정정(2026-06-10).** 초안의 "방식 1: APP_ADMIN_USER에 최소 DDL grant"는 **WRONG**으로 판정됐다. Flyway가 `APP_OWNER` 스키마를 타겟(`application.yml:10` `schemas`/`default-schema`)하는데 datasource는 `APP_ADMIN_USER`라 **러너 ≠ 소유자**. 다른 스키마 객체를 마이그레이션하려면 `CREATE/ALTER/DROP ANY` 광범위 권한이 필요하고, 그걸 주면 admin-app 침해 시 **DDL로 audit_log를 여전히 파괴**할 수 있어 finding의 목적(append-only 복원)을 못 닫는다. 또 "audit_log SELECT+INSERT only로 축소"도 **WRONG** — 런타임은 audit_log만 쓰는 게 아니다(아래).
+> **codex 리뷰 정정(2026-06-10).** 초안의 "방식 1: PSK_APP_ADMIN_USER에 최소 DDL grant"는 **WRONG**으로 판정됐다. Flyway가 `PSK_APP_OWNER` 스키마를 타겟(`application.yml:10` `schemas`/`default-schema`)하는데 datasource는 `PSK_APP_ADMIN_USER`라 **러너 ≠ 소유자**. 다른 스키마 객체를 마이그레이션하려면 `CREATE/ALTER/DROP ANY` 광범위 권한이 필요하고, 그걸 주면 admin-app 침해 시 **DDL로 audit_log를 여전히 파괴**할 수 있어 finding의 목적(append-only 복원)을 못 닫는다. 또 "audit_log SELECT+INSERT only로 축소"도 **WRONG** — 런타임은 audit_log만 쓰는 게 아니다(아래).
 
-**채택: Approach A — Flyway를 스키마 소유자 `APP_OWNER`로 실행, 런타임은 `APP_ADMIN_USER` 유지, DDL 권한만 0으로.**
+**채택: Approach A — Flyway를 스키마 소유자 `PSK_APP_OWNER`로 실행, 런타임은 `PSK_APP_ADMIN_USER` 유지, DDL 권한만 0으로.**
 
-Spring Boot 3.5.14(`gradle/libs.versions.toml:2`)는 `spring.flyway.user`/`password`/`url`를 주 datasource와 **분리 지정** 가능하고, `url` 미설정 시 주 datasource로 폴백한다. → 앱 인스턴스 1개로 런타임=APP_ADMIN_USER, 마이그레이션=APP_OWNER 동시 가능.
+Spring Boot 3.5.14(`gradle/libs.versions.toml:2`)는 `spring.flyway.user`/`password`/`url`를 주 datasource와 **분리 지정** 가능하고, `url` 미설정 시 주 datasource로 폴백한다. → 앱 인스턴스 1개로 런타임=PSK_APP_ADMIN_USER, 마이그레이션=PSK_APP_OWNER 동시 가능.
 
-**변경 1 — Flyway 자격증명 분리.** `admin-app` 설정에 `spring.flyway.user=APP_OWNER`(+ password) 추가. 런타임 `spring.datasource`는 APP_ADMIN_USER 그대로.
+**변경 1 — Flyway 자격증명 분리.** `admin-app` 설정에 `spring.flyway.user=PSK_APP_OWNER`(+ password) 추가. 런타임 `spring.datasource`는 PSK_APP_ADMIN_USER 그대로.
 
-**변경 2 — 두 부트스트랩에서 `GRANT ALL PRIVILEGES TO APP_ADMIN_USER` 제거** (`bootstrap-vpd.sql:90`, `bootstrap-external.sql:89`).
+**변경 2 — 두 부트스트랩에서 `GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER` 제거** (`bootstrap-vpd.sql:90`, `bootstrap-external.sql:89`).
 
-**변경 3 — APP_ADMIN_USER 런타임 권한 = "DDL만 제거, 나머지 유지".** 다음은 **유지**해야 admin-app이 안 깨진다(codex가 코드에서 실증):
-- `EXEMPT ACCESS POLICY` 유지 — V35:6이 "admin-app은 APP_ADMIN EXEMPT로 실행" 전제, cross-tenant는 앱 레이어 제어(`TenantBoundary.java:77` PLATFORM_OPERATOR는 tenant scope 없음, 서비스가 `findAll()`로 전테넌트 조회).
-- 일반 admin 테이블 **DML 유지** — 런타임이 쓰는 테이블: `tenant`(TenantAdminService:148), `api_key`(ApiKeyAdminService:87), `admin_user`/초대(AdminUserService:41), `security_policy`(SecurityPolicyService:38), MDS 이력(MdsHistoryService:51). 이들은 V1/V7/V9/V26/V27/V31 등이 `APP_ADMIN` 롤에 부여하는 객체 GRANT로 충족.
+**변경 3 — PSK_APP_ADMIN_USER 런타임 권한 = "DDL만 제거, 나머지 유지".** 다음은 **유지**해야 admin-app이 안 깨진다(codex가 코드에서 실증):
+- `EXEMPT ACCESS POLICY` 유지 — V35:6이 "admin-app은 PSK_APP_ADMIN EXEMPT로 실행" 전제, cross-tenant는 앱 레이어 제어(`TenantBoundary.java:77` PLATFORM_OPERATOR는 tenant scope 없음, 서비스가 `findAll()`로 전테넌트 조회).
+- 일반 admin 테이블 **DML 유지** — 런타임이 쓰는 테이블: `tenant`(TenantAdminService:148), `api_key`(ApiKeyAdminService:87), `admin_user`/초대(AdminUserService:41), `security_policy`(SecurityPolicyService:38), MDS 이력(MdsHistoryService:51). 이들은 V1/V7/V9/V26/V27/V31 등이 `PSK_APP_ADMIN` 롤에 부여하는 객체 GRANT로 충족.
 - `audit_log`는 **SELECT+INSERT만**(V10:39 그대로 살아남음) → admin-app 침해 시에도 UPDATE/DELETE 불가 → `AuditChainVerifier` 우회 차단. **DDL 권한이 0이므로 DROP/TRUNCATE도 불가** — 이게 초안 방식 1이 못 막던 구멍.
 
-**변경 4 — APP_OWNER 부트스트랩 권한 보강 2가지** (Flyway가 APP_OWNER로 돌기 위해 필요):
-1. `GRANT CREATE VIEW TO APP_OWNER` 추가 — 현재 부트스트랩(`bootstrap-vpd.sql:51` 등)은 table/sequence/procedure/trigger/context만 grant, V40이 뷰 생성(`V40__readable_uuid_views.sql:25`)인데 권한 없음.
-2. `GRANT EXEMPT ACCESS POLICY TO APP_OWNER`를 V8 마이그레이션 → SYS 부트스트랩으로 **이동**. Flyway가 APP_OWNER로 돌면 V8이 자기 자신에게 시스템 권한을 grant 못 한다(`V8__api_key_vpd_policy.sql:55`, definer-rights API key 패키지에 필요).
+**변경 4 — PSK_APP_OWNER 부트스트랩 권한 보강 2가지** (Flyway가 PSK_APP_OWNER로 돌기 위해 필요):
+1. `GRANT CREATE VIEW TO PSK_APP_OWNER` 추가 — 현재 부트스트랩(`bootstrap-vpd.sql:51` 등)은 table/sequence/procedure/trigger/context만 grant, V40이 뷰 생성(`V40__readable_uuid_views.sql:25`)인데 권한 없음.
+2. `GRANT EXEMPT ACCESS POLICY TO PSK_APP_OWNER`를 V8 마이그레이션 → SYS 부트스트랩으로 **이동**. Flyway가 PSK_APP_OWNER로 돌면 V8이 자기 자신에게 시스템 권한을 grant 못 한다(`V8__api_key_vpd_policy.sql:55`, definer-rights API key 패키지에 필요).
 
-> APP_OWNER는 자기 객체에 대한 GRANT를 `APP_ADMIN`/`APP_RUNTIME` 롤에 부여 가능(`WITH GRANT OPTION` 불필요, 롤이 재grant 안 함). V10:39·V1:40·V7:46·V9:26의 기존 객체 GRANT는 그대로 동작.
+> PSK_APP_OWNER는 자기 객체에 대한 GRANT를 `PSK_APP_ADMIN`/`PSK_APP_RUNTIME` 롤에 부여 가능(`WITH GRANT OPTION` 불필요, 롤이 재grant 안 함). V10:39·V1:40·V7:46·V9:26의 기존 객체 GRANT는 그대로 동작.
 
-> 방식 B(Flyway 전용 3번째 계정)는 기각 — 스키마 미소유 시 `CREATE/ALTER/DROP ANY` 광범위 권한 필요, A보다 런타임 보호 이득 없음. 진짜 구멍은 APP_ADMIN_USER의 ALL PRIVILEGES이고 A가 직접 닫는다.
+> 방식 B(Flyway 전용 3번째 계정)는 기각 — 스키마 미소유 시 `CREATE/ALTER/DROP ANY` 광범위 권한 필요, A보다 런타임 보호 이득 없음. 진짜 구멍은 PSK_APP_ADMIN_USER의 ALL PRIVILEGES이고 A가 직접 닫는다.
 
-**⚠️ 권한 목록은 추측 금지 — Testcontainers에서 APP_OWNER로 V1..V44 전체 마이그레이션을 실제로 돌려 실패→권한 추가 반복으로 확정한다** (메모리: Oracle 권한/DDL은 inspection이 못 잡음, Testcontainers 실행 필수). codex가 스캔한 비-단순 마이그레이션: V3(함수+DBMS_RLS), V8/V18/V19/V20/V42(APP_OWNER 패키지/함수), V19(DROP 패키지/테이블/시퀀스+VPD 정책 DROP), V35(VPD 정책), V40(뷰), 다수 ALTER/DROP 컬럼(V6/V21~V25/V29/V32/V33/V36/V37/V44).
+**⚠️ 권한 목록은 추측 금지 — Testcontainers에서 PSK_APP_OWNER로 V1..V44 전체 마이그레이션을 실제로 돌려 실패→권한 추가 반복으로 확정한다** (메모리: Oracle 권한/DDL은 inspection이 못 잡음, Testcontainers 실행 필수). codex가 스캔한 비-단순 마이그레이션: V3(함수+DBMS_RLS), V8/V18/V19/V20/V42(PSK_APP_OWNER 패키지/함수), V19(DROP 패키지/테이블/시퀀스+VPD 정책 DROP), V35(VPD 정책), V40(뷰), 다수 ALTER/DROP 컬럼(V6/V21~V25/V29/V32/V33/V36/V37/V44).
 
 **회귀 테스트 (Testcontainers, 필수):**
 - 작성 시점에 **빨강이어야 정상** — 현재 GRANT ALL이라 UPDATE/DELETE가 성공하므로.
-- `APP_ADMIN_USER로 audit_log UPDATE → ORA 권한 거부`
-- `APP_ADMIN_USER로 audit_log DELETE → ORA 권한 거부`
-- `APP_ADMIN_USER로 audit_log DROP/TRUNCATE → ORA 권한 거부` *(DDL 0 확인)*
-- `APP_ADMIN_USER로 audit_log INSERT/SELECT → 성공`
-- `APP_ADMIN_USER로 tenant/api_key/admin_user DML → 성공` *(런타임 안 깨짐 회귀)*
-- `APP_OWNER로 전체 Flyway 마이그레이션(V1..V44) 완주`
+- `PSK_APP_ADMIN_USER로 audit_log UPDATE → ORA 권한 거부`
+- `PSK_APP_ADMIN_USER로 audit_log DELETE → ORA 권한 거부`
+- `PSK_APP_ADMIN_USER로 audit_log DROP/TRUNCATE → ORA 권한 거부` *(DDL 0 확인)*
+- `PSK_APP_ADMIN_USER로 audit_log INSERT/SELECT → 성공`
+- `PSK_APP_ADMIN_USER로 tenant/api_key/admin_user DML → 성공` *(런타임 안 깨짐 회귀)*
+- `PSK_APP_OWNER로 전체 Flyway 마이그레이션(V1..V44) 완주`
 
 ### #2 — 외부 부트스트랩 비번 (HIGH)
 
-**sqlplus DEFINE 치환 + fail-fast.** `bootstrap-external.sql`의 3계정(APP_OWNER/APP_RUNTIME_USER/APP_ADMIN_USER) 평문 비번(`app_owner_pw`/`runtime_pw`/`admin_pw`)을 외부 입력으로:
+**sqlplus DEFINE 치환 + fail-fast.** `bootstrap-external.sql`의 3계정(PSK_APP_OWNER/PSK_APP_RUNTIME_USER/PSK_APP_ADMIN_USER) 평문 비번(`app_owner_pw`/`runtime_pw`/`admin_pw`)을 외부 입력으로:
 
 ```sql
 -- 비밀번호는 외부 입력. 미정의 시 부트스트랩 중단(fail-fast).
@@ -152,15 +152,15 @@ END;
 - `CREATE USER ... IDENTIFIED BY "&&app_owner_pw"` 형태로 치환 (큰따옴표로 특수문자 허용).
 - **가드 배치(codex GAP 지적)**: 빈 값 가드 PL/SQL 블록은 **반드시 첫 `CREATE USER`(현재 `bootstrap-external.sql:28`) 앞에** 둔다. 뒤에 있으면 계정이 약한 비번으로 이미 생성된 뒤라 무의미.
 - **DEFINE 빈 기본값 = 비대화식 안전(codex 확인)**: `DEFINE x = ''`로 변수를 정의해두면 sqlplus가 대화식 프롬프트로 멈추지 않는다(undefined `&&var`라면 프롬프트→파이프 실행 hang). env 주입 경로는 빈 기본 `DEFINE` 줄 앞에 **구체 `DEFINE` 줄을 prepend**해 덮어쓴다.
-- `init-db-external.sh`: env(`APP_OWNER_PW`/`RUNTIME_PW`/`ADMIN_PW`)를 sqlplus에 DEFINE으로 전달, env가 비면 셸에서 먼저 중단. **현재 `init-db-external.sh:93`이 `APP_ADMIN_USER/admin_pw`를 하드코딩하고 있으므로 함께 제거**(codex 지적).
+- `init-db-external.sh`: env(`APP_OWNER_PW`/`RUNTIME_PW`/`ADMIN_PW`)를 sqlplus에 DEFINE으로 전달, env가 비면 셸에서 먼저 중단. **현재 `init-db-external.sh:93`이 `PSK_APP_ADMIN_USER/admin_pw`를 하드코딩하고 있으므로 함께 제거**(codex 지적).
 
 **`bootstrap-vpd.sql` 비번은 이번 범위 제외 — 단, 잔존 위험 명시.** 같은 평문 비번이지만 **docker-compose 전용**이라 위협 등급이 낮아 보고서 #2도 external만 confirmed. 다만 codex가 `docker-compose.yml:6`에서 **Oracle 1521 포트가 호스트로 노출**됨을 지적: "엄격히 로컬 바인딩일 때만" 저위험이다. vpd에는 **#3 GRANT ALL 제거만** 적용하고 비번은 그대로 두되, **후속 백로그에 "1521을 `127.0.0.1`로 바인딩 또는 vpd 비번 외부화"를 기록**한다(이번 범위 밖, 별도 처리).
 
 ### 묶음 B 작업 순서
 
 1. Testcontainers 회귀 테스트 먼저 작성 (audit_log UPDATE/DELETE/DROP 거부 + tenant/api_key DML 성공) — 현재 GRANT ALL이라 **거부 테스트가 빨강이어야 정상**.
-2. `spring.flyway.user=APP_OWNER` 분리 설정 + 두 SQL의 `GRANT ALL PRIVILEGES TO APP_ADMIN_USER` 제거.
-3. APP_OWNER 권한 보강(`CREATE VIEW`, V8의 `EXEMPT ACCESS POLICY` grant를 SYS 부트스트랩으로 이동) — Testcontainers에서 APP_OWNER로 V1..V44 완주할 때까지 권한 조정.
+2. `spring.flyway.user=PSK_APP_OWNER` 분리 설정 + 두 SQL의 `GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER` 제거.
+3. PSK_APP_OWNER 권한 보강(`CREATE VIEW`, V8의 `EXEMPT ACCESS POLICY` grant를 SYS 부트스트랩으로 이동) — Testcontainers에서 PSK_APP_OWNER로 V1..V44 완주할 때까지 권한 조정.
 4. external 비번 DEFINE화(가드를 첫 CREATE USER 앞 배치) + `init-db-external.sh` env 주입 + `:93` 하드코딩 제거.
 
 ---

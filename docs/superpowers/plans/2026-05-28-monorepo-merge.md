@@ -624,8 +624,8 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun
 부팅 로그에서 다음을 확인:
 
 ```
-INFO ... DbMigrate : Migrating schema "APP_OWNER" with repeatable migration "dev seed"
-INFO ... DbMigrate : Successfully applied 1 migration to schema "APP_OWNER"
+INFO ... DbMigrate : Migrating schema "PSK_APP_OWNER" with repeatable migration "dev seed"
+INFO ... DbMigrate : Successfully applied 1 migration to schema "PSK_APP_OWNER"
 INFO ... AdminApplication : Started AdminApplication in N seconds
 ```
 
@@ -732,7 +732,7 @@ R__dev_seed 까지 모두 적용하게 한다. 그 다음 passkey-app 을 띄운
 
 ```bash
 docker exec passkey-oracle bash -c 'echo "
-DELETE FROM APP_OWNER.\"flyway_schema_history\"
+DELETE FROM PSK_APP_OWNER.\"flyway_schema_history\"
  WHERE \"description\" LIKE '\''%dev seed%'\'' OR \"success\" = 0;
 COMMIT;
 EXIT;" | sqlplus -S system/oracle@//localhost:1521/XEPDB1'

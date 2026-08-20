@@ -67,7 +67,7 @@ class MdsSchedulerIT {
 
     @Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -80,7 +80,7 @@ class MdsSchedulerIT {
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry reg) throws Exception {
         // Run bootstrap-schema.sql before Hikari opens its first connection —
-        // APP_ADMIN_USER must exist before Spring's Flyway / datasource init.
+        // PSK_APP_ADMIN_USER must exist before Spring's Flyway / datasource init.
         var exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
@@ -92,7 +92,7 @@ class MdsSchedulerIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -110,7 +110,7 @@ class MdsSchedulerIT {
 
     JdbcTemplate jdbc;
 
-    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    /** PSK_APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
     private static HikariDataSource ownerPool;
 
     @AfterAll
@@ -125,7 +125,7 @@ class MdsSchedulerIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("mds-scheduler-it-owner");
@@ -138,19 +138,19 @@ class MdsSchedulerIT {
     void resetState() {
         jdbc = new JdbcTemplate(ds);
         // Clear any audit rows from previous test runs.
-        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
+        // audit_log: PSK_APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
         // Reset the mds_blob_cache sentinel row to its V19 seed values,
         // including next_update so that the happy-path test's 2099-01-01
         // write does not bleed into later tests.
-        jdbc.update("UPDATE APP_OWNER.mds_blob_cache " +
+        jdbc.update("UPDATE PSK_APP_OWNER.mds_blob_cache " +
                     "SET version=0, next_update=DATE '1970-01-01', " +
                     "    fetched_at=TIMESTAMP '1970-01-01 00:00:00 +00:00' " +
                     "WHERE id=HEXTORAW('00000000000000000000000000000001')");
         // Clear mds-sync lease rows but preserve the AUDIT_CHAIN_LOCK sentinel
         // row seeded by V14. Deleting AUDIT_CHAIN_LOCK causes AuditLogService
         // to throw NoResultException when it does FOR UPDATE on that row.
-        jdbc.update("DELETE FROM APP_OWNER.scheduler_lease WHERE name='mds-sync'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.scheduler_lease WHERE name='mds-sync'");
         // Flush Redis so AAGUID entries from previous tests don't bleed through.
         var redisConn = redisFactory.getConnection();
         try {
@@ -185,7 +185,7 @@ class MdsSchedulerIT {
 
         // ── DB: version updated in sentinel row ──────────────────────
         Long version = jdbc.queryForObject(
-                "SELECT version FROM APP_OWNER.mds_blob_cache " +
+                "SELECT version FROM PSK_APP_OWNER.mds_blob_cache " +
                 "WHERE id=HEXTORAW('00000000000000000000000000000001')", Long.class);
         assertThat(version).isEqualTo(42L);
 
@@ -211,7 +211,7 @@ class MdsSchedulerIT {
     void runOnceSkipsWhenAnotherInstanceHoldsLease() {
         // Pre-INSERT a lease row held by "somebody-else" that has not expired.
         jdbc.update(
-                "INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
+                "INSERT INTO PSK_APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                 "VALUES ('mds-sync', 'somebody-else', SYSTIMESTAMP + INTERVAL '1' HOUR)");
 
         // client.fetch() must never be called — if it is, this throws to catch the bug.

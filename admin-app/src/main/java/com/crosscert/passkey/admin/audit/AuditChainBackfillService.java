@@ -84,7 +84,7 @@ public class AuditChainBackfillService {
                 // Use native SQL UPDATE targeting only tenant_hash + tenant_prev_hash so that
                 // we need only the column-level UPDATE grant on those two columns (V46),
                 // not a full-row UPDATE. This avoids triggering ORA-01031 on the other columns
-                // that APP_ADMIN intentionally cannot update (V10 append-only design).
+                // that PSK_APP_ADMIN intentionally cannot update (V10 append-only design).
                 em.createNativeQuery(
                                 "UPDATE " + schema + ".audit_log"
                                 + " SET tenant_prev_hash = :prevHash,"

@@ -225,7 +225,7 @@ Phase 1은 단일 키쌍 (서버 부팅 시 in-memory 생성). Phase 2 또는 3�
 
 VPD policy: V3 패턴 그대로 `api_key` 테이블에도 `CREDENTIAL_TENANT_ISOLATION`과 같은 정책 부착(이름은 `API_KEY_TENANT_ISOLATION`).
 
-grants: APP_RUNTIME에 SELECT, UPDATE(last_used_at 갱신용). INSERT/DELETE는 APP_ADMIN만(키 생성/철회는 admin의 일).
+grants: PSK_APP_RUNTIME에 SELECT, UPDATE(last_used_at 갱신용). INSERT/DELETE는 PSK_APP_ADMIN만(키 생성/철회는 admin의 일).
 
 ### 6.3 `credential` 테이블 (Phase 1에서는 변경 없음)
 

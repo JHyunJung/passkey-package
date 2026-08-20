@@ -85,7 +85,7 @@ core/src/main/java/com/crosscert/passkey/core/
 │  └ KeyEnvelope.java                                 (NEW — AES-256-GCM)
 └ resources/db/migration/
    ├ V15__signing_key_table.sql                       (NEW)
-   ├ V16__signing_key_runtime_grants.sql              (NEW — APP_RUNTIME SELECT)
+   ├ V16__signing_key_runtime_grants.sql              (NEW — PSK_APP_RUNTIME SELECT)
    └ V17__mds_blob_cache_singleton_seed.sql          (NEW — id=1 sentinel row)
 
 admin-app/src/main/java/com/crosscert/passkey/admin/
@@ -145,9 +145,9 @@ CREATE TABLE signing_key (
 );
 CREATE INDEX signing_key_status_ix ON signing_key(status);
 
-GRANT SELECT, INSERT, UPDATE ON signing_key TO APP_ADMIN;
-GRANT SELECT ON signing_key_seq TO APP_ADMIN;
--- V16: GRANT SELECT ON signing_key TO APP_RUNTIME (passkey-app 읽기용)
+GRANT SELECT, INSERT, UPDATE ON signing_key TO PSK_APP_ADMIN;
+GRANT SELECT ON signing_key_seq TO PSK_APP_ADMIN;
+-- V16: GRANT SELECT ON signing_key TO PSK_APP_RUNTIME (passkey-app 읽기용)
 ```
 
 ### 5.2 상태 전환
@@ -382,7 +382,7 @@ public class KeyRotationService {
 | ROTATED → REVOKED 시간 단축 (15min grace 부족) | 기본 30min, `passkey.key-rotation.grace` property override |
 | 테스트용 fake MDS BLOB의 cert chain | 테스트 전용 self-signed CA + 테스트 fixture. test profile에서만 root CA swap |
 | `@Scheduled` 부팅 시 동시 동작 | `initialDelay` 지터 + SchedulerLease |
-| ddl-validate가 새 컬럼 미존재 시 fail | V15 마이그레이션이 admin-app boot 시 먼저 적용. V16 APP_RUNTIME grant 필수 (Phase 2 V12/V13 패턴) |
+| ddl-validate가 새 컬럼 미존재 시 fail | V15 마이그레이션이 admin-app boot 시 먼저 적용. V16 PSK_APP_RUNTIME grant 필수 (Phase 2 V12/V13 패턴) |
 
 ## 11. Phase 4+로 미루는 항목
 

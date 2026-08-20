@@ -503,7 +503,7 @@ public class AuditChainBackfillService {
     public Summary backfill() {
         // 단일 chain lock — append 와 직렬화
         em.createNativeQuery(
-                "SELECT 1 FROM APP_OWNER.scheduler_lease WHERE name = :n FOR UPDATE")
+                "SELECT 1 FROM PSK_APP_OWNER.scheduler_lease WHERE name = :n FOR UPDATE")
             .setParameter("n", AuditLogService.CHAIN_LOCK_NAME)
             .getSingleResult();
 

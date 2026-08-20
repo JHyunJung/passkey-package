@@ -27,7 +27,7 @@
 - Modify: `core/src/main/resources/db/migration/V1__baseline_schema.sql` — admin_user CREATE TABLE(140-170), ix_admin_user_tenant 인덱스(408), v_admin_user 뷰(455-479), GRANT 블록(667-669 admin_user GRANT 근처)
 
 **Interfaces:**
-- Produces: `admin_user_tenant(admin_user_id RAW(16), tenant_id RAW(16), created_at, created_by)` 조인 테이블, PK(admin_user_id, tenant_id), FK 2개, GRANT(APP_ADMIN: SELECT/INSERT/UPDATE/DELETE, APP_RUNTIME: SELECT). `admin_user`에서 `tenant_id` 컬럼·`fk_admin_user_tenant`·`ck_admin_user_role_tenant`·`ix_admin_user_tenant` 제거. `v_admin_user` 뷰는 tenant 조인 제거(N:M이라 단일 tenant 표시 불가).
+- Produces: `admin_user_tenant(admin_user_id RAW(16), tenant_id RAW(16), created_at, created_by)` 조인 테이블, PK(admin_user_id, tenant_id), FK 2개, GRANT(PSK_APP_ADMIN: SELECT/INSERT/UPDATE/DELETE, PSK_APP_RUNTIME: SELECT). `admin_user`에서 `tenant_id` 컬럼·`fk_admin_user_tenant`·`ck_admin_user_role_tenant`·`ix_admin_user_tenant` 제거. `v_admin_user` 뷰는 tenant 조인 제거(N:M이라 단일 tenant 표시 불가).
 
 - [ ] **Step 1: admin_user 테이블에서 tenant_id 관련 항목 제거**
 
@@ -64,14 +64,14 @@ CREATE INDEX ix_aut_tenant ON admin_user_tenant (tenant_id);
 
 - [ ] **Step 4: admin_user_tenant GRANT 추가 (사각지대 — 누락 시 런타임 ORA-00942/01031)**
 
-GRANT 블록(`GRANT ... ON admin_user TO APP_ADMIN;` 근처, 약 667-669행)에 다음을 추가한다. APP_ADMIN은 매핑을 CRUD하고 APP_RUNTIME은 읽기만:
+GRANT 블록(`GRANT ... ON admin_user TO PSK_APP_ADMIN;` 근처, 약 667-669행)에 다음을 추가한다. PSK_APP_ADMIN은 매핑을 CRUD하고 PSK_APP_RUNTIME은 읽기만:
 
 ```sql
-GRANT SELECT ON admin_user_tenant TO APP_ADMIN;
-GRANT INSERT ON admin_user_tenant TO APP_ADMIN;
-GRANT UPDATE ON admin_user_tenant TO APP_ADMIN;
-GRANT DELETE ON admin_user_tenant TO APP_ADMIN;
-GRANT SELECT ON admin_user_tenant TO APP_RUNTIME;
+GRANT SELECT ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT INSERT ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT UPDATE ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT DELETE ON admin_user_tenant TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_user_tenant TO PSK_APP_RUNTIME;
 ```
 
 > 메모리 `project_flyway_squash_done` 교훈: 테이블/컬럼 GRANT는 덤프 사각지대 — 누락하면 로그인은 되지만 매핑 조회/저장 시점에 권한 오류가 난다.
@@ -255,7 +255,7 @@ public interface AdminUserTenantRepository
 
 - [ ] **Step 4: 리포지토리 테스트 작성 (실패 확인)**
 
-`AdminUserTenantRepositoryTest.java` — **이 프로젝트의 core 리포지토리 테스트는 `@DataJpaTest`가 아니라 `@SpringBootTest + @ActiveProfiles("test") + @Testcontainers`** 패턴이다(예: `core/src/test/java/com/crosscert/passkey/core/repository/CredentialAuthEventRepositoryTest.java`). 그 파일을 열어 다음을 그대로 복사한다: 내부 `@SpringBootApplication TestApp`(EntityScan/EnableJpaRepositories), `OracleContainer` + `bootstrap-schema.sql` + `@DynamicPropertySource`(APP_ADMIN_USER/admin_pw), `@AfterEach` cleanup, tenant/credential을 만드는 `seed...` 픽스처 헬퍼.
+`AdminUserTenantRepositoryTest.java` — **이 프로젝트의 core 리포지토리 테스트는 `@DataJpaTest`가 아니라 `@SpringBootTest + @ActiveProfiles("test") + @Testcontainers`** 패턴이다(예: `core/src/test/java/com/crosscert/passkey/core/repository/CredentialAuthEventRepositoryTest.java`). 그 파일을 열어 다음을 그대로 복사한다: 내부 `@SpringBootApplication TestApp`(EntityScan/EnableJpaRepositories), `OracleContainer` + `bootstrap-schema.sql` + `@DynamicPropertySource`(PSK_APP_ADMIN_USER/admin_pw), `@AfterEach` cleanup, tenant/credential을 만드는 `seed...` 픽스처 헬퍼.
 
 FK 제약(`admin_user_id`→admin_user, `tenant_id`→tenant) 때문에 매핑 INSERT 전에 부모 행이 있어야 한다. CredentialAuthEventRepositoryTest의 `seedCredential`이 tenant를 만드는 방식을 참고해 admin_user + tenant 부모 행을 먼저 저장한다:
 
@@ -1268,12 +1268,12 @@ Expected: 출력 없음(시드에 tenant_id 컬럼 미사용).
 ```java
         // bob 을 demo-rp 의 RP_ADMIN 으로 재할당 (role + admin_user_tenant 매핑)
         jdbc.update("""
-                UPDATE APP_OWNER.admin_user
+                UPDATE PSK_APP_OWNER.admin_user
                    SET role = 'RP_ADMIN'
                  WHERE email = 'bob@crosscert.com'
                 """);
         jdbc.update("""
-                MERGE INTO APP_OWNER.admin_user_tenant t
+                MERGE INTO PSK_APP_OWNER.admin_user_tenant t
                 USING (SELECT HEXTORAW('00000000000000000000000000000011') AS aid,
                               HEXTORAW('0000000000000000000000000000C0DE') AS tid FROM dual) s
                    ON (t.admin_user_id = s.aid AND t.tenant_id = s.tid)
@@ -1412,16 +1412,16 @@ Expected: 위 19개 라인(파일 23참조)이 보인다. 이 목록이 교체 �
 
 각 위치는 두 형태 중 하나다. 치환 규칙:
 
-(A) `UPDATE APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL` (단일 라인, 대부분)
-→ `DELETE FROM APP_OWNER.admin_user_tenant`로 교체. role 강제 다운그레이드가 cleanup에 필요했던 테스트는 별도로 `UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'`를 한 줄 더 둔다(컬럼 참조 없음 → 안전).
+(A) `UPDATE PSK_APP_OWNER.admin_user SET tenant_id = NULL, role = 'PLATFORM_OPERATOR' WHERE tenant_id IS NOT NULL` (단일 라인, 대부분)
+→ `DELETE FROM PSK_APP_OWNER.admin_user_tenant`로 교체. role 강제 다운그레이드가 cleanup에 필요했던 테스트는 별도로 `UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'`를 한 줄 더 둔다(컬럼 참조 없음 → 안전).
 
 ```java
-        jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");
-        jdbc.update("UPDATE APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
+        jdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
 ```
 
 (B) `AdminUserInvitationFlowIT.java:164`처럼 `SET tenant_id = NULL, role = 'PLATFORM_OPERATOR', ...`로 다른 컬럼도 함께 SET하는 멀티라인:
-→ `tenant_id = NULL,` 부분만 제거하고 나머지 SET절은 유지. 그 앞 줄에 `jdbc.update("DELETE FROM APP_OWNER.admin_user_tenant");` 추가.
+→ `tenant_id = NULL,` 부분만 제거하고 나머지 SET절은 유지. 그 앞 줄에 `jdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");` 추가.
 
 > 구현자 주의: `passkey-app/.../Fido2EndToEndIT.java`는 같은 SQL이 2곳(217,258)에 있고 별도 JdbcTemplate(`adminJdbc`)을 쓴다 — 둘 다 교체. 일부 파일은 위에 `// V23 ... FK ...` 주석이 있는데, 주석도 `// admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE` 식으로 갱신(선택).
 

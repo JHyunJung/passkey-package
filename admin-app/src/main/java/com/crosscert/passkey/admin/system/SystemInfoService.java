@@ -50,7 +50,7 @@ public class SystemInfoService {
             String b = jdbc.queryForObject("SELECT banner FROM v$version WHERE ROWNUM=1", String.class);
             if (b != null && !b.isBlank()) dbBanner = b;
         } catch (Exception ignore) {
-            // APP_ADMIN_USER may lack SELECT on v$version — leave dbBanner default.
+            // PSK_APP_ADMIN_USER may lack SELECT on v$version — leave dbBanner default.
         }
         components.add(new SystemInfoView.Component("Oracle DB", dbBanner, "OK", 1, "primary"));
         components.add(new SystemInfoView.Component(

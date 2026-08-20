@@ -71,7 +71,7 @@ hash chain 컬럼 없음. `created_at` 이 이벤트 시각.
 - FK: `credential_id REFERENCES credential(id) ON DELETE CASCADE`.
 - 조회 인덱스: `(credential_id, created_at DESC)` — P2 페이지 조회용.
 - retention 인덱스: `(created_at)` — purge 용.
-- APP_ADMIN 에 DELETE 권한 (retention purge 가 admin-app 에서 실행됨 — ceremony_event 전례 따름).
+- PSK_APP_ADMIN 에 DELETE 권한 (retention purge 가 admin-app 에서 실행됨 — ceremony_event 전례 따름).
 - VPD: ceremony_event 와 동일 정책(미적용 또는 동일 predicate). 기존 V41 의 VPD 처리를 그대로 모방.
 
 ### 5.3 `CredentialAuthEventRepository`

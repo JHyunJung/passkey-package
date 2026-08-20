@@ -65,7 +65,7 @@ class ActivityRepositoryFeedPageIT {
     @org.testcontainers.junit.jupiter.Container
     static final OracleContainer ORACLE =
             new OracleContainer(ORACLE_IMAGE)
-                    .withUsername("APP_OWNER")
+                    .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
                             MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -84,10 +84,10 @@ class ActivityRepositoryFeedPageIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "APP_OWNER");
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
         reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
@@ -101,7 +101,7 @@ class ActivityRepositoryFeedPageIT {
     JdbcTemplate jdbc;
 
     /**
-     * APP_ADMIN_USER (the runtime datasource) has SELECT+INSERT only on
+     * PSK_APP_ADMIN_USER (the runtime datasource) has SELECT+INSERT only on
      * audit_log (V10 design) — DELETE requires the schema-owner pool, same
      * pattern as ActivityControllerIT.ownerJdbc().
      */
@@ -119,7 +119,7 @@ class ActivityRepositoryFeedPageIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("activity-repo-feedpage-it-owner");
@@ -130,7 +130,7 @@ class ActivityRepositoryFeedPageIT {
 
     @AfterEach
     void cleanup() {
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
     }
 
     private AuditLog row(byte[] hash, OffsetDateTime createdAt) {

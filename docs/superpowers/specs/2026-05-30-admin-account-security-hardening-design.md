@@ -40,7 +40,7 @@ consumed_at   TIMESTAMP WITH TIME ZONE         -- nullable, one-shot 마킹
 created_at    TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL
 INDEX ix_pwd_reset_token_hash (token_hash)
 ```
-GRANT: `APP_ADMIN` SELECT,INSERT,UPDATE,DELETE / `APP_RUNTIME` SELECT (invitation·recovery 패턴 동일 — passkey-app `@EntityScan` ddl-validate 통과용).
+GRANT: `PSK_APP_ADMIN` SELECT,INSERT,UPDATE,DELETE / `PSK_APP_RUNTIME` SELECT (invitation·recovery 패턴 동일 — passkey-app `@EntityScan` ddl-validate 통과용).
 
 ### 2.3 `admin_user_recovery_code`
 **이미 V36에 존재** → V37에 추가 DDL 없음. (`id`, `admin_user_id` FK CASCADE, `code_hash VARCHAR2(64)`, `used_at`, `created_at`, `ix_recovery_admin_user`)

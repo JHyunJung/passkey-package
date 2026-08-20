@@ -86,7 +86,7 @@
 --   - tenant 생성 시 자동 INSERT 는 TenantAdminService 에서 (V26 안에서 X)
 --
 -- VPD: TENANT_AAGUID_POLICY 와 ENTRY 둘 다 V20 policy 따름 (tenant_id 필터).
--- Grants: APP_USER (passkey-app, 등록 ceremony 에서 SELECT) + APP_ADMIN
+-- Grants: APP_USER (passkey-app, 등록 ceremony 에서 SELECT) + PSK_APP_ADMIN
 --   (admin-app, CRUD).
 -- ============================================================
 
@@ -145,8 +145,8 @@ WHERE NOT EXISTS (
 -- 4. 권한
 GRANT SELECT ON tenant_aaguid_policy TO APP_USER;
 GRANT SELECT ON tenant_aaguid_policy_entry TO APP_USER;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_aaguid_policy TO APP_ADMIN;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_aaguid_policy_entry TO APP_ADMIN;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_aaguid_policy TO PSK_APP_ADMIN;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_aaguid_policy_entry TO PSK_APP_ADMIN;
 ```
 
 (GRANT 실패가 멱등성에 영향 안 주도록 EXCEPTION 으로 감쌀지 결정 — 기존 V13/V12 패턴 참고하여 작성. 만약 다른 V*__runtime_grants 패턴이 있다면 그것에 맞춤.)
@@ -239,8 +239,8 @@ WHERE NOT EXISTS (
   SELECT 1 FROM tenant_webauthn_snapshot s WHERE s.tenant_id = t.id
 );
 
-GRANT SELECT, INSERT ON tenant_webauthn_snapshot TO APP_ADMIN;
-GRANT SELECT ON tenant_webauthn_snapshot_seq TO APP_ADMIN;
+GRANT SELECT, INSERT ON tenant_webauthn_snapshot TO PSK_APP_ADMIN;
+GRANT SELECT ON tenant_webauthn_snapshot_seq TO PSK_APP_ADMIN;
 ```
 
 **중요**: 기존 마이그레이션들의 GRANT 패턴 확인. 만약 별도 `V*__runtime_grants` 가 존재하면 (V13 처럼) GRANT 만 별도 파일로 빼는 패턴 따름.

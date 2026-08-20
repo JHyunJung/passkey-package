@@ -58,7 +58,7 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 
 ```bash
 docker compose up -d
-# 첫 부팅 시: bootstrap-schema.sql 로 APP_OWNER / APP_RUNTIME_USER / APP_ADMIN_USER 생성 필요
+# 첫 부팅 시: bootstrap-schema.sql 로 PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER 생성 필요
 docker exec -i passkey-oracle sqlplus -s / as sysdba < scripts/bootstrap-schema.sql
 ```
 
@@ -124,9 +124,9 @@ npm run dev      # Vite :5173 — admin-app :8081 으로 proxy
 | 스크립트 | 용도 | 언제 |
 |---|---|---|
 | `init-dev-db.sh` | 컨테이너·볼륨 재생성 → 부트스트랩까지 풀 초기화 (분 단위) | 처음부터 깨끗이 / 볼륨까지 갈아엎을 때 |
-| `reset-app-owner.sh` | 컨테이너는 두고 APP_OWNER 스키마 객체만 DROP+재생성 (초 단위) | 데이터만 비우고 빠르게 다시 시작할 때 |
-| `bootstrap-schema.sql` | APP_OWNER / APP_RUNTIME_USER / APP_ADMIN_USER + role 부트스트랩. **Testcontainers IT 의 single source of truth** | 위 스크립트가 내부 호출 (수동 실행은 1) 인프라 기동 참고) |
-| `run-bootstrap.sh` · `wait-for-oracle.sh` · `reset-app-owner.sql` | 부트스트랩 실행 러너 / healthcheck 대기 / APP_OWNER 객체 DROP(SYS) | 위 스크립트가 내부 호출 (직접 실행 불필요) |
+| `reset-app-owner.sh` | 컨테이너는 두고 PSK_APP_OWNER 스키마 객체만 DROP+재생성 (초 단위) | 데이터만 비우고 빠르게 다시 시작할 때 |
+| `bootstrap-schema.sql` | PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER + role 부트스트랩. **Testcontainers IT 의 single source of truth** | 위 스크립트가 내부 호출 (수동 실행은 1) 인프라 기동 참고) |
+| `run-bootstrap.sh` · `wait-for-oracle.sh` · `reset-app-owner.sql` | 부트스트랩 실행 러너 / healthcheck 대기 / PSK_APP_OWNER 객체 DROP(SYS) | 위 스크립트가 내부 호출 (직접 실행 불필요) |
 
 ```bash
 scripts/init-dev-db.sh            # 확인 프롬프트 후 풀 초기화 (--yes 로 생략)
@@ -140,7 +140,7 @@ PROFILE=dev scripts/reset-app-owner.sh   # dev 시드로 리셋
 |---|---|---|
 | `init-db-external.sh` | sqlplus 로 부트스트랩 + Flyway 적용 (도커 미사용) | 외부 Oracle 에 스키마를 처음 올릴 때 |
 | `bootstrap-external.sql` (+ `bootstrap-external-body.sql`) | DBeaver 등 DEFINE 미지원 클라이언트용 부트스트랩 wrapper | sqlplus 없이 GUI 로 부트스트랩할 때 |
-| `reset-app-owner-external.sql` | 외부 SE 의 APP_OWNER 스키마를 DBeaver 에서 APP_OWNER 계정으로 비움 (SYSDBA·sqlplus 불필요) | 외부 dev DB 를 리셋할 때 |
+| `reset-app-owner-external.sql` | 외부 SE 의 PSK_APP_OWNER 스키마를 DBeaver 에서 PSK_APP_OWNER 계정으로 비움 (SYSDBA·sqlplus 불필요) | 외부 dev DB 를 리셋할 때 |
 
 ```bash
 # 외부 Oracle 초기화. 부트스트랩 비번 3종(ADMIN_PW/APP_OWNER_PW/RUNTIME_PW) 필수.
@@ -179,8 +179,8 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ## 멀티 테넌트 격리
 
 - **VPD (Virtual Private Database)** — Oracle 의 row-level security 로 모든 tenant-scoped 테이블에 `tenant_id` predicate 자동 적용
-- **APP_CTX** — `APP_OWNER.CTX_PKG.set_tenant(...)` 가 session 컨텍스트 설정. `APP_RUNTIME` role 이 read 시 자동 필터.
-- **APP_ADMIN** role 은 `EXEMPT ACCESS POLICY` — admin-app + Flyway 만 부여
+- **APP_CTX** — `PSK_APP_OWNER.CTX_PKG.set_tenant(...)` 가 session 컨텍스트 설정. `PSK_APP_RUNTIME` role 이 read 시 자동 필터.
+- **PSK_APP_ADMIN** role 은 `EXEMPT ACCESS POLICY` — admin-app + Flyway 만 부여
 
 ## Audit Chain
 

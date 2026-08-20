@@ -105,8 +105,8 @@ CREATE TABLE tenant_allowed_origin (
 );
 CREATE INDEX ix_tao_tenant ON tenant_allowed_origin (tenant_id);
 
-GRANT SELECT ON tenant_allowed_origin TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_allowed_origin TO APP_ADMIN;
+GRANT SELECT ON tenant_allowed_origin TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_allowed_origin TO PSK_APP_ADMIN;
 
 -- 4. tenant_accepted_format (1:N child)
 CREATE TABLE tenant_accepted_format (
@@ -121,8 +121,8 @@ CREATE TABLE tenant_accepted_format (
 );
 CREATE INDEX ix_taf_tenant ON tenant_accepted_format (tenant_id);
 
-GRANT SELECT ON tenant_accepted_format TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_accepted_format TO APP_ADMIN;
+GRANT SELECT ON tenant_accepted_format TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_accepted_format TO PSK_APP_ADMIN;
 
 -- 5. api_key — drop scopes CLOB
 ALTER TABLE api_key DROP CONSTRAINT ck_api_key_scopes_json;
@@ -140,8 +140,8 @@ CREATE TABLE api_key_scope (
 );
 CREATE INDEX ix_aks_api_key ON api_key_scope (api_key_id);
 
-GRANT SELECT ON api_key_scope TO APP_RUNTIME;
-GRANT SELECT, INSERT, UPDATE, DELETE ON api_key_scope TO APP_ADMIN;
+GRANT SELECT ON api_key_scope TO PSK_APP_RUNTIME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON api_key_scope TO PSK_APP_ADMIN;
 ```
 
 - [ ] **Step 2: Sanity grep**
@@ -185,7 +185,7 @@ Review:
 5. UNIQUE(tenant_id, origin) and (tenant_id, format) prevent dup rows.
 6. REGEXP_LIKE for origin format — basic http/https URL pattern.
 7. NUMBER(5,0) sort_order — supports up to 99999 origins per tenant.
-8. APP_RUNTIME gets SELECT only (read for ceremony); APP_ADMIN full CRUD.
+8. PSK_APP_RUNTIME gets SELECT only (read for ceremony); PSK_APP_ADMIN full CRUD.
 
 Output P1/P2/Confirmations.
 PROMPT

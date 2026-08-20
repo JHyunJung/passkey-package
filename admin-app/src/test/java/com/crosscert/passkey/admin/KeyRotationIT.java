@@ -78,7 +78,7 @@ class KeyRotationIT {
 
     @Container
     static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("APP_OWNER")
+            .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("bootstrap-schema.sql"),
@@ -91,7 +91,7 @@ class KeyRotationIT {
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry reg) throws Exception {
         // Run bootstrap-schema.sql before Hikari opens its first connection —
-        // APP_ADMIN_USER must exist before Spring's Flyway / datasource init.
+        // PSK_APP_ADMIN_USER must exist before Spring's Flyway / datasource init.
         var exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
@@ -103,7 +103,7 @@ class KeyRotationIT {
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "APP_ADMIN_USER");
+        reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
         reg.add("spring.data.redis.host", REDIS::getHost);
         reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -119,7 +119,7 @@ class KeyRotationIT {
 
     JdbcTemplate jdbc;
 
-    /** APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
+    /** PSK_APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
     private static HikariDataSource ownerPool;
 
     @AfterAll
@@ -134,7 +134,7 @@ class KeyRotationIT {
         if (ownerPool == null) {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(ORACLE.getJdbcUrl());
-            ds.setUsername("APP_OWNER");
+            ds.setUsername("PSK_APP_OWNER");
             ds.setPassword(SYS_PASSWORD);
             ds.setMaximumPoolSize(2);
             ds.setPoolName("key-rotation-it-owner");
@@ -147,15 +147,15 @@ class KeyRotationIT {
     void resetState() {
         jdbc = new JdbcTemplate(ds);
         // Clear audit rows from previous test runs.
-        // audit_log: APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.audit_log");
+        // audit_log: PSK_APP_ADMIN has SELECT+INSERT only (V10 design) — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
         // Wipe all signing keys so provider.init() starts fresh.
-        // signing_key: APP_ADMIN has no DELETE grant — use schema-owner pool.
-        ownerJdbc().update("DELETE FROM APP_OWNER.signing_key");
+        // signing_key: PSK_APP_ADMIN has no DELETE grant — use schema-owner pool.
+        ownerJdbc().update("DELETE FROM PSK_APP_OWNER.signing_key");
         // Clear rotation and expiration lease rows but preserve the
         // AUDIT_CHAIN_LOCK sentinel row seeded by V14. Deleting it causes
         // AuditLogService to throw NoResultException on FOR UPDATE.
-        jdbc.update("DELETE FROM APP_OWNER.scheduler_lease WHERE name IN ('key-rotation', 'key-expiration')");
+        jdbc.update("DELETE FROM PSK_APP_OWNER.scheduler_lease WHERE name IN ('key-rotation', 'key-expiration')");
         // Re-create the single ACTIVE signing key via the @PostConstruct path.
         provider.init();
     }
@@ -215,7 +215,7 @@ class KeyRotationIT {
         ByteBuffer bb = ByteBuffer.allocate(16);
         bb.putLong(rotatedId.getMostSignificantBits());
         bb.putLong(rotatedId.getLeastSignificantBits());
-        jdbc.update("UPDATE APP_OWNER.signing_key SET rotated_at=? WHERE id=?",
+        jdbc.update("UPDATE PSK_APP_OWNER.signing_key SET rotated_at=? WHERE id=?",
                 Timestamp.from(past), bb.array());
 
         expirationJob.runOnce();
@@ -238,7 +238,7 @@ class KeyRotationIT {
         // Pre-INSERT a 'key-rotation' lease held by somebody-else (5-min TTL,
         // well beyond the 30s SchedulerLeaseService threshold).
         jdbc.update(
-                "INSERT INTO APP_OWNER.scheduler_lease (name, holder, expires_at) " +
+                "INSERT INTO PSK_APP_OWNER.scheduler_lease (name, holder, expires_at) " +
                 "VALUES ('key-rotation', 'somebody-else', SYSTIMESTAMP + INTERVAL '5' MINUTE)");
 
         assertThatThrownBy(() -> rotation.rotate(null, "(test)"))
