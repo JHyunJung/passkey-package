@@ -17,15 +17,15 @@ V1/V4 를 직접 수정해 히스토리를 깨끗하게 유지한다.
 
 | 구분 | 기존 | 변경 후 | 길이 |
 |---|---|---|---|
-| 롤 | `PSK_APP_RUNTIME` | `PSK_APP_RUNTIME` | 15 |
-| 롤 | `PSK_APP_ADMIN` | `PSK_APP_ADMIN` | 13 |
-| 계정 | `PSK_APP_OWNER` | `PSK_APP_OWNER` | 13 |
-| 계정 | `PSK_APP_RUNTIME_USER` | `PSK_APP_RUNTIME_USER` | 20 |
-| 계정 | `PSK_APP_ADMIN_USER` | `PSK_APP_ADMIN_USER` | 18 |
+| 롤 | `APP_RUNTIME` | `PSK_APP_RUNTIME` | 15 |
+| 롤 | `APP_ADMIN` | `PSK_APP_ADMIN` | 13 |
+| 계정 | `APP_OWNER` | `PSK_APP_OWNER` | 13 |
+| 계정 | `APP_RUNTIME_USER` | `PSK_APP_RUNTIME_USER` | 20 |
+| 계정 | `APP_ADMIN_USER` | `PSK_APP_ADMIN_USER` | 18 |
 
 전부 30자 이내이므로 구버전 Oracle 식별자 길이 제한에도 안전하다.
 
-`PSK_APP_OWNER` 는 단순한 계정이 아니라 **스키마 소유자**다. 이름이 바뀌면
+`APP_OWNER` 는 단순한 계정이 아니라 **스키마 소유자**다. 이름이 바뀌면
 스키마명이 바뀌고, 스키마명을 참조하는 모든 지점이 함께 바뀌어야 한다.
 
 ## 영향 범위
@@ -45,26 +45,26 @@ V1/V4 를 직접 수정해 히스토리를 깨끗하게 유지한다.
 
 | 식별자 | 출현 |
 |---|---|
-| `PSK_APP_OWNER` | 856 |
-| `PSK_APP_ADMIN` (단독) | 371 |
-| `PSK_APP_RUNTIME` (단독) | 201 |
-| `PSK_APP_ADMIN_USER` | 192 |
-| `PSK_APP_RUNTIME_USER` | 58 |
+| `APP_OWNER` | 856 |
+| `APP_ADMIN` (단독) | 371 |
+| `APP_RUNTIME` (단독) | 201 |
+| `APP_ADMIN_USER` | 192 |
+| `APP_RUNTIME_USER` | 58 |
 
 ## ⚠️ 핵심 함정 — 부분문자열 충돌
 
-`PSK_APP_ADMIN` 은 `PSK_APP_ADMIN_USER` 의 부분문자열이다. `PSK_APP_RUNTIME` 과
-`PSK_APP_RUNTIME_USER` 도 마찬가지다. 순진하게 치환하면 이름이 깨지거나
+`APP_ADMIN` 은 `APP_ADMIN_USER` 의 부분문자열이다. `APP_RUNTIME` 과
+`APP_RUNTIME_USER` 도 마찬가지다. 순진하게 치환하면 이름이 깨지거나
 `PSK_PSK_` 같은 이중 접두사가 생긴다.
 
 **긴 이름부터 치환하고, 단어 경계(`\b`)를 적용한다.**
 
 ```
-1순위  PSK_APP_RUNTIME_USER  →  PSK_APP_RUNTIME_USER
-2순위  PSK_APP_ADMIN_USER    →  PSK_APP_ADMIN_USER
-3순위  PSK_APP_RUNTIME       →  PSK_APP_RUNTIME
-4순위  PSK_APP_ADMIN         →  PSK_APP_ADMIN
-5순위  PSK_APP_OWNER         →  PSK_APP_OWNER
+1순위  APP_RUNTIME_USER  →  PSK_APP_RUNTIME_USER
+2순위  APP_ADMIN_USER    →  PSK_APP_ADMIN_USER
+3순위  APP_RUNTIME       →  PSK_APP_RUNTIME
+4순위  APP_ADMIN         →  PSK_APP_ADMIN
+5순위  APP_OWNER         →  PSK_APP_OWNER
 ```
 
 치환 스크립트는 GNU/BSD sed 차이를 피하기 위해 Python 으로 작성하고,
@@ -75,7 +75,7 @@ V1/V4 를 직접 수정해 히스토리를 깨끗하게 유지한다.
 
 ### 1. 스키마명 외부화 (Java 14곳 / 7파일)
 
-`PSK_APP_OWNER.` 가 **실행되는 SQL 문자열 안에** 하드코딩돼 있다. 컴파일은
+`APP_OWNER.` 가 **실행되는 SQL 문자열 안에** 하드코딩돼 있다. 컴파일은
 통과하고 런타임에만 깨지므로 정적 검사로는 잡히지 않는 위험 지점이다.
 
 대상 파일과 건수. **실행 SQL** 은 반드시 고쳐야 하는 런타임 파손 지점이고,
@@ -110,7 +110,7 @@ passkey:
 
 ```java
 // AS-IS
-"SELECT ... FROM PSK_APP_OWNER.mds_sync_history "
+"SELECT ... FROM APP_OWNER.mds_sync_history "
 
 // TO-BE
 "SELECT ... FROM " + schema + ".mds_sync_history "
@@ -130,8 +130,8 @@ passkey:
 
 ```yaml
 flyway:
-  schemas: PSK_APP_OWNER          # was PSK_APP_OWNER
-  default-schema: PSK_APP_OWNER   # was PSK_APP_OWNER
+  schemas: PSK_APP_OWNER          # was APP_OWNER
+  default-schema: PSK_APP_OWNER   # was APP_OWNER
   user: ${SPRING_FLYWAY_USER:PSK_APP_OWNER}
 ```
 
@@ -141,8 +141,8 @@ Flyway 미실행 상태이므로 **직접 수정**한다.
 
 | 파일 | 변경 |
 |---|---|
-| `V1__baseline_schema.sql` | `TO PSK_APP_ADMIN` 93건 → `TO PSK_APP_ADMIN`<br>`TO PSK_APP_RUNTIME` 41건 → `TO PSK_APP_RUNTIME` |
-| `V4__grant_security_incident_to_app_runtime.sql` | `TO PSK_APP_RUNTIME` 1건 → `TO PSK_APP_RUNTIME` |
+| `V1__baseline_schema.sql` | `TO APP_ADMIN` 93건 → `TO PSK_APP_ADMIN`<br>`TO APP_RUNTIME` 41건 → `TO PSK_APP_RUNTIME` |
+| `V4__grant_security_incident_to_app_runtime.sql` | `TO APP_RUNTIME` 1건 → `TO PSK_APP_RUNTIME` |
 
 두 파일 모두 `CREATE USER` / `CREATE ROLE` 은 포함하지 않는다(계정·롤 생성은
 `scripts/full-schema-part1-accounts.sql` 담당). GRANT 대상 이름만 바뀐다.
@@ -174,11 +174,11 @@ Flyway 는 버전(`V4`)과 체크섬으로 식별하며, 파일명 변경은 이
 
 ### 6. 테스트 (29개 파일)
 
-테스트는 `OracleContainer.withUsername("PSK_APP_OWNER")` 로 컨테이너를 직접
+테스트는 `OracleContainer.withUsername("APP_OWNER")` 로 컨테이너를 직접
 만들고 `bootstrap-schema.sql` 로 스키마를 올린다. 즉 **자기완결적**이다.
 DDL 과 테스트를 일관되게 치환하면 그대로 통과해야 한다.
 
-정리 SQL 의 `DELETE FROM PSK_APP_OWNER.<table>` 형태도 함께 치환된다.
+정리 SQL 의 `DELETE FROM APP_OWNER.<table>` 형태도 함께 치환된다.
 
 ### 7. 문서 (70개)
 
@@ -200,8 +200,8 @@ grep -rE 'PSK_APP_(ADMIN|RUNTIME)_USER_USER' .
 grep -rE 'PSK_APP_(ADMIN|RUNTIME)_PSK_' .
 
 # 3. 건수 보존 — 치환 전후 총합이 같아야 한다
-#    PSK_APP_OWNER 856 / PSK_APP_ADMIN 371 / PSK_APP_RUNTIME 201
-#    PSK_APP_ADMIN_USER 192 / PSK_APP_RUNTIME_USER 58
+#    APP_OWNER 856 / APP_ADMIN 371 / APP_RUNTIME 201
+#    APP_ADMIN_USER 192 / APP_RUNTIME_USER 58
 ```
 
 ### 빌드·테스트
