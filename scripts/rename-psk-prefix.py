@@ -19,10 +19,12 @@ MAPPING = [
 ]
 
 # (?<!PSK_) : 이미 접두사가 붙은 토큰 제외
-# (?<![A-Z0-9_]) / (?![A-Z0-9_]) : 단어 경계. \b 는 밑줄을 단어문자로 봐서
+# (?<![A-Za-z0-9_]) / (?![A-Za-z0-9_]) : 단어 경계. \b 는 밑줄을 단어문자로 봐서
 #   APP_ADMIN_USER 안의 APP_ADMIN 을 걸러내지 못하므로 직접 명시한다.
+#   소문자도 포함해야 한다 — 대문자만 쓰면 APP_ADMINistrator 처럼 뒤에
+#   소문자가 이어지는 다른 토큰까지 부분 매치되어 오염된다.
 PATTERNS = [
-    (re.compile(r"(?<!PSK_)(?<![A-Z0-9_])" + old + r"(?![A-Z0-9_])"), new)
+    (re.compile(r"(?<!PSK_)(?<![A-Za-z0-9_])" + old + r"(?![A-Za-z0-9_])"), new)
     for old, new in MAPPING
 ]
 
@@ -46,6 +48,9 @@ def self_test() -> int:
         # 부분문자열이 아닌 다른 식별자는 건드리지 않는다
         ("MY_APP_ADMINISTRATOR", "MY_APP_ADMINISTRATOR"),
         ("APP_ADMINX", "APP_ADMINX"),
+        # 뒤에 소문자가 이어지면 다른 단어다 — 건드리지 않는다
+        ("APP_ADMINistrator", "APP_ADMINistrator"),
+        ("APP_OWNERship", "APP_OWNERship"),
     ]
     failed = 0
     for src, expected in cases:
