@@ -5,7 +5,7 @@
 # URL/username/password at runtime — those keys are intentionally omitted
 # here. Everything else (Flyway, JPA, driver) is fixed.
 #
-# Spring connects as APP_ADMIN_USER, the runtime user, which is the correct
+# Spring connects as PSK_APP_ADMIN_USER, the runtime user, which is the correct
 # identity for Flyway migrations and lets ITs seed/observe credential rows
 # via raw JDBC. Tenant isolation is enforced by the app-level Hibernate
 # @Filter (TenantFilterAspect), not the DB user — Oracle VPD was removed.
@@ -13,8 +13,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: APP_OWNER
-    default-schema: APP_OWNER
+    schemas: PSK_APP_OWNER
+    default-schema: PSK_APP_OWNER
     baseline-on-migrate: true
     baseline-version: 0
   jpa:
@@ -23,7 +23,7 @@ spring:
     properties:
       hibernate.dialect: org.hibernate.dialect.OracleDialect
       hibernate.jdbc.time_zone: Asia/Seoul
-      hibernate.default_schema: APP_OWNER
+      hibernate.default_schema: PSK_APP_OWNER
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
     hikari:
