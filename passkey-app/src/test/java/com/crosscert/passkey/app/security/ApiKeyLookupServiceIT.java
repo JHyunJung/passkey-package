@@ -1,5 +1,6 @@
 package com.crosscert.passkey.app.security;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -79,7 +80,9 @@ class ApiKeyLookupServiceIT {
     static class ServiceConfig {
         @Bean
         ApiKeyLookupService apiKeyLookupService(DataSource dataSource) {
-            return new ApiKeyLookupService(dataSource);
+            // 이 IT 컨테이너는 아직 구 계정명(APP_OWNER)으로 부트스트랩된다.
+            // 스키마명을 명시해 IT 자체의 SQL(위 seed/verify 쿼리)과 일치시킨다.
+            return new ApiKeyLookupService(dataSource, new DbSchemaProperties("APP_OWNER"));
         }
     }
 

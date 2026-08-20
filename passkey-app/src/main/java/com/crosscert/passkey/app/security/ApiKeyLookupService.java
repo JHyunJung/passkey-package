@@ -1,5 +1,6 @@
 package com.crosscert.passkey.app.security;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,7 +32,7 @@ import java.util.UUID;
  * </ul>
  *
  * <p>Previously these two calls went through a definer-rights PL/SQL package
- * ({@code APP_OWNER.api_key_lookup_pkg}) whose only purpose was to bypass the
+ * ({@code PSK_APP_OWNER.api_key_lookup_pkg}) whose only purpose was to bypass the
  * Oracle VPD predicate ({@code tenant_id = SYS_CONTEXT(...)}) that would
  * otherwise return zero rows when no context was set. With VPD removed the
  * bypass is unnecessary: a plain SQL query already sees all rows, so the
@@ -48,21 +49,23 @@ import java.util.UUID;
 public class ApiKeyLookupService {
 
     private final JdbcTemplate jdbc;
+    private final String schema;
 
-    public ApiKeyLookupService(DataSource dataSource) {
+    public ApiKeyLookupService(DataSource dataSource, DbSchemaProperties dbSchema) {
         this.jdbc = new JdbcTemplate(dataSource);
+        this.schema = dbSchema.schema();
     }
 
     public Optional<ApiKeyAuthRow> findByPrefix(String keyPrefix) {
         // 인증 시점에는 아직 tenant context 가 없다. key_prefix 는 전역 UNIQUE(V7)
         // 이므로 tenant 없이 1행 룩업이 정확하다. JdbcTemplate 의 직접 SQL 은
         // Hibernate @Filter(ORM 레벨) 를 거치지 않으므로 모든 테넌트의 행을 본다.
-        // 테이블은 APP_OWNER.api_key 로 명시 — hibernate.default_schema 는 ORM 에만
+        // 테이블은 PSK_APP_OWNER.api_key 로 명시 — hibernate.default_schema 는 ORM 에만
         // 적용되고 raw JDBC 의 미수식 이름은 로그인 사용자 스키마로 해석되기 때문이다
         // (AuditLogService 의 ad-hoc native 쿼리와 동일 규칙).
         return jdbc.query(
                 "SELECT id, tenant_id, key_hash, expires_at, revoked_at "
-              + "FROM APP_OWNER.api_key WHERE key_prefix = ?",
+              + "FROM " + schema + ".api_key WHERE key_prefix = ?",
                 ps -> ps.setString(1, keyPrefix),
                 rs -> {
                     if (!rs.next()) return Optional.empty();
@@ -83,7 +86,7 @@ public class ApiKeyLookupService {
         // 행 변조 차단). VPD 제거 후에도 격리 의미를 명시 검증으로 유지.
         try {
             jdbc.update(
-                    "UPDATE APP_OWNER.api_key SET last_used_at = ? WHERE id = ? AND tenant_id = ?",
+                    "UPDATE " + schema + ".api_key SET last_used_at = ? WHERE id = ? AND tenant_id = ?",
                     ps -> {
                         ps.setTimestamp(1, Timestamp.from(now));
                         ps.setBytes(2, toBytes(apiKeyId));
