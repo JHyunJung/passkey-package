@@ -1,6 +1,7 @@
 package com.crosscert.passkey.admin.mds;
 
 import com.crosscert.passkey.core.api.ApiResponse;
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.MdsBlobCache;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.Cursor;
@@ -24,17 +25,20 @@ public class MdsAdminController {
     private final MdsHistoryService historyService;
     private final StringRedisTemplate redis;
     private final Environment env;
+    private final String schema;
 
     public MdsAdminController(JdbcTemplate jdbc,
                               MdsSchedulerService scheduler,
                               MdsHistoryService historyService,
                               StringRedisTemplate redis,
-                              Environment env) {
+                              Environment env,
+                              DbSchemaProperties dbSchema) {
         this.jdbc = jdbc;
         this.scheduler = scheduler;
         this.historyService = historyService;
         this.redis = redis;
         this.env = env;
+        this.schema = dbSchema.schema();
     }
 
     @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
@@ -70,7 +74,7 @@ public class MdsAdminController {
                 "SELECT version AS \"version\", " +
                 "       next_update AS \"nextUpdate\", " +
                 "       fetched_at AS \"fetchedAt\" " +
-                "FROM APP_OWNER.mds_blob_cache WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
+                "FROM " + schema + ".mds_blob_cache WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
                 (rs, n) -> new MdsStatusView(
                         rs.getLong("version"),
                         rs.getDate("nextUpdate") == null

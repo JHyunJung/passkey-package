@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.mds;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +77,8 @@ class MdsAdminControllerScanTest {
 
     private MdsAdminController controller(JdbcTemplate jdbc, MdsHistoryService history, Environment env,
                                            StringRedisTemplate redisTemplate) {
-        return new MdsAdminController(jdbc, mock(MdsSchedulerService.class), history, redisTemplate, env);
+        return new MdsAdminController(jdbc, mock(MdsSchedulerService.class), history, redisTemplate, env,
+                new DbSchemaProperties("PSK_APP_OWNER"));
     }
 
     @Test

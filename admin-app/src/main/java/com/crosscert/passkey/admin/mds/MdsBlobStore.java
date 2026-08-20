@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.mds;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.MdsBlobCache;
 import com.crosscert.passkey.webauthn.mds.MdsBlob;
 import org.springframework.dao.IncorrectUpdateSemanticsDataAccessException;
@@ -27,10 +28,12 @@ public class MdsBlobStore {
 
     private final JdbcTemplate jdbc;
     private final Clock clock;
+    private final String schema;
 
-    public MdsBlobStore(JdbcTemplate jdbc, Clock clock) {
+    public MdsBlobStore(JdbcTemplate jdbc, Clock clock, DbSchemaProperties dbSchema) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.schema = dbSchema.schema();
     }
 
     @Transactional
@@ -39,7 +42,7 @@ public class MdsBlobStore {
         LocalDate nextUpdate = blob.nextUpdate();
         Instant now = clock.instant();
         int updated = jdbc.update(
-                "UPDATE APP_OWNER.mds_blob_cache " +
+                "UPDATE " + schema + ".mds_blob_cache " +
                 "SET version=?, next_update=?, fetched_at=? " +
                 "WHERE id=HEXTORAW('" + SINGLETON_HEX + "')",
                 version,

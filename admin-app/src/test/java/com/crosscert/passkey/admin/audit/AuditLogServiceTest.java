@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit;
 
+import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.config.KstTime;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
@@ -50,7 +51,8 @@ class AuditLogServiceTest {
         // Phase B — findLatestByTenant 기본 stub: genesis (테넌트 chain 없음)
         when(repo.findLatestByTenant(isNull(), any())).thenReturn(List.of());
         when(repo.findLatestByTenant(any(UUID.class), any())).thenReturn(List.of());
-        service = new AuditLogService(repo, em, new ObjectMapper(), clock);
+        service = new AuditLogService(repo, em, new ObjectMapper(), clock,
+                new DbSchemaProperties("PSK_APP_OWNER"));
     }
 
     @Test
