@@ -18,13 +18,19 @@ MAPPING = [
     ("APP_OWNER",        "PSK_APP_OWNER"),
 ]
 
-# (?<!PSK_) : 이미 접두사가 붙은 토큰 제외
-# (?<![A-Za-z0-9_]) / (?![A-Za-z0-9_]) : 단어 경계. \b 는 밑줄을 단어문자로 봐서
-#   APP_ADMIN_USER 안의 APP_ADMIN 을 걸러내지 못하므로 직접 명시한다.
-#   소문자도 포함해야 한다 — 대문자만 쓰면 APP_ADMINistrator 처럼 뒤에
-#   소문자가 이어지는 다른 토큰까지 부분 매치되어 오염된다.
+# 경계 문자: 식별자의 일부가 될 수 있는 것 전부.
+#   - ASCII 영숫자·밑줄
+#   - Oracle 식별자에 허용되는 $ 와 #
+#   - 유니코드 문자(주석·문서에 한글 등이 바로 이어지는 경우)
+# 이것들이 앞뒤에 붙어 있으면 "다른 토큰의 일부"이므로 치환하지 않는다.
+# \w 는 Python3 에서 기본이 유니코드이므로 한글도 단어문자로 잡힌다.
 PATTERNS = [
-    (re.compile(r"(?<!PSK_)(?<![A-Za-z0-9_])" + old + r"(?![A-Za-z0-9_])"), new)
+    (re.compile(
+        r"(?<!PSK_)"           # 이미 접두사가 붙은 토큰 제외
+        r"(?<![\w\$#])"        # 앞 경계: 단어문자(유니코드 포함)·$·# 가 아니어야
+        + old +
+        r"(?![\w\$#])"         # 뒤 경계: 같음
+    ), new)
     for old, new in MAPPING
 ]
 
@@ -51,6 +57,13 @@ def self_test() -> int:
         # 뒤에 소문자가 이어지면 다른 단어다 — 건드리지 않는다
         ("APP_ADMINistrator", "APP_ADMINistrator"),
         ("APP_OWNERship", "APP_OWNERship"),
+        # Oracle 식별자에 허용되는 $ · # 가 이어지면 다른 토큰이다
+        ("APP_ADMIN$AUDIT", "APP_ADMIN$AUDIT"),
+        ("APP_OWNER#1", "APP_OWNER#1"),
+        # 유니코드 문자가 바로 이어지는 경우
+        ("APP_OWNER한글", "APP_OWNER한글"),
+        # 앞에 $ 가 붙은 경우도 다른 토큰
+        ("X$APP_ADMIN", "X$APP_ADMIN"),
     ]
     failed = 0
     for src, expected in cases:
@@ -85,6 +98,8 @@ def main(argv):
             continue  # 바이너리·디렉터리는 건너뛴다
         converted = convert(original)
         if converted != original:
+            # 비원자적 쓰기지만 대상이 전부 git 추적 파일이라 손상 시 checkout 으로
+            # 복구된다. 일회성 도구이므로 임시파일+os.replace 는 과설계(YAGNI).
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(converted)
             changed += 1
