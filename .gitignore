@@ -30,6 +30,19 @@ deploy/*
 !deploy/README.md
 !deploy/nginx/
 deploy/.env
+
+# QA 반입 번들(qa-bundle/) — 스크립트와 문서만 버전 관리한다.
+# 이미지 tarball·Docker 정적 바이너리는 700MB 넘고 GitHub 100MB 제한을 위반하며,
+# docker save / 공식 배포처에서 언제든 재생성할 수 있으므로 커밋하지 않는다.
+# (재생성 방법은 qa-bundle/README.md 참조)
+qa-bundle/images/*.tar.gz
+qa-bundle/docker-install/*.tgz
+qa-bundle/docker-install/docker-compose-linux-*
+# 서버에서 생성되는 실제 시크릿
+qa-bundle/deploy/.env
+# 단, 값이 비어 있는 템플릿은 커밋한다(아래 **/.env.* 규칙의 예외).
+# ! 예외는 뒤에 오는 규칙에 다시 걸리면 무효가 되므로, 해당 규칙 뒤에 둔다.
+
 # Eclipse/Gradle 모듈별 컴파일 산출물(IT 실행 등이 생성) — 커밋 금지
 bin/
 */bin/
@@ -51,6 +64,7 @@ logs/
 *.env
 .env.*
 **/.env.*
+!qa-bundle/deploy/.env.qa-template
 # 단 .env.example 은 시크릿이 아닌 템플릿이므로 커밋한다
 !.env.example
 !**/.env.example
