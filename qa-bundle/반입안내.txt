@@ -1,0 +1,65 @@
+Passkey QA 반입 안내
+====================
+
+이 파일은 passkey-qa-bundle.tar.gz 안에 함께 들어 있다.
+압축을 풀었다면 [1] 은 이미 끝난 것이므로 [2] 부터 진행한다.
+
+대상: Rocky Linux 9.7 / x86_64
+      ※ 내부 이미지·바이너리가 전부 amd64 전용이다.
+        ARM 서버에서는 exec format error 로 동작하지 않는다.
+
+
+[1] 반입 직후 무결성 검증  (압축 풀기 전)
+
+    함께 받은 passkey-qa-bundle.tar.gz.sha256 으로 확인한다.
+
+        sha256sum -c passkey-qa-bundle.tar.gz.sha256
+        → passkey-qa-bundle.tar.gz: OK
+
+    ※ 기대 해시값은 이 파일이 아니라 위 .sha256 파일에 들어 있다
+      (아카이브 안에 자기 자신의 해시를 적어 둘 수 없기 때문).
+    ※ .sha256 을 못 받았다면 건너뛰어도 된다. 아래 [3] 에서 내부 파일들의
+      체크섬을 어차피 다시 검증하므로 손상은 그 시점에 잡힌다.
+
+
+[2] 압축 해제  (약 710MB 로 늘어난다)
+
+        tar xzf passkey-qa-bundle.tar.gz
+        cd passkey-qa-bundle
+
+
+[3] 사전 점검
+
+        ./preflight.sh <OracleIP> 1521
+
+    [!!] 로 표시된 항목을 먼저 해결한다. 특히 iptables 가 없으면
+    Docker 네트워킹이 동작하지 않는다(폐쇄망이라 dnf 불가 → OS ISO 사용).
+
+
+[4] 전체 순서
+
+        cat README.md          # 설치~검증 전 과정
+        cat CHECKLIST.md       # 단계별 체크리스트
+
+    다섯 줄이면 기동까지 끝난다:
+
+        ./preflight.sh <OracleIP> 1521      점검
+        sudo ./docker-install/install-docker.sh
+        ./load-images.sh                    이미지 적재
+        ./setup.sh                          환경 설정 (6가지 질문)
+        ./start.sh                          기동
+
+    그다음 admin 콘솔에서 테넌트·API키를 만들고:
+
+        ./setup.sh --rp-keys                값 2개 입력
+        ./start.sh rp-app                   RP 데모 기동
+
+
+별도 준비물 (번들에 포함할 수 없는 것)
+
+  - Rocky-9.7-x86_64-dvd1.iso    iptables / container-selinux 미설치 시에만 필요.
+                                 배포 불가하므로 별도 조달한다.
+  - Oracle DB                    스키마·계정·운영자 계정은 이미 생성된 전제.
+                                 이 번들에 DDL 은 없다. 접속 정보만 준비한다.
+  - 내부 DNS 2개 + TLS 종료 LB    WebAuthn 은 HTTPS 가 필수다(README §9).
+                                 평문 HTTP 로는 브라우저가 패스키 등록을 거부한다.
