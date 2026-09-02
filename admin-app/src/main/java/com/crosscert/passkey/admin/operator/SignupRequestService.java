@@ -27,6 +27,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -132,6 +133,9 @@ public class SignupRequestService {
             throw new IllegalArgumentException("Invalid role: " + body.role());
         }
         List<UUID> tenantIds = body.tenantIds() == null ? List.of() : body.tenantIds();
+        if (tenantIds.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("tenantIds must not contain null");
+        }
         if ("RP_ADMIN".equals(body.role()) && tenantIds.isEmpty()) {
             throw new IllegalArgumentException("RP_ADMIN requires at least one tenant");
         }
@@ -165,7 +169,19 @@ public class SignupRequestService {
         user.setStatus("ACTIVE");
         user.setEnabled(true);
         user.setCreatedBy(actorEmail);
-        AdminUser saved = users.save(user);
+        // saveAndFlush (not save) — a plain save() defers the INSERT (and its
+        // UNIQUE(email) violation) to commit, which happens *outside* this
+        // method after the exception-translation below has already been
+        // skipped, surfacing as an uncaught 500. Flushing here forces the
+        // violation to throw inside the try, where it can still be mapped
+        // to 409; the exception propagating out of @Transactional still
+        // rolls the whole approval back.
+        AdminUser saved;
+        try {
+            saved = users.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+        }
 
         List<UUID> distinctTenants = List.copyOf(new LinkedHashSet<>(tenantIds));
         for (UUID tid : distinctTenants) {

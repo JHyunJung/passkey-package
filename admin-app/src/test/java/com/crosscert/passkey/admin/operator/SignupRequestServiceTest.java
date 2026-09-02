@@ -12,6 +12,7 @@ import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -152,13 +155,13 @@ class SignupRequestServiceTest {
         when(requests.findById(reqId)).thenReturn(Optional.of(pendingReq));
         when(users.findByEmail("new@x.com")).thenReturn(Optional.empty());
         when(requests.deleteIfPresent(reqId)).thenReturn(1);
-        when(users.save(any())).thenReturn(savedUser);
+        when(users.saveAndFlush(any())).thenReturn(savedUser);
 
         AdminUserDto.View view = service.approve(reqId,
                 new SignupRequestDto.Approve("RP_ADMIN", List.of(tenantId, tenantId)), ACTOR_ID, ACTOR);
 
         ArgumentCaptor<AdminUser> userCap = ArgumentCaptor.forClass(AdminUser.class);
-        verify(users).save(userCap.capture());
+        verify(users).saveAndFlush(userCap.capture());
         AdminUser created = userCap.getValue();
         assertThat(created.getEmail()).isEqualTo("new@x.com");
         assertThat(created.getBcryptHash()).as("요청의 해시를 그대로 복사").isEqualTo("$2a$12$stored");
@@ -181,6 +184,13 @@ class SignupRequestServiceTest {
 
         verify(mail).send(eq("new@x.com"), anyString(), anyString());
         assertThat(view.tenantIds()).containsExactly(tenantId);
+
+        // 경합 판정(deleteIfPresent) 은 반드시 계정 INSERT 보다 먼저 실행돼야
+        // 한다 — clearAutomatically 가 영속성 컨텍스트를 비우는 지점이 이 순서에
+        // 의존한다(SignupRequestService.approve 4번 주석 참고).
+        InOrder inOrder = inOrder(requests, users);
+        inOrder.verify(requests).deleteIfPresent(reqId);
+        inOrder.verify(users).saveAndFlush(any());
     }
 
     @Test
@@ -232,7 +242,7 @@ class SignupRequestServiceTest {
                 new SignupRequestDto.Approve("PLATFORM_OPERATOR", List.of()), ACTOR_ID, ACTOR))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
-        verify(users, never()).save(any());
+        verify(users, never()).saveAndFlush(any());
     }
 
     @Test
@@ -247,8 +257,35 @@ class SignupRequestServiceTest {
                 new SignupRequestDto.Approve("PLATFORM_OPERATOR", List.of()), ACTOR_ID, ACTOR))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
-        verify(users, never()).save(any());
+        verify(users, never()).saveAndFlush(any());
         verify(audit, never()).append(any());
+    }
+
+    @Test
+    void approve_uniqueViolationOnFlush_409() {
+        UUID reqId = UUID.randomUUID();
+        AdminSignupRequest pendingReq = pending(reqId, "flush@x.com");
+        when(requests.findById(reqId)).thenReturn(Optional.of(pendingReq));
+        when(users.findByEmail("flush@x.com")).thenReturn(Optional.empty());
+        when(requests.deleteIfPresent(reqId)).thenReturn(1);
+        when(users.saveAndFlush(any()))
+                .thenThrow(new DataIntegrityViolationException("uq_admin_user_email"));
+
+        assertThatThrownBy(() -> service.approve(reqId,
+                new SignupRequestDto.Approve("PLATFORM_OPERATOR", List.of()), ACTOR_ID, ACTOR))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verify(audit, never()).append(any());
+    }
+
+    @Test
+    void approve_nullTenantId_rejected400() {
+        UUID reqId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.approve(reqId,
+                new SignupRequestDto.Approve("RP_ADMIN", Arrays.asList((UUID) null)), ACTOR_ID, ACTOR))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not contain null");
+        verify(requests, never()).deleteIfPresent(any());
     }
 
     @Test
@@ -259,7 +296,7 @@ class SignupRequestServiceTest {
         when(requests.findById(reqId)).thenReturn(Optional.of(pendingReq));
         when(users.findByEmail("m@x.com")).thenReturn(Optional.empty());
         when(requests.deleteIfPresent(reqId)).thenReturn(1);
-        when(users.save(any())).thenReturn(savedUser);
+        when(users.saveAndFlush(any())).thenReturn(savedUser);
         doThrow(new RuntimeException("smtp down")).when(mail).send(anyString(), anyString(), anyString());
 
         assertThatCode(() -> service.approve(reqId,
