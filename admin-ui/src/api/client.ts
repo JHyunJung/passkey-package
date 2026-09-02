@@ -25,7 +25,8 @@ function isOnLoginScreen(): boolean {
   return p === '/admin'
     || p === '/admin/'
     || p.startsWith('/admin/forgot-password')
-    || p.startsWith('/admin/reset-password');
+    || p.startsWith('/admin/reset-password')
+    || p.startsWith('/admin/signup');
 }
 
 // Used for endpoints that return raw JSON (no ApiResponse envelope),

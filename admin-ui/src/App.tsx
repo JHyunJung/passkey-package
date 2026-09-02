@@ -20,6 +20,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import LicensePage from '@/pages/LicensePage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
+import SignupRequestPage from '@/pages/SignupRequestPage';
 import { api, getMe } from '@/api/client';
 import type { Me } from '@/api/types';
 import type { AppRoute } from '@/appRoute';
@@ -215,7 +216,7 @@ function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const location = useLocation();
-  const isPublicPath = location.pathname === '/forgot-password' || location.pathname === '/reset-password';
+  const isPublicPath = location.pathname === '/forgot-password' || location.pathname === '/reset-password' || location.pathname === '/signup';
 
   useEffect(() => {
     if (isPublicPath) { setLoading(false); return; }
@@ -228,6 +229,7 @@ function App() {
   // public 경로 — me 로딩과 무관하게 즉시 렌더
   if (location.pathname === '/forgot-password') return <ForgotPasswordPage />;
   if (location.pathname === '/reset-password') return <ResetPasswordPage />;
+  if (location.pathname === '/signup') return <SignupRequestPage />;
 
   async function handleLogout() {
     try { await api.post<void>('/admin/logout', {}); } catch { /* ignore */ }
