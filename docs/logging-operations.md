@@ -51,7 +51,7 @@ apiKeyPrefix: "pk_devacme0"
 
 ### 보안 경보 패턴
 ```bash
-grep -E 'WARN.*(api-key auth failed|signCount did not advance|tenant boundary violation|invitation (expired|used)|admin access denied)' *.log
+grep -E 'WARN.*(api-key auth failed|signCount did not advance|tenant boundary violation|signup request skipped|admin access denied)' *.log
 ```
 
 ## 3. 레벨 의미
@@ -110,9 +110,9 @@ prod 에서 root 가 INFO 라 DEBUG 는 출력 안 됨.
 | `WARN login/complete failed: reason=id-token-verify-failed cause=…expired…` | clock skew 또는 token TTL 너무 짧음 | 서버 시간 동기 확인 |
 | `WARN admin login failed: email=… reason=unknown-user` | 잘못된 email 또는 사용자 삭제 | `admin_user` 테이블 확인 |
 | `WARN tenant boundary violation` | RP_ADMIN 이 다른 tenant 접근 시도 | actor 확인 → 의도된 경로인지 정책 점검 |
-| `WARN invitation expired` | 24h TTL 초과 | 재초대 발급 |
-| `WARN invitation used` | 토큰 재사용 시도 | 즉시 `admin_user` 상태 + `audit_log` 검사 |
-| `WARN invitation lookup failed: reason=not-found` | 잘못된 토큰 또는 만료 후 삭제 | 발급 이력 확인 |
+| `WARN signup request skipped: reason=already-admin` | 기존 계정 이메일로 가입 요청 | 정상(열거 방지 응답). 반복되면 계정 소유자 확인 |
+| `WARN signup request skipped: reason=pending-cap` | 대기 요청 100건 도달 | 운영자 탭에서 요청 정리(승인/거절) 또는 retention 대기 |
+| `WARN signup request skipped: reason=concurrent-duplicate` | 같은 이메일 동시 요청 | 정상 |
 
 ## 7. 환경별 로그 레벨
 
