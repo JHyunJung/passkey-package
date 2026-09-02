@@ -73,15 +73,15 @@ export default function AdminUsersTab() {
       await signupRequestsApi.approve(req.id, body);
       setApproving(null);
       toast({ kind: 'ok', title: '가입 요청을 승인했습니다.', message: `${req.email} · 즉시 로그인 가능` });
+      await reload();
     } catch (e: unknown) {
       if (e instanceof ApiError && e.status === 409) {
         toast({ kind: 'warn', title: '이미 처리된 요청입니다.', message: '다른 관리자가 먼저 처리했습니다.' });
         setApproving(null);
+        await reload();
       } else {
         toast({ kind: 'err', title: '승인 실패', message: errMsg(e) });
       }
-    } finally {
-      await reload();
     }
   }
 
@@ -89,15 +89,16 @@ export default function AdminUsersTab() {
     try {
       await signupRequestsApi.reject(req.id);
       toast({ kind: 'warn', title: '가입 요청을 거절했습니다.', message: req.email });
+      setRejecting(null);
+      await reload();
     } catch (e: unknown) {
       if (e instanceof ApiError && e.status === 409) {
         toast({ kind: 'warn', title: '이미 처리된 요청입니다.', message: '다른 관리자가 먼저 처리했습니다.' });
+        setRejecting(null);
+        await reload();
       } else {
         toast({ kind: 'err', title: '거절 실패', message: errMsg(e) });
       }
-    } finally {
-      setRejecting(null);
-      await reload();
     }
   }
 
