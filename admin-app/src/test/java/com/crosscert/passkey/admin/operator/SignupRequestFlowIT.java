@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.operator;
 
+import com.crosscert.passkey.admin.AdminApplication;
 import com.crosscert.passkey.admin.auth.AdminUserDetails;
 import com.crosscert.passkey.admin.tenant.TenantAdminDto;
 import com.crosscert.passkey.admin.tenant.TenantAdminService;
@@ -40,7 +41,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * V5 마이그레이션(테이블 생성·GRANT·초대 테이블 DROP)이 실제로 적용되는지도 여기서 확인된다.
  * 서비스 레이어 직접 호출 — 삭제된 AdminUserInvitationFlowIT 와 같은 패턴.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// operator 패키지에 슬라이스용 중첩 @SpringBootConfiguration 이 있어 부트 클래스를 명시한다.
+@SpringBootTest(classes = AdminApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
 class SignupRequestFlowIT {
@@ -130,7 +132,7 @@ class SignupRequestFlowIT {
 
         AdminUserDetails operator = new AdminUserDetails(
                 SECURITY_CTX_ACTOR_ID, ALICE_EMAIL, "{noop}unused",
-                "PLATFORM_OPERATOR", null, true, null, java.time.Clock.systemUTC());
+                "PLATFORM_OPERATOR", Set.of(), true, null, java.time.Clock.systemUTC());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(operator, null, operator.getAuthorities()));
 
