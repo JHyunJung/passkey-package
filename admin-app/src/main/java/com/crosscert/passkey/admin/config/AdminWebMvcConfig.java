@@ -37,6 +37,7 @@ public class AdminWebMvcConfig {
                 registry.addViewController("/admin/license").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/forgot-password").setViewName("forward:/admin/index.html");
                 registry.addViewController("/admin/reset-password").setViewName("forward:/admin/index.html");
+                registry.addViewController("/admin/signup").setViewName("forward:/admin/index.html");
             }
         };
     }
