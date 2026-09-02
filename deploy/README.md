@@ -227,6 +227,17 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 비어 있으면 의도적으로 fail-fast 한다. `docker compose logs passkey-app` 에서
 `Failed to configure a DataSource` 류의 메시지를 확인하고 `.env` 를 점검한다.
 
+## 마이그레이션 후속 조치
+
+- **V5 (`admin_signup_request` 도입 + 초대 테이블 제거) 적용 후**: 기존 초대
+  흐름이 남긴 미완료 계정(`admin_user.status='PENDING'`, `bcrypt_hash IS NULL`)은
+  초대 테이블이 사라져 더 이상 완료할 방법이 없다. `admin_user_tenant.admin_user_id`
+  FK 가 `ON DELETE CASCADE` 이므로 `admin_user` 행만 지우면 연결된 테넌트 매핑도
+  함께 정리된다. PSK_APP_OWNER 로 한 번 실행한다:
+  ```sql
+  DELETE FROM admin_user WHERE status = 'PENDING' AND bcrypt_hash IS NULL;
+  ```
+
 **`--scale` 시 포트 충돌** — passkey-app 에 `ports:` 매핑이 살아 있는지
 확인한다. nginx 를 쓰는 기본 구성에서는 주석 처리돼 있어야 한다.
 

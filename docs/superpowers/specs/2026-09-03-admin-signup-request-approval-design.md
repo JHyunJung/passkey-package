@@ -206,6 +206,11 @@ GRANT: `PSK_APP_ADMIN` 에 SELECT, INSERT, DELETE. UPDATE 는 부여하지 않�
 - V5 는 초대 테이블을 DROP 한다. 실행 전 미수락 초대가 남아 있어도 복구 대상이 아니다(어차피 수락 불가).
 - `passkey.retention.invitation` 을 override 하던 환경변수가 있으면 `passkey.retention.signup-request` 로 바꾼다.
 - `ADMIN_INVITE_BASE_URL` 환경변수는 이름 그대로 유지된다.
+- V5 적용 후 초대 흐름이 남긴 미완료 계정(`status='PENDING'`, `bcrypt_hash IS NULL`)은 완료 수단이 없으므로 한 번 정리한다 —
+  `admin_user_tenant.admin_user_id` FK 가 `ON DELETE CASCADE` 이므로 `admin_user` 만 지우면 된다(PSK_APP_OWNER 로 실행):
+  ```sql
+  DELETE FROM admin_user WHERE status = 'PENDING' AND bcrypt_hash IS NULL;
+  ```
 
 ## 7. 범위 밖
 
