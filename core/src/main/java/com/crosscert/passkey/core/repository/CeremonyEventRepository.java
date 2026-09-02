@@ -47,7 +47,7 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
      * P1-4 retention: created_at 이 cutoff 이전인 ceremony 이벤트 삭제. funnel 쿼리는
      * 최대 30일까지만 조회하므로 윈도 초과분은 안전하게 제거 가능(append-only 지표 정리).
      *
-     * <p>Batched: ROWNUM 캡(AdminUserInvitationRepository 참고). nativeQuery + 실제 컬럼명.
+     * <p>Batched: ROWNUM 캡으로 batchSize 단위 삭제(nativeQuery + 실제 컬럼명).
      */
     @Modifying(clearAutomatically = true)
     @Transactional

@@ -2,7 +2,7 @@ package com.crosscert.passkey.admin.retention;
 
 import com.crosscert.passkey.admin.mds.MdsHistoryService;
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository;
-import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
+import com.crosscert.passkey.core.repository.AdminSignupRequestRepository;
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
 import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
@@ -32,7 +32,7 @@ public class RetentionPurgeService {
      */
     static final int BATCH = 1000;
 
-    private final AdminUserInvitationRepository invitations;
+    private final AdminSignupRequestRepository signupRequests;
     private final AdminPasswordResetTokenRepository resetTokens;
     private final AdminUserRecoveryCodeRepository recoveryCodes;
     private final TenantWebauthnSnapshotRepository snapshots;
@@ -40,10 +40,11 @@ public class RetentionPurgeService {
     private final CeremonyEventRepository ceremonyEvents;
     private final CredentialAuthEventRepository credentialAuthEvents;
 
-    public int purgeInvitations(OffsetDateTime cutoff) {
+    /** 보존기간 지난 미처리 가입 요청 삭제 — 방치된 요청이 대기 상한을 영구 점유하지 않게. */
+    public int purgeSignupRequests(OffsetDateTime cutoff) {
         int total = 0, n;
         do {
-            n = invitations.deleteConsumedOrExpiredBefore(cutoff, BATCH);
+            n = signupRequests.deleteRequestedBefore(cutoff, BATCH);
             total += n;
         } while (n == BATCH);
         return total;

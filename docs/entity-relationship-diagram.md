@@ -4,7 +4,7 @@ Crosscert Passkey Platform 의 JPA 엔티티(`core/src/main/java/com/crosscert/p
 연관관계입니다. 두 개의 집합(aggregate)으로 나뉩니다.
 
 - **TENANT 집합** — 패스키 운영 데이터 (credential, api_key, 정책·설정)
-- **ADMIN_USER 집합** — 관리 콘솔 계정 (recovery code, reset token, invitation)
+- **ADMIN_USER 집합** — 관리 콘솔 계정 (recovery code, reset token, signup request)
 - 두 집합은 `admin_user.tenant_id` 로 느슨히 연결됩니다 (RP_ADMIN 은 특정 테넌트 소속,
   플랫폼 운영자는 `tenant_id = null`).
 
@@ -27,7 +27,6 @@ erDiagram
     TENANT ||--o{ ADMIN_USER : "scopes RP_ADMIN (soft, nullable)"
     ADMIN_USER ||--o{ ADMIN_USER_RECOVERY_CODE : "has (soft)"
     ADMIN_USER ||--o{ ADMIN_PASSWORD_RESET_TOKEN : "has (soft)"
-    ADMIN_USER ||--o{ ADMIN_USER_INVITATION : "has (soft)"
     ADMIN_USER ||--o{ AUDIT_LOG : "actor (soft, nullable)"
     TENANT ||--o{ AUDIT_LOG : "scope (soft, nullable)"
 
@@ -107,13 +106,6 @@ erDiagram
         string token_prefix
         instant expires_at
     }
-    ADMIN_USER_INVITATION {
-        RAW16 id PK
-        RAW16 admin_user_id "soft FK"
-        string token_hash "sha-256"
-        string token_prefix
-        instant expires_at
-    }
     AUDIT_LOG {
         RAW16 id PK
         RAW16 actor_id "soft FK, nullable"
@@ -136,6 +128,7 @@ erDiagram
 | `MDS_BLOB_CACHE` | FIDO MDS 블롭 캐시 | 고정 SINGLETON_ID |
 | `SECURITY_POLICY` | 전역 보안 설정 | 싱글톤 (세션 타임아웃·CORS·MFA 필수 등) |
 | `SCHEDULER_LEASE` | 배치 리더 선출 lease | `name`·`holder`·`expires_at` |
+| `ADMIN_SIGNUP_REQUEST` | 승인 대기 중인 가입 요청 | FK 없음(독립). `id`·`email`(UK)·`bcrypt_hash`·`reason`·`requested_at`. 승인/거절 시 삭제(이력은 `audit_log`) |
 
 ## 관계 요약표
 
@@ -150,7 +143,6 @@ erDiagram
 | API_KEY | API_KEY_SCOPE | 1:N | JPA `@ManyToOne` | ALL + orphanRemoval |
 | ADMIN_USER | ADMIN_USER_RECOVERY_CODE | 1:N | soft FK (`admin_user_id`) | — |
 | ADMIN_USER | ADMIN_PASSWORD_RESET_TOKEN | 1:N | soft FK | — |
-| ADMIN_USER | ADMIN_USER_INVITATION | 1:N | soft FK | — |
 | TENANT | ADMIN_USER | 1:N | soft FK (nullable) | — |
 | ADMIN_USER | AUDIT_LOG | 1:N | soft FK (`actor_id`, nullable) | — |
 | TENANT | AUDIT_LOG | 1:N | soft FK (`tenant_id`, nullable) | — |

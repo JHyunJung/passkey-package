@@ -82,7 +82,7 @@ class AaguidPolicyControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
     @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserInvitationRepository invitationRepository;
+    @MockBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
     @MockBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
     @MockBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;

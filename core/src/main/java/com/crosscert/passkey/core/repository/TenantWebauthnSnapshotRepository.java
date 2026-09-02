@@ -18,7 +18,7 @@ public interface TenantWebauthnSnapshotRepository extends JpaRepository<TenantWe
     /**
      * P1-4 retention: taken_at 이 cutoff 이전인 스냅샷 삭제(append-only 이력 정리).
      *
-     * <p>Batched: ROWNUM 캡(AdminUserInvitationRepository 참고). nativeQuery + 실제 컬럼명.
+     * <p>Batched: ROWNUM 캡으로 batchSize 단위 삭제(nativeQuery + 실제 컬럼명).
      */
     @Modifying(clearAutomatically = true)
     @Transactional

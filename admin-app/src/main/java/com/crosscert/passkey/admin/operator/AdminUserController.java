@@ -33,12 +33,6 @@ public class AdminUserController {
         return service.list();
     }
 
-    @PostMapping
-    public AdminUserDto.InviteResponse invite(@Valid @RequestBody AdminUserDto.InviteRequest req,
-                                               Authentication auth) {
-        return service.invite(req, actorId(auth), auth.getName());
-    }
-
     @PostMapping("/{id}/suspend")
     public void suspend(@PathVariable UUID id, Authentication auth) {
         service.suspend(id, actorId(auth), auth.getName());
@@ -47,13 +41,6 @@ public class AdminUserController {
     @PostMapping("/{id}/activate")
     public void activate(@PathVariable UUID id, Authentication auth) {
         service.activate(id, actorId(auth), auth.getName());
-    }
-
-    @PostMapping("/{id}/invitation/resend")
-    public AdminUserDto.InvitationInfo resend(@PathVariable UUID id,
-                                                Authentication auth,
-                                                @RequestParam String email) {
-        return service.resendInvitation(id, auth.getName(), email);
     }
 
     @PostMapping("/{id}/tenants")

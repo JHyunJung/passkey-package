@@ -2,7 +2,7 @@ package com.crosscert.passkey.admin.retention;
 
 import com.crosscert.passkey.admin.mds.MdsHistoryService;
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository;
-import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
+import com.crosscert.passkey.core.repository.AdminSignupRequestRepository;
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository;
 import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RetentionPurgeServiceTest {
 
-    @Mock AdminUserInvitationRepository invitations;
+    @Mock AdminSignupRequestRepository signupRequests;
     @Mock AdminPasswordResetTokenRepository resetTokens;
     @Mock AdminUserRecoveryCodeRepository recoveryCodes;
     @Mock TenantWebauthnSnapshotRepository snapshots;
@@ -35,16 +35,15 @@ class RetentionPurgeServiceTest {
     @BeforeEach
     void setUp() {
         service = new RetentionPurgeService(
-                invitations, resetTokens, recoveryCodes, snapshots, mdsHistory,
+                signupRequests, resetTokens, recoveryCodes, snapshots, mdsHistory,
                 ceremonyEvents, credentialAuthEvents);
     }
 
     @Test
-    void purgeInvitations_delegates_cutoff_and_returns_count() {
+    void purgeSignupRequests_delegates_cutoff_and_returns_count() {
         OffsetDateTime cutoff = OffsetDateTime.parse("2026-01-01T00:00:00Z");
-        // 3 < BATCH(1000) 이므로 do/while 루프는 1회만 돌고 종료.
-        when(invitations.deleteConsumedOrExpiredBefore(eq(cutoff), anyInt())).thenReturn(3);
-        assertThat(service.purgeInvitations(cutoff)).isEqualTo(3);
+        when(signupRequests.deleteRequestedBefore(eq(cutoff), anyInt())).thenReturn(3);
+        assertThat(service.purgeSignupRequests(cutoff)).isEqualTo(3);
     }
 
     @Test
@@ -79,9 +78,9 @@ class RetentionPurgeServiceTest {
     void purge_loops_until_batch_not_full_and_sums_totals() {
         OffsetDateTime cutoff = OffsetDateTime.parse("2026-01-01T00:00:00Z");
         // 1회차 full batch(1000) → 반복, 2회차 250(<1000) → 종료. 총 1250.
-        when(invitations.deleteConsumedOrExpiredBefore(eq(cutoff), anyInt()))
+        when(signupRequests.deleteRequestedBefore(eq(cutoff), anyInt()))
                 .thenReturn(RetentionPurgeService.BATCH, 250);
-        assertThat(service.purgeInvitations(cutoff))
+        assertThat(service.purgeSignupRequests(cutoff))
                 .isEqualTo(RetentionPurgeService.BATCH + 250);
     }
 }

@@ -33,7 +33,8 @@ export async function adminFetch<T>(
     // 미인증 → 로그인 화면(/admin)으로. 로그인/공개 화면 위에서는 무한 reload 방지.
     const p = typeof window !== 'undefined' ? window.location.pathname : '';
     const onLogin = p === '/admin' || p === '/admin/'
-      || p.startsWith('/admin/forgot-password') || p.startsWith('/admin/reset-password');
+      || p.startsWith('/admin/forgot-password') || p.startsWith('/admin/reset-password')
+      || p.startsWith('/admin/signup');
     if (!onLogin) window.location.href = '/admin';
     throw new ApiError(401, 'A001', 'Authentication required');
   }
@@ -80,24 +81,9 @@ export type AdminUserView = {
   mfaEnabled: boolean;
 };
 
-export type InvitationInfo = {
-  tokenPrefix: string;
-  plaintextToken: string;
-  acceptUrl: string;
-  expiresAt: string;
-};
-
-export type InviteResponse = {
-  user: AdminUserView;
-  invitation: InvitationInfo;
-};
-
 export const adminUsersApi = {
   list: (): Promise<AdminUserView[]> =>
     adminFetch<AdminUserView[]>('GET', '/admin/api/admin-users'),
-
-  invite: (body: { email: string; role: string; tenantIds: string[] }): Promise<InviteResponse> =>
-    adminFetch<InviteResponse>('POST', '/admin/api/admin-users', body),
 
   // Spring @PostMapping("/{id}/suspend") returns 200 with no body
   suspend: (id: string): Promise<void> =>
@@ -105,13 +91,6 @@ export const adminUsersApi = {
 
   activate: (id: string): Promise<void> =>
     adminFetch<void>('POST', `/admin/api/admin-users/${id}/activate`, {}),
-
-  resendInvitation: (id: string, email: string): Promise<InvitationInfo> =>
-    adminFetch<InvitationInfo>(
-      'POST',
-      `/admin/api/admin-users/${id}/invitation/resend?email=${encodeURIComponent(email)}`,
-      {},
-    ),
 
   addTenant: (id: string, tenantId: string): Promise<void> =>
     adminFetch<void>('POST', `/admin/api/admin-users/${id}/tenants`, { tenantId }),

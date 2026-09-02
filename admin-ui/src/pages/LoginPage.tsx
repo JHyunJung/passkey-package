@@ -202,6 +202,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             </button>
           </div>
 
+          <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-mute)', textAlign: 'center' }}>
+            계정이 없으신가요?{' '}
+            <a href="/admin/signup" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>가입 요청</a>
+          </div>
+
           <div style={{ marginTop: 24, padding: '10px 12px', background: 'var(--surface-3)', borderRadius: 8, fontSize: 11, color: 'var(--text-mute)', display: 'flex', gap: 8 }}>
             <Icons.Info size={14} />
             <span>30분 동안 활동이 없으면 자동 로그아웃됩니다. 모든 mutation은 audit chain에 기록됩니다.</span>

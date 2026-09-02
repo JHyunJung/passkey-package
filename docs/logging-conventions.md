@@ -23,8 +23,7 @@ log.info("hi {}", userId);                              // event name 없음
 소스에서 raw 값 출력 금지. 반드시 헬퍼:
 
 ```java
-log.info("admin invite issued: email={} tenantId={}",
-         LogRedact.email(req.email()), req.tenantId());
+log.info("signup request approved: email={} role={}", CryptoUtils.maskEmail(email), role);
 ```
 
 대상 필드: email, API key full, JWT, password, bcrypt hash, raw bytes.

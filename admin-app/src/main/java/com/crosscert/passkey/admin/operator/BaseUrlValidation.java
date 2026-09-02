@@ -3,9 +3,9 @@ package com.crosscert.passkey.admin.operator;
 import org.springframework.core.env.Environment;
 
 /**
- * G11 fail-fast guard shared by {@link InvitationService} and
- * {@link PasswordResetService} — both read {@code admin.invite.base-url}
- * and both mail out live links built from it (accept-invite / reset-password).
+ * G11 fail-fast guard shared by {@link PasswordResetService} and
+ * {@link SignupRequestService} — both read {@code admin.invite.base-url}
+ * and both mail out live links built from it (reset-password / signup approval).
  *
  * <p>The property's dev-convenience default ({@code http://localhost:5173})
  * lets the app boot successfully even when a prod deployment forgets to

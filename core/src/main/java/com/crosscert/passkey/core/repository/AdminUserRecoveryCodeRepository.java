@@ -36,7 +36,7 @@ public interface AdminUserRecoveryCodeRepository extends JpaRepository<AdminUser
      * P1-4 retention: 사용된 recovery code 중 used_at 이 cutoff 이전인 것 삭제.
      * 미사용 코드(used_at is null)는 MFA 백업이므로 보존.
      *
-     * <p>Batched: ROWNUM 캡(AdminUserInvitationRepository 참고). nativeQuery + 실제 컬럼명.
+     * <p>Batched: ROWNUM 캡으로 batchSize 단위 삭제(nativeQuery + 실제 컬럼명).
      */
     @Modifying(clearAutomatically = true)
     @Transactional

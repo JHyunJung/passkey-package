@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * G11: admin.invite.base-url must not silently boot in prod with the
- * localhost dev default — see InvitationService/PasswordResetService's
+ * localhost dev default — see PasswordResetService/SignupRequestService's
  * validateBaseUrlForProd() @PostConstruct hooks.
  */
 class BaseUrlValidationTest {

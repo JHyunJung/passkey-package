@@ -48,7 +48,7 @@ class RetentionPurgeJobTest {
     @Test
     void one_table_failure_does_not_block_others_and_audits() {
         when(leases.tryAcquire(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(service.purgeInvitations(any())).thenReturn(2);
+        when(service.purgeSignupRequests(any())).thenReturn(2);
         when(service.purgeResetTokens(any())).thenThrow(new RuntimeException("db error"));
         when(service.purgeRecoveryCodes(any())).thenReturn(1);
         when(service.purgeSnapshots(any())).thenReturn(0);
@@ -58,7 +58,7 @@ class RetentionPurgeJobTest {
 
         job.runOnce();
 
-        verify(service).purgeInvitations(any());
+        verify(service).purgeSignupRequests(any());
         verify(service).purgeResetTokens(any());
         verify(service).purgeRecoveryCodes(any());
         verify(service).purgeSnapshots(any());
@@ -68,7 +68,7 @@ class RetentionPurgeJobTest {
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
         assertThat(cap.getValue().action()).isEqualTo("RETENTION_PURGE");
-        assertThat(cap.getValue().payload().get("invitationsPurged")).isEqualTo(2);
+        assertThat(cap.getValue().payload().get("signupRequestsPurged")).isEqualTo(2);
         // sentinel 제거: 실패한 테이블은 count 키 자체가 없다(합산 오염 방지).
         assertThat(cap.getValue().payload()).doesNotContainKey("resetTokensPurged");
         assertThat(cap.getValue().payload().get("failed").toString()).contains("resetTokens");
@@ -79,7 +79,7 @@ class RetentionPurgeJobTest {
     @Test
     void all_success_audits_every_count_and_empty_failed() {
         when(leases.tryAcquire(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(service.purgeInvitations(any())).thenReturn(5);
+        when(service.purgeSignupRequests(any())).thenReturn(5);
         when(service.purgeResetTokens(any())).thenReturn(3);
         when(service.purgeRecoveryCodes(any())).thenReturn(0);
         when(service.purgeSnapshots(any())).thenReturn(7);
@@ -92,7 +92,7 @@ class RetentionPurgeJobTest {
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
         var payload = cap.getValue().payload();
-        assertThat(payload.get("invitationsPurged")).isEqualTo(5);
+        assertThat(payload.get("signupRequestsPurged")).isEqualTo(5);
         assertThat(payload.get("resetTokensPurged")).isEqualTo(3);
         assertThat(payload.get("recoveryCodesPurged")).isEqualTo(0);
         assertThat(payload.get("snapshotsPurged")).isEqualTo(7);
@@ -106,7 +106,7 @@ class RetentionPurgeJobTest {
     @Test
     void all_zero_still_audits_with_zero_counts_and_empty_failed() {
         when(leases.tryAcquire(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        when(service.purgeInvitations(any())).thenReturn(0);
+        when(service.purgeSignupRequests(any())).thenReturn(0);
         when(service.purgeResetTokens(any())).thenReturn(0);
         when(service.purgeRecoveryCodes(any())).thenReturn(0);
         when(service.purgeSnapshots(any())).thenReturn(0);
@@ -119,7 +119,7 @@ class RetentionPurgeJobTest {
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
         var payload = cap.getValue().payload();
-        assertThat(payload.get("invitationsPurged")).isEqualTo(0);
+        assertThat(payload.get("signupRequestsPurged")).isEqualTo(0);
         assertThat(payload.get("resetTokensPurged")).isEqualTo(0);
         assertThat(payload.get("recoveryCodesPurged")).isEqualTo(0);
         assertThat(payload.get("snapshotsPurged")).isEqualTo(0);

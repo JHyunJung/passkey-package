@@ -71,8 +71,10 @@ passkey:
 
 admin:
   invite:
-    # 초대 수락 페이지 base URL. 메일 본문의 /accept-invite?token=... 앞에 붙는다.
-    # InvitationService 의 @Value("${admin.invite.base-url:...}") 가 읽는다.
+    # 공개 페이지 base URL — 메일 본문의 링크 앞에 붙는다.
+    # 비밀번호 재설정(/reset-password?token=) 과 가입 승인 메일의 로그인 링크(/admin)
+    # 가 이 값을 쓴다. PasswordResetService·SignupRequestService 의
+    # @Value("${admin.invite.base-url:...}") 가 읽는다. 속성 이름은 호환성 때문에 유지.
     base-url: ${ADMIN_INVITE_BASE_URL:http://localhost:5173}
 
 logging:

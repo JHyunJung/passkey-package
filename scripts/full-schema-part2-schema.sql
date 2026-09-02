@@ -7,7 +7,7 @@
 --   ⚠️ 선행 조건: scripts/full-schema-part1-accounts.sql 이 먼저 실행돼
 --      PSK_APP_OWNER / PSK_APP_RUNTIME / PSK_APP_ADMIN 롤·유저가 있어야 한다.
 --
---   출처: V1__baseline_schema.sql (전체) + V2/V3 (ALTER) + V4 (GRANT)
+--   출처: V1__baseline_schema.sql (전체) + V2/V3 (ALTER) + V4 (GRANT) + V5 (admin_signup_request, 초대 테이블 DROP)
 --
 -- ############################################################################
 -- ############################################################################
@@ -319,21 +319,15 @@ CREATE TABLE admin_password_reset_token (
     CONSTRAINT fk_pwd_reset_admin_user            FOREIGN KEY (admin_user_id) REFERENCES admin_user (id) ON DELETE CASCADE
 );
 
--- 1-18. ADMIN_USER_INVITATION (FK → ADMIN_USER)
-CREATE TABLE admin_user_invitation (
-    id              NUMBER(19,0)                NOT NULL,
-    admin_user_id   RAW(16)                     NOT NULL,
-    token_hash      VARCHAR2(64)                NOT NULL,
-    token_prefix    VARCHAR2(8)                 NOT NULL,
-    created_at      TIMESTAMP(6) WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
-    created_by      VARCHAR2(255)               NOT NULL,
-    expires_at      TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    accepted_at     TIMESTAMP(6) WITH TIME ZONE,
-    resent_count    NUMBER(5,0)   DEFAULT 0     NOT NULL,
-    resent_at       TIMESTAMP(6) WITH TIME ZONE,
-    CONSTRAINT pk_admin_user_invitation      PRIMARY KEY (id),
-    CONSTRAINT uq_admin_user_invitation_token UNIQUE (token_hash),
-    CONSTRAINT fk_admin_user_invitation_user  FOREIGN KEY (admin_user_id) REFERENCES admin_user (id) ON DELETE CASCADE
+-- 1-18. ADMIN_SIGNUP_REQUEST (승인 전 가입 요청만 보관; FK 없음)
+CREATE TABLE admin_signup_request (
+    id            RAW(16)                     DEFAULT SYS_GUID() NOT NULL,
+    email         VARCHAR2(255)               NOT NULL,
+    bcrypt_hash   VARCHAR2(72)                NOT NULL,
+    reason        VARCHAR2(500),
+    requested_at  TIMESTAMP(6) WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_admin_signup_request       PRIMARY KEY (id),
+    CONSTRAINT uq_admin_signup_request_email UNIQUE (email)
 );
 
 -- 1-19. ADMIN_USER_RECOVERY_CODE (FK → ADMIN_USER)
@@ -393,10 +387,6 @@ CREATE SEQUENCE admin_password_reset_token_seq
     MINVALUE 1 MAXVALUE 9999999999999999999999999999
     INCREMENT BY 1 START WITH 1 NOCACHE NOORDER NOCYCLE;
 
-CREATE SEQUENCE admin_user_invitation_seq
-    MINVALUE 1 MAXVALUE 9999999999999999999999999999
-    INCREMENT BY 1 START WITH 1 NOCACHE NOORDER NOCYCLE;
-
 CREATE SEQUENCE mds_sync_history_seq
     MINVALUE 1 MAXVALUE 9999999999999999999999999999
     INCREMENT BY 1 START WITH 1 NOCACHE NOORDER NOCYCLE;
@@ -411,7 +401,6 @@ CREATE SEQUENCE tenant_webauthn_snapshot_seq
 -- ============================================================
 
 -- admin_user
-CREATE INDEX ix_admin_user_invitation_user ON admin_user_invitation (admin_user_id);
 CREATE INDEX ix_pwd_reset_admin_user ON admin_password_reset_token (admin_user_id);
 CREATE INDEX ix_recovery_admin_user ON admin_user_recovery_code (admin_user_id);
 
@@ -674,12 +663,10 @@ GRANT INSERT ON admin_user_tenant TO PSK_APP_ADMIN;
 GRANT UPDATE ON admin_user_tenant TO PSK_APP_ADMIN;
 GRANT DELETE ON admin_user_tenant TO PSK_APP_ADMIN;
 GRANT SELECT ON admin_user_tenant TO PSK_APP_RUNTIME;
-GRANT INSERT ON admin_user_invitation TO PSK_APP_ADMIN;
-GRANT SELECT ON admin_user_invitation TO PSK_APP_ADMIN;
-GRANT UPDATE ON admin_user_invitation TO PSK_APP_ADMIN;
-GRANT SELECT ON admin_user_invitation TO PSK_APP_RUNTIME;
-GRANT SELECT ON admin_user_invitation_seq TO PSK_APP_ADMIN;
-GRANT SELECT ON admin_user_invitation_seq TO PSK_APP_RUNTIME;
+GRANT SELECT ON admin_signup_request TO PSK_APP_ADMIN;
+GRANT INSERT ON admin_signup_request TO PSK_APP_ADMIN;
+GRANT DELETE ON admin_signup_request TO PSK_APP_ADMIN;
+GRANT SELECT ON admin_signup_request TO PSK_APP_RUNTIME;
 GRANT DELETE ON admin_user_recovery_code TO PSK_APP_ADMIN;
 GRANT INSERT ON admin_user_recovery_code TO PSK_APP_ADMIN;
 GRANT SELECT ON admin_user_recovery_code TO PSK_APP_ADMIN;

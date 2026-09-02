@@ -334,28 +334,3 @@ export type AdminUserView = {
   suspendedAt: string | null;
   createdBy: string | null;
 };
-
-export type InviteRequest = {
-  email: string;
-  role: 'PLATFORM_OPERATOR' | 'RP_ADMIN';
-  tenantIds: string[];
-};
-
-export type InvitationInfo = {
-  tokenPrefix: string;
-  plaintextToken: string;
-  acceptUrl: string;
-  expiresAt: string;
-};
-
-export type InviteResponse = {
-  user: AdminUserView;
-  invitation: InvitationInfo;
-};
-
-export type InvitationCheck = {
-  email: string;
-  role: string;
-  tenantIds: string[];
-  expiresAt: string;
-};

@@ -4,11 +4,9 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.entity.AdminUserTenant;
-import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.time.Clock;
 import java.util.List;
@@ -23,36 +21,12 @@ import static org.mockito.Mockito.*;
 class AdminUserServiceTest {
 
     private final AdminUserRepository userRepo = mock(AdminUserRepository.class);
-    private final AdminUserInvitationRepository invitationRepo = mock(AdminUserInvitationRepository.class);
-    private final InvitationService invitationService = mock(InvitationService.class);
     private final AdminUserTenantRepository mappingRepo = mock(AdminUserTenantRepository.class);
     private final AuditLogService audit = mock(AuditLogService.class);
     private final Clock clock = Clock.systemUTC();
 
     private final AdminUserService service = new AdminUserService(
-            userRepo, invitationRepo, invitationService, mappingRepo, audit, clock);
-
-    @Test
-    void rpAdminInviteRequiresAtLeastOneTenant() {
-        when(userRepo.findByEmail(any())).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.invite(
-                new AdminUserDto.InviteRequest("rp@x.com", "RP_ADMIN", List.of()),
-                UUID.randomUUID(), "alice"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("RP_ADMIN requires at least one tenant");
-    }
-
-    @Test
-    void platformOperatorInviteMustHaveNoTenant() {
-        when(userRepo.findByEmail(any())).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.invite(
-                new AdminUserDto.InviteRequest("po@x.com", "PLATFORM_OPERATOR",
-                        List.of(UUID.randomUUID())), UUID.randomUUID(), "alice"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("PLATFORM_OPERATOR must not have tenant");
-    }
+            userRepo, mappingRepo, audit, clock);
 
     @Test
     void removeLastTenantOfRpAdminRejected() {
@@ -167,63 +141,6 @@ class AdminUserServiceTest {
         assertThatThrownBy(() -> service.suspend(targetId, actorId, "someoneelse@x.com"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("last active PLATFORM_OPERATOR");
-    }
-
-    @Test
-    void inviteAppendsAuditEntry() {
-        when(userRepo.findByEmail(any())).thenReturn(Optional.empty());
-        // AdminUser.getId() is populated by Hibernate's @UuidGenerator on
-        // persist — a mocked repo.save() never runs that lifecycle, so a
-        // plain AdminUser.create() has a null id. Mock the entity itself to
-        // stub getId() to a fixed UUID (invite() needs saved.getId() for
-        // both the audit targetId and the mapping rows).
-        UUID savedId = UUID.randomUUID();
-        AdminUser saved = mock(AdminUser.class);
-        when(saved.getId()).thenReturn(savedId);
-        when(saved.getEmail()).thenReturn("new@x.com");
-        when(saved.getRole()).thenReturn("PLATFORM_OPERATOR");
-        when(saved.getStatus()).thenReturn("PENDING");
-        when(saved.isMfaEnabled()).thenReturn(false);
-        when(userRepo.save(any())).thenReturn(saved);
-        when(invitationService.createInvitation(any(), any(), any()))
-                .thenReturn(new AdminUserDto.InvitationInfo("prefix12", "plain", "url", null));
-
-        service.invite(new AdminUserDto.InviteRequest("new@x.com", "PLATFORM_OPERATOR", List.of()),
-                UUID.randomUUID(), "alice@x.com");
-
-        verify(audit).append(any(AuditAppendRequest.class));
-    }
-
-    @Test
-    void inviteCreatesDisabledPendingUser() {
-        // G03: PENDING accounts (no password set yet) must not satisfy the
-        // ENABLED login gate. AdminUser.create() defaults enabledFlag="Y",
-        // so invite() must explicitly disable the freshly-created user
-        // before it is persisted.
-        when(userRepo.findByEmail(any())).thenReturn(Optional.empty());
-        // AdminUser.getId() is populated by Hibernate's @UuidGenerator on
-        // persist — a mocked repo.save() never runs that lifecycle. Return a
-        // mock standing in for the persisted row (stubbed getId() only) so
-        // invite()'s post-save code (mapping rows, audit) doesn't NPE, while
-        // capturing the *actual* pre-save AdminUser passed into save() to
-        // assert on its real enabled-flag state.
-        UUID savedId = UUID.randomUUID();
-        AdminUser savedStandIn = mock(AdminUser.class);
-        when(savedStandIn.getId()).thenReturn(savedId);
-        when(savedStandIn.getEmail()).thenReturn("new@x.com");
-        when(savedStandIn.getRole()).thenReturn("PLATFORM_OPERATOR");
-        when(savedStandIn.getStatus()).thenReturn("PENDING");
-        when(savedStandIn.isMfaEnabled()).thenReturn(false);
-        when(userRepo.save(any())).thenReturn(savedStandIn);
-        when(invitationService.createInvitation(any(), any(), any()))
-                .thenReturn(new AdminUserDto.InvitationInfo("prefix12", "plain", "url", null));
-
-        service.invite(new AdminUserDto.InviteRequest("new@x.com", "PLATFORM_OPERATOR", List.of()),
-                UUID.randomUUID(), "alice@x.com");
-
-        ArgumentCaptor<AdminUser> captor = ArgumentCaptor.forClass(AdminUser.class);
-        verify(userRepo).save(captor.capture());
-        assertThat(captor.getValue().isEnabled()).isFalse();
     }
 
     @Test
