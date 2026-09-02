@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
@@ -38,6 +39,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 import com.crosscert.passkey.core.license.LicenseGuardFilter;
 
@@ -99,15 +101,16 @@ public class AdminSecurityConfig {
                 .requestMatchers("/admin/crosscert-logo-transparent.png").permitAll()
                 .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
                                  "/admin/activity", "/admin/audit-chain", "/admin/settings", "/admin/license",
-                                 "/admin/forgot-password", "/admin/reset-password").permitAll()
+                                 "/admin/forgot-password", "/admin/reset-password", "/admin/signup").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 // /admin/api/profile 은 active profile 만 노출. Login.tsx 가 미인증 상태에서
                 // local 여부를 알아 테스트 계정 prefill 을 결정하는 데 쓴다.
                 // /admin/api/license 는 DEAD 상태에서도 운영자가 라이선스 진단에 접근할 수 있어야 한다.
                 .requestMatchers("/admin/api/profile", "/admin/api/license").permitAll()
-                // Invitation token check (GET) and accept (POST) are unauthenticated —
-                // the invited user has no session yet.
-                .requestMatchers("/admin/api/invitations/**").permitAll()
+                // 가입 요청(POST)만 미인증 허용 — 요청자는 아직 계정이 없다.
+                // GET 목록과 /{id}/approve·reject 는 아래 /admin/api/** authenticated 에
+                // 걸리고, 컨트롤러 @PreAuthorize 가 PLATFORM_OPERATOR 를 강제한다.
+                .requestMatchers(HttpMethod.POST, "/admin/api/signup-requests").permitAll()
                 // Self-service password reset (request + confirm) is unauthenticated —
                 // the operator has no session (they forgot their password).
                 .requestMatchers("/admin/api/password-reset/**").permitAll()
@@ -126,10 +129,12 @@ public class AdminSecurityConfig {
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfRepo)
                 .csrfTokenRequestHandler(csrfHandler)
-                // Invitation accept is a one-time POST from an unauthenticated context
-                // (no session, no XSRF-TOKEN cookie). Exempt the entire path so that
-                // the SPA can call it without a prior GET to seed the CSRF cookie.
-                .ignoringRequestMatchers("/admin/api/invitations/**", "/admin/api/password-reset/**"));
+                // 가입 요청 POST 와 비밀번호 재설정은 세션·XSRF-TOKEN 쿠키가 없는
+                // 미인증 컨텍스트의 1회성 호출이라 CSRF 를 면제한다. 가입 요청은
+                // 정확히 POST 한 건만 — 하위 경로(approve/reject)는 보호 유지.
+                .ignoringRequestMatchers(
+                        PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/admin/api/signup-requests"),
+                        PathPatternRequestMatcher.withDefaults().matcher("/admin/api/password-reset/**")));
 
         // onprem 모드에서만 존재하는 빈 — Optional 주입으로 SaaS 모드에서 absent.
         // SecurityContextHolderFilter 전에 삽입해 인증 처리 이전에 라이선스를 검사한다.
