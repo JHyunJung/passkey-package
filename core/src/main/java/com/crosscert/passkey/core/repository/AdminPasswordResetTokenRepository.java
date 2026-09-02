@@ -18,7 +18,7 @@ public interface AdminPasswordResetTokenRepository extends JpaRepository<AdminPa
      * P1-4 retention: 소비 또는 만료된 reset 토큰 중 그 시점이 cutoff 이전인 것 삭제.
      * 미소비·미만료 토큰은 보존.
      *
-     * <p>Batched: ROWNUM 캡(AdminUserInvitationRepository 참고). nativeQuery + 실제 컬럼명.
+     * <p>Batched: ROWNUM 캡으로 batchSize 단위 삭제(nativeQuery + 실제 컬럼명).
      */
     @Modifying(clearAutomatically = true)
     @Transactional

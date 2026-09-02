@@ -30,13 +30,13 @@ public class SmtpMailSender implements MailSender {
             helper.setFrom(from);
             helper.setTo(to);
             helper.setSubject(subject);
-            helper.setText(body, true); // HTML 본문 (초대 URL <a href> 포함)
+            helper.setText(body, true); // HTML 본문 (로그인/재설정 URL <a href> 포함)
             message.saveChanges(); // Content-Type 헤더를 DataHandler 에서 플러시
             javaMailSender.send(message);
             log.info("[MAIL] sent to={} subject=\"{}\" body-length={}", to, subject,
                     body == null ? 0 : body.length());
         } catch (Exception e) {
-            // 호출자(InvitationService 등)의 catch(Exception) 가 fallback 처리.
+            // 호출자(PasswordResetService/SignupRequestService 등)의 catch(Exception) 가 fallback 처리.
             log.warn("[MAIL] send failed to={} subject=\"{}\" reason={}", to, subject,
                     e.getMessage());
             throw new RuntimeException("mail send failed", e);

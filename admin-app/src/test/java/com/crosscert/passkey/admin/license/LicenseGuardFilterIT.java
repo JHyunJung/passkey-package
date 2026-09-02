@@ -153,7 +153,6 @@ class LicenseGuardFilterIT {
     @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
     @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
     @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserInvitationRepository adminUserInvitationRepository;
     @MockBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
     @MockBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;

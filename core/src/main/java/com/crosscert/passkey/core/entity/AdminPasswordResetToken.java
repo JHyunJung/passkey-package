@@ -11,7 +11,7 @@ import java.util.UUID;
  * 관리자 비밀번호 재설정 토큰 레코드 (1회용 토큰의 sha-256 hash).
  *
  * <p>BaseEntity 상속 안 함 — PK 가 Oracle SEQUENCE + NUMBER(19,0).
- * UUID 기반 BaseEntity 와 PK 타입이 다르므로 독립 선언 (AdminUserInvitation 패턴).
+ * UUID 기반 BaseEntity 와 PK 타입이 다르므로 독립 선언.
  *
  * <p>admin_user_id 는 RAW(16) FK → admin_user(id).
  * token_hash 는 SHA-256 hex (64자, UNIQUE), token_prefix 는 8자 식별용.

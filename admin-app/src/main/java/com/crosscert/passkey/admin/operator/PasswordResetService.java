@@ -21,7 +21,7 @@ import java.time.OffsetDateTime;
 /**
  * Admin self-service password reset (P1-6).
  *
- * <p>InvitationService 패턴 복제 — sha-256 token_hash, MailSender, 1회용 토큰.
+ * <p>sha-256 token_hash, MailSender, 1회용 토큰.
  * request 는 enumeration 방지를 위해 사용자 존재 여부와 무관하게 동일하게 동작
  * (없으면 조용히 no-op). confirm 은 lockout 리셋.
  */
@@ -57,10 +57,8 @@ public class PasswordResetService {
     }
 
     /**
-     * G11 fail-fast — see {@link BaseUrlValidation} and
-     * {@link InvitationService#validateBaseUrlForProd()} for the shared
-     * rationale (this service reads the same admin.invite.base-url property
-     * to build its own reset-password link).
+     * G11 fail-fast — see {@link BaseUrlValidation}. SignupRequestService 도 같은
+     * admin.invite.base-url 속성으로 승인 메일의 로그인 링크를 만든다.
      */
     @PostConstruct
     void validateBaseUrlForProd() {

@@ -4,7 +4,6 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest;
 import com.crosscert.passkey.admin.audit.AuditLogService;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.entity.AdminUserTenant;
-import com.crosscert.passkey.core.repository.AdminUserInvitationRepository;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.repository.AdminUserTenantRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +14,6 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,21 +23,15 @@ import java.util.UUID;
 public class AdminUserService {
 
     private final AdminUserRepository userRepo;
-    private final AdminUserInvitationRepository invitationRepo;
-    private final InvitationService invitationService;
     private final AdminUserTenantRepository mappingRepo;
     private final AuditLogService audit;
     private final Clock clock;
 
     public AdminUserService(AdminUserRepository userRepo,
-                            AdminUserInvitationRepository invitationRepo,
-                            InvitationService invitationService,
                             AdminUserTenantRepository mappingRepo,
                             AuditLogService audit,
                             Clock clock) {
         this.userRepo = userRepo;
-        this.invitationRepo = invitationRepo;
-        this.invitationService = invitationService;
         this.mappingRepo = mappingRepo;
         this.audit = audit;
         this.clock = clock;
@@ -59,50 +51,6 @@ public class AdminUserService {
         return users.stream()
                 .map(u -> toView(u, tenantIdsByUser.getOrDefault(u.getId(), List.of())))
                 .toList();
-    }
-
-    @Transactional
-    public AdminUserDto.InviteResponse invite(AdminUserDto.InviteRequest req, UUID actorId, String invitedBy) {
-        if (!"PLATFORM_OPERATOR".equals(req.role()) && !"RP_ADMIN".equals(req.role())) {
-            throw new IllegalArgumentException("Invalid role: " + req.role());
-        }
-        List<UUID> tenantIds = req.tenantIds() == null
-                ? List.of() : req.tenantIds();
-        if ("RP_ADMIN".equals(req.role()) && tenantIds.isEmpty()) {
-            throw new IllegalArgumentException("RP_ADMIN requires at least one tenant");
-        }
-        if ("PLATFORM_OPERATOR".equals(req.role()) && !tenantIds.isEmpty()) {
-            throw new IllegalArgumentException("PLATFORM_OPERATOR must not have tenant");
-        }
-        if (userRepo.findByEmail(req.email()).isPresent()) {
-            throw new IllegalStateException("Email already exists: " + req.email());
-        }
-
-        AdminUser user = AdminUser.create();
-        user.setEmail(req.email());
-        user.setRole(req.role());
-        user.setStatus("PENDING");
-        user.setCreatedBy(invitedBy);
-        // G03: ENABLED is the actual login gate (DefaultPreAuthenticationChecks
-        // reads isEnabled(), not STATUS). AdminUser.create() defaults
-        // enabledFlag="Y" for the general case, but a freshly-invited PENDING
-        // account has no password yet — it must not satisfy the gate until
-        // the invitee accepts and sets one (see InvitationService.accept()).
-        user.setEnabled(false);
-        AdminUser saved = userRepo.save(user);
-
-        for (UUID tid : new LinkedHashSet<>(tenantIds)) {   // 중복 멱등
-            mappingRepo.save(AdminUserTenant.of(saved.getId(), tid, invitedBy));
-        }
-
-        var inv = invitationService.createInvitation(saved.getId(), invitedBy, req.email());
-        // G04: record operator lifecycle change in the tamper-evident audit chain.
-        audit.append(new AuditAppendRequest(actorId, invitedBy, "ADMIN_USER_INVITE",
-                "ADMIN_USER", saved.getId().toString(), null,
-                Map.of("role", req.role(), "tenantCount", tenantIds.size())));
-        log.info("admin invite issued: emailMasked={} role={} tenantCount={}",
-                mask(req.email()), req.role(), tenantIds.size());
-        return new AdminUserDto.InviteResponse(toView(saved, tenantIds), inv);
     }
 
     @Transactional
@@ -168,18 +116,6 @@ public class AdminUserService {
         audit.append(new AuditAppendRequest(actorId, byUser, "ADMIN_USER_ACTIVATE",
                 "ADMIN_USER", userId.toString(), null, Map.of()));
         log.info("admin activated: emailMasked={}", mask(user.getEmail()));
-    }
-
-    @Transactional
-    public AdminUserDto.InvitationInfo resendInvitation(UUID userId, String byUser, String email) {
-        OffsetDateTime now = OffsetDateTime.now(clock);
-        // Resend revokes any prior pending invitations — the new token replaces them.
-        var existing = invitationRepo.findByAdminUserIdAndAcceptedAtIsNull(userId);
-        for (var inv : existing) {
-            inv.recordResend(now);
-            inv.markRevoked(now);
-        }
-        return invitationService.createInvitation(userId, byUser, email);
     }
 
     private void assertNotLockingOut(AdminUser user, String byUser, String action) {
