@@ -34,7 +34,7 @@ public class RetentionPurgeJob {
     private final SchedulerLeaseService leases;
     private final AuditLogService audit;
     private final Clock clock;
-    private final Duration invitationRetention;
+    private final Duration signupRequestRetention;
     private final Duration resetTokenRetention;
     private final Duration recoveryCodeRetention;
     private final Duration snapshotRetention;
@@ -46,7 +46,7 @@ public class RetentionPurgeJob {
                              SchedulerLeaseService leases,
                              AuditLogService audit,
                              Clock clock,
-                             @Value("${passkey.retention.invitation:P90D}") Duration invitationRetention,
+                             @Value("${passkey.retention.signup-request:P90D}") Duration signupRequestRetention,
                              @Value("${passkey.retention.password-reset-token:P30D}") Duration resetTokenRetention,
                              @Value("${passkey.retention.recovery-code:P180D}") Duration recoveryCodeRetention,
                              @Value("${passkey.retention.webauthn-snapshot:P365D}") Duration snapshotRetention,
@@ -57,7 +57,7 @@ public class RetentionPurgeJob {
         this.leases = leases;
         this.audit = audit;
         this.clock = clock;
-        this.invitationRetention = invitationRetention;
+        this.signupRequestRetention = signupRequestRetention;
         this.resetTokenRetention = resetTokenRetention;
         this.recoveryCodeRetention = recoveryCodeRetention;
         this.snapshotRetention = snapshotRetention;
@@ -83,8 +83,8 @@ public class RetentionPurgeJob {
             Map<String, Object> payload = new LinkedHashMap<>();
             List<String> failed = new ArrayList<>();
 
-            purgeOne(payload, failed, "invitationsPurged", "invitations",
-                    () -> service.purgeInvitations(now.minus(invitationRetention)));
+            purgeOne(payload, failed, "signupRequestsPurged", "signupRequests",
+                    () -> service.purgeSignupRequests(now.minus(signupRequestRetention)));
             purgeOne(payload, failed, "resetTokensPurged", "resetTokens",
                     () -> service.purgeResetTokens(now.minus(resetTokenRetention)));
             purgeOne(payload, failed, "recoveryCodesPurged", "recoveryCodes",
