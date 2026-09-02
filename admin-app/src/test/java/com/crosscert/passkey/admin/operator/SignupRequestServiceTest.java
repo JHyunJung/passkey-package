@@ -108,6 +108,17 @@ class SignupRequestServiceTest {
         verify(requests, never()).save(any());
     }
 
+    /** 타이밍 이퀄라이제이션 — 스킵 경로도 bcrypt 를 실제로 돌려야 응답시간으로 이메일 존재를 추정할 수 없다. */
+    @Test
+    void request_skipPathsStillRunBcrypt() {
+        when(users.findByEmail("alice@crosscert.com")).thenReturn(Optional.of(AdminUser.create()));
+
+        service.request(new SignupRequestDto.Create("alice@crosscert.com", "password-12chars", null));
+
+        verify(encoder).encode("password-12chars");
+        verify(requests, never()).save(any());
+    }
+
     @Test
     void request_emailAlreadyPending_silentlySkips() {
         when(users.findByEmail("dup@x.com")).thenReturn(Optional.empty());
@@ -127,7 +138,7 @@ class SignupRequestServiceTest {
         service.request(new SignupRequestDto.Create("cap@x.com", "password-12chars", null));
 
         verify(requests, never()).save(any());
-        verify(encoder, never()).encode(anyString());
+        verify(encoder).encode("password-12chars");
     }
 
     @Test

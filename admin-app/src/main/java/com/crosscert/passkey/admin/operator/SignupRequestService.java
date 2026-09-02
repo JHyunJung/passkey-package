@@ -93,6 +93,12 @@ public class SignupRequestService {
         String email = normalize(req.email());
         String masked = CryptoUtils.maskEmail(email);
 
+        // 타이밍 이퀄라이제이션(열거 저항) — bcrypt(strength 12, 수백 ms)는 아래
+        // 세 확인(스킵 경로 포함)을 지배하는 비용이다. 존재/대기/상한 확인보다
+        // 먼저, 스킵 여부와 무관하게 항상 해싱해야 공개 엔드포인트 응답시간으로
+        // 이메일 존재 여부를 추정할 수 없다(나머지 DB 왕복 차이는 수 ms로 무해).
+        String bcryptHash = encoder.encode(req.password());
+
         if (users.findByEmail(email).isPresent()) {
             log.warn("signup request skipped: email={} reason=already-admin", masked);
             return;
@@ -107,7 +113,7 @@ public class SignupRequestService {
         }
 
         String reason = req.reason() == null || req.reason().isBlank() ? null : req.reason().trim();
-        var row = new AdminSignupRequest(email, encoder.encode(req.password()), reason, OffsetDateTime.now(clock));
+        var row = new AdminSignupRequest(email, bcryptHash, reason, OffsetDateTime.now(clock));
         try {
             requests.save(row);
         } catch (DataIntegrityViolationException e) {
