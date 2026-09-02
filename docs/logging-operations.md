@@ -110,9 +110,10 @@ prod 에서 root 가 INFO 라 DEBUG 는 출력 안 됨.
 | `WARN login/complete failed: reason=id-token-verify-failed cause=…expired…` | clock skew 또는 token TTL 너무 짧음 | 서버 시간 동기 확인 |
 | `WARN admin login failed: email=… reason=unknown-user` | 잘못된 email 또는 사용자 삭제 | `admin_user` 테이블 확인 |
 | `WARN tenant boundary violation` | RP_ADMIN 이 다른 tenant 접근 시도 | actor 확인 → 의도된 경로인지 정책 점검 |
-| `WARN signup request skipped: reason=already-admin` | 기존 계정 이메일로 가입 요청 | 정상(열거 방지 응답). 반복되면 계정 소유자 확인 |
-| `WARN signup request skipped: reason=pending-cap` | 대기 요청 100건 도달 | 운영자 탭에서 요청 정리(승인/거절) 또는 retention 대기 |
-| `WARN signup request skipped: reason=concurrent-duplicate` | 같은 이메일 동시 요청 | 정상 |
+| `WARN signup request skipped: email=… reason=already-admin` | 기존 계정 이메일로 가입 요청 | 정상(열거 방지 응답). 반복되면 계정 소유자 확인 |
+| `WARN signup request skipped: email=… reason=already-pending` | 이미 대기 중인 이메일로 재요청 | 정상. 운영자 탭에서 대기 요청 처리 |
+| `WARN signup request skipped: email=… reason=pending-cap max=100` | 대기 요청 100건 도달 | 운영자 탭에서 요청 정리(승인/거절) 또는 retention(passkey.retention.signup-request) 대기 |
+| `WARN signup request skipped: email=… reason=concurrent-duplicate` | 같은 이메일 동시 요청 | 정상 |
 
 ## 7. 환경별 로그 레벨
 
