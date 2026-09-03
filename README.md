@@ -202,7 +202,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ├── docs/
 │   ├── logging-operations.md          # 운영자용 검색 cookbook + alert + trouble-shooting
 │   ├── logging-conventions.md         # 개발자용 로깅 컨벤션
-│   └── superpowers/                   # spec + implementation plan 모음
+│   └── superpowers/followups/         # 미처리 백로그 (완료된 spec/plan 은 git 이력에서 조회)
 └── docker-compose.yml   # Oracle XE 21 + Redis 7
 ```
 
@@ -213,7 +213,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 - **F1~F5** — admin-ui 디자인 vs 백엔드 gap audit + 5 phase 로 20건 gap 모두 닫음
 - **G1~G4** — 3 서버 로깅 인프라 (logback-spring.xml + MDC + RequestLoggingFilter + SecretMaskingConverter + 운영 가이드)
 
-자세한 spec/plan 은 `docs/superpowers/{specs,plans}/` 참고.
+완료된 phase 의 spec/plan 은 저장소에서 정리했다. 필요하면 git 이력(`git log --all -- docs/superpowers/specs docs/superpowers/plans`)에서 조회한다. 미처리 백로그는 `docs/superpowers/followups/` 에 남아 있다.
 
 ## API 레퍼런스
 

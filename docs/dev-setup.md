@@ -7,9 +7,8 @@
 작성: 2026-05-28
 대상 commit: monorepo-merge 후
 관련:
-- [Activity 페이지 spec](superpowers/specs/2026-05-27-activity-page-design.md)
 - [Activity followups](superpowers/followups/2026-05-28-activity-page-followups.md)
-- [monorepo 통합 spec](superpowers/specs/2026-05-28-monorepo-merge-design.md)
+- Activity 페이지 spec·monorepo 통합 spec 은 저장소에서 정리됨 (git 이력의 `docs/superpowers/specs/` 참조)
 
 ---
 

@@ -1,6 +1,6 @@
 # 컨테이너 배포 가이드
 
-설계 근거: [`docs/superpowers/specs/2026-08-07-docker-deployment-design.md`](../docs/superpowers/specs/2026-08-07-docker-deployment-design.md)
+설계 근거: `docs/superpowers/specs/2026-08-07-docker-deployment-design.md` (완료된 spec 은 저장소에서 정리됨 — git 이력에서 조회)
 
 > **상태**: 이 문서는 의도된 배포 절차를 기술한다. 이미지 빌드와 스택 기동은
 > 아직 end-to-end 로 실증되지 않았다(Docker 데몬 이슈로 작업 중단). 실제

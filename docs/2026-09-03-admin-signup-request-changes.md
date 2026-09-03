@@ -4,7 +4,7 @@
 방식으로 바꾼 변경(main 머지 `9d81f6f5`, 2026-09-03)의 요약과, 이 변경 때문에 배포·운영에서 해야 하는
 일을 정리한 문서입니다.
 
-설계 근거: [`docs/superpowers/specs/2026-09-03-admin-signup-request-approval-design.md`](superpowers/specs/2026-09-03-admin-signup-request-approval-design.md)
+설계 근거: `docs/superpowers/specs/2026-09-03-admin-signup-request-approval-design.md` (완료된 spec 은 저장소에서 정리됨 — git 이력에서 조회)
 
 ## 1. 왜 바꿨나
 
