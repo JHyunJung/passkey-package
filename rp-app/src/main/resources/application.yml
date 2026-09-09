@@ -2,7 +2,6 @@ server:
   port: 9090
 
 rp-app:
-  origin: ${RP_APP_ORIGIN:http://localhost:9090}
   # 재기동 후에도 확정 등록된 user↔handle↔credential 매핑을 유지하기 위한 JSON 파일.
   # 단일 인스턴스 데모용. 환경변수 RP_APP_USER_STORE_FILE 로 오버라이드 가능.
   user-store:
@@ -44,8 +43,6 @@ rp:
     allowed-origins: ${RP_CORS_ALLOWED_ORIGINS:}
 
 spring:
-  session:
-    store-type: none
   thymeleaf:
     cache: false
 

@@ -23,7 +23,6 @@ spring:
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
   session:
-    store-type: redis
     timeout: PT30M
     redis:
       namespace: spring:session

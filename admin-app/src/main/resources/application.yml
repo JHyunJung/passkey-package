@@ -27,7 +27,6 @@ spring:
     baseline-version: 0
 
   session:
-    store-type: redis
     timeout: PT30M
     redis:
       namespace: spring:session
