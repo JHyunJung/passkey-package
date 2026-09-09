@@ -130,11 +130,14 @@ INFO ... AdminApplication : Started AdminApplication in N seconds
 ### 3.3 passkey-app (port 8080)
 
 ```bash
-SPRING_PROFILES_ACTIVE=local ./gradlew :passkey-app:bootRun \
+SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
   --args="--passkey.id-token.issuer-base=http://localhost:8080"
 ```
 
-(dev 환경이면 `local` → `dev` 로 교체)
+passkey-app 에는 `local` 프로필이 없다(`application-local.yml` 부재) — 프로필별 시드가
+없어 `dev` 하나가 local/dev 를 겸한다(시드 분리는 admin-app 의 Flyway locations 담당).
+base `application.yml` 에는 datasource·Redis 설정이 없으므로 `local` 로 띄우면 기동에
+실패한다.
 
 ```bash
 curl -s http://localhost:8080/actuator/health
@@ -164,24 +167,32 @@ Passkey2 루트에서 단일 명령:
 **local 프로필 (로컬 패스키 테스트 — 권장):**
 
 ```bash
+SPRING_PROFILES_ACTIVE=local \
 PASSKEY_BASE_URL=http://localhost:8080 \
 PASSKEY_TENANT_ID=0000000000000000000000000000C0DE \
 PASSKEY_API_KEY=pk_devlocaldev_local_secret_known_plaintext_for_test_only \
 PASSKEY_ISSUER_BASE=http://localhost:8080 \
-RP_APP_ORIGIN=http://localhost:9090 \
 ./gradlew :rp-app:bootRun
 ```
+
+프로필 지정은 필수다. `RelayKeyGuard` 는 active profile 에 `dev`/`local` 이 없으면
+relay 데모 기본 키를 거부하고 기동을 중단시킨다(프로필 미지정 = 운영 취급).
 
 **dev 프로필 (서버 배포 환경):**
 
 ```bash
+SPRING_PROFILES_ACTIVE=dev \
 PASSKEY_BASE_URL=https://dev-passkey.crosscert.com \
 PASSKEY_TENANT_ID=7F00DEAD000000000000000DE7000001 \
 PASSKEY_API_KEY=pk_devsrv01dev_server_secret_known_plaintext_for_test_only \
 PASSKEY_ISSUER_BASE=https://dev-passkey.crosscert.com \
-RP_APP_ORIGIN=https://dev-passkey.crosscert.com \
+RP_RELAY_SECRET="$(openssl rand -base64 32)" \
 ./gradlew :rp-app:bootRun
 ```
+
+`dev` 프로필에서는 가드가 relay 데모 기본 키를 허용하지만, 서버에 올리는 구성이므로
+`RP_RELAY_SECRET` 으로 강한 키를 주입한다(미주입 시 base `application.yml` 의
+`${RP_RELAY_SECRET:}` 폴백으로 데모 키가 쓰인다).
 
 | 환경변수 | 값 |
 |---|---|
@@ -189,7 +200,9 @@ RP_APP_ORIGIN=https://dev-passkey.crosscert.com \
 | `PASSKEY_TENANT_ID` | tenant_id. RAW(16) hex 32자 또는 UUID 대시 형식 모두 가능(rp-app 가 비교 전 UUID 로 정규화). ID Token 의 `iss`/`aud` 는 UUID 형식이라, **외부 시스템에서 직접 검증한다면 UUID 형식**을 권장 |
 | `PASSKEY_API_KEY` | X-API-Key 헤더 값 (prefix + secret) |
 | `PASSKEY_ISSUER_BASE` | ID token issuer (passkey-app 의 `id-token.issuer-base` 와 동일) |
-| `RP_APP_ORIGIN` | RP 자기 origin — `allowed_origins` 에 들어 있어야 함 |
+
+RP 자신의 origin 을 rp-app 에 알려주는 설정은 없다 — 등록/인증에서 대조되는 origin 은
+테넌트의 `allowed_origins` 로 결정된다.
 
 부팅 후 브라우저에서 `http://localhost:9090/` 접속.
 

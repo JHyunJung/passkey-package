@@ -89,6 +89,8 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
   --args="--passkey.id-token.issuer-base=http://localhost:8080"
 
 # 3) rp-app — 시드된 acme-corp API key 주입
+#    프로필 필수: RelayKeyGuard 가 dev/local 외 프로필에서 relay 데모 키를 거부한다
+SPRING_PROFILES_ACTIVE=dev \
 PASSKEY_API_KEY="pk_devacme0dev_acme_secret_known_plaintext_for_local_test_only" \
 PASSKEY_TENANT_ID="7f00dead-0000-0000-0000-00000ace0001" \
 PASSKEY_BASE_URL="http://localhost:8080" \

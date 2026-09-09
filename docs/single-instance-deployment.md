@@ -79,9 +79,15 @@ sudo certbot certonly --nginx \
 
 ```bash
 docker compose up -d
-# 첫 부팅 시 스키마/유저 부트스트랩
-docker exec -i passkey-oracle sqlplus -s / as sysdba < scripts/bootstrap-schema.sql
+# 첫 부팅 시 스키마/유저 부트스트랩 (정본 러너 — PDB 명 주입을 대신 처리한다)
+scripts/run-bootstrap.sh
+# 기본 PDB 가 XEPDB1 이 아니면: ORA_SERVICE=<PDB명> scripts/run-bootstrap.sh
 ```
+
+`bootstrap-schema.sql` 을 sqlplus 로 직접 파이프하지 마세요 — 이 SQL 은 `&ora_service`
+치환에 의존하는데 in-file `DEFINE` 이 없어 호출측(`run-bootstrap.sh`)의 주입이 유일한
+정의입니다. 컨테이너부터 새로 만드는 경우는 `scripts/init-dev-db.sh` 가 compose 재생성 →
+healthy 대기 → 부트스트랩 → Flyway 시드까지 한 번에 처리합니다.
 
 Oracle XE가 ready 되기까지 30~60초 걸립니다.
 
@@ -89,7 +95,7 @@ Oracle XE가 ready 되기까지 30~60초 걸립니다.
 
 ## 3. 애플리케이션 기동
 
-세 서버를 **prod 프로파일**로 기동합니다. 핵심은 **각 서버에 자신의 외부 도메인을 알려주는 환경변수**입니다.
+세 서버를 **prod 프로파일**로 기동합니다. 핵심은 **passkey-app 에 자신의 외부 도메인을 알려주는 것**(`PASSKEY_ID_TOKEN_ISSUER_BASE` — ID Token `iss` 의 베이스)과, rp-app 이 그 값을 `PASSKEY_ISSUER_BASE` 로 동일하게 바라보게 하는 것입니다. **RP 서버의 origin 을 알려주는 환경변수는 없습니다** — RP origin 은 테넌트의 `allowedOrigins`(§4)로 제어됩니다.
 
 ### 3.1 Passkey 서버 (passkey-app, 내부 8080)
 
@@ -110,7 +116,7 @@ PASSKEY_ID_TOKEN_ISSUER_BASE='https://dev-passkey.crosscert.com' \
 | `PASSKEY_ID_TOKEN_ISSUER_BASE` | `https://dev-passkey.crosscert.com` | ID Token `iss`의 베이스. **Passkey 서버의 외부 도메인**(끝에 슬래시 없이). |
 | `PASSKEY_KEY_ENVELOPE_MASTER_KEY` | base64 32바이트 | at-rest 암호화 키. `openssl rand -base64 32`로 생성. |
 
-> ⚠️ **forward-headers 필수**: nginx 뒤에서 origin/스킴을 올바로 인식하려면 prod에서 `SERVER_FORWARD_HEADERS_STRATEGY=NATIVE`(또는 `FRAMEWORK`)를 함께 설정하세요. 프록시가 보내는 `X-Forwarded-Proto: https`를 신뢰해야 secure 쿠키·origin 판정이 맞습니다.
+> ℹ️ **forward-headers 는 주입하지 않습니다**: `SERVER_FORWARD_HEADERS_STRATEGY` 를 따로 설정할 필요가 없습니다 — passkey-app/admin-app 의 base `application.yml` 에 `forward-headers-strategy: framework` 가 이미 있습니다. env 로 주입하면 오히려 그 값을 덮어씁니다. 필요한 것은 프록시가 `X-Forwarded-For` 와 `X-Forwarded-Proto` 를 보내는지(§5)뿐입니다 — 전자가 감사로그 클라이언트 IP·rate-limit IP 버킷의 근거(`request.getRemoteAddr()`)가 되고, 후자가 스킴(`request.isSecure()`) 판정으로 쿠키 Secure 를 결정합니다.
 
 ### 3.2 admin 콘솔 (admin-app, 내부 8081) — 테넌트/키 발급용
 
@@ -132,12 +138,13 @@ PASSKEY_KEY_ENVELOPE_MASTER_KEY='<passkey-app 과 동일한 마스터키>' \
 **§4에서 테넌트·API key를 발급한 뒤** 그 값으로 기동합니다.
 
 ```bash
+SPRING_PROFILES_ACTIVE=prod \
 SERVER_PORT=9090 \
 PASSKEY_BASE_URL='https://dev-passkey.crosscert.com' \
 PASSKEY_ISSUER_BASE='https://dev-passkey.crosscert.com' \
 PASSKEY_TENANT_ID='<§4에서 만든 tenantId>' \
 PASSKEY_API_KEY='<§4에서 발급한 X-API-Key>' \
-SERVER_FORWARD_HEADERS_STRATEGY=NATIVE \
+RP_RELAY_SECRET='<openssl rand -base64 32 로 생성한 키>' \
 ./gradlew :rp-app:bootRun
 ```
 
@@ -147,7 +154,7 @@ SERVER_FORWARD_HEADERS_STRATEGY=NATIVE \
 | `PASSKEY_ISSUER_BASE` | `https://dev-passkey.crosscert.com` | ID Token `iss` 검증용. passkey-app의 `PASSKEY_ID_TOKEN_ISSUER_BASE`와 **동일**해야 함. |
 | `PASSKEY_TENANT_ID` | tenantId | §4에서 만든 테넌트. **UUID 대시 형식**(`7f00dead-0000-...`) 권장 — ID Token 의 `iss`/`aud` 가 이 형식이라. RAW hex 도 rp-app 가 정규화해 받지만, 외부 검증 시스템은 UUID 형식을 기대한다. |
 | `PASSKEY_API_KEY` | `pk_...` | §4에서 발급한 키. |
-| `SERVER_FORWARD_HEADERS_STRATEGY` | `NATIVE` | nginx 뒤에서 https origin·secure 쿠키 인식. |
+| `RP_RELAY_SECRET` | base64 32바이트 | 등록 relay 바인딩용 HMAC 키. `openssl rand -base64 32` 로 생성. **prod 에서 필수** — `application-prod.yml` 은 로깅 레벨만 정의하고 이 값은 base `application.yml` 의 `${RP_RELAY_SECRET:}` 폴백을 쓰므로, 주입하지 않으면 데모 기본 키가 되고 `RelayKeyGuard` 가 기동을 중단시킨다(`rp.relay.secret 이 데모 기본 키입니다`). 가드가 데모 키를 허용하는 프로필은 `dev`/`local` 뿐이다. |
 
 > **origin 검증은 RP 서버가 아니라 Passkey 서버가 합니다.** RP 서버의 외부 origin(`https://rp-dev.crosscert.com`)이 패스키 등록/인증에서 검증되는데, 그 비교 기준은 **테넌트의 `allowedOrigins`**(§4)입니다. 즉 RP 서버 자체에는 origin을 알려줄 필요가 없고(설정 항목 없음), **테넌트 `allowedOrigins`를 RP 서버의 실제 origin과 정확히 맞추는 것이 핵심**입니다.
 
@@ -174,15 +181,31 @@ SERVER_FORWARD_HEADERS_STRATEGY=NATIVE \
 
 admin-app에 로그인(`https://<admin 내부주소>:8081/admin/`, form 로그인 — seed 운영자 계정)한 뒤, 테넌트를 생성합니다. API로 직접 만들려면:
 
+`POST /admin/login` 을 포함해 모든 POST 는 CSRF 보호 대상입니다(면제는 가입 요청·비밀번호
+재설정 두 경로뿐). 토큰은 `XSRF-TOKEN` 쿠키로 내려오고(HttpOnly 아님, path `/admin`),
+같은 값을 `X-XSRF-TOKEN` 헤더로 되돌려줘야 합니다. 로그인 시 토큰이 회전하므로 로그인
+직후 인증된 GET 을 한 번 끼워 확정 토큰을 받는 4단계가 됩니다(통합테스트
+`AdminFlowIT` 가 쓰는 것과 같은 순서):
+
 ```bash
+# 0) XSRF-TOKEN 쿠키 획득 (미인증 접근 가능한 엔드포인트)
+curl -s -c cookies.txt http://localhost:8081/admin/api/profile > /dev/null
+XSRF=$(awk '$6=="XSRF-TOKEN"{print $7}' cookies.txt)
+
 # 1) admin 세션 쿠키 획득 (form 로그인)
-curl -c cookies.txt -X POST http://localhost:8081/admin/login \
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:8081/admin/login \
+  -H "X-XSRF-TOKEN: $XSRF" \
   -d 'email=alice@crosscert.com&password=<운영자 비번>'
 
-# 2) 테넌트 생성 (rpId / allowedOrigins 가 핵심)
+# 2) 워밍업 GET — 로그인 시 CSRF 토큰이 회전하고 토큰 발급이 지연(deferred)되므로,
+#    인증된 세션으로 한 번 왕복해 서버의 확정 토큰을 쿠키 jar 에 받아둔다
+curl -s -b cookies.txt -c cookies.txt http://localhost:8081/admin/api/me > /dev/null
+XSRF=$(awk '$6=="XSRF-TOKEN"{print $7}' cookies.txt)
+
+# 3) 테넌트 생성 (rpId / allowedOrigins 가 핵심)
 curl -b cookies.txt -X POST http://localhost:8081/admin/api/tenants \
   -H 'Content-Type: application/json' \
-  -H "X-XSRF-TOKEN: <CSRF 토큰>" \
+  -H "X-XSRF-TOKEN: $XSRF" \
   -d '{
     "slug": "rp-dev",
     "displayName": "RP Dev",
@@ -237,7 +260,7 @@ server {
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;   # https — secure 쿠키·origin 판정에 필수
+        proxy_set_header X-Forwarded-Proto $scheme;   # https — 쿠키 Secure 판정(isSecure)에 필수
         proxy_set_header X-Forwarded-Host  $host;
     }
 }
@@ -276,7 +299,14 @@ sudo ln -s /etc/nginx/sites-available/passkey.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-> **`X-Forwarded-Proto` 가 중요합니다.** 이 헤더가 있어야 두 서버가 "외부에서 https로 들어왔다"를 인식해 origin을 `https://rp-dev.crosscert.com`(443)으로 판정합니다. §3.1의 `SERVER_FORWARD_HEADERS_STRATEGY=NATIVE`와 함께 동작합니다. 이게 없으면 서버가 origin을 `http://...:9090`으로 오인해 등록이 `allowedOrigins` 불일치로 실패합니다.
+> **`X-Forwarded-For` 와 `X-Forwarded-Proto` 를 둘 다 보내야 합니다.** 역할이 다릅니다.
+>
+> - **`X-Forwarded-For`** → `request.getRemoteAddr()` 이 실제 클라이언트 IP 를 가리키게 합니다. 감사로그의 IP 와 rate-limit 의 IP 버킷 분리가 이 값을 씁니다. 없으면 모든 요청이 프록시 IP 하나로 뭉칩니다.
+> - **`X-Forwarded-Proto`** → `request.isSecure()` 가 "외부에서 https로 들어왔다"를 인식하게 합니다. 세션/CSRF 쿠키의 Secure 자동판정이 여기에 달려 있습니다.
+>
+> 앱 쪽 설정은 base `application.yml` 의 `forward-headers-strategy: framework` 로 이미 되어 있어 별도 주입이 필요 없습니다(admin-app 은 `application-prod.yml` 에서 세션 쿠키 `secure: true` 를 명시해 헤더가 누락돼도 fail-closed).
+>
+> 다만 **패스키 origin 검증은 이 헤더와 무관합니다.** WebAuthn 은 브라우저가 서명한 `clientDataJSON` 의 origin 을 테넌트 `allowed_origins` 와 대조합니다(서버가 자기 요청 URL 에서 origin 을 유도하지 않습니다). 등록이 origin 문제로 실패하면 §4.1 의 `allowedOrigins` 를 브라우저 주소창 origin(443, 포트 표기 없음)과 정확히 맞추세요.
 
 ---
 
@@ -298,10 +328,11 @@ sudo nginx -t && sudo systemctl reload nginx
 |---|---|---|
 | 등록 시 `C001`(origin 관련) | 테넌트 `allowedOrigins`가 실제 origin과 불일치 | `allowedOrigins`를 정확히 `https://rp-dev.crosscert.com`(포트 없음)으로. 브라우저 주소창의 origin과 글자까지 일치해야 함. |
 | `iss mismatch` 로그인 실패 | passkey-app `PASSKEY_ID_TOKEN_ISSUER_BASE` ≠ rp-app `PASSKEY_ISSUER_BASE` | 둘을 `https://dev-passkey.crosscert.com`으로 동일하게. |
-| 등록이 `http://...:9090` origin으로 시도됨 | forward-headers 미설정 | §3.1 `SERVER_FORWARD_HEADERS_STRATEGY=NATIVE` + nginx `X-Forwarded-Proto` 확인. |
+| 등록이 origin 불일치로 실패 | 브라우저 `clientDataJSON` 의 origin 과 테넌트 `allowed_origins` 불일치 | §4.1 의 `allowedOrigins` 를 브라우저 주소창 origin(`https://rp-dev.crosscert.com`, 포트 표기 없음)과 정확히 맞춤. `SERVER_FORWARD_HEADERS_STRATEGY` 는 주입 대상이 아니다(base `application.yml` 이 `framework` 로 고정). |
 | 패스키가 다른 서브도메인에서 안 됨 | `rpId`를 좁게 설정함 | 여러 서브도메인을 쓰려면 `rpId`를 상위 도메인(`crosscert.com`)으로, `allowedOrigins`에 각 origin 추가. |
 | JWKS 404/타임아웃 | nginx가 `dev-passkey` 서브도메인을 8080으로 프록시 안 함 | §5 nginx 설정·DNS 확인. |
 | 401 (RP→Passkey 호출) | `PASSKEY_API_KEY` 형식/scope 오류 | prefix+secret 이어붙임 확인, 키에 registration·authentication scope 있는지 확인. |
+| rp-app 부팅 실패 — `rp.relay.secret 이 데모 기본 키입니다` | `RP_RELAY_SECRET` 미주입 (dev/local 외 프로필은 데모 키 거부) | §3.3 처럼 `RP_RELAY_SECRET='<openssl rand -base64 32>'` 를 주입. |
 
 ---
 
