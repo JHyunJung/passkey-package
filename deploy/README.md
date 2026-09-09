@@ -145,7 +145,7 @@ cp .env.example .env && chmod 600 .env
 | DB (Flyway) | `DB_OWNER_USER/PASSWORD` | **admin-app 에만** 주입 — passkey-app 은 `--scale` 로 여러 개 뜨므로 마이그레이션을 동시에 시도하면 안 된다 |
 | Redis | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | 서버 C 를 가리킨다 |
 | 시크릿 | `MASTER_KEY` | `openssl rand -base64 32`. **서버 A·B 가 반드시 동일**해야 한다 — 다르면 한쪽이 암호화한 데이터를 다른 쪽이 복호화하지 못한다 |
-| 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE`, `ADMIN_INVITE_BASE_URL` | nginx `server_name` + ID Token issuer |
+| 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE`, `ADMIN_INVITE_BASE_URL` | nginx `server_name` + ID Token issuer. `ISSUER_BASE` 는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두 기동 거부(fail-fast) |
 | admin | `ADMIN_BIND_ADDR`(기본 `127.0.0.1`), `ADMIN_HOST_PORT`(기본 `8081`), `MDS_LEASE_HOLDER` | 콘솔은 내부망 전용 |
 | 리소스 | `PASSKEY_MEM_LIMIT`, `ADMIN_MEM_LIMIT`, `RP_MEM_LIMIT` | 컨테이너 메모리 상한. `JAVA_OPTS` 의 `MaxRAMPercentage=75` 가 이 값을 인식한다 |
 | QA 전용 | `RP_SERVER_NAME`, `RP_PROFILE`, `RP_PASSKEY_BASE_URL`, `RP_API_KEY`, `RP_TENANT_ID`, `RP_RELAY_SECRET` | prod 에서는 `qa` profile 을 지정하지 않으므로 값이 비어 있어도 무해하다. 2차 방어: 실수로 `qa` 가 섞여도 `RelayKeyGuard` 가 데모 기본 키를 거부해 rp-app 이 기동에 실패한다(fail-closed) |

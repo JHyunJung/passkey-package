@@ -87,6 +87,8 @@ services:
       # passkey-app 과 동일 값 — 두 앱 issuer 일치. admin-app 은 ID Token 을
       # 발급하지 않지만 core 스캔으로 IdTokenIssuer 빈이 뜨므로, 코드 기본값
       # (dev 도메인)이 아니라 이 배포의 실제 issuer 를 쥐고 있게 한다.
+      # ISSUER_BASE 는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두
+      # 기동을 거부한다(IdTokenIssuer 의 blank 가드, fail-fast).
       PASSKEY_ID_TOKEN_ISSUER_BASE: ${ISSUER_BASE}
       #
       # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
