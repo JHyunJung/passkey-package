@@ -115,11 +115,16 @@ npm run dev      # Vite :5173 — admin-app :8081 으로 proxy
 
 | Email | Password | Role | Tenant | MFA |
 | --- | --- | --- | --- | --- |
-| `alice@crosscert.com` | `alice-temp-pw` | `PLATFORM_OPERATOR` | — (플랫폼 전역) | 켜짐(로그인 후 TOTP) |
+| `alice@crosscert.com` | `alice-temp-pw` | `PLATFORM_OPERATOR` | — (플랫폼 전역) | 꺼짐(비번만, 설정에서 TOTP 등록 가능) |
 | `bob@crosscert.com` | `bob-temp-pw` | `RP_ADMIN` | `dev-passkey` | 꺼짐(비번만) |
 
-> `alice` 는 `db/seed-common`, `bob` 은 `db/dev`(dev-passkey 테넌트에 바인딩)에서
-> 시드된다. dev/local 전용 — 비프로덕션 배포 전 반드시 로테이션.
+> `alice` 는 `db/seed-common`(local·dev 공통), `bob` 은 `db/dev`(**dev 프로필 한정**,
+> dev-passkey 테넌트에 바인딩)에서 시드된다. dev/local 전용 — 비프로덕션 배포 전 반드시
+> 로테이션.
+>
+> 두 계정 모두 MFA 가 꺼진 상태다 — bob 은 시드 SQL 이 `mfa_enabled='N'` 을 명시하고,
+> alice 는 INSERT 에 그 컬럼이 없어 스키마 기본값(`DEFAULT 'N'`)이 적용된다. TOTP 를
+> 쓰려면 로그인 후 설정 → 계정에서 등록한다.
 
 ### 5) DB 스크립트
 
