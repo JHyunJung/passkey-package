@@ -246,9 +246,10 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 
 ## 8. 트러블슈팅
 
-**`/actuator/**` 가 외부에서 404** — 의도된 동작이다. `nginx.conf` 의 passkey
-서버 블록이 `location ^~ /actuator/` 로 404 를 반환해 운영 엔드포인트를 외부에
-노출하지 않는다. 컨테이너 healthcheck 는 nginx 를 거치지 않고 내부
+**actuator 가 외부에서 404** — 의도된 동작이다. `nginx.conf` 의 passkey 서버
+블록이 인덱스 경로(`location = /actuator`)와 하위 경로 전체
+(`location ^~ /actuator/`) 양쪽에서 404 를 반환해, 운영 엔드포인트를 외부에
+전혀 노출하지 않는다. 컨테이너 healthcheck 는 nginx 를 거치지 않고 내부
 `localhost:8080/actuator/health` 를 호출하므로 영향받지 않으며, 서버에서 직접
 확인하려면 `docker compose exec passkey-app wget -qO- http://localhost:8080/actuator/health` 를 쓴다.
 
