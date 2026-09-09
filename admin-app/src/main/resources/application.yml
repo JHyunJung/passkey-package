@@ -13,6 +13,8 @@ spring:
     # 스키마명은 common yml 의 passkey.db.schema(=${PASSKEY_DB_SCHEMA:PSK_APP_OWNER})
     # 한 곳에서만 정한다. Hibernate 의 default_schema 도 같은 값을 참조하므로
     # Flyway 가 만드는 스키마와 JPA 가 조회하는 스키마가 갈라질 수 없다.
+    # 단, 아래 spring.flyway.user 는 별도 값이다 — PASSKEY_DB_SCHEMA 만 바꾸면
+    # 대상 스키마와 접속 계정이 갈라질 수 있으니 둘을 함께 바꾼다.
     schemas: ${passkey.db.schema}
     default-schema: ${passkey.db.schema}
     # Finding #3 (Approach A): Flyway runs as the schema OWNER, not the

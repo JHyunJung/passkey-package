@@ -27,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * admin-app 은 운영자 계정을 DB(AdminUserDetailsService)에서 읽으므로 Spring Security 의
  * 기본 인메모리 사용자를 쓰지 않는다. 예전에는 부팅 로그의 "Using generated security
  * password" 한 줄을 지우려고 application.yml 에 더미 spring.security.user.password 를
- * 두었는데, 그 키가 없어도 로그가 찍히지 않는다는 것을 여기서 고정한다.
+ * 두었는데, 그 키가 없어도 로그가 찍히지 않는다. 이 테스트는 그 back-off 메커니즘을
+ * 증명한다 — 실제 admin-app 배선에서의 확인은 컨텍스트를 통째로 띄우는 IT 가 담당한다.
  *
  * <p>근거는 {@link UserDetailsServiceAutoConfiguration} 의 @ConditionalOnMissingBean 이다.
  * 애플리케이션이 {@link UserDetailsService} 빈(admin-app 의 AdminUserDetailsService)을 이미
@@ -55,12 +56,16 @@ class GeneratedSecurityPasswordAbsentTest {
 
     private Logger logger;
     private ListAppender<ILoggingEvent> appender;
+    private Level originalLevel;
 
     @BeforeEach
     void captureLog() {
         logger = (Logger) LoggerFactory.getLogger(PASSWORD_LOGGER);
         appender = new ListAppender<>();
         appender.start();
+        // 메시지는 WARN 으로 찍힌다. 원래 레벨을 보관했다가 복원해야 같은 JVM 의
+        // 후속 테스트로 레벨 변경이 새지 않는다(null = 상위에서 상속받던 상태).
+        originalLevel = logger.getLevel();
         logger.setLevel(Level.WARN);
         logger.addAppender(appender);
     }
@@ -69,6 +74,7 @@ class GeneratedSecurityPasswordAbsentTest {
     void releaseLog() {
         logger.detachAppender(appender);
         appender.stop();
+        logger.setLevel(originalLevel);
     }
 
     @Test
