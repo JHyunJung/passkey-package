@@ -18,7 +18,14 @@ import java.util.regex.Pattern;
 @Component
 public class DbSchemaProperties {
 
-    private static final Pattern VALID = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*$");
+    /**
+     * Oracle 의 인용 없는(unquoted) 식별자 규칙: 첫 글자는 영문자, 이후는 영숫자와
+     * {@code _ $ #}, 최대 30자. {@code $}·{@code #} 는 Oracle 식별자 문자이므로
+     * 허용하되, 이 패턴은 공백·따옴표·세미콜론·하이픈 등 SQL 을 끊거나 새 절을
+     * 시작할 수 있는 문자를 전부 배제한다 — 따라서 검증을 통과한 값을 raw SQL 의
+     * 테이블 prefix 로 문자열 연결해도 인젝션 벡터가 되지 않는다.
+     */
+    private static final Pattern VALID = Pattern.compile("^[A-Za-z][A-Za-z0-9_$#]{0,29}$");
 
     private final String schema;
 

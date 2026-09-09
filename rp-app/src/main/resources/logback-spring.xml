@@ -54,7 +54,8 @@
       </encoder>
     </appender>
 
-    <if condition='property("logJson").equals("true")'>
+    <!-- equalsIgnoreCase: PASSKEY_LOG_JSON=TRUE/True 도 JSON 으로 인식(운영자 오타 방지). -->
+    <if condition='property("logJson").equalsIgnoreCase("true")'>
       <then>
         <root level="WARN"><appender-ref ref="CONSOLE_JSON"/></root>
       </then>

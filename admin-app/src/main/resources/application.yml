@@ -10,8 +10,11 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: PSK_APP_OWNER
-    default-schema: PSK_APP_OWNER
+    # 스키마명은 common yml 의 passkey.db.schema(=${PASSKEY_DB_SCHEMA:PSK_APP_OWNER})
+    # 한 곳에서만 정한다. Hibernate 의 default_schema 도 같은 값을 참조하므로
+    # Flyway 가 만드는 스키마와 JPA 가 조회하는 스키마가 갈라질 수 없다.
+    schemas: ${passkey.db.schema}
+    default-schema: ${passkey.db.schema}
     # Finding #3 (Approach A): Flyway runs as the schema OWNER, not the
     # runtime datasource user. This lets us strip ALL DDL power from the
     # runtime PSK_APP_ADMIN_USER while migrations still create/alter objects.
@@ -30,12 +33,6 @@ spring:
     timeout: PT30M
     redis:
       namespace: spring:session
-  security:
-    user:
-      # We do not use Spring Security's default in-memory user — set a
-      # random impossible-to-guess password to suppress the "Using
-      # generated security password" startup log line.
-      password: "____disabled____never-used-loaded-from-db-instead____"
 
 server:
   port: 8081
@@ -59,6 +56,9 @@ passkey:
   mds:
     fixed-delay: PT6H
     initial-delay: PT30S
+    # 어드민 UI 표시값 전용 — 실제 신뢰 판정은 검증 계층이 하고, 이 값은
+    # MdsAdminController 가 현재 정책을 화면에 보여줄 때만 읽는다(동일 폴백).
+    trust-mode: MDS_STRICT_OPTIONAL
   key-rotation:
     grace: PT30M
     expiration-job:
@@ -85,3 +85,4 @@ passkey:
     webauthn-snapshot: P365D    # 스냅샷 1년
     mds-sync-history: P90D      # sync 이력 90일
     ceremony-event: P90D        # funnel 지표 90일 (funnel 조회는 최대 30일)
+    credential-auth-event: P90D # 인증 이벤트 90일

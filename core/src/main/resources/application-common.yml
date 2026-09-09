@@ -57,7 +57,6 @@ logging:
   level:
     root: INFO
     com.crosscert.passkey: INFO
-    com.crosscert.passkey.sdk: INFO
     org.springframework.web: WARN
     org.hibernate: WARN
     org.hibernate.SQL: WARN

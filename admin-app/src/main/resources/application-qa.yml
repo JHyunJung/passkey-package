@@ -15,6 +15,7 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
   flyway:
     # Finding #3 (Approach A): Flyway 는 스키마 OWNER(PSK_APP_OWNER)로 실행 — 런타임
     # datasource 유저(PSK_APP_ADMIN_USER)에서 DDL 권한을 전부 제거하기 위함.
