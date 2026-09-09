@@ -1,11 +1,13 @@
 package com.crosscert.passkey.rpapp.config;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.ConfigurableEnvironment;
+
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,34 +18,51 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ProfilePropertyResolutionTest {
 
-    private ConfigurableEnvironment environmentFor(String... profiles) {
-        return new SpringApplicationBuilder(EmptyConfig.class)
+    /** 컨텍스트를 띄워 Environment 를 검사하고 반드시 닫는다. */
+    private void withEnvironment(String profile, Consumer<ConfigurableEnvironment> assertions) {
+        try (ConfigurableApplicationContext ctx = new SpringApplicationBuilder(EmptyConfig.class)
                 .web(WebApplicationType.NONE)
-                .profiles(profiles)
-                .run()
-                .getEnvironment();
+                .profiles(profile)
+                .run()) {
+            assertions.accept(ctx.getEnvironment());
+        }
     }
 
     @Test
     void localProfile_enablesDebugLoggingAndDisablesTemplateCache() {
-        ConfigurableEnvironment env = environmentFor("local");
-        assertThat(env.getProperty("logging.level.com.crosscert.passkey")).isEqualTo("DEBUG");
-        assertThat(env.getProperty("spring.thymeleaf.cache")).isEqualTo("false");
+        withEnvironment("local", env -> {
+            assertThat(env.getProperty("logging.level.com.crosscert.passkey")).isEqualTo("DEBUG");
+            assertThat(env.getProperty("spring.thymeleaf.cache")).isEqualTo("false");
+        });
     }
 
     @Test
     void devProfile_enablesDebugLoggingAndDisablesTemplateCache() {
-        ConfigurableEnvironment env = environmentFor("dev");
-        assertThat(env.getProperty("logging.level.com.crosscert.passkey")).isEqualTo("DEBUG");
-        assertThat(env.getProperty("spring.thymeleaf.cache")).isEqualTo("false");
+        withEnvironment("dev", env -> {
+            assertThat(env.getProperty("logging.level.com.crosscert.passkey")).isEqualTo("DEBUG");
+            assertThat(env.getProperty("spring.thymeleaf.cache")).isEqualTo("false");
+        });
     }
 
     /** prod 는 thymeleaf 캐시 키를 선언하지 않는다 → Boot 기본값(캐시 on). */
     @Test
     void prodProfile_leavesTemplateCacheAtBootDefault() {
-        ConfigurableEnvironment env = environmentFor("prod");
-        assertThat(env.getProperty("spring.thymeleaf.cache")).isNull();
-        assertThat(env.getProperty("logging.level.com.crosscert.passkey")).isEqualTo("INFO");
+        withEnvironment("prod", env -> {
+            assertThat(env.getProperty("spring.thymeleaf.cache")).isNull();
+            assertThat(env.getProperty("logging.level.com.crosscert.passkey")).isEqualTo("INFO");
+        });
+    }
+
+    /**
+     * qa 도 prod 와 같다 — application-qa.yml 은 로거 레벨만 선언하고 thymeleaf 키는
+     * 두지 않으므로 Boot 기본값(캐시 on)이 적용된다.
+     */
+    @Test
+    void qaProfile_leavesTemplateCacheAtBootDefault() {
+        withEnvironment("qa", env -> {
+            assertThat(env.getProperty("spring.thymeleaf.cache")).isNull();
+            assertThat(env.getProperty("logging.level.com.crosscert.passkey")).isEqualTo("INFO");
+        });
     }
 
     @Configuration(proxyBeanMethods = false)
