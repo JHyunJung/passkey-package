@@ -84,9 +84,10 @@ services:
       PASSKEY_KEY_ENVELOPE_MASTER_KEY: ${MASTER_KEY}
       PASSKEY_MDS_LEASE_HOLDER: ${MDS_LEASE_HOLDER:-admin-a}
       ADMIN_INVITE_BASE_URL: ${ADMIN_INVITE_BASE_URL}
-      # admin-app 은 ID Token 을 발급하지 않아 PASSKEY_ID_TOKEN_ISSUER_BASE 주입이
-      # 불필요하다(core 스캔으로 빈은 뜨지만 기본값 그대로). 발급 경로가 생기면
-      # passkey-app 과 같은 ISSUER_BASE 를 함께 주입할 것.
+      # passkey-app 과 동일 값 — 두 앱 issuer 일치. admin-app 은 ID Token 을
+      # 발급하지 않지만 core 스캔으로 IdTokenIssuer 빈이 뜨므로, 코드 기본값
+      # (dev 도메인)이 아니라 이 배포의 실제 issuer 를 쥐고 있게 한다.
+      PASSKEY_ID_TOKEN_ISSUER_BASE: ${ISSUER_BASE}
       #
       # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
       # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.

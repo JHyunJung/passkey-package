@@ -246,6 +246,12 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 
 ## 8. 트러블슈팅
 
+**`/actuator/**` 가 외부에서 404** — 의도된 동작이다. `nginx.conf` 의 passkey
+서버 블록이 `location ^~ /actuator/` 로 404 를 반환해 운영 엔드포인트를 외부에
+노출하지 않는다. 컨테이너 healthcheck 는 nginx 를 거치지 않고 내부
+`localhost:8080/actuator/health` 를 호출하므로 영향받지 않으며, 서버에서 직접
+확인하려면 `docker compose exec passkey-app wget -qO- http://localhost:8080/actuator/health` 를 쓴다.
+
 **passkey-app 이 부팅 직후 종료** — prod 프로필은 DB/Redis 관련 환경변수가
 비어 있으면 의도적으로 fail-fast 한다. `docker compose logs passkey-app` 에서
 `Failed to configure a DataSource` 류의 메시지를 확인하고 `.env` 를 점검한다.
