@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -297,5 +298,21 @@ class WebAuthnControllerTest {
                         .content("{\"publicKeyCredential\":{\"id\":\"x\"},\"authenticationToken\":\"auth-token\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(ErrorCode.PASSKEY_ID_TOKEN.code()));
+    }
+
+    // ── 9. CORS: 화이트리스트 origin 의 preflight 는 통과 ────────────────────
+
+    /**
+     * 양성 대조 — FixtureConfig 가 등록한 정확 origin 의 preflight 는 허용되고
+     * ACAO 가 <b>요청 Origin 을 반사한 게 아니라</b> 화이트리스트 값과 같아야 한다.
+     * 짝이 되는 음성 대조는 {@code WebAuthnCorsDisabledTest}(목록이 비면 preflight 거부).
+     */
+    @Test
+    void preflight_fromAllowedOrigin_isAccepted() throws Exception {
+        mvc.perform(options("/passkey/register/begin")
+                        .header("Origin", "https://app.example.com")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://app.example.com"));
     }
 }

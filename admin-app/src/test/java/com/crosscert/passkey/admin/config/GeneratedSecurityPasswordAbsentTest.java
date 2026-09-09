@@ -28,7 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 기본 인메모리 사용자를 쓰지 않는다. 예전에는 부팅 로그의 "Using generated security
  * password" 한 줄을 지우려고 application.yml 에 더미 spring.security.user.password 를
  * 두었는데, 그 키가 없어도 로그가 찍히지 않는다. 이 테스트는 그 back-off 메커니즘을
- * 증명한다 — 실제 admin-app 배선에서의 확인은 컨텍스트를 통째로 띄우는 IT 가 담당한다.
+ * 증명한다 — 실제 admin-app 배선에서의 확인은 컨텍스트를 통째로 띄우는
+ * {@code AdminFlowIT.security_usesDbBackedUserDetailsService_noInMemoryFallback()} 이 담당한다.
  *
  * <p>근거는 {@link UserDetailsServiceAutoConfiguration} 의 @ConditionalOnMissingBean 이다.
  * 애플리케이션이 {@link UserDetailsService} 빈(admin-app 의 AdminUserDetailsService)을 이미

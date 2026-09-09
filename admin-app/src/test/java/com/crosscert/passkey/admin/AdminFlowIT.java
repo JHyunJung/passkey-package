@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin;
 
+import com.crosscert.passkey.admin.auth.AdminUserDetailsService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +19,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -134,6 +138,8 @@ class AdminFlowIT {
     @Autowired ObjectMapper mapper;
     @Autowired DataSource ds;
     @Autowired RedisConnectionFactory redisFactory;
+    /** 실제로 부팅된 admin-app 컨텍스트의 보안 배선을 직접 들여다보기 위한 주입. */
+    @Autowired ApplicationContext ctx;
 
     /** App-scoped pool (PSK_APP_ADMIN_USER), used for read assertions + cleanup. */
     JdbcTemplate jdbc;
@@ -593,6 +599,20 @@ class AdminFlowIT {
         assertThat(n).isNotNull();
         Integer k = jdbc.queryForObject("SELECT COUNT(*) FROM PSK_APP_OWNER.api_key", Integer.class);
         assertThat(k).isNotNull();
+    }
+
+    /**
+     * #22 후속 — 실제 admin-app 컨텍스트에서 Boot 기본 인메모리 사용자가 만들어지지 않음을 단언한다.
+     * {@code GeneratedSecurityPasswordAbsentTest} 는 스텁 러너로 back-off 메커니즘만 증명하므로,
+     * "실앱 배선" 확인은 컨텍스트를 통째로 띄우는 이 테스트가 담당한다.
+     *
+     * <p>운영자 계정은 DB(AdminUserDetailsService)에서만 읽어야 한다. 인메모리 폴백이 되살아나면
+     * 부팅 때마다 임의 비밀번호를 가진 {@code user} 계정이 생겨 인증 경로가 이원화된다.
+     */
+    @Test
+    void security_usesDbBackedUserDetailsService_noInMemoryFallback() {
+        assertThat(ctx.getBeansOfType(InMemoryUserDetailsManager.class)).isEmpty();
+        assertThat(ctx.getBean(UserDetailsService.class)).isInstanceOf(AdminUserDetailsService.class);
     }
 
     /** For richer audit-count failure messages. */
