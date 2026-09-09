@@ -21,12 +21,17 @@
   - 위치: `passkey-app/src/main/java/com/crosscert/passkey/app/security/RateLimitFilter.java:144, 158-165; pass`
   - 방향: 신뢰 프록시 모델을 명시적으로 고정: prod 에서 `server.forward-headers-strategy=NATIVE`(또는 Tomcat RemoteIpValve 의 internalProxies/trustedProxies 화이트리스트) 를 설정해 LB 가 부여한 XFF 의 신뢰 가능한 클라이언트 IP만 채택하게 하고, 그 위에서 getRemoteAdd
 - **`sec-actuator-unauthenticated-exposure`** [medium/security] — actuator health(show-details: always)·prometheus 가 인증/레이트리밋 밖에서 노출
+  - **부분 해소(2026-09-10)**: `exposure.include` 를 `health,info` 로 축소해 **prometheus 는 기본 비노출**이 됐다
+    (`MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE` 로 켠 배포에서만 노출). `show-details: always` 와
+    health/info 의 미인증 노출은 **미해소** — 아래 `sec-actuator-health-show-details-always` 와 함께 남는다.
   - 위치: `core/src/main/resources/application-common.yml:32-35 (endpoints.web.exposure.include: health,info,pr`
   - 방향: actuator 를 별도 management.server.port(내부망/사이드카)로 분리하거나, 외부 노출 엔드포인트를 health(show-details: when-authorized 또는 never)로 축소하고 prometheus 는 인프라 내부 스크레이프 경로로만 제한. ALB/Ingress 레벨에서 /actuator 외부 차단도 가능. RP API
 - **`sec-actuator-health-show-details-always`** [medium/security] — actuator health show-details: always + /actuator/health permitAll → 미인증 인프라 상태 노출
   - 위치: `core/src/main/resources/application-common.yml:33 (endpoint.health.show-details: always), admin-app/`
   - 방향: application-common.yml 의 show-details 를 'when-authorized' 로 낮추고, 미인증 노출은 health 그룹 요약(UP/DOWN)만 허용. 상세는 인증된 운영자(또는 actuator role)에만. info/prometheus 도 동일 정책 검토.
 - **`sec-passkey-app-actuator-unauthenticated`** [medium/security] — passkey-app 에 Spring Security 체인 부재 → /actuator/prometheus, /actuator/health 가 완전 미인증
+  - **부분 해소(2026-09-10)**: prometheus 가 기본 비노출로 바뀌어 passkey-app 8080 에서 메트릭이 새는 경로는 닫혔다.
+    `/actuator/health`(show-details: always) 는 여전히 미인증이고 Spring Security 체인 부재도 그대로라 **항목은 유효**하다.
   - 위치: `passkey-app/build.gradle.kts:5-18 (starter-security 미선언), core/src/main/resources/application-common`
   - 방향: passkey-app 에 최소한의 SecurityFilterChain 추가(actuator 는 health 그룹 요약만 permitAll, prometheus/info 는 내부망/인증 한정) 하거나, management.server.port 를 별도 내부 전용 포트로 분리하고 외부 LB 에서 /actuator 차단. 또는 exposure.include 에서
 - **`sec-passkey-app-no-security-filterchain-headers`** [low/security] — 공개 RP API(passkey-app)에 SecurityFilterChain 부재 → Spring 기본 보안 헤더(nosniff/frame-options 등)조차 미적용

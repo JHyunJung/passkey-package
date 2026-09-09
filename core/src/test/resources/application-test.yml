@@ -9,12 +9,20 @@
 # identity for Flyway migrations and lets ITs seed/observe credential rows
 # via raw JDBC. Tenant isolation is enforced by the app-level Hibernate
 # @Filter (TenantFilterAspect), not the DB user — Oracle VPD was removed.
+# 스키마명 단일 출처. 이 yml 은 application-common.yml 을 import 하지 않는 자립
+# 설정이므로 값을 여기서 리터럴로 정의한다 — env 플레이스홀더를 쓰지 않는 것은
+# 의도적이다. Java 쪽 withUsername("PSK_APP_OWNER") 와 bootstrap SQL 이 같은 이름을
+# 하드코딩하고 있어, 외부 env 로 이 값만 바뀌면 IT 가 어긋나기 때문이다.
+passkey:
+  db:
+    schema: PSK_APP_OWNER
+
 spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: PSK_APP_OWNER
-    default-schema: PSK_APP_OWNER
+    schemas: ${passkey.db.schema}
+    default-schema: ${passkey.db.schema}
     baseline-on-migrate: true
     baseline-version: 0
   jpa:
@@ -23,7 +31,7 @@ spring:
     properties:
       hibernate.dialect: org.hibernate.dialect.OracleDialect
       hibernate.jdbc.time_zone: Asia/Seoul
-      hibernate.default_schema: PSK_APP_OWNER
+      hibernate.default_schema: ${passkey.db.schema}
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
     hikari:

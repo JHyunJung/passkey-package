@@ -11,8 +11,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    schemas: PSK_APP_OWNER
-    default-schema: PSK_APP_OWNER
+    # 스키마명 단일 출처는 common yml 의 passkey.db.schema — main application.yml 과 동일 규약.
+    schemas: ${passkey.db.schema}
+    default-schema: ${passkey.db.schema}
     baseline-on-migrate: true
     baseline-version: 0
     # Flyway runs as schema owner PSK_APP_OWNER (same as admin-app / core ITs),

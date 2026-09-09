@@ -45,7 +45,10 @@ spring:
 management:
   endpoint.health.show-details: always
   endpoint.health.probes.enabled: true
-  endpoints.web.exposure.include: health,info,prometheus
+  # prometheus 는 기본 비노출 — 스크레이프가 필요한 배포만 env
+  # MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,prometheus 로 켠다
+  # (passkey-app 은 Spring Security 가 없어 8080 에서 무인증이므로 기본 닫음).
+  endpoints.web.exposure.include: health,info
   health:
     group:
       readiness:

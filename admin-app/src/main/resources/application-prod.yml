@@ -42,7 +42,8 @@ spring:
   #     MailSenderConfiguration 이 LogMailSender 선택(메일 미발송, 초대는 동작).
   #   - SPRING_MAIL_HOST 설정 → relaxed binding 으로 spring.mail.host 자동 인식,
   #     JavaMailSender auto-config 동작, SmtpMailSender 선택.
-  # 실제 발송 시 함께 주입: SPRING_MAIL_PORT(기본 587), SPRING_MAIL_USERNAME,
+  # 실제 발송 시 함께 주입: SPRING_MAIL_PORT(미지정 시 JavaMail 기본 25;
+  # STARTTLS 는 보통 587), SPRING_MAIL_USERNAME,
   # SPRING_MAIL_PASSWORD, SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH,
   # SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE.
 

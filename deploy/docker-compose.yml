@@ -38,18 +38,23 @@ services:
     #  - "${PASSKEY_HOST_PORT:-8080}:8080"
     mem_limit: ${PASSKEY_MEM_LIMIT:-1g}
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: ${DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${DB_RUNTIME_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_RUNTIME_PASSWORD}
-      SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
-      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
-      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
-      PASSKEY_KEY_ENVELOPE_MASTER_KEY: ${MASTER_KEY}
-      PASSKEY_ID_TOKEN_ISSUER_BASE: ${ISSUER_BASE}
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=${DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_RUNTIME_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_RUNTIME_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PASSKEY_KEY_ENVELOPE_MASTER_KEY=${MASTER_KEY}
+      - PASSKEY_ID_TOKEN_ISSUER_BASE=${ISSUER_BASE}
       # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
       # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.
-      JAVA_OPTS: ${PASSKEY_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      - JAVA_OPTS=${PASSKEY_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      # 값 없는 리스트형 — .env/셸에 있을 때만 전달되고 없으면 키 자체가 빠진다
+      # (compose config 에서 null). `${VAR:-}` 로 쓰면 빈 문자열이 전달돼 앱이
+      # '설정됨' 으로 취급하므로 이 형태여야 한다. prometheus 스크레이프가
+      # 필요한 배포만 .env 에서 켠다(기본은 core 의 health,info).
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 15s
@@ -68,32 +73,45 @@ services:
       - "${ADMIN_BIND_ADDR:-127.0.0.1}:${ADMIN_HOST_PORT:-8081}:8081"
     mem_limit: ${ADMIN_MEM_LIMIT:-1g}
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: ${DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${DB_ADMIN_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_ADMIN_PASSWORD}
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=${DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_ADMIN_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_ADMIN_PASSWORD}
       # Flyway 는 admin-app 에만 주입한다. passkey-app 에 주면 --scale 로 늘어난
       # 인스턴스들이 동시에 마이그레이션을 시도한다.
-      SPRING_FLYWAY_USER: ${DB_OWNER_USER}
-      SPRING_FLYWAY_PASSWORD: ${DB_OWNER_PASSWORD}
-      SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
-      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
-      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      - SPRING_FLYWAY_USER=${DB_OWNER_USER}
+      - SPRING_FLYWAY_PASSWORD=${DB_OWNER_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       # 서버 A·B 가 같은 값이어야 한다. 다르면 한쪽 암호화 데이터를
       # 다른 쪽이 복호화하지 못한다.
-      PASSKEY_KEY_ENVELOPE_MASTER_KEY: ${MASTER_KEY}
-      PASSKEY_MDS_LEASE_HOLDER: ${MDS_LEASE_HOLDER:-admin-a}
-      ADMIN_INVITE_BASE_URL: ${ADMIN_INVITE_BASE_URL}
+      - PASSKEY_KEY_ENVELOPE_MASTER_KEY=${MASTER_KEY}
+      - PASSKEY_MDS_LEASE_HOLDER=${MDS_LEASE_HOLDER:-admin-a}
+      - ADMIN_INVITE_BASE_URL=${ADMIN_INVITE_BASE_URL}
       # passkey-app 과 동일 값 — 두 앱 issuer 일치. admin-app 은 ID Token 을
       # 발급하지 않지만 core 스캔으로 IdTokenIssuer 빈이 뜨므로, 코드 기본값
       # (dev 도메인)이 아니라 이 배포의 실제 issuer 를 쥐고 있게 한다.
       # ISSUER_BASE 는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두
       # 기동을 거부한다(IdTokenIssuer 의 blank 가드, fail-fast).
-      PASSKEY_ID_TOKEN_ISSUER_BASE: ${ISSUER_BASE}
+      - PASSKEY_ID_TOKEN_ISSUER_BASE=${ISSUER_BASE}
       #
       # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
       # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.
-      JAVA_OPTS: ${ADMIN_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      - JAVA_OPTS=${ADMIN_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      #
+      # 아래는 값 없는 리스트형 — .env/셸에 있을 때만 전달되고 없으면 키 자체가
+      # 빠진다(compose config 에서 null). `${VAR:-}` 로 쓰면 빈 문자열이 전달돼
+      # Boot 의 @ConditionalOnProperty(spring.mail.host) 가 활성화되고 mail
+      # health 가 DOWN 이 된다.
+      - SPRING_MAIL_HOST
+      - SPRING_MAIL_PORT
+      - SPRING_MAIL_USERNAME
+      - SPRING_MAIL_PASSWORD
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
+      - PASSKEY_MAIL_FROM
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
       interval: 15s

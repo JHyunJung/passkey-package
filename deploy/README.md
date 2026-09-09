@@ -165,7 +165,8 @@ compose 기본값으로 동작한다:
 | QA (rp-app) | `WK_ANDROID_PACKAGE` | `com.crosscert.sample.passkey` | `/.well-known/assetlinks.json` 의 Android 패키지명 |
 | QA (rp-app) | `WK_ANDROID_SHA256` | `63:0C:F8:85:C6:9A:80:A0:87:B0:A2:72:83:61:00:29:F8:36:65:FF:EF:8E:FE:71:71:74:13:ED:34:9D:7C:54` | `assetlinks.json` 의 서명키 SHA-256 지문. 자체 빌드 앱을 쓰면 반드시 교체한다 |
 | QA (rp-app) | `WK_IOS_APPID` | `LTPC88ZFE8.com.crosscert.sample.passkey` | `/.well-known/apple-app-site-association` 의 `<TeamID>.<BundleID>` |
-| SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. ⚠️ 현재 `docker-compose.yml` 의 admin-app 에 이 변수들의 패스스루가 없어, `.env` 에만 채우면 컨테이너까지 전달되지 않는다 — 먼저 admin-app `environment:` 에 추가해야 한다 |
+| SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. `docker-compose.yml` 의 admin-app 에 패스스루됨 — **빈 값 금지**(`SPRING_MAIL_HOST=` 처럼 두면 빈 값도 '설정됨' 으로 취급돼 mail health 가 DOWN 이 된다). 쓰지 않으면 주석 처리로 끈다 |
+| actuator | `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE` | `health,info` | prometheus 를 켜려면 `health,info,prometheus`. passkey-app 은 인증이 없으니 내부망 스크레이퍼만 접근 가능하게 둔다 |
 
 아래는 **필수** — 기본값이 없어 비워두면 기동에 실패한다:
 
