@@ -160,6 +160,7 @@ compose 기본값으로 동작한다:
 | 리소스 | `PASSKEY_JAVA_OPTS`, `ADMIN_JAVA_OPTS`, `RP_JAVA_OPTS` | `-XX:MaxRAMPercentage=75` | 같은 기본값이 각 `Dockerfile` 의 `ENV JAVA_OPTS` 에도 있다 — 바꿀 때 양쪽을 함께 고친다 |
 | Redis 스택 | `REDIS_HOST_PORT` | `6379` | `docker-compose.redis.yml` 전용 |
 | Redis 스택 | `REDIS_MAXMEMORY` | `512mb` | `docker-compose.redis.yml` 전용 |
+| SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. ⚠️ 현재 `docker-compose.yml` 의 admin-app 에 이 변수들의 패스스루가 없어, `.env` 에만 채우면 컨테이너까지 전달되지 않는다 — 먼저 admin-app `environment:` 에 추가해야 한다 |
 
 아래는 **필수** — 기본값이 없어 비워두면 기동에 실패한다:
 
@@ -257,17 +258,6 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 비어 있으면 의도적으로 fail-fast 한다. `docker compose logs passkey-app` 에서
 `Failed to configure a DataSource` 류의 메시지를 확인하고 `.env` 를 점검한다.
 
-## 마이그레이션 후속 조치
-
-- **V5 (`admin_signup_request` 도입 + 초대 테이블 제거) 적용 후**: 기존 초대
-  흐름이 남긴 미완료 계정(`admin_user.status='PENDING'`, `bcrypt_hash IS NULL`)은
-  초대 테이블이 사라져 더 이상 완료할 방법이 없다. `admin_user_tenant.admin_user_id`
-  FK 가 `ON DELETE CASCADE` 이므로 `admin_user` 행만 지우면 연결된 테넌트 매핑도
-  함께 정리된다. PSK_APP_OWNER 로 한 번 실행한다:
-  ```sql
-  DELETE FROM admin_user WHERE status = 'PENDING' AND bcrypt_hash IS NULL;
-  ```
-
 **`--scale` 시 포트 충돌** — passkey-app 에 `ports:` 매핑이 살아 있는지
 확인한다. nginx 를 쓰는 기본 구성에서는 주석 처리돼 있어야 한다.
 
@@ -292,3 +282,14 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 **admin 콘솔에 외부에서 접속이 안 됨** — 의도된 동작이다. `ADMIN_BIND_ADDR` 기본값이
 `127.0.0.1` 이라 루프백에서만 열린다. 내부망에서 접근하려면 `.env` 에서
 `ADMIN_BIND_ADDR` 을 내부 IP 로 명시적으로 바꿔야 한다.
+
+## 마이그레이션 후속 조치
+
+- **V5 (`admin_signup_request` 도입 + 초대 테이블 제거) 적용 후**: 기존 초대
+  흐름이 남긴 미완료 계정(`admin_user.status='PENDING'`, `bcrypt_hash IS NULL`)은
+  초대 테이블이 사라져 더 이상 완료할 방법이 없다. `admin_user_tenant.admin_user_id`
+  FK 가 `ON DELETE CASCADE` 이므로 `admin_user` 행만 지우면 연결된 테넌트 매핑도
+  함께 정리된다. PSK_APP_OWNER 로 한 번 실행한다:
+  ```sql
+  DELETE FROM admin_user WHERE status = 'PENDING' AND bcrypt_hash IS NULL;
+  ```

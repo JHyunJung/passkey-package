@@ -58,11 +58,16 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 
 ```bash
 docker compose up -d
-# 첫 부팅 시: bootstrap-schema.sql 로 PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER 생성 필요
-docker exec -i passkey-oracle sqlplus -s / as sysdba < scripts/bootstrap-schema.sql
+# 첫 부팅 시 스키마/유저 부트스트랩 (정본 러너 — PDB 명 주입을 대신 처리한다)
+scripts/run-bootstrap.sh
+# 기본 PDB 가 XEPDB1 이 아니면: ORA_SERVICE=<PDB명> scripts/run-bootstrap.sh
 ```
 
-> 한 번에 깨끗이 초기화하려면 위 두 줄 대신 `scripts/init-dev-db.sh` 를 쓴다.
+`bootstrap-schema.sql` 을 sqlplus 로 직접 파이프하지 마세요 — 이 SQL 은 `&ora_service`
+치환에 의존하는데 in-file `DEFINE` 이 없어 호출측(`run-bootstrap.sh`)의 주입이 유일한
+정의입니다.
+
+> 한 번에 깨끗이 초기화하려면 위 블록 대신 `scripts/init-dev-db.sh` 를 쓴다.
 > 컨테이너·볼륨 재생성부터 부트스트랩까지 자동화한다 ([5) DB 스크립트](#5-db-스크립트) 참고).
 
 ### 프로필

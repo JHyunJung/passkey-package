@@ -132,6 +132,10 @@ services:
       # user-store JSON 영속화. Dockerfile 이 /app/data 를 appuser 소유로 만들어 두므로
       # named volume 이 그 소유권을 이어받아 컨테이너가 쓸 수 있다.
       - rp-data:/app/data
+    # healthcheck 없음 — rp-app 은 actuator 에 의존하지 않는다(build.gradle.kts 에
+    # spring-boot-starter-actuator 미포함). /actuator/health 가 없으므로 passkey-app·
+    # admin-app 과 같은 wget 프로브를 둘 수 없다. 데모용 단일 인스턴스라 무해하며,
+    # 상태는 `docker compose ps` / 로그로 확인한다.
 
 volumes:
   rp-data:

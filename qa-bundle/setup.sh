@@ -188,7 +188,10 @@ put DB_OWNER_PASSWORD   "$PW_OWNER"
 put DB_ADMIN_PASSWORD   "$PW_ADMIN"
 put DB_RUNTIME_PASSWORD "$PW_RUNTIME"
 
-# 도메인 1개에서 4곳이 유도된다. 손편집 시 한 곳만 고치는 사고를 막는다.
+# FQDN 입력 2개에서 4곳이 유도된다 — passkey FQDN 하나가 아래 3곳
+# (PASSKEY_SERVER_NAME / ISSUER_BASE / ADMIN_INVITE_BASE_URL)을 채우고,
+# RP FQDN 은 별도 입력이라 RP_SERVER_NAME 1곳만 채운다.
+# 손편집 시 한 곳만 고치는 사고를 막는다.
 put PASSKEY_SERVER_NAME   "$PASSKEY_FQDN"
 put ISSUER_BASE           "https://${PASSKEY_FQDN}"
 put ADMIN_INVITE_BASE_URL "https://${PASSKEY_FQDN}"
