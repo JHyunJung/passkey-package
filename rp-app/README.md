@@ -70,8 +70,9 @@ passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 �
 
 ## 6. 설정 레퍼런스
 
-`application.yml` 의 실제 키·기본값. "환경변수" 열은 컨테이너 배포에서 그 키를 덮어쓸 때
-쓰는 이름이다.
+`application.yml` 의 실제 키·기본값. "환경변수" 열은 그 키를 덮어쓸 때 쓰는 환경변수
+이름이다(compose 가 실제로 어떤 것을 컨테이너에 넘기는지는 `deploy/docker-compose.yml`
+참고 — 표에 있어도 패스스루가 없는 변수가 있다).
 
 | 키 | 환경변수 | 기본값 | 의미 |
 |---|---|---|---|
@@ -89,7 +90,7 @@ passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 �
 | `rp-app.well-known.android[].package-name` | `WK_ANDROID_PACKAGE` [^wk] | `com.crosscert.sample.passkey` | Android 패키지명 |
 | `rp-app.well-known.android[].sha256-fingerprints` | `WK_ANDROID_SHA256` [^wk] | 샘플 앱 서명 지문 | Android 서명키 SHA-256 |
 | `rp-app.well-known.ios.app-ids` | `WK_IOS_APPID` [^wk] | `LTPC88ZFE8.com.crosscert.sample.passkey` | iOS App ID |
-| (`logback-spring.xml` 의 `passkey.log.json`) | `PASSKEY_LOG_JSON` | `false` | `true` 면 JSON 로그 인코더. yml 에 키가 없고 이 환경변수로만 켠다 |
+| (`logback-spring.xml` 의 `passkey.log.json`) | `PASSKEY_LOG_JSON` | `false` | `true` 면 JSON 로그 인코더(prod 프로필). yml 에 키가 없어 환경변수(또는 `-Dpasskey.log.json` 시스템 프로퍼티)로 켠다 |
 | `server.port` | `SERVER_PORT` | `9090` | 서버 포트 |
 
 [^wk]: well-known 세 값은 **YAML 배열 원소**라 `RP_APP_WELLKNOWN_ANDROID_0_PACKAGENAME`

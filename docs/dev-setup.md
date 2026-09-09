@@ -97,11 +97,16 @@ scope: `registration` + `authentication` (양쪽 다 허용).
 
 | email | password | role | tenant | MFA | 출처 |
 |---|---|---|---|---|---|
-| `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) | 켜짐(로그인 후 TOTP) | `db/seed-common` (local·dev 공통) |
+| `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) | 꺼짐(비번만, 설정에서 TOTP 등록 가능) | `db/seed-common` (local·dev 공통) |
 | `bob@crosscert.com` | `bob-temp-pw` | RP_ADMIN | `dev-passkey` | 꺼짐(비번만) | `db/dev` (**dev 프로필 한정**) |
 
-bob 은 `dev` 프로필에서만 시드된다 — `local` 프로필에는 없다. `mfa_enabled='N'` 이라
-비밀번호만으로 콘솔에 들어갈 수 있다(RP_ADMIN 권한 화면 확인용).
+bob 은 `dev` 프로필에서만 시드된다 — `local` 프로필에는 없다.
+
+**두 계정 모두 MFA 가 꺼진 상태로 시드**되어 비밀번호만으로 콘솔에 들어갈 수 있다.
+bob 은 시드 SQL 이 `mfa_enabled='N'` 을 명시하고, alice 는 INSERT 에 그 컬럼이 아예 없어
+스키마 기본값(`DEFAULT 'N'`)이 적용된다. 로그인 후 MFA 를 요구할지는 이 값 하나로
+결정되므로(`AdminSecurityConfig` 의 `isMfaEnabled()`), 시드 직후에는 둘 다 TOTP 단계가
+없다. TOTP 를 써 보려면 로그인 후 **설정 → 계정**에서 직접 등록한다.
 
 `local`/`dev` profile 의 admin-ui 로그인 화면은 "데모 계정으로 로그인" 카드를 띄우는데,
 자동 prefill 대상은 alice(PLATFORM_OPERATOR) 뿐이다. bob 은 직접 입력한다.
@@ -243,7 +248,8 @@ alice 자동 prefill 로 로그인 후. 사이드바는 **어디에 있느냐로
 
 - **Tenants** → local 프로필: `demo-rp` 1개 / dev 프로필: `dev-passkey` 1개
 - **활동** → 24h KPI + Top 5 + 이벤트 스트림
-- **감사 로그**(테넌트 스코프) → tenantId UUID 로 필터 가능
+- **감사 로그**(테넌트 스코프) → 이벤트 유형·시간창 필터. 테넌트는 이미 경로로 고정돼
+  있어 별도 tenantId 입력은 없다
 
 ### 4.2 RP 측 curl 시점
 
