@@ -145,7 +145,7 @@ cp .env.example .env && chmod 600 .env
 | DB (Flyway) | `DB_OWNER_USER/PASSWORD` | **admin-app 에만** 주입 — passkey-app 은 `--scale` 로 여러 개 뜨므로 마이그레이션을 동시에 시도하면 안 된다 |
 | Redis | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | 서버 C 를 가리킨다 |
 | 시크릿 | `MASTER_KEY` | `openssl rand -base64 32`. **서버 A·B 가 반드시 동일**해야 한다 — 다르면 한쪽이 암호화한 데이터를 다른 쪽이 복호화하지 못한다 |
-| 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE`, `ADMIN_INVITE_BASE_URL` | nginx `server_name` + ID Token issuer. `ISSUER_BASE` 는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두 기동 거부(fail-fast) |
+| 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE`, `ADMIN_INVITE_BASE_URL` | nginx `server_name` + ID Token issuer. `ISSUER_BASE` 는 compose 배포에서는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두 기동 거부(fail-fast)(compose 밖 `bootRun` 은 이 변수를 주지 않아 `IdTokenIssuer` 의 코드 기본값으로 기동한다) |
 | admin | `ADMIN_BIND_ADDR`(기본 `127.0.0.1`), `ADMIN_HOST_PORT`(기본 `8081`), `MDS_LEASE_HOLDER` | 콘솔은 내부망 전용 |
 | 리소스 | `PASSKEY_MEM_LIMIT`, `ADMIN_MEM_LIMIT`, `RP_MEM_LIMIT` | 컨테이너 메모리 상한. `JAVA_OPTS` 의 `MaxRAMPercentage=75` 가 이 값을 인식한다 |
 | QA 전용 | `RP_SERVER_NAME`, `RP_PROFILE`, `RP_PASSKEY_BASE_URL`, `RP_API_KEY`, `RP_TENANT_ID`, `RP_RELAY_SECRET` | prod 에서는 `qa` profile 을 지정하지 않으므로 값이 비어 있어도 무해하다. 2차 방어: 실수로 `qa` 가 섞여도 `RelayKeyGuard` 가 데모 기본 키를 거부해 rp-app 이 기동에 실패한다(fail-closed) |
@@ -163,7 +163,7 @@ compose 기본값으로 동작한다:
 | QA (rp-app) | `RP_CORS_ALLOWED_ORIGINS` | 빈 값 | 비우면 CORS 비활성. 네이티브 앱·다른 오리진 웹에서 rp-app 을 호출할 때만 설정한다 |
 | QA (rp-app) | `RP_APP_USER_STORE_FILE` | `/app/data/rp-app-users.json` | 데모 user↔credential 매핑 JSON. `rp-data` 볼륨에 두어 재기동 후에도 유지된다 |
 | QA (rp-app) | `WK_ANDROID_PACKAGE` | `com.crosscert.sample.passkey` | `/.well-known/assetlinks.json` 의 Android 패키지명 |
-| QA (rp-app) | `WK_ANDROID_SHA256` | 샘플 앱 서명 해시 | `assetlinks.json` 의 서명키 SHA-256 지문. 자체 빌드 앱을 쓰면 반드시 교체한다 |
+| QA (rp-app) | `WK_ANDROID_SHA256` | `63:0C:F8:85:C6:9A:80:A0:87:B0:A2:72:83:61:00:29:F8:36:65:FF:EF:8E:FE:71:71:74:13:ED:34:9D:7C:54` | `assetlinks.json` 의 서명키 SHA-256 지문. 자체 빌드 앱을 쓰면 반드시 교체한다 |
 | QA (rp-app) | `WK_IOS_APPID` | `LTPC88ZFE8.com.crosscert.sample.passkey` | `/.well-known/apple-app-site-association` 의 `<TeamID>.<BundleID>` |
 | SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. ⚠️ 현재 `docker-compose.yml` 의 admin-app 에 이 변수들의 패스스루가 없어, `.env` 에만 채우면 컨테이너까지 전달되지 않는다 — 먼저 admin-app `environment:` 에 추가해야 한다 |
 
