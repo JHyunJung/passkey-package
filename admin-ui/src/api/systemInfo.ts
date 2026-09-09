@@ -4,28 +4,19 @@ export type SystemInfoComponent = {
   name: string;
   version: string;
   status: 'OK' | 'DOWN' | 'DEGRADED';
-  instances: number;
   note: string | null;
 };
 
 export type SystemInfoHost = {
-  apiHostname: string;
-  adminConsole: string;
-  region: string;
+  /** 활성 Spring 프로필을 쉼표로 이은 값 — 없으면 "default". */
   environment: string;
-  deployMethod: string;
-  deploymentMode: 'saas' | 'onprem';   // L4.4 백엔드 일치
 };
 
 export type SystemInfoData = {
   serverVersion: string;
-  deployedAt: string;
-  apiP95Ms: number | null;
-  apiAvgMs: number | null;
-  apiP99Ms: number | null;
-  uptimePercent: number | null;
+  /** 빌드 시각(KST) — build-info 가 없으면 null. */
+  deployedAt: string | null;
   uptimeDays: number;
-  uptimeIncidentMinutes: number | null;
   host: SystemInfoHost;
   components: SystemInfoComponent[];
 };
