@@ -42,7 +42,7 @@
   - passkey · RP 두 FQDN
   - 호스트 내부 IP (`docker0` 자동 제시, 127.0.0.1 은 거부됨)
 
-## F. HTTPS (§9 — 가장 자주 막히는 지점)
+## F. HTTPS (README "반드시 먼저 해결해야 하는 것" — 가장 자주 막히는 지점)
 
 - [ ] 내부 DNS 서브도메인 2개 등록 (`passkey-qa.…`, `rp-qa.…`)
 - [ ] 앞단 LB/nginx 가 TLS 종료

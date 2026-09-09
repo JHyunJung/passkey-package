@@ -9,6 +9,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# 이 스크립트가 만드는 파일(.env, .env.bak, sed 임시파일)은 시크릿을 담는다.
+# umask 로 처음부터 600 으로 만들어, chmod 전까지의 노출 창을 없앤다.
+umask 077
+
 TEMPLATE=deploy/.env.qa-template
 ENV_FILE=deploy/.env
 
@@ -22,14 +26,27 @@ die(){ echo "${RED}[!!]${RST} $*" >&2; exit 1; }
 esc(){ printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'; }
 
 # key=value 를 .env 에 기록한다. 이미 있으면 치환, 없으면 추가.
+#
+# 값은 작은따옴표로 감싼다. .env 를 읽는 쪽이 둘이기 때문이다.
+#   - start.sh  : set -a; source .env   (셸 파서)
+#   - compose   : --env-file 의 자체 파서
+# 무인용으로 적으면 공백·$·백틱이 든 비밀번호를 셸이 해석해, source 는
+# 명령 치환·구문오류를 내고 compose 는 리터럴로 읽어 **서로 다른 값**을 본다.
+# 작은따옴표로 감싸면 양쪽이 같은 리터럴을 본다(공백·$·백틱·\·" 전수 확인).
+#
+# 단, 값 안의 작은따옴표만은 두 파서가 합의하는 표기가 존재하지 않는다.
+# 셸의 '\'' 는 compose 파서가 파일 전체를 거부하고(unexpected character),
+# compose 가 받는 '\' 나 "..." 는 셸이 다르게 읽는다. 조용한 불일치보다
+# 입력 시점 거부가 안전하므로 여기서 fail-closed 한다(ask 에서도 미리 막는다).
 put() {
   local k=$1 v=$2
   # 개행이 남아 있으면 sed 가 "unescaped newline" 으로 깨진다. 방어적으로 제거.
   v=${v//$'\n'/}; v=${v//$'\r'/}
+  [[ $v == *"'"* ]] && die "$k 값에 작은따옴표(')는 쓸 수 없습니다."
   if grep -qE "^${k}=" "$ENV_FILE"; then
-    sed -i.tmp "s|^${k}=.*|${k}=$(esc "$v")|" "$ENV_FILE" && rm -f "$ENV_FILE.tmp"
+    sed -i.tmp "s|^${k}=.*|${k}='$(esc "$v")'|" "$ENV_FILE" && rm -f "$ENV_FILE.tmp"
   else
-    printf '%s=%s\n' "$k" "$v" >> "$ENV_FILE"
+    printf "%s='%s'\n" "$k" "$v" >> "$ENV_FILE"
   fi
 }
 
@@ -45,8 +62,14 @@ ask() {
     else
       read -r -p "  $prompt: " out || die "입력이 중단되었습니다."
     fi
-    [[ -n $out ]] && { printf '%s' "$out"; return; }
-    echo "     ${DIM}값을 입력하세요.${RST}" >&2
+    if [[ -z $out ]]; then
+      echo "     ${DIM}값을 입력하세요.${RST}" >&2
+    elif [[ $out == *"'"* ]]; then
+      # put() 참고 — source 와 compose 가 합의하는 표기가 없다.
+      echo "     ${DIM}작은따옴표(')는 쓸 수 없습니다. 다시 입력하세요.${RST}" >&2
+    else
+      printf '%s' "$out"; return
+    fi
   done
 }
 
@@ -56,6 +79,9 @@ ask_secret() {
   while :; do
     read -r -s -p "  $prompt: " a || die "입력이 중단되었습니다."; echo >&2
     [[ -n $a ]] || { echo "     ${DIM}값을 입력하세요.${RST}" >&2; continue; }
+    # put() 참고 — source 와 compose 가 합의하는 표기가 없다.
+    [[ $a == *"'"* ]] && {
+      echo "     ${DIM}작은따옴표(')는 쓸 수 없습니다. 다시 입력하세요.${RST}" >&2; continue; }
     read -r -s -p "  $prompt (확인): " b || die "입력이 중단되었습니다."; echo >&2
     [[ $a == "$b" ]] && { printf '%s' "$a"; return; }
     echo "     ${DIM}일치하지 않습니다. 다시 입력하세요.${RST}" >&2
@@ -160,13 +186,10 @@ ok "deploy/.env 작성 완료"
 # 시크릿 3종은 사람이 만들 이유가 없다. 여기서 바로 생성한다.
 echo
 echo "${DIM}--- 시크릿 생성 (MASTER_KEY / REDIS_PASSWORD / RP_RELAY_SECRET) ---${RST}"
+# gen-secrets.sh 가 .env.bak(이전 세대 시크릿)을 스스로 삭제한다.
 ./gen-secrets.sh --write >/dev/null
 chmod 600 "$ENV_FILE"
 ok "시크릿 3종 기록"
-[[ -f deploy/.env.bak ]] && {
-  shred -u deploy/.env.bak 2>/dev/null || rm -f deploy/.env.bak
-  echo "  ${DIM}이전 세대 시크릿이 든 .env.bak 을 삭제했습니다.${RST}"
-}
 
 # ---------------------------------------------------------------------------
 echo

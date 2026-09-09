@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 가이드 §6·§8 — Redis 와 앱 스택을 순서대로 기동한다.
+# README "6. 기동" — Redis 와 앱 스택을 순서대로 기동한다.
 #
 #   ./start.sh                  # 선검증 → Redis → 앱 전체 기동
-#   ./start.sh rp-app           # 테넌트/API 키를 채운 뒤 rp-app 만 재기동(§10.3)
+#   ./start.sh rp-app           # 테넌트/API 키를 채운 뒤 rp-app 만 재기동
 #   ./start.sh --check          # 기동하지 않고 .env 검증만
 #   ./start.sh --status         # 현재 상태만 출력
 #   ./start.sh --stop           # 앱 스택 중지(Redis 는 유지)
@@ -84,8 +84,10 @@ check_env() {
   fi
 
   # 자리표시자 잔존. .env.qa-template 의 __XXX__ 를 안 바꾼 채 기동하는 사고가 잦다.
+  # 문자 클래스에 _ 와 숫자가 있어야 __ORACLE_HOST__ 처럼 내부에 _ 가 든 것도
+  # 잡힌다. 빠뜨리면 같은 줄의 다른 자리표시자에 우연히 걸리는지에 검출이 의존한다.
   local leftover
-  leftover=$(grep -nE '__[A-Za-z가-힣]+__' "$ENV_FILE" || true)
+  leftover=$(grep -nE '__[A-Za-z0-9_가-힣]+__' "$ENV_FILE" || true)
   if [[ -n $leftover ]]; then
     err "템플릿 자리표시자가 남아 있습니다:"
     echo "${leftover//$'\n'/$'\n'       }" | sed '1s/^/       /'
@@ -101,7 +103,8 @@ check_env() {
     else err "MASTER_KEY 가 ${len}바이트입니다(32 필요) → ./gen-secrets.sh --write"; fi
   fi
 
-  # WebAuthn 은 localhost 가 아니면 HTTPS 필수다(§9).
+  # WebAuthn 은 localhost 가 아니면 HTTPS 필수다
+  # (README "반드시 먼저 해결해야 하는 것 — HTTPS").
   if [[ ${ISSUER_BASE:-} == https://* ]]; then
     ok "ISSUER_BASE 가 https"
   elif [[ -n ${ISSUER_BASE:-} ]]; then
@@ -121,6 +124,13 @@ check_env() {
     err "RP_RELAY_SECRET 이 비어 있습니다 → ./gen-secrets.sh --write"
   fi
 
+  # compose 의 PASSKEY_BASE_URL 은 기본값이 없다. 비면 rp-app 이 빈 base URL 로
+  # 떠서 런타임에야 실패한다. rp-app 을 실제로 띄우는 경우에만 검사한다
+  # (start_apps 의 기동 조건과 같은 판정 — rp_ready 이거나 인자로 지정).
+  if rp_will_start && [[ -z ${RP_PASSKEY_BASE_URL:-} ]]; then
+    err "RP_PASSKEY_BASE_URL 이 비어 있습니다 (예: http://passkey-app:8080)"
+  fi
+
   # 이미지가 실제로 적재돼 있는지. 폐쇄망이라 pull 폴백이 없다.
   local tag=${IMAGE_TAG:-0.0.1-SNAPSHOT} img
   for img in passkey-app admin-app rp-app; do
@@ -131,9 +141,22 @@ check_env() {
   return 0
 }
 
-# RP_API_KEY / RP_TENANT_ID 는 테넌트를 만든 뒤에야 알 수 있다(§10).
+# RP_API_KEY / RP_TENANT_ID 는 테넌트를 만든 뒤에야 알 수 있다
+# (README "8. 테넌트 생성 → API 키 → rp-app 재기동").
 # 최초 기동에는 비어 있는 것이 정상이므로 rp-app 만 빼고 진행한다.
 rp_ready() { [[ -n ${RP_API_KEY:-} && -n ${RP_TENANT_ID:-} ]]; }
+
+# 이번 실행에서 rp-app 이 실제로 뜨는가. start_apps 의 서비스 선택과 같은 판정이다.
+# 인자가 있으면 그 목록에 rp-app 이 있을 때만, 없으면 rp_ready 일 때만 뜬다.
+RUN_ARGS=()
+rp_will_start() {
+  if ((${#RUN_ARGS[@]})); then
+    local s
+    for s in "${RUN_ARGS[@]}"; do [[ $s == rp-app ]] && return 0; done
+    return 1
+  fi
+  rp_ready
+}
 
 # ---------------------------------------------------------------------------
 # Redis — 앱보다 먼저 떠 있어야 한다
@@ -146,7 +169,9 @@ start_redis() {
   # 0.0.0.0 은 외부 노출이라 금지. 미지정 시 REDIS_HOST 를 그대로 쓴다.
   export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-${REDIS_HOST}}
   if [[ $REDIS_BIND_ADDR == 0.0.0.0 ]]; then
-    err "REDIS_BIND_ADDR 이 0.0.0.0 입니다. 내부 IP 로 지정하세요."
+    # ERRORS 는 check_env 직후에만 읽히므로 여기서 세어봐야 아무도 안 본다.
+    # 중단은 return 1 이 한다.
+    fail "REDIS_BIND_ADDR 이 0.0.0.0 입니다. 내부 IP 로 지정하세요."
     return 1
   fi
 
@@ -172,7 +197,7 @@ start_apps() {
   elif ! rp_ready; then
     # rp-app 을 뺀 나머지만. 빈 RP_API_KEY 로 띄워봐야 401 만 난다.
     warn "RP_API_KEY / RP_TENANT_ID 가 비어 있어 rp-app 은 제외합니다."
-    echo "     테넌트·API 키 발급(README §9) 후: ./start.sh rp-app"
+    echo "     테넌트·API 키 발급(README \"8. 테넌트 생성\") 후: ./start.sh rp-app"
     svcs=(nginx passkey-app admin-app)
   fi
 
@@ -238,13 +263,13 @@ next_steps() {
   echo
   echo "== 다음 =="
   if ! rp_ready; then
-    echo "  1) admin 콘솔 로그인 → 테넌트 생성 → API 키 발급 (README §9)"
+    echo "  1) admin 콘솔 로그인 → 테넌트 생성 → API 키 발급 (README \"8. 테넌트 생성\")"
     echo "     http://${ADMIN_BIND_ADDR:-127.0.0.1}:${ADMIN_HOST_PORT:-8081}/admin/"
     echo "  2) deploy/.env 의 RP_TENANT_ID, RP_API_KEY 를 채운다"
     echo "  3) ./start.sh rp-app"
   else
     echo "  브라우저에서 https://${RP_SERVER_NAME:-rp-qa} 접속 → 패스키 등록"
-    echo "  (HTTPS 가 아니면 브라우저가 등록을 거부합니다 — README §9)"
+    echo "  (HTTPS 가 아니면 브라우저가 등록을 거부합니다 — README \"반드시 먼저 해결해야 하는 것\")"
   fi
   echo
   echo "  로그:  cd deploy && docker compose logs -f admin-app"
@@ -290,6 +315,7 @@ case "${1:-}" in
 
   *)
     load_env
+    RUN_ARGS=("$@")   # check_env 의 rp_will_start 판정에 쓰인다
     check_env
     if (( ERRORS > 0 )); then
       echo

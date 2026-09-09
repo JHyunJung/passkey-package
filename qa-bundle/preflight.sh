@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 설치 전 사전 점검 (가이드 §1). 읽기 전용이며 아무것도 바꾸지 않는다.
+# 설치 전 사전 점검 (README "1. 사전 점검"). 읽기 전용이며 아무것도 바꾸지 않는다.
 #   ./preflight.sh [Oracle호스트] [Oracle포트]
 set -uo pipefail
 
@@ -13,7 +13,7 @@ ARCH=$(uname -m)
 
 echo "== 2. iptables (없으면 Docker 네트워킹 불가) =="
 command -v iptables >/dev/null 2>&1 && ok "$(iptables --version 2>/dev/null | head -1)" \
-  || warn "미설치 — 가이드 §1 의 ISO 로컬 저장소로 iptables 설치 필요"
+  || warn "미설치 — README \"2. Docker 설치\" 의 ISO 로컬 저장소로 iptables 설치 필요"
 
 echo "== 3. SELinux =="
 if command -v getenforce >/dev/null 2>&1; then
@@ -21,13 +21,13 @@ if command -v getenforce >/dev/null 2>&1; then
   if [[ $SE == Enforcing ]]; then
     rpm -q container-selinux >/dev/null 2>&1 \
       && ok "Enforcing + container-selinux 설치됨" \
-      || warn "Enforcing 인데 container-selinux 없음 — 볼륨 마운트 permission denied 발생(가이드 §2.5)"
+      || warn "Enforcing 인데 container-selinux 없음 — 볼륨 마운트 permission denied 발생(README \"2. Docker 설치\")"
   else ok "SELinux=$SE"; fi
 else info "getenforce 없음"; fi
 
 echo "== 4. firewalld =="
 if systemctl is-active --quiet firewalld 2>/dev/null; then
-  warn "활성 — docker0 을 trusted zone 에 넣으세요(가이드 §2.5)"
+  warn "활성 — docker0 을 trusted zone 에 넣으세요(README \"2. Docker 설치\")"
 else ok "비활성"; fi
 
 echo "== 5. 디스크 (/var 20GB+ 권장) =="
@@ -50,9 +50,9 @@ if [[ -n $ORA_HOST ]]; then
 else info "인자 없음 — ./preflight.sh <OracleIP> [포트] 로 확인 가능"
 fi
 
-echo "== 7. MDS 아웃바운드 (선택, §12) =="
+echo "== 7. MDS 아웃바운드 (선택, README 문제 해결) =="
 timeout 6 bash -c ": < /dev/tcp/mds3.fidoalliance.org/443" 2>/dev/null \
   && ok "mds3.fidoalliance.org:443 열림" \
-  || info "차단됨 — mdsRequired=false 로 QA 진행 가능(§12.4)"
+  || info "차단됨 — mdsRequired=false 로 QA 진행 가능(README 문제 해결)"
 
 echo; echo "점검 완료. [!!] 항목을 해결한 뒤 install-docker.sh 를 실행하세요."
