@@ -15,6 +15,15 @@ import java.util.List;
 @Service
 public class SystemInfoService {
 
+    /** 컴포넌트 상태 표시값 — 현재는 실측 없이 고정값이다. */
+    private static final String STATUS_OK = "OK";
+    /** 컴포넌트 인스턴스 수 — 현재는 실측 없이 고정값이다. */
+    private static final int DEFAULT_INSTANCES = 1;
+    private static final String NOTE_SPRING_BOOT = "Spring Boot";
+    private static final String NOTE_DB_PRIMARY = "primary";
+    private static final String NOTE_MDS_SCHEDULE = "03:00 KST daily";
+    private static final String DB_BANNER_UNKNOWN = "Oracle (unknown)";
+
     @Nullable private final BuildProperties build;
     private final JdbcTemplate jdbc;
     private final Environment env;
@@ -43,18 +52,21 @@ public class SystemInfoService {
         );
 
         List<SystemInfoView.Component> components = new ArrayList<>();
-        components.add(new SystemInfoView.Component("admin-app", version, "OK", 1, "Spring Boot"));
-        components.add(new SystemInfoView.Component("passkey-app", version, "OK", 1, "Spring Boot"));
-        String dbBanner = "Oracle (unknown)";
+        components.add(new SystemInfoView.Component(
+                "admin-app", version, STATUS_OK, DEFAULT_INSTANCES, NOTE_SPRING_BOOT));
+        components.add(new SystemInfoView.Component(
+                "passkey-app", version, STATUS_OK, DEFAULT_INSTANCES, NOTE_SPRING_BOOT));
+        String dbBanner = DB_BANNER_UNKNOWN;
         try {
             String b = jdbc.queryForObject("SELECT banner FROM v$version WHERE ROWNUM=1", String.class);
             if (b != null && !b.isBlank()) dbBanner = b;
         } catch (Exception ignore) {
             // PSK_APP_ADMIN_USER may lack SELECT on v$version — leave dbBanner default.
         }
-        components.add(new SystemInfoView.Component("Oracle DB", dbBanner, "OK", 1, "primary"));
         components.add(new SystemInfoView.Component(
-                "MDS sync scheduler", version, "OK", 1, "03:00 KST daily"));
+                "Oracle DB", dbBanner, STATUS_OK, DEFAULT_INSTANCES, NOTE_DB_PRIMARY));
+        components.add(new SystemInfoView.Component(
+                "MDS sync scheduler", version, STATUS_OK, DEFAULT_INSTANCES, NOTE_MDS_SCHEDULE));
 
         return new SystemInfoView(
                 version,
