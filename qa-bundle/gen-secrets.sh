@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# README "5. 환경 설정" — 시크릿 3종 생성. 한 번만 실행하고 값을 안전하게 보관한다.
+# README "5. 환경 설정" — 시크릿 3종 생성. 키 회전 시 다시 실행할 수 있다
+# (재실행하면 이전 값은 무효가 되므로, 기동 중이면 앱도 함께 재기동해야 한다).
 #   ./gen-secrets.sh                        # 화면 출력
 #   ./gen-secrets.sh --write                # deploy/.env 의 해당 항목을 직접 채움
 #   ./gen-secrets.sh --write --keep-backup  # 위와 같되 .env.bak 을 남긴다

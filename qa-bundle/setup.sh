@@ -25,6 +25,15 @@ die(){ echo "${RED}[!!]${RST} $*" >&2; exit 1; }
 # 값에 & | \ 가 섞여도 sed 가 깨지지 않게 이스케이프한다(gen-secrets.sh 와 동일).
 esc(){ printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'; }
 
+# 값이 홀수 개의 백슬래시로 끝나는가. compose 의 .env 파서는 작은따옴표 안의
+# \ 도 이스케이프로 취급해, 홀수면 닫는 따옴표를 삼키고 파일 전체를 거부한다.
+# 짝수(\\)는 양쪽 파서가 같은 값을 보므로 허용한다.
+bad_trailing_backslash() {
+  local t=$1 n=0
+  while [[ $t == *\\ ]]; do t=${t%\\}; n=$((n+1)); done
+  (( n % 2 == 1 ))
+}
+
 # key=value 를 .env 에 기록한다. 이미 있으면 치환, 없으면 추가.
 #
 # 값은 작은따옴표로 감싼다. .env 를 읽는 쪽이 둘이기 때문이다.
@@ -34,15 +43,19 @@ esc(){ printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'; }
 # 명령 치환·구문오류를 내고 compose 는 리터럴로 읽어 **서로 다른 값**을 본다.
 # 작은따옴표로 감싸면 양쪽이 같은 리터럴을 본다(공백·$·백틱·\·" 전수 확인).
 #
-# 단, 값 안의 작은따옴표만은 두 파서가 합의하는 표기가 존재하지 않는다.
-# 셸의 '\'' 는 compose 파서가 파일 전체를 거부하고(unexpected character),
-# compose 가 받는 '\' 나 "..." 는 셸이 다르게 읽는다. 조용한 불일치보다
-# 입력 시점 거부가 안전하므로 여기서 fail-closed 한다(ask 에서도 미리 막는다).
+# 단, 두 가지 값만은 두 파서가 합의하는 표기가 존재하지 않아 거부한다.
+#   1) 작은따옴표 — 셸의 '\'' 는 compose 가 파일 전체를 거부하고
+#      (unexpected character), compose 가 받는 '\' 나 "..." 는 셸이 다르게 읽는다.
+#   2) 끝의 홀수 개 백슬래시 — compose 는 '…\' 의 \ 를 이스케이프로 보아
+#      닫는 따옴표를 삼키고 "unterminated quoted value" 로 파일 전체를 거부한다.
+#      (셸은 작은따옴표 안의 \ 를 리터럴로 읽어 정상 통과 → 조용한 불일치)
+# 둘 다 조용한 불일치보다 입력 시점 거부가 안전하다(ask 에서도 미리 막는다).
 put() {
   local k=$1 v=$2
   # 개행이 남아 있으면 sed 가 "unescaped newline" 으로 깨진다. 방어적으로 제거.
   v=${v//$'\n'/}; v=${v//$'\r'/}
   [[ $v == *"'"* ]] && die "$k 값에 작은따옴표(')는 쓸 수 없습니다."
+  bad_trailing_backslash "$v" && die "$k 값은 백슬래시(\\)로 끝날 수 없습니다."
   if grep -qE "^${k}=" "$ENV_FILE"; then
     sed -i.tmp "s|^${k}=.*|${k}='$(esc "$v")'|" "$ENV_FILE" && rm -f "$ENV_FILE.tmp"
   else
@@ -67,6 +80,8 @@ ask() {
     elif [[ $out == *"'"* ]]; then
       # put() 참고 — source 와 compose 가 합의하는 표기가 없다.
       echo "     ${DIM}작은따옴표(')는 쓸 수 없습니다. 다시 입력하세요.${RST}" >&2
+    elif bad_trailing_backslash "$out"; then
+      echo "     ${DIM}백슬래시(\\)로 끝날 수 없습니다. 다시 입력하세요.${RST}" >&2
     else
       printf '%s' "$out"; return
     fi
@@ -82,6 +97,8 @@ ask_secret() {
     # put() 참고 — source 와 compose 가 합의하는 표기가 없다.
     [[ $a == *"'"* ]] && {
       echo "     ${DIM}작은따옴표(')는 쓸 수 없습니다. 다시 입력하세요.${RST}" >&2; continue; }
+    bad_trailing_backslash "$a" && {
+      echo "     ${DIM}백슬래시(\\)로 끝날 수 없습니다. 다시 입력하세요.${RST}" >&2; continue; }
     read -r -s -p "  $prompt (확인): " b || die "입력이 중단되었습니다."; echo >&2
     [[ $a == "$b" ]] && { printf '%s' "$a"; return; }
     echo "     ${DIM}일치하지 않습니다. 다시 입력하세요.${RST}" >&2
@@ -186,10 +203,13 @@ ok "deploy/.env 작성 완료"
 # 시크릿 3종은 사람이 만들 이유가 없다. 여기서 바로 생성한다.
 echo
 echo "${DIM}--- 시크릿 생성 (MASTER_KEY / REDIS_PASSWORD / RP_RELAY_SECRET) ---${RST}"
-# gen-secrets.sh 가 .env.bak(이전 세대 시크릿)을 스스로 삭제한다.
+# gen-secrets.sh 가 .env.bak(이전 세대 시크릿)을 스스로 삭제한다. 위에서
+# "백업했습니다" 라고 알린 파일이 여기서 사라지므로 그 사실도 알린다.
+HAD_BACKUP=0; [[ -f $ENV_FILE.bak ]] && HAD_BACKUP=1 || true
 ./gen-secrets.sh --write >/dev/null
 chmod 600 "$ENV_FILE"
 ok "시크릿 3종 기록"
+(( HAD_BACKUP )) && ok "이전 세대 시크릿이 든 $ENV_FILE.bak 삭제" || true
 
 # ---------------------------------------------------------------------------
 echo

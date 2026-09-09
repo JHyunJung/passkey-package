@@ -44,7 +44,7 @@ passkey-qa-bundle/
 |---|---|
 | `Rocky-9.7-x86_64-dvd1.iso` | 배포 불가. `iptables`/`container-selinux` 가 없을 때만 필요 |
 | Oracle DB | 스택 외부. 내부망 1521 접근 필요 |
-| TLS 인증서 + 내부 DNS 2개 | 조직 인프라 (§9) |
+| TLS 인증서 + 내부 DNS 2개 | 조직 인프라 ("반드시 먼저 해결해야 하는 것 — HTTPS") |
 
 ---
 
@@ -141,10 +141,12 @@ sudo firewall-cmd --reload
 | passkey 서버 FQDN · RP 데모 FQDN | 인프라팀(내부 DNS) |
 | 호스트 내부 IP | `docker0` 에서 자동 탐지, 확인만 |
 
-> **입력 규칙: 값에 작은따옴표(`'`)를 쓸 수 없다.** `.env` 를 읽는 두 파서
-> (`start.sh` 의 셸 `source` 와 `docker compose`)가 `'` 를 담는 표기에 대해
-> 서로 합의하는 형식이 없어, 넣으면 양쪽이 다른 값을 보게 된다. 입력 단계에서
-> 거부하므로 **DB 비밀번호를 발급받을 때 `'` 를 피해서 받는다.**
+> **입력 규칙: 값에 작은따옴표(`'`)를 쓸 수 없고, 백슬래시(`\`)로 끝날 수 없다.**
+> `.env` 를 읽는 두 파서(`start.sh` 의 셸 `source` 와 `docker compose`)가 이
+> 두 경우에 합의하는 표기가 없다. `'` 는 양쪽이 다른 값을 보게 되고, 값 끝의
+> `\` 는 compose 가 닫는 따옴표를 이스케이프로 읽어 **`.env` 파일 전체를
+> 거부**한다(셸은 정상 통과하므로 `--check` 만으로는 드러나지 않는다).
+> 입력 단계에서 거부하므로 **DB 비밀번호를 발급받을 때 `'` 와 끝 `\` 를 피한다.**
 
 자동으로 처리되는 것:
 
@@ -161,7 +163,8 @@ sudo firewall-cmd --reload
 
 기록 형식은 `KEY='값'`(작은따옴표)이다. 공백·`$`·백틱이 든 비밀번호를
 `start.sh` 의 `source` 와 `docker compose` 가 **같은 값**으로 읽게 하려면
-따옴표가 필요하다. 무인용으로 손편집한 기존 `.env` 도 그대로 동작한다.
+따옴표가 필요하다. 무인용으로 손편집한 기존 `.env` 도 **값에 공백·`$`·백틱이
+없다면** 그대로 동작한다(있다면 두 파서가 다른 값을 보므로 따옴표를 씌운다).
 
 > `.env` 를 직접 편집하고 싶다면 `deploy/.env.qa-template` 을 `deploy/.env` 로
 > 복사해 손으로 채운 뒤 `./start.sh --check` 로 검증해도 된다.
@@ -225,7 +228,7 @@ admin 콘솔(`https://<admin주소>/admin/`)에서 테넌트를 만든다.
 | `rpId` | `rp-qa.내부도메인` | **도메인만.** 스킴·포트 없음 |
 | `allowedOrigins` | `["https://rp-qa.내부도메인"]` | **전체 origin.** 스킴 포함 |
 
-`mdsRequired` 는 첫 등록 테스트에서 **`false`** 를 권장한다(§12).
+`mdsRequired` 는 첫 등록 테스트에서 **`false`** 를 권장한다("문제 해결" 참고).
 
 API Keys 탭에서 `registration`, `authentication` scope 키를 발급한다.
 **평문 키는 1회만 표시**되므로 즉시 `.env` 의 `RP_API_KEY` 에 넣고,
