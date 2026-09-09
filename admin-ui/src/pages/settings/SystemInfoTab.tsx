@@ -26,6 +26,12 @@ function MetricCard({ label, value, sub }: { label: string; value: React.ReactNo
 
 // ── ComponentRow ──────────────────────────────────────────────────────────────
 
+const STATUS_BADGE_CLASS: Record<SystemInfoComponent['status'], string> = {
+  OK: 'badge--success',
+  DEGRADED: 'badge--warning',
+  DOWN: 'badge--danger',
+};
+
 function ComponentRow({ name, version, status, note }: SystemInfoComponent) {
   return (
     <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -35,7 +41,7 @@ function ComponentRow({ name, version, status, note }: SystemInfoComponent) {
       </div>
       <div className="row">
         <span className="mono muted" style={{ fontSize: 11 }}>{version}</span>
-        <span className="badge badge--success badge--dot">{status}</span>
+        <span className={`badge ${STATUS_BADGE_CLASS[status]} badge--dot`}>{status}</span>
       </div>
     </div>
   );

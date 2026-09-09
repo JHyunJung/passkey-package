@@ -16,7 +16,7 @@ const sample: SystemInfoData = {
   host: { environment: 'prod,oracle' },
   components: [
     { name: 'admin-app', version: '1.2.3', status: 'OK', note: 'Spring Boot' },
-    { name: 'MDS sync scheduler', version: '1.2.3', status: 'OK', note: '매 PT6H' },
+    { name: 'MDS sync scheduler', version: '1.2.3', status: 'OK', note: '매 6시간' },
   ],
 };
 
@@ -37,7 +37,7 @@ describe('SystemInfoTab', () => {
     // KST 문자열이어도 앞 10자가 날짜다.
     expect(screen.getByText('2026-05-31 배포')).toBeInTheDocument();
     expect(screen.getByText('prod,oracle')).toBeInTheDocument();
-    expect(screen.getByText('매 PT6H')).toBeInTheDocument();
+    expect(screen.getByText('매 6시간')).toBeInTheDocument();
     expect(screen.getByText('4d')).toBeInTheDocument();
   });
 
@@ -55,5 +55,22 @@ describe('SystemInfoTab', () => {
     await waitFor(() =>
       expect(screen.getByText('System Info 를 불러오지 못했습니다.')).toBeInTheDocument());
     expect(screen.queryByText('System Info 로딩 중…')).not.toBeInTheDocument();
+  });
+
+  it('maps each component status to its badge class', async () => {
+    mockGet().mockResolvedValue({
+      ...sample,
+      components: [
+        { name: 'admin-app', version: '1.2.3', status: 'OK', note: 'Spring Boot' },
+        { name: 'Oracle DB', version: 'Oracle (unknown)', status: 'DEGRADED', note: 'primary' },
+        { name: 'MDS sync scheduler', version: '1.2.3', status: 'DOWN', note: '매 6시간' },
+      ],
+    });
+    render(<SystemInfoTab />);
+
+    await waitFor(() => expect(screen.getByText('OK')).toBeInTheDocument());
+    expect(screen.getByText('OK').className).toContain('badge--success');
+    expect(screen.getByText('DEGRADED').className).toContain('badge--warning');
+    expect(screen.getByText('DOWN').className).toContain('badge--danger');
   });
 });
