@@ -20,3 +20,15 @@ passkey:
   # rp-app 은 이 tenant-id 로 iss 의 tenantId 부분과 aud 를 검증한다.
   tenant-id:   00000000-0000-0000-0000-00000000c0de
   issuer-base: http://localhost:8080
+
+# 템플릿 수정을 재기동 없이 반영한다(base 에서 이 프로필로 옮김 — prod/qa 는 Boot 기본 캐시 on).
+spring:
+  thymeleaf:
+    cache: false
+
+# logback-spring.xml 의 <springProfile name="local,dev"> 가 컬러 패턴·풀 스택트레이스·
+# payload 로거 DEBUG 를 담당한다. Boot 의 logging.level 은 logback 설정보다 나중에
+# 적용되므로, 여기서 DEBUG 를 명시하지 않으면 base 의 INFO 가 그 의도를 덮어쓴다.
+logging:
+  level:
+    com.crosscert.passkey: DEBUG

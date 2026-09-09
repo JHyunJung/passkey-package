@@ -76,7 +76,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PasskeyAuthException.class)
     public ResponseEntity<ApiResponse<Void>> handlePasskeyAuth(PasskeyAuthException e) {
-        log.error("[PasskeyAuth] upstream rejected X-API-Key — check rp-app/.env", e);
+        log.error("[PasskeyAuth] upstream rejected X-API-Key — "
+                + "PASSKEY_API_KEY / PASSKEY_TENANT_ID 설정을 확인하세요", e);
         return ResponseEntity.status(ErrorCode.PASSKEY_AUTH_ERROR.status())
                 .body(ApiResponse.error(ErrorCode.PASSKEY_AUTH_ERROR));
     }

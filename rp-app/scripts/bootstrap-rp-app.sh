@@ -113,4 +113,4 @@ else
 fi
 
 echo
-echo "다음: cd examples/rp-app && set -a && source .env && set +a && ./gradlew bootRun"
+echo "다음: set -a && source rp-app/.env && set +a && ./gradlew :rp-app:bootRun"

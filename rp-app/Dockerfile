@@ -28,6 +28,10 @@ FROM eclipse-temurin:17-jre
 RUN useradd -r -u 1001 -m appuser
 WORKDIR /app
 COPY --from=build /src/deploy/rp-app.jar /app/app.jar
+# user-store JSON(rp-app.user-store.file 기본값 ./data/rp-app-users.json = /app/data/...)
+# 을 appuser 가 쓸 수 있어야 한다. /app 은 root 소유라 이 디렉터리를 미리 만들어
+# 소유권을 넘기지 않으면 등록 확정 시 쓰기에 실패한다.
+RUN mkdir -p /app/data && chown appuser:appuser /app/data
 USER appuser
 EXPOSE 9090
 # 이 기본값은 deploy/docker-compose.yml 의 JAVA_OPTS 기본값과 두 곳에 중복

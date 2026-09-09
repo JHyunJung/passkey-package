@@ -112,6 +112,23 @@ services:
       # 등록 relay 토큰 HMAC 키. rp-app 은 데모 기본값이면 부팅을 거부한다
       # (IllegalStateException: rp.relay.secret 이 데모 기본 키입니다).
       RP_RELAY_SECRET: ${RP_RELAY_SECRET}
+      # cross-origin 웹 SPA 의 정확한 origin 목록(쉼표 구분). 비우면 빈 목록으로
+      # 바인딩돼 CORS 가 비활성이다(같은-origin 만) — 와일드카드는 부팅 시 거부된다.
+      RP_CORS_ALLOWED_ORIGINS: ${RP_CORS_ALLOWED_ORIGINS:-}
+      # user↔handle↔credential 매핑 JSON. 아래 rp-data 볼륨에 두어 재기동 후에도 유지한다.
+      RP_APP_USER_STORE_FILE: ${RP_APP_USER_STORE_FILE:-/app/data/rp-app-users.json}
+      # 네이티브 앱 패스키용 Well-Known 값. 미설정 시 첨부 샘플 앱 기본값이며,
+      # 아래 기본값은 rp-app/src/main/resources/application.yml 과 동일하게 유지한다.
+      WK_ANDROID_PACKAGE: ${WK_ANDROID_PACKAGE:-com.crosscert.sample.passkey}
+      WK_ANDROID_SHA256: ${WK_ANDROID_SHA256:-63:0C:F8:85:C6:9A:80:A0:87:B0:A2:72:83:61:00:29:F8:36:65:FF:EF:8E:FE:71:71:74:13:ED:34:9D:7C:54}
+      WK_IOS_APPID: ${WK_IOS_APPID:-LTPC88ZFE8.com.crosscert.sample.passkey}
       # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
       # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.
       JAVA_OPTS: ${RP_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+    volumes:
+      # user-store JSON 영속화. Dockerfile 이 /app/data 를 appuser 소유로 만들어 두므로
+      # named volume 이 그 소유권을 이어받아 컨테이너가 쓸 수 있다.
+      - rp-data:/app/data
+
+volumes:
+  rp-data:

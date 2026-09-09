@@ -42,14 +42,9 @@ rp:
     # ⚠️ 와일드카드/reflected 금지. passkey-app tenant allowed-origins 와 일치시킬 것.
     allowed-origins: ${RP_CORS_ALLOWED_ORIGINS:}
 
-spring:
-  thymeleaf:
-    cache: false
-
 logging:
   level:
     root: INFO
+    # 자식 로거(.sdk/.rpapp)는 이 부모 로거와 같은 레벨이므로 따로 두지 않는다.
     com.crosscert.passkey: INFO
-    com.crosscert.passkey.sdk: INFO
-    com.crosscert.passkey.rpapp: INFO
     org.springframework.web: WARN

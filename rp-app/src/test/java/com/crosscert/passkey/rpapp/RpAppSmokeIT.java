@@ -13,10 +13,9 @@ import org.springframework.test.context.ActiveProfiles;
  *   1. cd Passkey2 && docker compose up -d
  *   2. cd Passkey2 && ./gradlew :passkey-app:bootRun --args="--passkey.id-token.issuer-base=http://localhost:8080" (별 터미널)
  *   3. cd Passkey2 && ./gradlew :admin-app:bootRun (별 터미널)
- *   4. cd examples/sdk-java && ./gradlew publishToMavenLocal
- *   5. cd examples/rp-app && ./scripts/bootstrap-rp-app.sh
- *   6. set -a && source examples/rp-app/.env && set +a
- *   7. cd examples/rp-app && ./gradlew test --tests RpAppSmokeIT
+ *   4. rp-app/scripts/bootstrap-rp-app.sh
+ *   5. set -a && source rp-app/.env && set +a
+ *   6. ./gradlew :rp-app:test --tests RpAppSmokeIT
  *
  * @Disabled 마커를 제거해야 실제 실행된다. 위 전제가 만족되지 않으면 fail 한다.
  * passkey-app + admin-app 의 자동 부팅을 IT 가 책임지지 않는다 (spec § 8.1 — 개발 속도 우선).
