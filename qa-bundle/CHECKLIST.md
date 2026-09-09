@@ -21,6 +21,8 @@
 
 - [ ] `./load-images.sh` → 5개 모두 `[OK] … (amd64)`
       (앱 하나만: `./load-images.sh passkey-app`)
+- [ ] rp-app 재빌드 시 `images/` tar.gz 와 `SHA256SUMS` 재생성
+      (`load-images.sh` 가 `sha256sum -c` 로 검증)
 
 ## D. DB (이미 생성됨 — 확인만)
 

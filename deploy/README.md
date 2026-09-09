@@ -160,6 +160,11 @@ compose 기본값으로 동작한다:
 | 리소스 | `PASSKEY_JAVA_OPTS`, `ADMIN_JAVA_OPTS`, `RP_JAVA_OPTS` | `-XX:MaxRAMPercentage=75` | 같은 기본값이 각 `Dockerfile` 의 `ENV JAVA_OPTS` 에도 있다 — 바꿀 때 양쪽을 함께 고친다 |
 | Redis 스택 | `REDIS_HOST_PORT` | `6379` | `docker-compose.redis.yml` 전용 |
 | Redis 스택 | `REDIS_MAXMEMORY` | `512mb` | `docker-compose.redis.yml` 전용 |
+| QA (rp-app) | `RP_CORS_ALLOWED_ORIGINS` | 빈 값 | 비우면 CORS 비활성. 네이티브 앱·다른 오리진 웹에서 rp-app 을 호출할 때만 설정한다 |
+| QA (rp-app) | `RP_APP_USER_STORE_FILE` | `/app/data/rp-app-users.json` | 데모 user↔credential 매핑 JSON. `rp-data` 볼륨에 두어 재기동 후에도 유지된다 |
+| QA (rp-app) | `WK_ANDROID_PACKAGE` | `com.crosscert.sample.passkey` | `/.well-known/assetlinks.json` 의 Android 패키지명 |
+| QA (rp-app) | `WK_ANDROID_SHA256` | 샘플 앱 서명 해시 | `assetlinks.json` 의 서명키 SHA-256 지문. 자체 빌드 앱을 쓰면 반드시 교체한다 |
+| QA (rp-app) | `WK_IOS_APPID` | `LTPC88ZFE8.com.crosscert.sample.passkey` | `/.well-known/apple-app-site-association` 의 `<TeamID>.<BundleID>` |
 | SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. ⚠️ 현재 `docker-compose.yml` 의 admin-app 에 이 변수들의 패스스루가 없어, `.env` 에만 채우면 컨테이너까지 전달되지 않는다 — 먼저 admin-app `environment:` 에 추가해야 한다 |
 
 아래는 **필수** — 기본값이 없어 비워두면 기동에 실패한다:
@@ -248,9 +253,17 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 ## 8. 트러블슈팅
 
 **actuator 가 외부에서 404** — 의도된 동작이다. `nginx.conf` 의 passkey 서버
-블록이 인덱스 경로(`location = /actuator`)와 하위 경로 전체
-(`location ^~ /actuator/`) 양쪽에서 404 를 반환해, 운영 엔드포인트를 외부에
-전혀 노출하지 않는다. 컨테이너 healthcheck 는 nginx 를 거치지 않고 내부
+블록이 세 가지 location 으로 404 를 반환해, 운영 엔드포인트를 외부에 전혀
+노출하지 않는다: 인덱스 경로(`location = /actuator`), 하위 경로 전체
+(`location ^~ /actuator/`), 그리고 경로 파라미터 우회를 막는 정규식
+(`location ~ "^/actuator([/;]|$)"`). 세 번째가 필요한 이유는 `;` 때문이다 —
+nginx 는 `/actuator;x/health` 를 `;` 까지 포함한 하나의 경로로 보아 앞의 두
+블록에 걸리지 않지만, Spring MVC 의 PathPattern 은 `;` 뒤를 경로 파라미터로
+떼어내고 `/actuator/health` 로 매칭한다. 즉 정규식이 없으면 nginx 는
+통과시키고 앱은 실행한다(양쪽 실측 확인). `/actuatorfoo` 처럼 접두사만 같은
+경로는 `[/;]` 경계 때문에 차단되지 않는다.
+
+컨테이너 healthcheck 는 nginx 를 거치지 않고 내부
 `localhost:8080/actuator/health` 를 호출하므로 영향받지 않으며, 서버에서 직접
 확인하려면 `docker compose exec passkey-app wget -qO- http://localhost:8080/actuator/health` 를 쓴다.
 
@@ -284,6 +297,11 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 `ADMIN_BIND_ADDR` 을 내부 IP 로 명시적으로 바꿔야 한다.
 
 ## 마이그레이션 후속 조치
+
+- **rp-app 이미지 재빌드 필수**: `Dockerfile` 에 `/app/data` 생성·`chown` 이
+  추가돼, 이전 이미지로는 새로 붙는 `rp-data` 볼륨에 쓰기가 되지 않는다.
+  신설된 `rp-data` 볼륨은 비어 있는 상태로 시작하므로 **기존 컨테이너 내부의
+  `users.json` 은 이관되지 않는다** — QA 데모 데이터라 재등록하면 그만이다.
 
 - **V5 (`admin_signup_request` 도입 + 초대 테이블 제거) 적용 후**: 기존 초대
   흐름이 남긴 미완료 계정(`admin_user.status='PENDING'`, `bcrypt_hash IS NULL`)은

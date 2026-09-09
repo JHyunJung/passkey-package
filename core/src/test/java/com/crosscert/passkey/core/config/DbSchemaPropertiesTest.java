@@ -27,15 +27,16 @@ class DbSchemaPropertiesTest {
     }
 
     @Test
-    void acceptsThirtyCharIdentifier() {
-        String thirty = "A".repeat(30);
-        assertThat(new DbSchemaProperties(thirty).schema()).isEqualTo(thirty);
+    void acceptsMaxLengthIdentifier() {
+        // Oracle 12.2+ 의 식별자 상한은 128바이트. 대상 DB 는 19c 다.
+        String max = "A".repeat(128);
+        assertThat(new DbSchemaProperties(max).schema()).isEqualTo(max);
     }
 
     @Test
-    void rejectsIdentifierLongerThanThirtyChars() {
-        // Oracle 의 인용 없는 식별자 상한은 30자 — 31자는 부팅 시점에 거부한다.
-        assertThatThrownBy(() -> new DbSchemaProperties("A".repeat(31)))
+    void rejectsIdentifierLongerThanMaxLength() {
+        // 129자는 상한을 넘으므로 부팅 시점에 거부한다.
+        assertThatThrownBy(() -> new DbSchemaProperties("A".repeat(129)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("passkey.db.schema");
     }

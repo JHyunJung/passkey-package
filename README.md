@@ -76,7 +76,7 @@ scripts/run-bootstrap.sh
 
 | Profile | 용도 | 시크릿 |
 |---|---|---|
-| `dev` | 로컬 개발 (localhost Oracle/Redis + 시드 데이터) | yml 하드코딩 (dev 전용) |
+| `dev` | 로컬 개발 (localhost Oracle/Redis + 시드 데이터) | 환경변수 (미주입 시 localhost 기본값) |
 | `qa` | 내부 QA / 통합 테스트 | 환경변수 필수 |
 | `prod` | 프로덕션 (SaaS 또는 on-prem) | 환경변수 필수 + Flyway 안전장치 |
 
@@ -93,11 +93,11 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun
 SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
   --args="--passkey.id-token.issuer-base=http://localhost:8080"
 
-# 3) rp-app — 시드된 acme-corp API key 주입
+# 3) rp-app — 시드된 dev-passkey 테넌트의 API key 주입
 #    프로필 필수: RelayKeyGuard 가 dev/local 외 프로필에서 relay 데모 키를 거부한다
 SPRING_PROFILES_ACTIVE=dev \
-PASSKEY_API_KEY="pk_devacme0dev_acme_secret_known_plaintext_for_local_test_only" \
-PASSKEY_TENANT_ID="7f00dead-0000-0000-0000-00000ace0001" \
+PASSKEY_API_KEY="pk_devsrv01dev_server_secret_known_plaintext_for_test_only" \
+PASSKEY_TENANT_ID="7F00DEAD000000000000000DE7000001" \
 PASSKEY_BASE_URL="http://localhost:8080" \
 PASSKEY_ISSUER_BASE="http://localhost:8080" \
 ./gradlew :rp-app:bootRun

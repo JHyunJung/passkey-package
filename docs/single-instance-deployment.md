@@ -133,6 +133,8 @@ PASSKEY_KEY_ENVELOPE_MASTER_KEY='<passkey-app 과 동일한 마스터키>' \
 ./gradlew :admin-app:bootRun
 ```
 
+> ℹ️ `PASSKEY_ID_TOKEN_ISSUER_BASE` 가 위 예시에 없는 것은 의도된 것입니다. compose 배포에서는 이 변수가 admin-app 에도 주입되며 비어 있으면 fail-fast 로 기동을 거부합니다(`deploy/README.md` §4 변수 표의 "양쪽 필수"는 compose 한정). 위 bootRun 은 변수를 주지 않으므로 `IdTokenIssuer` 의 코드 기본값으로 기동합니다 — admin-app 은 ID Token 을 발급하지 않아 동작에 영향이 없습니다.
+
 ### 3.3 RP 서버 (rp-app, 내부 9090)
 
 **§4에서 테넌트·API key를 발급한 뒤** 그 값으로 기동합니다.

@@ -104,6 +104,10 @@ sudo firewall-cmd --reload
 5개 이미지가 모두 `amd64` 로 확인돼야 한다. 앱을 따로 재배포할 때는 해당
 `tar.gz` 하나만 서버로 옮겨 그 이름으로 실행하면 된다.
 
+⚠️ rp-app 을 재빌드했다면(`Dockerfile` 의 `/app/data` 추가) `images/` 의
+`tar.gz` 와 `SHA256SUMS` 를 함께 재생성해야 한다 — `load-images.sh` 가
+`sha256sum -c` 로 검증하므로 해시가 어긋나면 적재가 실패한다.
+
 ### 4. DB 확인
 
 스키마·계정·초기 운영자 계정은 **이미 생성돼 있다는 전제**다. 기동 전에 접속만
