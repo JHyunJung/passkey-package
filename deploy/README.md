@@ -2,10 +2,13 @@
 
 설계 근거: `docs/superpowers/specs/2026-08-07-docker-deployment-design.md` (완료된 spec 은 저장소에서 정리됨 — git 이력에서 조회)
 
-> **상태**: 이 문서는 의도된 배포 절차를 기술한다. 이미지 빌드와 스택 기동은
-> 아직 end-to-end 로 실증되지 않았다(Docker 데몬 이슈로 작업 중단). 실제
-> 기동 검증은 별도 단계(QA 통합 검증)에서 수행한다. 절차를 따르다 문제가
-> 있으면 [7. 트러블슈팅](#7-트러블슈팅)과 실제 로그를 함께 확인한다.
+> **상태**: 이미지 빌드와 스택 기동은 실기동으로 검증을 완주했다 — 이미지 3종
+> 빌드, `proxy,admin` / `proxy,admin,qa` 스택 기동, `--scale passkey-app=3` 포트
+> 충돌 없음, SIGTERM graceful shutdown, Redis 인증(NOAUTH/PONG) 확인. 폐쇄망
+> QA 반입 번들(`qa-bundle/`)도 이 절차에서 산출됐다.
+> **아직 실증되지 않은 것은 [5. 무중단 배포](#5-무중단-배포-수동-블루그린)의
+> 블루/그린 절차 하나뿐이다.** 절차를 따르다 문제가 있으면
+> [8. 트러블슈팅](#8-트러블슈팅)과 실제 로그를 함께 확인한다.
 
 ## 토폴로지
 
@@ -145,7 +148,27 @@ cp .env.example .env && chmod 600 .env
 | 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE`, `ADMIN_INVITE_BASE_URL` | nginx `server_name` + ID Token issuer |
 | admin | `ADMIN_BIND_ADDR`(기본 `127.0.0.1`), `ADMIN_HOST_PORT`(기본 `8081`), `MDS_LEASE_HOLDER` | 콘솔은 내부망 전용 |
 | 리소스 | `PASSKEY_MEM_LIMIT`, `ADMIN_MEM_LIMIT`, `RP_MEM_LIMIT` | 컨테이너 메모리 상한. `JAVA_OPTS` 의 `MaxRAMPercentage=75` 가 이 값을 인식한다 |
-| QA 전용 | `RP_SERVER_NAME`, `RP_PROFILE`, `RP_PASSKEY_BASE_URL`, `RP_API_KEY`, `RP_TENANT_ID` | prod 에서는 `qa` profile 을 지정하지 않으므로 값이 비어 있어도 무해하다 |
+| QA 전용 | `RP_SERVER_NAME`, `RP_PROFILE`, `RP_PASSKEY_BASE_URL`, `RP_API_KEY`, `RP_TENANT_ID`, `RP_RELAY_SECRET` | prod 에서는 `qa` profile 을 지정하지 않으므로 값이 비어 있어도 무해하다. 2차 방어: 실수로 `qa` 가 섞여도 `RelayKeyGuard` 가 데모 기본 키를 거부해 rp-app 이 기동에 실패한다(fail-closed) |
+
+`.env.example` 에 주석으로만 적혀 있는 변수. 아래는 **선택** — 비워두면
+compose 기본값으로 동작한다:
+
+| 그룹 | 변수 | 기본값 | 비고 |
+|---|---|---|---|
+| 호스트 포트 | `NGINX_HOST_PORT` | `80` | nginx 가 잡는 호스트 포트 |
+| 호스트 포트 | `PASSKEY_HOST_PORT` | `8080` | `docker-compose.yml` 의 passkey-app `ports:` 2줄을 주석 해제했을 때만 의미가 있다 |
+| 리소스 | `PASSKEY_JAVA_OPTS`, `ADMIN_JAVA_OPTS`, `RP_JAVA_OPTS` | `-XX:MaxRAMPercentage=75` | 같은 기본값이 각 `Dockerfile` 의 `ENV JAVA_OPTS` 에도 있다 — 바꿀 때 양쪽을 함께 고친다 |
+| Redis 스택 | `REDIS_HOST_PORT` | `6379` | `docker-compose.redis.yml` 전용 |
+| Redis 스택 | `REDIS_MAXMEMORY` | `512mb` | `docker-compose.redis.yml` 전용 |
+
+아래는 **필수** — 기본값이 없어 비워두면 기동에 실패한다:
+
+| 그룹 | 변수 | 기본값 | 비고 |
+|---|---|---|---|
+| Redis 스택 | `REDIS_BIND_ADDR` | 기본값 없음 | `docker-compose.redis.yml` 전용. 비우면 redis 스택 기동 실패(fail-closed, `${REDIS_BIND_ADDR:?}`). 서버 C 내부 IP 를 쓴다 — `0.0.0.0` 금지. §3 참고 |
+
+`REDIS_*` 3개는 **앱 스택이 아니라 redis 스택(서버 C)** 이 읽는다. 앱 스택이
+Redis 에 접속할 때 쓰는 변수는 위 표의 `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD` 다.
 
 `SERVER_FORWARD_HEADERS_STRATEGY` 는 주입하지 않는다 — `forward-headers-strategy:
 framework` 가 passkey-app/admin-app 의 base `application.yml` 에 이미 있다.
@@ -219,7 +242,7 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 | 호스트 장애 | 해당 서버의 인스턴스가 전부 중단, LB 가 다른 서버로 우회 |
 | **Redis SPOF** | 서버 C 장애 시 신규 인증/등록 중단. 영구 데이터는 Oracle 에 있어 유실은 없다 |
 | 시크릿 관리 | `.env` 평문 — Vault 등 시크릿 매니저 미도입, 파일 권한(600)으로만 보호 |
-| 검증 상태 | 이 절차는 아직 실제 빌드/기동으로 검증되지 않았다(§ 상단 참고) |
+| 검증 상태 | 빌드·기동·`--scale`·종료·Redis 인증은 실기동으로 검증됨. **§5 무중단 블루/그린 절차만 미실증** (§ 상단 참고) |
 
 ## 8. 트러블슈팅
 
@@ -241,11 +264,13 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 **`--scale` 시 포트 충돌** — passkey-app 에 `ports:` 매핑이 살아 있는지
 확인한다. nginx 를 쓰는 기본 구성에서는 주석 처리돼 있어야 한다.
 
-**로그인 후 즉시 로그아웃 / WebAuthn origin 오류** — `X-Forwarded-Proto` 가
-앱까지 원본 그대로 전달되지 않는 경우다. LB 설정과 `nginx.conf` 의
+**로그인 후 즉시 로그아웃** — `X-Forwarded-Proto` 가 앱까지 원본 그대로
+전달되지 않는 경우다. LB 설정과 `nginx.conf` 의
 `proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;` 를 확인한다.
 `$scheme` 으로 바뀌어 있으면 안 된다 — nginx 가 평문 HTTP 로 받았다는 이유로
-앱이 secure 쿠키/WebAuthn origin 검증을 깨뜨린다.
+앱이 요청을 http 로 인식해 secure 쿠키(admin-app prod 의 세션 쿠키)를 내리지
+못한다. WebAuthn origin 검증은 이 헤더와 무관하다 — 브라우저가 보낸
+`clientDataJSON` 의 origin 을 테넌트 `allowed_origins` 와 대조한다.
 
 **nginx 가 기동 자체를 못 함 (`host not found in upstream`)** — `nginx.conf` 의
 `proxy_pass` 대상이 변수(`$passkey_upstream`)가 아니라 호스트명 리터럴로 바뀐

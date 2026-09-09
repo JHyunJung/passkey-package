@@ -47,6 +47,8 @@ services:
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
       PASSKEY_KEY_ENVELOPE_MASTER_KEY: ${MASTER_KEY}
       PASSKEY_ID_TOKEN_ISSUER_BASE: ${ISSUER_BASE}
+      # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
+      # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.
       JAVA_OPTS: ${PASSKEY_JAVA_OPTS:--XX:MaxRAMPercentage=75}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
@@ -82,6 +84,12 @@ services:
       PASSKEY_KEY_ENVELOPE_MASTER_KEY: ${MASTER_KEY}
       PASSKEY_MDS_LEASE_HOLDER: ${MDS_LEASE_HOLDER:-admin-a}
       ADMIN_INVITE_BASE_URL: ${ADMIN_INVITE_BASE_URL}
+      # admin-app 은 ID Token 을 발급하지 않아 PASSKEY_ID_TOKEN_ISSUER_BASE 주입이
+      # 불필요하다(core 스캔으로 빈은 뜨지만 기본값 그대로). 발급 경로가 생기면
+      # passkey-app 과 같은 ISSUER_BASE 를 함께 주입할 것.
+      #
+      # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
+      # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.
       JAVA_OPTS: ${ADMIN_JAVA_OPTS:--XX:MaxRAMPercentage=75}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
@@ -104,4 +112,6 @@ services:
       # 등록 relay 토큰 HMAC 키. rp-app 은 데모 기본값이면 부팅을 거부한다
       # (IllegalStateException: rp.relay.secret 이 데모 기본 키입니다).
       RP_RELAY_SECRET: ${RP_RELAY_SECRET}
+      # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
+      # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.
       JAVA_OPTS: ${RP_JAVA_OPTS:--XX:MaxRAMPercentage=75}
