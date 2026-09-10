@@ -161,7 +161,7 @@ grep "<jws-redacted>" *.log
 ### 부팅 라이센스 컨텍스트
 
 ```bash
-grep -E "license loaded from disk|license state initialized|onprem mode: pinned VPD" admin-app.log | head
+grep -E "license loaded from disk|license state initialized|onprem mode: licensed tenant" admin-app.log | head
 ```
 
 서비스 시작 시 한 줄씩 나타나야 정상. 부팅 실패면 stderr 에 `LicenseVerificationException` 메시지.

@@ -299,6 +299,10 @@ nginx 는 `/actuator;x/health` 를 `;` 까지 포함한 하나의 경로로 보�
 
 ## 마이그레이션 후속 조치
 
+- **앱 이미지 3개(passkey-app·admin-app·rp-app) 모두 재빌드 필수**: actuator 기본 노출
+  축소(`health,info`), license 기본값(코드 단일 출처), logback 레벨 단일 출처, SystemInfo
+  상태 판정은 전부 이미지에 구워지는 변경이다. 구 이미지로 기동하면 `/actuator/prometheus`
+  가 무인증으로 계속 열려 있다.
 - **rp-app 이미지 재빌드 필수**: `Dockerfile` 에 `/app/data` 생성·`chown` 이
   추가돼, 이전 이미지로는 새로 붙는 `rp-data` 볼륨에 쓰기가 되지 않는다.
   신설된 `rp-data` 볼륨은 비어 있는 상태로 시작하므로 **기존 컨테이너 내부의

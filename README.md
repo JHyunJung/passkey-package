@@ -220,6 +220,9 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 │   ├── external-client-integration.md  # 외부 클라이언트 연동 가이드
 │   ├── logging-operations.md           # 운영자용 검색 cookbook + alert + trouble-shooting
 │   ├── logging-conventions.md          # 개발자용 로깅 컨벤션
+│   ├── entity-relationship-diagram.md  # 엔티티 관계도
+│   ├── spring-boot-api-response-template.md  # API 응답·로깅 템플릿
+│   ├── 2026-09-03-admin-signup-request-changes.md  # 어드민 가입 요청·승인 전환 변경 기록
 │   └── superpowers/followups/          # 미처리 백로그 (완료된 spec/plan 은 git 이력에서 조회)
 └── docker-compose.yml   # Oracle XE 21 + Redis 7
 ```

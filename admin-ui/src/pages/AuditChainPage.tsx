@@ -316,7 +316,7 @@ export default function AuditChainPage() {
       <div className="grid-4" style={{ marginBottom: 20 }}>
         <MetricCard label="정상 / 전체" value={`${totals.tenantsIntact} / ${totals.tenantsTotal}`} sub={tamperedTenant ? `위변조 의심: ${tamperedTenant.tenantName}` : '전체 정상'} />
         <MetricCard label="검증된 audit row" value={fmt(totals.verifiedRows)} sub="누적 chain length" />
-        <MetricCard label="검증 주기" value="60s" sub="background scheduler · prometheus 연동" />
+        <MetricCard label="검증 주기" value="60s" sub="background scheduler" />
         <MetricCard label="평균 chain 검증" value={`${totals.verificationMs}ms`} sub="100k rows 기준 · p99 920ms" />
       </div>
 
