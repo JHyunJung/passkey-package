@@ -7,8 +7,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# 이 스크립트가 만드는 파일(.env.bak, sed 임시파일)은 시크릿을 담는다.
-# umask 로 처음부터 600 으로 만들어, chmod 전까지의 노출 창을 없앤다.
+# 이 스크립트가 새로 만드는 파일(.env.bak)은 시크릿을 담는다.
+# umask 로 생성 시점부터 600 이 되게 한다. 단 umask 는 신규 파일에만 듣는다 —
+# 기존 .env 를 sed -i 로 고칠 때는 원본 모드가 그대로 유지되므로(GNU sed 실측)
+# 그 경로는 아래 chmod 600 이 실제 보장이다.
 umask 077
 
 # MASTER_KEY 는 base64 디코딩 시 정확히 32바이트여야 한다. 아니면 AES 키
@@ -45,6 +47,7 @@ fi
 if (( WRITE )); then
   ENV_FILE=deploy/.env
   [[ -f $ENV_FILE ]] || { echo "$ENV_FILE 이 없습니다. cp deploy/.env.qa-template deploy/.env 먼저 실행" >&2; exit 1; }
+  chmod 600 "$ENV_FILE"   # 손복사한 .env 가 644 일 수 있다 — 시크릿을 쓰기 전에 조인다
   # 백업과 sed 임시파일에는 "이전 세대" 시크릿이 그대로 남는다. 먼저 권한을
   # 좁히고, 중간에 실패해도 임시파일이 디스크에 남지 않도록 trap 을 건다.
   cp "$ENV_FILE" "$ENV_FILE.bak"

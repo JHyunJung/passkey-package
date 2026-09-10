@@ -31,6 +31,7 @@
 - [ ] Oracle 1521 도달 확인 (`./preflight.sh <OracleIP> 1521`)
 - [ ] 계정 3개 비밀번호 확보
       (`PSK_APP_OWNER` / `PSK_APP_ADMIN_USER` / `PSK_APP_RUNTIME_USER`)
+      **비밀번호에 작은따옴표(`'`) 불가, 백슬래시(`\`)로 끝나면 불가** — `setup.sh` 가 입력을 거부한다(README §5 입력 규칙). DBA 에게 발급 요청할 때 미리 알린다.
 - [ ] **DDL 로 스키마를 미리 만든 경우** `flyway baseline -baselineVersion=4` 처리
 - [ ] admin 콘솔 로그인용 운영자 계정이 `admin_user` 에 존재
 

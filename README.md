@@ -3,7 +3,7 @@
 WebAuthn / FIDO2 패스키 인증 플랫폼. **Passkey 서버** 가 RP(Relying Party) 백엔드를 위한 ceremony API 를 제공하고, **Admin Console** 에서 멀티 테넌트 운영을 관리한다. 데모용 **Sample RP** 가 통합 시나리오를 보여준다.
 
 ```
-┌─────────────┐    JSESSIONID    ┌──────────────┐  X-API-Key   ┌──────────────┐
+┌─────────────┐    relay token   ┌──────────────┐  X-API-Key   ┌──────────────┐
 │  Browser    │ ────────────────▶│   rp-app  │ ────────────▶│  passkey-app │
 │  (User)     │                  │   (RP 데모)  │              │  (Passkey 서버)│
 └─────────────┘                  └──────────────┘  ◀── ID Token└──────┬───────┘
@@ -23,20 +23,20 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 
 | Module | Port | 역할 |
 | --- | --- | --- |
-| **`core`** | — | 공통 entity (Oracle JPA), JWT (RS256), VPD 컨텍스트, audit chain, MDC 로깅 인프라 |
+| **`core`** | — | 공통 entity (Oracle JPA), JWT (RS256), 테넌트 컨텍스트(Hibernate `@Filter` · `TenantFilterAspect`), audit chain, MDC 로깅 인프라 |
 | **`passkey-app`** | 8080 | WebAuthn 등록·인증 ceremony, JWKS, X-API-Key 인증, ID Token 발급 |
 | **`admin-app`** | 8081 | 멀티 테넌트 관리 (tenant / API key / credential / audit / MDS / security policy) |
 | **`admin-ui`** | (Vite dev: 5173) | React + TypeScript admin UI (Vite, 단일 페이지) |
-| **`rp-app`** | 9090 | RP 데모 — `/webauthn/{register,login}/{options,complete}` + ID Token 검증 |
-| **`sdk-java`** | — | RP 백엔드용 Java SDK (Spring `RestTemplate` 기반 + JWKS 검증 + redaction) |
+| **`rp-app`** | 9090 | RP 데모 — `/passkey/{register,authenticate}/{begin,finish}` (무상태 릴레이 토큰) + ID Token 검증 |
+| **`sdk-java`** | — | RP 백엔드용 Java SDK (Spring `RestClient`(JDK HttpClient) 기반 + JWKS 검증 + redaction) |
 
 ## 기술 스택
 
 - **JVM**: Java 17, Spring Boot 3.x, JPA/Hibernate 6
-- **DB**: Oracle XE 21 (Flyway 마이그레이션 V1~V38, VPD multi-tenant isolation)
-- **Cache**: Redis 7 (rate limit, ceremony state)
+- **DB**: Oracle — 로컬 dev 는 XE 21 컨테이너, 운영은 외부 Oracle. Flyway 마이그레이션 `V1__baseline_schema.sql`(squash baseline) + 증분 V2~ (`core/src/main/resources/db/migration`). 테넌트 격리는 앱 레벨 Hibernate `@Filter`
+- **Cache**: Redis 7 (rate limit, ceremony state, 관리자 세션 — Spring Session)
 - **Auth**:
-  - 클라이언트 ↔ RP: HTTP Session (JSESSIONID)
+  - 클라이언트 ↔ RP: 무상태 릴레이 토큰 — `regRelayToken` 은 rp-app 이 HMAC(SHA-256) 서명한 등록 릴레이 토큰, `authenticationToken` 은 passkey-app 이 발급한 ceremony 토큰을 rp-app 이 그대로 중계 — 서버 세션 없음
   - RP ↔ Passkey 서버: `X-API-Key` (bcrypt 검증)
   - Passkey 서버 → RP: ID Token (RS256 JWT + JWKS)
 - **Frontend**: React 18 + TypeScript + Vite (admin-ui), Thymeleaf (rp-app)
@@ -168,31 +168,31 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 
 ### 등록 (Registration)
 
-1. `Browser → rp-app` : `POST /webauthn/register/options { username, displayName }`
+1. `Browser → rp-app` : `POST /passkey/register/begin { username, displayName }` → `{ publicKeyCredentialCreationOptions, regRelayToken }`
 2. `rp-app → passkey-app` : `POST /api/v1/rp/registration/start` (X-API-Key)
 3. `passkey-app → rp-app` : `PublicKeyCredentialCreationOptions` + ceremony token
 4. `Browser : navigator.credentials.create(...)`
-5. `Browser → rp-app` : `POST /webauthn/register/complete { publicKeyCredential }`
+5. `Browser → rp-app` : `POST /passkey/register/finish { publicKeyCredential, regRelayToken }`
 6. `rp-app → passkey-app` : `POST /api/v1/rp/registration/finish`
 7. attestation 검증 + AAGUID 정책 적용 + `credential` 테이블 저장
-8. `rp-app` 가 user 와 credential mapping 을 in-memory store 에 commit
+8. `rp-app` 가 user 와 credential mapping 을 `InMemoryUserStore`(JSON 파일 영속, `rp-app.user-store.file`) 에 commit — 고객사는 자사 DB 로 교체
 
 ### 인증 (Authentication)
 
-1. `Browser → rp-app` : `POST /webauthn/login/options { username }` (또는 discoverable)
+1. `Browser → rp-app` : `POST /passkey/authenticate/begin { username? }` (username 없으면 discoverable) → `{ publicKeyCredentialRequestOptions, authenticationToken }`
 2. `rp-app → passkey-app` : `POST /api/v1/rp/authentication/start`
 3. `Browser : navigator.credentials.get(...)`
-4. `Browser → rp-app` : `POST /webauthn/login/complete`
+4. `Browser → rp-app` : `POST /passkey/authenticate/finish { publicKeyCredential, authenticationToken }`
 5. `rp-app → passkey-app` : `POST /api/v1/rp/authentication/finish`
 6. signature 검증 + counter 단조 증가 확인 → **ID Token (RS256 JWT)** 발급
-7. `rp-app` 가 SDK 의 `IdTokenVerifier` 로 JWKS 검증 (`iss` / `aud` / `sub` / `exp`)
-8. `rp-app` 가 HTTP session 발급 (JSESSIONID)
+7. `rp-app` 가 SDK `PasskeyClient.verifyIdToken(jwt, expectedIssuer, expectedAudience)` 로 서명·`iss`·`aud`·`exp` 검증
+8. `rp-app` 가 `{ authenticated, userHandle, displayName }` 을 반환 (서버 세션 없음 — STATELESS)
 
 ## 멀티 테넌트 격리
 
-- **VPD (Virtual Private Database)** — Oracle 의 row-level security 로 모든 tenant-scoped 테이블에 `tenant_id` predicate 자동 적용
-- **APP_CTX** — `PSK_APP_OWNER.CTX_PKG.set_tenant(...)` 가 session 컨텍스트 설정. `PSK_APP_RUNTIME` role 이 read 시 자동 필터.
-- **PSK_APP_ADMIN** role 은 `EXEMPT ACCESS POLICY` — admin-app + Flyway 만 부여
+- **앱 레벨 Hibernate `@Filter`** — `TenantContextHolder` 에 바인딩된 tenantId 로 `TenantFilterAspect` 가 `tenantFilter` 를 활성화해 모든 tenant-scoped 엔티티 조회에 `tenant_id` 술어를 적용한다 (`core/src/main/java/com/crosscert/passkey/core/tenant/`).
+- **DB 롤은 권한 분리용** — `PSK_APP_RUNTIME`(passkey-app, DDL 없음 — DML + 부트스트랩 패키지 EXECUTE) / `PSK_APP_ADMIN`(admin-app), 스키마 소유자 `PSK_APP_OWNER` 는 Flyway 전용 (`scripts/bootstrap-schema.sql`). 행 필터링은 DB 가 아니라 앱이 한다.
+- 과거 Oracle 의 row-level security 기반 격리는 전면 제거됐다(SE2 호환). 앱 런타임은 그런 DB 세션 컨텍스트 설정을 읽지 않는다.
 
 ## Audit Chain
 
@@ -204,17 +204,23 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 
 ```
 .
-├── core/                # 공통 entity + repository + JWT + VPD + audit chain
+├── core/                # 공통 entity + repository + JWT + 테넌트 @Filter + audit chain
 ├── passkey-app/         # WebAuthn ceremony (RegistrationStart/Finish, AuthenticationStart/Finish)
-├── admin-app/           # 관리 API (tenant / api-key / credential / audit / mds / system / security-policy)
+├── admin-app/           # 관리 API (tenant / api-key / credential / audit / activity / funnel / mds / keys / license / operator(가입요청·운영자·비번재설정) / mfa / system / security-policy)
 ├── admin-ui/            # React + TypeScript admin SPA (Vite)
 ├── rp-app/           # 데모 RP — Thymeleaf 페이지 + WebAuthnController
 ├── sdk-java/            # Java SDK (PasskeyClient + IdTokenVerifier + Redacting/TracePropagation interceptors)
 ├── scripts/             # DB 부트스트랩·초기화·리셋 (Docker 로컬 + 외부 Oracle) — 5) DB 스크립트 참고
 ├── docs/
-│   ├── logging-operations.md          # 운영자용 검색 cookbook + alert + trouble-shooting
-│   ├── logging-conventions.md         # 개발자용 로깅 컨벤션
-│   └── superpowers/followups/         # 미처리 백로그 (완료된 spec/plan 은 git 이력에서 조회)
+│   ├── dev-setup.md                    # 로컬 개발 환경 구성
+│   ├── single-instance-deployment.md   # 단일 인스턴스 배포
+│   ├── onprem-deployment.md            # 설치형(onprem) 배포 절차
+│   ├── rp-server-api.md                # Passkey 서버 ceremony API 레퍼런스
+│   ├── rp-client-api-quickref.md       # RP 클라이언트(rp-app) API 퀵레퍼런스
+│   ├── external-client-integration.md  # 외부 클라이언트 연동 가이드
+│   ├── logging-operations.md           # 운영자용 검색 cookbook + alert + trouble-shooting
+│   ├── logging-conventions.md          # 개발자용 로깅 컨벤션
+│   └── superpowers/followups/          # 미처리 백로그 (완료된 spec/plan 은 git 이력에서 조회)
 └── docker-compose.yml   # Oracle XE 21 + Redis 7
 ```
 
@@ -230,7 +236,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ## API 레퍼런스
 
 - **RP 클라이언트** (rp-app 가 노출하는 API): [`rp-client-api-quickref.md`](./docs/rp-client-api-quickref.md)
-- **Passkey 서버 ceremony API** (RP 백엔드가 호출): `passkey-app` 의 `/api/v1/rp/{registration,authentication}/{start,finish}` + `/api/v1/rp/.well-known/jwks.json`
+- **Passkey 서버 ceremony API** (RP 백엔드가 호출): `passkey-app` 의 `/api/v1/rp/{registration,authentication}/{start,finish}`, `/api/v1/rp/credentials`(자기 credential 조회·라벨·삭제), `/.well-known/jwks.json`
 - **Admin API**: `/admin/api/**` — UI 가 호출. Spring Security session 인증.
 
 ## 로깅 포맷
