@@ -19,6 +19,11 @@ import java.util.Map;
  * - status=active + valid latestToken -> StateMachine.onHeartbeatSuccess
  * - non-2xx, transport error, parse failure, signature failure
  *   -> StateMachine.onHeartbeatFailure(reason)
+ *
+ * <p>간격의 단일 출처는 {@link LicenseProperties#heartbeatInterval()} — 아래
+ * {@code @Scheduled} 의 {@code :PT1H} 폴백은 프로퍼티가 바인딩되지 않았을 때만 쓰이며,
+ * 레코드 기본값과 항상 같은 값이어야 한다. 이는
+ * {@code LicenseHeartbeatSchedulerIntervalDefaultTest} 가 리플렉션으로 고정한다.
  */
 @Slf4j
 @Component

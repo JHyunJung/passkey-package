@@ -74,13 +74,8 @@ passkey:
     schema: ${PASSKEY_DB_SCHEMA:PSK_APP_OWNER}
   deployment:
     mode: saas
-  license:
-    path: /etc/passkey/license.jwt
-    cache-path: /var/lib/passkey/license-cache.jwt
-    issuer: license.crosscert.com
-    audience: passkey-onprem
-    heartbeat-url: https://license.crosscert.com/v1/license
-    heartbeat-interval: PT1H
+  # passkey.license.* 기본값은 LicenseProperties 레코드(단일 출처). 덮어쓰려면
+  # PASSKEY_LICENSE_* env 또는 여기에 키를 추가한다(onprem 에서만 소비).
   mail:
     # 발신 주소. MailSenderConfiguration 의 SmtpMailSender 가 사용.
     # SMTP 활성화(spring.mail.host 설정) 시 의미 있음.
