@@ -26,9 +26,10 @@ spring:
   thymeleaf:
     cache: false
 
-# logback-spring.xml 의 <springProfile name="local,dev"> 가 컬러 패턴·풀 스택트레이스·
-# payload 로거 DEBUG 를 담당한다. Boot 의 logging.level 은 logback 설정보다 나중에
-# 적용되므로, 여기서 DEBUG 를 명시하지 않으면 base 의 INFO 가 그 의도를 덮어쓴다.
+# 로그 레벨의 단일 출처는 이 yml 의 logging.level 이다(Task #34). logback-spring.xml 의
+# <springProfile name="local,dev"> 는 컬러 패턴·풀 스택트레이스(출력 형식)만 담당하고
+# 레벨 선언은 없다. payload 로거(req/resp 본문)는 아래 com.crosscert.passkey: DEBUG 를
+# 상속해 local 에서 DEBUG 가 된다 — 여기서 DEBUG 를 빼면 base 의 INFO 로 떨어진다.
 logging:
   level:
     com.crosscert.passkey: DEBUG

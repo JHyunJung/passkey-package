@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- 레벨의 단일 출처는 yml logging.level(Spring Boot 가 초기화 직후 적용). 이 파일은
+     패턴/인코더/appender 만 정의한다. -->
 <configuration>
+  <springProperty scope="context" name="rootLevel" source="logging.level.root" defaultValue="INFO"/>
+
   <!-- Spring Boot 기본 변환어(%clr, %wEx 등) 등록 -->
   <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
@@ -15,9 +19,7 @@
         <pattern>%d{HH:mm:ss.SSS} %clr(%-5level) %compactMdc %clr(%logger{36}){cyan} - %msg%n%ex</pattern>
       </encoder>
     </appender>
-    <root level="INFO"><appender-ref ref="CONSOLE"/></root>
-    <logger name="com.crosscert.passkey" level="DEBUG"/>
-    <logger name="com.crosscert.passkey.payload" level="DEBUG"/>
+    <root level="${rootLevel}"><appender-ref ref="CONSOLE"/></root>
   </springProfile>
 
   <!-- qa: 한 줄 구조화, 축약 스택 -->
@@ -27,8 +29,7 @@
         <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %compactMdc %logger{36} - %msg%n%rEx{8}</pattern>
       </encoder>
     </appender>
-    <root level="INFO"><appender-ref ref="CONSOLE"/></root>
-    <logger name="com.crosscert.passkey" level="INFO"/>
+    <root level="${rootLevel}"><appender-ref ref="CONSOLE"/></root>
   </springProfile>
 
   <!-- prod: 한 줄, 스택 최소. PASSKEY_LOG_JSON=true 로 JSON 전환 가능 -->
@@ -60,14 +61,12 @@
     <!-- equalsIgnoreCase: PASSKEY_LOG_JSON=TRUE/True 도 JSON 으로 인식(운영자 오타 방지). -->
     <if condition='property("logJson").equalsIgnoreCase("true")'>
       <then>
-        <root level="WARN"><appender-ref ref="CONSOLE_JSON"/></root>
+        <root level="${rootLevel}"><appender-ref ref="CONSOLE_JSON"/></root>
       </then>
       <else>
-        <root level="WARN"><appender-ref ref="CONSOLE_TEXT"/></root>
+        <root level="${rootLevel}"><appender-ref ref="CONSOLE_TEXT"/></root>
       </else>
     </if>
-    <logger name="com.crosscert.passkey" level="INFO"/>
-    <logger name="org.springframework" level="WARN"/>
   </springProfile>
 
   <!-- 프로필 미지정(테스트 등) 폴백 -->
@@ -77,7 +76,6 @@
         <pattern>%d{HH:mm:ss.SSS} %-5level %compactMdc %logger{36} - %msg%n</pattern>
       </encoder>
     </appender>
-    <root level="INFO"><appender-ref ref="CONSOLE"/></root>
-    <logger name="com.crosscert.passkey" level="INFO"/>
+    <root level="${rootLevel}"><appender-ref ref="CONSOLE"/></root>
   </springProfile>
 </configuration>
