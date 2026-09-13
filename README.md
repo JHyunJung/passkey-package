@@ -257,7 +257,7 @@ HH:mm:ss.SSS LEVEL [traceId=… tenantId=… actorEmail=… apiKeyPrefix=…] lo
 
 예 (admin 의 보안 정책 변경):
 ```
-08:55:52.973 INFO  [traceId=cfb5331993aa4c68 actorEmail=alice@crosscert] c.c.p.admin.policy.SecurityPolicyService - security policy updated: sessionIdle=30 mfa=true corsAllowlistSize=0
+08:55:52.973 INFO  [traceId=cfb5331993aa4c68 actorEmail=alice@crosscert.] c.c.p.admin.policy.SecurityPolicyService - security policy updated: sessionIdle=30 mfa=true corsAllowlistSize=0
 ```
 
 운영자용 검색·alert 가이드: [`docs/logging-operations.md`](./docs/logging-operations.md)

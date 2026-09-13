@@ -97,7 +97,7 @@ sudo firewall-cmd --reload
 ### 3. 이미지 적재
 
 ```bash
-./load-images.sh                 # 4개 전부
+./load-images.sh                 # tarball 4개 전부(이미지 5개)
 ./load-images.sh passkey-app     # 특정 앱만 (재배포 시)
 ```
 

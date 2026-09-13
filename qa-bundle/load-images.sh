@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 반입한 이미지 tarball 을 로드하고 아키텍처가 맞는지 검증한다.
 #
-#   ./load-images.sh                     # 4개 전부 로드
+#   ./load-images.sh                     # tarball 4개 전부 로드(infra 에 nginx+redis 2개가 들어 있어 이미지는 5개)
 #   ./load-images.sh passkey-app         # 특정 앱만 로드(재배포 시)
 #   ./load-images.sh passkey-app admin-app
 #
