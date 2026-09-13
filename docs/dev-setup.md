@@ -6,8 +6,8 @@
 
 최종 갱신: 2026-09-09
 관련:
-- [Activity followups](superpowers/followups/2026-05-28-activity-page-followups.md)
-- Activity 페이지 spec·monorepo 통합 spec 은 저장소에서 정리됨 (git 이력의 `docs/superpowers/specs/` 참조)
+- [백로그](backlog.md) — Activity 관련 미해소 항목은 §1 기능 개발 참조
+- Activity 페이지 spec·monorepo 통합 spec 은 저장소에서 정리됨 (git 이력의 `docs/superpowers/` 참조)
 
 ---
 

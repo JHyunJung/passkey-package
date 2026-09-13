@@ -223,7 +223,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 │   ├── entity-relationship-diagram.md  # 엔티티 관계도
 │   ├── spring-boot-api-response-template.md  # API 응답·로깅 템플릿
 │   ├── 2026-09-03-admin-signup-request-changes.md  # 어드민 가입 요청·승인 전환 변경 기록
-│   └── superpowers/followups/          # 미처리 백로그 (완료된 spec/plan 은 git 이력에서 조회)
+│   └── backlog.md                      # 미해소 항목 단일 소스 (배포전 필수·기능·보안·성능·결정기록)
 └── docker-compose.yml   # Oracle XE 21 + Redis 7
 ```
 
@@ -234,7 +234,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 - **F1~F5** — admin-ui 디자인 vs 백엔드 gap audit + 5 phase 로 20건 gap 모두 닫음
 - **G1~G4** — 3 서버 로깅 인프라 (logback-spring.xml + MDC + RequestLoggingFilter + SecretMaskingConverter + 운영 가이드)
 
-완료된 phase 의 spec/plan 은 저장소에서 정리했다. 필요하면 git 이력(`git log --all -- docs/superpowers/specs docs/superpowers/plans`)에서 조회한다. 미처리 백로그는 `docs/superpowers/followups/` 에 남아 있다.
+완료된 phase 의 spec/plan/followups 는 저장소에서 정리했다. 필요하면 git 이력(`git log --all -- docs/superpowers`)에서 조회한다. 미해소 백로그는 [`docs/backlog.md`](docs/backlog.md) 에 단일 소스로 통합돼 있다.
 
 ## API 레퍼런스
 
