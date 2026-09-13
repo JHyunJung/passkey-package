@@ -53,8 +53,10 @@ rp-app 의 `/passkey/**` 는 무상태 토큰 릴레이 방식이다. 세션 쿠
 ## 프로덕션 주의
 - rp-app 자체엔 rate limit 이 없다. begin 남용(challenge 발급) 방지를 위해 **앞단 게이트웨이/
   per-client rate limit 을 둘 것.** passkey-app 의 공유 키·공유 IP rate limit 만으로는 부족하다.
-- **relay 서명 키**: `RP_RELAY_SECRET` 환경변수로 강한 키를 주입할 것. 미설정 시 데모 기본값으로
-  떨어지므로 운영 배포 파이프라인에서 필수 검증을 권장한다.
+- **relay 서명 키**: `RP_RELAY_SECRET` 환경변수로 강한 키를 주입할 것. 미설정 시 값은 데모
+  기본값으로 떨어지지만, `dev`/`local` 이 아닌 프로필(프로필 미지정 포함)에서는 `RelayKeyGuard` 가
+  기동을 거부한다 — `rp.relay.secret 이 데모 기본 키입니다`. 즉 운영에 데모 키가 실릴 일은
+  없고(fail-closed), 배포 파이프라인에서 값 존재를 미리 확인하면 기동 실패 전에 더 빨리 잡는다.
 - **장기 세션이 필요하면**: authenticate/finish 성공 후 RP 가 자체 세션/토큰을 발급하라(데모는
   인증 결과 반환까지만 한다).
 

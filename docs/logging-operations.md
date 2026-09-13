@@ -1,50 +1,61 @@
 # Logging Operations Guide
 
 > 3 서버 (admin-app / passkey-app / rp-app) 의 로그 검색·alert·troubleshooting 가이드.
-> 인프라: G1-G4 의 `logback-spring.xml` + MDC 4종 + `SecretMaskingConverter`.
+> 인프라: `core/src/main/resources/logback-spring.xml`(admin-app·passkey-app)
+> 과 `rp-app/src/main/resources/logback-spring.xml` + MDC 4종
+> + `SecretMaskingConverter` + `CompactMdcConverter`.
 
 ## 1. 로그 포맷
 
 ```
-HH:mm:ss.SSS LEVEL [traceId] [tenantId] [actorEmail] [apiKeyPrefix] logger - msg
+HH:mm:ss.SSS LEVEL [traceId=… tenantId=… actorEmail=… apiKeyPrefix=…] logger - msg
 ```
 
-각 `[…]` 칸:
+MDC 칸은 `CompactMdcConverter`(`%compactMdc`)가 만든다 — **값이 있는 키만**
+`key=value` 로 나열하고 하나의 `[…]` 로 묶는다. 값이 없는 키는 **생략**되고,
+MDC 가 전부 비면 대괄호 자체가 나오지 않는다. 각 값은 **16자에서 잘린다**.
+
 - **traceId** — 한 HTTP 요청의 식별자. cross-server 추적 가능 (`X-Trace-Id` 헤더로 propagate).
+  `TraceIdFilter` 가 발급할 때는 UUID 에서 **대시를 없앤 16자**다(`9f3a2b1c4d5e6f70`).
 - **tenantId** — passkey-app 의 `ApiKeyAuthFilter` 가 인증 성공 시 set (UUID).
-- **actorEmail** — admin-app 의 로그인 사용자 email.
+  16자 절단 때문에 로그에는 **앞 16자만** 보인다(`7f00dead-0000-00`).
+- **actorEmail** — 로그인 사용자 email. `RequestLoggingFilter` 가 set 하며 **마스킹된 형태**(`a***@…`)다.
 - **apiKeyPrefix** — passkey-app 의 `X-API-Key` 헤더 앞 11자 (`pk_xxxxxxxx`).
-- 빈 칸은 `[]` 그대로 — 그 컨텍스트에서는 의미 없는 정보.
+- rp-app 은 이 중 `traceId`·`actorEmail` 둘만 넣는다(`ApiKeyAuthFilter` 가 없음).
 
 `msg` 는 logfmt 형식: `event: key=val key=val`.
 
 ## 2. 검색 cookbook
 
+> MDC 는 `key=value` 로 찍히므로 **키 이름을 붙여서** 검색한다. 값은 16자에서
+> 잘리므로 긴 값은 **앞부분만** 넣는다(접두 검색). JSON 로그(`PASSKEY_LOG_JSON=true`)
+> 에서는 MDC 4종이 별도 필드로 나가므로 ELK 쪽 질의는 절단 영향을 받지 않는다.
+
 ### 한 사용자 트랜잭션 추적
 ```bash
-grep '9f3a-2b1' *.log
+grep 'traceId=9f3a2b1c4d5e6f70' *.log
 # 또는 ELK
-traceId: "9f3a-2b1"
+traceId: "9f3a2b1c4d5e6f70"
 ```
-rp-app 의 `register/options` → passkey-app 의 `registration/start` → … 가 한 trace 로 정렬됨.
+rp-app 의 `register/begin` → passkey-app 의 `registration/start` → … 가 한 trace 로 정렬됨.
 
 ### tenant 한정 이벤트
 ```bash
-grep '\[7f00dead-' *.log
-# ELK
-traceId AND tenantId: "7f00dead-…"
+grep 'tenantId=7f00dead-0000-00' *.log   # 16자 절단분까지만 매칭
+# ELK (절단 없는 원본)
+tenantId: "7f00dead-0000-0000-0000-000000000000"
 ```
 
 ### 관리자 활동
 ```bash
-grep '\[alice@crosscert.com\]' *.log
+grep 'actorEmail=a\*\*\*@crosscert' *.log   # 마스킹된 형태로 찍힌다
 # ELK
-actorEmail: "alice@crosscert.com"
+actorEmail: "a***@crosscert.com"
 ```
 
 ### 특정 API key 사용 추적
 ```bash
-grep '\[pk_devacme0\]' *.log
+grep 'apiKeyPrefix=pk_devacme0' *.log
 # ELK
 apiKeyPrefix: "pk_devacme0"
 ```
@@ -63,7 +74,9 @@ grep -E 'WARN.*(api-key auth failed|signCount did not advance|tenant boundary vi
 | `ERROR` | 시스템 오류 + 예외 | MDS sync failed, JPA exception (stack trace 동반) |
 | `DEBUG` | dev 디버깅 전용 | request body 크기, JWKS 호출, key kid 발급 |
 
-prod 에서 root 가 INFO 라 DEBUG 는 출력 안 됨.
+prod 에서는 root 가 **WARN**, `com.crosscert.passkey` 만 INFO 다(3앱 공통).
+따라서 애플리케이션 로그는 INFO 까지 나오지만 프레임워크(Spring·Hibernate 등)
+로그는 WARN 이상만 남고, DEBUG 는 어느 쪽도 출력되지 않는다.
 
 ## 4. Redaction 약속
 
@@ -80,8 +93,12 @@ prod 에서 root 가 INFO 라 DEBUG 는 출력 안 됨.
 | User handle (b64url) | `idTail(…, 12)` 끝 12자만 |
 
 방어선:
-1. `LogRedact` 헬퍼 — 개발자가 직접 호출 (소스 컨벤션).
+1. `CryptoUtils.maskEmail` 등 마스킹 유틸 — 개발자가 로그 호출 시 직접 적용 (소스 컨벤션).
+   email 마스킹의 실제 관례는 이쪽이다(`AdminSecurityConfig`, `TenantBoundary`,
+   `SignupRequestService`, `PasswordResetService`). `core` 에 `LogRedact` 클래스가 남아
+   있지만 main 코드에서 호출하는 곳이 없다 — 컨벤션의 정본이 아니다.
 2. `SecretMaskingConverter` — logback 출력 시점 자동 마스킹 (defense-in-depth, 실수 방어).
+   텍스트·JSON(`RedactingMessageJsonProvider`) 양쪽에 걸린다.
 
 ## 5. Alert 추천 규칙
 
@@ -117,10 +134,14 @@ prod 에서 root 가 INFO 라 DEBUG 는 출력 안 됨.
 
 ## 7. 환경별 로그 레벨
 
+레벨의 단일 출처는 각 앱의 yml `logging.level` 이다(`logback-spring.xml` 은
+패턴·appender 만 정의하고 root 레벨을 `logging.level.root` 에서 읽어 온다).
+
 | 환경 | root | `com.crosscert.passkey` | 메모 |
 | --- | --- | --- | --- |
-| dev (`application-dev.yml`) | INFO | DEBUG | `hibernate.SQL=DEBUG` 도 활성. 로컬 디버깅용. |
-| prod (override 없음) | INFO | INFO | DEBUG/TRACE 출력 안 됨. |
+| dev (`application-dev.yml`) | INFO (Boot 기본) | DEBUG | passkey-app·admin-app dev 는 `org.hibernate.SQL=DEBUG` 도 활성(admin-app 은 `local` 도 동일). **rp-app dev 에는 없다.** |
+| qa (`application-qa.yml`) | INFO | INFO | rp-app 만 `org.springframework.web=WARN` 추가. |
+| prod (`application-prod.yml`) | **WARN** | INFO | 3앱 공통. DEBUG/TRACE 출력 안 됨. |
 
 ## License (on-prem 전용)
 
@@ -166,4 +187,8 @@ grep -E "license loaded from disk|license state initialized|onprem mode: license
 
 서비스 시작 시 한 줄씩 나타나야 정상. 부팅 실패면 stderr 에 `LicenseVerificationException` 메시지.
 
-prod 에서 일시적으로 DEBUG 필요 시: 환경 변수 `LOGGING_LEVEL_COM_CROSSCERT_PASSKEY=DEBUG` 로 재기동.
+prod 에서 일시적으로 DEBUG 필요 시: 환경 변수
+`LOGGING_LEVEL_COM_CROSSCERT_PASSKEY=DEBUG` 로 재기동한다. 이것은 애플리케이션
+로거만 내린다 — prod root 가 WARN 이므로 **프레임워크(Spring·Hibernate 등) 로그까지
+보려면** `LOGGING_LEVEL_ROOT=DEBUG`(또는 `INFO`)를 함께 준다. 조사 후에는 반드시
+원복한다(로그량·PII 노출 위험).

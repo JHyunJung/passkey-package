@@ -7,8 +7,11 @@
 #   - API key  : pk_devlocaldev_local_secret_known_plaintext_for_test_only
 #
 # tenant-id 가 비면 인증 시 iss/aud 검증에 실패한다. 또한 rp-app 은 ID Token 의 iss 를
-# "<issuer-base>/<tenantId>" 로 검증하므로, passkey-app 을
-# -Dpasskey.id-token.issuer-base=http://localhost:8080 으로 띄워 아래 issuer-base 와 맞춘다.
+# "<issuer-base>/<tenantId>" 로 검증하므로, passkey-app 을 아래처럼 띄워 이 파일의
+# issuer-base 와 맞춘다(정본: docs/dev-setup.md §3.3 — -D 는 Gradle 데몬 JVM 프로퍼티라
+# 앱에 전달되지 않으므로 --args 를 쓴다):
+#   SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
+#     --args="--passkey.id-token.issuer-base=http://localhost:8080"
 #
 # 기동 예:
 #   ./gradlew :rp-app:bootRun --args="--spring.profiles.active=local"

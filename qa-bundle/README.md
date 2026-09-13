@@ -104,10 +104,8 @@ sudo firewall-cmd --reload
 5개 이미지가 모두 `amd64` 로 확인돼야 한다. 앱을 따로 재배포할 때는 해당
 `tar.gz` 하나만 서버로 옮겨 그 이름으로 실행하면 된다.
 
-⚠️ 앱 이미지를 재빌드했다면(rp-app 은 `Dockerfile` 의 `/app/data` 추가, passkey-app·admin-app 은
-actuator 기본 노출 축소·logback/license 단일 출처 반영) `images/` 의
-`tar.gz` 와 `SHA256SUMS` 를 함께 재생성해야 한다 — `load-images.sh` 가
-`sha256sum -c` 로 검증하므로 해시가 어긋나면 적재가 실패한다.
+이미지를 재빌드하면 `images/` 의 `tar.gz` 와 `SHA256SUMS` 를 **함께** 갱신한다 —
+`load-images.sh` 가 `sha256sum -c` 로 검증하므로 해시가 어긋나면 적재가 실패한다.
 
 ### 4. DB 확인
 
@@ -126,10 +124,12 @@ actuator 기본 노출 축소·logback/license 단일 출처 반영) `images/` �
 | `PSK_APP_ADMIN_USER` | admin-app 런타임 |
 | `PSK_APP_RUNTIME_USER` | passkey-app 런타임 |
 
-> **Flyway** — admin-app 이 기동하며 V1~V4 를 적용한다. 스키마를 DDL 로 이미
+> **Flyway** — admin-app 이 기동하며 `V1`~`V5` 를 적용한다. 스키마를 DDL 로 이미
 > 만들어 둔 경우 `flyway_schema_history` 가 비어 있으므로
-> **`baseline -baselineVersion=4`** 처리가 필요하다. 안 하면 V1 부터 재적용을
+> **`baseline -baselineVersion=5`** 처리가 필요하다. 안 하면 V1 부터 재적용을
 > 시도하다 실패한다.
+> 버전 숫자는 번들을 뜰 때마다 확인한다 — 정본은
+> `ls core/src/main/resources/db/migration` 의 최댓값이다.
 
 ### 5. 환경 설정
 
@@ -137,14 +137,18 @@ actuator 기본 노출 축소·logback/license 단일 출처 반영) `images/` �
 ./setup.sh
 ```
 
-**6가지만 물어본다.** 나머지는 전부 유도하거나 자동 생성한다.
+**아래 6가지만 물어본다.** 나머지는 전부 유도하거나 자동 생성한다. (여기서 "6가지"는
+*값*의 묶음이 아니라 프롬프트 6개를 말하는 게 아니다 — 실제 프롬프트는 9번이고,
+예컨대 "계정 3개 비밀번호"가 프롬프트 3번이다.)
 
-| 묻는 것 | 어디서 얻나 |
-|---|---|
-| Oracle 호스트 · 포트 · 서비스명 | DBA |
-| 계정 3개 비밀번호 | DBA |
-| passkey 서버 FQDN · RP 데모 FQDN | 인프라팀(내부 DNS) |
-| 호스트 내부 IP | `docker0` 에서 자동 탐지, 확인만 |
+| # | 묻는 것 | 프롬프트 | 어디서 얻나 |
+|---|---|---|---|
+| 1 | Oracle 호스트 · 포트 · 서비스명 | 3 | DBA |
+| 2 | 계정 3개 비밀번호 (`PSK_APP_OWNER` / `PSK_APP_ADMIN_USER` / `PSK_APP_RUNTIME_USER`) | 3 | DBA |
+| 3 | passkey 서버 FQDN | 1 | 인프라팀(내부 DNS) |
+| 4 | RP 데모 FQDN | 1 | 인프라팀(내부 DNS) |
+| 5 | 호스트 내부 IP | 1 | `docker0` 에서 자동 탐지, 확인만 |
+| 6 | `RP_TENANT_ID` · `RP_API_KEY` | (별도) | 테넌트를 만든 뒤에야 알 수 있어 §8 의 `./setup.sh --rp-keys` 로 나중에 채운다 |
 
 > **입력 규칙: 값에 작은따옴표(`'`)를 쓸 수 없고, 백슬래시(`\`)로 끝날 수 없다.**
 > `.env` 를 읽는 두 파서(`start.sh` 의 셸 `source` 와 `docker compose`)가 이
@@ -193,8 +197,8 @@ compose 를 직접 칠 필요가 없다.
 - Redis 스택이 요구하는 `REDIS_BIND_ADDR` / `REDIS_PASSWORD` export
 - healthy 폴링 — admin-app 은 `start_period` 가 90초라 시간이 걸리는 게 정상
 
-`RP_API_KEY` 가 비어 있으면 **rp-app 은 자동으로 제외**하고 안내를 출력한다.
-빈 키로 띄워봐야 401 만 나기 때문이다.
+`RP_API_KEY` **또는 `RP_TENANT_ID`** 가 비어 있으면 **rp-app 은 자동으로 제외**하고
+안내를 출력한다(둘 다 채워져야 기동한다). 값이 빠진 채로 띄워봐야 401 만 나기 때문이다.
 
 ```bash
 ./start.sh --status     # 상태 확인
@@ -226,7 +230,9 @@ COMPOSE_PROFILES=proxy,admin,qa docker compose up -d
 
 ### 8. 테넌트 생성 → API 키 → rp-app 재기동
 
-admin 콘솔(`https://<admin주소>/admin/`)에서 테넌트를 만든다.
+admin 콘솔(`http://<ADMIN_BIND_ADDR>:<ADMIN_HOST_PORT>/admin/` — 기본
+`http://127.0.0.1:8081/admin/`)에서 테넌트를 만든다. admin-app 은 nginx 를 거치지 않고
+호스트에 직접 바인딩되며 기본값이 루프백이라 **그 호스트 안에서만** 접근된다.
 
 | 항목 | 값 | 규칙 |
 |---|---|---|

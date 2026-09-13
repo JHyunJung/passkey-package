@@ -148,7 +148,8 @@ List<String> amr = claims.amr();
 ```
 
 `verifyIdToken(idToken)` 은 ① alg=RS256 핀(alg-confusion/none/HS\* 다운그레이드 거부) ② JWKS(`/.well-known/jwks.json`,
-TTL 캐시) 로 서명 검증 ③ exp 만료 검사를 수행한다. 실패 시 `PasskeyIdTokenException`.
+TTL 캐시) 로 서명 검증 ③ 시각 검사 — `exp` 만료(허용오차 없음)에 더해, 값이 있으면 `nbf`(아직 유효하지 않음)와
+`iat`(미래 발급)도 **60초 clock skew 허용** 아래 거부 — 를 수행한다. 실패 시 `PasskeyIdTokenException`.
 
 **시맨틱 검증까지 한 번에(권장):** iss/aud 까지 검증하려면 3-인자 오버로드를 쓴다. RP 가 직접 iss/aud 를
 비교하다 실수하는 것을 막아준다.

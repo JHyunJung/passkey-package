@@ -34,7 +34,15 @@ passkey-app 에 위임: WebAuthn 의식 처리, challenge/credential 저장, ID 
 
 ⚠️ **issuer-base 정렬 필수.** rp-app 은 ID Token 의 `iss` 를 `<passkey.issuer-base>/<tenantId>` 로 검증한다.
 따라서 passkey-app 을 rp-app 의 `passkey.issuer-base` 와 같은 값으로 띄워야 한다 — local 데모에서는
-passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 기동한다. 정렬이 어긋나면
+passkey-app 을 이렇게 기동한다:
+
+```bash
+SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
+  --args="--passkey.id-token.issuer-base=http://localhost:8080"
+```
+
+(기동 명령의 정본은 `docs/dev-setup.md` §3.3 이다. `./gradlew -D…` 는 Gradle 데몬 JVM 의 시스템
+프로퍼티일 뿐이라 앱에 전달되지 않으므로 반드시 `--args=` 를 쓴다.) 정렬이 어긋나면
 인증 마지막 단계(`/passkey/authenticate/finish`)에서 iss mismatch(P004)로 실패한다.
 
 자사 환경에서는 아래 설정을 주입한다:
@@ -42,6 +50,11 @@ passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 �
 (이때도 passkey-app 의 issuer-base 와 일치시킬 것).
 
 ## 4. 요청 흐름
+
+아래 응답 표기는 **본문(payload)만** 적은 것이다. 실제 JSON 은 모두 `ApiResponse`
+envelope 으로 감싸여 나가므로 클라이언트는 `data` 아래에서 꺼내야 한다
+(예: `data.regRelayToken`). 자세한 envelope 형태는
+[`docs/external-client-integration.md`](../docs/external-client-integration.md) 참고.
 
 등록(2-step):
 1. `POST /passkey/register/begin` `{ username, displayName }` → `{ publicKeyCredentialCreationOptions, regRelayToken }`

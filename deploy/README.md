@@ -1,6 +1,6 @@
 # 컨테이너 배포 가이드
 
-설계 근거: `docs/superpowers/specs/2026-08-07-docker-deployment-design.md` (완료된 spec 은 저장소에서 정리됨 — git 이력에서 조회)
+설계 근거: 완료된 spec 은 저장소에서 정리됐다 — `git show c319049d -- docs/superpowers/specs/2026-08-07-docker-deployment-design.md`
 
 > **상태**: 이미지 빌드와 스택 기동은 실기동으로 검증을 완주했다 — 이미지 3종
 > 빌드, `proxy,admin` / `proxy,admin,qa` 스택 기동, `--scale passkey-app=3` 포트
@@ -145,7 +145,8 @@ cp .env.example .env && chmod 600 .env
 | DB (Flyway) | `DB_OWNER_USER/PASSWORD` | **admin-app 에만** 주입 — passkey-app 은 `--scale` 로 여러 개 뜨므로 마이그레이션을 동시에 시도하면 안 된다 |
 | Redis | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | 서버 C 를 가리킨다 |
 | 시크릿 | `MASTER_KEY` | `openssl rand -base64 32`. **서버 A·B 가 반드시 동일**해야 한다 — 다르면 한쪽이 암호화한 데이터를 다른 쪽이 복호화하지 못한다 |
-| 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE`, `ADMIN_INVITE_BASE_URL` | nginx `server_name` + ID Token issuer. `ISSUER_BASE` 는 compose 배포에서는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두 기동 거부(fail-fast)(compose 밖 `bootRun` 은 이 변수를 주지 않아 `IdTokenIssuer` 의 코드 기본값으로 기동한다) |
+| 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE` | nginx `server_name` + ID Token issuer. `ISSUER_BASE` 는 compose 배포에서는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두 기동 거부(fail-fast). (compose 밖 `bootRun`: passkey-app `prod`/`qa` 프로필은 yml 기본이 빈 문자열(`${PASSKEY_ID_TOKEN_ISSUER_BASE:}`)이라 변수 없이는 **기동을 거부**한다. `IdTokenIssuer` 의 코드 기본값 `https://dev-passkey.crosscert.com` 이 살아남는 건 이 키가 yml 에 없는 admin-app 과 passkey-app `dev` 프로필뿐이다.) |
+| 도메인 | `ADMIN_INVITE_BASE_URL` | 가입 승인·비밀번호 재설정 메일에 넣는 admin 콘솔 base URL(속성명 `admin.invite.base-url` 은 호환성으로 남은 이름이고, 초대 기능 자체는 제거됐다). prod 에서 비우면 `localhost` 폴백을 거부해 기동 실패 |
 | admin | `ADMIN_BIND_ADDR`(기본 `127.0.0.1`), `ADMIN_HOST_PORT`(기본 `8081`), `MDS_LEASE_HOLDER` | 콘솔은 내부망 전용 |
 | 리소스 | `PASSKEY_MEM_LIMIT`, `ADMIN_MEM_LIMIT`, `RP_MEM_LIMIT` | 컨테이너 메모리 상한. `JAVA_OPTS` 의 `MaxRAMPercentage=75` 가 이 값을 인식한다 |
 | QA 전용 | `RP_SERVER_NAME`, `RP_PROFILE`, `RP_PASSKEY_BASE_URL`, `RP_API_KEY`, `RP_TENANT_ID`, `RP_RELAY_SECRET` | prod 에서는 `qa` profile 을 지정하지 않으므로 값이 비어 있어도 무해하다. 2차 방어: 실수로 `qa` 가 섞여도 `RelayKeyGuard` 가 데모 기본 키를 거부해 rp-app 이 기동에 실패한다(fail-closed) |
@@ -299,14 +300,14 @@ nginx 는 `/actuator;x/health` 를 `;` 까지 포함한 하나의 경로로 보�
 
 ## 마이그레이션 후속 조치
 
-- **앱 이미지 3개(passkey-app·admin-app·rp-app) 모두 재빌드 필수**: actuator 기본 노출
-  축소(`health,info`), license 기본값(코드 단일 출처), logback 레벨 단일 출처, SystemInfo
-  상태 판정은 전부 이미지에 구워지는 변경이다. 구 이미지로 기동하면 `/actuator/prometheus`
-  가 무인증으로 계속 열려 있다.
-- **rp-app 이미지 재빌드 필수**: `Dockerfile` 에 `/app/data` 생성·`chown` 이
-  추가돼, 이전 이미지로는 새로 붙는 `rp-data` 볼륨에 쓰기가 되지 않는다.
-  신설된 `rp-data` 볼륨은 비어 있는 상태로 시작하므로 **기존 컨테이너 내부의
-  `users.json` 은 이관되지 않는다** — QA 데모 데이터라 재등록하면 그만이다.
+- **앱 이미지 3개(passkey-app·admin-app·rp-app) 재빌드** — *완료(2026-09-10, `df9663f5`)*.
+  actuator 기본 노출 축소(`health,info`), license 기본값(코드 단일 출처), logback 레벨
+  단일 출처, SystemInfo 상태 판정, rp-app `Dockerfile` 의 `/app/data` 생성·`chown` 은 전부
+  이미지에 구워지는 변경이라 재빌드가 필요했고, QA 반입 번들(`qa-bundle/images/`)도 그때
+  함께 갱신했다. 아직 **구 이미지로 돌고 있는 환경이 있다면** 새 이미지로 교체한다 —
+  그전까지는 `/actuator/prometheus` 가 무인증으로 열려 있고, rp-app 은 새로 붙는
+  `rp-data` 볼륨에 쓰지 못한다. `rp-data` 볼륨은 비어 있는 상태로 시작하므로 **기존
+  컨테이너 내부의 `users.json` 은 이관되지 않는다** — QA 데모 데이터라 재등록하면 그만이다.
 
 - **V5 (`admin_signup_request` 도입 + 초대 테이블 제거) 적용 후**: 기존 초대
   흐름이 남긴 미완료 계정(`admin_user.status='PENDING'`, `bcrypt_hash IS NULL`)은

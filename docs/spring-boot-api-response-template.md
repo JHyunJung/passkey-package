@@ -2,6 +2,8 @@
 
 > Spring Boot 3.x + Java 17+ 기반의 통합 API 응답 표준 템플릿
 
+> **이 문서는 이 프로젝트 코드의 미러가 아니라, 새 프로젝트에 그대로 옮겨 쓰라고 둔 사내 재사용 템플릿입니다.** 패키지도 `com.example` 이고 `ErrorCode` 목록도 예시입니다. 이 저장소의 실제 응답 규약·에러 코드는 `core/…/api/ApiResponse`·`ErrorCode`(및 rp-app 트윈)와 [rp-server-api.md](rp-server-api.md) 를 보세요.
+
 ## 목차
 
 1. [개요](#개요)

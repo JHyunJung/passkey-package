@@ -2,6 +2,8 @@
 
 클라이언트(웹/앱)가 **RP 서버**에 패스키 등록·인증을 요청하는 API 명세서입니다. rp-app의 실제 구현(`/passkey/**`)을 기준으로 작성했습니다.
 
+> **이 문서가 단일 출처입니다.** 예전에 함께 두던 PDF 렌더본은 md 보다 뒤처져 틀린 내용을 퍼뜨려서 저장소에서 제거했습니다. 고객사 배포용 PDF 가 필요하면 **그때 이 md 에서 재생성**하고, 저장소에는 다시 커밋하지 마세요.
+
 > **이 API는 무상태(stateless)입니다.** RP 서버는 begin↔finish 사이에 세션·쿠키를 쓰지 않습니다. begin 응답으로 받은 **불투명 토큰**을 클라이언트가 들고 있다가 finish 요청 body에 다시 실어 보냅니다. 따라서 **세션 쿠키도, CSRF 토큰도 필요 없습니다.** 네이티브 앱과 cross-origin 웹 SPA가 동일하게 연동할 수 있습니다.
 
 - **호출 관계**: 클라이언트(브라우저 JS / 모바일 앱) → **RP 서버**(당신이 구현하는 서버). RP 서버는 내부적으로 Passkey 서버를 호출하지만, 그 부분은 클라이언트에 노출되지 않습니다.
@@ -582,6 +584,8 @@ export async function postJson(url, body) {
 
 > `P00x` 코드는 RP 서버가 Passkey 서버와 통신하면서 만나는 오류입니다. 클라이언트 입장에서는 "서버 측 일시 오류"로 처리하고 재시도하면 됩니다.
 
+> 위 표는 `/passkey/**` 에서 클라이언트가 실제로 만날 수 있는 코드만 추렸습니다. RP 서버의 `ErrorCode` 에는 이 밖에 `A002`(403, ACCESS_DENIED)와 `P002`(401, PASSKEY_AUTH_ERROR — RP 서버에 설정된 `X-API-Key` 가 잘못됐을 때)가 더 있습니다. 둘 다 **클라이언트가 고칠 수 있는 오류가 아니라 RP 서버 설정 문제**이므로, 만나면 재시도하지 말고 RP 운영자에게 알리세요.
+
 ### 에러 응답 예시
 
 `regRelayToken` 만료/누락으로 등록 완료 실패 (`400`):
@@ -638,8 +642,11 @@ export async function postJson(url, body) {
   - 여기서 `<rpId>`는 `options` 응답의 `rp.id`(등록) / `rpId`(인증)와 일치해야 합니다.
   - **앱 개발자가 준비할 것**: iOS 는 앱 빌드 설정의 Associated Domains 에 `webcredentials:<rpId>` 를 추가하고,
     Android 는 자기 앱의 **패키지명 + 서명 SHA-256 지문**을 RP 서버 운영자에게 전달합니다(운영자가 이 값을
-    `assetlinks.json` 에 등록). well-known 파일 자체의 호스팅은 RP 서버 쪽 작업이며, 구성 방법은
-    [single-instance-deployment.md](single-instance-deployment.md) §6 을 참조하세요.
+    `assetlinks.json` 에 등록). well-known 파일 자체는 rp-app 의 `WellKnownController` 가
+    `/.well-known/assetlinks.json` · `/.well-known/apple-app-site-association` 로 **직접 서빙**합니다 —
+    별도 정적 파일을 두지 않고 `rp-app.well-known.*` 설정값(Android 패키지명·서명 지문, iOS `<TeamID>.<BundleID>`)만
+    채우면 됩니다. 배포 시 주입하는 환경 변수는 [deploy/README.md](../deploy/README.md) §4 의
+    `WK_ANDROID_PACKAGE` · `WK_ANDROID_SHA256` · `WK_IOS_APPID` 를 참조하세요.
 
 #### 7.1.1 envelope 풀기 · 토큰 릴레이 (양 플랫폼 공통 개념)
 

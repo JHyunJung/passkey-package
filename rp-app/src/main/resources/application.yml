@@ -24,9 +24,11 @@ passkey:
   api-key:     ${PASSKEY_API_KEY:}
   tenant-id:   ${PASSKEY_TENANT_ID:}
   # passkey-app 의 IdTokenIssuer 가 발급하는 iss prefix. passkey-app 의
-  # passkey.id-token.issuer-base (기본 https://passkey.crosscert.com) 와 일치해야 한다.
-  # 로컬 데모에서는 passkey-app 측을 application-local.yml 로 같은 값으로 override 하거나
-  # bootRun 시 -Dpasskey.id-token.issuer-base=http://localhost:8080 으로 띄운다.
+  # passkey.id-token.issuer-base (코드 기본값 https://dev-passkey.crosscert.com) 와 일치해야 한다.
+  # 로컬 데모에서는 passkey-app 을 아래처럼 띄워 이 값과 맞춘다(정본: docs/dev-setup.md §3.3).
+  #   SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
+  #     --args="--passkey.id-token.issuer-base=http://localhost:8080"
+  # -D 는 Gradle 데몬 JVM 프로퍼티라 앱에 전달되지 않으므로 --args 를 쓴다.
   issuer-base: ${PASSKEY_ISSUER_BASE:http://localhost:8080}
   connect-timeout: 3s
   read-timeout: 10s
