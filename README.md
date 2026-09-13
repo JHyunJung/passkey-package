@@ -222,7 +222,6 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 │   ├── single-instance-deployment.md   # 단일 인스턴스 배포
 │   ├── onprem-deployment.md            # 설치형(onprem) 배포 절차
 │   ├── rp-server-api.md                # Passkey 서버 ceremony API 레퍼런스
-│   ├── rp-client-api-quickref.md       # RP 클라이언트(rp-app) API 퀵레퍼런스
 │   ├── external-client-integration.md  # 외부 클라이언트 연동 가이드
 │   ├── logging-operations.md           # 운영자용 검색 cookbook + alert + trouble-shooting
 │   ├── logging-conventions.md          # 개발자용 로깅 컨벤션
@@ -243,7 +242,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 
 ## API 레퍼런스
 
-- **RP 클라이언트** (rp-app 가 노출하는 API): [`rp-client-api-quickref.md`](./docs/rp-client-api-quickref.md)
+- **RP 클라이언트** (rp-app 가 브라우저에 노출하는 API): `POST /passkey/{register,authenticate}/{begin,finish}` — 요청·응답 필드는 [`rp-app/README.md`](rp-app/README.md) §4, 외부 클라이언트 연동은 [`external-client-integration.md`](./docs/external-client-integration.md)
 - **Passkey 서버 ceremony API** (RP 백엔드가 호출): `passkey-app` 의 `/api/v1/rp/{registration,authentication}/{start,finish}`, `/api/v1/rp/credentials`(자기 credential 조회·라벨·삭제), `/.well-known/jwks.json`
 - **Admin API**: `/admin/api/**` — UI 가 호출. Spring Security session 인증.
 
