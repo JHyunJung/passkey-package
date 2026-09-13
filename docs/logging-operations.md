@@ -197,5 +197,7 @@ grep -E "license loaded from disk|license state initialized|onprem mode: license
 prod 에서 일시적으로 DEBUG 필요 시: 환경 변수
 `LOGGING_LEVEL_COM_CROSSCERT_PASSKEY=DEBUG` 로 재기동한다. 이것은 애플리케이션
 로거만 내린다 — prod root 가 WARN 이므로 **프레임워크(Spring·Hibernate 등) 로그까지
-보려면** `LOGGING_LEVEL_ROOT=DEBUG`(또는 `INFO`)를 함께 준다. 조사 후에는 반드시
-원복한다(로그량·PII 노출 위험).
+보려면** `LOGGING_LEVEL_ROOT=DEBUG`(또는 `INFO`)를 함께 준다. 단 prod yml 에 로거가
+명시된 패키지는 root 를 내려도 그 값이 이긴다 — rp-app 의 `org.springframework: WARN`
+이 그렇고, 이때는 `LOGGING_LEVEL_ORG_SPRINGFRAMEWORK=DEBUG` 처럼 해당 로거를 직접 지정한다.
+조사 후에는 반드시 원복한다(로그량·PII 노출 위험).

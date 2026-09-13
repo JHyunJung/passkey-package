@@ -162,6 +162,11 @@ sudo firewall-cmd --reload
 - FQDN 2개 입력 → **4곳에 일관 반영** (손편집 시 한 곳만 고치는 사고가 사라진다)
   — passkey FQDN 3곳(`PASSKEY_SERVER_NAME`·`ISSUER_BASE`·`ADMIN_INVITE_BASE_URL`)
   + RP FQDN 1곳(`RP_SERVER_NAME`)
+
+  > ⚠️ `ADMIN_INVITE_BASE_URL` 은 가입 승인·비밀번호 재설정 **메일 링크의 base** 인데
+  > setup.sh 가 passkey FQDN 을 넣는다. admin 콘솔은 nginx 뒤가 아니라
+  > `ADMIN_BIND_ADDR:ADMIN_HOST_PORT`(기본 `127.0.0.1:8081`)로 직접 바인딩되므로,
+  > 메일을 실제로 쓸 환경이면 `deploy/.env` 에서 이 값을 콘솔 접근 주소로 고쳐야 한다.
 - `MASTER_KEY`·`REDIS_PASSWORD`·`RP_RELAY_SECRET` 생성 및 기록
   (값은 화면에 출력하지 않는다 — 확인은 `deploy/.env` 에서)
 - `REDIS_HOST` = `REDIS_BIND_ADDR` 동기화, `127.0.0.1` 입력은 거부
