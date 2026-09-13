@@ -38,6 +38,12 @@
       호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. [rp-admin-role-gating 2026-05-31]
 - [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.java:43` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
 - [ ] **p95 응답 metric** — Activity KPI 가 'N/A'. admin-app 에 p95 산출 0건. [activity-page 2026-05-28]
+- [ ] **Activity KPI·topTenants 가 fixture 초기값으로 렌더된다** — `admin-ui/src/pages/ActivityPage.tsx:232-233` 이
+      `activityFixture.kpi`/`topTenants` 를 초기 state 로 쓴다. 서버 응답 전이나 오류 시 가짜 수치가 잠깐 보인다.
+      로딩·오류 상태를 분리해야 한다. [master-backlog 2026-05-31]
+- [ ] **`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다** — `admin-app/.../config/AdminSecurityConfig.java:242-245` 가
+      `AuditAppendRequest` 의 tenantId 를 `null` 로 넘긴다. RP_ADMIN 로그인도 테넌트 스코프 없이 기록돼
+      테넌트별 감사 조회에서 누락된다. [activity-page 2026-05-28]
 
 ## 2. 보안·정합성 (P2)
 
@@ -95,6 +101,11 @@
 - [ ] **admin-ui 가상화/디바운스/폰트 CSS/license 3중 fetch/chain overview 중복/idle 리스너 재바인딩** (6건) [master-backlog 2026-05-31]
 - [ ] (하위) AAGUID 정책 등록마다 DB 조회, rate-limit Redis 2 RTT, 로그 마스킹 정규식 short-circuit 부재,
       onprem 매 요청 `LicenseStateMachine.recompute()`, CORS negative cache, alert executor 포화. [master-backlog 2026-05-31]
+
+- [ ] **`ADMIN_INVITE_BASE_URL` 이 admin 콘솔 주소와 어긋난다** — 가입 승인·비밀번호 재설정 메일의 링크 base 인데
+      `qa-bundle/setup.sh:200` 은 passkey FQDN(`https://${PASSKEY_FQDN}`)을 넣는다. admin-app 은 nginx 뒤가 아니라
+      `deploy/docker-compose.yml:73` 의 `ADMIN_BIND_ADDR:ADMIN_HOST_PORT` 로 직접 바인딩되므로 메일 링크가
+      실제 콘솔 주소와 다르다. 변수명(invite)도 초대 기능 제거 후 낡았다. [2026-09-13 문서 감사에서 발견]
 
 ## 4. 구조·위생 (P3)
 

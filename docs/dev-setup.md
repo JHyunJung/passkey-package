@@ -347,7 +347,7 @@ SPRING_PROFILES_ACTIVE=local ./gradlew :admin-app:bootRun   # 또는 dev
 
 ## 7. 참고
 
-- **RP 서버 API 명세서**: [rp-server-api.md](rp-server-api.md) — RP 백엔드가 `/api/v1/rp/**` 를 직접 호출하기 위한 정식 레퍼런스(인증/scope/DTO/ID Token/에러/rate limit)
+- **RP 서버 API 명세서**: [rp-server-api.md](rp-server-api.md) — 클라이언트(웹/앱)가 RP 서버(rp-app)의 `/passkey/**` 를 호출하는 정식 레퍼런스(무상태 릴레이 토큰/DTO/에러). RP 서버 구현자용 절에 Passkey 서버 `/api/v1/rp/**` 온보딩·ID Token 검증도 포함
 - 시드 SQL (local): [`core/src/main/resources/db/local/R__seed_local_tenant.sql`](../core/src/main/resources/db/local/R__seed_local_tenant.sql)
 - 시드 SQL (dev): [`core/src/main/resources/db/dev/R__seed_dev_tenant.sql`](../core/src/main/resources/db/dev/R__seed_dev_tenant.sql)
 - 공통 운영자 시드: [`core/src/main/resources/db/seed-common/R__seed_operators.sql`](../core/src/main/resources/db/seed-common/R__seed_operators.sql)

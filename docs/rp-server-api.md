@@ -108,6 +108,39 @@ RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
 > 깨집니다. RP 는 이 값을 불투명 식별자로 다루는 것이 안전합니다.
 > `aaguid` 는 optional 이므로 필수로 가정하지 마세요.
 
+<details>
+<summary><code>cred_id</code> 를 UUID 로 디코딩해야 한다면 (언어별 예시)</summary>
+
+바이트 배치는 UUID 의 MSB 8바이트 || LSB 8바이트(big-endian)입니다. 저장 컬럼은 `RAW(16)`/`BINARY(16)`
+또는 문자열이면 32자까지 여유를 두세요.
+
+```java
+// Java — 문자열을 그대로 보관해도 되고, UUID 가 필요하면
+byte[] bytes = Base64.getUrlDecoder().decode(claims.getStringClaim("cred_id"));
+if (bytes.length != 16) throw new IllegalArgumentException("cred_id must be 16 bytes");
+ByteBuffer bb = ByteBuffer.wrap(bytes);
+UUID credentialId = new UUID(bb.getLong(), bb.getLong());
+```
+
+```javascript
+// Node (jose)
+const bytes = Buffer.from(payload.cred_id, 'base64url');
+if (bytes.length !== 16) throw new Error('cred_id must be 16 bytes');
+const hex = bytes.toString('hex');
+const uuid = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+```
+
+```python
+# Python (PyJWT) — urlsafe_b64decode 는 4의 배수 길이를 요구하므로 패딩을 붙인다(22 → 24)
+import base64, uuid
+b64 = claims['cred_id']
+raw = base64.urlsafe_b64decode(b64 + '=' * (-len(b64) % 4))
+assert len(raw) == 16
+credential_id = uuid.UUID(bytes=raw)
+```
+
+</details>
+
 ---
 
 ## 2. 공통 규약

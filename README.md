@@ -221,7 +221,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 │   ├── dev-setup.md                    # 로컬 개발 환경 구성
 │   ├── single-instance-deployment.md   # 단일 인스턴스 배포
 │   ├── onprem-deployment.md            # 설치형(onprem) 배포 절차
-│   ├── rp-server-api.md                # Passkey 서버 ceremony API 레퍼런스
+│   ├── rp-server-api.md                # 클라이언트 → RP 서버(rp-app /passkey/**) API 명세
 │   ├── external-client-integration.md  # 외부 클라이언트 연동 가이드
 │   ├── logging-operations.md           # 운영자용 검색 cookbook + alert + trouble-shooting
 │   ├── logging-conventions.md          # 개발자용 로깅 컨벤션
@@ -249,12 +249,15 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ## 로깅 포맷
 
 ```
-HH:mm:ss.SSS LEVEL [traceId] [tenantId] [actorEmail] [apiKeyPrefix] logger - msg
+HH:mm:ss.SSS LEVEL [traceId=… tenantId=… actorEmail=… apiKeyPrefix=…] logger - msg
 ```
+
+값이 있는 MDC 키만 `key=value` 로 한 대괄호 안에 들어가고(값은 16자에서 절단),
+전부 비면 칸 자체가 사라진다. 자세한 검색법은 [`docs/logging-operations.md`](docs/logging-operations.md).
 
 예 (admin 의 보안 정책 변경):
 ```
-08:55:52.973 INFO  [cfb5331993aa4c68] [] [alice@crosscert.com] [] c.c.p.admin.policy.SecurityPolicyService - security policy updated: sessionIdle=30 pwMin=12 mfa=true corsAllowlistSize=0
+08:55:52.973 INFO  [traceId=cfb5331993aa4c68 actorEmail=alice@crosscert] c.c.p.admin.policy.SecurityPolicyService - security policy updated: sessionIdle=30 pwMin=12 mfa=true corsAllowlistSize=0
 ```
 
 운영자용 검색·alert 가이드: [`docs/logging-operations.md`](./docs/logging-operations.md)
