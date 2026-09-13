@@ -61,7 +61,7 @@ log.error("mds sync failed: cause={}", e.toString(), e);  // 두 번째 e 가 st
 
 현재 표준 키는 **4종**이다: `traceId`(`TraceIdFilter`), `tenantId`·`apiKeyPrefix`
 (passkey-app `ApiKeyAuthFilter`), `actorEmail`(`RequestLoggingFilter`).
-rp-app 은 이 중 `traceId`·`actorEmail` 둘만 넣는다.
+rp-app 은 `traceId` 만 실제로 채운다(`actorEmail` 자리는 있으나 값을 넣는 인증 필터가 없다).
 
 > MDC 값은 마스킹 대상이 아니다 — `SecretMaskingConverter` 는 `%msg` 에만 걸린다.
 > `actorEmail` 은 MDC 칸에 평문으로 남으므로, PII 를 새 MDC 키로 넣을 때는 값을 넣기 전에 마스킹해야 한다.

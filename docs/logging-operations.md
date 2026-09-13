@@ -25,7 +25,8 @@ MDC 가 전부 비면 대괄호 자체가 나오지 않는다. 각 값은 **16�
   (텍스트 로그는 16자에서 절단 — `CompactMdcConverter:39-40`. JSON 로그는 절단하지 않아 전체 주소가 나간다),
   메시지 본문은 `a***@crosscert.com` 으로 다르게 보일 수 있다.
 - **apiKeyPrefix** — passkey-app 의 `X-API-Key` 헤더 앞 11자 (`pk_xxxxxxxx`).
-- rp-app 은 이 중 `traceId`·`actorEmail` 둘만 넣는다(`ApiKeyAuthFilter` 가 없음).
+- rp-app 은 실제로 `traceId` 만 남긴다. `RequestLoggingFilter` 에 `actorEmail` 자리는 있지만
+  값을 넣어 주는 인증 필터가 없어(데모라 로그인 개념 없음) 항상 비어 있다. `tenantId`·`apiKeyPrefix` 는 `ApiKeyAuthFilter` 가 없어 아예 없다.
 
 `msg` 는 logfmt 형식: `event: key=val key=val`.
 
@@ -34,7 +35,7 @@ MDC 가 전부 비면 대괄호 자체가 나오지 않는다. 각 값은 **16�
 > MDC 는 `key=value` 로 찍히므로 **키 이름을 붙여서** 검색한다. 값은 16자에서
 > 잘리므로 긴 값은 **앞부분만** 넣는다(접두 검색). JSON 로그(`PASSKEY_LOG_JSON=true`)
 > 에서는 MDC 가 별도 필드로 나가므로 ELK 쪽 질의는 절단 영향을 받지 않는다
-> (core 기반 passkey-app·admin-app 은 4종 전부, rp-app 은 `traceId`·`actorEmail` 둘만).
+> (core 기반 passkey-app·admin-app 은 4종 전부, rp-app 은 `traceId`·`actorEmail` 필드를 선언하지만 실제로 채워지는 건 `traceId` 뿐).
 
 ### 한 사용자 트랜잭션 추적
 ```bash

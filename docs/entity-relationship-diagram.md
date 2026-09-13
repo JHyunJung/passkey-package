@@ -16,7 +16,8 @@ Crosscert Passkey Platform 의 JPA 엔티티(`core/src/main/java/com/crosscert/p
 > (`fk_credential_tenant`·`fk_api_key_tenant`·`fk_aut_admin_user`(CASCADE)·`fk_aut_tenant`·
 > `fk_pwd_reset_admin_user`·`fk_recovery_admin_user`·`fk_cred_auth_event_credential` 등
 > V1 에 14건이 선언되고, 그중 `admin_user_invitation` 것이 V5 의 `DROP TABLE` 과 함께 사라져 현행 13건).
-> FK 제약이 **없는** 테이블은 tenant 를 참조하지 않는 독립 테이블(`signing_key`·`mds_blob_cache`·
+> FK 제약이 **없는** 테이블은 루트 테이블(`tenant`·`admin_user` — 참조할 상위가 없다)과,
+> tenant 를 참조하지 않는 독립 테이블(`signing_key`·`mds_blob_cache`·
 > `mds_sync_history`·`scheduler_lease`·`security_policy`)과, tenant 컬럼을 갖되 제약을 걸지 않은
 > `audit_log`·`ceremony_event`·`security_incident`, 그리고 V5 의 `admin_signup_request` 입니다.
 > `admin_user` 도 tenant 를 직접 참조하지 않습니다(위 N:M 매핑 참조).

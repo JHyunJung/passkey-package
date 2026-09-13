@@ -116,7 +116,8 @@ RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
 
 ```java
 // Java — 문자열을 그대로 보관해도 되고, UUID 가 필요하면
-byte[] bytes = Base64.getUrlDecoder().decode(claims.getStringClaim("cred_id"));
+// SDK 를 쓰면 IdTokenClaims#credId() 가 이 문자열을 준다
+byte[] bytes = Base64.getUrlDecoder().decode(credIdB64);
 if (bytes.length != 16) throw new IllegalArgumentException("cred_id must be 16 bytes");
 ByteBuffer bb = ByteBuffer.wrap(bytes);
 UUID credentialId = new UUID(bb.getLong(), bb.getLong());

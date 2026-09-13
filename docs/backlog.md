@@ -87,6 +87,10 @@
 
 ## 3. 성능 (P2/P3)
 
+- [ ] **트랜잭션 안에서 동기 메일 발송** — `PasswordResetService.java:68-85`(`@Transactional` 메서드가 `mail.send`),
+      `SignupRequestService.java:206,232`(`sendQuietly` → `mail.send`). SMTP 지연이 DB 커넥션 점유 시간이 된다.
+      커밋 후 발송(`TransactionSynchronization`)이나 비동기 큐로 분리한다. [master-backlog 2026-05-31]
+
 - [ ] **API key BCrypt(cost 12) 를 매 요청 수행 + 전역 캐싱 인프라 부재** — `@EnableCaching`/Caffeine/`@Cacheable`
       이 core·passkey-app·admin-app 통틀어 0건. [master-backlog 2026-05-31]
 - [ ] **`ApiKeyAdminService.list()` 가 `findAll()` + scopes N+1 + ORDER BY 부재** — `:73` = `repo.findAll().stream()`.
@@ -112,6 +116,10 @@
       실제 콘솔 주소와 다르다. 변수명(invite)도 초대 기능 제거 후 낡았다. [2026-09-13 문서 감사에서 발견]
 
 ## 4. 구조·위생 (P3)
+
+- [ ] **관리자 비밀번호 self-service 변경 경로 부재** — 지금은 운영자가 재설정 메일로만 바꿀 수 있다.
+      로그인 상태에서의 변경 엔드포인트, 회전 정책(주기적 변경 요구), 최초 로그인 시 강제 변경이 모두 없다.
+      [prod-hardening 2026-05-25]
 
 - [ ] **`AdminUser.role` 을 Java enum 으로** — `core/.../entity/AdminUser.java:16-17` 이 `String` 이고
       `AdminUserDetails.java:24,47-48` 등이 문자열 리터럴로 비교한다. DB CHECK 제약은 있으나 컴파일 타임

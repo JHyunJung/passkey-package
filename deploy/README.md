@@ -146,7 +146,7 @@ cp .env.example .env && chmod 600 .env
 | Redis | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | 서버 C 를 가리킨다 |
 | 시크릿 | `MASTER_KEY` | `openssl rand -base64 32`. **서버 A·B 가 반드시 동일**해야 한다 — 다르면 한쪽이 암호화한 데이터를 다른 쪽이 복호화하지 못한다 |
 | 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE` | nginx `server_name` + ID Token issuer. `ISSUER_BASE` 는 compose 배포에서는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두 기동 거부(fail-fast). (compose 밖 `bootRun`: passkey-app `prod`/`qa` 프로필은 yml 기본이 빈 문자열(`${PASSKEY_ID_TOKEN_ISSUER_BASE:}`)이라 변수 없이는 **기동을 거부**한다. `IdTokenIssuer` 의 코드 기본값 `https://dev-passkey.crosscert.com` 이 살아남는 건 이 키가 yml 에 없는 admin-app 과 passkey-app `dev` 프로필뿐이다.) |
-| 도메인 | `ADMIN_INVITE_BASE_URL` | 가입 승인·비밀번호 재설정 메일에 넣는 admin 콘솔 base URL(속성명 `admin.invite.base-url` 은 호환성으로 남은 이름이고, 초대 기능 자체는 제거됐다). prod 에서 비우면 `localhost` 폴백을 거부해 기동 실패 |
+| 도메인 | `ADMIN_INVITE_BASE_URL` | 가입 승인·비밀번호 재설정 메일에 넣는 admin 콘솔 base URL(속성명 `admin.invite.base-url` 은 호환성으로 남은 이름이고, 초대 기능 자체는 제거됐다). prod 에서 **미주입**이면 yml 기본값이 `http://localhost:5173` 이라 `BaseUrlValidation` 이 기동을 거부한다. 다만 `ADMIN_INVITE_BASE_URL=`(빈 문자열)로 두면 검사(null·localhost 만 차단)를 통과해 **링크가 깨진 메일이 나간다** — 반드시 실제 콘솔 주소를 넣는다 |
 | admin | `ADMIN_BIND_ADDR`(기본 `127.0.0.1`), `ADMIN_HOST_PORT`(기본 `8081`), `MDS_LEASE_HOLDER` | 콘솔은 내부망 전용 |
 | 리소스 | `PASSKEY_MEM_LIMIT`, `ADMIN_MEM_LIMIT`, `RP_MEM_LIMIT` | 컨테이너 메모리 상한. `JAVA_OPTS` 의 `MaxRAMPercentage=75` 가 이 값을 인식한다 |
 | QA 전용 | `RP_SERVER_NAME`, `RP_PROFILE`, `RP_PASSKEY_BASE_URL`, `RP_API_KEY`, `RP_TENANT_ID`, `RP_RELAY_SECRET` | prod 에서는 `qa` profile 을 지정하지 않으므로 값이 비어 있어도 무해하다. 2차 방어: 실수로 `qa` 가 섞여도 `RelayKeyGuard` 가 데모 기본 키를 거부해 rp-app 이 기동에 실패한다(fail-closed) |
