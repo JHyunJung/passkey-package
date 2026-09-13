@@ -15,7 +15,8 @@ Crosscert Passkey Platform 의 JPA 엔티티(`core/src/main/java/com/crosscert/p
 > **FK 와 "(soft)" 표기**: 대부분의 테이블에는 **DB 레벨 FK 제약이 실재합니다**
 > (`fk_credential_tenant`·`fk_api_key_tenant`·`fk_aut_admin_user`(CASCADE)·`fk_aut_tenant`·
 > `fk_pwd_reset_admin_user`·`fk_recovery_admin_user`·`fk_cred_auth_event_credential` 등
-> V1 에 13건). FK 제약이 **없는** 테이블은 `audit_log`·`ceremony_event`·`security_incident`
+> V1 에 14건이 선언되고, 그중 `admin_user_invitation` 것이 V5 의 `DROP TABLE` 과 함께 사라져 현행 13건).
+> FK 제약이 **없는** 테이블은 `audit_log`·`ceremony_event`·`security_incident`
 > 셋뿐이고, `admin_user` 도 tenant 를 직접 참조하지 않습니다.
 >
 > 아래 다이어그램의 **"(soft)" 는 "JPA 연관 어노테이션(`@ManyToOne`/`@OneToMany`)이 없고

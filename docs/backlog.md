@@ -22,7 +22,7 @@
       pepper/HMAC 없음. [master-backlog 2026-05-31]
 - [ ] **`X-Trace-Id` 무검증 → 로그 인젝션** — `core/.../api/TraceIdFilter.java:27-31` 이 `isBlank()` 만 보고 헤더 값을
       MDC 와 응답 헤더에 그대로 넣는다. CRLF·길이·문자집합 제한 없음. rp-app 의 동명 필터
-      (`rp-app/.../common/filter/TraceIdFilter.java:30-35`)도 같다. [master-backlog 2026-05-31]
+      (`rp-app/src/main/java/com/crosscert/passkey/rpapp/common/filter/TraceIdFilter.java:30-35`)도 같다. [master-backlog 2026-05-31]
 - [ ] **MDS3 §3.1.6 `nextUpdate` 의미를 1차 문서와 대조** — `webauthn/.../mds/NativeMetadataBlobVerifier.java:34-37` 은
       `nextUpdate != null` 일 때만 신선도를 강제하므로 null 이면 fail-open 이다. 사양상 필수 필드인지 확인. [zero-base 2026-07-04]
 - [ ] **시드 평문 비번이 prod 에 실리지 않는지 확인** — `core/src/main/resources/db/seed-common/R__seed_operators.sql:4-5`
@@ -60,7 +60,7 @@
       F22(rename 비잠금 전환)가 이 이유로 롤백됐다 — **락 제거형 성능개선은 항상 이걸 먼저 의심한다.** [zero-base 2026-07-04]
 - [ ] **G02 rp-app `StreamReadConstraints` 미설정** — rp-app 에 0건. passkey-app 만
       `PasskeyAppJacksonConfig.java:31-37` 로 설정돼 있다. [zero-base 2026-07-04]
-- [ ] **G10 rp-app issuer-base localhost 폴백** — `rp-app/src/main/resources/application.yml:30`
+- [ ] **G10 rp-app issuer-base localhost 폴백** — `rp-app/src/main/resources/application.yml:32`
       = `${PASSKEY_ISSUER_BASE:http://localhost:8080}`. 환경변수 누락 시 조용히 localhost 로 떨어진다. [zero-base 2026-07-04]
 - [ ] **F30 `NativeWebAuthnVerifier` BE/BS 플래그 검사 · F35 `CborDecoder` non-minimal int 거부** [zero-base 2026-07-04]
 - [ ] **alert throttle/dedup 미구현** — 고빈도 이벤트 폭주 시 알림 스톰. 훅만 존재. [observability-C 2026-05-31]

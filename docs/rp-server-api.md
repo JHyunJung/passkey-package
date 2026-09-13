@@ -91,6 +91,23 @@ RP 서버를 Passkey 서버에 연결하려면 먼저 다음이 필요합니다.
 - **`iss`/`aud`**: `iss = <Passkey 서버 주소>/<tenantId>`, `aud = <tenantId>`. tenantId 표기 차이로 인한 검증 실패는 §6 P004를 참조하세요.
 - **JWKS 캐싱**: 매 요청마다 JWKS를 가져오지 말고 캐시합니다(권장 TTL 수 분). **키 회전 주의** — 서버가 서명키를 교체하면 캐시에 없는 새 `kid`가 올 수 있습니다. `kid`를 못 찾으면 캐시를 즉시 무효화하고 1회 재조회하도록 구현하는 것이 안전합니다(TTL만 의존하면 회전 직후 TTL 동안 검증이 실패할 수 있음).
 
+**클레임 구성** — `IdTokenIssuer` 가 싣는 값입니다(SDK 는 `IdTokenClaims` 레코드로 노출).
+
+| 클레임 | 형식 | 설명 |
+|---|---|---|
+| `iss` | string | `<Passkey 서버 주소>/<tenantId>` |
+| `sub` | string | 등록 시 부여한 `userHandle` 의 base64url(패딩 없음) |
+| `aud` | string | `tenantId`(UUID 소문자 대시 형식) |
+| `iat`/`exp` | number | 발급·만료 시각(epoch seconds) |
+| `amr` | array | 항상 `["webauthn"]` |
+| `cred_id` | string | 인증에 쓰인 credential 의 내부 UUID(16바이트)를 base64url(패딩 없음)로 인코딩한 **22자** 문자열 |
+| `aaguid` | string | 인증기 AAGUID 의 hex. 값이 없으면 클레임 자체가 빠집니다(optional) |
+
+> ⚠️ **`cred_id` 를 파싱해 저장한다면** 길이 22자(16바이트 UUID) 기준으로 컬럼을 잡으세요.
+> 과거 버전은 8바이트 Long 을 인코딩한 11자였습니다. 숫자로 역변환하거나 11자 길이를 가정한 구현은
+> 깨집니다. RP 는 이 값을 불투명 식별자로 다루는 것이 안전합니다.
+> `aaguid` 는 optional 이므로 필수로 가정하지 마세요.
+
 ---
 
 ## 2. 공통 규약
