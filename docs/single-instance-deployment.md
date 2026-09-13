@@ -183,8 +183,10 @@ RP_RELAY_SECRET='<openssl rand -base64 32 로 생성한 키>' \
 
 admin-app에 로그인(`https://<admin 내부주소>:8081/admin/`, form 로그인 — seed 운영자 계정)한 뒤, 테넌트를 생성합니다. API로 직접 만들려면:
 
-`POST /admin/login` 을 포함해 모든 POST 는 CSRF 보호 대상입니다(면제는 가입 요청·비밀번호
-재설정 두 경로뿐). 토큰은 `XSRF-TOKEN` 쿠키로 내려오고(HttpOnly 아님, path `/admin`),
+`POST /admin/login` 을 포함해 모든 POST 는 CSRF 보호 대상입니다. 면제는
+`POST /admin/api/signup-requests`(가입 요청 생성) 한 건과 `/admin/api/password-reset/**`
+뿐입니다 — 가입 요청의 `/{id}/approve`·`/{id}/reject` 는 면제 대상이 아니라 CSRF 보호가
+그대로 걸립니다(`AdminSecurityConfig` 의 `ignoringRequestMatchers`). 토큰은 `XSRF-TOKEN` 쿠키로 내려오고(HttpOnly 아님, path `/admin`),
 같은 값을 `X-XSRF-TOKEN` 헤더로 되돌려줘야 합니다. 로그인 시 토큰이 회전하므로 로그인
 직후 인증된 GET 을 한 번 끼워 확정 토큰을 받는 4단계가 됩니다(통합테스트
 `AdminFlowIT` 가 쓰는 것과 같은 순서):

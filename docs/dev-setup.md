@@ -4,7 +4,7 @@
 **local 또는 dev profile** 로 띄우면 admin-ui 콘솔과 RP 측 API 가 모두 동작하고,
 프로필별 시드 tenant 1개 + API key 1개로 즉시 호출할 수 있다.
 
-최종 갱신: 2026-09-09
+최종 갱신: 2026-09-13
 관련:
 - [백로그](backlog.md) — Activity 관련 미해소 항목은 §1 기능 개발 참조
 - Activity 페이지 spec·monorepo 통합 spec 은 저장소에서 정리됨 (git 이력의 `docs/superpowers/` 참조)
@@ -33,7 +33,9 @@
     ├── admin-ui/    # React + Vite 콘솔 SPA
     ├── sdk-java/    # 패스키 SDK (Java) — rp-app 가 의존
     ├── rp-app/      # 데모 RP 앱 (port 9090)
-    └── deploy/      # 컨테이너 배포 (docker-compose + nginx) — deploy/README.md
+    ├── scripts/     # DB 부트스트랩·초기화·리셋 스크립트 (Docker 로컬 + 외부 Oracle)
+    ├── deploy/      # 컨테이너 배포 (docker-compose + nginx) — deploy/README.md
+    └── qa-bundle/   # 폐쇄망 QA 반입 번들 (amd64 이미지 + 설치 스크립트)
 ```
 
 ### 1.3 컨테이너 (Oracle + Redis)
@@ -51,17 +53,17 @@ docker ps  # passkey-oracle (1521) + passkey-redis (6379) 가 healthy
 
 ## 2. 프로필별 시드가 제공하는 것
 
-> **2026-05 변경 (프로필별 시드 분리)**: Flyway seed locations 가 프로필별로 분리됐다.
-> - **local** (`SPRING_PROFILES_ACTIVE=local`): `db/migration,db/seed-common,db/local` — 완전 로컬 개발용. rpId=`localhost` 라 **로컬 브라우저에서 패스키 ceremony 가 그대로 동작**한다.
-> - **dev** (`SPRING_PROFILES_ACTIVE=dev`): `db/migration,db/seed-common,db/dev` — 서버 배포(dev-passkey.crosscert.com)용. rpId=도메인이라 로컬 localhost 에서는 rpId 불일치로 ceremony 불가.
->
-> 로컬 개발자가 패스키를 직접 테스트하려면 **`local` 프로필**을 사용한다.
-> dev 가 datasource URL, credential, Redis host, dev key-envelope master 를
-> self-contained 로 제공하는 구조는 동일하다. 다만 이 값들은 이제
-> `${SPRING_DATASOURCE_URL:jdbc:oracle:thin:@localhost:1521/XEPDB1}` 처럼
-> **기존 값을 기본값으로 둔 플레이스홀더**라, 아무것도 주입하지 않으면 동작이 전과
-> 같고 서버 배포 시에는 환경변수로 덮어쓸 수 있다. 해당 환경변수를 셸에 export 해 둔
-> 상태면 로컬에서도 그 값이 우선하니 주의한다.
+Flyway seed locations 는 프로필별로 분리돼 있다.
+
+- **local** (`SPRING_PROFILES_ACTIVE=local`): `db/migration,db/seed-common,db/local` — 완전 로컬 개발용. rpId=`localhost` 라 **로컬 브라우저에서 패스키 ceremony 가 그대로 동작**한다.
+- **dev** (`SPRING_PROFILES_ACTIVE=dev`): `db/migration,db/seed-common,db/dev` — 서버 배포(dev-passkey.crosscert.com)용. rpId=도메인이라 로컬 localhost 에서는 rpId 불일치로 ceremony 불가.
+
+로컬 개발자가 패스키를 직접 테스트하려면 **`local` 프로필**을 사용한다.
+dev 도 datasource URL, credential, Redis host, dev key-envelope master 를 self-contained 로
+제공한다. 다만 이 값들은 `${SPRING_DATASOURCE_URL:jdbc:oracle:thin:@localhost:1521/XEPDB1}`
+처럼 **기존 값을 기본값으로 둔 플레이스홀더**라, 아무것도 주입하지 않으면 로컬 기본값으로
+동작하고 서버 배포 시에는 환경변수로 덮어쓸 수 있다. 해당 환경변수를 셸에 export 해 둔
+상태면 로컬에서도 그 값이 우선하니 주의한다.
 
 admin-app 을 부팅하면 Flyway repeatable migration 이 자동 적용되어 다음 시드 데이터가
 DB 에 들어간다.
@@ -98,9 +100,14 @@ scope: `registration` + `authentication` (양쪽 다 허용).
 | email | password | role | tenant | MFA | 출처 |
 |---|---|---|---|---|---|
 | `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) | 꺼짐(비번만, 설정에서 TOTP 등록 가능) | `db/seed-common` (local·dev 공통) |
-| `bob@crosscert.com` | `bob-temp-pw` | RP_ADMIN | `dev-passkey` | 꺼짐(비번만) | `db/dev` (**dev 프로필 한정**) |
+| `bob@crosscert.com` | `bob-temp-pw` | RP_ADMIN | `dev-passkey`※ | 꺼짐(비번만) | `db/dev` (**dev 프로필 한정**) |
 
 bob 은 `dev` 프로필에서만 시드된다 — `local` 프로필에는 없다.
+
+> ※ `admin_user` 에는 tenant 컬럼이 없다. 운영자 ↔ RP 는 **N:M 매핑 테이블
+> `admin_user_tenant`** 로 연결되며, bob 의 소속은 시드 SQL 이 넣는 매핑 행
+> (`R__seed_dev_tenant.sql` 의 `INSERT INTO admin_user_tenant`) 하나로 결정된다.
+> `PLATFORM_OPERATOR`(alice)는 매핑 행이 0개이고 전체 테넌트에 접근한다.
 
 **두 계정 모두 MFA 가 꺼진 상태로 시드**되어 비밀번호만으로 콘솔에 들어갈 수 있다.
 bob 은 시드 SQL 이 `mfa_enabled='N'` 을 명시하고, alice 는 INSERT 에 그 컬럼이 아예 없어
@@ -182,6 +189,13 @@ Passkey2 루트에서 단일 명령:
 **local 프로필 (로컬 패스키 테스트 — 권장):**
 
 ```bash
+SPRING_PROFILES_ACTIVE=local ./gradlew :rp-app:bootRun
+```
+
+`application-local.yml` 이 `passkey.base-url`·`api-key`·`tenant-id`·`issuer-base` 네 값을
+모두 갖고 있어 환경변수 주입 없이 뜬다. 다른 서버를 가리키려면 아래처럼 덮어쓴다:
+
+```bash
 SPRING_PROFILES_ACTIVE=local \
 PASSKEY_BASE_URL=http://localhost:8080 \
 PASSKEY_TENANT_ID=0000000000000000000000000000C0DE \
@@ -228,8 +242,8 @@ RP 자신의 origin 을 rp-app 에 알려주는 설정은 없다 — 등록/인�
 | local | `0000000000000000000000000000C0DE` (UUID: `00000000-0000-0000-0000-00000000c0de`) | `pk_devlocaldev_local_secret_known_plaintext_for_test_only` |
 | dev   | `7F00DEAD000000000000000DE7000001` (UUID: `7f00dead-0000-0000-0000-000de7000001`) | `pk_devsrv01dev_server_secret_known_plaintext_for_test_only` |
 
-⚠️ SDK 가 monorepo 안의 `:sdk-java` 모듈에 직접 의존하므로 `:sdk-java:publishToMavenLocal`
-단계 불필요. sdk-java 코드 변경 즉시 rp-app 가 반영.
+rp-app 은 저장소 안의 `:sdk-java` 모듈에 직접 의존한다. SDK 를 로컬 Maven 저장소에 먼저
+배포하는 단계는 필요 없고, sdk-java 코드를 고치면 rp-app 빌드에 즉시 반영된다.
 
 ---
 
@@ -266,7 +280,8 @@ curl -X POST http://localhost:8080/api/v1/rp/registration/start \
   }'
 ```
 
-성공 시 응답에 `publicKeyCredentialCreationOptions` + `registrationToken` 포함.
+성공 시 응답은 `ApiResponse` 래퍼(`success`/`code`/`message`/`data`/`traceId`/`timestamp`)이고,
+`data` 안에 `registrationToken` + `publicKeyCredentialCreationOptions` 가 들어 있다.
 
 ### 4.3 rp-app 시점
 
@@ -333,11 +348,9 @@ SPRING_PROFILES_ACTIVE=local ./gradlew :admin-app:bootRun   # 또는 dev
 ## 7. 참고
 
 - **RP 서버 API 명세서**: [rp-server-api.md](rp-server-api.md) — RP 백엔드가 `/api/v1/rp/**` 를 직접 호출하기 위한 정식 레퍼런스(인증/scope/DTO/ID Token/에러/rate limit)
-- 프로필별 시드 분리: `feat(seed): 프로필별 시드 분리` commit
-- monorepo 통합: `Merge feature/monorepo-merge` commit
 - 시드 SQL (local): [`core/src/main/resources/db/local/R__seed_local_tenant.sql`](../core/src/main/resources/db/local/R__seed_local_tenant.sql)
 - 시드 SQL (dev): [`core/src/main/resources/db/dev/R__seed_dev_tenant.sql`](../core/src/main/resources/db/dev/R__seed_dev_tenant.sql)
 - 공통 운영자 시드: [`core/src/main/resources/db/seed-common/R__seed_operators.sql`](../core/src/main/resources/db/seed-common/R__seed_operators.sql)
 - ApiKey 인증 필터: `passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java`
-- SDK 모듈: [`sdk-java/`](../sdk-java/) (monorepo 흡수 후 — `project(":sdk-java")` 직접 의존)
-- 데모 RP: [`rp-app/`](../rp-app/) (monorepo 흡수 후 — `./gradlew :rp-app:bootRun`)
+- SDK 모듈: [`sdk-java/`](../sdk-java/) — `project(":sdk-java")` 로 직접 의존
+- 데모 RP: [`rp-app/`](../rp-app/) — `./gradlew :rp-app:bootRun`

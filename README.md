@@ -24,8 +24,9 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 | Module | Port | 역할 |
 | --- | --- | --- |
 | **`core`** | — | 공통 entity (Oracle JPA), JWT (RS256), 테넌트 컨텍스트(Hibernate `@Filter` · `TenantFilterAspect`), audit chain, MDC 로깅 인프라 |
+| **`webauthn`** | — | WebAuthn 검증 코어 자체 구현 — attestation 7개 포맷 + MDS3 (외부 webauthn4j 런타임 의존 없음) |
 | **`passkey-app`** | 8080 | WebAuthn 등록·인증 ceremony, JWKS, X-API-Key 인증, ID Token 발급 |
-| **`admin-app`** | 8081 | 멀티 테넌트 관리 (tenant / API key / credential / audit / MDS / security policy) |
+| **`admin-app`** | 8081 | 멀티 테넌트 관리 (tenant / API key / credential / audit / activity / funnel / MDS / 서명키 / 라이선스 / 운영자·가입요청 / security policy / 보존정책 / 스케줄러) |
 | **`admin-ui`** | (Vite dev: 5173) | React + TypeScript admin UI (Vite, 단일 페이지) |
 | **`rp-app`** | 9090 | RP 데모 — `/passkey/{register,authenticate}/{begin,finish}` (무상태 릴레이 토큰) + ID Token 검증 |
 | **`sdk-java`** | — | RP 백엔드용 Java SDK (Spring `RestClient`(JDK HttpClient) 기반 + JWKS 검증 + redaction) |
@@ -205,12 +206,17 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ```
 .
 ├── core/                # 공통 entity + repository + JWT + 테넌트 @Filter + audit chain
+├── webauthn/            # WebAuthn 검증 코어 (attestation 포맷 + MDS) — 자체 구현
 ├── passkey-app/         # WebAuthn ceremony (RegistrationStart/Finish, AuthenticationStart/Finish)
-├── admin-app/           # 관리 API (tenant / api-key / credential / audit / activity / funnel / mds / keys / license / operator(가입요청·운영자·비번재설정) / mfa / system / security-policy)
+├── admin-app/           # 관리 API — 패키지: activity / apikey / audit / auth(로그인·MFA·테넌트 경계) /
+│                        #   config / credential / funnel / keymgmt / license / mds /
+│                        #   operator(가입요청·운영자·비번재설정) / policy / retention / scheduler / system / tenant
 ├── admin-ui/            # React + TypeScript admin SPA (Vite)
-├── rp-app/           # 데모 RP — Thymeleaf 페이지 + WebAuthnController
+├── rp-app/              # 데모 RP — Thymeleaf 페이지 + WebAuthnController
 ├── sdk-java/            # Java SDK (PasskeyClient + IdTokenVerifier + Redacting/TracePropagation interceptors)
 ├── scripts/             # DB 부트스트랩·초기화·리셋 (Docker 로컬 + 외부 Oracle) — 5) DB 스크립트 참고
+├── deploy/              # 컨테이너 배포 (docker-compose + nginx) — deploy/README.md
+├── qa-bundle/           # 폐쇄망 QA 반입 번들 (amd64 이미지 + 설치 스크립트)
 ├── docs/
 │   ├── dev-setup.md                    # 로컬 개발 환경 구성
 │   ├── single-instance-deployment.md   # 단일 인스턴스 배포
@@ -231,8 +237,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 
 이 프로젝트는 **brainstorming → spec → plan → subagent-driven-development** 사이클로 phase 별 진행되었다. 각 phase 는 별도 worktree 에서 작업되고 main 에 `--no-ff` merge.
 
-- **F1~F5** — admin-ui 디자인 vs 백엔드 gap audit + 5 phase 로 20건 gap 모두 닫음
-- **G1~G4** — 3 서버 로깅 인프라 (logback-spring.xml + MDC + RequestLoggingFilter + SecretMaskingConverter + 운영 가이드)
+주요 변경 이력은 `git log --oneline --merges` 로 확인한다 — merge 커밋 제목이 phase 단위다.
 
 완료된 phase 의 spec/plan/followups 는 저장소에서 정리했다. 필요하면 git 이력(`git log --all -- docs/superpowers`)에서 조회한다. 미해소 백로그는 [`docs/backlog.md`](docs/backlog.md) 에 단일 소스로 통합돼 있다.
 
