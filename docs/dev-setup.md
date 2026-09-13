@@ -4,8 +4,7 @@
 **local 또는 dev profile** 로 띄우면 admin-ui 콘솔과 RP 측 API 가 모두 동작하고,
 프로필별 시드 tenant 1개 + API key 1개로 즉시 호출할 수 있다.
 
-작성: 2026-05-28
-대상 commit: monorepo-merge 후
+최종 갱신: 2026-09-09
 관련:
 - [Activity followups](superpowers/followups/2026-05-28-activity-page-followups.md)
 - Activity 페이지 spec·monorepo 통합 spec 은 저장소에서 정리됨 (git 이력의 `docs/superpowers/specs/` 참조)
@@ -27,12 +26,14 @@
 ```
 /Users/jhyun/Git/10-work/crosscert/
 └── Passkey2/        # 모든 코드 (단일 저장소)
-    ├── core/        # JPA entity + repository + VPD + Flyway
+    ├── core/        # JPA entity + repository + 테넌트 격리(Hibernate @Filter) + Flyway
+    ├── webauthn/    # WebAuthn 검증 코어 (attestation 포맷 + MDS) — 자체 구현
     ├── passkey-app/ # FIDO2 server (port 8080)
     ├── admin-app/   # 운영 콘솔 API + admin-ui 정적 serving (port 8081)
     ├── admin-ui/    # React + Vite 콘솔 SPA
     ├── sdk-java/    # 패스키 SDK (Java) — rp-app 가 의존
-    └── rp-app/   # 데모 RP 앱 (port 9090)
+    ├── rp-app/      # 데모 RP 앱 (port 9090)
+    └── deploy/      # 컨테이너 배포 (docker-compose + nginx) — deploy/README.md
 ```
 
 ### 1.3 컨테이너 (Oracle + Redis)
@@ -56,7 +57,11 @@ docker ps  # passkey-oracle (1521) + passkey-redis (6379) 가 healthy
 >
 > 로컬 개발자가 패스키를 직접 테스트하려면 **`local` 프로필**을 사용한다.
 > dev 가 datasource URL, credential, Redis host, dev key-envelope master 를
-> self-contained 로 제공하는 구조는 동일.
+> self-contained 로 제공하는 구조는 동일하다. 다만 이 값들은 이제
+> `${SPRING_DATASOURCE_URL:jdbc:oracle:thin:@localhost:1521/XEPDB1}` 처럼
+> **기존 값을 기본값으로 둔 플레이스홀더**라, 아무것도 주입하지 않으면 동작이 전과
+> 같고 서버 배포 시에는 환경변수로 덮어쓸 수 있다. 해당 환경변수를 셸에 export 해 둔
+> 상태면 로컬에서도 그 값이 우선하니 주의한다.
 
 admin-app 을 부팅하면 Flyway repeatable migration 이 자동 적용되어 다음 시드 데이터가
 DB 에 들어간다.
@@ -72,7 +77,7 @@ DB 에 들어간다.
   `allowed_origin` = `http://localhost:9090`.
 - **dev**: rpId=`dev-passkey.crosscert.com` → 서버 배포 환경 전용.
   `allowed_origin` = `https://dev-passkey.crosscert.com`.
-- `accepted_format` 은 `none` (passkey 기본).
+- `accepted_format` 은 `none` + `packed` 두 건이 시드된다(양쪽 프로필 동일).
 
 ### 2.2 시드 API key (프로필별 1개)
 
@@ -88,13 +93,23 @@ scope: `registration` + `authentication` (양쪽 다 허용).
 > ⚠️ **dev/local 전용 시드.** 위 plaintext 가 git 에 commit 되어 있다.
 > 절대 prod 활성화 금지.
 
-### 2.3 시드 관리자 계정 (seed-common)
+### 2.3 시드 관리자 계정
 
-| email | password | role | tenant |
-|---|---|---|---|
-| `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) |
+| email | password | role | tenant | MFA | 출처 |
+|---|---|---|---|---|---|
+| `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) | 꺼짐(비번만, 설정에서 TOTP 등록 가능) | `db/seed-common` (local·dev 공통) |
+| `bob@crosscert.com` | `bob-temp-pw` | RP_ADMIN | `dev-passkey` | 꺼짐(비번만) | `db/dev` (**dev 프로필 한정**) |
 
-`local`/`dev` profile 의 admin-ui 로그인 화면은 alice 계정을 자동 prefill 한다.
+bob 은 `dev` 프로필에서만 시드된다 — `local` 프로필에는 없다.
+
+**두 계정 모두 MFA 가 꺼진 상태로 시드**되어 비밀번호만으로 콘솔에 들어갈 수 있다.
+bob 은 시드 SQL 이 `mfa_enabled='N'` 을 명시하고, alice 는 INSERT 에 그 컬럼이 아예 없어
+스키마 기본값(`DEFAULT 'N'`)이 적용된다. 로그인 후 MFA 를 요구할지는 이 값 하나로
+결정되므로(`AdminSecurityConfig` 의 `isMfaEnabled()`), 시드 직후에는 둘 다 TOTP 단계가
+없다. TOTP 를 써 보려면 로그인 후 **설정 → 계정**에서 직접 등록한다.
+
+`local`/`dev` profile 의 admin-ui 로그인 화면은 "데모 계정으로 로그인" 카드를 띄우는데,
+자동 prefill 대상은 alice(PLATFORM_OPERATOR) 뿐이다. bob 은 직접 입력한다.
 
 ---
 
@@ -130,11 +145,14 @@ INFO ... AdminApplication : Started AdminApplication in N seconds
 ### 3.3 passkey-app (port 8080)
 
 ```bash
-SPRING_PROFILES_ACTIVE=local ./gradlew :passkey-app:bootRun \
+SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
   --args="--passkey.id-token.issuer-base=http://localhost:8080"
 ```
 
-(dev 환경이면 `local` → `dev` 로 교체)
+passkey-app 에는 `local` 프로필이 없다(`application-local.yml` 부재) — 프로필별 시드가
+없어 `dev` 하나가 local/dev 를 겸한다(시드 분리는 admin-app 의 Flyway locations 담당).
+base `application.yml` 에는 datasource·Redis 설정이 없으므로 `local` 로 띄우면 기동에
+실패한다.
 
 ```bash
 curl -s http://localhost:8080/actuator/health
@@ -164,24 +182,32 @@ Passkey2 루트에서 단일 명령:
 **local 프로필 (로컬 패스키 테스트 — 권장):**
 
 ```bash
+SPRING_PROFILES_ACTIVE=local \
 PASSKEY_BASE_URL=http://localhost:8080 \
 PASSKEY_TENANT_ID=0000000000000000000000000000C0DE \
 PASSKEY_API_KEY=pk_devlocaldev_local_secret_known_plaintext_for_test_only \
 PASSKEY_ISSUER_BASE=http://localhost:8080 \
-RP_APP_ORIGIN=http://localhost:9090 \
 ./gradlew :rp-app:bootRun
 ```
+
+프로필 지정은 필수다. `RelayKeyGuard` 는 active profile 에 `dev`/`local` 이 없으면
+relay 데모 기본 키를 거부하고 기동을 중단시킨다(프로필 미지정 = 운영 취급).
 
 **dev 프로필 (서버 배포 환경):**
 
 ```bash
+SPRING_PROFILES_ACTIVE=dev \
 PASSKEY_BASE_URL=https://dev-passkey.crosscert.com \
 PASSKEY_TENANT_ID=7F00DEAD000000000000000DE7000001 \
 PASSKEY_API_KEY=pk_devsrv01dev_server_secret_known_plaintext_for_test_only \
 PASSKEY_ISSUER_BASE=https://dev-passkey.crosscert.com \
-RP_APP_ORIGIN=https://dev-passkey.crosscert.com \
+RP_RELAY_SECRET="$(openssl rand -base64 32)" \
 ./gradlew :rp-app:bootRun
 ```
+
+`dev` 프로필에서는 가드가 relay 데모 기본 키를 허용하지만, 서버에 올리는 구성이므로
+`RP_RELAY_SECRET` 으로 강한 키를 주입한다(미주입 시 base `application.yml` 의
+`${RP_RELAY_SECRET:}` 폴백으로 데모 키가 쓰인다).
 
 | 환경변수 | 값 |
 |---|---|
@@ -189,7 +215,9 @@ RP_APP_ORIGIN=https://dev-passkey.crosscert.com \
 | `PASSKEY_TENANT_ID` | tenant_id. RAW(16) hex 32자 또는 UUID 대시 형식 모두 가능(rp-app 가 비교 전 UUID 로 정규화). ID Token 의 `iss`/`aud` 는 UUID 형식이라, **외부 시스템에서 직접 검증한다면 UUID 형식**을 권장 |
 | `PASSKEY_API_KEY` | X-API-Key 헤더 값 (prefix + secret) |
 | `PASSKEY_ISSUER_BASE` | ID token issuer (passkey-app 의 `id-token.issuer-base` 와 동일) |
-| `RP_APP_ORIGIN` | RP 자기 origin — `allowed_origins` 에 들어 있어야 함 |
+
+RP 자신의 origin 을 rp-app 에 알려주는 설정은 없다 — 등록/인증에서 대조되는 origin 은
+테넌트의 `allowed_origins` 로 결정된다.
 
 부팅 후 브라우저에서 `http://localhost:9090/` 접속.
 
@@ -209,11 +237,19 @@ RP_APP_ORIGIN=https://dev-passkey.crosscert.com \
 
 ### 4.1 admin-ui 시점
 
-alice 자동 prefill 로 로그인 후:
-- 사이드바: Tenants / Activity / Signing Keys / MDS / Audit Log
+alice 자동 prefill 로 로그인 후. 사이드바는 **어디에 있느냐로 두 벌**이 뜬다
+(`admin-ui/src/shell/Sidebar.tsx`):
+
+- **플랫폼 스코프** (테넌트 밖): Tenants / 활동 / 감사 체인 / 설정.
+  `deployment.mode=onprem` 이면 감사 체인과 설정 사이에 **라이선스** 가 끼어든다.
+  RP_ADMIN(bob) 으로 들어가면 이 중 **설정** 하나만 보인다(자기 계정·MFA 용).
+- **테넌트 스코프** (테넌트 하나를 열면 그 이름 아래로 교체): 개요 / WebAuthn /
+  AAGUID 정책 / API 키 / Credentials / 감사 로그 / 퍼널.
+
 - **Tenants** → local 프로필: `demo-rp` 1개 / dev 프로필: `dev-passkey` 1개
-- **Activity** → 24h KPI + Top 5 + 이벤트 스트림
-- **Audit Log** → tenantId UUID 로 필터 가능
+- **활동** → 24h KPI + Top 5 + 이벤트 스트림
+- **감사 로그**(테넌트 스코프) → 이벤트 유형·시간창 필터. 테넌트는 이미 경로로 고정돼
+  있어 별도 tenantId 입력은 없다
 
 ### 4.2 RP 측 curl 시점
 
@@ -253,8 +289,13 @@ docker exec passkey-oracle bash -c 'echo "
 DELETE FROM PSK_APP_OWNER.\"flyway_schema_history\"
  WHERE \"description\" LIKE '\''%seed%'\'' OR \"success\" = 0;
 COMMIT;
-EXIT;" | sqlplus -S system/oracle@//localhost:1521/XEPDB1'
+EXIT;" | sqlplus -S system/"${ORACLE_PASSWORD:-oracle}"@//localhost:1521/"${ORA_SERVICE:-XEPDB1}"'
 ```
+
+`ORACLE_PASSWORD` 는 루트 `docker-compose.yml` 이 컨테이너에 넣어주는 이름 그대로라
+(`environment: ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle}`), 컨테이너 안에서 자동으로
+해석된다. 반면 `ORA_SERVICE` 는 컨테이너 환경에 없으므로 PDB 명이 `XEPDB1` 이 아니면
+`docker exec -e ORA_SERVICE=<PDB명> ...` 로 직접 넘겨야 한다(안 넘기면 `XEPDB1` 폴백).
 
 그 후 admin-app 재기동.
 

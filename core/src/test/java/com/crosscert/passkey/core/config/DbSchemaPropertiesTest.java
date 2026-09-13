@@ -21,6 +21,27 @@ class DbSchemaPropertiesTest {
     }
 
     @Test
+    void acceptsOracleIdentifierSpecialChars() {
+        // Oracle 은 인용 없는 식별자에 $ 와 # 를 허용한다(예: SYS 계정의 V$ 뷰 관례).
+        assertThat(new DbSchemaProperties("APP$OWNER#1").schema()).isEqualTo("APP$OWNER#1");
+    }
+
+    @Test
+    void acceptsMaxLengthIdentifier() {
+        // Oracle 12.2+ 의 식별자 상한은 128바이트. 대상 DB 는 19c 다.
+        String max = "A".repeat(128);
+        assertThat(new DbSchemaProperties(max).schema()).isEqualTo(max);
+    }
+
+    @Test
+    void rejectsIdentifierLongerThanMaxLength() {
+        // 129자는 상한을 넘으므로 부팅 시점에 거부한다.
+        assertThatThrownBy(() -> new DbSchemaProperties("A".repeat(129)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("passkey.db.schema");
+    }
+
+    @Test
     void rejectsSqlInjectionAttempt() {
         // 값의 출처는 설정 파일이지만, 오설정을 부팅 시점에 잡는다.
         assertThatThrownBy(() -> new DbSchemaProperties("APP_OWNER; DROP TABLE tenant"))

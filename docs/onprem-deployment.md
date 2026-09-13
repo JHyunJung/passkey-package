@@ -4,7 +4,7 @@
 
 설치형(on-prem) 배포 모드. SaaS 모드와 동일한 단일 jar 를 사용하되 런타임에 `passkey.deployment.mode=onprem` 으로 전환한다. 활성화되면:
 
-- 단일 tenant 로 VPD 컨텍스트가 부팅 시 + 요청별 자동 고정 (OnpremTenantPinFilter)
+- 단일 tenant 로 테넌트 컨텍스트(앱 레벨 Hibernate `@Filter`)가 부팅 시 + 요청별 자동 고정 (OnpremTenantPinFilter)
 - 라이센스 토큰의 서명·만료가 부팅 시 검증됨 (실패 시 시작 중단)
 - 주기적 heartbeat 로 라이센스 서버에 갱신/revocation 확인 (기본 1시간)
 - 만료/grace 초과 시 모든 API가 503 으로 차단됨

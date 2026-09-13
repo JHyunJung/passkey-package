@@ -116,7 +116,7 @@ docker compose version
 docker info --format 'Storage: {{.Driver}} / Cgroup: {{.CgroupVersion}} / Root: {{.DockerRootDir}}'
 
 STORAGE=$(docker info --format '{{.Driver}}')
-[[ $STORAGE == overlay2 ]] || echo "!! Storage Driver 가 $STORAGE 입니다. overlay 모듈 확인 필요(가이드 §2.6)."
+[[ $STORAGE == overlay2 ]] || echo "!! Storage Driver 가 $STORAGE 입니다. overlay 모듈 확인 필요(가이드 §2)."
 
 echo
 echo "완료. sudo 없이 쓰려면: sudo usermod -aG docker <계정> 후 재로그인"

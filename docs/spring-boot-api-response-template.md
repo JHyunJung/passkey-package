@@ -501,11 +501,17 @@ public UserResponse findById(Long id) {
 
 ### logback-spring.xml
 
-traceId를 로그 패턴에 포함해 응답과 서버 로그를 연결한다.
+traceId를 로그 패턴에 포함해 응답과 서버 로그를 연결한다. 레벨은 yml
+`logging.level.*` 이 단일 출처(Spring Boot 가 logback 초기화 직후 적용) —
+logback 은 패턴/appender 만 정의하고 `<root>`/`<logger>` 에 레벨을 직접
+하드코딩하지 않는다. root 레벨이 필요하면 `<springProperty>` 로 yml 값을
+읽어 참조한다.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+    <springProperty scope="context" name="rootLevel" source="logging.level.root" defaultValue="INFO"/>
+
     <property name="LOG_PATTERN"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"/>
 
@@ -515,7 +521,7 @@ traceId를 로그 패턴에 포함해 응답과 서버 로그를 연결한다.
         </encoder>
     </appender>
 
-    <root level="INFO">
+    <root level="${rootLevel}">
         <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>

@@ -61,5 +61,8 @@ Passkey QA 반입 안내
                                  배포 불가하므로 별도 조달한다.
   - Oracle DB                    스키마·계정·운영자 계정은 이미 생성된 전제.
                                  이 번들에 DDL 은 없다. 접속 정보만 준비한다.
-  - 내부 DNS 2개 + TLS 종료 LB    WebAuthn 은 HTTPS 가 필수다(README §9).
+                                 계정 비밀번호에 작은따옴표(') 는 쓸 수 없고 끝이 \ 여도
+                                 안 된다(setup.sh 가 거부, README "5. 환경 설정" 의 입력 규칙).
+  - 내부 DNS 2개 + TLS 종료 LB    WebAuthn 은 HTTPS 가 필수다
+                                 (README "반드시 먼저 해결해야 하는 것 — HTTPS").
                                  평문 HTTP 로는 브라우저가 패스키 등록을 거부한다.

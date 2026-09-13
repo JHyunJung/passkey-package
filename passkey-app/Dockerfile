@@ -38,5 +38,8 @@ COPY --from=build /src/deploy/passkey-app.jar /app/app.jar
 USER appuser
 EXPOSE 8080
 # JAVA_OPTS 로 힙 상한을 컨테이너 메모리에 맞춘다(compose 의 mem_limit 인식).
+# 이 기본값은 deploy/docker-compose.yml 의 JAVA_OPTS 기본값과 두 곳에 중복
+# 정의돼 있다 — 바꿀 때 반드시 함께. compose 가 항상 JAVA_OPTS 를 주입하므로
+# compose 경로에서는 아래 ENV 값이 쓰이지 않는다(docker run 직접 실행용 기본값).
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75"
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

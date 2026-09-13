@@ -15,6 +15,7 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
   flyway:
     # Finding #3 (Approach A): Flyway 는 스키마 OWNER(PSK_APP_OWNER)로 실행 — 런타임
     # datasource 유저(PSK_APP_ADMIN_USER)에서 DDL 권한을 전부 제거하기 위함.
@@ -29,13 +30,6 @@ spring:
 
 server:
   port: ${SERVER_PORT:8081}
-  # TLS 종단을 앱에서 직접 처리할 경우 환경변수로 주입(미설정 시 SSL 비활성 — 보통 앞단 LB/리버스프록시가 종단).
-  ssl:
-    enabled:            ${SERVER_SSL_ENABLED:false}
-    key-store:          ${SERVER_SSL_KEY_STORE:}
-    key-store-password: ${SERVER_SSL_KEY_STORE_PASSWORD:}
-    key-store-type:     ${SERVER_SSL_KEY_STORE_TYPE:}
-    key-alias:          ${SERVER_SSL_KEY_ALIAS:}
   servlet:
     session:
       cookie:

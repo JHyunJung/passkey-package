@@ -11,6 +11,9 @@ build/
 */build/
 **/node_modules/
 admin-ui/dist/
+# 배포용으로 deploy/ 에 복사해 둔 산출물 jar 만 제외한다. `*.jar` 나 `**/*.jar` 로
+# 넓히면 gradle/wrapper/gradle-wrapper.jar 까지 빠져 컨테이너 안에서 ./gradlew 가
+# 동작하지 않는다(빌드 실패). 경로를 반드시 deploy/ 로 한정할 것.
 deploy/*.jar
 .idea/
 .claude/

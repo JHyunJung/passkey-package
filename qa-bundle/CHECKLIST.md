@@ -21,6 +21,8 @@
 
 - [ ] `./load-images.sh` → 5개 모두 `[OK] … (amd64)`
       (앱 하나만: `./load-images.sh passkey-app`)
+- [ ] 앱 이미지 3개(passkey-app·admin-app·rp-app) 재빌드 후 `images/` tar.gz 와 `SHA256SUMS` 재생성
+      (`load-images.sh` 가 `sha256sum -c` 로 검증)
 
 ## D. DB (이미 생성됨 — 확인만)
 
@@ -29,6 +31,7 @@
 - [ ] Oracle 1521 도달 확인 (`./preflight.sh <OracleIP> 1521`)
 - [ ] 계정 3개 비밀번호 확보
       (`PSK_APP_OWNER` / `PSK_APP_ADMIN_USER` / `PSK_APP_RUNTIME_USER`)
+      **비밀번호에 작은따옴표(`'`) 불가, 백슬래시(`\`)로 끝나면 불가** — `setup.sh` 가 입력을 거부한다(README §5 입력 규칙). DBA 에게 발급 요청할 때 미리 알린다.
 - [ ] **DDL 로 스키마를 미리 만든 경우** `flyway baseline -baselineVersion=4` 처리
 - [ ] admin 콘솔 로그인용 운영자 계정이 `admin_user` 에 존재
 
@@ -42,7 +45,7 @@
   - passkey · RP 두 FQDN
   - 호스트 내부 IP (`docker0` 자동 제시, 127.0.0.1 은 거부됨)
 
-## F. HTTPS (§9 — 가장 자주 막히는 지점)
+## F. HTTPS (README "반드시 먼저 해결해야 하는 것" — 가장 자주 막히는 지점)
 
 - [ ] 내부 DNS 서브도메인 2개 등록 (`passkey-qa.…`, `rp-qa.…`)
 - [ ] 앞단 LB/nginx 가 TLS 종료

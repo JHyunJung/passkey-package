@@ -82,6 +82,12 @@ class MeControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
+    // 형제 *SecurityTest 들과 동일 — 이 mock 이 없으면 @EnableJpaRepositories 가
+    // 실제 JPA 리포지토리를 만들려다 스텁 Metamodel 에서 엔티티를 찾지 못해
+    // 컨텍스트 로드가 실패한다(JpaMetamodelEntityInformation).
+    @MockBean com.crosscert.passkey.core.repository.CredentialAuthEventRepository credentialAuthEventRepository;
+    @MockBean com.crosscert.passkey.core.repository.AdminUserTenantRepository adminUserTenantRepository;
+    @MockBean com.crosscert.passkey.core.repository.SecurityIncidentRepository securityIncidentRepository;
     // AdminSecurityConfig 의 adminLoginSuccessHandler / adminFilterChain 가 요구하는 협력 빈
     // (세션 정책 적용·테넌트 경계 필터 추가 시 도입됨) — 슬라이스 컨텍스트 로드를 위해 mock 등록.
     @MockBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
@@ -156,5 +162,25 @@ class MeControllerSecurityTest {
                 .with(authentication(operator())))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.sessionIdleTimeoutMinutes").value(30));
+    }
+
+    // --- actuator 노출 회귀 가드 -------------------------------------------
+    // AdminSecurityConfig 는 /actuator/health·/actuator/info 만 permitAll 이고
+    // 나머지는 anyRequest().denyAll() 이 잡는다. 이 슬라이스에는 actuator 핸들러가
+    // 없지만 보안 체인이 핸들러보다 먼저 돌므로, 인가 결정은 그대로 검증된다.
+
+    @Test
+    void anonymousActuatorPrometheus_isDenied() throws Exception {
+        // permitAll 목록에 없으므로 denyAll → 401. 200 이 되면 노출 회귀다.
+        mvc.perform(get("/actuator/prometheus").accept("application/json"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anonymousActuatorHealth_passesSecurityButHasNoHandlerHere() throws Exception {
+        // permitAll 이라 보안 체인은 통과하고, 슬라이스에 핸들러가 없어 404 가 된다.
+        // 즉 "보안이 막아서 못 온 것이 아님" 을 보이는 대조군이다.
+        mvc.perform(get("/actuator/health").accept("application/json"))
+            .andExpect(status().isNotFound());
     }
 }

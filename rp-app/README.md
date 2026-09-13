@@ -70,24 +70,33 @@ passkey-app 을 `-Dpasskey.id-token.issuer-base=http://localhost:8080` 으로 �
 
 ## 6. 설정 레퍼런스
 
-`application.yml` 의 실제 키·기본값(환경변수 오버라이드 가능).
+`application.yml` 의 실제 키·기본값. "환경변수" 열은 그 키를 덮어쓸 때 쓰는 환경변수
+이름이다(compose 가 실제로 어떤 것을 컨테이너에 넘기는지는 `deploy/docker-compose.yml`
+참고 — 표에 있어도 패스스루가 없는 변수가 있다).
 
-| 키 | 기본값 | 의미 |
-|---|---|---|
-| `passkey.base-url` | `http://localhost:8080` | passkey-app 주소 |
-| `passkey.api-key` | (빈 값) | X-API-Key. 기동 시 1회 읽어 고정(교체 시 재기동) |
-| `passkey.tenant-id` | (빈 값) | 테넌트 UUID |
-| `passkey.issuer-base` | `http://localhost:8080` | ID Token iss prefix |
-| `passkey.connect-timeout` | `3s` | SDK connect 타임아웃 |
-| `passkey.read-timeout` | `10s` | SDK read 타임아웃 |
-| `passkey.jwks-cache-ttl` | `5m` | JWKS 캐시 TTL |
-| `rp.relay.secret` | (빈 값 → 데모 키 폴백) | 릴레이 HMAC 키 — 운영 필수 교체(미설정 시 데모 키가 쓰이고 운영 프로필에서 기동 차단) |
-| `rp.relay.ttl` | `5m` | 릴레이 토큰 만료 |
-| `rp.cors.allowed-origins` | (빈 값=비활성) | 허용 origin 목록 |
-| `rp-app.user-store.file` | `./data/rp-app-users.json` | 데모 저장소 파일(교체 시 무의미) |
-| `rp-app.well-known.android[].package-name` | `com.crosscert.sample.passkey` | Android 패키지명 |
-| `rp-app.well-known.android[].sha256-fingerprints` | 샘플 앱 서명 지문 | Android 서명키 SHA-256 |
-| `rp-app.well-known.ios.app-ids` | `LTPC88ZFE8.com.crosscert.sample.passkey` | iOS App ID |
+| 키 | 환경변수 | 기본값 | 의미 |
+|---|---|---|---|
+| `passkey.base-url` | `PASSKEY_BASE_URL` | `http://localhost:8080` | passkey-app 주소 |
+| `passkey.api-key` | `PASSKEY_API_KEY` | (빈 값) | X-API-Key. 기동 시 1회 읽어 고정(교체 시 재기동) |
+| `passkey.tenant-id` | `PASSKEY_TENANT_ID` | (빈 값) | 테넌트 UUID |
+| `passkey.issuer-base` | `PASSKEY_ISSUER_BASE` | `http://localhost:8080` | ID Token iss prefix |
+| `passkey.connect-timeout` | — | `3s` | SDK connect 타임아웃 |
+| `passkey.read-timeout` | — | `10s` | SDK read 타임아웃 |
+| `passkey.jwks-cache-ttl` | — | `5m` | JWKS 캐시 TTL |
+| `rp.relay.secret` | `RP_RELAY_SECRET` | (빈 값 → 데모 키 폴백) | 릴레이 HMAC 키 — 운영 필수 교체(미설정 시 데모 키가 쓰이고 운영 프로필에서 기동 차단) |
+| `rp.relay.ttl` | — | `5m` | 릴레이 토큰 만료 |
+| `rp.cors.allowed-origins` | `RP_CORS_ALLOWED_ORIGINS` | (빈 값=비활성) | 허용 origin 목록(쉼표 구분). 와일드카드는 부팅 시 거부 |
+| `rp-app.user-store.file` | `RP_APP_USER_STORE_FILE` | `./data/rp-app-users.json` | 데모 저장소 파일(교체 시 무의미) |
+| `rp-app.well-known.android[].package-name` | `WK_ANDROID_PACKAGE` [^wk] | `com.crosscert.sample.passkey` | Android 패키지명 |
+| `rp-app.well-known.android[].sha256-fingerprints` | `WK_ANDROID_SHA256` [^wk] | 샘플 앱 서명 지문 | Android 서명키 SHA-256 |
+| `rp-app.well-known.ios.app-ids` | `WK_IOS_APPID` [^wk] | `LTPC88ZFE8.com.crosscert.sample.passkey` | iOS App ID |
+| (`logback-spring.xml` 의 `passkey.log.json`) | `PASSKEY_LOG_JSON` | `false` | `true` 면 JSON 로그 인코더(prod 프로필). yml 에 키가 없어 환경변수(또는 `-Dpasskey.log.json` 시스템 프로퍼티)로 켠다 |
+| `server.port` | `SERVER_PORT` | `9090` | 서버 포트 |
+
+[^wk]: well-known 세 값은 **YAML 배열 원소**라 `RP_APP_WELLKNOWN_ANDROID_0_PACKAGENAME`
+같은 relaxed binding 환경변수로는 덮어쓸 수 없다. `application.yml` 이 원소 자리에
+`${WK_ANDROID_PACKAGE:...}` 플레이스홀더를 박아두었기 때문에, 오직 이 `WK_*` 이름으로만
+주입된다. 배열 원소를 늘리려면(앱 2개 이상) yml 을 직접 고쳐야 한다.
 
 ## 7. 보안 노트
 

@@ -9,8 +9,9 @@ spring:
     # that log in as alice are not gated by MfaPendingFilter). This location
     # exists only under src/test/resources, so it never ships to prod.
     locations: classpath:db/migration,classpath:db/testfix
-    schemas: PSK_APP_OWNER
-    default-schema: PSK_APP_OWNER
+    # 스키마명 단일 출처는 common yml 의 passkey.db.schema — main application.yml 과 동일 규약.
+    schemas: ${passkey.db.schema}
+    default-schema: ${passkey.db.schema}
     baseline-on-migrate: true
     baseline-version: 0
     # Finding #3 (Approach A): Flyway runs as the schema OWNER (PSK_APP_OWNER), not
@@ -23,13 +24,9 @@ spring:
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
   session:
-    store-type: redis
     timeout: PT30M
     redis:
       namespace: spring:session
-  security:
-    user:
-      password: "____disabled____never-used-loaded-from-db-instead____"
 
 passkey:
   key-envelope:

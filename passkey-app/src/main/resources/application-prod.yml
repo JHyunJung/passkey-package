@@ -16,22 +16,17 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
 
 server:
   port: ${SERVER_PORT:8080}
-  # TLS 종단을 앱에서 직접 처리할 경우 환경변수로 주입(미설정 시 SSL 비활성 — 보통 앞단 LB/리버스프록시가 종단).
-  ssl:
-    enabled:            ${SERVER_SSL_ENABLED:false}
-    key-store:          ${SERVER_SSL_KEY_STORE:}
-    key-store-password: ${SERVER_SSL_KEY_STORE_PASSWORD:}
-    key-store-type:     ${SERVER_SSL_KEY_STORE_TYPE:}
-    key-alias:          ${SERVER_SSL_KEY_ALIAS:}
 
 passkey:
   key-envelope:
     master-key: ${PASSKEY_KEY_ENVELOPE_MASTER_KEY:}
   id-token:
     issuer-base: ${PASSKEY_ID_TOKEN_ISSUER_BASE:}
+    ttl: PT15M
 
 logging:
   level:

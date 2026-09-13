@@ -1,14 +1,18 @@
-# dev 프로필 로깅 — 개발 디버깅용. logback-spring.xml 의 <springProfile name="local,dev"> 가
-# 컬러 패턴 + 풀 스택트레이스 + payload 로거 DEBUG(req/resp 본문)를 담당하고,
-# 여기서는 로거별 레벨만 보조로 둔다.
+# dev 프로필 — 개발 디버깅용. 로그 레벨의 단일 출처는 이 yml 의 logging.level 이다(Task #34).
+# logback-spring.xml 의 <springProfile name="local,dev"> 는 컬러 패턴 + 풀 스택트레이스
+# (출력 형식)만 담당하고 레벨 선언은 없다. 여기서는 로거별 레벨과 템플릿 캐시 off 를 둔다.
 #
-# 주의: com.crosscert.passkey.payload 를 여기에 명시하지 않는다 — 명시하면 logback 의
-# local/dev DEBUG 게이트를 덮어쓸 수 있다. 본문 로깅은 logback 에서만 제어한다.
+# payload 로거(req/resp 본문)는 별도 명시 없이 com.crosscert.passkey: DEBUG 를 상속해
+# dev 에서 DEBUG 가 된다 — 본문 로깅을 끄려면 여기서 com.crosscert.passkey.payload: INFO.
 # (com.crosscert.passkey: DEBUG 가 하위 payload 로거도 DEBUG 로 끌어올리는데, dev 에선 의도된 동작.)
 logging:
   level:
     root: INFO
+    # 자식 로거(.sdk/.rpapp)는 이 부모 로거와 같은 레벨이므로 따로 두지 않는다.
     com.crosscert.passkey: DEBUG
-    com.crosscert.passkey.sdk: DEBUG
-    com.crosscert.passkey.rpapp: DEBUG
     org.springframework.web: INFO
+
+# 템플릿 수정을 재기동 없이 반영한다(base 에서 이 프로필로 옮김 — prod/qa 는 Boot 기본 캐시 on).
+spring:
+  thymeleaf:
+    cache: false

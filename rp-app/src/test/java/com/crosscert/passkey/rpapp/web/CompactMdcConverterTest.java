@@ -37,11 +37,24 @@ class CompactMdcConverterTest {
             convert(
                 Map.of(
                     "actorEmail", "a@x.com",
-                    "traceId", "abc",
-                    "tenantId", "t1"
+                    "traceId", "abc"
                 )
             )
-        ).isEqualTo("[traceId=abc tenantId=t1 actorEmail=a@x.com]");
+        ).isEqualTo("[traceId=abc actorEmail=a@x.com]");
+    }
+
+    /** KEYS 에 없는 MDC 키는 출력하지 않는다(rp-app 은 traceId·actorEmail 만 넣는다). */
+    @Test
+    void unknownKeys_areNotRendered() {
+        assertThat(
+            convert(
+                Map.of(
+                    "traceId", "abc",
+                    "tenantId", "t1",
+                    "apiKeyPrefix", "pk_dev"
+                )
+            )
+        ).isEqualTo("[traceId=abc]");
     }
 
     @Test
@@ -52,7 +65,7 @@ class CompactMdcConverterTest {
 
     @Test
     void blankValue_isTreatedAsAbsent() {
-        assertThat(convert(Map.of("traceId", "", "tenantId", "t1")))
-            .isEqualTo("[tenantId=t1]");
+        assertThat(convert(Map.of("traceId", "", "actorEmail", "a@x.com")))
+            .isEqualTo("[actorEmail=a@x.com]");
     }
 }

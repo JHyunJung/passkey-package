@@ -44,7 +44,7 @@ passkey-qa-bundle/
 |---|---|
 | `Rocky-9.7-x86_64-dvd1.iso` | 배포 불가. `iptables`/`container-selinux` 가 없을 때만 필요 |
 | Oracle DB | 스택 외부. 내부망 1521 접근 필요 |
-| TLS 인증서 + 내부 DNS 2개 | 조직 인프라 (§9) |
+| TLS 인증서 + 내부 DNS 2개 | 조직 인프라 ("반드시 먼저 해결해야 하는 것 — HTTPS") |
 
 ---
 
@@ -104,6 +104,11 @@ sudo firewall-cmd --reload
 5개 이미지가 모두 `amd64` 로 확인돼야 한다. 앱을 따로 재배포할 때는 해당
 `tar.gz` 하나만 서버로 옮겨 그 이름으로 실행하면 된다.
 
+⚠️ 앱 이미지를 재빌드했다면(rp-app 은 `Dockerfile` 의 `/app/data` 추가, passkey-app·admin-app 은
+actuator 기본 노출 축소·logback/license 단일 출처 반영) `images/` 의
+`tar.gz` 와 `SHA256SUMS` 를 함께 재생성해야 한다 — `load-images.sh` 가
+`sha256sum -c` 로 검증하므로 해시가 어긋나면 적재가 실패한다.
+
 ### 4. DB 확인
 
 스키마·계정·초기 운영자 계정은 **이미 생성돼 있다는 전제**다. 기동 전에 접속만
@@ -141,19 +146,37 @@ sudo firewall-cmd --reload
 | passkey 서버 FQDN · RP 데모 FQDN | 인프라팀(내부 DNS) |
 | 호스트 내부 IP | `docker0` 에서 자동 탐지, 확인만 |
 
+> **입력 규칙: 값에 작은따옴표(`'`)를 쓸 수 없고, 백슬래시(`\`)로 끝날 수 없다.**
+> `.env` 를 읽는 두 파서(`start.sh` 의 셸 `source` 와 `docker compose`)가 이
+> 두 경우에 합의하는 표기가 없다. `'` 는 양쪽이 다른 값을 보게 되고, 값 끝의
+> `\` 는 compose 가 닫는 따옴표를 이스케이프로 읽어 **`.env` 파일 전체를
+> 거부**한다(셸은 정상 통과하므로 `--check` 만으로는 드러나지 않는다).
+> 입력 단계에서 거부하므로 **DB 비밀번호를 발급받을 때 `'` 와 끝 `\` 를 피한다.**
+
 자동으로 처리되는 것:
 
-- 도메인 1개 입력 → `PASSKEY_SERVER_NAME`·`ISSUER_BASE`·`ADMIN_INVITE_BASE_URL`
-  **3곳에 일관 반영** (손편집 시 한 곳만 고치는 사고가 사라진다)
+- FQDN 2개 입력 → **4곳에 일관 반영** (손편집 시 한 곳만 고치는 사고가 사라진다)
+  — passkey FQDN 3곳(`PASSKEY_SERVER_NAME`·`ISSUER_BASE`·`ADMIN_INVITE_BASE_URL`)
+  + RP FQDN 1곳(`RP_SERVER_NAME`)
 - `MASTER_KEY`·`REDIS_PASSWORD`·`RP_RELAY_SECRET` 생성 및 기록
+  (값은 화면에 출력하지 않는다 — 확인은 `deploy/.env` 에서)
 - `REDIS_HOST` = `REDIS_BIND_ADDR` 동기화, `127.0.0.1` 입력은 거부
-- `chmod 600`, 백업 파일 정리
+- `chmod 600`, 이전 세대 시크릿이 든 `.env.bak` 삭제
 - 마지막에 `start.sh --check` 자동 실행
 
 끝나면 `[OK] 검증 통과` 가 떠야 한다.
 
+기록 형식은 `KEY='값'`(작은따옴표)이다. 공백·`$`·백틱이 든 비밀번호를
+`start.sh` 의 `source` 와 `docker compose` 가 **같은 값**으로 읽게 하려면
+따옴표가 필요하다. 무인용으로 손편집한 기존 `.env` 도 **값에 공백·`$`·백틱이
+없다면** 그대로 동작한다(있다면 두 파서가 다른 값을 보므로 따옴표를 씌운다).
+
 > `.env` 를 직접 편집하고 싶다면 `deploy/.env.qa-template` 을 `deploy/.env` 로
 > 복사해 손으로 채운 뒤 `./start.sh --check` 로 검증해도 된다.
+
+시크릿 3종만 다시 만들려면(키 회전) `./gen-secrets.sh --write` 를 쓴다. 이전
+값이 든 `deploy/.env.bak` 은 자동으로 지운다. 롤백 대비로 남기려면
+`--keep-backup` 을 붙이고, 확인이 끝나면 직접 삭제한다.
 
 ### 6. 기동
 
@@ -192,11 +215,14 @@ cd deploy && docker compose logs -f admin-app
 
 ```bash
 cd deploy
-export REDIS_BIND_ADDR=<호스트 내부 IP>    # 0.0.0.0 금지
-export REDIS_PASSWORD=$(grep '^REDIS_PASSWORD=' .env | cut -d= -f2-)
+set -a; . ./.env; set +a          # 값의 따옴표를 셸이 벗겨준다
+export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}   # 0.0.0.0 금지
 docker compose -f docker-compose.redis.yml up -d
 COMPOSE_PROFILES=proxy,admin,qa docker compose up -d
 ```
+
+> `grep … | cut -d= -f2-` 로 값을 뽑지 않는다. `.env` 는 값을 작은따옴표로
+> 감싸므로 따옴표까지 딸려와 비밀번호가 틀린다. 위처럼 `.` 로 읽으면 된다.
 
 ### 8. 테넌트 생성 → API 키 → rp-app 재기동
 
@@ -207,7 +233,7 @@ admin 콘솔(`https://<admin주소>/admin/`)에서 테넌트를 만든다.
 | `rpId` | `rp-qa.내부도메인` | **도메인만.** 스킴·포트 없음 |
 | `allowedOrigins` | `["https://rp-qa.내부도메인"]` | **전체 origin.** 스킴 포함 |
 
-`mdsRequired` 는 첫 등록 테스트에서 **`false`** 를 권장한다(§12).
+`mdsRequired` 는 첫 등록 테스트에서 **`false`** 를 권장한다("문제 해결" 참고).
 
 API Keys 탭에서 `registration`, `authentication` scope 키를 발급한다.
 **평문 키는 1회만 표시**되므로 즉시 `.env` 의 `RP_API_KEY` 에 넣고,

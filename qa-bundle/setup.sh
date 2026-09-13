@@ -9,6 +9,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# 이 스크립트가 새로 만드는 파일(.env 최초 생성, .env.bak)은 시크릿을 담는다.
+# umask 로 생성 시점부터 600 이 되게 한다. 단 umask 는 신규 파일에만 듣는다 —
+# 기존 .env 를 sed -i 로 고칠 때는 원본 모드가 그대로 유지되므로(GNU sed 실측)
+# 그 경로는 아래 chmod 600 이 실제 보장이다.
+umask 077
+
 TEMPLATE=deploy/.env.qa-template
 ENV_FILE=deploy/.env
 
@@ -21,15 +27,41 @@ die(){ echo "${RED}[!!]${RST} $*" >&2; exit 1; }
 # 값에 & | \ 가 섞여도 sed 가 깨지지 않게 이스케이프한다(gen-secrets.sh 와 동일).
 esc(){ printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'; }
 
+# 값이 홀수 개의 백슬래시로 끝나는가. compose 의 .env 파서는 작은따옴표 안의
+# \ 도 이스케이프로 취급해, 홀수면 닫는 따옴표를 삼키고 파일 전체를 거부한다.
+# 짝수(\\)는 양쪽 파서가 같은 값을 보므로 허용한다.
+bad_trailing_backslash() {
+  local t=$1 n=0
+  while [[ $t == *\\ ]]; do t=${t%\\}; n=$((n+1)); done
+  (( n % 2 == 1 ))
+}
+
 # key=value 를 .env 에 기록한다. 이미 있으면 치환, 없으면 추가.
+#
+# 값은 작은따옴표로 감싼다. .env 를 읽는 쪽이 둘이기 때문이다.
+#   - start.sh  : set -a; source .env   (셸 파서)
+#   - compose   : --env-file 의 자체 파서
+# 무인용으로 적으면 공백·$·백틱이 든 비밀번호를 셸이 해석해, source 는
+# 명령 치환·구문오류를 내고 compose 는 리터럴로 읽어 **서로 다른 값**을 본다.
+# 작은따옴표로 감싸면 양쪽이 같은 리터럴을 본다(공백·$·백틱·\·" 전수 확인).
+#
+# 단, 두 가지 값만은 두 파서가 합의하는 표기가 존재하지 않아 거부한다.
+#   1) 작은따옴표 — 셸의 '\'' 는 compose 가 파일 전체를 거부하고
+#      (unexpected character), compose 가 받는 '\' 나 "..." 는 셸이 다르게 읽는다.
+#   2) 끝의 홀수 개 백슬래시 — compose 는 '…\' 의 \ 를 이스케이프로 보아
+#      닫는 따옴표를 삼키고 "unterminated quoted value" 로 파일 전체를 거부한다.
+#      (셸은 작은따옴표 안의 \ 를 리터럴로 읽어 정상 통과 → 조용한 불일치)
+# 둘 다 조용한 불일치보다 입력 시점 거부가 안전하다(ask 에서도 미리 막는다).
 put() {
   local k=$1 v=$2
   # 개행이 남아 있으면 sed 가 "unescaped newline" 으로 깨진다. 방어적으로 제거.
   v=${v//$'\n'/}; v=${v//$'\r'/}
+  [[ $v == *"'"* ]] && die "$k 값에 작은따옴표(')는 쓸 수 없습니다."
+  bad_trailing_backslash "$v" && die "$k 값은 백슬래시(\\)로 끝날 수 없습니다."
   if grep -qE "^${k}=" "$ENV_FILE"; then
-    sed -i.tmp "s|^${k}=.*|${k}=$(esc "$v")|" "$ENV_FILE" && rm -f "$ENV_FILE.tmp"
+    sed -i.tmp "s|^${k}=.*|${k}='$(esc "$v")'|" "$ENV_FILE" && rm -f "$ENV_FILE.tmp"
   else
-    printf '%s=%s\n' "$k" "$v" >> "$ENV_FILE"
+    printf "%s='%s'\n" "$k" "$v" >> "$ENV_FILE"
   fi
 }
 
@@ -45,8 +77,16 @@ ask() {
     else
       read -r -p "  $prompt: " out || die "입력이 중단되었습니다."
     fi
-    [[ -n $out ]] && { printf '%s' "$out"; return; }
-    echo "     ${DIM}값을 입력하세요.${RST}" >&2
+    if [[ -z $out ]]; then
+      echo "     ${DIM}값을 입력하세요.${RST}" >&2
+    elif [[ $out == *"'"* ]]; then
+      # put() 참고 — source 와 compose 가 합의하는 표기가 없다.
+      echo "     ${DIM}작은따옴표(')는 쓸 수 없습니다. 다시 입력하세요.${RST}" >&2
+    elif bad_trailing_backslash "$out"; then
+      echo "     ${DIM}백슬래시(\\)로 끝날 수 없습니다. 다시 입력하세요.${RST}" >&2
+    else
+      printf '%s' "$out"; return
+    fi
   done
 }
 
@@ -56,6 +96,11 @@ ask_secret() {
   while :; do
     read -r -s -p "  $prompt: " a || die "입력이 중단되었습니다."; echo >&2
     [[ -n $a ]] || { echo "     ${DIM}값을 입력하세요.${RST}" >&2; continue; }
+    # put() 참고 — source 와 compose 가 합의하는 표기가 없다.
+    [[ $a == *"'"* ]] && {
+      echo "     ${DIM}작은따옴표(')는 쓸 수 없습니다. 다시 입력하세요.${RST}" >&2; continue; }
+    bad_trailing_backslash "$a" && {
+      echo "     ${DIM}백슬래시(\\)로 끝날 수 없습니다. 다시 입력하세요.${RST}" >&2; continue; }
     read -r -s -p "  $prompt (확인): " b || die "입력이 중단되었습니다."; echo >&2
     [[ $a == "$b" ]] && { printf '%s' "$a"; return; }
     echo "     ${DIM}일치하지 않습니다. 다시 입력하세요.${RST}" >&2
@@ -67,6 +112,7 @@ ask_secret() {
 # ---------------------------------------------------------------------------
 if [[ ${1:-} == --rp-keys ]]; then
   [[ -f $ENV_FILE ]] || die "$ENV_FILE 이 없습니다. 먼저 ./setup.sh 를 실행하세요."
+  chmod 600 "$ENV_FILE"   # 손복사한 .env 가 644 일 수 있다 — 시크릿을 쓰기 전에 조인다
   echo
   echo "admin 콘솔에서 발급한 값을 입력합니다."
   echo "${DIM}  (API 키 평문은 발급 시 1회만 표시됩니다)${RST}"
@@ -145,7 +191,10 @@ put DB_OWNER_PASSWORD   "$PW_OWNER"
 put DB_ADMIN_PASSWORD   "$PW_ADMIN"
 put DB_RUNTIME_PASSWORD "$PW_RUNTIME"
 
-# 도메인 1개에서 4곳이 유도된다. 손편집 시 한 곳만 고치는 사고를 막는다.
+# FQDN 입력 2개에서 4곳이 유도된다 — passkey FQDN 하나가 아래 3곳
+# (PASSKEY_SERVER_NAME / ISSUER_BASE / ADMIN_INVITE_BASE_URL)을 채우고,
+# RP FQDN 은 별도 입력이라 RP_SERVER_NAME 1곳만 채운다.
+# 손편집 시 한 곳만 고치는 사고를 막는다.
 put PASSKEY_SERVER_NAME   "$PASSKEY_FQDN"
 put ISSUER_BASE           "https://${PASSKEY_FQDN}"
 put ADMIN_INVITE_BASE_URL "https://${PASSKEY_FQDN}"
@@ -160,13 +209,13 @@ ok "deploy/.env 작성 완료"
 # 시크릿 3종은 사람이 만들 이유가 없다. 여기서 바로 생성한다.
 echo
 echo "${DIM}--- 시크릿 생성 (MASTER_KEY / REDIS_PASSWORD / RP_RELAY_SECRET) ---${RST}"
+# gen-secrets.sh 가 .env.bak(이전 세대 시크릿)을 스스로 삭제한다. 위에서
+# "백업했습니다" 라고 알린 파일이 여기서 사라지므로 그 사실도 알린다.
+HAD_BACKUP=0; [[ -f $ENV_FILE.bak ]] && HAD_BACKUP=1 || true
 ./gen-secrets.sh --write >/dev/null
 chmod 600 "$ENV_FILE"
 ok "시크릿 3종 기록"
-[[ -f deploy/.env.bak ]] && {
-  shred -u deploy/.env.bak 2>/dev/null || rm -f deploy/.env.bak
-  echo "  ${DIM}이전 세대 시크릿이 든 .env.bak 을 삭제했습니다.${RST}"
-}
+(( HAD_BACKUP )) && ok "이전 세대 시크릿이 든 $ENV_FILE.bak 삭제" || true
 
 # ---------------------------------------------------------------------------
 echo

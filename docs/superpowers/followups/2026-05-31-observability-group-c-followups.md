@@ -57,8 +57,16 @@ OpenAI usage limit(resets Jun 1)로 `/codex review` 미실행. Task별 spec + co
 ## 9. admin-ui / 운영 후속
 
 - Prometheus 스크래핑 설정(`/actuator/prometheus`)·Grafana 대시보드·Alertmanager 규칙은 운영 인프라 영역(코드 밖).
+  - **정정(2026-09-10)**: `/actuator/prometheus` 는 이제 **기본 비노출**이다(`application-common.yml`
+    의 `exposure.include` 가 `health,info`). 스크레이프를 붙이려면 그 배포에서
+    `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,prometheus` 로 켜야 한다.
 - `passkey.alert.mail.{enabled,to}` 운영 설정으로 메일 채널 활성화 시 발송 주소 결정 필요.
 
 ## 10. 검증 환경 메모
 
-신규 마이그레이션 없음. 게이트: **core 94 + passkey-app 48 + admin-app 117 단위/슬라이스 green**(alert 3 + ceremony 메트릭 포함). prometheus 노출·health probes는 actuator 자동 기능이라 단위 테스트 생략(spec §6), 앱 부팅 후 `/actuator/prometheus`·`/actuator/health/{readiness,liveness}` 수동 확인 권장(이 환경에선 미수행). Oracle/Redis `*IT` flaky는 이전 phase와 동일.
+신규 마이그레이션 없음. 게이트: **core 94 + passkey-app 48 + admin-app 117 단위/슬라이스 green**(alert 3 + ceremony 메트릭 포함). prometheus 노출·health probes는 actuator 자동 기능이라 단위 테스트 생략(spec §6), 앱 부팅 후 `/actuator/prometheus`·`/actuator/health/{readiness,liveness}` 수동 확인 권장(이 환경에선 미수행).
+**정정(2026-09-10)**: `/actuator/prometheus` 는 그 뒤 기본 비노출로 바뀌었다 — 이 확인은
+`MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,prometheus` 로 켠 배포에서만 유효하고,
+기본 설정에서는 404 가 정상이다. `/actuator/health` 계열은 그대로 노출된다.
+
+Oracle/Redis `*IT` flaky는 이전 phase와 동일.

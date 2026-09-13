@@ -6,12 +6,14 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.Map;
 
 /**
- * 값이 있는 MDC 키만 {@code [traceId=.. tenantId=.. ..]} 형태로 묶어 로그에 출력한다.
+ * 값이 있는 MDC 키만 {@code [traceId=.. actorEmail=..]} 형태로 묶어 로그에 출력한다.
  * 빈 키는 생략하고, 전부 비면 빈 문자열. 값은 16자로 자른다.
  */
 public class CompactMdcConverter extends ClassicConverter {
 
-    private static final String[] KEYS = {"traceId", "tenantId", "actorEmail", "apiKeyPrefix"};
+    // rp-app 이 MDC 에 넣는 키는 이 둘뿐이다
+    // (TraceIdFilter=traceId, RequestLoggingFilter=actorEmail). 출력 순서도 이 배열을 따른다.
+    private static final String[] KEYS = {"traceId", "actorEmail"};
     private static final int MAX_VALUE_LEN = 16;
 
     @Override

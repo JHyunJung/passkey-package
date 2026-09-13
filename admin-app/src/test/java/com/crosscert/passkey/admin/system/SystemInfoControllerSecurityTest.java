@@ -67,6 +67,9 @@ class SystemInfoControllerSecurityTest {
     @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
     // AdminSecurityConfig wires a DynamicCorsConfigurationSource constructor param.
     @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    // AdminSecurityConfig 의 adminFilterChain 이 주입받는 두 빈 — 슬라이스에는 스캔되지 않는다.
+    @MockBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
     // Prevent @EnableJpaRepositories from wiring real Spring Data repos
     @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
     @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
@@ -83,13 +86,15 @@ class SystemInfoControllerSecurityTest {
     @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
     @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
+    @MockBean com.crosscert.passkey.core.repository.SecurityIncidentRepository securityIncidentRepository;
+    @MockBean com.crosscert.passkey.core.repository.AdminUserTenantRepository adminUserTenantRepository;
+    @MockBean com.crosscert.passkey.core.repository.CredentialAuthEventRepository credentialAuthEventRepository;
 
     private static SystemInfoView sampleView() {
         // Minimal construction: nested Host null, empty components — only $.success is asserted.
         return new SystemInfoView(
-                "1.0.0", "2026-05-31T00:00:00Z",
-                null, null, null, null, null, null,
-                null, List.<SystemInfoView.Component>of());
+                "1.0.0", "2026-05-31T09:00+09:00",
+                null, null, List.<SystemInfoView.Component>of());
     }
 
     @Test

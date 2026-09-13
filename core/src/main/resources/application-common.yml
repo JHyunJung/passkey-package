@@ -45,7 +45,10 @@ spring:
 management:
   endpoint.health.show-details: always
   endpoint.health.probes.enabled: true
-  endpoints.web.exposure.include: health,info,prometheus
+  # prometheus 는 기본 비노출 — 스크레이프가 필요한 배포만 env
+  # MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,prometheus 로 켠다
+  # (passkey-app 은 Spring Security 가 없어 8080 에서 무인증이므로 기본 닫음).
+  endpoints.web.exposure.include: health,info
   health:
     group:
       readiness:
@@ -57,7 +60,6 @@ logging:
   level:
     root: INFO
     com.crosscert.passkey: INFO
-    com.crosscert.passkey.sdk: INFO
     org.springframework.web: WARN
     org.hibernate: WARN
     org.hibernate.SQL: WARN
@@ -72,13 +74,8 @@ passkey:
     schema: ${PASSKEY_DB_SCHEMA:PSK_APP_OWNER}
   deployment:
     mode: saas
-  license:
-    path: /etc/passkey/license.jwt
-    cache-path: /var/lib/passkey/license-cache.jwt
-    issuer: license.crosscert.com
-    audience: passkey-onprem
-    heartbeat-url: https://license.crosscert.com/v1/license
-    heartbeat-interval: PT1H
+  # passkey.license.* 기본값은 LicenseProperties 레코드(단일 출처). 덮어쓰려면
+  # PASSKEY_LICENSE_* env 또는 여기에 키를 추가한다(onprem 에서만 소비).
   mail:
     # 발신 주소. MailSenderConfiguration 의 SmtpMailSender 가 사용.
     # SMTP 활성화(spring.mail.host 설정) 시 의미 있음.
