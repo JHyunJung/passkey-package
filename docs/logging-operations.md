@@ -32,7 +32,8 @@ MDC 가 전부 비면 대괄호 자체가 나오지 않는다. 각 값은 **16�
 
 > MDC 는 `key=value` 로 찍히므로 **키 이름을 붙여서** 검색한다. 값은 16자에서
 > 잘리므로 긴 값은 **앞부분만** 넣는다(접두 검색). JSON 로그(`PASSKEY_LOG_JSON=true`)
-> 에서는 MDC 4종이 별도 필드로 나가므로 ELK 쪽 질의는 절단 영향을 받지 않는다.
+> 에서는 MDC 가 별도 필드로 나가므로 ELK 쪽 질의는 절단 영향을 받지 않는다
+> (core 기반 passkey-app·admin-app 은 4종 전부, rp-app 은 `traceId`·`actorEmail` 둘만).
 
 ### 한 사용자 트랜잭션 추적
 ```bash
@@ -53,7 +54,7 @@ tenantId: "7f00dead-0000-0000-0000-000000000000"
 ```bash
 grep 'actorEmail=alice@crosscert' *.log   # MDC 칸은 평문(16자 절단)
 # ELK
-actorEmail: "alice@crosscert.co"
+actorEmail: "alice@crosscert.com"   # JSON 필드는 절단되지 않는다(텍스트 로그만 16자)
 ```
 
 ### 특정 API key 사용 추적
@@ -83,16 +84,17 @@ prod 에서는 root 가 **WARN**, `com.crosscert.passkey` 만 INFO 다(3앱 공�
 
 ## 4. Redaction 약속
 
-다음 값은 어떤 로그에도 **절대 노출되지 않음**:
+다음 값은 로그 **메시지 본문**(`%msg`)에서 `SecretMaskingConverter` 가 가린다.
+MDC 칸(`%compactMdc`·JSON MDC 필드)은 이 변환을 거치지 않으므로 표의 약속이 적용되지 않는다:
 
 | 자격증명/PII | 처리 방법 |
 | --- | --- |
 | API key secret (prefix 이후) | `pk_devacme0` 11자만 노출 |
-| JWT body | `Bearer <redacted>` 또는 `eyJh…<redacted>` |
+| JWT body | `Bearer <redacted>`(헤더 형태) / 본문에 홀로 나온 JWS 는 `<jws-redacted>` |
 | Password | `password=<redacted>` |
 | Bcrypt hash | `<bcrypt-redacted>` |
 | Raw attestation/assertion bytes | 메시지에 포함 안 함 (claim 메타만) |
-| Email (사용자 facing) | `a***@domain` |
+| Email (로그 **메시지** 안) | `a***@domain` — `CryptoUtils.maskEmail` 을 호출한 곳만. **MDC `actorEmail` 칸은 평문**(§1 참조) |
 | User handle (b64url) | `idTail(…, 12)` 끝 12자만 |
 
 방어선:
