@@ -41,6 +41,11 @@
 
 ## 2. 보안·정합성 (P2)
 
+- [ ] **MDC `actorEmail` 이 평문 email 로 로그에 남는다** — `AdminMdcFilter.java:42` 가 `auth.getName()` 을 request attribute 로
+      넘기고 `RequestLoggingFilter.java:110` 이 그대로 MDC 에 넣는다. `SecretMaskingConverter` 는 `%msg` 에만 걸리고
+      `%compactMdc` 는 거치지 않으므로, 메시지 본문은 `maskEmail` 로 가려도 MDC 칸에는 평문이 남는다(16자 절단).
+      prod JSON 로그의 `includeMdcKeyName` 에도 그대로 실린다. 마스킹 위치를 MDC put 지점으로 옮길지 결정 필요.
+      [2026-09-13 문서 감사에서 발견]
 - [ ] **credential DELETE 가 registration scope 를 공유** — `passkey-app/.../security/ApiKeyScopeResolver.java:24-27`.
       파괴적 작업의 scope 분리는 정책 결정 사항. 같은 파일의 `admin` scope 가 dead scope 인 것도 함께. [config-enforcement-B 2026-05-31, master-backlog 2026-05-31]
 - [ ] **CORS allowlist origin 형식 검증** — `SecurityPolicyDto.java:29` 에 `@NotBlank @Size(max=256)` 는 있으나

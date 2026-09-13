@@ -19,7 +19,10 @@ MDC 가 전부 비면 대괄호 자체가 나오지 않는다. 각 값은 **16�
   `TraceIdFilter` 가 발급할 때는 UUID 에서 **대시를 없앤 16자**다(`9f3a2b1c4d5e6f70`).
 - **tenantId** — passkey-app 의 `ApiKeyAuthFilter` 가 인증 성공 시 set (UUID).
   16자 절단 때문에 로그에는 **앞 16자만** 보인다(`7f00dead-0000-00`).
-- **actorEmail** — 로그인 사용자 email. `RequestLoggingFilter` 가 set 하며 **마스킹된 형태**(`a***@…`)다.
+- **actorEmail** — 로그인 사용자 email. `AdminMdcFilter` 가 request attribute 로 넘기고 `RequestLoggingFilter` 가 MDC 에 넣는다.
+  **MDC 칸에는 평문 email 이 그대로 들어간다** — `SecretMaskingConverter` 는 `%msg`(메시지 본문)에만 걸리고 `%compactMdc` 는 거치지 않으며,
+  `CryptoUtils.maskEmail` 은 로그 메시지 인자에만 쓰인다. 즉 같은 줄에서 MDC 칸은 `actorEmail=alice@crosscert.com`,
+  메시지 본문은 `a***@crosscert.com` 으로 다르게 보일 수 있다(값은 16자에서 절단).
 - **apiKeyPrefix** — passkey-app 의 `X-API-Key` 헤더 앞 11자 (`pk_xxxxxxxx`).
 - rp-app 은 이 중 `traceId`·`actorEmail` 둘만 넣는다(`ApiKeyAuthFilter` 가 없음).
 
@@ -48,9 +51,9 @@ tenantId: "7f00dead-0000-0000-0000-000000000000"
 
 ### 관리자 활동
 ```bash
-grep 'actorEmail=a\*\*\*@crosscert' *.log   # 마스킹된 형태로 찍힌다
+grep 'actorEmail=alice@crosscert' *.log   # MDC 칸은 평문(16자 절단)
 # ELK
-actorEmail: "a***@crosscert.com"
+actorEmail: "alice@crosscert.co"
 ```
 
 ### 특정 API key 사용 추적

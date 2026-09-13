@@ -62,6 +62,9 @@ log.error("mds sync failed: cause={}", e.toString(), e);  // 두 번째 e 가 st
 (passkey-app `ApiKeyAuthFilter`), `actorEmail`(`RequestLoggingFilter`).
 rp-app 은 이 중 `traceId`·`actorEmail` 둘만 넣는다.
 
+> MDC 값은 마스킹 대상이 아니다 — `SecretMaskingConverter` 는 `%msg` 에만 걸린다.
+> `actorEmail` 은 MDC 칸에 평문으로 남으므로, PII 를 새 MDC 키로 넣을 때는 값을 넣기 전에 마스킹해야 한다.
+
 새 MDC 키 추가 시:
 1. 어떤 Filter/Handler 가 set/clear 하는지 명시(넣었으면 `finally` 에서 `MDC.remove`).
 2. 텍스트 로그: pattern 이 아니라 **`CompactMdcConverter.KEYS` 배열**에 추가한다
