@@ -45,8 +45,9 @@ email 외의 값(API key / JWT / 식별자 꼬리)은 전용 헬퍼를 쓰지 �
 직접 자르되(`prefix` 11자, 꼬리 n자 등), 새어 나가면 `SecretMaskingConverter`
 정규식이 잡도록 되어 있다.
 
-> `core/…/logging/LogRedact` 클래스가 남아 있지만 **main 코드에서 호출하는 곳이
-> 0건**이다(유일한 참조는 `SecretMaskingConverterTest`). 새 코드에서 표준으로 삼지 말 것.
+> `core/…/logging/LogRedact` 클래스가 남아 있지만 **main 코드에서 호출하는 곳이 0건**이다
+> (`SecretMaskingConverter` Javadoc 이 "개발자가 직접 호출" 로 가리키고 테스트가 참조할 뿐).
+> 새 코드에서 표준으로 삼지 말 것 — 클래스와 그 Javadoc 정리는 `docs/backlog.md` §4 에 있다.
 
 ## 3. Exception 은 ERROR + throwable
 

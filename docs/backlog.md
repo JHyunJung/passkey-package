@@ -38,9 +38,10 @@
       호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. [rp-admin-role-gating 2026-05-31]
 - [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.java:43` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
 - [ ] **p95 응답 metric** — Activity KPI 가 'N/A'. admin-app 에 p95 산출 0건. [activity-page 2026-05-28]
-- [ ] **Activity KPI·topTenants 가 fixture 초기값으로 렌더된다** — `admin-ui/src/pages/ActivityPage.tsx:232-233` 이
-      `activityFixture.kpi`/`topTenants` 를 초기 state 로 쓴다. 서버 응답 전이나 오류 시 가짜 수치가 잠깐 보인다.
-      로딩·오류 상태를 분리해야 한다. [master-backlog 2026-05-31]
+- [ ] **Activity KPI·topTenants 초기값이 fixture** — `admin-ui/src/pages/ActivityPage.tsx:232-233` 이
+      `activityFixture.kpi`/`topTenants` 를 초기 state 로 쓴다. 첫 로딩·첫 오류는 `:349,358` 가드가 막지만,
+      **갱신 실패(2회차 이후)나 KPI 만 비는 부분 응답에서는 이전 fixture 값이 그대로 남는다**.
+      초기값을 null 로 두고 KPI 영역에도 로딩·오류 표시를 따로 두는 편이 안전하다. [master-backlog 2026-05-31]
 - [ ] **`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다** — `admin-app/.../config/AdminSecurityConfig.java:242-245` 가
       `AuditAppendRequest` 의 tenantId 를 `null` 로 넘긴다. RP_ADMIN 로그인도 테넌트 스코프 없이 기록돼
       테넌트별 감사 조회에서 누락된다. [activity-page 2026-05-28]
@@ -108,6 +109,10 @@
       실제 콘솔 주소와 다르다. 변수명(invite)도 초대 기능 제거 후 낡았다. [2026-09-13 문서 감사에서 발견]
 
 ## 4. 구조·위생 (P3)
+
+- [ ] **`LogRedact` 죽은 헬퍼 정리** — `core/.../logging/LogRedact.java` 를 main 에서 호출하는 곳이 0건인데
+      `SecretMaskingConverter.java:21` Javadoc 이 "개발자가 직접 호출" 로 가리켜 오해를 만든다. 실제 표준은
+      `CryptoUtils.maskEmail`. 클래스를 지우거나 Javadoc 을 정정한다. [2026-09-13 문서 감사에서 발견]
 
 - [ ] **core 엔티티 23개가 단일 패키지** → passkey-app 이 쓰지 않는 엔티티까지 스키마 검증·권한을 요구한다.
       `SchedulerLease`(2026-05-25) → `SecurityIncident`(2026-08-07) 로 재발했고 V4 GRANT 로 우회 중. **구조적 미해소.**

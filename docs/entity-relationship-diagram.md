@@ -36,7 +36,7 @@ erDiagram
     TENANT ||--o{ TENANT_ACCEPTED_FORMAT : "has (JPA)"
     TENANT ||--o| TENANT_AAGUID_POLICY : "1:1 (soft)"
     TENANT_AAGUID_POLICY ||--o{ TENANT_AAGUID_POLICY_ENTRY : "has (@ElementCollection)"
-    TENANT ||--o| TENANT_WEBAUTHN_SNAPSHOT : "1:1 cache (soft)"
+    TENANT ||--o{ TENANT_WEBAUTHN_SNAPSHOT : "설정 변경 이력 (append-only)"
     TENANT ||--o{ CREDENTIAL : "has (soft)"
     CREDENTIAL ||--o{ CREDENTIAL_AUTH_EVENT : "has (soft)"
     TENANT ||--o{ API_KEY : "has (soft)"
@@ -85,7 +85,7 @@ erDiagram
     }
     TENANT_WEBAUTHN_SNAPSHOT {
         NUMBER id PK
-        RAW16 tenant_id FK "1행/테넌트"
+        RAW16 tenant_id FK "테넌트당 N행"
         string rp_id
         string rp_name
         clob allowed_origins
@@ -222,7 +222,7 @@ soft 로만 표기합니다. `ADMIN_USER_INVITATION` 테이블(초대 흐름)은
 | TENANT | TENANT_ACCEPTED_FORMAT | 1:N | JPA `@ManyToOne` | `fk_taf_tenant` ON DELETE CASCADE + JPA orphanRemoval |
 | TENANT | TENANT_AAGUID_POLICY | 1:1 | soft (tenant_id = PK) | `fk_tenant_aaguid_policy_tenant` ON DELETE CASCADE |
 | TENANT_AAGUID_POLICY | TENANT_AAGUID_POLICY_ENTRY | 1:N | JPA `@ElementCollection`(`Entry` embeddable) | `fk_tenant_aaguid_policy_entry_policy` ON DELETE CASCADE |
-| TENANT | TENANT_WEBAUTHN_SNAPSHOT | 1:1 | soft (테넌트당 1행) | `fk_tenant_webauthn_snapshot_tenant` ON DELETE CASCADE |
+| TENANT | TENANT_WEBAUTHN_SNAPSHOT | 1:N | append-only 이력 — 테넌트 생성·설정 변경마다 1행(`TenantAdminService.java:160,200`). `tenant_id` UNIQUE 없음 | `fk_tenant_webauthn_snapshot_tenant` ON DELETE CASCADE |
 | TENANT | CREDENTIAL | 1:N | soft (`UUID tenantId`) | `fk_credential_tenant` |
 | CREDENTIAL | CREDENTIAL_AUTH_EVENT | 1:N | soft (`UUID credentialId`) | `fk_cred_auth_event_credential` ON DELETE CASCADE |
 | TENANT | API_KEY | 1:N | soft | `fk_api_key_tenant` |
