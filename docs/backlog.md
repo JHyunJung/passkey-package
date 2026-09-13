@@ -23,8 +23,6 @@
 - [ ] **`X-Trace-Id` 무검증 → 로그 인젝션** — `core/.../api/TraceIdFilter.java:27-31` 이 `isBlank()` 만 보고 헤더 값을
       MDC 와 응답 헤더에 그대로 넣는다. CRLF·길이·문자집합 제한 없음. rp-app 의 동명 필터
       (`rp-app/src/main/java/com/crosscert/passkey/rpapp/common/filter/TraceIdFilter.java:30-35`)도 같다. [master-backlog 2026-05-31]
-- [ ] **MDS3 §3.1.6 `nextUpdate` 의미를 1차 문서와 대조** — `webauthn/.../mds/NativeMetadataBlobVerifier.java:34-37` 은
-      `nextUpdate != null` 일 때만 신선도를 강제하므로 null 이면 fail-open 이다. 사양상 필수 필드인지 확인. [zero-base 2026-07-04]
 - [ ] **시드 평문 비번이 prod 에 실리지 않는지 확인** — `core/src/main/resources/db/seed-common/R__seed_operators.sql:4-5`
       에 "prod 는 이 디렉터리를 `flyway.locations` 에 포함하지 않는다" 로 명시돼 있다. 배포 전 실제 locations 로 재확인.
       (bob 은 더 이상 이 파일에서 시드하지 않는다 — alice 만.) [prod-hardening 2026-05-25]
@@ -189,6 +187,12 @@
 - pdfbox/fontbox 2.0.24 transitive(openhtmltopdf 경유) — 미확인. [master-backlog 2026-05-31]
 
 ## 6. 의도적 보류 결정 (재검토 트리거만 기록 — 실행 대상 아님)
+
+- **MDS `nextUpdate` null fail-open 우려는 사실무근** — 원 백로그(zero-base 2026-07-04)가
+  `NativeMetadataBlobVerifier.java:34` 의 `nextUpdate != null` 가드를 fail-open 으로 봤으나,
+  블롭은 항상 `MdsBlobParser.parse()` 를 거치고 `:36` 이 `parseDate(..., required=true)` 로
+  누락·null 을 `MALFORMED_PAYLOAD` 예외로 먼저 막는다. 검증기의 null 분기는 도달 불가.
+  파서를 우회하는 새 경로를 만들 때만 재검토. [2026-09-13 문서 감사에서 확인]
 
 - **`NavBtn` React.memo 미적용** — map 내부 인라인 `onClick` 때문에 memo 효과가 0. nav 항목이 폭증하면 재검토. [qw5 2026-05-31]
 - **`AuditTab` 행당 `JSON.stringify`** — payload 가 큰 테넌트에서 측정상 병목이 확인되면 재검토. [qw5 2026-05-31]
