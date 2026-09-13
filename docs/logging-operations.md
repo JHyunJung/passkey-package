@@ -21,8 +21,9 @@ MDC 가 전부 비면 대괄호 자체가 나오지 않는다. 각 값은 **16�
   16자 절단 때문에 로그에는 **앞 16자만** 보인다(`7f00dead-0000-00`).
 - **actorEmail** — 로그인 사용자 email. `AdminMdcFilter` 가 request attribute 로 넘기고 `RequestLoggingFilter` 가 MDC 에 넣는다.
   **MDC 칸에는 평문 email 이 그대로 들어간다** — `SecretMaskingConverter` 는 `%msg`(메시지 본문)에만 걸리고 `%compactMdc` 는 거치지 않으며,
-  `CryptoUtils.maskEmail` 은 로그 메시지 인자에만 쓰인다. 즉 같은 줄에서 MDC 칸은 `actorEmail=alice@crosscert.com`,
-  메시지 본문은 `a***@crosscert.com` 으로 다르게 보일 수 있다(값은 16자에서 절단).
+  `CryptoUtils.maskEmail` 은 로그 메시지 인자에만 쓰인다. 즉 같은 줄에서 MDC 칸은 `actorEmail=alice@crosscert`
+  (텍스트 로그는 16자에서 절단 — `CompactMdcConverter:39-40`. JSON 로그는 절단하지 않아 전체 주소가 나간다),
+  메시지 본문은 `a***@crosscert.com` 으로 다르게 보일 수 있다.
 - **apiKeyPrefix** — passkey-app 의 `X-API-Key` 헤더 앞 11자 (`pk_xxxxxxxx`).
 - rp-app 은 이 중 `traceId`·`actorEmail` 둘만 넣는다(`ApiKeyAuthFilter` 가 없음).
 

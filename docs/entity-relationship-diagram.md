@@ -65,7 +65,7 @@ erDiagram
     TENANT_ALLOWED_ORIGIN {
         RAW16 id PK
         RAW16 tenant_id FK
-        string origin "https:// 또는 android:apk-key-hash:"
+        string origin "http(s):// 또는 android:apk-key-hash: (V1 ck_tao_origin_format)"
         number sort_order
     }
     TENANT_ACCEPTED_FORMAT {

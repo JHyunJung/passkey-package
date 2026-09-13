@@ -38,6 +38,9 @@
       호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. [rp-admin-role-gating 2026-05-31]
 - [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.java:43` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
 - [ ] **p95 응답 metric** — Activity KPI 가 'N/A'. admin-app 에 p95 산출 0건. [activity-page 2026-05-28]
+- [ ] **Activity 실시간 갱신을 push 로** — `admin-ui/src/pages/ActivityPage.tsx:253,291` 이 5초 폴링이다.
+      WebSocket/SSE 로 바꾸면 유휴 부하와 지연이 함께 줄어든다. 서버 측 이벤트 발행 설계가 선행돼야 한다.
+      [activity-page 2026-05-28]
 - [ ] **Activity KPI·topTenants 초기값이 fixture** — `admin-ui/src/pages/ActivityPage.tsx:232-233` 이
       `activityFixture.kpi`/`topTenants` 를 초기 state 로 쓴다. 첫 로딩·첫 오류는 `:349,358` 가드가 막지만,
       **갱신 실패(2회차 이후)나 KPI 만 비는 부분 응답에서는 이전 fixture 값이 그대로 남는다**.
@@ -109,6 +112,10 @@
       실제 콘솔 주소와 다르다. 변수명(invite)도 초대 기능 제거 후 낡았다. [2026-09-13 문서 감사에서 발견]
 
 ## 4. 구조·위생 (P3)
+
+- [ ] **`AdminUser.role` 을 Java enum 으로** — `core/.../entity/AdminUser.java:16-17` 이 `String` 이고
+      `AdminUserDetails.java:24,47-48` 등이 문자열 리터럴로 비교한다. DB CHECK 제약은 있으나 컴파일 타임
+      안전성이 없다. [admin-role-separation 2026-05-27]
 
 - [ ] **`LogRedact` 죽은 헬퍼 정리** — `core/.../logging/LogRedact.java` 를 main 에서 호출하는 곳이 0건인데
       `SecretMaskingConverter.java:21` Javadoc 이 "개발자가 직접 호출" 로 가리켜 오해를 만든다. 실제 표준은
