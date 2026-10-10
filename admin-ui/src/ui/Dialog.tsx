@@ -4,11 +4,11 @@ import { cn } from '@/lib/cn';
 type Props = {
   open: boolean; onClose: () => void; title?: ReactNode; sub?: ReactNode; children?: ReactNode;
   footer?: ReactNode; footerStart?: ReactNode; wide?: boolean | 'x'; dismissible?: boolean; closeOnScrim?: boolean;
-  initialFocusRef?: RefObject<HTMLElement>; role?: 'dialog' | 'alertdialog'; ariaLabel?: string;
+  initialFocusRef?: RefObject<HTMLElement>; headerIcon?: ReactNode; role?: 'dialog' | 'alertdialog'; ariaLabel?: string;
 };
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Dialog({ open, onClose, title, sub, children, footer, footerStart, wide, dismissible = true, closeOnScrim = true, initialFocusRef, role = 'dialog', ariaLabel }: Props) {
+export function Dialog({ open, onClose, title, sub, children, footer, footerStart, wide, dismissible = true, closeOnScrim = true, initialFocusRef, role = 'dialog', ariaLabel, headerIcon }: Props) {
   const titleId = useId();
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -42,9 +42,17 @@ export function Dialog({ open, onClose, title, sub, children, footer, footerStar
       <div ref={boxRef} className={cn('dialog', wide === true && 'dialog--wide', wide === 'x' && 'dialog--xwide')} role={role} aria-modal="true"
         aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : ariaLabel} onKeyDown={trap}>
         {(title || sub) && (
-          <div className="dialog__head">
-            {title && <h3 className="dialog__title" id={titleId}>{title}</h3>}
-            {sub && <div className="dialog__sub">{sub}</div>}
+          <div className="dialog__head" style={headerIcon ? { flexDirection: 'row', alignItems: 'center', gap: 16 } : undefined}>
+            {headerIcon && <span style={{ flex: 'none' }}>{headerIcon}</span>}
+            {headerIcon ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                {title && <h3 className="dialog__title" id={titleId}>{title}</h3>}
+                {sub && <div className="dialog__sub">{sub}</div>}
+              </div>
+            ) : (<>
+              {title && <h3 className="dialog__title" id={titleId}>{title}</h3>}
+              {sub && <div className="dialog__sub">{sub}</div>}
+            </>)}
           </div>
         )}
         {children && <div className="dialog__body">{children}</div>}

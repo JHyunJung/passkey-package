@@ -24,6 +24,11 @@ describe('Dialog', () => {
     const d = screen.getByRole('dialog', { name: '신규 Tenant 생성' });
     expect(d).toHaveAttribute('aria-modal', 'true');
   });
+  it('headerIcon 이 있어도 접근 가능한 이름은 제목뿐', () => {
+    render(<Dialog open onClose={() => {}} title="세션 만료" sub="30초" headerIcon={<span>29s</span>} />);
+    expect(screen.getByRole('dialog', { name: '세션 만료' })).toBeInTheDocument();
+    expect(screen.getByText('29s')).toBeInTheDocument();
+  });
   it('role=alertdialog 지원', () => {
     render(<Dialog open onClose={() => {}} title="정지" role="alertdialog" />);
     expect(screen.getByRole('alertdialog', { name: '정지' })).toBeInTheDocument();

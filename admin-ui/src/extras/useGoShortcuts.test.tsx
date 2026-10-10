@@ -35,6 +35,13 @@ describe('useGoShortcuts', () => {
     fireEvent.keyDown(getByLabelText('메모'), { key: 'c' });
     expect(nav).not.toHaveBeenCalled();
   });
+  it('contenteditable 안에서는 무시', () => {
+    const nav = vi.fn();
+    const { getByTestId } = render(<><Host onNavigate={nav} /><div data-testid="ce" contentEditable suppressContentEditableWarning><span data-testid="in">x</span></div></>);
+    fireEvent.keyDown(getByTestId('in'), { key: 'g' });
+    fireEvent.keyDown(getByTestId('in'), { key: 't' });
+    expect(nav).not.toHaveBeenCalled();
+  });
   it('모달이 열려 있으면 무시', () => {
     const nav = vi.fn();
     render(<><Host onNavigate={nav} /><div aria-modal="true" /></>);

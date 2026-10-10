@@ -257,6 +257,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 200px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sh-2); padding: 6px; }
 .menu__item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent; font: inherit; font-size: 13px; color: var(--ink); text-align: left; cursor: pointer; }
 .menu__item:hover, .menu__item:focus { background: var(--canvas); outline: none; }
+.menu__item:disabled { color: var(--faint); cursor: not-allowed; background: transparent; }
 .menu__item--danger { color: var(--bad); }
 .menu__sep { height: 1px; background: var(--line-soft); margin: 6px 0; }
 .menu__section { display: block; padding: 2px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--bad); }

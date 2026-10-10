@@ -8,7 +8,7 @@ const me: Me = { email: 'a@x.com', role: 'PLATFORM_OPERATOR', tenantIds: [], mfa
 describe('CommandPalette V2', () => {
   it('이동/액션 그룹과 단축키 표시, 결과 없음 상태', () => {
     render(<CommandPalette open onClose={() => {}} me={me} onNavigate={() => {}} onAction={() => {}} />);
-    expect(screen.getByText('이동')).toBeInTheDocument();
+    expect(screen.getAllByText('이동').some((e) => e.classList.contains('t-over'))).toBe(true);
     expect(screen.getByText('액션')).toBeInTheDocument();
     expect(screen.getByText('G T')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox', { name: '검색' }), { target: { value: 'zzzzzz' } });

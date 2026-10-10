@@ -52,16 +52,17 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
       icon: string;
       label: string;
       hint?: string;
+      path?: string;
       action: () => void;
       disabled?: boolean;
     }[] = [];
 
     // Pages — context-dependent
     if (isPlatform) {
-      items.push({ group: "이동", icon: "Building", label: "Tenants 목록", hint: "전체 RP 회사", action: () => onNavigate({ name: "tenants" }) });
-      items.push({ group: "이동", icon: "Activity", label: "Activity", hint: "cross-tenant 활동 피드", action: () => onNavigate({ name: "activity" }) });
-      items.push({ group: "이동", icon: "Hash", label: "Audit Chain Monitor", hint: "전 tenant 무결성 보드", action: () => onNavigate({ name: "audit-chain" }) });
-      items.push({ group: "이동", icon: "Cog", label: "설정", hint: "Admin · MDS · 시스템", action: () => onNavigate({ name: "settings" }) });
+      items.push({ group: "이동", icon: "Building", label: "Tenants 목록", hint: "전체 RP 회사", path: "플랫폼", action: () => onNavigate({ name: "tenants" }) });
+      items.push({ group: "이동", icon: "Activity", label: "Activity", hint: "cross-tenant 활동 피드", path: "플랫폼", action: () => onNavigate({ name: "activity" }) });
+      items.push({ group: "이동", icon: "Hash", label: "Audit Chain Monitor", hint: "전 tenant 무결성 보드", path: "플랫폼", action: () => onNavigate({ name: "audit-chain" }) });
+      items.push({ group: "이동", icon: "Cog", label: "설정", hint: "Admin · MDS · 시스템", path: "관리", action: () => onNavigate({ name: "settings" }) });
     }
 
     // Tenants — only platform sees all (populated from searchResults below)
@@ -177,11 +178,11 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
                     disabled={it.disabled}
                     onClick={() => { it.action(); onClose(); }}
                     onMouseEnter={() => setSelIdx(it._i)}
-                    style={active ? { background: "var(--brand-100)", boxShadow: "inset 3px 0 0 var(--brand-700)" } : undefined}
+                    style={{ minHeight: 40, padding: "0 16px", ...(active ? { background: "var(--brand-100)", boxShadow: "inset 3px 0 0 var(--brand-700)" } : {}) }}
                   >
                     <Ic size={16} />
                     <span>{it.label}</span>
-                    {it.hint && <span className="hint" style={{ margin: "0 0 0 auto" }}>{it.hint}</span>}
+                    {(it.path ?? it.hint) && <span className="hint" style={{ margin: "0 0 0 auto" }}>{it.path ?? it.hint}</span>}
                     {goKey && <kbd>{GO_SHORTCUTS[goKey]}</kbd>}
                   </button>
                 );
@@ -190,7 +191,7 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
           ))}
         </div>
         <div className="row" style={{ gap: 14, padding: "10px 16px", borderTop: "1px solid var(--line-soft)", background: "var(--canvas)", fontSize: 12, color: "var(--mute)" }}>
-          <span><kbd>↑</kbd><kbd>↓</kbd> 탐색</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> 이동</span>
           <span><kbd>↵</kbd> 실행</span>
           <span style={{ marginLeft: "auto" }}>{filtered.length} 결과</span>
         </div>

@@ -62,8 +62,7 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
   const C = 2 * Math.PI * 28;
   return (
     <Dialog open={open} onClose={() => {}} dismissible={false} role="alertdialog"
-      title={
-        <span className="row" style={{ gap: 16, flexWrap: "nowrap" }}>
+      headerIcon={
           <span style={{ position: "relative", width: 64, height: 64, flex: "none" }}>
             <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
               <circle cx="32" cy="32" r="28" fill="none" stroke="var(--line-soft)" strokeWidth="6" />
@@ -72,9 +71,8 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
             </svg>
             <span className="mono" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600 }}>{secondsLeft}s</span>
           </span>
-          <span>세션이 곧 만료됩니다</span>
-        </span>
       }
+      title="세션이 곧 만료됩니다"
       sub={`${secondsLeft}초 후 자동으로 로그아웃됩니다.`}
       footer={<>
         <button className="btn" onClick={() => { setOpen(false); onLogout(); }}>지금 로그아웃</button>
