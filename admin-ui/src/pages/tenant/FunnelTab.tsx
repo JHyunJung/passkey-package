@@ -17,7 +17,7 @@ const PERIOD_LABEL: Record<Win, string> = { 1: '최근 24시간', 7: '최근 7�
 // 단계 막대: 옅은 → 진한 브랜드 (캔버스 4단계 블루)
 const STEP_COLORS = ['var(--brand-300)', 'var(--brand-500)', 'var(--brand-600)', 'var(--brand-700)'];
 const DIST_COLORS = ['var(--brand-700)', 'var(--brand-500)', 'var(--brand-300)', 'var(--brand-900)', 'var(--brand-600)'];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => ymd(new Date().toISOString());
 
 export default function FunnelTab({ tenant }: { tenant: Tenant }) {
   const [windowDays, setWindowDays] = useState<Win>(7);
@@ -28,6 +28,7 @@ export default function FunnelTab({ tenant }: { tenant: Tenant }) {
   useEffect(() => {
     let cancelled = false;
     setFailed(false);
+    setData(null); // 기간·테넌트 전환 시 이전 숫자가 새 라벨 아래 보이지 않게
     funnelApi.get(tenant.id, windowDays)
       .then((d) => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) { setData(null); setFailed(true); } });
@@ -78,7 +79,7 @@ export default function FunnelTab({ tenant }: { tenant: Tenant }) {
               value={<span style={{ fontSize: 20 }}>{s.biggestDrop ? `${s.biggestDrop.from} → ${s.biggestDrop.to}` : '—'}</span>}
               hint={s.biggestDrop ? `이탈 ${fmtNum(s.biggestDrop.lost)}건 · ${fmtPct(s.biggestDrop.rate)}` : '이탈 없음'} />
             <KpiCard label="기간" value={<span style={{ fontSize: 20 }}>{PERIOD_LABEL[windowDays]}</span>}
-              hint={`${ymd(new Date(now - windowDays * 86_400_000).toISOString())} – ${ymd(new Date(now).toISOString())}`} />
+              hint={`${ymd(new Date(now - (windowDays === 1 ? 1 : windowDays - 1) * 86_400_000).toISOString())} – ${ymd(new Date(now).toISOString())}`} />
           </div>
 
           <Card>

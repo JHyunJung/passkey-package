@@ -62,6 +62,17 @@ describe('FunnelTab V2', () => {
     expect(screen.queryByText(/직전 7일 대비/)).toBeNull();
   });
 
+  it('기간 전환 중에는 이전 기간 숫자를 새 라벨 아래 보이지 않는다', async () => {
+    render(<FunnelTab tenant={tenant} />);
+    await screen.findByText('63.0%');
+    api.get.mockImplementation(() => new Promise(() => {}));
+    fireEvent.click(within(screen.getByRole('group', { name: '기간' })).getByRole('button', { name: '30d' }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('t1', 30));
+    expect(screen.queryByText('63.0%')).toBeNull();
+    expect(screen.queryByText('최근 30일')).toBeNull();
+    expect(screen.getByText('불러오는 중…')).toBeInTheDocument();
+  });
+
   it('표로 보기: 같은 데이터를 표로, CSV 는 일별 시리즈', async () => {
     render(<FunnelTab tenant={tenant} />);
     await screen.findByText('63.0%');
