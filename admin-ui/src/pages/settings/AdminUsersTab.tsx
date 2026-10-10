@@ -312,9 +312,8 @@ function ApproveDialog({
     tenantsApi
       .list()
       .then((list) => {
-        const active = list.filter((t) => t.status === 'ACTIVE');
-        setTenants(active);
-        if (active.length > 0) setTenantIds([active[0].id]);
+        // 임의 tenant 를 미리 선택하지 않는다 — 운영자가 접근 권한을 줄 tenant 를 직접 고른다.
+        setTenants(list.filter((t) => t.status === 'ACTIVE'));
       })
       .catch(() => { /* non-critical */ });
   }, []);

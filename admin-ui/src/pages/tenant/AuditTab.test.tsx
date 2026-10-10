@@ -124,8 +124,12 @@ describe('AuditTab V2', () => {
     expect(screen.getByText('PLATFORM 전용')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '검증 실행' }));
     const dlg = screen.getByRole('dialog', { name: 'Hash chain 검증' });
+    // 서버 /chain/verify 는 기간을 받지 않고 항상 전체 체인을 검증한다 — 기간 입력을 보이지 않는다.
+    expect(within(dlg).queryByLabelText('from')).toBeNull();
+    expect(within(dlg).queryByLabelText('to')).toBeNull();
+    expect(dlg).toHaveTextContent('전체 체인 검증');
     fireEvent.click(within(dlg).getByRole('button', { name: '검증 실행' }));
-    await waitFor(() => expect(api.verify).toHaveBeenCalledWith('t1', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)));
+    await waitFor(() => expect(api.verify).toHaveBeenCalledWith('t1'));
     expect(await screen.findByText('위변조 0건')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Hash chain 검증' })).toBeNull();
   });

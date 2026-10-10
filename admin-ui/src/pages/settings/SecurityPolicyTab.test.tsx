@@ -58,6 +58,7 @@ describe('SecurityPolicyTab V2', () => {
     }));
     await waitFor(() => expect(bar()).toBeNull());
     expect(await screen.findByText('보안 정책 저장됨')).toBeInTheDocument();
+    expect(screen.queryByText(/traceId/)).toBeNull();
   });
 
   it('CORS: Enter 로 추가(새 칩 강조), 중복 무시, 취소는 서버 값으로 되돌림', async () => {

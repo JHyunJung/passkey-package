@@ -42,7 +42,7 @@ export default function SecurityPolicyTab() {
         corsAllowlist,
       });
       applyView(v);
-      toast({ kind: 'ok', title: '보안 정책 저장됨', traceId: 'tr_sec_001' });
+      toast({ kind: 'ok', title: '보안 정책 저장됨' });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast({ kind: 'err', title: '보안 정책 저장 실패', message: msg });

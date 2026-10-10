@@ -95,7 +95,9 @@ describe('AdminUsersTab signup requests', () => {
     expect(within(dlg).getByRole('radio', { name: /RP Admin/ })).toHaveAttribute('aria-checked', 'true');
     await waitFor(() => within(dlg).getByText('Acme'));   // tenant 목록 로드(ACTIVE 만)
     expect(within(dlg).queryByText('Old Corp')).toBeNull();
-    expect(within(dlg).getByRole('checkbox', { name: /Acme/ })).toBeChecked();
+    // 임의 tenant 를 미리 고르지 않는다 — 운영자가 직접 선택해야 한다.
+    expect(within(dlg).getByRole('checkbox', { name: /Acme/ })).not.toBeChecked();
+    fireEvent.click(within(dlg).getByRole('checkbox', { name: /Acme/ }));
     expect(within(dlg).getByText('1개 선택')).toBeInTheDocument();
     fireEvent.click(within(dlg).getByRole('button', { name: '승인하고 계정 생성' }));
     await waitFor(() =>
@@ -109,9 +111,8 @@ describe('AdminUsersTab signup requests', () => {
     fireEvent.click(screen.getByRole('button', { name: '승인…' }));
     const dlg = approveDialog();
     await waitFor(() => within(dlg).getByText('Acme'));
-    fireEvent.click(within(dlg).getByRole('checkbox', { name: /Acme/ }));
-    expect(within(dlg).getByText('Tenant를 최소 1개 선택해야 합니다.')).toBeInTheDocument();
     fireEvent.click(within(dlg).getByRole('button', { name: '승인하고 계정 생성' }));
+    expect(within(dlg).getByText('Tenant를 최소 1개 선택해야 합니다.')).toBeInTheDocument();
     expect(signupRequestsApi.approve).not.toHaveBeenCalled();
   });
 
@@ -167,6 +168,7 @@ describe('AdminUsersTab signup requests', () => {
     await waitFor(() => screen.getByText('new@x.com'));
     fireEvent.click(screen.getByRole('button', { name: '승인…' }));
     await waitFor(() => within(approveDialog()).getByText('Acme'));
+    fireEvent.click(within(approveDialog()).getByRole('checkbox', { name: /Acme/ }));
     fireEvent.click(within(approveDialog()).getByRole('button', { name: '승인하고 계정 생성' }));
     await waitFor(() => expect(signupRequestsApi.approve).toHaveBeenCalled());
     expect(approveDialog()).toBeInTheDocument();
@@ -179,6 +181,7 @@ describe('AdminUsersTab signup requests', () => {
     await waitFor(() => screen.getByText('new@x.com'));
     fireEvent.click(screen.getByRole('button', { name: '승인…' }));
     await waitFor(() => within(approveDialog()).getByText('Acme'));
+    fireEvent.click(within(approveDialog()).getByRole('checkbox', { name: /Acme/ }));
     fireEvent.click(within(approveDialog()).getByRole('button', { name: '승인하고 계정 생성' }));
     expect(await screen.findByText('이미 처리된 요청입니다.')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '가입 요청 승인' })).toBeNull());

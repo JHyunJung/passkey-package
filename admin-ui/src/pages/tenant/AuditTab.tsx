@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import {
-  Badge, Button, Card, CardFooter, DataTable, Dialog, EmptyState, Field, FilterChip, Segmented, Switch, useToast,
+  Badge, Button, Card, CardFooter, DataTable, Dialog, EmptyState, FilterChip, Segmented, Switch, useToast,
   type Column,
 } from '@/ui';
 import { auditApi } from '@/api/audit';
 import { copyToClipboard } from '@/lib/clipboard';
 import { downloadCsv } from '@/lib/csvExport';
 import type { Tenant, AuditEvent, ChainVerifyResult } from '@/api/designTypes';
-import { fmtNum, hms, timeAgo, ymd, ymdHms } from './tabFormat';
+import { fmtNum, hms, timeAgo, ymdHms } from './tabFormat';
 import { WINDOWS, type WindowKey, dayLabel, diffValue, eventTone, isFailure, payloadDiff, windowRange } from './auditHelpers';
 
 const PAGE_SIZE = 50;
@@ -111,9 +111,10 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
     );
   }
 
-  async function handleVerifyRun(from: string, to: string) {
+  async function handleVerifyRun() {
     try {
-      const result = await auditApi.verify(tenant.id, from, to);
+      // 서버 /chain/verify 는 기간을 받지 않고 항상 전체 체인을 검증한다.
+      const result = await auditApi.verify(tenant.id);
       setVerifyResult(result);
       setShowVerify(false);
     } catch (e: unknown) {
@@ -295,10 +296,7 @@ function ChainVerifyCard({ onOpen, result }: { onOpen: () => void; result: Chain
 
 // ── Hash chain 검증 다이얼로그 (진행률) ────────────────────────────────────────
 
-function ChainVerifyDialog({ open, onClose, onRun }: { open: boolean; onClose: () => void; onRun: (from: string, to: string) => Promise<void> }) {
-  // 기본 구간: 최근 7일(KST). auditApi.verify 가 windowHours 로 환산해 최대 168h 로 자른다.
-  const [from, setFrom] = useState(() => ymd(new Date(Date.now() - 7 * 86_400_000).toISOString()));
-  const [to, setTo] = useState(() => ymd(new Date().toISOString()));
+function ChainVerifyDialog({ open, onClose, onRun }: { open: boolean; onClose: () => void; onRun: () => Promise<void> }) {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -310,7 +308,7 @@ function ChainVerifyDialog({ open, onClose, onRun }: { open: boolean; onClose: (
       setProgress((p) => Math.min(95, p + 7 + Math.random() * 9));
     }, 90);
     try {
-      await onRun(from, to);
+      await onRun();
       setProgress(100);
     } catch {
       // 오류 토스트는 부모가 띄운다
@@ -327,10 +325,9 @@ function ChainVerifyDialog({ open, onClose, onRun }: { open: boolean; onClose: (
         <Button onClick={onClose} disabled={running}>취소</Button>
         <Button variant="primary" disabled={running} onClick={() => void run()}>{running ? `검증 중… ${pct}%` : '검증 실행'}</Button>
       </>}>
-      <div className="grid-2" style={{ gap: 12 }}>
-        <Field label="from" htmlFor="chain-from"><input id="chain-from" className="input" type="date" value={from} disabled={running} onChange={(e) => setFrom(e.target.value)} /></Field>
-        <Field label="to" htmlFor="chain-to"><input id="chain-to" className="input" type="date" value={to} disabled={running} onChange={(e) => setTo(e.target.value)} /></Field>
-      </div>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
+        전체 체인 검증 — 이 tenant 의 감사 로그 전체를 처음부터 hash 로 다시 계산해 확인합니다. 기간은 지정하지 않습니다.
+      </p>
       {running && (
         <div className="stack-2">
           <div className="row">
