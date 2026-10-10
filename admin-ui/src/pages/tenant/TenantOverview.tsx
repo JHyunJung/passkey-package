@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+// admin-ui/src/pages/tenant/TenantOverview.tsx
+import { useState, useEffect, CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import type { Tenant } from '@/api/designTypes';
 import { auditChainApi, type TenantChainVerify } from '@/api/auditChain';
+import { auditChainMonitorApi } from '@/api/auditChainMonitor';
 import { funnelApi, type FunnelData } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
-import { useToast } from '@/ui';
+import { Alert, Button, Card, CardBody, CardHeader, KpiCard, StatusStrip, useToast } from '@/ui';
 import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
-import { statusLabel } from '@/i18n/labels';
+import { pickRecentRuns, recentRunsLabel, type ChainRun } from './tenantSignals';
 
-// ── Local utilities (mirrors design globals) ────────────────────────────────
+// ── util ─────────────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -21,8 +23,7 @@ function timeAgo(iso: string | null | undefined): string {
   if (h < 24) return `${h}시간 전`;
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}일 전`;
-  const mo = Math.floor(d / 30);
-  return `${mo}개월 전`;
+  return `${Math.floor(d / 30)}개월 전`;
 }
 
 function tail(s: string, n: number): string {
@@ -33,132 +34,73 @@ function fmt(n: number): string {
   return n.toLocaleString();
 }
 
-// ── MetricCard (mirrors design-system MetricCard) ──────────────────────────
-
-function MetricCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
-  return (
-    <div className="card">
-      <div className="card__body">
-        <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{label}</div>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>{value}</div>
-        {sub && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{sub}</div>}
-      </div>
-    </div>
-  );
+/** 이벤트 유형 점 색. 유형 이름 태그가 함께 표시되므로 색만으로 의미를 전달하지 않는다. */
+function eventColor(type: string): string {
+  if (/FAIL|REVOKED|REGRESSION|TAMPER/.test(type)) return 'var(--bad)';
+  if (type.startsWith('API_KEY') || type.endsWith('_UPDATED')) return 'var(--warn-dot)';
+  return 'var(--brand-700)';
 }
 
-// ── KV ─────────────────────────────────────────────────────────────────────
+const iconBox = (bg: string, fg: string): CSSProperties => ({
+  width: 40, height: 40, borderRadius: 10, background: bg, color: fg,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none',
+});
 
-function KV({ k, v }: { k: string; v: React.ReactNode }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, alignItems: "center", fontSize: 13 }}>
-      <div className="muted" style={{ fontSize: 12 }}>{k}</div>
-      <div>{v}</div>
-    </div>
-  );
-}
+// ── ChainSummaryCard ─────────────────────────────────────────────────────────
 
-// ── EventDot ───────────────────────────────────────────────────────────────
-
-function EventDot({ type }: { type: string }) {
-  const map: Record<string, [string, string]> = {
-    CREDENTIAL_AUTHENTICATED: ["var(--success)", "var(--success-soft)"],
-    CREDENTIAL_REGISTERED: ["var(--info)", "var(--info-soft)"],
-    CREDENTIAL_REVOKED: ["var(--danger)", "var(--danger-soft)"],
-    API_KEY_ISSUED: ["var(--violet)", "var(--violet-soft)"],
-    API_KEY_REVOKED: ["var(--danger)", "var(--danger-soft)"],
-    WEBAUTHN_CONFIG_UPDATED: ["var(--warning)", "var(--warning-soft)"],
-    ATTESTATION_POLICY_UPDATED: ["var(--warning)", "var(--warning-soft)"],
-    SIGNATURE_COUNTER_REGRESSION: ["var(--danger)", "var(--danger-soft)"],
-    ATTESTATION_TRUST_FAILED: ["var(--danger)", "var(--danger-soft)"],
-  };
-  const [c, bg] = map[type] || ["var(--text-mute)", "var(--surface-3)"];
-  return (
-    <div style={{ width: 24, height: 24, borderRadius: 6, background: bg, color: c, display: "grid", placeItems: "center", flex: "none" }}>
-      <div style={{ width: 6, height: 6, borderRadius: 999, background: c }} />
-    </div>
-  );
-}
-
-// ── ChainStatusCard ────────────────────────────────────────────────────────
-
-function ChainStatusCard({
-  state,
-  onManualVerify,
-  onMonthlyReport,
-}: {
+function ChainSummaryCard({ state, recentRuns, onManualVerify, onMonthlyReport, onDetail }: {
   state: TenantChainVerify | null;
+  recentRuns?: ChainRun[];
   onManualVerify: () => void;
   onMonthlyReport: () => void;
+  onDetail: () => void;
 }) {
-  if (!state) {
-    return (
-      <div className="card" style={{ background: "linear-gradient(135deg, var(--surface-2), transparent 60%)" }}>
-        <div className="card__body" style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface-3)", color: "var(--text-mute)", display: "grid", placeItems: "center", flex: "none" }}>
-            <Icons.Shield size={20} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div className="row" style={{ gap: 8 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Audit Hash Chain</div>
-              <span className="badge">확인 중</span>
-            </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>체인 무결성 상태를 불러오는 중입니다.</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.intact) {
-    return (
-      <div className="card" style={{ background: "linear-gradient(135deg, var(--success-soft), transparent 60%)", borderColor: "color-mix(in oklab, var(--success) 25%, var(--border))" }}>
-        <div className="card__body" style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--success)", color: "white", display: "grid", placeItems: "center", flex: "none" }}>
-            <Icons.Shield size={20} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div className="row" style={{ gap: 8 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Audit Hash Chain 무결</div>
-              <span className="badge badge--success badge--dot">{statusLabel('INTACT')}</span>
-            </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>마지막 자동 검증 · {timeAgo(state.verifiedAt)} · 위변조 0건</div>
-          </div>
-          <button className="btn btn--sm" onClick={onManualVerify}><Icons.Hash size={12} /> 수동 검증</button>
-          <button className="btn btn--sm" onClick={onMonthlyReport}><Icons.Download size={12} /> 월간 보고서</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="card" style={{ background: "linear-gradient(135deg, var(--danger-soft), transparent 60%)", borderColor: "color-mix(in oklab, var(--danger) 25%, var(--border))" }}>
-      <div className="card__body" style={{ display: "flex", gap: 14, alignItems: "center" }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--danger)", color: "white", display: "grid", placeItems: "center", flex: "none" }}>
-          <Icons.Shield size={20} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div className="row" style={{ gap: 8 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Audit Hash Chain 위변조 감지</div>
-            <span className="badge badge--danger badge--dot">{statusLabel('TAMPERED')}</span>
+    <Card>
+      <CardHeader title="감사 체인" actions={<Button variant="ghost" size="sm" onClick={onDetail}>자세히 <Icons.ChevronRight size={12} /></Button>} />
+      <CardBody className="stack-3">
+        {state === null ? (
+          <div className="row" style={{ gap: 12, flexWrap: 'nowrap' }}>
+            <span style={iconBox('var(--sunk)', 'var(--mute)')} aria-hidden="true"><Icons.Shield size={20} /></span>
+            <div className="col" style={{ minWidth: 0 }}>
+              <strong>확인 중</strong>
+              <span className="hint" style={{ margin: 0 }}>체인 무결성 상태를 불러오는 중입니다.</span>
+            </div>
           </div>
-          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            마지막 검증 · {timeAgo(state.verifiedAt)}{state.tamperedEntryId ? ` · 위변조 항목: ${tail(state.tamperedEntryId, 8)}` : ''}
+        ) : state.intact ? (
+          <div className="row" style={{ gap: 12, flexWrap: 'nowrap' }}>
+            <span style={iconBox('var(--ok-soft)', 'var(--ok)')} aria-hidden="true"><Icons.Shield size={20} /></span>
+            <div className="col" style={{ minWidth: 0 }}>
+              <strong>무결 · 위변조 0건</strong>
+              <span className="hint" style={{ margin: 0 }}>마지막 검증 {timeAgo(state.verifiedAt)}</span>
+            </div>
           </div>
+        ) : (
+          <Alert tone="bad" title="위변조 감지">
+            마지막 검증 {timeAgo(state.verifiedAt)}{state.tamperedEntryId ? ` · 위변조 항목 …${tail(state.tamperedEntryId, 8)}` : ''}
+          </Alert>
+        )}
+        {recentRuns && recentRuns.length > 0 && (
+          <StatusStrip fluid results={recentRuns.map((r) => r.ok)} label={recentRunsLabel(recentRuns)} />
+        )}
+        <div className="row">
+          <Button size="sm" onClick={onManualVerify}>수동 검증</Button>
+          <Button size="sm" onClick={onMonthlyReport}>월간 보고서</Button>
         </div>
-        <button className="btn btn--sm" onClick={onManualVerify}><Icons.Hash size={12} /> 수동 검증</button>
-        <button className="btn btn--sm" onClick={onMonthlyReport}><Icons.Download size={12} /> 월간 보고서</button>
-      </div>
-    </div>
+      </CardBody>
+    </Card>
   );
 }
 
-// ── TenantOverview ─────────────────────────────────────────────────────────
+// ── TenantOverview ───────────────────────────────────────────────────────────
 
-export default function TenantOverview({ tenant }: { tenant: Tenant }) {
+type Props = { tenant: Tenant; isPlatformOperator?: boolean; expiringKeyCount?: number };
+
+export default function TenantOverview({ tenant, isPlatformOperator = false, expiringKeyCount }: Props) {
   const navigate = useNavigate();
   const toast = useToast();
   const [chainState, setChainState] = useState<TenantChainVerify | null>(null);
+  const [recentRuns, setRecentRuns] = useState<ChainRun[] | undefined>(undefined);
   const [funnel, setFunnel] = useState<FunnelData | null>(null);
   const [recentEvents, setRecentEvents] = useState<RecentActivityEvent[]>([]);
 
@@ -166,11 +108,7 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
     try {
       const result = await auditChainApi.verifyTenant(tenant.id);
       setChainState(result);
-      toast({
-        kind: result.intact ? 'ok' : 'warn',
-        title: '수동 검증 완료',
-        message: result.intact ? '체인 무결' : '위변조 감지',
-      });
+      toast({ kind: result.intact ? 'ok' : 'warn', title: '수동 검증 완료', message: result.intact ? '체인 무결' : '위변조 감지' });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast({ kind: 'err', title: '수동 검증 실패', message: msg });
@@ -187,6 +125,16 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
       .catch(() => setChainState(null));
   }, [tenant.id]);
 
+  // ★ 최근 검증 이력: overview 는 PLATFORM 전용 API. 필드가 없으면 undefined 유지 → 스트립 숨김.
+  useEffect(() => {
+    if (!isPlatformOperator) return;
+    let cancelled = false;
+    auditChainMonitorApi.overview(24)
+      .then((o) => { if (!cancelled) setRecentRuns(pickRecentRuns(o, tenant.id)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [tenant.id, isPlatformOperator]);
+
   useEffect(() => {
     let cancelled = false;
     funnelApi.get(tenant.id, 7)
@@ -196,18 +144,13 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
   }, [tenant.id]);
 
   useEffect(() => {
-    // activityApi.fetch signature is (sinceId, category) — there is no
-    // server-side tenantId filter, so fetch latest feed and filter client-side.
+    // 기존과 동일: 최신 피드를 받아 클라이언트에서 tenant 로 거른다.
     let cancelled = false;
     activityApi
       .fetch(null, undefined)
       .then((view) => {
         if (cancelled) return;
-        setRecentEvents(
-          adaptFeedItems(view)
-            .filter((e) => e.tenantId === tenant.id)
-            .slice(0, 5)
-        );
+        setRecentEvents(adaptFeedItems(view).filter((e) => e.tenantId === tenant.id).slice(0, 5));
       })
       .catch(() => { if (!cancelled) setRecentEvents([]); });
     return () => { cancelled = true; };
@@ -217,55 +160,69 @@ export default function TenantOverview({ tenant }: { tenant: Tenant }) {
     registration: { attempts: 0, success: 0, ratio: 0 },
     authentication: { attempts: 0, success: 0, ratio: 0 },
   };
+  const delta = tenant.credentialsDelta7d;
 
   return (
-    <div className="stack-4">
-      <div className="grid-4">
-        <MetricCard label="등록 Credential" value={fmt(tenant.credentials)} sub="활성 + 회수 포함" />
-        <MetricCard label="유효 API Key" value={tenant.apiKeys} sub="ACTIVE 상태" />
-        <MetricCard label="등록 성공률 (7d)" value={f.registration.attempts > 0 ? `${(f.registration.ratio * 100).toFixed(1)}%` : '—'} sub={f.registration.attempts > 0 ? `${fmt(f.registration.success)} / ${fmt(f.registration.attempts)} 시도` : '최근 7일 등록 시도 없음'} />
-        <MetricCard label="인증 성공률 (7d)" value={f.authentication.attempts > 0 ? `${(f.authentication.ratio * 100).toFixed(1)}%` : '—'} sub={f.authentication.attempts > 0 ? `${fmt(f.authentication.success)} / ${fmt(f.authentication.attempts)} 시도` : '최근 7일 인증 시도 없음'} />
+    <div className="stack-6">
+      <div className="kpis">
+        <KpiCard label="등록 Credential" value={fmt(tenant.credentials)}
+          hint={delta !== undefined ? `7일 ${delta >= 0 ? '+' : ''}${fmt(delta)}` : undefined} />
+        <KpiCard label="유효 API Key" value={tenant.apiKeys}
+          hint={expiringKeyCount !== undefined ? `만료 임박 ${expiringKeyCount}` : undefined}
+          hintTone={expiringKeyCount ? 'warn' : 'default'} />
+        <KpiCard label="등록 성공률 (7d)"
+          value={f.registration.attempts > 0 ? `${(f.registration.ratio * 100).toFixed(1)}%` : '—'}
+          hint={f.registration.attempts > 0 ? `${fmt(f.registration.success)} / ${fmt(f.registration.attempts)} 시도` : '최근 7일 등록 시도 없음'} />
+        <KpiCard label="인증 성공률 (7d)"
+          value={f.authentication.attempts > 0 ? `${(f.authentication.ratio * 100).toFixed(1)}%` : '—'}
+          hint={f.authentication.attempts > 0 ? `${fmt(f.authentication.success)} / ${fmt(f.authentication.attempts)} 시도` : '최근 7일 인증 시도 없음'} />
       </div>
 
-      <div className="grid-2">
-        <div className="card">
-          <div className="card__head"><h3 className="card__title">WebAuthn 요약</h3><button className="btn btn--sm" onClick={() => navigate(`/tenants/${tenant.id}?tab=webauthn`)}>편집 <Icons.ChevronRight size={12} /></button></div>
-          <div className="card__body stack-3">
-            <KV k="rpId" v={<span className="mono">{tenant.rpId}</span>} />
-            <KV k="rpName" v={tenant.name} />
-            <KV k="origins" v={
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                <span className="chip mono">https://{tenant.rpId}</span>
-              </div>
-            } />
-            <KV k="userVerification" v={<span className="badge badge--accent">{tenant.userVerification}</span>} />
-            <KV k="attestation" v={<span className="badge">{tenant.attestationConveyance}</span>} />
-            <KV k="timeout" v={`${tenant.webauthnTimeoutMs / 1000}s`} />
-          </div>
-        </div>
+      <div className="grid-3">
+        <Card>
+          <CardHeader title="WebAuthn 요약" actions={
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/tenants/${tenant.id}?tab=webauthn`)}>편집 <Icons.ChevronRight size={12} /></Button>
+          } />
+          <CardBody>
+            <dl className="kv" style={{ gridTemplateColumns: '120px minmax(0, 1fr)' }}>
+              <dt>rpId</dt><dd className="mono truncate" style={{ fontSize: 12 }} title={tenant.rpId}>{tenant.rpId}</dd>
+              <dt>rpName</dt><dd className="truncate" title={tenant.name}>{tenant.name}</dd>
+              <dt>origins</dt><dd className="row" style={{ gap: 4 }}><span className="tag">https://{tenant.rpId}</span></dd>
+              <dt>userVerification</dt><dd><span className="tag">{tenant.userVerification}</span></dd>
+              <dt>attestation</dt><dd><span className="tag">{tenant.attestationConveyance}</span></dd>
+              <dt>timeout</dt><dd className="mono" style={{ fontSize: 12 }}>{tenant.webauthnTimeoutMs} ms</dd>
+            </dl>
+          </CardBody>
+        </Card>
 
-        <div className="card">
-          <div className="card__head"><h3 className="card__title">최근 활동</h3><button className="btn btn--sm" onClick={() => navigate(`/activity?tenantId=${tenant.id}`)}>전체 보기 <Icons.ChevronRight size={12} /></button></div>
-          <div style={{ padding: "0" }}>
-            {recentEvents.length === 0 ? (
-              <div className="muted" style={{ padding: "20px", fontSize: 13, textAlign: "center" }}>최근 활동 없음</div>
-            ) : (
-              recentEvents.slice(0, 5).map((e, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, padding: "10px 20px", borderBottom: i === 4 ? 0 : "1px solid var(--border)", alignItems: "flex-start" }}>
-                  <EventDot type={e.type} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{e.type}</div>
-                    <div className="mono muted" style={{ fontSize: 11, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tail(e.subjectId, 16)}</div>
-                  </div>
-                  <div className="muted" style={{ fontSize: 11 }}>{timeAgo(e.ts)}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <Card>
+          <CardHeader title="최근 활동" actions={
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/activity?tenantId=${tenant.id}`)}>전체 보기 <Icons.ChevronRight size={12} /></Button>
+          } />
+          {recentEvents.length === 0 ? (
+            <p className="muted" style={{ margin: 0, padding: 20, fontSize: 13, textAlign: 'center' }}>최근 활동 없음</p>
+          ) : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {recentEvents.map((e, i) => (
+                <li key={e.id} className="row" style={{ flexWrap: 'nowrap', gap: 10, padding: '11px 20px', borderBottom: i === recentEvents.length - 1 ? 0 : '1px solid var(--line-soft)' }}>
+                  <span className="dot" style={{ background: eventColor(e.type) }} aria-hidden="true" />
+                  <span className="tag" style={{ flex: 'none' }}>{e.type}</span>
+                  <span className="mono hint truncate" style={{ margin: 0, flex: '1 1 0' }}>…{tail(e.subjectId, 16)}</span>
+                  <span className="hint" style={{ margin: 0, flex: 'none' }}>{timeAgo(e.ts)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <ChainSummaryCard
+          state={chainState}
+          recentRuns={recentRuns}
+          onManualVerify={() => void handleManualVerify()}
+          onMonthlyReport={handleMonthlyReport}
+          onDetail={() => navigate(`/tenants/${tenant.id}?tab=audit`)}
+        />
       </div>
-
-      <ChainStatusCard state={chainState} onManualVerify={handleManualVerify} onMonthlyReport={handleMonthlyReport} />
     </div>
   );
 }

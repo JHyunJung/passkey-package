@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
+// admin-ui/src/pages/TenantDetailPage.tsx
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
-import { StatusBadge, useToast, Dialog } from '@/ui';
 import { tenantsApi } from '@/api/tenants';
-import type { Tenant } from '@/api/designTypes';
+import { aaguidPolicyApi } from '@/api/aaguidPolicy';
+import { apiKeysApi } from '@/api/apiKeys';
+import type { Tenant, AaguidPolicy, ApiKey } from '@/api/designTypes';
 import type { Me } from '@/api/types';
+import { isPlatform } from '@/me/roles';
+import { Alert, Button, ConfirmByTyping, Dialog, Menu, PropChip, StatusBadge, Tabs, useToast, type TabItem } from '@/ui';
 import TenantOverview from '@/pages/tenant/TenantOverview';
 import WebauthnConfigTab from '@/pages/tenant/WebauthnConfigTab';
 import AaguidPolicyTab from '@/pages/tenant/AaguidPolicyTab';
@@ -12,24 +16,27 @@ import ApiKeysTab from '@/pages/tenant/ApiKeysTab';
 import CredentialsTab from '@/pages/tenant/CredentialsTab';
 import AuditTab from '@/pages/tenant/AuditTab';
 import FunnelTab from '@/pages/tenant/FunnelTab';
+import { countExpiringKeys, hasUnverifiedAaguid } from '@/pages/tenant/tenantSignals';
 
-// ── Local util (mirrors design pages-2.jsx global fmtDateTime) ───────────────
+// ── util ─────────────────────────────────────────────────────────────────────
 
-function fmtDateTime(iso: string | null | undefined): string {
+/** ISO → KST 날짜 'YYYY-MM-DD'. 값이 없으면 '—', 파싱 불가면 원문. */
+export function fmtDateKst(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
+export const TENANT_TABS: TabItem[] = [
+  { id: 'overview', label: '개요' },
+  { id: 'webauthn', label: 'WebAuthn' },
+  { id: 'aaguid', label: 'AAGUID 정책' },
+  { id: 'apikeys', label: 'API 키' },
+  { id: 'credentials', label: 'Credentials' },
+  { id: 'audit', label: '감사 로그' },
+  { id: 'funnel', label: '퍼널' },
+];
 
 type TenantDetailPageProps = {
   tenant: Tenant;
@@ -39,40 +46,121 @@ type TenantDetailPageProps = {
   onReload: () => void;
 };
 
-// ── SuspendDialog — 슬러그 타이핑 확인 다이얼로그 ─────────────────────────────
+// ── SuspendDialog — 영향 범위 + slug 타이핑 확인 ─────────────────────────────
 
 function SuspendDialog({ tenant, open, onClose, onConfirmed }: {
   tenant: Tenant; open: boolean; onClose: () => void; onConfirmed: () => void;
 }) {
-  const [typed, setTyped] = useState('');
+  const [match, setMatch] = useState(false);
   const [busy, setBusy] = useState(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const toast = useToast();
+
+  function close() {
+    setMatch(false);
+    onClose();
+  }
   async function go() {
-    if (typed !== tenant.slug) return;
+    if (!match) return;
     setBusy(true);
     try {
       await tenantsApi.suspend(tenant.id);
       toast({ kind: 'warn', title: '테넌트가 정지되었습니다.', message: `${tenant.slug} · 모든 API 키 revoke됨` });
       onConfirmed();
-      onClose();
-      setTyped('');
+      close();
     } catch (e: unknown) {
       toast({ kind: 'err', title: '정지 실패', message: e instanceof Error ? e.message : String(e) });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
   return (
-    <Dialog open={open} onClose={onClose} title="테넌트 정지"
-      sub="정지하면 이 테넌트의 모든 API 키가 revoke되고, 등록·인증 ceremony가 거부됩니다."
+    <Dialog open={open} onClose={close} role="alertdialog" title="테넌트 정지" sub={`${tenant.name} 을(를) 정지합니다.`} initialFocusRef={cancelRef}
       footer={<>
-        <button className="btn btn--sm" onClick={onClose}>취소</button>
-        <button className="btn btn--sm btn--danger" disabled={busy || typed !== tenant.slug} onClick={go}>정지</button>
+        <button ref={cancelRef} type="button" className="btn" onClick={close}>취소</button>
+        <Button variant="danger-solid" disabled={busy || !match} onClick={() => void go()}>정지</Button>
       </>}>
-      <div style={{ fontSize: 13, color: 'var(--text-mute)', marginBottom: 8 }}>
-        확인을 위해 테넌트 슬러그 <span className="mono" style={{ color: 'var(--text)' }}>{tenant.slug}</span> 를 입력하세요.
-      </div>
-      <input className="input mono" value={typed} onChange={(e) => setTyped(e.target.value)}
-        placeholder={tenant.slug} style={{ width: '100%' }} autoFocus />
+      <Alert tone="bad" title="영향 범위">
+        <ul className="stack-1" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          <li>· 유효 API key {tenant.apiKeys}개 즉시 회수</li>
+          <li>· 이 tenant 의 모든 ceremony 거부</li>
+          <li>· 정지를 해제해도 회수된 키는 복구되지 않음</li>
+        </ul>
+      </Alert>
+      <ConfirmByTyping
+        id="suspend-slug"
+        expected={tenant.slug}
+        onMatchChange={setMatch}
+        label={<>확인을 위해 slug <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{tenant.slug}</span> 를 입력하세요</>}
+      />
     </Dialog>
+  );
+}
+
+// ── ResumeDialog — 기존 window.confirm 과 같은 의미의 확인 ───────────────────
+
+function ResumeDialog({ tenant, open, onClose, onConfirmed }: {
+  tenant: Tenant; open: boolean; onClose: () => void; onConfirmed: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  async function go() {
+    setBusy(true);
+    try {
+      await tenantsApi.activate(tenant.id);
+      toast({ kind: 'ok', title: '정지 해제됨' });
+      onConfirmed();
+      onClose();
+    } catch (e: unknown) {
+      toast({ kind: 'err', title: '해제 실패', message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog open={open} onClose={onClose} title="정지 해제" sub={`${tenant.name} 의 정지를 해제합니다.`}
+      footer={<>
+        <Button onClick={onClose}>취소</Button>
+        <Button variant="primary" disabled={busy} onClick={() => void go()}>정지 해제</Button>
+      </>}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
+        이 테넌트의 정지를 해제하시겠습니까? 등록·인증 ceremony 가 다시 허용됩니다. 정지 때 회수된 API 키는 복구되지 않으므로 필요하면 새로 발급하세요.
+      </p>
+    </Dialog>
+  );
+}
+
+// ── TenantHeader — V2 2행 헤더 ──────────────────────────────────────────────
+
+function TenantHeader({ tenant, canManage, onSuspend, onActivate }: {
+  tenant: Tenant; canManage: boolean; onSuspend: () => void; onActivate: () => void;
+}) {
+  return (
+    <>
+      <div className="row" style={{ gap: 14 }}>
+        <span className="avatar avatar--lg" aria-hidden="true">{tenant.name.slice(0, 1).toUpperCase()}</span>
+        <div className="row" style={{ gap: 10, flex: '1 1 280px', minWidth: 0 }}>
+          <h1 className="page__title truncate" title={tenant.name}>{tenant.name}</h1>
+          <StatusBadge status={tenant.status} />
+        </div>
+        <div className="row">
+          {tenant.rpId && (
+            <a className="btn" href={`https://${tenant.rpId}`} target="_blank" rel="noopener noreferrer">
+              RP 사이트 열기 <Icons.ExternalLink size={13} />
+            </a>
+          )}
+          {canManage && (tenant.status === 'ACTIVE'
+            ? <Menu label="더보기" items={[]} dangerItems={[{ label: '테넌트 정지', danger: true, onSelect: onSuspend }]} />
+            : <Menu label="더보기" items={[{ label: '정지 해제', onSelect: onActivate }]} />)}
+        </div>
+      </div>
+      <div className="propchips">
+        <PropChip label="ID" value={tenant.id} copy />
+        <PropChip label="RP ID" value={tenant.rpId} copy />
+        <PropChip label="slug" value={tenant.slug} />
+        <PropChip label="생성" value={fmtDateKst(tenant.createdAt)} />
+      </div>
+    </>
   );
 }
 
@@ -80,87 +168,43 @@ function SuspendDialog({ tenant, open, onClose, onConfirmed }: {
 
 export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload }: TenantDetailPageProps) {
   const [suspendOpen, setSuspendOpen] = useState(false);
-  const toast = useToast();
+  const [resumeOpen, setResumeOpen] = useState(false);
+  const [aaguidPolicy, setAaguidPolicy] = useState<AaguidPolicy | null>(null);
+  const [apiKeys, setApiKeys] = useState<ApiKey[] | null>(null);
+  const platform = isPlatform(me);
+
+  // 탭 점 배지 신호. tenant 가 바뀌거나(onReload 포함) 처음 열릴 때 1회 조회.
+  useEffect(() => {
+    let cancelled = false;
+    setAaguidPolicy(null);
+    setApiKeys(null);
+    aaguidPolicyApi.get(tenant.id).then((p) => { if (!cancelled) setAaguidPolicy(p); }).catch(() => {});
+    apiKeysApi.list(tenant.id).then((k) => { if (!cancelled) setApiKeys(k); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [tenant]);
+
+  const expiringKeyCount = apiKeys ? countExpiringKeys(apiKeys, Date.now()) : undefined;
+  const tabs: TabItem[] = TENANT_TABS.map((t) => {
+    if (t.id === 'aaguid') return { ...t, dot: hasUnverifiedAaguid(aaguidPolicy) };
+    if (t.id === 'apikeys') return { ...t, dot: (expiringKeyCount ?? 0) > 0 };
+    return t;
+  });
+
   return (
     <div className="page">
-      <TenantHeader
-        tenant={tenant}
-        onSuspend={() => setSuspendOpen(true)}
-        onActivate={async () => {
-          if (!window.confirm('이 테넌트의 정지를 해제하시겠습니까?')) return;
-          try { await tenantsApi.activate(tenant.id); toast({ kind: 'ok', title: '정지 해제됨' }); onReload(); }
-          catch (e) { toast({ kind: 'err', title: '해제 실패', message: e instanceof Error ? e.message : String(e) }); }
-        }}
-      />
+      <div className="stack-3" style={{ gap: 14 }}>
+        <TenantHeader tenant={tenant} canManage={platform} onSuspend={() => setSuspendOpen(true)} onActivate={() => setResumeOpen(true)} />
+        <Tabs ariaLabel="Tenant 탭" items={tabs} active={currentTab} onChange={onTabChange} />
+      </div>
+      {currentTab === 'overview' && <TenantOverview tenant={tenant} isPlatformOperator={platform} expiringKeyCount={expiringKeyCount} />}
+      {currentTab === 'webauthn' && <WebauthnConfigTab tenant={tenant} />}
+      {currentTab === 'aaguid' && <AaguidPolicyTab tenant={tenant} />}
+      {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} />}
+      {currentTab === 'credentials' && <CredentialsTab tenant={tenant} />}
+      {currentTab === 'audit' && <AuditTab tenant={tenant} isPlatformOperator={platform} />}
+      {currentTab === 'funnel' && <FunnelTab tenant={tenant} />}
       <SuspendDialog tenant={tenant} open={suspendOpen} onClose={() => setSuspendOpen(false)} onConfirmed={onReload} />
-      <TenantTabs current={currentTab} onChange={onTabChange} />
-      <div className="stack-4">
-        {currentTab === 'overview' && <TenantOverview tenant={tenant} />}
-        {currentTab === 'webauthn' && <WebauthnConfigTab tenant={tenant} />}
-        {currentTab === 'aaguid' && <AaguidPolicyTab tenant={tenant} />}
-        {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} />}
-        {currentTab === 'credentials' && <CredentialsTab tenant={tenant} />}
-        {currentTab === 'audit' && <AuditTab tenant={tenant} isPlatformOperator={me.role === 'PLATFORM_OPERATOR'} />}
-        {currentTab === 'funnel' && <FunnelTab tenant={tenant} />}
-      </div>
-    </div>
-  );
-}
-
-// ── TenantHeader — design pages-2.jsx TenantHeader 1:1 포팅 ─────────────────
-
-function TenantHeader({ tenant, onSuspend, onActivate }: { tenant: Tenant; onSuspend: () => void; onActivate: () => void }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16 }}>
-      <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
-        <div style={{ width: 44, height: 44, borderRadius: 10, background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: 'white', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em' }}>
-          {tenant.name.slice(0, 1)}
-        </div>
-        <div className="stack-1">
-          <div className="row" style={{ gap: 8 }}>
-            <h1 className="page__title" style={{ marginBottom: 0 }}>{tenant.name}</h1>
-            <StatusBadge status={tenant.status} />
-          </div>
-          <div className="row" style={{ gap: 16, fontSize: 12, color: 'var(--text-mute)', marginTop: 4 }}>
-            <span className="mono">{tenant.id}</span>
-            <span>·</span>
-            <span className="mono">slug: {tenant.slug}</span>
-            <span>·</span>
-            <span>생성 {fmtDateTime(tenant.createdAt)}</span>
-          </div>
-        </div>
-      </div>
-      <div className="row">
-        <button className="btn btn--sm" onClick={() => tenant.rpId && window.open('https://' + tenant.rpId, '_blank', 'noopener,noreferrer')}><Icons.ExternalLink size={12} /> RP 사이트 열기</button>
-        {tenant.status === 'ACTIVE' ? (
-          <button className="btn btn--sm btn--danger" onClick={onSuspend}>테넌트 정지</button>
-        ) : (
-          <button className="btn btn--sm" style={{ color: 'var(--success)' }} onClick={onActivate}>정지 해제</button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── TenantTabs — design pages-2.jsx TenantTabs 1:1 포팅 ─────────────────────
-
-function TenantTabs({ current, onChange }: { current: string; onChange: (tab: string) => void }) {
-  const tabs = [
-    { id: 'overview', label: '개요' },
-    { id: 'webauthn', label: 'WebAuthn' },
-    { id: 'aaguid', label: 'AAGUID 정책' },
-    { id: 'apikeys', label: 'API 키' },
-    { id: 'credentials', label: 'Credentials' },
-    { id: 'audit', label: '감사 로그' },
-    { id: 'funnel', label: '퍼널' },
-  ];
-  return (
-    <div className="tabs">
-      {tabs.map((t) => (
-        <button key={t.id} className={`tabs__btn ${current === t.id ? 'tabs__btn--active' : ''}`} onClick={() => onChange(t.id)}>
-          {t.label}
-        </button>
-      ))}
+      <ResumeDialog tenant={tenant} open={resumeOpen} onClose={() => setResumeOpen(false)} onConfirmed={onReload} />
     </div>
   );
 }
@@ -193,8 +237,8 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
     tenantsApi.get(id).then(setTenant).catch(() => {});
   };
 
-  if (loading) return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
-  if (!tenant) return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Tenant 를 찾을 수 없습니다.</div>;
+  if (loading) return <div className="muted" style={{ padding: 40 }}>Loading…</div>;
+  if (!tenant) return <div className="muted" style={{ padding: 40 }}>Tenant 를 찾을 수 없습니다.</div>;
 
   return (
     <TenantDetailPage
