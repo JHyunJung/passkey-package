@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const S = join(__dirname, '..', 'styles');
@@ -20,5 +20,22 @@ describe('V2 tokens', () => {
   });
   it('IBM Plex 를 기본 폰트로 쓴다', () => {
     expect(tokens()).toMatch(/--font:\s*'IBM Plex Sans KR'/);
+  });
+
+  it('전환기간 별칭이 정의·참조되지 않는다', () => {
+    const ALIASES = ['--accent', '--text', '--text-soft', '--text-mute', '--text-faint', '--border', '--border-subtle', '--border-strong', '--bg', '--surface-2', '--surface-3', '--surface-sunk', '--success', '--warning', '--danger', '--info', '--violet', '--teal', '--shadow-xs', '--shadow-sm', '--shadow-md', '--shadow-lg', '--radius'];
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => { const p = join(dir, n); return statSync(p).isDirectory() ? walk(p) : [p]; });
+    const src = join(__dirname, '..');
+    const offenders: string[] = [];
+    for (const f of walk(src).filter((f) => /\.(tsx?|css)$/.test(f) && !f.endsWith('tokens.test.ts'))) {
+      const text = readFileSync(f, 'utf8');
+      for (const a of ALIASES) {
+        // 앞이 식별자 문자가 아닌 `--accent` / `--accent-soft` 뒤에 `:` 또는 `)` (선언·var() 참조). badge--danger 같은 클래스명은 제외.
+        const re = new RegExp(`(?<![a-z0-9-])${a}(-[a-z0-9]+)?\\s*[:)]`);
+        if (re.test(text)) offenders.push(`${f.replace(src, 'src')} ${a}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

@@ -27,18 +27,4 @@
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   /* layout */
   --sidebar-w: 248px; --topbar-h: 60px;
-
-  /* ── 전환기간 별칭 (Task 30 에서 제거) ── */
-  --accent: var(--brand-700); --accent-hover: var(--brand-900); --accent-soft: var(--brand-100); --accent-fg: #fff;
-  --text: var(--ink); --text-soft: var(--ink-2); --text-mute: var(--mute); --text-faint: var(--faint);
-  --border: var(--line); --border-subtle: var(--line-soft); --border-strong: var(--line-strong);
-  --bg: var(--canvas); --surface-2: var(--canvas); --surface-3: var(--sunk); --surface-sunk: var(--sunk);
-  --success: var(--ok); --success-soft: var(--ok-soft);
-  --warning: var(--warn); --warning-soft: var(--warn-soft);
-  --danger: var(--bad); --danger-soft: var(--bad-soft);
-  --info: var(--brand-700); --info-soft: var(--brand-100);
-  --violet: var(--plat); --violet-soft: var(--plat-soft);
-  --teal: var(--brand-600); --teal-soft: var(--brand-100);
-  --shadow-xs: var(--sh-1); --shadow-sm: var(--sh-1); --shadow-md: var(--sh-float); --shadow-lg: var(--sh-2);
-  --radius-xs: var(--r-xs); --radius-sm: var(--r-sm); --radius: var(--r); --radius-lg: var(--r-lg); --radius-pill: var(--r-pill);
 }

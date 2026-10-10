@@ -86,7 +86,6 @@ a:hover { color: var(--brand-900); }
 .btn--primary:hover { background: var(--brand-900); border-color: var(--brand-900); color: #fff; }
 .btn--ghost { border-color: transparent; background: transparent; color: var(--brand-700); }
 .btn--ghost:hover { background: var(--brand-50); border-color: transparent; color: var(--brand-900); }
-.btn--outline { /* legacy = secondary */ }
 .btn--danger { border-color: #E9B7B2; color: var(--bad); }
 .btn--danger:hover { background: var(--bad-soft); border-color: var(--bad-line); color: var(--bad); }
 .btn--danger-solid { background: var(--bad); border-color: var(--bad); color: #fff; }
@@ -106,7 +105,7 @@ a:hover { color: var(--brand-900); }
 .badge--success { background: var(--ok-soft); color: var(--ok); }
 .badge--warning { background: var(--warn-soft); color: var(--warn); }
 .badge--danger { background: var(--bad-soft); color: var(--bad); }
-.badge--info, .badge--accent, .badge--teal { background: var(--brand-100); color: var(--brand-700); }
+.badge--info { background: var(--brand-100); color: var(--brand-700); }
 .badge--violet { background: var(--plat-soft); color: var(--plat); }
 
 /* ── card / kpi ─────────────────────── */
@@ -124,9 +123,9 @@ a:hover { color: var(--brand-900); }
 .kpi--clickable { cursor: pointer; }
 .kpi--clickable:hover { border-color: var(--line-strong); }
 .kpi--selected { border-color: var(--brand-700); box-shadow: 0 0 0 1px var(--brand-700); }
-.kpi__label, .metric-label { font-size: 12px; font-weight: 500; color: var(--mute); }
-.kpi__value, .metric-value { font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -.01em; }
-.kpi__hint, .metric-delta { font-size: 12px; color: var(--ink-2); }
+.kpi__label { font-size: 12px; font-weight: 500; color: var(--mute); }
+.kpi__value { font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -.01em; }
+.kpi__hint { font-size: 12px; color: var(--ink-2); }
 .kpi__hint--warn { color: var(--warn); font-weight: 600; }
 
 /* ── page header bits ───────────────── */

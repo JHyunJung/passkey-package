@@ -195,7 +195,7 @@ function App() {
   }
 
   if (loading) {
-    return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
+    return <div style={{ padding: 40, color: 'var(--mute)' }}>Loading…</div>;
   }
 
   if (!me) {
