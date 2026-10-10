@@ -64,7 +64,51 @@ describe('Menu 클릭 전파', () => {
   });
 });
 
+describe('Menu V2 트리거·위치', () => {
+  function rect(top: number, right: number): DOMRect {
+    return { top, bottom: top + 32, left: right - 32, right, width: 32, height: 32, x: right - 32, y: top, toJSON: () => ({}) } as DOMRect;
+  }
+  it('기본 트리거는 가로 ⋯ 아이콘 버튼, trigger="button" 이면 테두리 있는 .btn', () => {
+    const { rerender } = render(<Menu label="더보기" items={[{ label: 'a', onSelect: vi.fn() }]} />);
+    const icon = screen.getByRole('button', { name: '더보기' });
+    expect(icon).toHaveClass('icon-btn');
+    const cx = Array.from(icon.querySelectorAll('circle')).map((c) => c.getAttribute('cy'));
+    expect(new Set(cx).size).toBe(1); // 세 점이 같은 y — 가로
+    rerender(<Menu label="더보기" trigger="button" items={[{ label: 'a', onSelect: vi.fn() }]} />);
+    expect(screen.getByRole('button', { name: '더보기' })).toHaveClass('btn');
+  });
+  it('열린 메뉴는 position:fixed 로 트리거 아래·오른쪽 정렬 — 스크롤 컨테이너(.tw)에 잘리지 않는다', () => {
+    render(<Menu label="키 액션" items={[{ label: '회전', onSelect: vi.fn() }]} />);
+    const trigger = screen.getByRole('button', { name: '키 액션' });
+    trigger.getBoundingClientRect = () => rect(100, 500);
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(menu.style.position).toBe('fixed');
+    expect(menu.style.top).toBe('138px');
+    expect(menu.style.right).toBe(`${window.innerWidth - 500}px`);
+  });
+  it('아래 공간이 모자라면 트리거 위로 연다', () => {
+    render(<Menu label="키 액션" items={[{ label: '회전', onSelect: vi.fn() }]} />);
+    const trigger = screen.getByRole('button', { name: '키 액션' });
+    trigger.getBoundingClientRect = () => rect(window.innerHeight - 40, 500);
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(menu.style.top).toBe('auto');
+    expect(menu.style.bottom).toBe('46px');
+  });
+  it('페이지가 스크롤되면 닫힌다(고정 위치가 트리거에서 떨어지지 않게)', () => {
+    render(<Menu label="키 액션" items={[{ label: '회전', onSelect: vi.fn() }]} />);
+    fireEvent.click(screen.getByRole('button', { name: '키 액션' }));
+    fireEvent.scroll(window);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+});
+
 describe('ConfirmByTyping', () => {
+  it('actionLabel 이 있으면 안내 문구에 그 버튼 이름을 쓴다', () => {
+    render(<ConfirmByTyping expected="acme" label="slug 입력" actionLabel="정지" onMatchChange={vi.fn()} id="c2" />);
+    expect(screen.getByText('일치해야 정지 버튼이 활성화됩니다.')).toBeInTheDocument();
+  });
   it('정확히 일치할 때만 true', () => {
     const onMatch = vi.fn();
     render(<ConfirmByTyping expected="acme" label="slug 입력" onMatchChange={onMatch} id="c" />);

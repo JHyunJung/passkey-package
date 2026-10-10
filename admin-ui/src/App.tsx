@@ -26,6 +26,7 @@ import type { AppRoute } from '@/appRoute';
 import { urlToRoute, routeToUrl } from '@/appRoute';
 import { RequirePlatform } from '@/me/RequirePlatform';
 import { rpTenantId } from '@/me/roles';
+import { useCrumbTenant } from '@/shell/useCrumbTenant';
 
 // ── Breadcrumb builder ───────────────────────────────────────────────────────
 
@@ -101,8 +102,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 
   useGoShortcuts(setRoute, isPlatform(me));
 
-  // Phase E2 에서 tenant 로딩 추가
-  const tenant = null;
+  const tenant = useCrumbTenant(route.name === 'tenant' ? route.tenantId : null);
   const breadcrumb = buildBreadcrumb(route, tenant, me, setRoute);
 
   async function handleSwitchRole() {

@@ -90,6 +90,7 @@ function SuspendDialog({ tenant, open, onClose, onConfirmed }: {
       <ConfirmByTyping
         id="suspend-slug"
         expected={tenant.slug}
+        actionLabel="정지"
         onMatchChange={setMatch}
         label={<>확인을 위해 slug <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{tenant.slug}</span> 를 입력하세요</>}
       />
@@ -150,8 +151,8 @@ function TenantHeader({ tenant, canManage, onSuspend, onActivate }: {
             </a>
           )}
           {canManage && (tenant.status === 'ACTIVE'
-            ? <Menu label="더보기" items={[]} dangerItems={[{ label: '테넌트 정지', danger: true, onSelect: onSuspend }]} />
-            : <Menu label="더보기" items={[{ label: '정지 해제', onSelect: onActivate }]} />)}
+            ? <Menu label="더보기" trigger="button" items={[]} dangerItems={[{ label: '테넌트 정지', danger: true, onSelect: onSuspend }]} />
+            : <Menu label="더보기" trigger="button" items={[{ label: '정지 해제', onSelect: onActivate }]} />)}
         </div>
       </div>
       <div className="propchips">

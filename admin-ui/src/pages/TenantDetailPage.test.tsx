@@ -128,6 +128,10 @@ describe('탭 점 배지', () => {
 });
 
 describe('테넌트 정지 / 정지 해제', () => {
+  it('PLATFORM 의 ⋯ 트리거는 테두리 있는 버튼(V2 TenantHead)', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: '더보기' })).toHaveClass('btn');
+  });
   it('RP_ADMIN 에게는 ⋯ 메뉴가 없다(서버 PLATFORM 전용)', () => {
     renderPage({ me: RP });
     expect(screen.queryByRole('button', { name: '더보기' })).toBeNull();
@@ -141,6 +145,7 @@ describe('테넌트 정지 / 정지 해제', () => {
     expect(within(dlg).getByRole('alert')).toHaveTextContent('영향 범위');
     expect(within(dlg).getByText('· 유효 API key 3개 즉시 회수')).toBeInTheDocument();
     expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
+    expect(within(dlg).getByText('일치해야 정지 버튼이 활성화됩니다.')).toBeInTheDocument();
     const go = within(dlg).getByRole('button', { name: '정지' });
     expect(go).toBeDisabled();
     const input = within(dlg).getByRole('textbox', { name: /확인을 위해 slug/ });

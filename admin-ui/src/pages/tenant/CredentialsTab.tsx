@@ -141,7 +141,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
         </span>
       ),
     },
-    { key: 'user', header: '사용자', render: (c) => <span className="mono" style={{ fontSize: 12 }}>{c.externalUserId}</span> },
+    { key: 'user', header: '사용자', render: (c) => <span className="mono truncate" style={{ fontSize: 12, display: 'inline-block', maxWidth: 200, verticalAlign: 'middle' }} title={c.externalUserId}>{c.externalUserId}</span> },
     { key: 'nick', header: '별칭', render: (c) => c.nickname ? <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{c.nickname}</span> : <span className="muted">—</span> },
     {
       key: 'authn', header: '인증기',

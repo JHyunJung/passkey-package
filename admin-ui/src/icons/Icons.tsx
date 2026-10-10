@@ -210,10 +210,11 @@ const Hash = makeIcon(['M4 9h16M4 15h16M10 3L8 21M16 3l-2 18']);
 
 const Menu = makeIcon(['M4 6h16M4 12h16M4 18h16']);
 
+// V2: 가로 ⋯ (아트보드 TenantHead·API 키 행 메뉴)
 const Dots = makeIconR([
-  { tag: 'circle', attrs: { cx: 12, cy: 5, r: 1.5, fill: 'currentColor', stroke: 'none' } },
+  { tag: 'circle', attrs: { cx: 5, cy: 12, r: 1.5, fill: 'currentColor', stroke: 'none' } },
   { tag: 'circle', attrs: { cx: 12, cy: 12, r: 1.5, fill: 'currentColor', stroke: 'none' } },
-  { tag: 'circle', attrs: { cx: 12, cy: 19, r: 1.5, fill: 'currentColor', stroke: 'none' } },
+  { tag: 'circle', attrs: { cx: 19, cy: 12, r: 1.5, fill: 'currentColor', stroke: 'none' } },
 ]);
 
 const Sparkles = makeIcon([

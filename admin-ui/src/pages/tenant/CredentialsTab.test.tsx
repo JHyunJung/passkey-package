@@ -36,6 +36,15 @@ describe('CredentialsTab V2', () => {
     await waitFor(() => expect(api.list).toHaveBeenLastCalledWith('t1', 0, 50, 'abc'));
   });
 
+  it('사용자 열은 긴 userHandle 을 말줄임(전체 값은 title) — 표가 카드 밖으로 밀리지 않게', async () => {
+    const long = 'pld_4hnml33mtmxZTozXbiHNX8BVqiwmbkIx8yzPueI';
+    api.list.mockResolvedValue(pageOf([cred('c1', { externalUserId: long })]));
+    renderTab();
+    const cell = await screen.findByText(long);
+    expect(cell).toHaveClass('truncate');
+    expect(cell).toHaveAttribute('title', long);
+  });
+
   it('credential 이 하나도 없으면 빈 상태 일러스트', async () => {
     api.list.mockResolvedValue(pageOf([], 0));
     const { container } = renderTab();
