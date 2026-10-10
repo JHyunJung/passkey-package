@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { activityApi } from '@/api/activity';
 import { downloadCsv } from '@/lib/csvExport';
-import { kstDateTime, kstTime, utcIso, groupByDay } from '@/lib/kst';
+import { kstDateTime, kstTime, kstToday, utcIso, groupByDay } from '@/lib/kst';
 import type { ActivityView, ActivityCategory, ActivityDetailView } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 import { actionLabel, eventSentence } from './activityLabels';
@@ -383,7 +383,7 @@ export default function ActivityPage() {
       return;
     }
     downloadCsv(
-      `activity-${new Date().toISOString().slice(0, 10)}.csv`,
+      `activity-${kstToday()}.csv`,
       ['timestamp', 'tenant', 'type', 'category', 'actor', 'subject'],
       events.map((e) => [e.ts, e.tenantSlug ?? e.tenantId ?? '', e.type, e.category, e.actorId ?? '', e.subjectId]),
     );

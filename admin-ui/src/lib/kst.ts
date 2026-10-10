@@ -33,6 +33,27 @@ export function kstDateTime(iso: string): string {
   return p ? `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}` : iso;
 }
 
+/** KST 날짜·시각 `YYYY-MM-DD HH:mm`. */
+export function kstDateTimeMin(iso: string): string {
+  const p = parts(iso);
+  return p ? `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}` : iso;
+}
+
+/** 지금의 KST 날짜 `YYYY-MM-DD`(파일 이름 등). */
+export function kstToday(now: Date = new Date()): string {
+  return kstDate(now.toISOString());
+}
+
+/** KST 기준 직전 달 1일 ~ 말일(`YYYY-MM-DD`). */
+export function kstPrevMonthRange(now: Date = new Date()): { from: string; to: string } {
+  const [y, m] = kstToday(now).split('-').map(Number);
+  const py = m === 1 ? y - 1 : y;
+  const pm = m === 1 ? 12 : m - 1;
+  const last = new Date(Date.UTC(py, pm, 0)).getUTCDate(); // pm 은 1-based → Date.UTC(py, pm, 0) = 그 달 말일
+  const mm = String(pm).padStart(2, '0');
+  return { from: `${py}-${mm}-01`, to: `${py}-${mm}-${String(last).padStart(2, '0')}` };
+}
+
 /** UTC ISO `YYYY-MM-DDTHH:mm:ssZ`(밀리초 제거). */
 export function utcIso(iso: string): string {
   const d = new Date(iso);

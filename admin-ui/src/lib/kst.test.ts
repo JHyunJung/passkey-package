@@ -1,6 +1,6 @@
 // admin-ui/src/lib/kst.test.ts
 import { describe, it, expect } from 'vitest';
-import { kstDate, kstTime, kstDateTime, utcIso, dayLabel, groupByDay } from './kst';
+import { kstDate, kstTime, kstDateTime, utcIso, dayLabel, groupByDay, kstToday, kstPrevMonthRange } from './kst';
 
 describe('kst formatters', () => {
   it('UTC 15:10 은 KST 다음날 00:10', () => {
@@ -51,5 +51,18 @@ describe('groupByDay', () => {
   });
   it('빈 입력은 빈 배열', () => {
     expect(groupByDay([], (i: { ts: string }) => i.ts, new Date())).toEqual([]);
+  });
+});
+
+describe('kstToday / kstPrevMonthRange', () => {
+  it('KST 00:00–09:00 사이에도 KST 날짜(UTC 전날이 아님)', () => {
+    expect(kstToday(new Date('2026-10-10T16:30:00Z'))).toBe('2026-10-11');
+    expect(kstToday(new Date('2026-10-11T14:59:00Z'))).toBe('2026-10-11');
+  });
+  it('직전 달 1일 ~ 말일을 KST 기준으로', () => {
+    // KST 2026-11-01 01:00 = UTC 2026-10-31 16:00 — 브라우저 시간대와 무관하게 직전 달은 10월
+    expect(kstPrevMonthRange(new Date('2026-10-31T16:00:00Z'))).toEqual({ from: '2026-10-01', to: '2026-10-31' });
+    expect(kstPrevMonthRange(new Date('2026-03-15T00:00:00Z'))).toEqual({ from: '2026-02-01', to: '2026-02-28' });
+    expect(kstPrevMonthRange(new Date('2026-01-10T00:00:00Z'))).toEqual({ from: '2025-12-01', to: '2025-12-31' });
   });
 });

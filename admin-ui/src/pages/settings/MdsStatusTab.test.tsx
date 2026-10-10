@@ -132,4 +132,11 @@ describe('MdsStatusTab V2', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(await screen.findByText('정상 · BLOB #87')).toBeInTheDocument();
   });
+
+  it('이력 시각은 브라우저 시간대가 아니라 KST', async () => {
+    mock(mdsStatusApi.history).mockResolvedValue([{ ...history[0], startedAt: '2026-10-10T16:30:00Z' }]);
+    renderTab();
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('2026-10-11 01:30')).toBeInTheDocument();
+  });
 });

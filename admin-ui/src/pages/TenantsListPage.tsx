@@ -7,7 +7,7 @@ import { apiKeysApi } from '@/api/apiKeys';
 import type { Tenant } from '@/api/designTypes';
 import type { ApiKeyView } from '@/api/types';
 import { downloadCsv } from '@/lib/csvExport';
-import { kstDate } from '@/lib/kst';
+import { kstDate, kstToday } from '@/lib/kst';
 import { isExpiringSoon } from '@/lib/apiKeyExpiry';
 import { statusLabel } from '@/i18n/labels';
 import { illustrations } from '@/assets/illustrations';
@@ -243,7 +243,7 @@ export default function TenantsListPage() {
               icon={<Icons.Download size={14} />}
               onClick={() =>
                 downloadCsv(
-                  `tenants-${new Date().toISOString().slice(0, 10)}.csv`,
+                  `tenants-${kstToday()}.csv`,
                   ['name', 'slug', 'rpId', 'status', 'credentials', 'apiKeys', 'createdAt'],
                   filtered.map((t) => [t.name, t.slug, t.rpId, t.status, t.credentials, t.apiKeys, t.createdAt]),
                 )

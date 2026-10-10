@@ -4,6 +4,7 @@ import { mfaApi, type EnrollResponse } from '@/api/mfa';
 import { getMe } from '@/api/client';
 import { ApiError, type Me } from '@/api/types';
 import { QrCode } from '@/shell/QrCode';
+import { kstDate } from '@/lib/kst';
 import { illustrations } from '@/assets/illustrations';
 import { Badge, Button, Dialog, OtpInput, SecretBox, Stepper, useToast, useUnsavedGuard, type StepState } from '@/ui';
 import { KvList, type KvItem } from '@/pages/tenant/KvList';
@@ -118,7 +119,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
   }
 
   // §6 ④ — 서버가 내려줄 때만 표시(null/undefined 면 줄 자체를 렌더하지 않음)
-  const enrolledAt = me.mfaEnrolledAt != null ? me.mfaEnrolledAt.slice(0, 10) : null;
+  const enrolledAt = me.mfaEnrolledAt != null ? kstDate(me.mfaEnrolledAt) : null;
   const remaining = me.recoveryCodesRemaining != null ? me.recoveryCodesRemaining : null;
   const infoRows: KvItem[] = [
     ...(enrolledAt !== null ? [{ k: '등록일', v: enrolledAt }] : []),

@@ -8,6 +8,7 @@ import {
 import { illustrations } from '@/assets/illustrations';
 import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';
+import { kstToday } from '@/lib/kst';
 import type { Tenant, Credential } from '@/api/designTypes';
 import CredentialDetailDialog from './CredentialDetailDialog';
 import { KvList } from './KvList';
@@ -122,7 +123,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   function exportCsv() {
     if (visible.length === 0) return;
     downloadCsv(
-      `credentials-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+      `credentials-${tenant.slug}-${kstToday()}.csv`,
       ['credentialId', 'externalUserId', 'label', 'authenticatorName', 'status', 'aaguid', 'transports', 'signatureCounter', 'lastUsedAt', 'createdAt'],
       visible.map((c) => [
         c.credentialId, c.externalUserId, c.nickname ?? '', c.authenticatorName ?? '', c.status, c.aaguid ?? '',

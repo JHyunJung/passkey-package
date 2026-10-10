@@ -81,7 +81,7 @@ export default function SystemInfoTab() {
         <KpiCard
           label="Server 버전"
           value={<span className="mono" style={{ fontSize: 22 }}>{info.serverVersion}</span>}
-          hint={info.deployedAt ? `${info.deployedAt.slice(0, 10)} 배포` : '배포 시각 정보 없음'}
+          hint={info.deployedAt ? `${kstDate(info.deployedAt)} 배포` : '배포 시각 정보 없음'}
         />
         <KpiCard label="Uptime" value={`${info.uptimeDays}d`} />
       </div>

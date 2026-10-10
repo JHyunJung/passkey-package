@@ -8,6 +8,7 @@ import {
 import { auditApi } from '@/api/audit';
 import { copyToClipboard } from '@/lib/clipboard';
 import { downloadCsv } from '@/lib/csvExport';
+import { kstToday } from '@/lib/kst';
 import type { Tenant, AuditEvent, ChainVerifyResult } from '@/api/designTypes';
 import { fmtNum, hms, timeAgo, ymdHms } from './tabFormat';
 import { WINDOWS, type WindowKey, dayLabel, diffValue, eventTone, isFailure, payloadDiff, windowRange } from './auditHelpers';
@@ -105,7 +106,7 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
   function exportCsv() {
     if (filtered.length === 0) return;
     downloadCsv(
-      `audit-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+      `audit-${tenant.slug}-${kstToday()}.csv`,
       ['ts', 'eventType', 'actorType', 'actorId', 'subjectType', 'subjectId', 'payload'],
       filtered.map((e) => [e.ts, e.eventType, e.actorType, e.actorId ?? '', e.subjectType ?? '', e.subjectId ?? '', JSON.stringify(e.payload ?? {})]),
     );

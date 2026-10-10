@@ -6,7 +6,7 @@ import { auditChainApi } from '@/api/auditChain';
 import { monthlyReportApi } from '@/api/monthlyReport';
 import { ApiError } from '@/api/types';
 import { statusLabel } from '@/i18n/labels';
-import { kstDateTime } from '@/lib/kst';
+import { kstDateTime, kstPrevMonthRange } from '@/lib/kst';
 import { illustrations } from '@/assets/illustrations';
 import {
   Alert, Badge, Button, Card, CardHeader, DataTable, Dialog, EmptyState, Field, KpiCard, PageHeader,
@@ -43,18 +43,6 @@ function timeUntil(iso: string): string {
   return `${Math.floor(m / 60)}시간 후`;
 }
 
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** 직전 달 1일 ~ 말일. */
-function prevMonthRange(now: Date): { from: string; to: string } {
-  return {
-    from: ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-    to: ymd(new Date(now.getFullYear(), now.getMonth(), 0)),
-  };
-}
-
 function stripLabel(runs: { ok: boolean }[]): string {
   const bad = runs.filter((r) => !r.ok).length;
   return bad === 0 ? `최근 ${runs.length}회 모두 정상` : `최근 ${runs.length}회 중 위변조 감지 ${bad}회`;
@@ -68,7 +56,7 @@ function MonthlyReportDialog({ open, onClose, overview }: {
   onClose: () => void;
   overview: ChainOverview;
 }) {
-  const initial = prevMonthRange(new Date());
+  const initial = kstPrevMonthRange(new Date());
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [busy, setBusy] = useState(false);

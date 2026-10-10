@@ -123,9 +123,9 @@ describe('AccountTab — MFA 켜짐', () => {
   });
 
   it('optional rows shown when defined', () => {
-    renderHost(<Host initial={{ ...on, mfaEnrolledAt: '2026-09-01T10:00:00Z', recoveryCodesRemaining: 7 }} />);
+    renderHost(<Host initial={{ ...on, mfaEnrolledAt: '2026-08-31T20:00:00Z', recoveryCodesRemaining: 7 }} />);
     expect(screen.getByText('등록일')).toBeInTheDocument();
-    expect(screen.getByText('2026-09-01')).toBeInTheDocument();
+    expect(screen.getByText('2026-09-01')).toBeInTheDocument(); // UTC 08-31 20:00 = KST 09-01 05:00
     expect(screen.getByText('남은 복구 코드')).toBeInTheDocument();
     expect(screen.getByText('7 / 10')).toBeInTheDocument();
   });

@@ -1,5 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { Icons } from '@/icons/Icons';
+import { kstDateTimeMin } from '@/lib/kst';
 import { mdsStatusApi, MDS_HISTORY_STRIP_LIMIT, type MdsStatus, type MdsHistoryRow } from '@/api/mdsStatus';
 import {
   Badge, Button, CardBody, CardHeader, DataTable, KpiCard, StatusStrip, useToast, type BadgeTone, type Column,
@@ -20,15 +21,7 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return iso ? kstDateTimeMin(iso) : '—';
 }
 
 /** 서버 시드(mds_blob_cache: version 0, 1970-01-01)는 "한 번도 동기화되지 않음"이다. 2000년 이전 시각은 시드로 본다. */
