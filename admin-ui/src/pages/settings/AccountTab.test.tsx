@@ -76,6 +76,18 @@ describe('AccountTab — MFA 꺼짐', () => {
     expect(screen.getByText('켜짐')).toBeInTheDocument();
   });
 
+  it('confirm 성공 후 getMe 가 실패해도 복구 코드는 보여 준다', async () => {
+    m(getMe).mockRejectedValue(new Error('boom'));
+    render(<Host initial={off} />);
+    fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
+    const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
+    fireEvent.paste(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' }), { clipboardData: { getData: () => '123456' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '확인 → 복구 코드' }));
+    const rc = await screen.findByRole('alertdialog', { name: '복구 코드 — 지금만 표시됩니다' });
+    expect(within(rc).getByText('AAAA-BBBB')).toBeInTheDocument();
+    expect(screen.queryByText('2단계 인증 확인 실패')).toBeNull();
+  });
+
   it('잘못된 코드면 코드가 지워지고 다이얼로그는 유지', async () => {
     const { ApiError } = await import('@/api/types');
     m(mfaApi.confirm).mockRejectedValue(new ApiError(401, 'invalid_code', 'invalid_code'));

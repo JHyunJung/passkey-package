@@ -63,10 +63,15 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
       const res = await mfaApi.confirm(enrollCode);
       setEnroll(null);
       setEnrollCode('');
-      onMeChange(await getMe());
-      toast({ kind: 'ok', title: '2단계 인증이 켜졌습니다.' });
+      // 복구 코드는 1회만 표시 — me 갱신 실패와 무관하게 먼저 보여 준다.
       if (res.recoveryCodes && res.recoveryCodes.length > 0) {
         setRecoveryCodes(res.recoveryCodes);
+      }
+      toast({ kind: 'ok', title: '2단계 인증이 켜졌습니다.' });
+      try {
+        onMeChange(await getMe());
+      } catch {
+        toast({ kind: 'warn', title: '계정 정보를 새로고침하지 못했습니다.', message: '페이지를 새로고침해 주세요.' });
       }
     } catch (e: unknown) {
       setEnrollCode('');
@@ -212,7 +217,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
       {/* ── 끄기 ─────────────────────────────────────────────────────────── */}
       <Dialog
         open={disableOpen}
-        onClose={() => setDisableOpen(false)}
+        onClose={() => { if (!disabling) setDisableOpen(false); }}
         role="alertdialog"
         title="2단계 인증 끄기"
         sub="본인 확인을 위해 현재 authenticator 코드를 입력하세요."
