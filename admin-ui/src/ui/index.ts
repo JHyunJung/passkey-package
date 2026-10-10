@@ -23,3 +23,6 @@ export * from './SecretBox';
 export * from './ConfirmByTyping';
 export * from './Stepper';
 export * from './StatusStrip';
+export * from './Tabs';
+export * from './DataTable';
+export * from './Pagination';
