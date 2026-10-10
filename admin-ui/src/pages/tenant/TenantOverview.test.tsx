@@ -1,6 +1,6 @@
 // admin-ui/src/pages/tenant/TenantOverview.test.tsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, fireEvent, cleanup, act, waitFor } from '@testing-library/react';
+import { screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { ToastHost } from '@/ui';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import type { Tenant } from '@/api/designTypes';
