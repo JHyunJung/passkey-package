@@ -9,11 +9,13 @@ vi.mock('@/api/auditChain', () => ({ auditChainApi: { verifyTenant: vi.fn() } })
 vi.mock('@/api/auditChainMonitor', () => ({ auditChainMonitorApi: { overview: vi.fn() } }));
 vi.mock('@/api/funnel', () => ({ funnelApi: { get: vi.fn() } }));
 vi.mock('@/api/activity', () => ({ activityApi: { fetch: vi.fn() } }));
+vi.mock('@/api/audit', () => ({ auditApi: { list: vi.fn() } }));
 
 import { auditChainApi } from '@/api/auditChain';
 import { auditChainMonitorApi } from '@/api/auditChainMonitor';
 import { funnelApi } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
+import { auditApi } from '@/api/audit';
 import TenantOverview from './TenantOverview';
 
 const T: Tenant = {
@@ -49,12 +51,16 @@ beforeEach(() => {
       { id: 'e2', action: 'API_KEY_ISSUED', actorEmail: 'op@x.com', targetType: null, targetId: 'k1', tenantId: 'other', tenantSlug: 'other', createdAt: new Date().toISOString(), category: 'ops' },
     ],
   });
+  (auditApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+    page: 0, size: 5,
+    items: [{ id: 'a1', ts: new Date().toISOString(), eventType: 'WEBAUTHN_CONFIG_UPDATED', actorType: 'ADMIN', actorId: 'rp@x.com', subjectType: 'TENANT', subjectId: 'tenant-0123456789abcdef', payload: null }],
+  });
 });
 afterEach(cleanup);
 
 describe('TenantOverview', () => {
   it('KPI 4개와 요약 카드 3개', async () => {
-    renderOverview({ expiringKeyCount: 2 });
+    renderOverview({ expiringKeyCount: 2, isPlatformOperator: true });
     expect(screen.getByText('등록 Credential')).toBeInTheDocument();
     expect(screen.getByText('1,234')).toBeInTheDocument();
     expect(screen.getByText('만료 임박 2')).toHaveClass('kpi__hint--warn');
@@ -85,45 +91,52 @@ describe('TenantOverview', () => {
     renderOverview();
     expect(screen.queryByText(/만료 임박/)).toBeNull();
   });
-  it('최근 활동은 이 tenant 이벤트만', async () => {
-    renderOverview();
+  it('PLATFORM: 최근 활동은 활동 피드에서 이 tenant 이벤트만', async () => {
+    renderOverview({ isPlatformOperator: true });
     expect(await screen.findByText('CREDENTIAL_AUTHENTICATED')).toBeInTheDocument();
     expect(screen.queryByText('API_KEY_ISSUED')).toBeNull();
   });
   it('감사 체인 무결 상태', async () => {
-    renderOverview();
+    renderOverview({ isPlatformOperator: true });
     expect(await screen.findByText('무결 · 위변조 0건')).toBeInTheDocument();
     expect(screen.getByText('마지막 검증 방금 전')).toBeInTheDocument();
   });
   it('위변조 상태는 bad 배너', async () => {
     (auditChainApi.verifyTenant as ReturnType<typeof vi.fn>).mockResolvedValue({ tenantId: 't-1', intact: false, tamperedEntryId: 'entry-1234567890abcdef', verifiedAt: new Date().toISOString() });
-    renderOverview();
+    renderOverview({ isPlatformOperator: true });
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('위변조 감지');
     expect(alert).toHaveTextContent('…90abcdef');
   });
-  it('RP_ADMIN: overview 를 부르지 않고 스트립이 없다', async () => {
-    renderOverview({ isPlatformOperator: false });
+  it('RP_ADMIN: PLATFORM 전용 API(verifyTenant·활동 피드·overview)를 부르지 않고, 감사 체인 카드가 없다', async () => {
+    const { router } = renderOverview({ isPlatformOperator: false });
+    expect(await screen.findByText('WEBAUTHN_CONFIG_UPDATED')).toBeInTheDocument();
+    expect(auditApi.list).toHaveBeenCalledWith('t-1', 0, 5);
+    expect(auditChainApi.verifyTenant).not.toHaveBeenCalled();
+    expect(activityApi.fetch).not.toHaveBeenCalled();
+    expect(auditChainMonitorApi.overview).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: '감사 체인' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '수동 검증' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '월간 보고서' })).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /전체 보기/ })); });
+    expect(router.state.location.pathname).toBe('/tenants/t-1');
+    expect(router.state.location.search).toBe('?tab=audit');
+  });
+  it('PLATFORM: 전체 보기는 활동 화면(tenant 필터)', async () => {
+    const { router } = renderOverview({ isPlatformOperator: true });
+    await screen.findByText('CREDENTIAL_AUTHENTICATED');
+    expect(auditApi.list).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /전체 보기/ })); });
+    expect(router.state.location.pathname).toBe('/activity');
+  });
+  it('PLATFORM: 전 tenant 체인 검증(overview)을 개요에서 부르지 않는다 — recentRuns 가 서버에 생길 때까지 스트립 없음', async () => {
+    renderOverview({ isPlatformOperator: true });
     await screen.findByText('무결 · 위변조 0건');
     expect(auditChainMonitorApi.overview).not.toHaveBeenCalled();
     expect(screen.queryByRole('img', { name: /최근 \d+회 검증/ })).toBeNull();
   });
-  it('PLATFORM 이지만 recentRuns 필드가 없으면 스트립이 없다', async () => {
-    renderOverview({ isPlatformOperator: true });
-    await waitFor(() => expect(auditChainMonitorApi.overview).toHaveBeenCalledWith(24));
-    await screen.findByText('무결 · 위변조 0건');
-    expect(screen.queryByRole('img', { name: /최근 \d+회 검증/ })).toBeNull();
-  });
-  it('PLATFORM + recentRuns 가 있으면 요약 라벨 스트립', async () => {
-    (auditChainMonitorApi.overview as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ...OVERVIEW,
-      tenants: [{ ...OVERVIEW.tenants[0], recentRuns: [{ at: 'a', ok: true }, { at: 'b', ok: false }, { at: 'c', ok: true }] }],
-    });
-    renderOverview({ isPlatformOperator: true });
-    expect(await screen.findByRole('img', { name: '최근 3회 검증 중 1회 위변조' })).toBeInTheDocument();
-  });
   it('수동 검증은 verifyTenant 재호출, 월간 보고서는 감사 체인 화면, 자세히는 감사 로그 탭', async () => {
-    const { router } = renderOverview();
+    const { router } = renderOverview({ isPlatformOperator: true });
     await screen.findByText('무결 · 위변조 0건');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '수동 검증' })); });
     expect(auditChainApi.verifyTenant).toHaveBeenCalledTimes(2);

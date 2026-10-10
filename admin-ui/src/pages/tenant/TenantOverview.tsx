@@ -2,14 +2,14 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
-import type { Tenant } from '@/api/designTypes';
+import type { AuditEvent, Tenant } from '@/api/designTypes';
 import { auditChainApi, type TenantChainVerify } from '@/api/auditChain';
-import { auditChainMonitorApi } from '@/api/auditChainMonitor';
 import { funnelApi, type FunnelData } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
+import { auditApi } from '@/api/audit';
 import { Alert, Button, Card, CardBody, CardHeader, KpiCard, StatusStrip, useToast } from '@/ui';
 import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
-import { pickRecentRuns, recentRunsLabel, type ChainRun } from './tenantSignals';
+import { recentRunsLabel, type ChainRun } from './tenantSignals';
 
 // ── util ─────────────────────────────────────────────────────────────────────
 
@@ -39,6 +39,13 @@ function eventColor(type: string): string {
   if (/FAIL|REVOKED|REGRESSION|TAMPER/.test(type)) return 'var(--bad)';
   if (type.startsWith('API_KEY') || type.endsWith('_UPDATED')) return 'var(--warn-dot)';
   return 'var(--brand-700)';
+}
+
+function auditToRecent(e: AuditEvent): RecentActivityEvent {
+  return {
+    id: e.id, ts: e.ts, tenantId: null, tenantName: '', tenantSlug: null, type: e.eventType,
+    actorType: e.actorType, actorId: e.actorId, subjectId: e.subjectId ?? '—', category: 'ops',
+  };
 }
 
 const iconBox = (bg: string, fg: string): CSSProperties => ({
@@ -100,7 +107,6 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
   const navigate = useNavigate();
   const toast = useToast();
   const [chainState, setChainState] = useState<TenantChainVerify | null>(null);
-  const [recentRuns, setRecentRuns] = useState<ChainRun[] | undefined>(undefined);
   const [funnel, setFunnel] = useState<FunnelData | null>(null);
   const [recentEvents, setRecentEvents] = useState<RecentActivityEvent[]>([]);
 
@@ -119,21 +125,18 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
     navigate('/audit-chain');
   }
 
-  useEffect(() => {
-    auditChainApi.verifyTenant(tenant.id)
-      .then(setChainState)
-      .catch(() => setChainState(null));
-  }, [tenant.id]);
-
-  // ★ 최근 검증 이력: overview 는 PLATFORM 전용 API. 필드가 없으면 undefined 유지 → 스트립 숨김.
+  // 감사 체인 검증(verifyTenant)은 PLATFORM 전용 API — RP_ADMIN 에게는 카드 자체를 그리지 않는다.
   useEffect(() => {
     if (!isPlatformOperator) return;
     let cancelled = false;
-    auditChainMonitorApi.overview(24)
-      .then((o) => { if (!cancelled) setRecentRuns(pickRecentRuns(o, tenant.id)); })
-      .catch(() => {});
+    auditChainApi.verifyTenant(tenant.id)
+      .then((r) => { if (!cancelled) setChainState(r); })
+      .catch(() => { if (!cancelled) setChainState(null); });
     return () => { cancelled = true; };
   }, [tenant.id, isPlatformOperator]);
+
+  // ★ 최근 검증 이력(recentRuns, 스펙 §6 ②)은 서버에 아직 없다. 그 필드를 찾으려고 전 tenant 체인을 검증하는
+  // overview 를 부르지 않는다 — 서버가 필드를 주면 여기서 읽어 ChainSummaryCard 의 recentRuns 로 넘긴다.
 
   useEffect(() => {
     let cancelled = false;
@@ -144,17 +147,16 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
   }, [tenant.id]);
 
   useEffect(() => {
-    // 기존과 동일: 최신 피드를 받아 클라이언트에서 tenant 로 거른다.
     let cancelled = false;
-    activityApi
-      .fetch(null, undefined)
-      .then((view) => {
-        if (cancelled) return;
-        setRecentEvents(adaptFeedItems(view).filter((e) => e.tenantId === tenant.id).slice(0, 5));
-      })
+    // PLATFORM: 활동 피드(PLATFORM 전용)에서 이 tenant 만. RP_ADMIN: 이 tenant 의 감사 로그 최근 5건.
+    const load: Promise<RecentActivityEvent[]> = isPlatformOperator
+      ? activityApi.fetch(null, undefined).then((view) => adaptFeedItems(view).filter((e) => e.tenantId === tenant.id).slice(0, 5))
+      : auditApi.list(tenant.id, 0, 5).then((res) => res.items.slice(0, 5).map(auditToRecent));
+    load
+      .then((events) => { if (!cancelled) setRecentEvents(events); })
       .catch(() => { if (!cancelled) setRecentEvents([]); });
     return () => { cancelled = true; };
-  }, [tenant.id]);
+  }, [tenant.id, isPlatformOperator]);
 
   const f = funnel ?? {
     registration: { attempts: 0, success: 0, ratio: 0 },
@@ -178,7 +180,7 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
           hint={f.authentication.attempts > 0 ? `${fmt(f.authentication.success)} / ${fmt(f.authentication.attempts)} 시도` : '최근 7일 인증 시도 없음'} />
       </div>
 
-      <div className="grid-3">
+      <div className={isPlatformOperator ? 'grid-3' : 'grid-2'}>
         <Card>
           <CardHeader title="WebAuthn 요약" actions={
             <Button variant="ghost" size="sm" onClick={() => navigate(`/tenants/${tenant.id}?tab=webauthn`)}>편집 <Icons.ChevronRight size={12} /></Button>
@@ -199,7 +201,7 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
 
         <Card>
           <CardHeader title="최근 활동" actions={
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/activity?tenantId=${tenant.id}`)}>전체 보기 <Icons.ChevronRight size={12} /></Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate(isPlatformOperator ? `/activity?tenantId=${tenant.id}` : `/tenants/${tenant.id}?tab=audit`)}>전체 보기 <Icons.ChevronRight size={12} /></Button>
           } />
           {recentEvents.length === 0 ? (
             <p className="muted" style={{ margin: 0, padding: 20, fontSize: 13, textAlign: 'center' }}>최근 활동 없음</p>
@@ -217,13 +219,14 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
           )}
         </Card>
 
-        <ChainSummaryCard
-          state={chainState}
-          recentRuns={recentRuns}
-          onManualVerify={() => void handleManualVerify()}
-          onMonthlyReport={handleMonthlyReport}
-          onDetail={() => navigate(`/tenants/${tenant.id}?tab=audit`)}
-        />
+        {isPlatformOperator && (
+          <ChainSummaryCard
+            state={chainState}
+            onManualVerify={() => void handleManualVerify()}
+            onMonthlyReport={handleMonthlyReport}
+            onDetail={() => navigate(`/tenants/${tenant.id}?tab=audit`)}
+          />
+        )}
       </div>
     </div>
   );
