@@ -14,6 +14,7 @@ export type Tenant = {
   userVerification: 'REQUIRED' | 'PREFERRED';
   attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
   webauthnTimeoutMs: number;
+  credentialsDelta7d?: number;
 };
 
 export type ApiKey = {

@@ -1,12 +1,22 @@
+// admin-ui/src/pages/TenantsListPage.tsx
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { tenantsApi } from '@/api/tenants';
+import { apiKeysApi } from '@/api/apiKeys';
 import type { Tenant } from '@/api/designTypes';
-import { useToast, StatusBadge, Dialog } from '@/ui';
+import type { ApiKeyView } from '@/api/types';
 import { downloadCsv } from '@/lib/csvExport';
+import { kstDate } from '@/lib/kst';
+import { isExpiringSoon } from '@/lib/apiKeyExpiry';
+import { statusLabel } from '@/i18n/labels';
+import { illustrations } from '@/assets/illustrations';
+import {
+  Button, Card, DataTable, Dialog, EmptyState, Field, KpiCard, PageHeader, Pagination,
+  RemovableChip, Segmented, StatusBadge, useToast, type Column,
+} from '@/ui';
 
-// ── local utilities (mirrors design globals) ─────────────────────────────────
+// ── local utilities ──────────────────────────────────────────────────────────
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -22,17 +32,6 @@ function timeAgo(iso: string | null | undefined): string {
   return `${mo}개월 전`;
 }
 
-function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
 function tail(s: string, n: number): string {
   return s.slice(-n);
 }
@@ -41,14 +40,25 @@ function fmt(n: number): string {
   return n.toLocaleString();
 }
 
+function signed(n: number): string {
+  return n >= 0 ? `+${fmt(n)}` : `−${fmt(Math.abs(n))}`;
+}
+
+type StatusFilter = 'ALL' | 'ACTIVE' | 'SUSPENDED';
+const PAGE_SIZES = [50, 100];
+
 // ── TenantsListPage ───────────────────────────────────────────────────────────
 
 export default function TenantsListPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [keys, setKeys] = useState<ApiKeyView[] | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [q, setQ] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -57,8 +67,10 @@ export default function TenantsListPage() {
     try {
       const list = await tenantsApi.list();
       setTenants(list);
+      setLoadFailed(false);
     } catch (e: unknown) {
       const err = e as { message?: string };
+      setLoadFailed(true);
       toast({ kind: 'err', title: 'tenant 목록 로드 실패', message: err?.message });
     } finally {
       setLoading(false);
@@ -66,6 +78,11 @@ export default function TenantsListPage() {
   }
 
   useEffect(() => { void reload(); }, []);
+
+  // 만료 임박 키 계산용 전체 키 목록. 실패해도 목록 화면은 그대로 — KPI 보조 줄만 숨긴다.
+  useEffect(() => {
+    apiKeysApi.listAll().then(setKeys).catch(() => setKeys(null));
+  }, []);
 
   function onOpen(id: string) {
     navigate(`/tenants/${id}?tab=overview`);
@@ -85,6 +102,10 @@ export default function TenantsListPage() {
     }
   }
 
+  function applyStatus(s: StatusFilter) { setStatusFilter(s); setPage(1); }
+  function applySearch(v: string) { setQ(v); setPage(1); }
+  function clearFilters() { setStatusFilter('ALL'); setQ(''); setPage(1); }
+
   const filtered = useMemo(
     () =>
       tenants.filter((t) => {
@@ -98,61 +119,128 @@ export default function TenantsListPage() {
     [q, statusFilter, tenants],
   );
 
-  const totalCredentials = useMemo(
-    () => tenants.reduce((a, t) => a + t.credentials, 0),
-    [tenants],
-  );
-  const totalKeys = useMemo(
-    () => tenants.reduce((a, t) => a + t.apiKeys, 0),
-    [tenants],
-  );
-  const totalActive = useMemo(
-    () => tenants.filter((t) => t.status === 'ACTIVE').length,
-    [tenants],
-  );
+  const counts = useMemo(() => ({
+    ALL: tenants.length,
+    ACTIVE: tenants.filter((t) => t.status === 'ACTIVE').length,
+    SUSPENDED: tenants.filter((t) => t.status === 'SUSPENDED').length,
+  }), [tenants]);
+
+  const totalCredentials = useMemo(() => tenants.reduce((a, t) => a + t.credentials, 0), [tenants]);
+  const totalKeys = useMemo(() => tenants.reduce((a, t) => a + t.apiKeys, 0), [tenants]);
+  const credDelta = useMemo(() => {
+    const ds = tenants.map((t) => t.credentialsDelta7d).filter((d): d is number => d !== undefined);
+    return ds.length > 0 ? ds.reduce((a, b) => a + b, 0) : undefined;
+  }, [tenants]);
+  const expiringKeys = useMemo(() => {
+    if (keys === null) return null;
+    const now = new Date();
+    return keys.filter((k) => isExpiringSoon(k, now)).length;
+  }, [keys]);
+
+  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const hasFilter = statusFilter !== 'ALL' || q !== '';
+
+  const columns: Column<Tenant>[] = [
+    {
+      key: 'tenant', header: 'Tenant',
+      render: (t) => (
+        <div className="row" style={{ gap: 10, flexWrap: 'nowrap', minWidth: 0 }}>
+          <span className="avatar avatar--sq" style={{ width: 30, height: 30, fontSize: 13 }} aria-hidden="true">{t.name.slice(0, 1).toUpperCase()}</span>
+          <div className="col" style={{ minWidth: 0 }}>
+            <strong className="truncate" style={{ fontSize: 13, maxWidth: 260 }} title={t.name}>{t.name}</strong>
+            <span className="mono muted" style={{ fontSize: 12 }}>{`…${tail(t.id, 8)}`}</span>
+          </div>
+        </div>
+      ),
+    },
+    { key: 'slug', header: '슬러그', render: (t) => <span className="mono" style={{ fontSize: 12 }}>{t.slug}</span> },
+    {
+      key: 'rpId', header: 'RP ID',
+      render: (t) => <span className="mono truncate" style={{ fontSize: 12, display: 'inline-block', maxWidth: 240, verticalAlign: 'middle' }} title={t.rpId}>{t.rpId}</span>,
+    },
+    { key: 'credentials', header: 'Credentials', align: 'right', render: (t) => fmt(t.credentials) },
+    { key: 'apiKeys', header: 'API 키', align: 'right', render: (t) => fmt(t.apiKeys) },
+    { key: 'status', header: '상태', render: (t) => <StatusBadge status={t.status} /> },
+    { key: 'lastEvent', header: '마지막 이벤트', render: (t) => <span className="muted">{timeAgo(t.lastEventAt)}</span> },
+    { key: 'createdAt', header: '생성일', render: (t) => <span className="muted">{t.createdAt ? kstDate(t.createdAt) : '—'}</span> },
+    {
+      key: 'open', header: '열기', srOnlyHeader: true, width: 40,
+      render: () => <span style={{ color: 'var(--faint)', display: 'inline-flex' }}><Icons.ChevronRight size={16} /></span>,
+    },
+  ];
 
   return (
     <div className="page">
-      <div className="page__head">
-        <div>
-          <h1 className="page__title">Tenants</h1>
-          <div className="page__sub">RP 회사별 격리된 Passkey 환경. 모든 데이터는 tenant_id로 row-level 분리되어 있습니다.</div>
-        </div>
-        {/* '신규 tenant'(POST /admin/api/tenants)는 PLATFORM_OPERATOR 전용. 이 페이지(/tenants)
-            자체가 App.tsx 의 RequirePlatform 으로 감싸져 있어 RP_ADMIN 은 진입 시 자기 테넌트로
-            redirect 된다 — 따라서 여기서 별도 버튼 게이팅은 불필요(가드가 단일 진입점). */}
-        <button className="btn btn--primary" onClick={() => setShowNew(true)}>
-          <Icons.Plus size={14} /> 신규 tenant
-        </button>
+      {/* '신규 tenant'(POST /admin/api/tenants)는 PLATFORM_OPERATOR 전용. 이 페이지(/tenants)
+          자체가 App.tsx 의 RequirePlatform 으로 감싸져 있어 RP_ADMIN 은 진입 시 자기 테넌트로
+          redirect 된다 — 따라서 여기서 별도 버튼 게이팅은 불필요(가드가 단일 진입점). */}
+      <PageHeader
+        title="Tenants"
+        sub="RP 회사별로 격리된 Passkey 환경 — 각 tenant 는 자체 rpId · credential · API 키를 가집니다."
+        actions={<Button variant="primary" icon={<Icons.Plus size={14} />} onClick={() => setShowNew(true)}>신규 tenant</Button>}
+      />
+
+      <div className="kpis kpis--3">
+        <KpiCard
+          label="활성 Tenant"
+          value={fmt(counts.ACTIVE)}
+          hint={`전체 ${fmt(counts.ALL)}건 · 클릭하면 활성만 보기`}
+          selected={statusFilter === 'ACTIVE'}
+          onClick={() => applyStatus(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')}
+        />
+        <KpiCard
+          label="등록 Credential"
+          value={fmt(totalCredentials)}
+          hint={`모든 tenant 합산${credDelta !== undefined ? ` · 7일 ${signed(credDelta)}` : ''}`}
+        />
+        <KpiCard
+          label="유효 API Key"
+          value={fmt(totalKeys)}
+          hint={<>ACTIVE 만{expiringKeys !== null && <> · <span style={{ color: 'var(--warn)', fontWeight: 600 }}>{`만료 임박 ${expiringKeys}`}</span></>}</>}
+        />
       </div>
 
-      <div className="grid-4" style={{ marginBottom: 20 }}>
-        <MetricCard label="활성 Tenant" value={totalActive} sub={`전체 ${tenants.length}건`} />
-        <MetricCard label="등록 Credential" value={fmt(totalCredentials)} sub="모든 tenant 합산" />
-        <MetricCard label="유효 API Key" value={totalKeys} sub="ACTIVE 상태만" />
-        <MetricCard label="24h ceremony" value="2.4M" sub="평균 응답 18ms" />
-      </div>
-
-      <div className="card">
-        <div className="card__head" style={{ gap: 8 }}>
-          <div className="row" style={{ gap: 10 }}>
-            <div style={{ position: 'relative', width: 280 }}>
-              <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-mute)' }}><Icons.Search size={13} /></span>
-              <input className="input" placeholder="name · slug 검색" value={q} onChange={(e) => setQ(e.target.value)} style={{ paddingLeft: 28, height: 30 }} />
+      {loading ? (
+        <Card><div className="empty"><p className="empty__sub">불러오는 중…</p></div></Card>
+      ) : loadFailed && tenants.length === 0 ? (
+        <Card>
+          <EmptyState
+            illustration={illustrations.loadError}
+            title="tenant 목록을 불러오지 못했습니다"
+            description="서버에 연결할 수 없거나 접근 권한이 없습니다."
+            action={<Button icon={<Icons.Refresh size={14} />} onClick={() => void reload()}>다시 시도</Button>}
+          />
+        </Card>
+      ) : tenants.length === 0 ? (
+        <Card>
+          <EmptyState
+            illustration={illustrations.emptyTenants}
+            title="아직 tenant 가 없습니다"
+            description="RP 회사마다 tenant 를 만들면 rpId · credential · API 키가 격리됩니다. 생성 후 WebAuthn 설정 → AAGUID 정책 → API key 발급 순으로 진행하세요."
+            action={<Button variant="primary" icon={<Icons.Plus size={14} />} onClick={() => setShowNew(true)}>신규 tenant</Button>}
+          />
+        </Card>
+      ) : (
+        <Card>
+          <div className="card__head">
+            <div className="search" style={{ flex: '0 1 280px' }}>
+              <Icons.Search size={15} />
+              <input className="input" aria-label="tenant 검색" placeholder="name · slug 검색" value={q} onChange={(e) => applySearch(e.target.value)} />
             </div>
-            <button
-              className={`btn btn--sm ${statusFilter !== 'ALL' ? 'btn--active' : ''}`}
-              onClick={() =>
-                setStatusFilter((s) => (s === 'ALL' ? 'ACTIVE' : s === 'ACTIVE' ? 'SUSPENDED' : 'ALL'))
-              }
-            >
-              <Icons.Filter size={12} /> {statusFilter === 'ALL' ? '필터' : statusFilter}
-            </button>
-            <span className="muted" style={{ fontSize: 12 }}>{filtered.length} / {tenants.length}건</span>
-          </div>
-          <div className="row" style={{ gap: 8 }}>
-            <button
-              className="btn btn--sm"
+            <Segmented<StatusFilter>
+              ariaLabel="상태"
+              value={statusFilter}
+              onChange={applyStatus}
+              options={[
+                { value: 'ALL', label: `전체 ${counts.ALL}` },
+                { value: 'ACTIVE', label: `활성 ${counts.ACTIVE}` },
+                { value: 'SUSPENDED', label: `정지 ${counts.SUSPENDED}` },
+              ]}
+            />
+            <div className="spacer" />
+            <span className="muted" style={{ fontSize: 12 }}>{`${filtered.length} / ${tenants.length}건`}</span>
+            <Button
+              icon={<Icons.Download size={14} />}
               onClick={() =>
                 downloadCsv(
                   `tenants-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -161,76 +249,49 @@ export default function TenantsListPage() {
                 )
               }
             >
-              <Icons.Download size={12} /> CSV
-            </button>
+              CSV
+            </Button>
           </div>
-        </div>
 
-        {loading ? (
-          <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-mute)' }}>로딩 중…</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Tenant</th>
-                <th>슬러그</th>
-                <th>RP ID</th>
-                <th style={{ textAlign: 'right' }}>Credentials</th>
-                <th style={{ textAlign: 'right' }}>API 키</th>
-                <th>상태</th>
-                <th>마지막 이벤트</th>
-                <th>생성일</th>
-                <th style={{ width: 40 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t) => (
-                <tr
-                  key={t.id}
-                  onClick={() => onOpen(t.id)}
-                  onKeyDown={(ev) => {
-                    if (ev.key === 'Enter' || ev.key === ' ') {
-                      ev.preventDefault();
-                      onOpen(t.id);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td>
-                    <div className="row">
-                      <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 11, flex: 'none' }}>
-                        {t.name.slice(0, 1)}
-                      </div>
-                      <div className="stack-1">
-                        <div style={{ fontWeight: 600 }}>{t.name}</div>
-                        <div className="mono muted" style={{ fontSize: 11 }}>{tail(t.id, 8)}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="mono">{t.slug}</td>
-                  <td><span className="mono" style={{ fontSize: 12 }}>{t.rpId}</span></td>
-                  <td style={{ textAlign: 'right' }} className="mono">{fmt(t.credentials)}</td>
-                  <td style={{ textAlign: 'right' }} className="mono">{t.apiKeys}</td>
-                  <td><StatusBadge status={t.status} /></td>
-                  <td><span className="muted" style={{ fontSize: 12 }}>{timeAgo(t.lastEventAt)}</span></td>
-                  <td><span className="muted" style={{ fontSize: 12 }}>{fmtDateTime(t.createdAt)}</span></td>
-                  <td><button className="btn btn--ghost btn--xs" onClick={(e) => { e.stopPropagation(); onOpen(t.id); }}><Icons.ChevronRight size={14} /></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+          {hasFilter && (
+            <div className="applied">
+              <span className="muted" style={{ fontSize: 12 }}>적용된 필터</span>
+              {statusFilter !== 'ALL' && (
+                <RemovableChip removeLabel="상태 필터 제거" onRemove={() => applyStatus('ALL')}>{`상태: ${statusLabel(statusFilter)}`}</RemovableChip>
+              )}
+              {q !== '' && (
+                <RemovableChip removeLabel="검색어 제거" onRemove={() => applySearch('')}>{`검색: ${q}`}</RemovableChip>
+              )}
+              <Button variant="ghost" size="sm" onClick={clearFilters}>모두 지우기</Button>
+            </div>
+          )}
 
-        <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-mute)', borderTop: '1px solid var(--border)' }}>
-          <span>page 1 of 1 · {filtered.length}건</span>
-          <div className="row" style={{ gap: 4 }}>
-            <button className="btn btn--xs" disabled><Icons.ChevronLeft size={12} /></button>
-            <button className="btn btn--xs" disabled><Icons.ChevronRight size={12} /></button>
-          </div>
-        </div>
-      </div>
+          <DataTable
+            columns={columns}
+            rows={pageRows}
+            rowKey={(t) => t.id}
+            onRowClick={(t) => onOpen(t.id)}
+            empty={
+              <EmptyState
+                compact
+                illustration={illustrations.noResults}
+                title="검색 결과가 없습니다"
+                description="검색어나 상태 필터를 바꿔 보세요."
+                action={<Button size="sm" onClick={clearFilters}>필터 모두 지우기</Button>}
+              />
+            }
+          />
+
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={filtered.length}
+            onPage={setPage}
+            pageSizeOptions={PAGE_SIZES}
+            onPageSize={(n) => { setPageSize(n); setPage(1); }}
+          />
+        </Card>
+      )}
 
       {showNew && (
         <NewTenantDialog
@@ -243,24 +304,13 @@ export default function TenantsListPage() {
   );
 }
 
-// ── MetricCard ────────────────────────────────────────────────────────────────
-
-function MetricCard({ label, value, sub, delta }: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  delta?: number;
-}) {
-  return (
-    <div className="card" style={{ padding: 16 }}>
-      <div className="metric-label">{label}</div>
-      <div className="metric-value">{value}</div>
-      <div className="metric-delta">{sub}{delta !== undefined && <span style={{ color: delta > 0 ? 'var(--success)' : 'var(--danger)', marginLeft: 6 }}>{delta > 0 ? '▲' : '▼'} {Math.abs(delta)}%</span>}</div>
-    </div>
-  );
-}
-
 // ── NewTenantDialog ───────────────────────────────────────────────────────────
+
+const NEXT_STEPS = [
+  { title: 'WebAuthn config', desc: 'origin · UV · attestation' },
+  { title: 'AAGUID 정책', desc: '허용할 인증기' },
+  { title: 'API key 발급', desc: 'RP 서버 연동' },
+];
 
 export function NewTenantDialog({ open, onClose, onCreate }: {
   open: boolean;
@@ -293,52 +343,59 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
     // setShowNew(false), which triggers the useEffect above to reset state.
   }
 
+  const slugError = touched && slug && !slugOk
+    ? '영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.'
+    : undefined;
+  const rpIdError = touched && rpId && !rpIdOk
+    ? '스킴·포트·경로 없이 실제 도메인 hostname을 입력하세요(예: passkey.acme.com). example.com은 placeholder라 사용할 수 없습니다.'
+    : undefined;
+
   return (
     <Dialog
       open={open}
       onClose={onClose}
       title="신규 Tenant 생성"
-      sub="새 RP를 온보딩합니다. 생성 후 WebAuthn 설정과 API key 발급으로 이어집니다."
+      sub="RP 회사 하나에 대한 격리된 Passkey 환경을 만듭니다."
       footer={<>
-        <button className="btn" onClick={onClose}>취소</button>
-        <button className="btn btn--primary" onClick={submit}>생성하고 설정으로 이동</button>
+        <Button onClick={onClose}>취소</Button>
+        <Button variant="primary" onClick={submit}>생성하고 설정으로 이동</Button>
       </>}
     >
-      <div className="stack-3">
-        <div>
-          <label className="label">표시 이름</label>
-          <input className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Slug (영문 식별자)</label>
-          <input className="input mono" placeholder="acme-corp" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} />
-          <div className="hint">
-            {touched && slug && !slugOk
-              ? <span style={{ color: 'var(--danger)' }}>영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.</span>
-              : <>테넌트를 구분하는 영문 식별자입니다. 영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 쓸 수 있습니다(2~63자). 띄어쓰기·대문자·한글은 사용할 수 없습니다. <strong>생성 후에는 변경할 수 없습니다.</strong></>}
-          </div>
-        </div>
-        <div>
-          <label className="label">rpId (Relying Party ID)</label>
-          <input className="input mono" placeholder="예: passkey.acme.com" value={rpId}
-                 onChange={(e) => setRpId(e.target.value.toLowerCase().trim())} />
-          <div className="hint">
-            {touched && rpId && !rpIdOk
-              ? <span style={{ color: 'var(--danger)' }}>스킴·포트·경로 없이 실제 도메인 hostname을 입력하세요(예: passkey.acme.com). example.com은 placeholder라 사용할 수 없습니다.</span>
-              : <span style={{ color: 'var(--danger)' }}>생성 후에는 변경할 수 없습니다. 패스키가 묶일 실제 RP 서버 도메인을 정확히 입력하세요.</span>}
-          </div>
-        </div>
+      <Field label="표시 이름" htmlFor="nt-name">
+        <input id="nt-name" className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Field label="Slug (영문 식별자)" htmlFor="nt-slug" help="소문자·숫자·하이픈. URL 과 로그에서 tenant 를 식별합니다." error={slugError}>
+        <input id="nt-slug" className="input mono" placeholder="acme-corp" value={slug}
+               aria-invalid={!!slugError} aria-describedby={slugError ? 'nt-slug-error' : undefined}
+               onChange={(e) => setSlug(e.target.value.toLowerCase())} />
+      </Field>
+      <Field
+        label="RP ID"
+        htmlFor="nt-rpid"
+        error={rpIdError}
+        help={
+          <span className="row" style={{ gap: 5, color: 'var(--warn)', flexWrap: 'nowrap' }}>
+            <Icons.Lock size={13} />
+            <span>생성 후에는 변경할 수 없습니다. 기존 credential 이 이 값에 묶입니다.</span>
+          </span>
+        }
+      >
+        <input id="nt-rpid" className="input mono" placeholder="예: passkey.acme.com" value={rpId}
+               aria-invalid={!!rpIdError} aria-describedby={rpIdError ? 'nt-rpid-error' : undefined}
+               onChange={(e) => setRpId(e.target.value.toLowerCase().trim())} />
+      </Field>
 
-        <div style={{ padding: 12, background: 'var(--surface-3)', borderRadius: 8, fontSize: 12, color: 'var(--text-soft)' }}>
-          <div style={{ fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icons.Info size={13} /> 다음 단계
-          </div>
-          <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
-            <li>WebAuthn config — origins, UV 정책 설정(rpId는 위에서 확정)</li>
-            <li>AAGUID 정책 — 시작은 <code>ANY</code> 권장, 이후 ALLOWLIST로 좁힘</li>
-            <li>API key 발급 — plaintext는 1회만 노출됩니다</li>
-          </ol>
-        </div>
+      <div className="stack-2" style={{ gap: 10, padding: '14px 16px', borderRadius: 'var(--r)', background: 'var(--brand-50)', border: '1px solid var(--brand-100)' }}>
+        <span className="t-over" id="nt-next-steps" style={{ color: 'var(--brand-700)' }}>다음 단계</span>
+        <ol aria-labelledby="nt-next-steps" className="stack-2" style={{ listStyle: 'none', margin: 0, padding: 0, gap: 10 }}>
+          {NEXT_STEPS.map((s, i) => (
+            <li key={s.title} className="row" style={{ gap: 10, flexWrap: 'nowrap', fontSize: 13 }}>
+              <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid var(--brand-700)', color: 'var(--brand-700)', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>{i + 1}</span>
+              <strong>{s.title}</strong>
+              <span className="muted">{s.desc}</span>
+            </li>
+          ))}
+        </ol>
       </div>
     </Dialog>
   );

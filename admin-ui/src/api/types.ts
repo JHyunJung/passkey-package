@@ -26,6 +26,8 @@ export interface TenantView {
   credentials: number;
   apiKeys: number;
   lastEventAt: string | null;
+  /** 스펙 §6 ⑤ 지표 보강(서버 후속). 최근 7일 credential 증감. 없으면 KPI 보조 줄을 그리지 않는다. */
+  credentialsDelta7d?: number;
 }
 
 export interface TenantCreateRequest {

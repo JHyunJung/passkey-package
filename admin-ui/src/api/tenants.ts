@@ -16,6 +16,7 @@ function adaptTenant(s: TenantView): Tenant {
     userVerification: s.requireUserVerification ? 'REQUIRED' : 'PREFERRED',
     attestationConveyance: s.attestationConveyance,
     webauthnTimeoutMs: s.webauthnTimeoutMs,
+    credentialsDelta7d: s.credentialsDelta7d,
   };
 }
 

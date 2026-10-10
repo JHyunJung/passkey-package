@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { NewTenantDialog } from './TenantsListPage';
 
 afterEach(cleanup);
@@ -57,5 +57,26 @@ describe('NewTenantDialog', () => {
     fireEvent.change(rpId, { target: { value: 'passkey.acme.com' } });
     fireEvent.click(screen.getByRole('button', { name: '생성하고 설정으로 이동' }));
     expect(onCreate).not.toHaveBeenCalled();
+  });
+  it('V2: 다음 단계 3개 + RP ID 잠금 안내', () => {
+    renderDialog();
+    const steps = screen.getByRole('list', { name: '다음 단계' });
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(steps).getByText('WebAuthn config')).toBeInTheDocument();
+    expect(within(steps).getByText('AAGUID 정책')).toBeInTheDocument();
+    expect(within(steps).getByText('API key 발급')).toBeInTheDocument();
+    expect(screen.getByText('생성 후에는 변경할 수 없습니다. 기존 credential 이 이 값에 묶입니다.')).toBeInTheDocument();
+    expect(screen.getByLabelText('RP ID')).toHaveAttribute('placeholder', '예: passkey.acme.com');
+  });
+
+  it('V2: placeholder 도메인 rpId 는 제출 시 오류를 보이고 생성하지 않는다', () => {
+    const onCreate = vi.fn();
+    const { name, slug, rpId } = renderDialog(onCreate);
+    fireEvent.change(name, { target: { value: 'Acme' } });
+    fireEvent.change(slug, { target: { value: 'acme' } });
+    fireEvent.change(rpId, { target: { value: 'passkey.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: '생성하고 설정으로 이동' }));
+    expect(onCreate).not.toHaveBeenCalled();
+    expect(screen.getByText(/example.com은 placeholder라 사용할 수 없습니다/)).toBeInTheDocument();
   });
 });

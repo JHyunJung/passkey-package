@@ -29,6 +29,9 @@ export const apiKeysApi = {
     return server.map(adapt);
   },
 
+  /** PLATFORM 전용 — 전체 tenant 의 키를 서버 원형 그대로(tenantId 보존). Tenants 목록 KPI "만료 임박" 계산용. */
+  listAll: (): Promise<ApiKeyView[]> => api.get<ApiKeyView[]>('/admin/api/api-keys'),
+
   create: async (
     tenantId: string,
     name: string,

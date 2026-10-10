@@ -45,4 +45,17 @@ describe('apiKeysApi', () => {
     expect(res.plaintextKey).toBe('pk_x.new');
     expect(res.oldKeyExpiresAt).toBe('2026-06-01T05:32:00Z');
   });
+  it('listAll GETs /admin/api/api-keys without tenantId and returns raw views', async () => {
+    const view = {
+      id: 'k1', keyPrefix: 'pk_a', name: 'prod', tenantId: 't1', scopes: ['registration'],
+      createdAt: '2026-10-01T00:00:00Z', expiresAt: '2026-10-20T00:00:00Z',
+    };
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(envelope([view]));
+    const res = await apiKeysApi.listAll();
+    const [url, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('/admin/api/api-keys');
+    expect(url).not.toContain('tenantId');
+    expect(init.method).toBe('GET');
+    expect(res).toEqual([view]);
+  });
 });
