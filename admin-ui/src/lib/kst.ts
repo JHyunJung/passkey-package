@@ -38,3 +38,25 @@ export function utcIso(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
+
+const DAY_MS = 86_400_000;
+
+/** 피드 날짜 그룹 라벨. KST 기준 오늘/어제, 그 외 YYYY-MM-DD. KST 는 DST 가 없어 24h 빼기로 전날을 구한다. */
+export function dayLabel(iso: string, now: Date): string {
+  const key = kstDate(iso);
+  if (key === kstDate(now.toISOString())) return '오늘';
+  if (key === kstDate(new Date(now.getTime() - DAY_MS).toISOString())) return '어제';
+  return key;
+}
+
+/** 입력 순서를 유지하며 같은 dayLabel 의 연속 구간을 하나의 그룹으로 묶는다(피드는 최신순). */
+export function groupByDay<T>(items: T[], isoOf: (item: T) => string, now: Date): { label: string; items: T[] }[] {
+  const groups: { label: string; items: T[] }[] = [];
+  for (const it of items) {
+    const label = dayLabel(isoOf(it), now);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(it);
+    else groups.push({ label, items: [it] });
+  }
+  return groups;
+}

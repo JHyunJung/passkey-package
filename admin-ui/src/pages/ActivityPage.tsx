@@ -1,28 +1,22 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+// admin-ui/src/pages/ActivityPage.tsx
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { activityApi } from '@/api/activity';
-import { activityFixture } from '@/fixtures/activity';
-import { useToast } from '@/ui';
 import { downloadCsv } from '@/lib/csvExport';
+import { kstDateTime, kstTime, utcIso, groupByDay } from '@/lib/kst';
 import type { ActivityView, ActivityCategory, ActivityDetailView } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 import { actionLabel, eventSentence } from './activityLabels';
+import { buildDiffRows, arrayChange, type DiffRow } from './activityDiff';
 import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
+import { illustrations } from '@/assets/illustrations';
+import {
+  Button, CopyBtn, EmptyState, IconButton, KpiCard, PageHeader, RemovableChip, Segmented, Switch, useToast,
+} from '@/ui';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}초 전`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  return `${Math.floor(h / 24)}일 전`;
-}
 
 function fmt(n: number | null | undefined): string {
   if (n == null) return '—';
@@ -31,6 +25,11 @@ function fmt(n: number | null | undefined): string {
 
 function parsePayload(raw: string): Record<string, unknown> | null {
   try { return JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+}
+
+function fmtVal(v: unknown): string {
+  if (v === undefined || v === null) return '—';
+  return typeof v === 'string' ? v : JSON.stringify(v);
 }
 
 // ── Adapter: server ActivityView → display shape ──────────────────────────────
@@ -56,10 +55,15 @@ function adaptServerView(view: ActivityView): {
   return { events, kpi: view.kpi, topTenants };
 }
 
+// 픽스처의 가짜 p95 를 보이지 않도록 0/null 로 시작한다(첫 응답 전에는 로딩 화면이라 노출되지 않음).
+const EMPTY_KPI: { events24h: number; ops24h: number; security24h: number; p95Ms: number | null } = {
+  events24h: 0, ops24h: 0, security24h: 0, p95Ms: null,
+};
+
 // ── Event 분류 → 색상 ─────────────────────────────────────────────────────────
 // 서버가 분류한 category(ops/security/system)를 1차 기준으로, 이름이 *_FAILED/
 // *_FAIL 인 실패 이벤트는 보안 실패로 격상해 한눈에 빨갛게 보이도록 한다.
-// 토큰: danger=보안실패, warning=운영변경, info=인증성공, teal=시스템자동.
+// V2 토큰: danger=--bad(보안 실패), warning=--warn-dot(운영 변경), info=--brand-700(인증), teal=--faint(시스템).
 
 type EventTone = 'danger' | 'warning' | 'info' | 'teal';
 
@@ -82,140 +86,154 @@ function eventTone(type: string, category: string): EventTone {
   if (AUTH_TYPES.has(type)) return 'info';
   // 운영 액션(테넌트/키 mutation) → 주황
   if (category === 'ops') return 'warning';
-  // 시스템 자동(MDS sync, retention purge 등) → 청록
+  // 시스템 자동(MDS sync, retention purge 등) → 회색
   return 'teal';
 }
 
 const TONE_VAR: Record<EventTone, string> = {
-  danger: 'var(--danger)',
-  warning: 'var(--warning)',
-  info: 'var(--info)',
-  teal: 'var(--teal)',
+  danger: 'var(--bad)',
+  warning: 'var(--warn-dot)',
+  info: 'var(--brand-700)',
+  teal: 'var(--faint)',
 };
 
-const TONE_BADGE: Record<EventTone, string> = {
-  danger: 'badge badge--danger',
-  warning: 'badge badge--warning',
-  info: 'badge badge--info',
-  teal: 'badge badge--teal',
-};
+const LEGEND: { tone: EventTone; label: string }[] = [
+  { tone: 'danger', label: '보안 실패' },
+  { tone: 'warning', label: '운영 변경' },
+  { tone: 'info', label: '인증' },
+  { tone: 'teal', label: '시스템' },
+];
 
-// ── EventDot ─────────────────────────────────────────────────────────────────
+const CATEGORY_LABEL: Record<ActivityCategory, string> = { all: '전체', ops: '운영', security: '보안' };
 
-function EventDot({ type, category }: { type: string; category: string }) {
+const REMOVED_TAG = { background: 'var(--bad-soft)', color: 'var(--bad-ink)' };
+const ADDED_TAG = { background: 'var(--ok-soft)', color: 'var(--ok-ink)' };
+
+// ── Detail panel pieces ───────────────────────────────────────────────────────
+
+function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <div
-      style={{
-        width: 7,
-        height: 7,
-        borderRadius: '50%',
-        background: TONE_VAR[eventTone(type, category)],
-        flex: 'none',
-      }}
-    />
-  );
-}
-
-// ── EventTypeBadge ────────────────────────────────────────────────────────────
-
-function EventTypeBadge({ type, category }: { type: string; category: string }) {
-  return <span className={TONE_BADGE[eventTone(type, category)]} style={{ fontSize: 10 }}>{actionLabel(type)}</span>;
-}
-
-// ── LegendDot — 피드 색상 범례 ─────────────────────────────────────────────────
-
-function LegendDot({ tone, label }: { tone: EventTone; label: string }) {
-  return (
-    <span className="row" style={{ gap: 5, fontSize: 11, color: 'var(--text-mute)' }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: TONE_VAR[tone], flex: 'none' }} />
-      {label}
-    </span>
-  );
-}
-
-// ── ChipTab ───────────────────────────────────────────────────────────────────
-
-function ChipTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={active ? 'badge badge--accent' : 'badge'}
-      style={{
-        cursor: 'pointer',
-        padding: '3px 9px',
-        fontSize: 11,
-        border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
-      }}
-    >
+    <div className="stack-1" style={{ gap: 6 }} role="group" aria-label={title}>
+      <div className="row">
+        <span className="t-over">{title}</span>
+        {action && <><div className="spacer" />{action}</>}
+      </div>
       {children}
-    </button>
-  );
-}
-
-// ── MetricCard ────────────────────────────────────────────────────────────────
-
-function MetricCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-}) {
-  return (
-    <div className="card" style={{ padding: '16px 20px' }}>
-      <div className="muted" style={{ fontSize: 11, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{fmt(typeof value === 'number' ? value : undefined) !== '—' ? value : value}</div>
-      {sub && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
 
-// ── DetailPanel ───────────────────────────────────────────────────────────────
+function DiffLine({ row }: { row: DiffRow }) {
+  const arr = arrayChange(row.from, row.to);
+  return (
+    <div className="row" style={{ gap: 8, fontSize: 12 }}>
+      <span className="mono truncate" style={{ width: 84, color: 'var(--mute)' }} title={row.field}>{row.field}</span>
+      {arr ? (
+        <>
+          {arr.removed.map((x) => <span key={`-${x}`} className="tag" style={REMOVED_TAG}>{`− ${x}`}</span>)}
+          {arr.added.map((x) => <span key={`+${x}`} className="tag" style={ADDED_TAG}>{`+ ${x}`}</span>)}
+        </>
+      ) : (
+        <>
+          <span className="tag" style={{ ...REMOVED_TAG, textDecoration: 'line-through' }}>{fmtVal(row.from)}</span>
+          <span style={{ color: 'var(--mute)', display: 'inline-flex' }}><Icons.ChevronRight size={14} /></span>
+          <span className="tag" style={ADDED_TAG}>{fmtVal(row.to)}</span>
+        </>
+      )}
+      <span className="sr-only">{`${row.field}: ${fmtVal(row.from)} 에서 ${fmtVal(row.to)} 로 변경`}</span>
+    </div>
+  );
+}
 
 function DetailPanel({
-  detail, loading, onClose,
-}: { detail: ActivityDetailView | null; loading: boolean; onClose: () => void }) {
+  detail, loading, onClose, onOpenTenant,
+}: { detail: ActivityDetailView | null; loading: boolean; onClose: () => void; onOpenTenant: (id: string | null) => void }) {
   const payload = detail ? parsePayload(detail.payload) : null;
-  const before = payload && typeof payload.before === 'object' && payload.before !== null ? payload.before as Record<string, unknown> : null;
-  const after = payload && typeof payload.after === 'object' && payload.after !== null ? payload.after as Record<string, unknown> : null;
+  const json = payload ? JSON.stringify(payload, null, 2) : (detail?.payload ?? '');
+  const rows = detail ? buildDiffRows(detail) : [];
   return (
-    <div className="card" style={{ padding: 14 }}>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <h3 className="card__title">상세</h3>
-        <button className="btn btn--ghost btn--xs" onClick={onClose}>닫기</button>
+    <section className="card" aria-label="이벤트 상세">
+      <div className="card__head">
+        <h2 className="card__title">상세</h2>
+        {detail && <span className="tag" title={actionLabel(detail.action)}>{detail.action}</span>}
+        <div className="spacer" />
+        <IconButton label="닫기" icon={<Icons.X size={16} />} onClick={onClose} />
       </div>
-      {loading && <div className="muted" style={{ fontSize: 12 }}>불러오는 중…</div>}
-      {!loading && !detail && <div className="muted" style={{ fontSize: 12 }}>행을 클릭하면 상세가 표시됩니다.</div>}
-      {!loading && detail && (
-        <div style={{ fontSize: 12 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{actionLabel(detail.action)}</div>
-          <div className="muted" style={{ marginBottom: 8 }}>{new Date(detail.createdAt).toLocaleString()}</div>
-          <div><b>누가</b> {detail.actorEmail || 'system'}</div>
-          <div><b>테넌트</b> {detail.tenantSlug ?? '플랫폼'}</div>
-          <div style={{ marginBottom: 8 }}><b>대상</b> {detail.targetType ?? '—'} {detail.targetId ?? ''}</div>
-          <div className="label" style={{ marginBottom: 4 }}>어떻게 바뀜</div>
-          {before && after ? (
-            <pre style={{ margin: 0, padding: 10, background: 'var(--surface-3)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--mono)', overflow: 'auto', color: 'var(--text)' }}>
-{Object.keys({ ...before, ...after }).map((k) =>
-  `- ${k}: ${JSON.stringify(before[k])}\n+ ${k}: ${JSON.stringify(after[k])}`).join('\n')}
-            </pre>
-          ) : (
-            <pre style={{ margin: 0, padding: 10, background: 'var(--surface-3)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--mono)', overflow: 'auto', color: 'var(--text)' }}>
-{payload ? JSON.stringify(payload, null, 2) : detail.payload}
-            </pre>
-          )}
+      <div className="card__body stack-4" style={{ gap: 18 }}>
+        {loading && <p className="muted" style={{ margin: 0, fontSize: 13 }}>불러오는 중…</p>}
+        {!loading && detail && (
+          <>
+            <Section title="언제">
+              <span style={{ fontSize: 13 }}>{kstDateTime(detail.createdAt)} <span className="muted" style={{ fontSize: 12 }}>KST</span></span>
+              <span className="mono muted" style={{ fontSize: 12 }}>{`${utcIso(detail.createdAt)} UTC`}</span>
+            </Section>
+            <Section title="누가">
+              <span className="row" style={{ gap: 8, fontSize: 13 }}>
+                <span className="avatar avatar--sm" aria-hidden="true">{(detail.actorEmail || 'S').slice(0, 1).toUpperCase()}</span>
+                <span>{detail.actorEmail || 'system'}</span>
+              </span>
+              {detail.actorIp !== undefined && <span className="mono muted" style={{ fontSize: 12 }}>{`IP ${detail.actorIp}`}</span>}
+            </Section>
+            <Section title="테넌트 · 대상">
+              <span className="row" style={{ gap: 4, fontSize: 13 }}>
+                {detail.tenantId
+                  ? <Button variant="ghost" size="xs" onClick={() => onOpenTenant(detail.tenantId)}>{detail.tenantSlug ?? detail.tenantId}</Button>
+                  : <span>플랫폼</span>}
+                <span>{`· ${detail.targetType ?? '—'}`}</span>
+                {detail.targetId && <span className="mono muted" style={{ fontSize: 12 }} title={detail.targetId}>{`…${detail.targetId.slice(-8)}`}</span>}
+              </span>
+            </Section>
+            {rows.length > 0 && (
+              <Section title="어떻게 바뀜">
+                {rows.map((r) => <DiffLine key={r.field} row={r} />)}
+              </Section>
+            )}
+            <Section title="원본 JSON" action={<CopyBtn value={json} label="복사" />}>
+              <pre className="mono" style={{ margin: 0, padding: 12, borderRadius: 8, background: 'var(--canvas)', border: '1px solid var(--line-soft)', fontSize: 11, lineHeight: '17px', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--ink-2)', maxHeight: 320, overflow: 'auto' }}>{json}</pre>
+            </Section>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Feed row ──────────────────────────────────────────────────────────────────
+
+function FeedRow({ e, selected, onSelect, onOpenTenant }: {
+  e: DisplayEvent; selected: boolean; onSelect: (id: string) => void; onOpenTenant: (id: string | null) => void;
+}) {
+  return (
+    <div
+      className="row"
+      aria-current={selected ? 'true' : undefined}
+      style={{
+        flexWrap: 'nowrap', alignItems: 'flex-start', gap: 12, padding: '12px 20px',
+        borderBottom: '1px solid var(--line-soft)',
+        background: selected ? 'var(--brand-50)' : 'var(--surface)',
+        boxShadow: selected ? 'inset 3px 0 0 var(--brand-700)' : 'none',
+      }}
+    >
+      <span className="mono muted" style={{ width: 44, flex: 'none', paddingTop: 2, fontSize: 12 }}>{kstTime(e.ts)}</span>
+      <span className="dot" aria-hidden="true" style={{ marginTop: 7, background: TONE_VAR[eventTone(e.type, e.category)] }} />
+      <div className="col" style={{ gap: 4, flex: '1 1 0', minWidth: 0 }}>
+        <div className="row" style={{ gap: 8 }}>
+          <span className="tag" title={actionLabel(e.type)}>{e.type}</span>
+          {e.tenantId
+            ? <Button variant="ghost" size="xs" onClick={() => onOpenTenant(e.tenantId)}>{e.tenantName}</Button>
+            : <span className="muted" style={{ fontSize: 13 }}>플랫폼</span>}
         </div>
-      )}
+        <span style={{ fontSize: 13, color: 'var(--ink)' }}>
+          {eventSentence({
+            action: e.type,
+            actorEmail: e.actorId ?? '',
+            tenantSlug: e.tenantSlug,
+            targetType: null,
+            targetId: e.subjectId,
+          })}
+        </span>
+      </div>
+      <IconButton label="상세 열기" icon={<Icons.ChevronRight size={16} />} onClick={() => onSelect(e.id)} />
     </div>
   );
 }
@@ -229,12 +247,13 @@ export default function ActivityPage() {
 
   // null = not yet loaded from server; undefined = server error (show empty state)
   const [events, setEvents] = useState<DisplayEvent[] | null>(null);
-  const [kpi, setKpi] = useState(activityFixture.kpi);
-  const [topTenants, setTopTenants] = useState(activityFixture.topTenants);
+  const [kpi, setKpi] = useState(EMPTY_KPI);
+  const [topTenants, setTopTenants] = useState<{ tenantId: string; tenantName: string; tenantSlug: string; count: number }[]>([]);
   const [serverError, setServerError] = useState(false);
 
   const [detail, setDetail] = useState<ActivityDetailView | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [categoryFilter, setCategoryFilter] = useState<ActivityCategory>('all');
   const [visibleCount, setVisibleCount] = useState(24);
@@ -295,10 +314,6 @@ export default function ActivityPage() {
     };
   }, [categoryFilter, selectedTenant]);
 
-  // Filtered events for the feed panel
-  // Use e.category (server classification) for ops/security filter;
-  // type-name sets are only for dot/badge color on fixture events where
-  // category is pre-computed from the same sets.
   const displayEvents = useMemo(() => events ?? [], [events]);
   const filtered = useMemo(
     () =>
@@ -311,6 +326,7 @@ export default function ActivityPage() {
   );
 
   function openDetail(id: string) {
+    setSelectedId(id);
     setDetailLoading(true);
     setDetail(null);
     activityApi
@@ -318,6 +334,11 @@ export default function ActivityPage() {
       .then((d) => setDetail(d))
       .catch(() => toast({ kind: 'err', title: '상세 로드 실패' }))
       .finally(() => setDetailLoading(false));
+  }
+
+  function closeDetail() {
+    setDetail(null);
+    setSelectedId(null);
   }
 
   function handleOpenTenant(tenantId: string | null) {
@@ -345,11 +366,73 @@ export default function ActivityPage() {
       .catch(() => toast({ kind: 'warn', title: '새로고침 실패', message: '서버 응답 없음' }));
   }
 
+  function handleExport() {
+    if (!events || events.length === 0) {
+      toast({ kind: 'warn', title: '내보낼 데이터 없음' });
+      return;
+    }
+    downloadCsv(
+      `activity-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['timestamp', 'tenant', 'type', 'category', 'actor', 'subject'],
+      events.map((e) => [e.ts, e.tenantSlug ?? e.tenantId ?? '', e.type, e.category, e.actorId ?? '', e.subjectId]),
+    );
+  }
+
+  async function handleLoadMore() {
+    if (!events || events.length === 0) return;
+    const oldestEvent = events[events.length - 1];
+    const oldest = oldestEvent.ts;
+    try {
+      const more = await activityApi.fetch(
+        null,
+        categoryFilter === 'all' ? undefined : categoryFilter,
+        oldest,
+        selectedTenant,
+        // F07: send the oldest visible row's id as the tuple-cursor
+        // partner to `before` so a row sharing the exact same
+        // microsecond timestamp as `oldest` is not dropped.
+        oldestEvent.id,
+      );
+      const adapted = adaptServerView(more);
+      setEvents([...events, ...adapted.events]);
+      // Expand the visible window so newly-loaded rows actually appear in the feed
+      setVisibleCount((n) => n + Math.max(adapted.events.length, 24));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ kind: 'err', title: '추가 로드 실패', message: msg });
+    }
+  }
+
+  function clearFilters() {
+    setCategoryFilter('all');
+    setSelectedTenant(undefined);
+    setActionQuery('');
+  }
+
+  const header = (
+    <PageHeader
+      title="Activity"
+      sub="전체 tenant의 ceremony · 운영 액션 · 보안 이벤트가 실시간으로 모입니다."
+      actions={serverError ? (
+        <Button icon={<Icons.Refresh size={14} />} onClick={handleRefresh}>재시도</Button>
+      ) : (
+        <>
+          <span className="row muted" style={{ gap: 6, fontSize: 12 }}>
+            <span className="dot" aria-hidden="true" style={{ background: 'var(--ok)' }} />Live
+          </span>
+          <Button icon={<Icons.Refresh size={14} />} onClick={handleRefresh}>새로고침</Button>
+          <Button icon={<Icons.Download size={14} />} onClick={handleExport}>내보내기</Button>
+        </>
+      )}
+    />
+  );
+
   // Loading state: waiting for first server response
   if (events === null && !serverError) {
     return (
       <div className="page">
-        <div style={{ padding: 40, color: 'var(--text-mute)' }}>Activity 데이터 로딩 중…</div>
+        {header}
+        <div className="card"><div className="empty"><p className="empty__sub">Activity 데이터 로딩 중…</p></div></div>
       </div>
     );
   }
@@ -358,276 +441,159 @@ export default function ActivityPage() {
   if (serverError) {
     return (
       <div className="page">
-        <div className="page__head">
-          <div>
-            <h1 className="page__title">Activity</h1>
-            <div className="page__sub">전체 tenant의 ceremony · 운영 액션 · 보안 이벤트가 실시간으로 모입니다.</div>
-          </div>
-          <div className="row">
-            <button className="btn btn--sm" onClick={handleRefresh}>
-              <Icons.Refresh size={12} /> 재시도
-            </button>
-          </div>
-        </div>
-        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-mute)' }}>
-          <Icons.Alert size={24} />
-          <div style={{ marginTop: 12, fontWeight: 500 }}>Activity 데이터를 불러오지 못했습니다.</div>
-          <div style={{ marginTop: 4, fontSize: 12 }}>서버에 연결할 수 없거나 접근 권한이 없습니다.</div>
+        {header}
+        <div className="card">
+          <EmptyState
+            illustration={illustrations.loadError}
+            title="Activity 데이터를 불러오지 못했습니다"
+            description="서버에 연결할 수 없거나 접근 권한이 없습니다."
+          />
         </div>
       </div>
     );
   }
 
+  const groups = groupByDay(filtered.slice(0, visibleCount), (e) => e.ts, new Date());
+  const maxTop = Math.max(1, ...topTenants.map((t) => t.count));
+  const selectedTenantSlug = selectedTenant
+    ? (tenants.find((t) => t.id === selectedTenant)?.slug ?? topTenants.find((t) => t.tenantId === selectedTenant)?.tenantSlug ?? selectedTenant)
+    : null;
+  const hasApplied = categoryFilter !== 'all' || !!selectedTenant || actionQuery.trim() !== '';
+
   return (
     <div className="page">
-      <div className="page__head">
-        <div>
-          <h1 className="page__title">Activity</h1>
-          <div className="page__sub">전체 tenant의 ceremony · 운영 액션 · 보안 이벤트가 실시간으로 모입니다.</div>
-        </div>
-        <div className="row">
-          <button className="btn btn--sm" onClick={handleRefresh}>
-            <Icons.Refresh size={12} /> 새로고침
-          </button>
-          <button className="btn btn--sm" onClick={() => {
-            if (!events || events.length === 0) {
-              toast({ kind: 'warn', title: '내보낼 데이터 없음' });
-              return;
-            }
-            downloadCsv(
-              `activity-${new Date().toISOString().slice(0, 10)}.csv`,
-              ['timestamp', 'tenant', 'type', 'category', 'actor', 'subject'],
-              events.map((e) => [e.ts, e.tenantSlug ?? e.tenantId ?? '', e.type, e.category, e.actorId ?? '', e.subjectId]),
-            );
-          }}>
-            <Icons.Download size={12} /> 내보내기
-          </button>
-        </div>
-      </div>
+      {header}
 
-      <div className="grid-4" style={{ marginBottom: 20 }}>
-        <MetricCard
-          label="활동 (24h)"
-          value={fmt(kpi.events24h)}
-          sub="전체 tenant 합산"
-        />
-        <MetricCard
-          label="운영 액션 (24h)"
-          value={kpi.ops24h}
-          sub="admin mutation 전체"
-        />
-        <MetricCard
+      <div className="kpis">
+        <KpiCard label="활동 (24h)" value={fmt(kpi.events24h)} />
+        <KpiCard label="운영 액션 (24h)" value={fmt(kpi.ops24h)} />
+        <KpiCard
           label="보안 이벤트 (24h)"
-          value={kpi.security24h}
-          sub="signature regression + attestation fail"
+          value={<span style={{ color: kpi.security24h > 0 ? 'var(--bad)' : undefined }}>{fmt(kpi.security24h)}</span>}
         />
-        <MetricCard
+        <KpiCard
           label="평균 응답"
           value={kpi.p95Ms != null ? `${kpi.p95Ms}ms` : '—'}
-          sub={kpi.p95Ms != null ? `p95 ${kpi.p95Ms}ms` : '측정 중'}
+          hint={kpi.p95Ms != null ? `p95 ${kpi.p95Ms}ms` : undefined}
         />
       </div>
 
-      <div className="card" style={{ marginBottom: 16, padding: '10px 14px' }}>
-        <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>카테고리</span>
-          <ChipTab active={categoryFilter === 'all'} onClick={() => setCategoryFilter('all')}>전체</ChipTab>
-          <ChipTab active={categoryFilter === 'ops'} onClick={() => setCategoryFilter('ops')}>운영</ChipTab>
-          <ChipTab active={categoryFilter === 'security'} onClick={() => setCategoryFilter('security')}>보안</ChipTab>
-
-          <span className="muted" style={{ fontSize: 12, fontWeight: 600, marginLeft: 8 }}>테넌트</span>
+      <div className="card" style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="row" style={{ gap: 12 }}>
+          <Segmented<ActivityCategory>
+            ariaLabel="카테고리"
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            options={[{ value: 'all', label: '전체' }, { value: 'ops', label: '운영' }, { value: 'security', label: '보안' }]}
+          />
           <select
+            className="input"
+            aria-label="테넌트"
+            style={{ width: 200 }}
             value={selectedTenant ?? ''}
             onChange={(ev) => setSelectedTenant(ev.target.value || undefined)}
-            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12 }}
           >
-            <option value="">전체</option>
+            <option value="">테넌트 · 전체</option>
             {tenants.map((t) => (
               <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
             ))}
           </select>
-
-          <span className="muted" style={{ fontSize: 12, fontWeight: 600, marginLeft: 8 }}>액션</span>
-          <input
-            value={actionQuery}
-            onChange={(ev) => setActionQuery(ev.target.value)}
-            placeholder="액션 검색…"
-            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, minWidth: 140 }}
+          <div className="search" style={{ flex: '1 1 220px' }}>
+            <Icons.Search size={15} />
+            <input className="input" aria-label="액션 검색" placeholder="액션 검색…" value={actionQuery} onChange={(ev) => setActionQuery(ev.target.value)} />
+          </div>
+          {/* "보안 실패만" = category=security 의 다른 보기. 서버 SECURITY_ACTIONS 가 실패 액션뿐이다. */}
+          <Switch
+            label="보안 실패만"
+            checked={categoryFilter === 'security'}
+            onChange={(on) => setCategoryFilter(on ? 'security' : 'all')}
           />
         </div>
+        {hasApplied && (
+          <div className="row" style={{ gap: 8 }}>
+            <span className="muted" style={{ fontSize: 12 }}>적용된 필터</span>
+            {categoryFilter !== 'all' && (
+              <RemovableChip removeLabel="카테고리 필터 제거" onRemove={() => setCategoryFilter('all')}>{`카테고리: ${CATEGORY_LABEL[categoryFilter]}`}</RemovableChip>
+            )}
+            {selectedTenantSlug && (
+              <RemovableChip removeLabel="테넌트 필터 제거" onRemove={() => setSelectedTenant(undefined)}>{`테넌트: ${selectedTenantSlug}`}</RemovableChip>
+            )}
+            {actionQuery.trim() !== '' && (
+              <RemovableChip removeLabel="액션 검색 제거" onRemove={() => setActionQuery('')}>{`액션: ${actionQuery.trim()}`}</RemovableChip>
+            )}
+            <Button variant="ghost" size="sm" onClick={clearFilters}>모두 지우기</Button>
+          </div>
+        )}
       </div>
 
-      <div className="grid-2" style={{ gridTemplateColumns: '1fr 320px', gap: 16 }}>
-        <div className="card">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+        <section className="card" style={{ flex: '999 1 460px', minWidth: 0 }}>
           <div className="card__head">
-            <h3 className="card__title">최근 이벤트</h3>
-          </div>
-          <div className="row" style={{ gap: 14, flexWrap: 'wrap', padding: '8px 20px', borderBottom: '1px solid var(--border)' }}>
-            <LegendDot tone="danger" label="보안 실패" />
-            <LegendDot tone="warning" label="운영 변경" />
-            <LegendDot tone="info" label="인증" />
-            <LegendDot tone="teal" label="시스템" />
-          </div>
-          <div>
-            {filtered.slice(0, visibleCount).map((e, i) => (
-              <div
-                key={e.id}
-                style={{
-                  display: 'flex',
-                  gap: 12,
-                  padding: '10px 20px',
-                  borderBottom:
-                    i === Math.min(filtered.length, visibleCount) - 1
-                      ? 0
-                      : '1px solid var(--border)',
-                  alignItems: 'center',
-                }}
-              >
-                <EventDot type={e.type} category={e.category} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="row" style={{ gap: 8 }}>
-                    <EventTypeBadge type={e.type} category={e.category} />
-                    <button
-                      onClick={() => handleOpenTenant(e.tenantId)}
-                      className="btn btn--ghost btn--xs"
-                      style={{ padding: '1px 6px', fontWeight: 600 }}
-                    >
-                      {e.tenantName}
-                    </button>
-                    <span className="muted" style={{ fontSize: 11 }}>
-                      · {timeAgo(e.ts)}
-                    </span>
-                  </div>
-                  <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>
-                    {eventSentence({
-                      action: e.type,
-                      actorEmail: e.actorId ?? '',
-                      tenantSlug: e.tenantSlug,
-                      targetType: null,
-                      targetId: e.subjectId,
-                    })}
-                  </div>
-                </div>
-                <button className="btn btn--ghost btn--xs" onClick={() => openDetail(e.id)}>
-                  <Icons.ChevronRight size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div
-            style={{
-              padding: '10px 14px',
-              textAlign: 'center',
-              borderTop: '1px solid var(--border)',
-            }}
-          >
-            <button className="btn btn--sm" onClick={async () => {
-              if (!events || events.length === 0) return;
-              const oldestEvent = events[events.length - 1];
-              const oldest = oldestEvent.ts;
-              try {
-                const more = await activityApi.fetch(
-                  null,
-                  categoryFilter === 'all' ? undefined : categoryFilter,
-                  oldest,
-                  selectedTenant,
-                  // F07: send the oldest visible row's id as the tuple-cursor
-                  // partner to `before` so a row sharing the exact same
-                  // microsecond timestamp as `oldest` is not dropped.
-                  oldestEvent.id,
-                );
-                const adapted = adaptServerView(more);
-                setEvents([...events, ...adapted.events]);
-                // Expand the visible window so newly-loaded rows actually appear in the feed
-                setVisibleCount((n) => n + Math.max(adapted.events.length, 24));
-              } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : String(err);
-                toast({ kind: 'err', title: '추가 로드 실패', message: msg });
-              }
-            }}>이전 24시간 더 보기</button>
-          </div>
-        </div>
-
-        <div className="stack-4">
-          {(detail || detailLoading) && (
-            <DetailPanel detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />
-          )}
-          <div className="card">
-            <div className="card__head">
-              <h3 className="card__title">활발한 Tenant</h3>
-            </div>
-            <div>
-              {topTenants.map((t, i) => (
-                <button
-                  key={t.tenantId}
-                  onClick={() => setSelectedTenant(t.tenantId)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '10px 16px',
-                    width: '100%',
-                    border: 0,
-                    background: 'transparent',
-                    borderBottom:
-                      i === topTenants.length - 1 ? 0 : '1px solid var(--border)',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    color: 'var(--text)',
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = 'var(--surface-2)')
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = 'transparent')
-                  }
-                >
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 6,
-                      background: 'var(--accent-soft)',
-                      color: 'var(--accent)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontWeight: 700,
-                      fontSize: 11,
-                      flex: 'none',
-                    }}
-                  >
-                    {t.tenantName.slice(0, 1).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontWeight: 500,
-                        fontSize: 13,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {t.tenantName}
-                    </div>
-                    <div className="mono muted" style={{ fontSize: 11 }}>
-                      {t.tenantSlug}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="mono" style={{ fontWeight: 600, fontSize: 13 }}>
-                      {fmt(t.count)}
-                    </div>
-                    <div className="muted" style={{ fontSize: 10 }}>
-                      24h events
-                    </div>
-                  </div>
-                </button>
+            <h2 className="card__title">최근 이벤트</h2>
+            <div className="spacer" />
+            <span className="row muted" style={{ gap: 12, fontSize: 12 }}>
+              {LEGEND.map((l) => (
+                <span key={l.tone} className="row" style={{ gap: 5 }}>
+                  <span className="dot" aria-hidden="true" style={{ background: TONE_VAR[l.tone] }} />{l.label}
+                </span>
               ))}
-            </div>
+            </span>
           </div>
+          {groups.length === 0 ? (
+            <EmptyState
+              compact
+              illustration={illustrations.noResults}
+              title="조건에 맞는 이벤트가 없습니다"
+              description="필터를 바꾸거나 이전 24시간을 더 불러오세요."
+            />
+          ) : (
+            groups.map((g, gi) => (
+              <div key={`${g.label}-${gi}`} role="group" aria-label={g.label}>
+                <div className="t-over" style={{ padding: '8px 20px', background: 'var(--canvas)', borderBottom: '1px solid var(--line-soft)' }}>{g.label}</div>
+                {g.items.map((e) => (
+                  <FeedRow key={e.id} e={e} selected={selectedId === e.id} onSelect={openDetail} onOpenTenant={handleOpenTenant} />
+                ))}
+              </div>
+            ))
+          )}
+          <div className="card__foot" style={{ justifyContent: 'center' }}>
+            <Button onClick={() => void handleLoadMore()}>이전 24시간 더 보기</Button>
+          </div>
+        </section>
 
-        </div>
+        <aside style={{ flex: '1 1 320px', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {(detail || detailLoading) && (
+            <DetailPanel detail={detail} loading={detailLoading} onClose={closeDetail} onOpenTenant={handleOpenTenant} />
+          )}
+          <section className="card">
+            <div className="card__head">
+              <h2 className="card__title">활발한 Tenant</h2>
+              <span className="muted" style={{ fontSize: 12 }}>24h</span>
+            </div>
+            {topTenants.length === 0 ? (
+              <p className="muted" style={{ margin: 0, padding: '16px 20px', fontSize: 13 }}>최근 24시간 이벤트가 없습니다.</p>
+            ) : topTenants.map((t) => (
+              <button
+                key={t.tenantId}
+                type="button"
+                className="row"
+                aria-pressed={selectedTenant === t.tenantId}
+                onClick={() => setSelectedTenant(t.tenantId)}
+                style={{ flexWrap: 'nowrap', gap: 10, padding: '10px 20px', width: '100%', border: 0, borderBottom: '1px solid var(--line-soft)', background: selectedTenant === t.tenantId ? 'var(--brand-50)' : 'transparent', textAlign: 'left', cursor: 'pointer', color: 'var(--ink)', font: 'inherit' }}
+              >
+                <span className="avatar avatar--sq" aria-hidden="true" style={{ width: 28, height: 28, fontSize: 12 }}>{t.tenantName.slice(0, 1).toUpperCase()}</span>
+                <span className="col" style={{ flex: '1 1 0', minWidth: 0 }}>
+                  <span className="truncate" style={{ fontSize: 13, fontWeight: 500 }}>{t.tenantName}</span>
+                  <span className="mono muted" style={{ fontSize: 12 }}>{t.tenantSlug}</span>
+                </span>
+                <span aria-hidden="true" style={{ width: 64, height: 6, borderRadius: 3, background: 'var(--line-soft)', flex: 'none' }}>
+                  <span style={{ display: 'block', width: `${Math.round((t.count / maxTop) * 100)}%`, height: 6, borderRadius: 3, background: 'var(--brand-500)' }} />
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, width: 40, textAlign: 'right' }}>{fmt(t.count)}</span>
+              </button>
+            ))}
+          </section>
+        </aside>
       </div>
     </div>
   );

@@ -114,6 +114,10 @@ export interface ActivityEvent {
   tenantSlug: string | null;
   createdAt: string;
   category: 'ops' | 'security' | 'system';
+  /** 스펙 §6 ③ 로그 보강(서버 후속). 없으면 상세 패널 IP 줄을 그리지 않는다. */
+  actorIp?: string;
+  /** 스펙 §6 ③. 없으면 payload 의 before/after(TENANT_UPDATE)로 diff 를 만든다. */
+  diff?: { field: string; from: unknown; to: unknown }[];
 }
 
 export interface ActivityDetailView {
@@ -128,6 +132,10 @@ export interface ActivityDetailView {
   createdAt: string;
   category: 'ops' | 'security' | 'system';
   payload: string; // canonical JSON string
+  /** 스펙 §6 ③ 로그 보강(서버 후속). 없으면 상세 패널 IP 줄을 그리지 않는다. */
+  actorIp?: string;
+  /** 스펙 §6 ③. 없으면 payload 의 before/after(TENANT_UPDATE)로 diff 를 만든다. */
+  diff?: { field: string; from: unknown; to: unknown }[];
 }
 
 export interface ActivityView {
