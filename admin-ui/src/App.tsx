@@ -9,9 +9,6 @@ import { ErrorBoundary } from '@/shell/ErrorBoundary';
 import { Header } from '@/shell/Header';
 import { IdleSessionModal } from '@/extras/IdleSessionModal';
 import { CommandPalette } from '@/extras/CommandPalette';
-import { TweaksPanel, TweakSection, TweakRadio, TweakColor } from '@/tweaks/TweaksPanel';
-import { useTweaks } from '@/tweaks/useTweaks';
-import type { Tweaks } from '@/tweaks/useTweaks';
 import LoginPage from '@/pages/LoginPage';
 import MfaChallenge from '@/pages/MfaChallenge';
 import ActivityPage from '@/pages/ActivityPage';
@@ -86,7 +83,6 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 
   const setRoute = useCallback((r: AppRoute) => { navigate(routeToUrl(r)); }, [navigate]);
 
-  const [t, setTweak] = useTweaks();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Cmd/Ctrl+K → open palette
@@ -128,7 +124,6 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
           currentRoute={route}
           onNavigate={setRoute}
           tenant={tenant}
-          sidebarMode={t.sidebarMode}
         />
       </ErrorBoundary>
       <div className="content" style={{ gridArea: 'content' }}>
@@ -167,44 +162,6 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
         onLogout={onLogout}
       />
 
-      <TweaksPanel title="Tweaks">
-        <TweakSection label="테마" />
-        <TweakRadio
-          label="모드"
-          value={t.theme}
-          onChange={(v) => setTweak('theme', v as Tweaks['theme'])}
-          options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
-        />
-        <TweakColor
-          label="Accent"
-          value={t.accent}
-          onChange={(v) => { const c = Array.isArray(v) ? v[0] : v; if (c) setTweak('accent', c); }}
-          options={['#4f46e5', '#5b5bd6', '#7c3aed', '#0f766e', '#db7706']}
-        />
-        <TweakSection label="레이아웃" />
-        <TweakRadio
-          label="밀도"
-          value={t.density}
-          onChange={(v) => setTweak('density', v as Tweaks['density'])}
-          options={[{ value: 'compact', label: 'Compact' }, { value: 'comfortable', label: 'Comfort' }]}
-        />
-        <TweakRadio
-          label="테이블"
-          value={t.tableStyle}
-          onChange={(v) => setTweak('tableStyle', v as Tweaks['tableStyle'])}
-          options={[
-            { value: 'lines', label: '구분선' },
-            { value: 'striped', label: '줄무늬' },
-            { value: 'borderless', label: '보더리스' },
-          ]}
-        />
-        <TweakRadio
-          label="사이드바"
-          value={t.sidebarMode}
-          onChange={(v) => setTweak('sidebarMode', v as Tweaks['sidebarMode'])}
-          options={[{ value: 'labels', label: '라벨' }, { value: 'icons', label: '아이콘만' }]}
-        />
-      </TweaksPanel>
       </div>
     </Fragment>
   );
