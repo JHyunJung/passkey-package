@@ -50,6 +50,20 @@ describe('Menu', () => {
   });
 });
 
+describe('Menu 클릭 전파', () => {
+  it('항목·트리거 클릭이 상위 onClick(행 클릭 등) 으로 전파되지 않는다', () => {
+    const spy = vi.fn();
+    const onSelect = vi.fn();
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 상위 클릭 전파 검증용 테스트 래퍼
+    render(<div onClick={spy}><Menu label="키 액션" items={[{ label: '회전', onSelect }]} /></div>);
+    fireEvent.click(screen.getByRole('button', { name: '키 액션' }));
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('menuitem', { name: '회전' }));
+    expect(onSelect).toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
 describe('ConfirmByTyping', () => {
   it('정확히 일치할 때만 true', () => {
     const onMatch = vi.fn();
