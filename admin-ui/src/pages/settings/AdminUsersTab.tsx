@@ -1,3 +1,4 @@
+// admin-ui/src/pages/settings/AdminUsersTab.tsx
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import { adminUsersApi, type AdminUserView } from '@/api/adminUsers';
@@ -5,7 +6,10 @@ import { signupRequestsApi, type SignupRequestView } from '@/api/signupRequests'
 import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import { ApiError } from '@/api/types';
-import { useToast, StatusBadge, Dialog } from '@/ui';
+import { illustrations } from '@/assets/illustrations';
+import {
+  Badge, Button, ChoiceCard, DataTable, Dialog, EmptyState, Segmented, StatusBadge, useToast, type Column,
+} from '@/ui';
 
 // ── Local utilities ───────────────────────────────────────────────────────────
 
@@ -27,19 +31,31 @@ function tail(s: string, n: number): string {
   return s.slice(-n);
 }
 
-function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-      {hint && <div className="hint">{hint}</div>}
-    </div>
-  );
-}
-
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
+
+function initial(email: string): string {
+  return email.slice(0, 1).toUpperCase();
+}
+
+type OperatorFilter = 'all' | 'PLATFORM' | 'RP_ADMIN' | 'SUSPENDED';
+const FILTERS: { value: OperatorFilter; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 'PLATFORM', label: 'PLATFORM' },
+  { value: 'RP_ADMIN', label: 'RP_ADMIN' },
+  { value: 'SUSPENDED', label: '정지' },
+];
+
+function matchesOperator(u: AdminUserView, filter: OperatorFilter, q: string): boolean {
+  if (filter === 'PLATFORM' && u.role !== 'PLATFORM_OPERATOR') return false;
+  if (filter === 'RP_ADMIN' && u.role !== 'RP_ADMIN') return false;
+  if (filter === 'SUSPENDED' && u.status !== 'SUSPENDED') return false;
+  return q === '' || u.email.toLowerCase().includes(q) || u.id.toLowerCase().includes(q);
+}
+
+const WARN_AVATAR = { width: 34, height: 34, background: 'var(--warn-soft)', color: 'var(--warn)' } as const;
+const CAPTION = { margin: 0 } as const;
 
 // ── AdminUsersTab ─────────────────────────────────────────────────────────────
 
@@ -49,6 +65,8 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<SignupRequestView | null>(null);
   const [rejecting, setRejecting] = useState<SignupRequestView | null>(null);
+  const [filter, setFilter] = useState<OperatorFilter>('all');
+  const [query, setQuery] = useState('');
   const toast = useToast();
 
   async function reload() {
@@ -65,7 +83,7 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
     }
   }
 
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => { void reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleApprove(req: SignupRequestView, body: { role: string; tenantIds: string[] }) {
     try {
@@ -122,131 +140,127 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
   }
 
   if (loading && users.length === 0 && requests.length === 0) {
-    return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
+    return (
+      <section className="card">
+        <div className="card__body muted" style={{ fontSize: 13 }}>Loading…</div>
+      </section>
+    );
   }
 
   const activeCount = users.filter((u) => u.status === 'ACTIVE').length;
+  const q = query.trim().toLowerCase();
+  const visible = users.filter((u) => matchesOperator(u, filter, q));
+
+  const columns: Column<AdminUserView>[] = [
+    {
+      key: 'who', header: '운영자',
+      render: (u) => (
+        <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}>
+          <span className="avatar" style={{ width: 30, height: 30, fontSize: 12 }} aria-hidden="true">{initial(u.email)}</span>
+          <div className="col" style={{ minWidth: 0 }}>
+            <strong style={{ fontSize: 13 }}>{u.email}</strong>
+            <span className="hint mono" style={CAPTION}>…{tail(u.id, 10)}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'role', header: '역할',
+      render: (u) => (
+        <Badge tone={u.role === 'PLATFORM_OPERATOR' ? 'plat' : 'info'} dot={false}>
+          {u.role === 'PLATFORM_OPERATOR' ? 'PLATFORM' : 'RP_ADMIN'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'tenant', header: 'Tenant',
+      render: (u) => {
+        const ids = u.tenantIds ?? [];
+        if (ids.length === 0) return <span className="faint">—</span>;
+        if (ids.length === 1) return <span className="mono" style={{ fontSize: 12 }} title={ids[0]}>…{tail(ids[0], 10)}</span>;
+        return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{ids.length}개 RP</span>;
+      },
+    },
+    { key: 'mfa', header: 'MFA', render: (u) => <Badge tone={u.mfaEnabled ? 'ok' : 'warn'}>{u.mfaEnabled ? 'ON' : 'OFF'}</Badge> },
+    {
+      key: 'last', header: '마지막 로그인',
+      render: (u) => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{u.lastLoginAt ? timeAgo(u.lastLoginAt) : '미접속'}</span>,
+    },
+    { key: 'status', header: '상태', render: (u) => <StatusBadge status={u.status} /> },
+    {
+      key: 'act', header: '액션',
+      render: (u) =>
+        u.status === 'ACTIVE' ? <Button size="sm" variant="danger" onClick={() => void handleSuspend(u)}>정지</Button>
+        : u.status === 'SUSPENDED' ? <Button size="sm" onClick={() => void handleActivate(u)}>활성화</Button>
+        : null,
+    },
+  ];
 
   return (
-    <div className="stack-4">
+    <div className="stack-6">
       {/* ── 가입 요청 ── */}
-      <div className="card">
-        <div className="card__head">
-          <div>
-            <h3 className="card__title">가입 요청</h3>
-            <div className="card__sub">로그인 화면에서 접수된 계정 요청. 승인 시 역할과 tenant 를 지정합니다.</div>
+      {requests.length === 0 ? (
+        <section className="card" aria-label="가입 요청">
+          <div className="card__head" style={{ borderBottom: 0 }}>
+            <h2 className="card__title">가입 요청</h2>
+            <Badge>대기 0건</Badge>
+            <div className="spacer" />
+            <span className="hint" style={CAPTION}>대기 중인 요청이 없습니다</span>
           </div>
-          <span className={`badge ${requests.length > 0 ? 'badge--warning' : ''}`}>대기 {requests.length}건</span>
-        </div>
-        {requests.length === 0 ? (
-          <div style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-mute)' }}>대기 중인 요청이 없습니다</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>이메일</th>
-                <th>요청 사유</th>
-                <th>요청 시각</th>
-                <th style={{ textAlign: 'right' }}>액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((r) => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{r.email}</td>
-                  <td style={{ fontSize: 13, color: r.reason ? 'var(--text)' : 'var(--text-mute)' }}>{r.reason ?? '—'}</td>
-                  <td><span className="muted">{timeAgo(r.requestedAt)}</span></td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div className="row" style={{ justifyContent: 'flex-end', gap: 4 }}>
-                      <button className="btn btn--primary btn--xs" onClick={() => setApproving(r)}>승인</button>
-                      <button className="btn btn--xs" style={{ color: 'var(--danger)' }} onClick={() => setRejecting(r)}>거절</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+        </section>
+      ) : (
+        <section className="card" aria-label="가입 요청" style={{ borderColor: 'var(--warn-line)' }}>
+          <div className="card__head" style={{ background: 'var(--warn-soft)', borderRadius: 'var(--r) var(--r) 0 0' }}>
+            <div className="col" style={{ gap: 2 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <h2 className="card__title">가입 요청</h2>
+                <Badge tone="warn">대기 {requests.length}건</Badge>
+              </div>
+              <p className="card__sub">로그인 화면에서 들어온 관리자 계정 요청. 승인 시 역할과 tenant 를 지정합니다.</p>
+            </div>
+          </div>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {requests.map((r, i) => (
+              <li key={r.id} className="row" style={{ gap: 14, padding: '14px 20px', borderBottom: i < requests.length - 1 ? '1px solid var(--line-soft)' : 0 }}>
+                <span className="avatar" style={WARN_AVATAR} aria-hidden="true">{initial(r.email)}</span>
+                <div className="col" style={{ flex: '1 1 260px', minWidth: 0 }}>
+                  <strong style={{ fontSize: 13 }}>{r.email}</strong>
+                  <span className="truncate" style={{ fontSize: 13, color: 'var(--ink-2)' }} title={r.reason ?? undefined}>
+                    {r.reason ?? '요청 사유 없음'}
+                  </span>
+                </div>
+                <span className="hint" style={CAPTION}>{timeAgo(r.requestedAt)}</span>
+                <div className="row" style={{ gap: 6 }}>
+                  <Button onClick={() => setRejecting(r)}>거절</Button>
+                  <Button variant="primary" onClick={() => setApproving(r)}>승인…</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ── 콘솔 운영자 ── */}
-      <div className="card">
+      <section className="card">
         <div className="card__head">
-          <div>
-            <h3 className="card__title">콘솔 운영자</h3>
-            <div className="card__sub">{users.length}명 · 활성 {activeCount}명</div>
+          <div className="col" style={{ gap: 2 }}>
+            <h2 className="card__title">콘솔 운영자</h2>
+            <span className="hint" style={CAPTION}>{users.length}명 · 활성 {activeCount}명</span>
+          </div>
+          <div className="spacer" />
+          <Segmented ariaLabel="역할" options={FILTERS} value={filter} onChange={setFilter} />
+          <div className="search" style={{ flex: '0 1 220px' }}>
+            <Icons.Search size={15} />
+            <input className="input" placeholder="이메일 · ID" aria-label="운영자 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
         </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>운영자</th>
-              <th>역할</th>
-              <th>Tenant</th>
-              <th>MFA</th>
-              <th>마지막 로그인</th>
-              <th>상태</th>
-              <th style={{ textAlign: 'right' }}>액션</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} style={{ opacity: u.status === 'SUSPENDED' ? 0.55 : 1 }}>
-                <td>
-                  <div className="row">
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 999,
-                      background: u.role === 'PLATFORM_OPERATOR' ? 'var(--violet-soft)' : 'var(--info-soft)',
-                      color: u.role === 'PLATFORM_OPERATOR' ? 'var(--violet)' : 'var(--info)',
-                      display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 11, flex: 'none',
-                    }}>
-                      {u.email.slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="stack-1">
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{u.email}</div>
-                      <div className="muted mono" style={{ fontSize: 11 }}>{tail(u.id, 10)}</div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <span className={`badge ${u.role === 'PLATFORM_OPERATOR' ? 'badge--violet' : 'badge--info'}`}>{u.role}</span>
-                </td>
-                <td>
-                  {u.tenantIds && u.tenantIds.length > 0 ? (
-                    <span className="mono" style={{ fontSize: 12 }}>
-                      {u.tenantIds.length === 1 ? tail(u.tenantIds[0], 10) : `${u.tenantIds.length}개 RP`}
-                    </span>
-                  ) : (
-                    <span className="faint">—</span>
-                  )}
-                </td>
-                <td>
-                  {u.mfaEnabled ? (
-                    <span className="badge badge--success" style={{ fontSize: 10 }}><Icons.Check size={10} /> ON</span>
-                  ) : (
-                    <span className="badge badge--warning" style={{ fontSize: 10 }}><Icons.Alert size={10} /> OFF</span>
-                  )}
-                </td>
-                <td>
-                  {u.lastLoginAt ? <span className="muted">{timeAgo(u.lastLoginAt)}</span> : <span className="faint">미접속</span>}
-                </td>
-                <td><StatusBadge status={u.status} /></td>
-                <td style={{ textAlign: 'right' }}>
-                  <div className="row" style={{ justifyContent: 'flex-end', gap: 4 }}>
-                    {u.status === 'ACTIVE' && (
-                      <button className="btn btn--xs" onClick={() => void handleSuspend(u)} style={{ color: 'var(--warning)' }}>정지</button>
-                    )}
-                    {u.status === 'SUSPENDED' && (
-                      <button className="btn btn--xs" onClick={() => void handleActivate(u)} style={{ color: 'var(--success)' }}>활성화</button>
-                    )}
-                    <button className="btn btn--ghost btn--xs"><Icons.Dots size={14} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        <DataTable
+          columns={columns}
+          rows={visible}
+          rowKey={(u) => u.id}
+          empty={<EmptyState compact illustration={illustrations.noResults} title="조건에 맞는 운영자가 없습니다." />}
+        />
+      </section>
 
       {approving && (
         <ApproveDialog
@@ -260,16 +274,16 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
         <Dialog
           open
           onClose={() => setRejecting(null)}
+          role="alertdialog"
           title="가입 요청 거절"
-          sub={`${rejecting.email} 의 요청을 거절합니다. 요청은 삭제되며 같은 이메일로 다시 요청할 수 있습니다.`}
           footer={
             <>
-              <button className="btn" onClick={() => setRejecting(null)}>취소</button>
-              <button className="btn btn--danger" onClick={() => void handleReject(rejecting)}>거절 확정</button>
+              <Button onClick={() => setRejecting(null)}>취소</Button>
+              <Button variant="danger-solid" onClick={() => void handleReject(rejecting)}>거절 확정</Button>
             </>
           }
         >
-          <div style={{ fontSize: 13, color: 'var(--text-mute)' }}>거절 사실은 요청자에게 메일로 안내되고 audit log 에 기록됩니다.</div>
+          <p className="card__sub">{rejecting.email} 의 요청을 거절합니다. 요청자는 다시 가입 요청을 보낼 수 있습니다.</p>
         </Dialog>
       )}
     </div>
@@ -288,8 +302,9 @@ function ApproveDialog({
   onApprove: (body: { role: string; tenantIds: string[] }) => Promise<void>;
 }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [role, setRole] = useState('RP_ADMIN');
+  const [role, setRole] = useState<'PLATFORM_OPERATOR' | 'RP_ADMIN'>('RP_ADMIN');
   const [tenantIds, setTenantIds] = useState<string[]>([]);
+  const [tenantQuery, setTenantQuery] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -305,10 +320,14 @@ function ApproveDialog({
   }, []);
 
   function toggleTenant(id: string) {
+    setTouched(true);
     setTenantIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   }
 
   const formValid = role === 'PLATFORM_OPERATOR' || tenantIds.length > 0;
+  const showTenantError = role === 'RP_ADMIN' && touched && tenantIds.length === 0;
+  const tq = tenantQuery.trim().toLowerCase();
+  const shown = tq ? tenants.filter((t) => t.name.toLowerCase().includes(tq) || t.slug.toLowerCase().includes(tq)) : tenants;
 
   async function submit() {
     setTouched(true);
@@ -325,85 +344,74 @@ function ApproveDialog({
     <Dialog
       open
       onClose={onClose}
-      wide
       title="가입 요청 승인"
-      sub="역할과 tenant 를 지정하면 계정이 즉시 활성화되고 요청자가 정한 비밀번호로 로그인할 수 있습니다."
       footer={
         <>
-          <button className="btn" onClick={onClose}>취소</button>
-          <button className="btn btn--primary" disabled={!formValid || submitting} onClick={() => void submit()}>
-            승인하고 계정 생성
-          </button>
+          <Button onClick={onClose}>취소</Button>
+          <Button variant="primary" disabled={submitting} onClick={() => void submit()}>승인하고 계정 생성</Button>
         </>
       }
     >
-      <div className="stack-3">
-        <Field label="이메일" hint="요청자가 입력한 로그인 ID 입니다.">
-          <input className="input" type="email" value={request.email} readOnly />
-        </Field>
+      <div className="row" style={{ gap: 12, flexWrap: 'nowrap', padding: '12px 14px', borderRadius: 'var(--r)', background: 'var(--canvas)' }}>
+        <span className="avatar" style={WARN_AVATAR} aria-hidden="true">{initial(request.email)}</span>
+        <div className="col" style={{ minWidth: 0 }}>
+          <strong style={{ fontSize: 13 }}>{request.email}</strong>
+          <span style={{ fontSize: 13, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>{request.reason ?? '요청 사유 없음'}</span>
+        </div>
+      </div>
 
-        {request.reason && (
-          <Field label="요청 사유">
-            <div style={{ padding: '8px 12px', background: 'var(--surface-3)', borderRadius: 6, fontSize: 13, whiteSpace: 'pre-wrap' }}>{request.reason}</div>
-          </Field>
-        )}
+      <div>
+        <span className="label">역할</span>
+        <div className="choices choices--2" role="radiogroup" aria-label="역할">
+          <ChoiceCard checked={role === 'PLATFORM_OPERATOR'} onSelect={() => setRole('PLATFORM_OPERATOR')} title="Platform Operator" description="모든 tenant 와 플랫폼 설정 관리" />
+          <ChoiceCard checked={role === 'RP_ADMIN'} onSelect={() => setRole('RP_ADMIN')} title="RP Admin" description="할당된 tenant 만 관리" />
+        </div>
+      </div>
 
-        <Field label="Role">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[
-              { v: 'PLATFORM_OPERATOR', t: 'Platform Operator', d: '모든 tenant에 대해 cross-tenant 운영 가능. Crosscert 사내용.' },
-              { v: 'RP_ADMIN', t: 'RP Admin', d: '한 tenant 안에서만 모든 권한. RP 회사의 IAM 담당자용.' },
-            ].map((opt) => (
-              <button key={opt.v} type="button" onClick={() => setRole(opt.v)} style={{
-                padding: '10px 12px', borderRadius: 8,
-                border: `1px solid ${role === opt.v ? 'var(--accent)' : 'var(--border)'}`,
-                background: role === opt.v ? 'var(--accent-soft)' : 'var(--surface)',
-                color: role === opt.v ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', textAlign: 'left',
-              }}>
-                <div className="row" style={{ gap: 6 }}>
-                  <Icons.Shield size={13} />
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{opt.t}</div>
-                </div>
-                <div style={{ fontSize: 11, marginTop: 4, lineHeight: 1.5,
-                  color: role === opt.v ? 'color-mix(in oklab, var(--accent) 70%, var(--text))' : 'var(--text-mute)' }}>
-                  {opt.d}
-                </div>
-              </button>
-            ))}
+      {role === 'RP_ADMIN' && (
+        <div>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span className="label">할당 Tenant</span>
+            <span className="hint" style={{ margin: '0 0 6px' }}>{tenantIds.length}개 선택</span>
           </div>
-        </Field>
-
-        {role === 'RP_ADMIN' && (
-          <Field
-            label="할당 Tenant"
-            hint={tenantIds.length === 0 && touched
-              ? <span style={{ color: 'var(--danger)' }}>Tenant를 최소 1개 선택해야 합니다.</span>
-              : '이 운영자가 접근 가능한 tenant를 선택하세요 (복수 선택 가능).'}
+          <div className="search" style={{ marginBottom: 8 }}>
+            <Icons.Search size={15} />
+            <input className="input" placeholder="tenant 검색" aria-label="tenant 검색" value={tenantQuery} onChange={(e) => setTenantQuery(e.target.value)} />
+          </div>
+          <div
+            role="group"
+            aria-label="할당 Tenant"
+            style={{ border: `1px solid ${showTenantError ? 'var(--bad)' : 'var(--line)'}`, borderRadius: 'var(--r)', maxHeight: 176, overflow: 'auto' }}
           >
-            <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', maxHeight: 200, overflowY: 'auto' }}>
-              {tenants.length === 0 && (
-                <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-mute)' }}>활성 tenant 없음</div>
-              )}
-              {tenants.map((t, i) => {
+            {tenants.length === 0 ? (
+              <p className="hint" style={{ margin: 0, padding: '10px 14px' }}>활성 tenant 없음</p>
+            ) : shown.length === 0 ? (
+              <p className="hint" style={{ margin: 0, padding: '10px 14px' }}>일치하는 tenant 없음</p>
+            ) : (
+              shown.map((t, i) => {
                 const checked = tenantIds.includes(t.id);
                 return (
-                  <label key={t.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                    borderBottom: i < tenants.length - 1 ? '1px solid var(--border)' : 'none',
-                    background: checked ? 'var(--accent-soft)' : 'transparent', cursor: 'pointer', fontSize: 13,
-                  }}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleTenant(t.id)} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, color: checked ? 'var(--accent)' : 'var(--text)' }}>{t.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>{t.slug}</div>
-                    </div>
+                  <label
+                    key={t.id}
+                    className="row"
+                    style={{
+                      gap: 10, flexWrap: 'nowrap', padding: '10px 14px', fontSize: 13, cursor: 'pointer',
+                      borderBottom: i < shown.length - 1 ? '1px solid var(--line-soft)' : 0,
+                      background: checked ? 'var(--brand-50)' : undefined,
+                    }}
+                  >
+                    <input type="checkbox" checked={checked} onChange={() => toggleTenant(t.id)} style={{ width: 16, height: 16, margin: 0, accentColor: 'var(--brand-700)' }} />
+                    <span className="truncate">{t.name}</span>
+                    <span className="spacer" />
+                    <span className="mono hint" style={{ margin: 0 }}>{t.slug}</span>
                   </label>
                 );
-              })}
-            </div>
-          </Field>
-        )}
-      </div>
+              })
+            )}
+          </div>
+          {showTenantError && <p className="field__error" role="alert">Tenant를 최소 1개 선택해야 합니다.</p>}
+        </div>
+      )}
     </Dialog>
   );
 }
