@@ -12,6 +12,8 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
   const [mode, setMode] = useState<'totp' | 'recovery'>('totp');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // 실패하면 칸이 비고(비활성 동안 포커스를 잃음) — 다시 활성이 되면 첫 칸에 포커스한다.
+  const [refocus, setRefocus] = useState(0);
   // 자동 제출(onComplete)과 수동 확인이 같은 틱에 겹쳐도 verify 는 한 번만.
   const inFlight = useRef(false);
   const toast = useToast();
@@ -32,6 +34,7 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
     } catch {
       toast({ kind: 'err', title: '인증 실패', message: mode === 'totp' ? '코드가 올바르지 않습니다.' : '복구 코드가 올바르지 않습니다.' });
       setCode('');
+      setRefocus((n) => n + 1);
     } finally {
       inFlight.current = false;
       setSubmitting(false);
@@ -61,7 +64,7 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
                 <p className="card__sub">authenticator 앱에 표시된 6자리 코드를 입력하세요.</p>
               </div>
               <div>
-                <OtpInput value={code} onChange={setCode} onComplete={(v) => void verify(v)} disabled={submitting} autoFocus />
+                <OtpInput value={code} onChange={setCode} onComplete={(v) => void verify(v)} disabled={submitting} autoFocus focusKey={refocus} />
                 <p className="hint" style={{ textAlign: 'center' }}>붙여넣기 지원 · 6자리를 모두 입력하면 자동 확인</p>
               </div>
               <Button type="submit" variant="primary" size="lg" disabled={submitting || !ready}>

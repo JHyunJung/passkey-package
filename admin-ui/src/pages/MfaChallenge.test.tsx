@@ -70,6 +70,15 @@ describe('MfaChallenge V2', () => {
     await waitFor(() => expect(cellValues()).toBe(''));
   });
 
+  it('검증 실패 후 첫 칸에 다시 포커스 — 클릭 없이 바로 다시 입력', async () => {
+    vi.mocked(mfaApi.verify).mockRejectedValue(new Error('invalid_code'));
+    renderChallenge();
+    fireEvent.paste(cell(0), { clipboardData: { getData: () => '999999' } });
+    expect(await screen.findByText('인증 실패')).toBeInTheDocument();
+    await waitFor(() => expect(cell(0)).toBeEnabled());
+    await waitFor(() => expect(document.activeElement).toBe(cell(0)));
+  });
+
   it('복구 코드 모드는 같은 카드 안에서 전환되고 대문자·대시로 정형한다', () => {
     const { container } = renderChallenge();
     const card = container.querySelector('.auth-card');

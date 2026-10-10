@@ -1,9 +1,17 @@
-import { useRef, ClipboardEvent, KeyboardEvent } from 'react';
+import { useEffect, useRef, ClipboardEvent, KeyboardEvent } from 'react';
 
-type Props = { length?: number; value: string; onChange: (v: string) => void; onComplete?: (v: string) => void; disabled?: boolean; ariaLabel?: string; autoFocus?: boolean };
+type Props = { length?: number; value: string; onChange: (v: string) => void; onComplete?: (v: string) => void; disabled?: boolean; ariaLabel?: string; autoFocus?: boolean;
+  /** 값이 바뀌고 칸이 활성일 때 첫 칸에 포커스한다(예: 검증 실패 후 다시 입력). */
+  focusKey?: number };
 
-export function OtpInput({ length = 6, value, onChange, onComplete, disabled, ariaLabel = '인증 코드', autoFocus }: Props) {
+export function OtpInput({ length = 6, value, onChange, onComplete, disabled, ariaLabel = '인증 코드', autoFocus, focusKey }: Props) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const appliedFocusKey = useRef(focusKey);
+  useEffect(() => {
+    if (disabled || focusKey === appliedFocusKey.current) return;
+    appliedFocusKey.current = focusKey;
+    refs.current[0]?.focus();
+  }, [focusKey, disabled]);
   const digits = Array.from({ length }, (_, i) => value[i] ?? '');
 
   function commit(next: string, focusIndex: number) {
