@@ -59,6 +59,7 @@ export type AuditEvent = {
   subjectType: string | null;
   subjectId: string | null;
   payload: Record<string, unknown> | null;
+  result?: 'SUCCESS' | 'FAILURE';   // 스펙 §6 ③ (optional)
 };
 
 export type WebauthnConfig = {

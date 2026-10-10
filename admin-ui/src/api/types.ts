@@ -90,6 +90,7 @@ export interface AuditLogView {
   targetId?: string;
   payload: string;
   createdAt: string;
+  result?: 'SUCCESS' | 'FAILURE';   // 스펙 §6 ③ AuditRow.result — 없으면 실패 판정은 액션 이름 기준
 }
 
 export interface ActivityKpi {
