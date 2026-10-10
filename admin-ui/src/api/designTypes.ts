@@ -15,6 +15,7 @@ export type Tenant = {
   attestationConveyance: 'NONE' | 'INDIRECT' | 'DIRECT' | 'ENTERPRISE';
   webauthnTimeoutMs: number;
   credentialsDelta7d?: number;
+  allowedOrigins?: string[];
 };
 
 export type ApiKey = {

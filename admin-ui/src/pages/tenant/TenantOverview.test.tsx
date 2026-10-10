@@ -64,6 +64,16 @@ describe('TenantOverview', () => {
     for (const h of ['WebAuthn 요약', '최근 활동', '감사 체인']) expect(screen.getByRole('heading', { name: h })).toBeInTheDocument();
     expect(screen.getByText('60000 ms')).toBeInTheDocument();
   });
+  it('WebAuthn 요약 origins 는 tenant 의 실제 allowedOrigins, 없으면 행을 그리지 않는다', () => {
+    const { unmount } = renderOverview({ tenant: { ...T, allowedOrigins: ['http://localhost:9090', 'android:apk-key-hash:abc'] } });
+    expect(screen.getByText('http://localhost:9090')).toHaveClass('tag');
+    expect(screen.getByText('android:apk-key-hash:abc')).toHaveClass('tag');
+    expect(screen.queryByText(`https://${T.rpId}`)).toBeNull();
+    unmount();
+    renderOverview({ tenant: { ...T, allowedOrigins: undefined } });
+    expect(screen.queryByText('origins')).toBeNull();
+  });
+
   it('credentialsDelta7d 는 있을 때만 보조 줄', () => {
     const { unmount } = renderOverview({ tenant: { ...T, credentialsDelta7d: 4 } });
     expect(screen.getByText('7일 +4')).toBeInTheDocument();

@@ -17,6 +17,7 @@ function adaptTenant(s: TenantView): Tenant {
     attestationConveyance: s.attestationConveyance,
     webauthnTimeoutMs: s.webauthnTimeoutMs,
     credentialsDelta7d: s.credentialsDelta7d,
+    ...(s.allowedOrigins !== undefined ? { allowedOrigins: s.allowedOrigins } : {}),
   };
 }
 

@@ -187,7 +187,9 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
             <dl className="kv" style={{ gridTemplateColumns: '120px minmax(0, 1fr)' }}>
               <dt>rpId</dt><dd className="mono truncate" style={{ fontSize: 12 }} title={tenant.rpId}>{tenant.rpId}</dd>
               <dt>rpName</dt><dd className="truncate" title={tenant.name}>{tenant.name}</dd>
-              <dt>origins</dt><dd className="row" style={{ gap: 4 }}><span className="tag">https://{tenant.rpId}</span></dd>
+              {tenant.allowedOrigins && (
+                <><dt>origins</dt><dd className="row" style={{ gap: 4 }}>{tenant.allowedOrigins.map((o) => <span key={o} className="tag">{o}</span>)}</dd></>
+              )}
               <dt>userVerification</dt><dd><span className="tag">{tenant.userVerification}</span></dd>
               <dt>attestation</dt><dd><span className="tag">{tenant.attestationConveyance}</span></dd>
               <dt>timeout</dt><dd className="mono" style={{ fontSize: 12 }}>{tenant.webauthnTimeoutMs} ms</dd>

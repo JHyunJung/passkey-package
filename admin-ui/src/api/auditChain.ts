@@ -9,7 +9,8 @@ export type TenantChainVerify = {
 
 export const auditChainApi = {
   verifyTenant: async (tenantId: string): Promise<TenantChainVerify> => {
-    return api.get<TenantChainVerify>(
+    // GET /admin/api/audit/chain/verify 는 ApiResponse envelope 없이 raw JSON 을 돌려준다.
+    return api.getRaw<TenantChainVerify>(
       `/admin/api/audit/chain/verify?tenantId=${tenantId}`
     );
   },
