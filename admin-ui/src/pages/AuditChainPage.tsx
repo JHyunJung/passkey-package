@@ -2,10 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { auditChainMonitorApi, type ChainOverview, type IncidentView } from '@/api/auditChainMonitor';
+import { auditChainApi } from '@/api/auditChain';
 import { monthlyReportApi } from '@/api/monthlyReport';
-import { useToast, Dialog } from '@/ui';
 import { ApiError } from '@/api/types';
 import { statusLabel } from '@/i18n/labels';
+import { kstDateTime } from '@/lib/kst';
+import { illustrations } from '@/assets/illustrations';
+import {
+  Alert, Badge, Button, Card, CardHeader, DataTable, Dialog, EmptyState, Field, KpiCard, PageHeader,
+  Segmented, StatusStrip, useToast, type Column,
+} from '@/ui';
+
+type ChainRow = ChainOverview['tenants'][number];
+const STRIP_RUNS = 14;
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
@@ -27,81 +36,46 @@ function timeAgo(iso: string | null | undefined): string {
   return `${mo}개월 전`;
 }
 
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+function timeUntil(iso: string): string {
+  const m = Math.ceil((new Date(iso).getTime() - Date.now()) / 60000);
+  if (m <= 0) return '곧';
+  if (m < 60) return `${m}분 후`;
+  return `${Math.floor(m / 60)}시간 후`;
 }
 
-// ── MetricCard ────────────────────────────────────────────────────────────────
-
-function MetricCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div className="card" style={{ padding: '16px 20px' }}>
-      <div className="muted" style={{ fontSize: 11, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{value}</div>
-      {sub && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{sub}</div>}
-    </div>
-  );
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ── ChainSparkline ───────────────────────────────────────────────────────────
-// Design (pages-5.jsx): receives only `intact: boolean`, generates 24 ticks
-// with h = 6 + (i * 7919) % 12, marks ticks 14 & 15 red when !intact.
-//
-// Server adaptation: server sends `buckets: number[]` (hourly row counts).
-// When real buckets are provided, we normalize them to the same height range
-// [6, 18] so the visual bar proportions reflect actual activity while keeping
-// the tampered-tick red-marker behaviour from the design.
+/** 직전 달 1일 ~ 말일. */
+function prevMonthRange(now: Date): { from: string; to: string } {
+  return {
+    from: ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+    to: ymd(new Date(now.getFullYear(), now.getMonth(), 0)),
+  };
+}
 
-function ChainSparkline({ buckets, intact }: { buckets: number[]; intact: boolean }) {
-  const ticks = Array.from({ length: 24 }, (_, i) => i);
-
-  // Normalize bucket counts to bar height in [6, 18].
-  // Falls back to the design's deterministic formula when buckets are absent.
-  const maxBucket = buckets && buckets.length > 0
-    ? Math.max(...buckets, 1)
-    : 1;
-
-  function barHeight(i: number): number {
-    if (buckets && buckets.length > i) {
-      // Normalize: map [0, max] → [6, 18]
-      return 6 + Math.round((buckets[i] / maxBucket) * 12);
-    }
-    // Fallback: deterministic formula from design
-    return 6 + (i * 7919) % 12;
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 18 }}>
-      {ticks.map((i) => {
-        const broken = !intact && (i === 14 || i === 15);
-        const h = barHeight(i);
-        return (
-          <span key={i} style={{
-            width: 4, height: h,
-            background: broken ? 'var(--danger)' : 'var(--success)',
-            borderRadius: 1, opacity: broken ? 1 : 0.55,
-          }} />
-        );
-      })}
-    </div>
-  );
+function stripLabel(runs: { ok: boolean }[]): string {
+  const bad = runs.filter((r) => !r.ok).length;
+  return bad === 0 ? `최근 ${runs.length}회 모두 정상` : `최근 ${runs.length}회 중 위변조 감지 ${bad}회`;
 }
 
 // ── MonthlyReportDialog ──────────────────────────────────────────────────────
+// 서버 monthly-report 는 from/to 만 받는다(tenant 선택 없음) → 포함 tenant 는 읽기 전용 목록.
 
 function MonthlyReportDialog({ open, onClose, overview }: {
   open: boolean;
   onClose: () => void;
   overview: ChainOverview;
 }) {
-  const [from, setFrom] = useState('2026-04-01');
-  const [to, setTo] = useState('2026-04-30');
+  const initial = prevMonthRange(new Date());
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const [busy, setBusy] = useState(false);
   const toast = useToast();
 
   async function handleGenerate() {
+    setBusy(true);
     try {
       const blob = await monthlyReportApi.download(from, to);
       const url = URL.createObjectURL(blob);
@@ -116,46 +90,52 @@ function MonthlyReportDialog({ open, onClose, overview }: {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast({ kind: 'err', title: 'PDF 생성 실패', message: msg });
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <Dialog open={open} onClose={onClose} wide title="월간 무결성 보고서 발급"
-      sub="기간 내 전체 tenant의 hash chain 검증 결과를 PDF로 묶어 내보냅니다."
+      sub="기간 내 전체 tenant 의 chain 검증 결과를 PDF 로 묶습니다."
       footer={<>
-        <button className="btn" onClick={onClose}>취소</button>
-        <button className="btn btn--primary" onClick={handleGenerate}>PDF 생성 → 다운로드</button>
+        <Button onClick={onClose} disabled={busy}>취소</Button>
+        <Button variant="primary" onClick={() => void handleGenerate()} disabled={busy || !from || !to}>
+          {busy ? '생성 중…' : 'PDF 생성 → 다운로드'}
+        </Button>
       </>}
     >
-      <div className="grid-2" style={{ marginBottom: 14 }}>
-        <div>
-          <label className="label">시작일</label>
-          <input className="input mono" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">종료일</label>
-          <input className="input mono" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
+      <div className="grid-2" style={{ gap: 12 }}>
+        <Field label="시작일" htmlFor="report-from">
+          <input id="report-from" className="input mono" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </Field>
+        <Field label="종료일" htmlFor="report-to">
+          <input id="report-to" className="input mono" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </Field>
       </div>
-      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-        {overview.tenants.map((c, i) => (
-          <div key={c.tenantId ?? 'platform'} style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', borderBottom: i === overview.tenants.length - 1 ? 0 : '1px solid var(--border)', fontSize: 13 }}>
-            <input type="checkbox" defaultChecked style={{ marginRight: 10 }} />
-            <span style={{ flex: 1 }}>{c.tenantName}</span>
-            <span className="mono muted" style={{ fontSize: 11, marginRight: 12 }}>{fmt(c.verifiedRows)} rows</span>
-            {c.intact ? <span className="badge badge--success">{statusLabel('INTACT')}</span> : <span className="badge badge--danger">{statusLabel('TAMPERED')}</span>}
-          </div>
-        ))}
-      </div>
-      <div style={{ marginTop: 12, padding: 10, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
-        <Icons.Info size={14} />
-        <span>보고서는 compliance 감사 응답에 사용 가능합니다. 생성에 약 30초 소요 (v1.1).</span>
+      <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 14px', background: 'var(--canvas)', borderBottom: '1px solid var(--line-soft)', fontSize: 12, fontWeight: 600, color: 'var(--mute)' }}>
+          {`포함 tenant · ${overview.tenants.length}개`}
+        </div>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {overview.tenants.map((c) => (
+            <li key={c.tenantId ?? 'platform'} className="row" style={{ gap: 10, flexWrap: 'nowrap', padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', fontSize: 13 }}>
+              <span className="truncate" style={{ flex: '1 1 0' }} title={c.tenantName}>{c.tenantName}</span>
+              <span className="mono muted" style={{ fontSize: 12 }}>{`${fmt(c.verifiedRows)} rows`}</span>
+              <Badge tone={c.intact ? 'ok' : 'bad'}>{statusLabel(c.intact ? 'INTACT' : 'TAMPERED')}</Badge>
+            </li>
+          ))}
+        </ul>
       </div>
     </Dialog>
   );
 }
 
 // ── AuditChainPage ────────────────────────────────────────────────────────────
+
+const PAGE_TITLE = '감사 체인 모니터';
+// 스케줄러 없음: overview 호출 시마다 서버가 전체 tenant chain 을 검증한다(AuditChainMonitorController.overview).
+const PAGE_SUB = "tenant별 audit hash chain 무결성 — 화면을 열 때와 '새로 검증'·'전체 즉시 검증'을 누를 때 서버가 검증합니다.";
 
 export default function AuditChainPage() {
   const [overview, setOverview] = useState<ChainOverview | null>(null);
@@ -170,6 +150,8 @@ export default function AuditChainPage() {
   const [resolving, setResolving] = useState<IncidentView | null>(null);
   const [resolveNote, setResolveNote] = useState('');
   const [resolveBusy, setResolveBusy] = useState(false);
+  const [view, setView] = useState<'all' | 'tampered'>('all');
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -220,6 +202,22 @@ export default function AuditChainPage() {
 
   function openTenant(tenantId: string | null) {
     if (tenantId) navigate(`/tenants/${tenantId}`);
+  }
+
+  async function handleVerifyTenant(tenantId: string) {
+    setVerifyingId(tenantId);
+    try {
+      const r = await auditChainApi.verifyTenant(tenantId);
+      toast(r.intact
+        ? { kind: 'ok', title: '검증 완료', message: 'chain 이 정상입니다.' }
+        : { kind: 'err', title: '위변조 의심', message: r.tamperedEntryId ? `불일치 entry ${r.tamperedEntryId}` : 'hash 불일치' });
+      await load();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '검증 실패';
+      toast({ kind: 'err', title: '검증 실패', message: msg });
+    } finally {
+      setVerifyingId(null);
+    }
   }
 
   async function handleCreateIncident(tenantId: string) {
@@ -276,217 +274,229 @@ export default function AuditChainPage() {
     }
   }
 
-  if (loading) return <div className="page" style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
+  if (loading) {
+    return (
+      <div className="page">
+        <PageHeader title={PAGE_TITLE} sub={PAGE_SUB} />
+        <Card><div className="empty"><p className="empty__sub">불러오는 중…</p></div></Card>
+      </div>
+    );
+  }
 
   if (error || !overview) {
     return (
       <div className="page">
-        <div className="card" style={{ borderColor: 'var(--danger)', background: 'var(--danger-soft)', margin: 24 }}>
-          <div className="card__body">
-            <div style={{ fontWeight: 600, color: 'var(--danger)' }}>overview 로드 실패</div>
-            <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 4 }}>{error}</div>
-            <button className="btn btn--sm" style={{ marginTop: 12 }} onClick={() => void load()}>
-              <Icons.Refresh size={12} /> 다시 시도
-            </button>
-          </div>
-        </div>
+        <PageHeader title={PAGE_TITLE} sub={PAGE_SUB} />
+        <Card>
+          <EmptyState
+            illustration={illustrations.loadError}
+            title="감사 체인 상태를 불러오지 못했습니다"
+            description={error ?? undefined}
+            action={<Button icon={<Icons.Refresh size={14} />} onClick={() => void load()}>다시 시도</Button>}
+          />
+        </Card>
       </div>
     );
   }
 
   const { totals, tenants } = overview;
   const tamperedTenant = tenants.find((c) => !c.intact) ?? null;
+  const tampered = totals.tenantsTampered > 0;
+  const showStrip = tenants.some((c) => c.recentRuns !== undefined);
+  const rows = view === 'tampered' ? tenants.filter((c) => !c.intact) : tenants;
+  const openCount = incidents.filter((i) => i.status === 'OPEN').length;
+  const headline = tampered
+    ? `${totals.tenantsTampered}개 tenant 위변조 의심 · ${totals.tenantsIntact} / ${totals.tenantsTotal} 정상`
+    : `모든 tenant 정상 · ${totals.tenantsIntact} / ${totals.tenantsTotal}`;
+  const lastLine = [
+    `마지막 검증 ${timeAgo(overview.verifiedAt)}`,
+    overview.nextRunAt !== undefined ? `다음 검증 ${timeUntil(overview.nextRunAt)}` : null,
+  ].filter(Boolean).join(' · ');
+
+  const chainColumns: Column<ChainRow>[] = [
+    {
+      key: 'tenant', header: 'Tenant',
+      render: (c) => (
+        <div className="row" style={{ gap: 10, flexWrap: 'nowrap', minWidth: 0 }}>
+          <span className="avatar avatar--sq avatar--sm" aria-hidden="true">{c.tenantName.slice(0, 1).toUpperCase()}</span>
+          <strong className="truncate" style={{ fontSize: 13, maxWidth: 260 }} title={c.tenantName}>{c.tenantName}</strong>
+        </div>
+      ),
+    },
+    { key: 'status', header: '상태', render: (c) => <Badge tone={c.intact ? 'ok' : 'bad'}>{statusLabel(c.intact ? 'INTACT' : 'TAMPERED')}</Badge> },
+    { key: 'rows', header: '검증 행 수', align: 'right', render: (c) => fmt(c.verifiedRows) },
+    { key: 'verifiedAt', header: '마지막 검증', render: () => <span className="muted">{timeAgo(overview.verifiedAt)}</span> },
+    ...(showStrip ? [{
+      key: 'strip',
+      header: `최근 ${STRIP_RUNS}회`,
+      render: (c: ChainRow) => {
+        if (!c.recentRuns || c.recentRuns.length === 0) return null;
+        const last = c.recentRuns.slice(-STRIP_RUNS);
+        return <StatusStrip results={last.map((r) => r.ok)} label={stripLabel(last)} />;
+      },
+    }] : []),
+    {
+      key: 'actions', header: '액션',
+      render: (c) => (
+        <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+          <Button size="sm" onClick={() => openTenant(c.tenantId)} disabled={!c.tenantId}>열기</Button>
+          <Button size="sm" onClick={() => { if (c.tenantId) void handleVerifyTenant(c.tenantId); }} disabled={!c.tenantId || verifyingId === c.tenantId}>
+            {verifyingId === c.tenantId ? '검증 중…' : '검증'}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const incidentColumns: Column<IncidentView>[] = [
+    { key: 'status', header: '상태', render: (i) => <Badge tone={i.status === 'OPEN' ? 'warn' : 'ok'}>{statusLabel(i.status)}</Badge> },
+    { key: 'tenant', header: 'Tenant', render: (i) => <strong style={{ fontSize: 13 }}>{i.tenantName}</strong> },
+    { key: 'type', header: '유형', render: (i) => <span className="tag">{i.type}</span> },
+    { key: 'createdAt', header: '생성시각', render: (i) => <span className="muted">{kstDateTime(i.createdAt).slice(0, 16)}</span> },
+    { key: 'createdBy', header: '생성자', render: (i) => <span className="muted">{i.createdByEmail}</span> },
+    {
+      key: 'actions', header: '액션',
+      render: (i) => i.status === 'OPEN'
+        ? <Button size="sm" icon={<Icons.Check size={14} />} onClick={() => { setResolving(i); setResolveNote(''); }}>해결</Button>
+        : null,
+    },
+  ];
 
   return (
     <div className="page">
-      <div className="page__head">
-        <div>
-          <h1 className="page__title">감사 체인 모니터</h1>
-          <div className="page__sub">전체 tenant의 SHA-256 hash chain 무결성 상태. scheduler가 60초마다 자동 검증합니다.</div>
-        </div>
-        <div className="row">
-          <button className="btn btn--sm" onClick={() => setShowReport(true)}><Icons.Download size={12} /> 월간 보고서</button>
-          <button className="btn btn--primary btn--sm" onClick={() => void handleRunAll()} disabled={running}>
-            <Icons.Hash size={12} /> {running ? '검증 중…' : '전체 즉시 검증'}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title={PAGE_TITLE}
+        sub={PAGE_SUB}
+        actions={<>
+          <Button icon={<Icons.Download size={14} />} onClick={() => setShowReport(true)}>월간 보고서</Button>
+          <Button variant="primary" icon={<Icons.Hash size={14} />} onClick={() => void handleRunAll()} disabled={running}>
+            {running ? '검증 중…' : '전체 즉시 검증'}
+          </Button>
+        </>}
+      />
 
-      <div className="grid-4" style={{ marginBottom: 20 }}>
-        <MetricCard label="정상 / 전체" value={`${totals.tenantsIntact} / ${totals.tenantsTotal}`} sub={tamperedTenant ? `위변조 의심: ${tamperedTenant.tenantName}` : '전체 정상'} />
-        <MetricCard label="검증된 audit row" value={fmt(totals.verifiedRows)} sub="누적 chain length" />
-        <MetricCard label="검증 주기" value="60s" sub="background scheduler" />
-        <MetricCard label="평균 chain 검증" value={`${totals.verificationMs}ms`} sub="100k rows 기준 · p99 920ms" />
-      </div>
+      <section className="card" aria-label="전체 상태" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20, padding: '20px 24px' }}>
+        <span aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 12, flex: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: tampered ? 'var(--bad-soft)' : 'var(--ok-soft)', color: tampered ? 'var(--bad)' : 'var(--ok)' }}>
+          <Icons.Link size={24} />
+        </span>
+        <div className="col" style={{ gap: 2, flex: '1 1 320px', minWidth: 0 }}>
+          <span className="t-over">전체 상태</span>
+          <strong style={{ fontSize: 20, lineHeight: '28px' }}>{headline}</strong>
+          <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{lastLine}</span>
+        </div>
+        <Button size="sm" icon={<Icons.Refresh size={14} />} onClick={() => void load()}>새로 검증</Button>
+      </section>
 
       {tamperedTenant && (
-        <div className="card" style={{ borderColor: 'var(--danger)', background: 'var(--danger-soft)', marginBottom: 20 }}>
-          <div className="card__body" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--danger)', color: 'white', display: 'grid', placeItems: 'center', flex: 'none' }}>
-              <Icons.Alert size={20} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: 'var(--danger)' }}>위변조 의심 — 즉시 조사 필요</div>
-              <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 4 }}>
-                <strong>{tamperedTenant.tenantName}</strong> tenant에서 audit row의 hash가 일치하지 않습니다. DBA + 보안팀 알림 필요.
-              </div>
-            </div>
-            <button className="btn" onClick={() => openTenant(tamperedTenant.tenantId)}>tenant 열기 <Icons.ChevronRight size={12} /></button>
-            <button
-              className="btn btn--danger btn--sm"
+        <Alert
+          tone="bad"
+          title="위변조 의심 — 즉시 조사 필요"
+          actions={<>
+            <Button size="sm" onClick={() => openTenant(tamperedTenant.tenantId)} disabled={!tamperedTenant.tenantId}>
+              tenant 열기 <Icons.ChevronRight size={12} />
+            </Button>
+            <Button
+              size="sm"
+              variant="danger-solid"
               onClick={() => setConfirmCreate(true)}
               disabled={!tamperedTenant.tenantId}
               title={tamperedTenant.tenantId ? undefined : '플랫폼 체인은 incident 대상이 아닙니다'}
             >
-              <Icons.Alert size={12} /> Incident 생성
-            </button>
-          </div>
-        </div>
+              Incident 생성
+            </Button>
+          </>}
+        >
+          {`${tamperedTenant.tenantName} chain 에서 hash 불일치가 감지되었습니다.`}
+          {tamperedTenant.tamperedEntryId && ` 불일치 entry …${tamperedTenant.tamperedEntryId.slice(-8)}`}
+        </Alert>
       )}
 
-      <div className="card">
-        <div className="card__head">
-          <h3 className="card__title">Tenant별 Chain 상태</h3>
-          <div className="row">
-            <span className="muted" style={{ fontSize: 12 }}>최근 60초 기준</span>
-            <span className="badge badge--success badge--dot">{statusLabel('INTACT')} {totals.tenantsIntact}</span>
-            {totals.tenantsTampered > 0 && <span className="badge badge--danger badge--dot">{statusLabel('TAMPERED')} {totals.tenantsTampered}</span>}
-          </div>
-        </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Tenant</th>
-              <th>상태</th>
-              <th style={{ textAlign: 'right' }}>검증 행 수</th>
-              <th>마지막 검증</th>
-              <th>Chain (시각화)</th>
-              <th style={{ textAlign: 'right' }}>액션</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tenants.map((c) => (
-              <tr key={c.tenantId ?? 'platform'}>
-                <td>
-                  <button onClick={() => openTenant(c.tenantId)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: 0, padding: 0, cursor: 'pointer', color: 'var(--text)' }}>
-                    <div style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 10, flex: 'none' }}>{c.tenantName.slice(0, 1)}</div>
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{c.tenantName}</span>
-                  </button>
-                </td>
-                <td>
-                  {c.intact ? (
-                    <span className="badge badge--success badge--dot">{statusLabel('INTACT')}</span>
-                  ) : (
-                    <span className="badge badge--danger badge--dot">{statusLabel('TAMPERED')}</span>
-                  )}
-                </td>
-                <td style={{ textAlign: 'right' }} className="mono">{fmt(c.verifiedRows)}</td>
-                <td className="muted">{timeAgo(overview.verifiedAt)}</td>
-                <td><ChainSparkline buckets={c.buckets} intact={c.intact} /></td>
-                <td style={{ textAlign: 'right' }}>
-                  <button className="btn btn--xs" onClick={() => openTenant(c.tenantId)}>열기</button>
-                  <button className="btn btn--xs" style={{ marginLeft: 4 }}>검증</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="kpis">
+        <KpiCard label="정상 / 전체" value={`${totals.tenantsIntact} / ${totals.tenantsTotal}`} />
+        <KpiCard label="검증된 audit row" value={fmt(totals.verifiedRows)} />
+        <KpiCard
+          label="검증 방식"
+          value={overview.nextRunAt === undefined ? '요청 시' : '자동'}
+          hint={overview.nextRunAt === undefined ? '화면 진입 · 새로 검증 · 전체 즉시 검증' : `다음 검증 ${kstDateTime(overview.nextRunAt)} KST`}
+        />
+        <KpiCard label="검증 소요" value={`${fmt(totals.verificationMs)}ms`} />
       </div>
 
-      <div className="card" style={{ marginTop: 20 }}>
-        <div className="card__head">
-          <h3 className="card__title">보안 Incident</h3>
-          <div className="row">
-            <span className="muted" style={{ fontSize: 12 }}>위변조 감지 시 등록되는 대응 incident</span>
-            {incidents.some((i) => i.status === 'OPEN') && (
-              <span className="badge badge--danger badge--dot">
-                {statusLabel('OPEN')} {incidents.filter((i) => i.status === 'OPEN').length}
-              </span>
-            )}
+      <Card>
+        <CardHeader
+          title="Tenant별 Chain 상태"
+          sub={`${timeAgo(overview.verifiedAt)} 검증 기준${showStrip ? ` · 스트립은 최근 ${STRIP_RUNS}회 검증` : ''}`}
+          actions={
+            <Segmented<'all' | 'tampered'>
+              ariaLabel="상태 필터"
+              value={view}
+              onChange={setView}
+              options={[{ value: 'all', label: '전체' }, { value: 'tampered', label: '위변조만' }]}
+            />
+          }
+        />
+        <DataTable
+          columns={chainColumns}
+          rows={rows}
+          rowKey={(c) => c.tenantId ?? 'platform'}
+          empty={
+            <p className="muted" style={{ margin: 0, padding: '24px 16px', textAlign: 'center', fontSize: 13 }}>
+              {view === 'tampered' ? '위변조 의심 tenant 가 없습니다.' : '검증할 tenant 가 없습니다.'}
+            </p>
+          }
+        />
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="보안 Incident"
+          sub="위변조 감지 시 등록되는 대응 incident"
+          actions={openCount > 0 ? <Badge tone="warn">{`${statusLabel('OPEN')} ${openCount}`}</Badge> : undefined}
+        />
+        {incidentError && (
+          <div className="card__body">
+            <Alert
+              tone="bad"
+              title="Incident 목록을 불러오지 못했습니다."
+              actions={<Button size="sm" icon={<Icons.Refresh size={14} />} onClick={() => void refreshIncidents()}>다시 시도</Button>}
+            >
+              {incidents.length > 0 ? '아래는 마지막으로 조회된 목록입니다.' : undefined}
+            </Alert>
           </div>
-        </div>
-        {incidentError ? (
-          <div className="card__body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '24px 0' }}>
-            <span style={{ color: 'var(--danger)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icons.Alert size={14} /> Incident 목록을 불러오지 못했습니다.
-              {incidents.length > 0 && <span className="muted" style={{ fontSize: 12 }}>(아래는 마지막으로 조회된 목록)</span>}
-            </span>
-            <button className="btn btn--sm" onClick={() => void refreshIncidents()}>
-              <Icons.Refresh size={12} /> 다시 시도
-            </button>
-          </div>
-        ) : null}
-        {incidentError && incidents.length === 0 ? null : !incidentError && incidents.length === 0 ? (
-          <div className="card__body muted" style={{ fontSize: 13, textAlign: 'center', padding: '28px 0' }}>
-            등록된 incident가 없습니다.
-          </div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>상태</th>
-                <th>Tenant</th>
-                <th>유형</th>
-                <th>생성시각</th>
-                <th>생성자</th>
-                <th style={{ textAlign: 'right' }}>액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              {incidents.map((inc) => (
-                <tr key={inc.id}>
-                  <td>
-                    {inc.status === 'OPEN' ? (
-                      <span className="badge badge--danger badge--dot">{statusLabel('OPEN')}</span>
-                    ) : (
-                      <span className="badge badge--dot">{statusLabel('RESOLVED')}</span>
-                    )}
-                  </td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{inc.tenantName}</td>
-                  <td className="mono" style={{ fontSize: 12 }}>{inc.type}</td>
-                  <td className="muted" style={{ fontSize: 12 }}>{formatDateTime(inc.createdAt)}</td>
-                  <td className="muted" style={{ fontSize: 12 }}>{inc.createdByEmail}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {inc.status === 'OPEN' && (
-                      <button
-                        className="btn btn--xs"
-                        onClick={() => { setResolving(inc); setResolveNote(''); }}
-                      >
-                        <Icons.Check size={11} /> 해결
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
-      </div>
+        {!incidentError && incidents.length === 0 ? (
+          <EmptyState
+            compact
+            illustration={illustrations.allClear}
+            title="등록된 incident가 없습니다"
+            description={tampered ? '위변조 의심 tenant 는 위 배너에서 Incident 를 생성하세요.' : '모든 chain 이 정상입니다.'}
+          />
+        ) : incidents.length > 0 ? (
+          <DataTable columns={incidentColumns} rows={incidents} rowKey={(i) => i.id} />
+        ) : null}
+      </Card>
 
       <Dialog
         open={confirmCreate}
         onClose={() => { if (!creating) setConfirmCreate(false); }}
         title="Incident 생성"
-        sub="위변조가 감지된 tenant 에 대한 보안 대응 incident 를 등록합니다."
         footer={<>
-          <button className="btn" onClick={() => setConfirmCreate(false)} disabled={creating}>취소</button>
-          <button
-            className="btn btn--danger"
+          <Button onClick={() => setConfirmCreate(false)} disabled={creating}>취소</Button>
+          <Button
+            variant="danger-solid"
             onClick={() => { if (tamperedTenant?.tenantId) void handleCreateIncident(tamperedTenant.tenantId); }}
             disabled={creating || !tamperedTenant?.tenantId}
           >
             {creating ? '생성 중…' : 'Incident 생성'}
-          </button>
+          </Button>
         </>}
       >
-        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-          <strong>{tamperedTenant?.tenantName ?? '—'}</strong> tenant 의 audit chain 에서 위변조가
-          감지되었습니다. 생성 시점에 서버가 재검증하여 위변조된 entry 를 자동으로 기록합니다.
-        </div>
-        <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
-          <Icons.Alert size={14} />
-          <span>이미 진행 중인 incident 가 있거나 재검증 결과 위변조가 아니면 생성되지 않습니다.</span>
-        </div>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
+          {`${tamperedTenant?.tenantName ?? '—'} 의 위변조 의심을 보안 incident 로 등록하고 대응 이력을 남깁니다.`}
+        </p>
+        <p className="hint" style={{ margin: 0 }}>
+          생성 시점에 서버가 재검증해 위변조 entry 를 기록합니다. 이미 진행 중인 incident 가 있거나 재검증 결과 위변조가 아니면 생성되지 않습니다.
+        </p>
       </Dialog>
 
       <Dialog
@@ -495,29 +505,28 @@ export default function AuditChainPage() {
         title="Incident 해결"
         sub={resolving ? `${resolving.tenantName} · ${resolving.type}` : undefined}
         footer={<>
-          <button className="btn" onClick={() => { setResolving(null); setResolveNote(''); }} disabled={resolveBusy}>취소</button>
-          <button
-            className="btn btn--primary"
+          <Button onClick={() => { setResolving(null); setResolveNote(''); }} disabled={resolveBusy}>취소</Button>
+          <Button
+            variant="primary"
             onClick={() => void handleResolveIncident()}
             disabled={resolveBusy || resolveNote.trim().length === 0}
           >
             {resolveBusy ? '처리 중…' : '해결로 표시'}
-          </button>
+          </Button>
         </>}
       >
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <label className="label">해결 메모 (필수)</label>
-          <span className="muted" style={{ fontSize: 11 }}>{resolveNote.length}/1024</span>
-        </div>
-        <textarea
-          className="input"
-          rows={4}
-          maxLength={1024}
-          value={resolveNote}
-          onChange={(e) => setResolveNote(e.target.value)}
-          placeholder="조사 결과 및 조치 내용을 기록하세요."
-          style={{ resize: 'vertical' }}
-        />
+        <Field label="해결 메모" htmlFor="resolve-note" required help="필수 · 감사 로그에 함께 기록됩니다.">
+          <textarea
+            id="resolve-note"
+            className="input"
+            rows={3}
+            maxLength={1024}
+            aria-required="true"
+            value={resolveNote}
+            onChange={(e) => setResolveNote(e.target.value)}
+            placeholder="원인 · 조치 내용"
+          />
+        </Field>
       </Dialog>
 
       <MonthlyReportDialog open={showReport} onClose={() => setShowReport(false)} overview={overview} />

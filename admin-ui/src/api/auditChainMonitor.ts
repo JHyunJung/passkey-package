@@ -4,6 +4,8 @@ export type ChainOverview = {
   verifiedAt: string;
   windowHours: number;
   bucketSizeMinutes: number;
+  /** 스펙 §6 ② 감사 체인 이력(서버 후속). 정기 검증 스케줄러가 생기면 다음 실행 시각. 없으면 "다음 검증" 을 그리지 않는다. */
+  nextRunAt?: string;
   totals: {
     tenantsIntact: number;
     tenantsTotal: number;
@@ -18,6 +20,8 @@ export type ChainOverview = {
     verifiedRows: number;
     buckets: number[];
     tamperedEntryId: string | null;
+    /** 스펙 §6 ②. 최근 검증 결과(오래된 → 최신). 어떤 tenant 에도 없으면 스트립 열을 숨긴다. */
+    recentRuns?: { at: string; ok: boolean }[];
   }[];
 };
 
