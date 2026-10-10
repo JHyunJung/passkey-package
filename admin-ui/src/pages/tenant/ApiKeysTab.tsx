@@ -136,7 +136,7 @@ export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onCh
     else toast({ kind: 'warn', title: '복사 실패', message: '클립보드 복사에 실패했습니다.' });
   }
 
-  if (loading && keys.length === 0) {
+  if (loading && keys.length === 0 && !issued) {
     return <p className="muted" style={{ padding: 40, margin: 0 }}>불러오는 중…</p>;
   }
 
