@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, within, fireEvent } from '@testing-library/react';
 
 vi.mock('@/api/systemInfo', () => ({
   systemInfoApi: { get: vi.fn() },
@@ -21,6 +21,7 @@ const sample: SystemInfoData = {
 };
 
 const mockGet = () => systemInfoApi.get as ReturnType<typeof vi.fn>;
+const list = () => screen.getByRole('list', { name: '백엔드 컴포넌트' });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -68,9 +69,49 @@ describe('SystemInfoTab', () => {
     });
     render(<SystemInfoTab />);
 
-    await waitFor(() => expect(screen.getByText('OK')).toBeInTheDocument());
-    expect(screen.getByText('OK').className).toContain('badge--success');
-    expect(screen.getByText('DEGRADED').className).toContain('badge--warning');
-    expect(screen.getByText('DOWN').className).toContain('badge--danger');
+    await waitFor(() => expect(list()).toBeInTheDocument());
+    expect(within(list()).getByText('정상').className).toContain('badge--success');
+    expect(within(list()).getByText('저하').className).toContain('badge--warning');
+    expect(within(list()).getByText('중단').className).toContain('badge--danger');
+  });
+
+  it('전체 상태는 컴포넌트 중 가장 나쁜 상태', async () => {
+    mockGet().mockResolvedValue({
+      ...sample,
+      components: [
+        { name: 'admin-app', version: '1.2.3', status: 'OK', note: null },
+        { name: 'Redis', version: '7', status: 'DEGRADED', note: null },
+      ],
+    });
+    render(<SystemInfoTab />);
+    await waitFor(() => expect(list()).toBeInTheDocument());
+    const kpi = screen.getByText('전체 상태').closest('.kpi')!;
+    expect(kpi).toHaveTextContent('저하');
+    expect(kpi).toHaveTextContent('컴포넌트 1 / 2');
+  });
+
+  it('latency hidden when undefined (§6 ⑤), shown when defined', async () => {
+    mockGet().mockResolvedValue({
+      ...sample,
+      components: [
+        { name: 'admin-app', version: '1.2.3', status: 'OK', note: null },
+        { name: 'Redis', version: '7', status: 'OK', note: null, latencyMs: 12 },
+      ],
+    });
+    render(<SystemInfoTab />);
+    await waitFor(() => expect(list()).toBeInTheDocument());
+    const items = within(list()).getAllByRole('listitem');
+    expect(items[0].textContent).not.toMatch(/\d+ms/);
+    expect(within(items[1]).getByText('12ms')).toBeInTheDocument();
+  });
+
+  it('불러오기 실패 → 일러스트 빈 상태, 다시 시도로 재요청', async () => {
+    mockGet().mockRejectedValueOnce(new Error('boom'));
+    const { container } = render(<SystemInfoTab />);
+    await waitFor(() => expect(screen.getByText('System Info 를 불러오지 못했습니다.')).toBeInTheDocument());
+    expect(container.querySelector('img')).toHaveAttribute('alt', '');
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.getByText('2026-05-31 배포')).toBeInTheDocument());
+    expect(systemInfoApi.get).toHaveBeenCalledTimes(2);
   });
 });

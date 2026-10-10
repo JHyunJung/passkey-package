@@ -132,18 +132,15 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
           />
           <main>
             <ErrorBoundary>
-              {/* TODO(Task 29): 각 페이지 루트가 .page 를 가지면 이 임시 래퍼를 제거 */}
-              <div className="page">
-                <Routes>
-                  <Route path="/tenants" element={<RequirePlatform me={me}><TenantsListPage /></RequirePlatform>} />
-                  <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
-                  <Route path="/activity" element={<RequirePlatform me={me}><ActivityPage /></RequirePlatform>} />
-                  <Route path="/audit-chain" element={<RequirePlatform me={me}><AuditChainPage /></RequirePlatform>} />
-                  <Route path="/settings" element={<SettingsPage me={me} onMeChange={onMeChange} />} />
-                  <Route path="/license" element={<RequirePlatform me={me}><LicensePage /></RequirePlatform>} />
-                  <Route path="*" element={<Navigate to={rpTenantId(me) ? `/tenants/${rpTenantId(me)}` : '/tenants'} replace />} />
-                </Routes>
-              </div>
+              <Routes>
+                <Route path="/tenants" element={<RequirePlatform me={me}><TenantsListPage /></RequirePlatform>} />
+                <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
+                <Route path="/activity" element={<RequirePlatform me={me}><ActivityPage /></RequirePlatform>} />
+                <Route path="/audit-chain" element={<RequirePlatform me={me}><AuditChainPage /></RequirePlatform>} />
+                <Route path="/settings" element={<SettingsPage me={me} onMeChange={onMeChange} />} />
+                <Route path="/license" element={<RequirePlatform me={me}><LicensePage /></RequirePlatform>} />
+                <Route path="*" element={<Navigate to={rpTenantId(me) ? `/tenants/${rpTenantId(me)}` : '/tenants'} replace />} />
+              </Routes>
             </ErrorBoundary>
           </main>
         </div>

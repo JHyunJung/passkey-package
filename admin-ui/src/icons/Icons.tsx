@@ -159,6 +159,12 @@ const Help = makeIconR([
   { tag: 'path', attrs: { d: 'M9.5 9.5a2.5 2.5 0 114 2c-.9.5-1.5 1-1.5 2M12 17h.01' } },
 ]);
 
+const Server = makeIconR([
+  { tag: 'rect', attrs: { x: 4, y: 4.5, width: 16, height: 6, rx: 1.5 } },
+  { tag: 'rect', attrs: { x: 4, y: 13.5, width: 16, height: 6, rx: 1.5 } },
+  { tag: 'path', attrs: { d: 'M7.5 7.5h.01M7.5 16.5h.01' } },
+]);
+
 const Lock = makeIconR([
   { tag: 'rect', attrs: { x: 4, y: 11, width: 16, height: 10, rx: 2 } },
   { tag: 'path', attrs: { d: 'M8 11V7a4 4 0 018 0v4' } },
@@ -252,6 +258,7 @@ export const Icons = {
   Alert,
   Info,
   Help,
+  Server,
   Lock,
   LogOut,
   Refresh,

@@ -237,8 +237,8 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
     tenantsApi.get(id).then(setTenant).catch(() => {});
   };
 
-  if (loading) return <div className="muted" style={{ padding: 40 }}>Loading…</div>;
-  if (!tenant) return <div className="muted" style={{ padding: 40 }}>Tenant 를 찾을 수 없습니다.</div>;
+  if (loading) return <div className="page"><p className="muted" style={{ margin: 0 }}>Loading…</p></div>;
+  if (!tenant) return <div className="page"><p className="muted" style={{ margin: 0 }}>Tenant 를 찾을 수 없습니다.</p></div>;
 
   return (
     <TenantDetailPage

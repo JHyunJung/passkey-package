@@ -5,6 +5,8 @@ export type SystemInfoComponent = {
   version: string;
   status: 'OK' | 'DOWN' | 'DEGRADED';
   note: string | null;
+  /** 스펙 §6 ⑤ — 헬스 체크 응답 시간(ms). 서버가 내려주기 전까지 undefined → 표시하지 않는다. */
+  latencyMs?: number;
 };
 
 export type SystemInfoHost = {

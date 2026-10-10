@@ -31,6 +31,12 @@ export type MdsHistoryRow = {
   errorMessage: string | null;
 };
 
+/**
+ * MDS Status 스트립에 그릴 최근 실행 수. 서버 MdsHistoryService.recent(limit) 는 1–50 으로 제한하고
+ * started_at DESC(최신 먼저)로 돌려준다 — 서버 변경 없이 ?limit=30 으로 요청한다.
+ */
+export const MDS_HISTORY_STRIP_LIMIT = 30;
+
 export const mdsStatusApi = {
   get: (): Promise<MdsStatus> => api.get<MdsStatus>('/admin/api/mds/status'),
   sync: (): Promise<MdsSyncResult> => api.post<MdsSyncResult>('/admin/api/mds/sync', {}),

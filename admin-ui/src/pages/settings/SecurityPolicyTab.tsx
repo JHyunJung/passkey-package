@@ -1,81 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Icons } from '@/icons/Icons';
 import { securityPolicyApi, type SecurityPolicyView } from '@/api/securityPolicy';
-import { useToast } from '@/ui';
+import { CardHeader, ChipInput, SaveBar, Switch, useToast, useUnsavedGuard } from '@/ui';
 
-// ── Field ─────────────────────────────────────────────────────────────────────
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-      {hint && <div className="hint">{hint}</div>}
-    </div>
-  );
+function sameList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
-
-// ── Toggle ────────────────────────────────────────────────────────────────────
-
-function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <button
-      onClick={() => onChange(!on)}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        border: 0,
-        background: 'transparent',
-        padding: 0,
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        style={{
-          position: 'relative',
-          width: 36,
-          height: 20,
-          borderRadius: 999,
-          background: on ? 'var(--accent)' : 'var(--border-strong)',
-          transition: 'background 120ms ease',
-          display: 'inline-block',
-        }}
-      >
-        <span
-          style={{
-            position: 'absolute',
-            top: 2,
-            left: on ? 18 : 2,
-            width: 16,
-            height: 16,
-            borderRadius: 999,
-            background: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-            transition: 'left 120ms ease',
-          }}
-        />
-      </span>
-      <span style={{ fontSize: 13, color: 'var(--text)' }}>{label}</span>
-    </button>
-  );
-}
-
-// ── SecurityPolicyTab ─────────────────────────────────────────────────────────
 
 export default function SecurityPolicyTab() {
   const [sessionMin, setSessionMin] = useState(30);
   const [reqMfa, setReqMfa] = useState(true);
   const [corsAllowlist, setCorsAllowlist] = useState<string[]>([]);
-  const [originInput, setOriginInput] = useState('');
+  const [saved, setSaved] = useState<SecurityPolicyView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -84,18 +19,7 @@ export default function SecurityPolicyTab() {
     setSessionMin(v.sessionIdleTimeoutMinutes);
     setReqMfa(v.mfaRequired);
     setCorsAllowlist(v.corsAllowlist);
-  }
-
-  function addCorsOrigin() {
-    const v = originInput.trim();
-    if (!v) return;
-    if (corsAllowlist.includes(v)) return;
-    setCorsAllowlist([...corsAllowlist, v]);
-    setOriginInput('');
-  }
-
-  function removeCorsOrigin(o: string) {
-    setCorsAllowlist(corsAllowlist.filter((x) => x !== o));
+    setSaved(v);
   }
 
   useEffect(() => {
@@ -107,7 +31,7 @@ export default function SecurityPolicyTab() {
         toast({ kind: 'err', title: '보안 정책 로드 실패', message: msg });
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSave() {
     setSaving(true);
@@ -137,48 +61,74 @@ export default function SecurityPolicyTab() {
     }
   }
 
+  const changed: string[] = [];
+  if (saved) {
+    if (sessionMin !== saved.sessionIdleTimeoutMinutes) changed.push('세션 idle timeout');
+    if (reqMfa !== saved.mfaRequired) changed.push('MFA 필수');
+    if (!sameList(corsAllowlist, saved.corsAllowlist)) changed.push('CORS Allowlist');
+  }
+  const guard = useUnsavedGuard(changed.length > 0);
+  const addedOrigins = saved ? corsAllowlist.filter((o) => !saved.corsAllowlist.includes(o)) : [];
+
   return (
     <div className="stack-4">
-      <div className="card">
-        <div className="card__head">
-          <h3 className="card__title">세션 &amp; 인증 정책</h3>
+      <section className="card">
+        <CardHeader title="세션 & 인증 정책" sub="모든 콘솔 운영자에게 적용" />
+
+        <div className="set">
+          <div>
+            <label className="set__label" htmlFor="sec-idle-timeout" style={{ display: 'block' }}>세션 idle timeout (분)</label>
+            <p className="set__desc">이 시간 동안 활동이 없으면 세션이 만료됩니다. 만료 직전 연장 모달이 뜹니다.</p>
+          </div>
+          <div className="row" style={{ gap: 10 }}>
+            <input
+              id="sec-idle-timeout"
+              className="input mono"
+              type="number"
+              value={sessionMin}
+              disabled={loading}
+              onChange={(e) => setSessionMin(parseInt(e.target.value || '0', 10))}
+              style={{ maxWidth: 120 }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>분</span>
+          </div>
         </div>
-        <div className="card__body stack-4">
-          <Field label="세션 idle timeout (분)" hint="이 시간 동안 활동이 없으면 자동 로그아웃됩니다. PRD REQ-A-5.">
-            <input className="input mono" type="number" value={sessionMin} onChange={(e) => setSessionMin(parseInt(e.target.value || '0', 10))} style={{ width: 120 }} />
-          </Field>
-          <Field label="MFA 필수">
-            <Toggle on={reqMfa} onChange={setReqMfa} label={reqMfa ? '모든 운영자에게 MFA 필수' : 'MFA 선택'} />
-          </Field>
-          <Field label="CORS Allowlist">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
-              {corsAllowlist.map((origin) => (
-                <span key={origin} className="chip mono" style={{ fontSize: 11 }}>
-                  {origin}
-                  <button className="chip__x" onClick={() => removeCorsOrigin(origin)}><Icons.X size={11} /></button>
-                </span>
-              ))}
-              <input
-                placeholder="https://… 추가 후 Enter"
-                style={{ border: 0, outline: 'none', fontSize: 12, padding: '2px 4px', flex: 1, minWidth: 200, background: 'transparent', color: 'var(--text)' }}
-                value={originInput}
-                onChange={(e) => setOriginInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCorsOrigin())}
-              />
-            </div>
-          </Field>
+
+        <div className="set">
+          <div>
+            <span className="set__label" style={{ display: 'block' }}>MFA 필수</span>
+            <p className="set__desc">켜면 MFA 를 등록하지 않은 운영자는 다음 로그인 때 등록해야 합니다.</p>
+          </div>
+          <div style={{ alignSelf: 'flex-start' }}>
+            <Switch checked={reqMfa} onChange={setReqMfa} label="모든 운영자에게 MFA 필수" disabled={loading} />
+          </div>
         </div>
-        <div className="card__head" style={{ borderTop: '1px solid var(--border)', borderBottom: 0, justifyContent: 'flex-end' }}>
-          <button className="btn" onClick={handleCancel} disabled={saving || loading}>취소</button>
-          <button
-            className="btn btn--primary"
-            onClick={handleSave}
-            disabled={saving || loading}
-          >
-            저장
-          </button>
+
+        <div className="set">
+          <div>
+            <span className="set__label" style={{ display: 'block' }}>CORS Allowlist</span>
+            <p className="set__desc">콘솔 API 를 호출할 수 있는 origin. Enter 로 추가합니다.</p>
+          </div>
+          <ChipInput
+            values={corsAllowlist}
+            onChange={setCorsAllowlist}
+            placeholder="https://… 추가 후 Enter"
+            ariaLabel="origin 추가"
+            mono
+            addedValues={addedOrigins}
+          />
         </div>
-      </div>
+      </section>
+
+      <SaveBar
+        count={changed.length}
+        summary={changed.join(' · ')}
+        onRevert={() => void handleCancel()}
+        onSave={() => void handleSave()}
+        saving={saving}
+        revertLabel="취소"
+      />
+      {guard}
     </div>
   );
 }
