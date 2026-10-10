@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { passwordResetApi } from '@/api/passwordReset';
+import { Alert, Button, Field } from '@/ui';
 
 /**
  * 미인증 public 화면 — 이메일로 재설정 링크 요청.
- * enumeration 방지: 항상 동일한 "메일을 보냈습니다" 안내(계정 존재 비노출).
+ * enumeration 방지: 항상 동일한 "메일을 확인하세요" 안내(계정 존재 비노출).
+ * 제출 후 같은 카드 안에서 완료 상태로 전환한다.
  */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -25,38 +27,45 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
-      <div style={{ width: 360, padding: 28, border: '1px solid var(--border)', borderRadius: 14, background: 'var(--surface)' }}>
-        <h2 style={{ marginTop: 0, fontSize: 20 }}>비밀번호 재설정</h2>
-        {sent ? (
-          <>
-            <div style={{ padding: '12px 14px', background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 8, fontSize: 13, lineHeight: 1.6 }}>
-              해당 이메일이 등록돼 있다면 재설정 링크를 보냈습니다. 메일함을 확인하세요.
-            </div>
-            <a href="/admin" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>← 로그인으로</a>
-          </>
-        ) : (
-          <form onSubmit={submit}>
-            <div style={{ fontSize: 13, color: 'var(--text-mute)', margin: '6px 0 18px' }}>
-              가입한 이메일을 입력하면 재설정 링크를 보냅니다.
-            </div>
-            <label className="label">이메일</label>
-            <input
-              className="input"
-              type="email"
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@crosscert.com"
-              style={{ width: '100%' }}
-            />
-            <button type="submit" className="btn btn--primary" disabled={submitting || !email.trim()} style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}>
-              {submitting ? '전송 중…' : '재설정 링크 보내기'}
-            </button>
-            <a href="/admin" className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 8, justifyContent: 'center' }}>← 로그인으로</a>
-          </form>
-        )}
+    <main className="auth">
+      <div className="auth__col">
+        <img className="auth__logo" src="/admin/crosscert-logo-transparent.png" alt="CROSSCERT" />
+        <div className="auth-card">
+          <div className="col" style={{ gap: 6 }}>
+            <h1 className="page__title">비밀번호 재설정</h1>
+            <p className="card__sub">
+              {sent
+                ? '가입한 이메일을 입력하면 재설정 링크를 보내드립니다.'
+                : '가입한 이메일을 입력하면 재설정 링크를 보내드립니다. 링크는 일정 시간 후 만료됩니다.'}
+            </p>
+          </div>
+          {sent ? (
+            <>
+              <Alert tone="ok" title="메일을 확인하세요">해당 이메일로 가입된 계정이 있으면 재설정 링크가 발송됩니다.</Alert>
+              <p className="hint" style={{ margin: 0 }}>메일이 오지 않으면 스팸함을 확인하거나 플랫폼 운영자에게 문의하세요.</p>
+            </>
+          ) : (
+            <form className="col" style={{ gap: 20 }} onSubmit={submit}>
+              <Field label="이메일" htmlFor="forgot-email">
+                <input
+                  id="forgot-email"
+                  className="input input--lg"
+                  type="email"
+                  autoFocus
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@crosscert.com"
+                />
+              </Field>
+              <Button type="submit" variant="primary" size="lg" disabled={submitting || !email.trim()}>
+                {submitting ? '전송 중…' : '재설정 링크 보내기'}
+              </Button>
+            </form>
+          )}
+        </div>
+        <a href="/admin" style={{ fontSize: 13, fontWeight: 600 }}>← 로그인으로</a>
       </div>
-    </div>
+    </main>
   );
 }
