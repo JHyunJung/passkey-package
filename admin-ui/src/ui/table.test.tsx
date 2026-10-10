@@ -65,6 +65,15 @@ describe('Pagination', () => {
     rerender(<Pagination page={1} pageSize={50} total={0} onPage={() => {}} />);
     expect(screen.getByText('0건')).toBeInTheDocument();
   });
+  it('page 가 마지막을 넘으면 마지막 페이지로 보정', () => {
+    const onPage = vi.fn();
+    render(<Pagination page={5} pageSize={50} total={120} onPage={onPage} />);
+    expect(screen.getByText('101–120 / 120건')).toBeInTheDocument();
+    expect(screen.getByText('3 / 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다음 페이지' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '이전 페이지' }));
+    expect(onPage).toHaveBeenCalledWith(2);
+  });
   it('페이지당 선택', () => {
     const onPageSize = vi.fn();
     render(<Pagination page={1} pageSize={50} total={10} onPage={() => {}} pageSizeOptions={[50, 100, 200]} onPageSize={onPageSize} />);

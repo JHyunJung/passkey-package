@@ -27,6 +27,21 @@ describe('Menu', () => {
     expect(revoke).toHaveBeenCalled();
     expect(screen.queryByRole('menu')).toBeNull();
   });
+  it('ArrowUp 을 컨테이너(인덱스 -1)에서 누르면 마지막 항목으로 이동', () => {
+    setup();
+    const menu = screen.getByRole('menu');
+    menu.focus();
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '회수' }));
+  });
+  it('트리거에 포커스가 있을 때 Escape 로 메뉴가 닫힌다', () => {
+    setup();
+    const trigger = screen.getByRole('button', { name: '키 액션' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
   it('Escape 로 닫히고 트리거로 포커스 복귀', () => {
     setup();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
