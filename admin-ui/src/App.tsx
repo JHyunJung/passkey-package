@@ -114,40 +114,35 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
   return (
     <Fragment>
       <LicenseBanner />
-      <div
-        className="app"
-        style={{ gridTemplateAreas: '"sidebar content"' }}
-      >
-      <ErrorBoundary fallback={null}>
-        <Sidebar
-          me={me}
-          currentRoute={route}
-          onNavigate={setRoute}
-          tenant={tenant}
-        />
-      </ErrorBoundary>
-      <div className="content" style={{ gridArea: 'content' }}>
-        <Header
-          me={me}
-          onLogout={onLogout}
-          onSwitchRole={handleSwitchRole}
-          breadcrumb={breadcrumb}
-          onOpenPalette={() => setPaletteOpen(true)}
-        />
-        <main style={{ padding: 24 }}>
-          <ErrorBoundary>
-          <Routes>
-            <Route path="/tenants" element={<RequirePlatform me={me}><TenantsListPage /></RequirePlatform>} />
-            <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
-            <Route path="/activity" element={<RequirePlatform me={me}><ActivityPage /></RequirePlatform>} />
-            <Route path="/audit-chain" element={<RequirePlatform me={me}><AuditChainPage /></RequirePlatform>} />
-            <Route path="/settings" element={<SettingsPage me={me} onMeChange={onMeChange} />} />
-            <Route path="/license" element={<RequirePlatform me={me}><LicensePage /></RequirePlatform>} />
-            <Route path="*" element={<Navigate to={rpTenantId(me) ? `/tenants/${rpTenantId(me)}` : '/tenants'} replace />} />
-          </Routes>
-          </ErrorBoundary>
-        </main>
-      </div>
+      <div className="app">
+        <ErrorBoundary fallback={null}>
+          <Sidebar me={me} currentRoute={route} onNavigate={setRoute} />
+        </ErrorBoundary>
+        <div className="content">
+          <Header
+            me={me}
+            onLogout={onLogout}
+            onSwitchRole={handleSwitchRole}
+            breadcrumb={breadcrumb}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
+          <main>
+            <ErrorBoundary>
+              {/* TODO(Task 29): 각 페이지 루트가 .page 를 가지면 이 임시 래퍼를 제거 */}
+              <div className="page">
+                <Routes>
+                  <Route path="/tenants" element={<RequirePlatform me={me}><TenantsListPage /></RequirePlatform>} />
+                  <Route path="/tenants/:id" element={<TenantDetailRoute me={me} />} />
+                  <Route path="/activity" element={<RequirePlatform me={me}><ActivityPage /></RequirePlatform>} />
+                  <Route path="/audit-chain" element={<RequirePlatform me={me}><AuditChainPage /></RequirePlatform>} />
+                  <Route path="/settings" element={<SettingsPage me={me} onMeChange={onMeChange} />} />
+                  <Route path="/license" element={<RequirePlatform me={me}><LicensePage /></RequirePlatform>} />
+                  <Route path="*" element={<Navigate to={rpTenantId(me) ? `/tenants/${rpTenantId(me)}` : '/tenants'} replace />} />
+                </Routes>
+              </div>
+            </ErrorBoundary>
+          </main>
+        </div>
 
       <CommandPalette
         open={paletteOpen}

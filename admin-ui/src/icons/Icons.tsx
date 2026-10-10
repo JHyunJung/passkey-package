@@ -154,6 +154,11 @@ const Info = makeIconR([
   { tag: 'path', attrs: { d: 'M12 11v6M12 8h.01' } },
 ]);
 
+const Help = makeIconR([
+  { tag: 'circle', attrs: { cx: 12, cy: 12, r: 9 } },
+  { tag: 'path', attrs: { d: 'M9.5 9.5a2.5 2.5 0 114 2c-.9.5-1.5 1-1.5 2M12 17h.01' } },
+]);
+
 const Lock = makeIconR([
   { tag: 'rect', attrs: { x: 4, y: 11, width: 16, height: 10, rx: 2 } },
   { tag: 'path', attrs: { d: 'M8 11V7a4 4 0 018 0v4' } },
@@ -246,6 +251,7 @@ export const Icons = {
   Trash,
   Alert,
   Info,
+  Help,
   Lock,
   LogOut,
   Refresh,

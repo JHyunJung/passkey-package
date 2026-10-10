@@ -1,214 +1,95 @@
-import React, { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
 import { Breadcrumb } from './Breadcrumb';
-import { activeTenantApi } from '@/api/activeTenant';
-import type { ActiveTenantView } from '@/api/activeTenant';
+import { activeTenantApi, type ActiveTenantView } from '@/api/activeTenant';
+import { Badge } from '@/ui';
 
-// ===== MenuItem (private helper) =====
-type MenuItemProps = {
-  icon: string;
-  label: string;
-  onClick?: () => void;
-};
-
-function MenuItem({ icon, label, onClick }: MenuItemProps) {
-  const I = (Icons as Record<string, React.ComponentType<{ size?: number }>>)[icon] || Icons.ChevronRight;
-  return (
-    <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', border: 0, background: 'transparent', borderRadius: 6, fontSize: 13, color: 'var(--text)', cursor: 'pointer' }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-3)')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-    >
-      <I size={14} />
-      <span>{label}</span>
-    </button>
-  );
+function useOutsideClose(open: boolean, close: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) close(); };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('mousedown', h); document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
+  }, [open, close]);
+  return ref;
 }
 
-// ===== RpSwitcher =====
-// Shown only when allowedTenantIds.length >= 2 (RP_ADMIN with multiple tenants).
-// Fetches tenant names for label display.
-
-type RpSwitcherProps = {
-  onSwitch: () => void;
-};
-
-function RpSwitcher({ onSwitch }: RpSwitcherProps) {
-  const [activeTenant, setActiveTenant] = useState<ActiveTenantView | null>(null);
+function RpSwitcher({ onSwitch }: { onSwitch: () => void }) {
+  const [active, setActive] = useState<ActiveTenantView | null>(null);
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
-
-  useEffect(() => {
-    activeTenantApi.get()
-      .then(setActiveTenant)
-      .catch(() => { /* non-critical — hide switcher on error */ });
-  }, []);
-
-  // Only show when >= 2 allowed tenants
-  if (!activeTenant || activeTenant.allowedTenantIds.length < 2) return null;
-
-  // 라벨 맵은 백엔드 active-tenant 응답의 allowedTenants(id+name)에서 파생한다.
-  // RP_ADMIN 은 일반 tenant 목록으로 비활성 RP 를 못 보므로 여기서만 전체 이름을 얻는다.
-  const tenantMap: Record<string, string> = {};
-  activeTenant.allowedTenants.forEach((t) => { tenantMap[t.id] = t.name; });
-
-  const activeLabel = activeTenant.activeTenantId
-    ? (tenantMap[activeTenant.activeTenantId] ?? activeTenant.activeTenantId.slice(-8))
-    : '—';
-
-  async function handleSwitch(tenantId: string) {
-    if (tenantId === activeTenant?.activeTenantId) { setOpen(false); return; }
+  const ref = useOutsideClose(open, () => setOpen(false));
+  useEffect(() => { activeTenantApi.get().then(setActive).catch(() => {}); }, []);
+  if (!active || active.allowedTenantIds.length < 2) return null;
+  const names: Record<string, string> = {};
+  active.allowedTenants.forEach((t) => { names[t.id] = t.name; });
+  const label = active.activeTenantId ? (names[active.activeTenantId] ?? active.activeTenantId.slice(-8)) : '—';
+  async function pick(id: string) {
+    if (id === active?.activeTenantId) { setOpen(false); return; }
     setSwitching(true);
-    try {
-      await activeTenantApi.switch(tenantId);
-      setOpen(false);
-      onSwitch();
-    } catch {
-      // silently ignore — no toast here, caller can add if needed
-    } finally {
-      setSwitching(false);
-    }
+    try { await activeTenantApi.switch(id); setOpen(false); onSwitch(); } catch { /* 무시 */ } finally { setSwitching(false); }
   }
-
   return (
-    <div style={{ position: 'relative' }}>
-      <button
-        className="btn btn--ghost"
-        disabled={switching}
-        onClick={() => setOpen((v) => !v)}
-        style={{ padding: '4px 8px', gap: 6, fontSize: 12 }}
-        title="RP 전환"
-      >
-        <Icons.Building size={14} />
-        <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {switching ? '전환 중…' : activeLabel}
-        </span>
-        <Icons.ChevronDown size={12} />
+    <div className="menu-wrap" ref={ref}>
+      <button type="button" className="btn btn--ghost" aria-haspopup="menu" aria-expanded={open} disabled={switching} onClick={() => setOpen((v) => !v)}>
+        <Icons.Building size={14} /><span className="truncate" style={{ maxWidth: 140 }}>{switching ? '전환 중…' : label}</span><Icons.ChevronDown size={12} />
       </button>
       {open && (
-        <>
-          <div onMouseDown={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
-          <div style={{
-            position: 'absolute', top: '100%', left: 0, marginTop: 6,
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 10, boxShadow: 'var(--shadow-lg)',
-            minWidth: 220, zIndex: 31, overflow: 'hidden',
-          }}>
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-mute)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              RP 전환
-            </div>
-            <div style={{ padding: 4 }}>
-              {activeTenant.allowedTenantIds.map((id) => {
-                const label = tenantMap[id] ?? id.slice(-8);
-                const isActive = id === activeTenant.activeTenantId;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => void handleSwitch(id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                      padding: '8px 10px', border: 0, borderRadius: 6,
-                      background: isActive ? 'var(--accent-soft)' : 'transparent',
-                      color: isActive ? 'var(--accent)' : 'var(--text)',
-                      cursor: 'pointer', fontSize: 13, textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--surface-3)'; }}
-                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {isActive && <Icons.Check size={12} />}
-                    {!isActive && <span style={{ width: 12 }} />}
-                    <span style={{ flex: 1 }}>{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
+        <div className="menu" role="menu" aria-label="RP 전환" style={{ left: 0, right: 'auto', minWidth: 220 }}>
+          <span className="t-over" style={{ display: 'block', padding: '4px 10px 6px' }}>RP 전환</span>
+          {active.allowedTenantIds.map((id) => (
+            <button key={id} type="button" role="menuitemradio" aria-checked={id === active.activeTenantId} className="menu__item" onClick={() => void pick(id)}>
+              <span style={{ width: 14, display: 'inline-flex' }}>{id === active.activeTenantId && <Icons.Check size={14} />}</span>
+              {names[id] ?? id.slice(-8)}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-// ===== Header =====
 type HeaderProps = {
   me: { role: string; email: string; displayName?: string };
-  onLogout: () => void;
-  onSwitchRole?: () => void;
+  onLogout: () => void; onSwitchRole?: () => void;
   breadcrumb: { label: ReactNode; onClick?: () => void }[];
-  onOpenPalette: () => void;
-  onRpSwitch?: () => void;
+  onOpenPalette: () => void; onRpSwitch?: () => void;
 };
 
 export function Header({ me, onLogout, onSwitchRole, breadcrumb, onOpenPalette, onRpSwitch }: HeaderProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const ref = useOutsideClose(open, () => setOpen(false));
+  const name = me.displayName ?? me.email;
+  const platform = me.role === 'PLATFORM_OPERATOR';
   return (
-    <header style={{
-      height: 52, borderBottom: '1px solid var(--border)',
-      background: 'var(--surface)', padding: '0 24px',
-      display: 'flex', alignItems: 'center', gap: 16,
-      position: 'sticky', top: 0, zIndex: 30,
-    }}>
+    <header className="topbar">
       <Breadcrumb items={breadcrumb} />
       <div className="spacer" />
-
-      {/* RP switcher — shown only for RP_ADMIN with ≥2 tenants */}
-      {me.role === 'RP_ADMIN' && (
-        <RpSwitcher onSwitch={onRpSwitch ?? (() => window.location.reload())} />
-      )}
-
-      {/* Global search — opens command palette */}
-      <button onClick={onOpenPalette} style={{
-        position: 'relative', width: 280, textAlign: 'left',
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '0 8px 0 30px', height: 32,
-        border: '1px solid var(--border)', borderRadius: 6,
-        background: 'var(--surface)', color: 'var(--text-mute)', cursor: 'pointer',
-        fontSize: 12, fontFamily: 'inherit',
-      }}>
-        <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }}>
-          <Icons.Search size={14} />
-        </span>
-        <span style={{ flex: 1 }}>tenant, credential, audit ID 검색…</span>
-        <span className="kbd">⌘K</span>
+      {me.role === 'RP_ADMIN' && <RpSwitcher onSwitch={onRpSwitch ?? (() => window.location.reload())} />}
+      <button type="button" className="topbar__search" onClick={onOpenPalette} aria-label="검색 (⌘K)">
+        <Icons.Search size={15} /><span>tenant, credential, audit ID 검색…</span><kbd>⌘K</kbd>
       </button>
-
-      {/* User menu */}
-      <div style={{ position: 'relative' }}>
-        <button className="btn btn--ghost" onClick={() => setMenuOpen((v) => !v)} style={{ padding: '4px 8px', gap: 8 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 999, background: 'var(--accent)', color: 'white', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 12 }}>
-            {(me.displayName ?? me.email).slice(0, 1)}
-          </div>
-          <div className="stack-1" style={{ alignItems: 'flex-start', lineHeight: 1.1 }}>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>{me.displayName ?? me.email}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-mute)' }}>{me.email}</div>
-          </div>
-          <span className={`badge ${me.role === 'PLATFORM_OPERATOR' ? 'badge--violet' : 'badge--info'}`}>
-            {me.role === 'PLATFORM_OPERATOR' ? 'PLATFORM' : 'RP_ADMIN'}
-          </span>
+      <button type="button" className="icon-btn" aria-label="도움말 · API 문서" title="도움말 · API 문서"><Icons.Help size={18} /></button>
+      <div className="menu-wrap" ref={ref}>
+        <button type="button" className="user-pill" aria-label="사용자 메뉴" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
+          <span className="stack-1" style={{ gap: 0, lineHeight: 1.2, textAlign: 'left' }}><span style={{ fontWeight: 600 }}>{name}</span><span style={{ fontSize: 11, color: 'var(--mute)' }}>{me.email}</span></span>
+          <Badge tone={platform ? 'plat' : 'info'} dot={false}>{platform ? 'PLATFORM' : 'RP_ADMIN'}</Badge>
           <Icons.ChevronDown size={14} />
         </button>
-        {menuOpen && (
-          <>
-            <div onMouseDown={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
-            <div style={{
-              position: 'absolute', top: '100%', right: 0, marginTop: 6,
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 10, boxShadow: 'var(--shadow-lg)',
-              minWidth: 240, zIndex: 31, overflow: 'hidden',
-            }}>
-              <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{me.displayName ?? me.email}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-mute)', marginTop: 2 }}>{me.email}</div>
-                <div className="row" style={{ marginTop: 8, gap: 6 }}>
-                  <span className={`badge ${me.role === 'PLATFORM_OPERATOR' ? 'badge--violet' : 'badge--info'}`}>{me.role}</span>
-                </div>
-              </div>
-              <div style={{ padding: 6 }}>
-                <MenuItem icon="Refresh" label="role 전환 (데모)" onClick={() => { setMenuOpen(false); onSwitchRole?.(); }} />
-                <MenuItem icon="ExternalLink" label="API 문서 열기" />
-                <MenuItem icon="LogOut" label="로그아웃" onClick={() => { setMenuOpen(false); onLogout(); }} />
-              </div>
+        {open && (
+          <div className="menu" role="menu" aria-label="사용자 메뉴" style={{ minWidth: 240 }}>
+            <div className="stack-1" style={{ padding: '8px 10px 10px', borderBottom: '1px solid var(--line-soft)', marginBottom: 4, gap: 2 }}>
+              <strong style={{ fontSize: 13 }}>{name}</strong><span style={{ fontSize: 12, color: 'var(--mute)' }}>{me.email}</span>
+              <span style={{ marginTop: 4 }}><Badge tone={platform ? 'plat' : 'info'} dot={false}>{platform ? 'PLATFORM' : 'RP_ADMIN'}</Badge></span>
             </div>
-          </>
+            <button type="button" role="menuitem" className="menu__item" onClick={() => { setOpen(false); onSwitchRole?.(); }}><Icons.Refresh size={14} />role 전환 (데모)</button>
+            <button type="button" role="menuitem" className="menu__item"><Icons.ExternalLink size={14} />API 문서 열기</button>
+            <div className="menu__sep" />
+            <button type="button" role="menuitem" className="menu__item menu__item--danger" onClick={() => { setOpen(false); onLogout(); }}><Icons.LogOut size={14} />로그아웃</button>
+          </div>
         )}
       </div>
     </header>
