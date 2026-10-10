@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
-import { StatusBadge } from '@/ui';
+import { StatusBadge, useToast, Dialog } from '@/ui';
 import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import type { Me } from '@/api/types';
-import { useToast } from '@/shell/ToastHost';
-import { Dialog } from '@/shell/Dialog';
 import TenantOverview from '@/pages/tenant/TenantOverview';
 import WebauthnConfigTab from '@/pages/tenant/WebauthnConfigTab';
 import AaguidPolicyTab from '@/pages/tenant/AaguidPolicyTab';

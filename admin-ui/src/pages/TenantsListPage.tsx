@@ -3,9 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
-import { useToast } from '@/shell/ToastHost';
-import { StatusBadge } from '@/ui';
-import { Dialog } from '@/shell/Dialog';
+import { useToast, StatusBadge, Dialog } from '@/ui';
 import { downloadCsv } from '@/lib/csvExport';
 
 // ── local utilities (mirrors design globals) ─────────────────────────────────

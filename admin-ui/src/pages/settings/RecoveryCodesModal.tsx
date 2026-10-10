@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog } from '@/shell/Dialog';
+import { Dialog } from '@/ui';
 import { Icons } from '@/icons/Icons';
 import { recoveryCodesFilename } from '@/lib/recoveryCodeFilename';
 import { copyToClipboard } from '@/lib/clipboard';

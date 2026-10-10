@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
-import { Dialog } from '@/shell/Dialog';
+import { Dialog } from '@/ui';
 import { Icons } from '@/icons/Icons';
 
 export type IdleSessionModalProps = {

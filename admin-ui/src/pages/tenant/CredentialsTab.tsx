@@ -1,8 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Dialog } from '@/shell/Dialog';
-import { StatusBadge } from '@/ui';
-import { useToast } from '@/shell/ToastHost';
+import { Dialog, StatusBadge, useToast } from '@/ui';
 import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';
 import type { Tenant, Credential } from '@/api/designTypes';

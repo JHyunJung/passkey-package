@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import type { Tenant, AaguidPolicy } from '@/api/designTypes';
-import { useToast } from '@/shell/ToastHost';
+import { useToast } from '@/ui';
 import { AAGUID_MODE_LABELS } from '@/i18n/labels';
 
 // ── AAGUID 입력 자동 포맷 ─────────────────────────────────────────────────────

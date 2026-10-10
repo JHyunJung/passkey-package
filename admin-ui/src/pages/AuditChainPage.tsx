@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { auditChainMonitorApi, type ChainOverview, type IncidentView } from '@/api/auditChainMonitor';
 import { monthlyReportApi } from '@/api/monthlyReport';
-import { useToast } from '@/shell/ToastHost';
-import { Dialog } from '@/shell/Dialog';
+import { useToast, Dialog } from '@/ui';
 import { ApiError } from '@/api/types';
 import { statusLabel } from '@/i18n/labels';
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Dialog } from '@/shell/Dialog';
+import { Dialog } from '@/ui';
 import { credentialsApi } from '@/api/credentials';
 import type { Credential, AuthEvent } from '@/api/designTypes';
 import { statusLabel } from '@/i18n/labels';

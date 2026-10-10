@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { mfaApi, type EnrollResponse } from '@/api/mfa';
 import { QrCode } from '@/shell/QrCode';
-import { useToast } from '@/shell/ToastHost';
-import { Dialog } from '@/shell/Dialog';
+import { useToast, Dialog } from '@/ui';
 import { getMe } from '@/api/client';
 import { ApiError, type Me } from '@/api/types';
 import { RecoveryCodesModal } from './RecoveryCodesModal';

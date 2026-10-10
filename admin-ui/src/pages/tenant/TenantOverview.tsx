@@ -5,7 +5,7 @@ import type { Tenant } from '@/api/designTypes';
 import { auditChainApi, type TenantChainVerify } from '@/api/auditChain';
 import { funnelApi, type FunnelData } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
-import { useToast } from '@/shell/ToastHost';
+import { useToast } from '@/ui';
 import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
 import { statusLabel } from '@/i18n/labels';
 

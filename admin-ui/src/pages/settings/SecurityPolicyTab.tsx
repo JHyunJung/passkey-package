@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import { securityPolicyApi, type SecurityPolicyView } from '@/api/securityPolicy';
-import { useToast } from '@/shell/ToastHost';
+import { useToast } from '@/ui';
 
 // ── Field ─────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { mfaApi } from '@/api/mfa';
-import { useToast } from '@/shell/ToastHost';
+import { useToast } from '@/ui';
 import { formatRecoveryCode } from '@/lib/recoveryCode';
 
 export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () => void; onLogout: () => void }) {

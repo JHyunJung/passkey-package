@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Dialog } from '@/shell/Dialog';
-import { StatusBadge } from '@/ui';
-import { useToast } from '@/shell/ToastHost';
+import { Dialog, StatusBadge, useToast } from '@/ui';
 import { apiKeysApi } from '@/api/apiKeys';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { Tenant, ApiKey } from '@/api/designTypes';

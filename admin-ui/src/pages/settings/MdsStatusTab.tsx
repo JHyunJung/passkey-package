@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import { mdsStatusApi, type MdsStatus, type MdsHistoryRow } from '@/api/mdsStatus';
-import { useToast } from '@/shell/ToastHost';
+import { useToast } from '@/ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@ import { LicenseBanner } from '@/components/LicenseBanner';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TenantsListPage from '@/pages/TenantsListPage';
 import TenantDetailRoute from '@/pages/TenantDetailPage';
-import { ToastHost } from '@/shell/ToastHost';
+import { ToastHost } from '@/ui';
 import { Sidebar } from '@/shell/Sidebar';
 import { ErrorBoundary } from '@/shell/ErrorBoundary';
 import { Header } from '@/shell/Header';

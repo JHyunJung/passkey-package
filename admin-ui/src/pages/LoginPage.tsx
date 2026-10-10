@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icons, BrandMark } from '@/icons/Icons';
 import { api, getMe } from '@/api/client';
 import type { Me } from '@/api/types';
-import { useToast } from '@/shell/ToastHost';
+import { useToast } from '@/ui';
 
 type LoginPageProps = {
   onLogin: (me: Me) => void;

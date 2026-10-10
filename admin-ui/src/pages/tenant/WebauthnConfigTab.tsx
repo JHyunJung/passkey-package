@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Dialog } from '@/shell/Dialog';
-import { useToast } from '@/shell/ToastHost';
+import { Dialog, useToast } from '@/ui';
 import { webauthnApi } from '@/api/webauthn';
 import type { Tenant, WebauthnConfig } from '@/api/designTypes';
 import { apkKeyHashFromFingerprint, isApkKeyHashOrigin, APK_KEY_HASH_PREFIX } from '@/lib/apkKeyHash';

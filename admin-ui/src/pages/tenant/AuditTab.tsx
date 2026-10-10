@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
-import { Dialog } from '@/shell/Dialog';
-import { useToast } from '@/shell/ToastHost';
+import { Dialog, useToast } from '@/ui';
 import { auditApi } from '@/api/audit';
 import { downloadCsv } from '@/lib/csvExport';
 import type { Tenant, AuditEvent, ChainVerifyResult } from '@/api/designTypes';

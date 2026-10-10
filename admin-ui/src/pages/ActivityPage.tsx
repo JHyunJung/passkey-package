@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { activityApi } from '@/api/activity';
 import { activityFixture } from '@/fixtures/activity';
-import { useToast } from '@/shell/ToastHost';
+import { useToast } from '@/ui';
 import { downloadCsv } from '@/lib/csvExport';
 import type { ActivityView, ActivityCategory, ActivityDetailView } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';

@@ -16,3 +16,5 @@ export * from './ChoiceCard';
 export * from './Chips';
 export * from './ChipInput';
 export * from './OtpInput';
+export * from './Dialog';
+export * from './ToastHost';

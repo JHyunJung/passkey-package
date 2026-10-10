@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { ToastHost } from '@/shell/ToastHost';
+import { ToastHost } from '@/ui';
 
 vi.mock('@/api/adminUsers', () => ({
   adminUsersApi: {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MfaChallenge from './MfaChallenge';
-import { ToastHost } from '@/shell/ToastHost';
+import { ToastHost } from '@/ui';
 
 function renderChallenge() {
   return render(
