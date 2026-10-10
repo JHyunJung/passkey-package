@@ -53,12 +53,12 @@ function RpSwitcher({ onSwitch }: { onSwitch: () => void }) {
 
 type HeaderProps = {
   me: { role: string; email: string; displayName?: string };
-  onLogout: () => void; onSwitchRole?: () => void;
+  onLogout: () => void;
   breadcrumb: { label: ReactNode; onClick?: () => void }[];
   onOpenPalette: () => void; onRpSwitch?: () => void;
 };
 
-export function Header({ me, onLogout, onSwitchRole, breadcrumb, onOpenPalette, onRpSwitch }: HeaderProps) {
+export function Header({ me, onLogout, breadcrumb, onOpenPalette, onRpSwitch }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const ref = useOutsideClose(open, () => setOpen(false));
   const name = me.displayName ?? me.email;
@@ -71,7 +71,6 @@ export function Header({ me, onLogout, onSwitchRole, breadcrumb, onOpenPalette, 
       <button type="button" className="topbar__search" onClick={onOpenPalette} aria-label="검색 (⌘K)">
         <Icons.Search size={15} /><span>tenant, credential, audit ID 검색…</span><kbd>⌘K</kbd>
       </button>
-      <button type="button" className="icon-btn" aria-label="도움말 · API 문서" title="도움말 · API 문서"><Icons.Help size={18} /></button>
       <div className="menu-wrap" ref={ref}>
         <button type="button" className="user-pill" aria-label="사용자 메뉴" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
@@ -85,9 +84,6 @@ export function Header({ me, onLogout, onSwitchRole, breadcrumb, onOpenPalette, 
               <strong style={{ fontSize: 13 }}>{name}</strong><span style={{ fontSize: 12, color: 'var(--mute)' }}>{me.email}</span>
               <span style={{ marginTop: 4 }}><Badge tone={platform ? 'plat' : 'info'} dot={false}>{platform ? 'PLATFORM' : 'RP_ADMIN'}</Badge></span>
             </div>
-            <button type="button" role="menuitem" className="menu__item" onClick={() => { setOpen(false); onSwitchRole?.(); }}><Icons.Refresh size={14} />role 전환 (데모)</button>
-            <button type="button" role="menuitem" className="menu__item"><Icons.ExternalLink size={14} />API 문서 열기</button>
-            <div className="menu__sep" />
             <button type="button" role="menuitem" className="menu__item menu__item--danger" onClick={() => { setOpen(false); onLogout(); }}><Icons.LogOut size={14} />로그아웃</button>
           </div>
         )}

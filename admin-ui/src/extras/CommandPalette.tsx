@@ -83,8 +83,6 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
 
     // Quick actions
     items.push({ group: "액션", icon: "Plus", label: "신규 tenant 생성", hint: "PLATFORM_OPERATOR만", action: () => onAction("new-tenant"), disabled: !isPlatform });
-    items.push({ group: "액션", icon: "Hash", label: "Hash chain 즉시 검증", hint: "현재 tenant", action: () => onAction("verify-chain") });
-    items.push({ group: "액션", icon: "Refresh", label: "Role 전환 (데모)", hint: "PLATFORM ↔ RP_ADMIN", action: () => onAction("switch-role") });
     items.push({ group: "액션", icon: "LogOut", label: "로그아웃", action: () => onAction("logout") });
 
     return items;

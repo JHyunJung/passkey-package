@@ -20,4 +20,10 @@ describe('CommandPalette V2', () => {
     fireEvent.keyDown(screen.getByRole('textbox', { name: '검색' }), { key: 'Enter' });
     expect(onNavigate).toHaveBeenCalledWith({ name: 'tenants' });
   });
+  it('동작하지 않는 액션(Hash chain 즉시 검증·Role 전환 데모)은 없다', () => {
+    render(<CommandPalette open onClose={() => {}} me={me} onNavigate={() => {}} onAction={() => {}} />);
+    expect(screen.queryByText('Hash chain 즉시 검증')).toBeNull();
+    expect(screen.queryByText('Role 전환 (데모)')).toBeNull();
+    expect(screen.getByText('로그아웃')).toBeInTheDocument();
+  });
 });

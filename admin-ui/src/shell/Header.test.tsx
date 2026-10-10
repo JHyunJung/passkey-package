@@ -12,10 +12,12 @@ describe('Header V2', () => {
     expect(onOpenPalette).toHaveBeenCalled();
     expect(screen.getByText('PLATFORM')).toBeInTheDocument();
   });
-  it('사용자 메뉴에 role 전환·API 문서·로그아웃', () => {
+  it('사용자 메뉴는 로그아웃만 — 동작하지 않는 role 전환(데모)·API 문서·도움말을 보이지 않는다', () => {
     const onLogout = vi.fn();
     render(<Header me={{ role: 'PLATFORM_OPERATOR', email: 'a@x.com' }} onLogout={onLogout} breadcrumb={[]} onOpenPalette={() => {}} />);
+    expect(screen.queryByRole('button', { name: /도움말/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '사용자 메뉴' }));
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['로그아웃']);
     fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
     expect(onLogout).toHaveBeenCalled();
   });

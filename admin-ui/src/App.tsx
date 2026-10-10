@@ -98,13 +98,8 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
   const tenant = useCrumbTenant(route.name === 'tenant' ? route.tenantId : null);
   const breadcrumb = buildBreadcrumb(route, tenant, me, setRoute);
 
-  async function handleSwitchRole() {
-    /* Phase E3 에서 데모용 role 전환 구현 */
-  }
-
   function paletteAction(kind: string) {
     if (kind === 'logout') onLogout();
-    if (kind === 'switch-role') void handleSwitchRole();
     if (kind === 'new-tenant') setRoute({ name: 'tenants' });
   }
 
@@ -119,7 +114,6 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
           <Header
             me={me}
             onLogout={onLogout}
-            onSwitchRole={handleSwitchRole}
             breadcrumb={breadcrumb}
             onOpenPalette={() => setPaletteOpen(true)}
           />

@@ -51,7 +51,7 @@ export function Sidebar({ me, currentRoute, onNavigate }: { me: Me; currentRoute
     <aside className="sidebar" aria-label="주 메뉴">
       <div className="sidebar__brand">
         <img src="/admin/crosscert-logo-transparent.png" alt="CROSSCERT" />
-        <div className="sidebar__env">Passkey Admin <span className="sidebar__env-badge">prod</span></div>
+        <div className="sidebar__env">Passkey Admin</div>
       </div>
       {groups.map((g) => (
         <div key={g.label} className="sidebar__group">
