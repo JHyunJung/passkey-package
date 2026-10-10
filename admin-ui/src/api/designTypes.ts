@@ -26,6 +26,7 @@ export type ApiKey = {
   lastUsedAt: string | null;
   scopes: string[];
   expiresAt: string | null;
+  keySuffix?: string;      // 스펙 §6 ⑤ (optional)
 };
 
 export type Credential = {

@@ -1,79 +1,28 @@
-import { useState, useEffect } from 'react';
+// admin-ui/src/pages/tenant/ApiKeysTab.tsx
+import { useEffect, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Dialog, StatusBadge, useToast } from '@/ui';
+import {
+  Alert, Badge, Button, Card, CardHeader, DataTable, Dialog, EmptyState, FilterChip, KpiCard, Menu, SecretBox, StatusBadge, useToast,
+  type Column,
+} from '@/ui';
+import { illustrations } from '@/assets/illustrations';
 import { apiKeysApi } from '@/api/apiKeys';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { Tenant, ApiKey } from '@/api/designTypes';
-
-// ── Local utilities (mirrors design globals) ──────────────────────────────────
-
-function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return '방금 전';
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}일 전`;
-  const mo = Math.floor(d / 30);
-  return `${mo}개월 전`;
-}
-
-function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  // yyyy.mm.dd (KST). en-CA 는 yyyy-mm-dd 를 주므로 '-' → '.' 치환.
-  return d.toLocaleDateString('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).replace(/-/g, '.');
-}
-
-function tail(s: string, n: number): string {
-  return s.slice(-n);
-}
-
-// ── MetricCard ────────────────────────────────────────────────────────────────
-
-function MetricCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
-  return (
-    <div className="card">
-      <div className="card__body">
-        <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{label}</div>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>{value}</div>
-        {sub && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{sub}</div>}
-      </div>
-    </div>
-  );
-}
-
-// ── Field ─────────────────────────────────────────────────────────────────────
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-      {hint && <div className="hint">{hint}</div>}
-    </div>
-  );
-}
-
-// ── Scope options ─────────────────────────────────────────────────────────────
+import { KvList } from './KvList';
+import { timeAgo, ymd, ymdHm } from './tabFormat';
+import {
+  ROTATION_DAYS, daysLeft, expiryState, keyStatusCounts, latestCreatedAt, previewExpiry, rotationOverdueCount,
+} from './apiKeyHelpers';
 
 const NAME_MAX = 64;
 
-const SCOPE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'registration', label: 'registration', desc: '패스키 등록 + self-service credential 관리' },
-  { value: 'authentication', label: 'authentication', desc: '패스키 인증(로그인)' },
+const SCOPE_OPTIONS: { value: string; desc: string }[] = [
+  { value: 'registration', desc: '패스키 등록 · credential 목록/이름변경/삭제' },
+  { value: 'authentication', desc: '패스키 인증 ceremony' },
 ];
 
-// 만료 프리셋(개월). null = 무기한.
+// 만료 프리셋(개월). null = 무기한. 기본 24개월.
 const EXPIRY_OPTIONS: { months: number | null; label: string }[] = [
   { months: 6, label: '6개월' },
   { months: 12, label: '12개월' },
@@ -82,27 +31,7 @@ const EXPIRY_OPTIONS: { months: number | null; label: string }[] = [
   { months: null, label: '무기한' },
 ];
 
-// now + N개월의 날짜 미리보기(YYYY-MM-DD, Asia/Seoul). null이면 null.
-// 말일 보정: 1/31 + 1개월처럼 다음 달에 같은 일자가 없으면 그 달 말일로 클램프.
-function previewExpiry(months: number | null): string | null {
-  if (months == null) return null;
-  const now = new Date();
-  const lastDayOfTargetMonth = new Date(now.getFullYear(), now.getMonth() + months + 1, 0).getDate();
-  const day = Math.min(now.getDate(), lastDayOfTargetMonth);
-  const target = new Date(now.getFullYear(), now.getMonth() + months, day,
-                          now.getHours(), now.getMinutes(), now.getSeconds());
-  return target.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }); // en-CA → YYYY-MM-DD
-}
-
-// 만료 상태 판정.
-function expiryState(expiresAt: string | null): 'none' | 'expired' | 'soon' | 'ok' {
-  if (!expiresAt) return 'none';
-  const exp = new Date(expiresAt).getTime();
-  const now = Date.now();
-  if (exp <= now) return 'expired';
-  if (exp - now <= 30 * 24 * 60 * 60 * 1000) return 'soon';
-  return 'ok';
-}
+type Issued = { key: ApiKey; plaintext: string; oldKeyExpiresAt?: string };
 
 // ── ApiKeysTab ────────────────────────────────────────────────────────────────
 
@@ -110,7 +39,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [issued, setIssued] = useState<{ key: ApiKey; plaintext: string; oldKeyExpiresAt?: string } | null>(null);
+  const [issued, setIssued] = useState<Issued | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const [rotating, setRotating] = useState<ApiKey | null>(null);
   const toast = useToast();
@@ -118,17 +47,15 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
   async function reload() {
     setLoading(true);
     try {
-      const list = await apiKeysApi.list(tenant.id);
-      setKeys(list);
+      setKeys(await apiKeysApi.list(tenant.id));
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: 'API key 로드 실패', message: msg });
+      toast({ kind: 'err', title: 'API key 로드 실패', message: e instanceof Error ? e.message : String(e) });
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { reload(); }, [tenant.id]);
+  useEffect(() => { void reload(); }, [tenant.id]);
 
   async function handleIssue(name: string, scopes: string[], expiresInMonths: number | null) {
     try {
@@ -137,8 +64,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
       setIssued(result);
       await reload();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: '발급 실패', message: msg });
+      toast({ kind: 'err', title: '발급 실패', message: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -149,8 +75,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
       setRevoking(null);
       await reload();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: '회수 실패', message: msg });
+      toast({ kind: 'err', title: '회수 실패', message: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -158,108 +83,100 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
     try {
       const res = await apiKeysApi.rotate(k.id);
       setRotating(null);
-      setIssued({
-        key: { ...k, prefix: res.prefix, scopes: res.scopes },
-        plaintext: res.plaintextKey,
-        oldKeyExpiresAt: res.oldKeyExpiresAt,
-      });
+      setIssued({ key: { ...k, prefix: res.prefix, scopes: res.scopes }, plaintext: res.plaintextKey, oldKeyExpiresAt: res.oldKeyExpiresAt });
       await reload();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: '회전 실패', message: msg });
+      toast({ kind: 'err', title: '회전 실패', message: e instanceof Error ? e.message : String(e) });
     }
   }
 
-  const activeCount = keys.filter((k) => k.status === 'ACTIVE').length;
-
-  if (loading && keys.length === 0) {
-    return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
+  async function copyPrefix(k: ApiKey) {
+    if (await copyToClipboard(k.prefix)) toast({ kind: 'ok', title: '접두사를 복사했습니다.', message: k.prefix });
+    else toast({ kind: 'warn', title: '복사 실패', message: '클립보드 복사에 실패했습니다.' });
   }
 
-  return (
-    <div className="stack-4">
-      <div className="grid-3">
-        <MetricCard label="총 API Key" value={keys.length} sub={`활성 ${activeCount} · 만료 ${keys.filter((k) => k.status === 'EXPIRED').length} · 회수 ${keys.filter((k) => k.status === 'REVOKED').length}`} />
-        <MetricCard label="최근 발급" value="1일 전" sub={`production · ${tail(keys[0]?.id || '—', 6)}`} />
-        <MetricCard label="권장 rotation" value="90일" sub="다음 키 회전: 73일 후" />
-      </div>
+  if (loading && keys.length === 0) {
+    return <p className="muted" style={{ padding: 40, margin: 0 }}>불러오는 중…</p>;
+  }
 
-      <div className="card">
-        <div className="card__head">
-          <div>
-            <h3 className="card__title">API Keys</h3>
-            <div className="card__sub">RP 백엔드에서 Crosscert Passkey API 호출 시 사용. plaintext는 발급 시 1회만 노출됩니다.</div>
-          </div>
-          <button className="btn btn--primary btn--sm" onClick={() => setShowNew(true)}><Icons.Plus size={12} /> 새 키 발급</button>
+  const counts = keyStatusCounts(keys);
+  const latest = latestCreatedAt(keys);
+  const overdue = rotationOverdueCount(keys);
+
+  const columns: Column<ApiKey>[] = [
+    {
+      key: 'name', header: '이름 · 키 접두사',
+      render: (k) => (
+        <div className="stack-1" style={{ gap: 0 }}>
+          <strong style={{ fontSize: 13 }}>{k.name}</strong>
+          <span className="mono" style={{ fontSize: 12, color: 'var(--mute)' }}>{k.prefix}…{k.keySuffix ?? ''}</span>
         </div>
+      ),
+    },
+    { key: 'scopes', header: '권한 범위', render: (k) => <div className="row" style={{ gap: 4 }}>{k.scopes.map((s) => <span key={s} className="tag">{s}</span>)}</div> },
+    { key: 'status', header: '상태', render: (k) => <StatusBadge status={k.status} /> },
+    { key: 'used', header: '마지막 사용', render: (k) => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{k.lastUsedAt ? timeAgo(k.lastUsedAt) : '미사용'}</span> },
+    { key: 'created', header: '생성일', render: (k) => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{ymd(k.createdAt)}</span> },
+    { key: 'expires', header: '만료일', render: (k) => <ExpiryCell k={k} /> },
+    {
+      key: 'actions', header: '액션', srOnlyHeader: true, width: 48,
+      render: (k) => k.status === 'ACTIVE' ? (
+        <Menu
+          label={`${k.name} 키 액션`}
+          items={[
+            { label: '회전', icon: <Icons.Refresh size={15} />, onSelect: () => setRotating(k) },
+            { label: '접두사 복사', icon: <Icons.Copy size={15} />, onSelect: () => { void copyPrefix(k); } },
+          ]}
+          dangerItems={[{ label: '회수', icon: <Icons.Trash size={15} />, danger: true, onSelect: () => setRevoking(k) }]}
+        />
+      ) : null,
+    },
+  ];
 
-        <table className="table">
-          <thead>
-            <tr>
-              <th>키 접두사</th>
-              <th>이름</th>
-              <th>상태</th>
-              <th>마지막 사용</th>
-              <th>생성일</th>
-              <th>만료일</th>
-              <th style={{ textAlign: 'right' }}>액션</th>
-            </tr>
-          </thead>
-          <tbody>
-            {keys.map((k) => (
-              <tr key={k.id} style={{ opacity: (k.status === 'REVOKED' || k.status === 'EXPIRED') ? 0.55 : 1 }}>
-                <td>
-                  <div className="row">
-                    <Icons.Key size={13} />
-                    <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{k.prefix}<span className="faint">.•••••</span></span>
-                  </div>
-                </td>
-                <td>{k.name}</td>
-                <td><StatusBadge status={k.status} /></td>
-                <td>{k.lastUsedAt ? <span className="muted">{timeAgo(k.lastUsedAt)}</span> : <span className="faint">미사용</span>}</td>
-                <td><span className="muted">{fmtDateTime(k.createdAt)}</span></td>
-                <td>
-                  {(() => {
-                    if (k.status === 'REVOKED') return <span className="faint">—</span>;
-                    const st = expiryState(k.expiresAt);
-                    if (st === 'none') return <span className="faint">무기한</span>;
-                    if (st === 'expired') return (
-                      <span style={{ color: 'var(--danger)', fontSize: 12 }}>{fmtDateTime(k.expiresAt!)}</span>
-                    );
-                    return (
-                      <span className={st === 'soon' ? undefined : 'muted'} style={st === 'soon' ? { color: 'var(--warning)' } : undefined}>
-                        {fmtDateTime(k.expiresAt!)}
-                      </span>
-                    );
-                  })()}
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  {k.status === 'ACTIVE' && (
-                    <span style={{ display: 'inline-flex', gap: 6, justifyContent: 'flex-end' }}>
-                      <button className="btn btn--xs" onClick={() => setRotating(k)}>
-                        <Icons.Refresh size={12} /> 회전
-                      </button>
-                      <button className="btn btn--xs" onClick={() => setRevoking(k)} style={{ color: 'var(--danger)', borderColor: 'color-mix(in oklab, var(--danger) 30%, var(--border))' }}>
-                        <Icons.Trash size={12} /> 회수
-                      </button>
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  return (
+    <div className="stack-6">
+      <div className="kpis kpis--3">
+        <KpiCard label="총 API Key" value={keys.length} hint={`활성 ${counts.active} · 만료 ${counts.expired} · 회수 ${counts.revoked}`} />
+        <KpiCard label="최근 발급" value={latest ? timeAgo(latest) : '—'} />
+        <KpiCard label="권장 rotation" value={`${ROTATION_DAYS}일`} hint={`초과 키 ${overdue}개`} hintTone={overdue > 0 ? 'warn' : 'default'} />
       </div>
+
+      <Card>
+        <CardHeader
+          title="API Keys"
+          sub="plaintext 는 발급 직후 1회만 노출됩니다. 서버는 해시만 저장합니다."
+          actions={<Button variant="primary" icon={<Icons.Plus size={14} />} onClick={() => setShowNew(true)}>새 키 발급</Button>}
+        />
+        <DataTable
+          columns={columns}
+          rows={keys}
+          rowKey={(k) => k.id}
+          empty={<EmptyState compact title="발급된 API key가 없습니다." description="새 키 발급으로 RP 서버용 키를 만드세요." />}
+        />
+      </Card>
 
       <NewKeyDialog open={showNew} onClose={() => setShowNew(false)} onIssue={handleIssue} />
-      <IssuedKeyModal issued={issued} onClose={() => { setIssued(null); }} />
+      <IssuedKeyDialog issued={issued} onClose={() => setIssued(null)} />
       <RotateKeyDialog k={rotating} onClose={() => setRotating(null)} onConfirm={handleRotate} />
       <RevokeKeyDialog k={revoking} onClose={() => setRevoking(null)} onConfirm={handleRevoke} />
     </div>
   );
 }
 
-// ── NewKeyDialog ──────────────────────────────────────────────────────────────
+// ── 만료일 셀: ACTIVE 이고 30일 이내면 경고색 + 아이콘 + 남은 일수 ─────────────
+
+function ExpiryCell({ k }: { k: ApiKey }) {
+  if (!k.expiresAt) return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>무기한</span>;
+  const soon = k.status === 'ACTIVE' && expiryState(k.expiresAt) === 'soon';
+  return (
+    <span className="row" style={{ gap: 5, flexWrap: 'nowrap', fontSize: 13, color: soon ? 'var(--warn)' : 'var(--ink-2)', fontWeight: soon ? 600 : 400 }}>
+      {soon && <Icons.Alert size={14} />}
+      {ymd(k.expiresAt)}{soon && ` · ${daysLeft(k.expiresAt)}일 남음`}
+    </span>
+  );
+}
+
+// ── 새 키 발급 ────────────────────────────────────────────────────────────────
 
 function NewKeyDialog({ open, onClose, onIssue }: {
   open: boolean;
@@ -268,10 +185,10 @@ function NewKeyDialog({ open, onClose, onIssue }: {
 }) {
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<string[]>(['registration', 'authentication']);
-  const [expiresInMonths, setExpiresInMonths] = useState<number | null>(24); // 기본 24개월
+  const [expiresInMonths, setExpiresInMonths] = useState<number | null>(24);
 
   function toggle(v: string) {
-    setScopes((prev) => prev.includes(v) ? prev.filter((s) => s !== v) : [...prev, v]);
+    setScopes((prev) => (prev.includes(v) ? prev.filter((s) => s !== v) : [...prev, v]));
   }
   function submit() {
     if (!name || scopes.length === 0) return;
@@ -280,206 +197,137 @@ function NewKeyDialog({ open, onClose, onIssue }: {
     setScopes(['registration', 'authentication']);
     setExpiresInMonths(24);
   }
+  const preview = previewExpiry(expiresInMonths);
 
   return (
-    <Dialog open={open} onClose={onClose} title="새 API key 발급"
-      sub="발급 후 plaintext는 단 한 번만 노출됩니다. 안전한 장소에 즉시 보관하세요."
+    <Dialog open={open} onClose={onClose} title="새 API key 발급" sub="RP 서버가 Passkey API 를 호출할 때 쓰는 키입니다."
       footer={<>
-        <button className="btn" onClick={onClose}>취소</button>
-        <button className="btn btn--primary" disabled={!name || scopes.length === 0} onClick={submit}>발급</button>
-      </>}
-    >
-      <Field label="용도 (이름)" hint={`배포 환경이나 용도를 짧게. 예: production, staging, mobile-app (최대 ${NAME_MAX}자)`}>
-        <input autoFocus className="input" maxLength={NAME_MAX} value={name} onChange={(e) => setName(e.target.value)} placeholder="production" />
-        <div className="muted" style={{ fontSize: 11, textAlign: 'right', marginTop: 4 }}>{name.length} / {NAME_MAX}</div>
-      </Field>
-      <div style={{ marginTop: 14 }}>
-        <label className="label">권한 범위 (scope) — 하나 이상</label>
-        <div className="stack-2" style={{ marginTop: 6 }}>
-          {SCOPE_OPTIONS.map((o) => (
-            <label key={o.value} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', background: scopes.includes(o.value) ? 'var(--accent-soft)' : 'transparent' }}>
-              <input type="checkbox" checked={scopes.includes(o.value)} onChange={() => toggle(o.value)} style={{ marginTop: 3 }} />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{o.label}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{o.desc}</div>
-              </div>
-            </label>
-          ))}
+        <Button onClick={onClose}>취소</Button>
+        <Button variant="primary" disabled={!name || scopes.length === 0} onClick={submit}>발급</Button>
+      </>}>
+      <div>
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <label className="label" htmlFor="apikey-name">용도 (이름)</label>
+          <span className="hint" style={{ margin: 0 }}>{name.length}/{NAME_MAX}</span>
         </div>
+        <input id="apikey-name" className="input" maxLength={NAME_MAX} value={name} onChange={(e) => setName(e.target.value)} placeholder="예: prod RP 서버" />
       </div>
-      <div style={{ marginTop: 14 }}>
-        <label className="label">만료 기간</label>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-          {EXPIRY_OPTIONS.map((o) => {
-            const selected = expiresInMonths === o.months;
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend className="label">권한 범위 (scope)</legend>
+        <div className="stack-2">
+          {SCOPE_OPTIONS.map((o) => {
+            const on = scopes.includes(o.value);
             return (
-              <button
-                key={o.label}
-                type="button"
-                onClick={() => setExpiresInMonths(o.months)}
-                style={{
-                  padding: '6px 12px', borderRadius: 8,
-                  border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
-                  background: selected ? 'var(--accent-soft)' : 'var(--surface)',
-                  color: selected ? 'var(--accent)' : 'var(--text)',
-                  fontWeight: selected ? 600 : 500, cursor: 'pointer', fontSize: 13,
-                }}
-              >
-                {o.label}
-              </button>
+              <label key={o.value} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 12px', border: `1px solid ${on ? 'var(--brand-300)' : 'var(--line)'}`, borderRadius: 'var(--r)', background: on ? 'var(--brand-50)' : 'var(--surface)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={on} onChange={() => toggle(o.value)} style={{ marginTop: 3 }} />
+                <span className="stack-1" style={{ gap: 0 }}>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{o.value}</span>
+                  <span className="hint" style={{ margin: 0 }}>{o.desc}</span>
+                </span>
+              </label>
             );
           })}
         </div>
-        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-          {expiresInMonths == null
-            ? '만료 없음 — 키가 무기한으로 유효합니다.'
-            : `만료일: ${previewExpiry(expiresInMonths)}`}
+        {scopes.length === 0 && <p className="field__error">하나 이상 선택하세요.</p>}
+      </fieldset>
+      <div>
+        <span className="label" id="apikey-expiry">만료 기간</span>
+        <div className="row" style={{ gap: 6 }} role="group" aria-labelledby="apikey-expiry">
+          {EXPIRY_OPTIONS.map((o) => (
+            <FilterChip key={o.label} active={expiresInMonths === o.months} onClick={() => setExpiresInMonths(o.months)}>{o.label}</FilterChip>
+          ))}
         </div>
+        <p className="hint">{preview ? `만료일 ${preview}` : '만료 없음 — 키가 무기한으로 유효합니다.'} · 권장 rotation {ROTATION_DAYS}일</p>
       </div>
     </Dialog>
   );
 }
 
-// ── IssuedKeyModal ────────────────────────────────────────────────────────────
+// ── 발급 완료: ESC·바깥 클릭으로 닫히지 않음, 확인 체크 후에만 닫기 ───────────
 
-function IssuedKeyModal({ issued, onClose }: {
-  issued: { key: ApiKey; plaintext: string; oldKeyExpiresAt?: string } | null;
-  onClose: () => void;
-}) {
-  const toast = useToast();
-  const [copied, setCopied] = useState(false);
+function IssuedKeyDialog({ issued, onClose }: { issued: Issued | null; onClose: () => void }) {
   const [checked, setChecked] = useState(false);
-  useEffect(() => { if (issued) { setCopied(false); setChecked(false); } }, [issued]);
+  useEffect(() => { if (issued) setChecked(false); }, [issued]);
   if (!issued) return null;
+  const oldHours = issued.oldKeyExpiresAt
+    ? Math.max(0, Math.round((new Date(issued.oldKeyExpiresAt).getTime() - Date.now()) / 3_600_000))
+    : null;
+
   return (
-    <Dialog open={true} onClose={() => { /* enforce */ }} closeOnScrim={false} wide
-      title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icons.Alert size={18} /> 새 API key가 발급되었습니다 — 지금만 표시됩니다</span>}
-      sub="이 창을 닫으면 plaintext는 영구히 사라집니다. 절대 다시 표시되지 않습니다."
-      footer={<>
-        <div style={{ flex: 1, fontSize: 12, color: 'var(--text-mute)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Icons.Lock size={13} /> server는 plaintext의 해시만 저장합니다.
-        </div>
-        <button className="btn btn--primary" disabled={!checked} onClick={onClose}>{checked ? '닫기 (영구 소실)' : '체크 필요'}</button>
-      </>}
-    >
-      <div className="stack-3">
-        {issued.oldKeyExpiresAt && (
-          <div style={{ padding: '8px 10px', background: 'var(--warning-soft)', color: 'var(--warning)', borderRadius: 8, fontSize: 12, display: 'flex', gap: 8 }}>
-            <Icons.Alert size={14} />
-            <span>구 키는 <b>{fmtDateTime(issued.oldKeyExpiresAt)}</b>에 만료됩니다. 그 전에 RP 서버를 새 키로 교체하세요.</span>
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <span className="badge badge--success">발급 완료</span>
-          <div style={{ flex: 1 }}>
-            <div className="muted" style={{ fontSize: 12 }}>이름</div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{issued.key.name}</div>
-          </div>
-          <div>
-            <div className="muted" style={{ fontSize: 12 }}>prefix</div>
-            <div className="mono" style={{ fontSize: 12 }}>{issued.key.prefix}</div>
-          </div>
-          <div>
-            <div className="muted" style={{ fontSize: 12 }}>만료</div>
-            <div style={{ fontSize: 12 }}>{issued.key.expiresAt ? fmtDateTime(issued.key.expiresAt) : <span className="faint">무기한</span>}</div>
-          </div>
-          <div>
-            <div className="muted" style={{ fontSize: 12 }}>id</div>
-            <div className="mono" style={{ fontSize: 12 }}>{issued.key.id}</div>
-          </div>
-        </div>
-
-        <div>
-          <div className="label">plaintext API key</div>
-          <div style={{ position: 'relative' }}>
-            <div style={{
-              fontFamily: 'var(--mono)', fontSize: 12, lineHeight: 1.5,
-              padding: '14px 16px 14px 16px', paddingRight: 96,
-              background: 'var(--surface-3)', borderRadius: 8,
-              border: '1px solid var(--border)',
-              wordBreak: 'break-all',
-              color: 'var(--text)',
-            }}>
-              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{issued.key.prefix}</span>.<span>{issued.plaintext.slice(issued.key.prefix.length + 1)}</span>
-            </div>
-            <button className="btn btn--primary btn--sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={async () => {
-              const ok = await copyToClipboard(issued.plaintext);
-              if (ok) setCopied(true);
-              else toast({ kind: 'warn', title: '복사 실패', message: '클립보드 복사에 실패했습니다. 키를 직접 선택해 복사하세요.' });
-            }}>
-              {copied ? <><Icons.Check size={12} /> 복사됨</> : <><Icons.Copy size={12} /> 클립보드</>}
-            </button>
-          </div>
-        </div>
-
-        <label style={{ display: 'flex', gap: 10, padding: 12, background: checked ? 'var(--success-soft)' : 'var(--warning-soft)', borderRadius: 8, alignItems: 'flex-start', cursor: 'pointer', border: `1px solid ${checked ? 'color-mix(in oklab, var(--success) 25%, transparent)' : 'color-mix(in oklab, var(--warning) 25%, transparent)'}` }}>
-          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} style={{ marginTop: 2 }} />
-          <div style={{ fontSize: 13 }}>
-            <div style={{ fontWeight: 600, color: checked ? 'var(--success)' : 'var(--warning)' }}>안전한 장소에 복사했습니다.</div>
-            <div style={{ color: 'var(--text-soft)', marginTop: 2, fontSize: 12 }}>1Password, AWS Secrets Manager 등 보안 저장소에 보관하세요. 닫기 후에는 재조회 불가능합니다.</div>
-          </div>
-        </label>
-      </div>
+    <Dialog open onClose={onClose} dismissible={false} role="alertdialog"
+      title={
+        <span className="row" style={{ gap: 10, flexWrap: 'nowrap' }}>
+          <img src={illustrations.apiKeyIssued} alt="" width={72} height={72} style={{ objectFit: 'contain', flex: 'none' }} />
+          <span>새 API key가 발급되었습니다 — 지금만 표시됩니다</span>
+        </span>
+      }
+      footerStart={<span className="hint" style={{ margin: 0 }}>server는 plaintext의 해시만 저장합니다.</span>}
+      footer={
+        <Button variant="primary" disabled={!checked} onClick={onClose}>
+          {checked ? '닫기 (영구 소실)' : '닫기 (영구 소실) · 체크 필요'}
+        </Button>
+      }>
+      {oldHours !== null && (
+        <Alert tone="warn">
+          이전 키는 {oldHours}시간 후({ymdHm(issued.oldKeyExpiresAt)}) 만료됩니다. 그 전에 RP 서버를 새 키로 교체하세요.
+        </Alert>
+      )}
+      <KvList boxed keyWidth={80} items={[
+        { k: '이름', v: <>{issued.key.name} <span style={{ marginLeft: 6 }}><Badge tone="ok">발급 완료</Badge></span></> },
+        { k: 'prefix', v: issued.key.prefix, mono: true },
+        { k: '만료', v: issued.key.expiresAt ? ymd(issued.key.expiresAt) : '무기한' },
+        { k: 'id', v: issued.key.id, mono: true },
+      ]} />
+      <SecretBox value={issued.plaintext} />
+      <label style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', border: '1px solid var(--brand-700)', borderRadius: 'var(--r)', background: 'var(--brand-50)', cursor: 'pointer' }}>
+        <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+        <span style={{ fontSize: 13, fontWeight: 600 }}>안전한 장소에 복사했습니다.</span>
+      </label>
     </Dialog>
   );
 }
 
-// ── RevokeKeyDialog ───────────────────────────────────────────────────────────
+// ── 회수 (위험) — 취소 기본 포커스 ───────────────────────────────────────────
 
-function RevokeKeyDialog({ k, onClose, onConfirm }: {
-  k: ApiKey | null;
-  onClose: () => void;
-  onConfirm: (k: ApiKey) => void;
-}) {
+function RevokeKeyDialog({ k, onClose, onConfirm }: { k: ApiKey | null; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
   if (!k) return null;
   return (
-    <Dialog open onClose={onClose} title="API key를 회수하시겠습니까?"
-      sub="회수된 키는 다음 ceremony부터 401을 받습니다. 캐시 만료까지 약 5초 이내에 완전 차단됩니다."
+    <Dialog open onClose={onClose} role="alertdialog" title="API key를 회수하시겠습니까?" initialFocusRef={cancelRef}
       footer={<>
-        <button className="btn" onClick={onClose}>취소</button>
-        <button className="btn btn--danger" onClick={() => onConfirm(k)}>회수</button>
-      </>}
-    >
-      <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 8, fontSize: 13 }}>
-          <div className="muted">prefix</div><div className="mono">{k.prefix}</div>
-          <div className="muted">이름</div><div>{k.name}</div>
-          <div className="muted">생성</div><div className="muted">{fmtDateTime(k.createdAt)}</div>
-        </div>
-      </div>
-      <div style={{ marginTop: 12, padding: 10, background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
-        <Icons.Alert size={14} />
-        <span>이 작업은 되돌릴 수 없습니다. RP 서비스에 새 키가 배포되어 있는지 확인하세요.</span>
-      </div>
+        <button ref={cancelRef} type="button" className="btn" onClick={onClose}>취소</button>
+        <Button variant="danger-solid" onClick={() => onConfirm(k)}>회수</Button>
+      </>}>
+      <KvList keyWidth={80} items={[
+        { k: 'prefix', v: k.prefix, mono: true },
+        { k: '이름', v: k.name },
+        { k: '생성', v: ymd(k.createdAt) },
+      ]} />
+      <Alert tone="bad">회수는 되돌릴 수 없습니다. 이 키를 쓰는 RP 서버의 요청이 즉시 401 로 거부됩니다.</Alert>
     </Dialog>
   );
 }
 
-// ── RotateKeyDialog ───────────────────────────────────────────────────────────
+// ── 회전 — 기존 키 24시간 겹침 타임라인 ───────────────────────────────────────
 
-function RotateKeyDialog({ k, onClose, onConfirm }: {
-  k: ApiKey | null;
-  onClose: () => void;
-  onConfirm: (k: ApiKey) => void;
-}) {
+function RotateKeyDialog({ k, onClose, onConfirm }: { k: ApiKey | null; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
   if (!k) return null;
   return (
     <Dialog open onClose={onClose} title="API key를 회전하시겠습니까?"
-      sub="같은 권한의 새 키가 즉시 발급됩니다. 구 키는 24시간 후 만료됩니다."
       footer={<>
-        <button className="btn" onClick={onClose}>취소</button>
-        <button className="btn btn--primary" onClick={() => onConfirm(k)}>회전 실행</button>
-      </>}
-    >
-      <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 8, fontSize: 13 }}>
-          <div className="muted">prefix</div><div className="mono">{k.prefix}</div>
-          <div className="muted">이름</div><div>{k.name}</div>
-        </div>
-      </div>
-      <div style={{ marginTop: 12, padding: 10, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
-        <Icons.Info size={14} />
-        <span>새 키는 발급 직후 이 화면에서 한 번만 표시됩니다. RP 서버를 24시간 안에 교체하세요.</span>
+        <Button onClick={onClose}>취소</Button>
+        <Button variant="primary" onClick={() => onConfirm(k)}>회전 실행</Button>
+      </>}>
+      <KvList keyWidth={80} items={[
+        { k: 'prefix', v: k.prefix, mono: true },
+        { k: '이름', v: k.name },
+      ]} />
+      <div className="row" style={{ gap: 10, flexWrap: 'nowrap', fontSize: 13, padding: '12px 14px', background: 'var(--canvas)', borderRadius: 'var(--r)' }}>
+        <span className="tag">기존 키</span>
+        <span style={{ color: 'var(--ink-2)' }}>24시간 함께 유효</span>
+        <Icons.ChevronRight size={14} />
+        <span className="tag" style={{ background: 'var(--brand-100)', color: 'var(--brand-700)' }}>새 키</span>
+        <span style={{ color: 'var(--ink-2)' }}>즉시 발급</span>
       </div>
     </Dialog>
   );

@@ -58,4 +58,15 @@ describe('apiKeysApi', () => {
     expect(init.method).toBe('GET');
     expect(res).toEqual([view]);
   });
+  it('list maps keySuffix only when the server sends it (스펙 §6 ⑤)', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(envelope([
+      { id: 'k1', keyPrefix: 'pk_a', name: 'a', tenantId: 't1', scopes: ['registration'], createdAt: '2026-01-01T00:00:00Z', keySuffix: 'a1c9' },
+      { id: 'k2', keyPrefix: 'pk_b', name: 'b', tenantId: 't1', scopes: ['registration'], createdAt: '2026-01-01T00:00:00Z' },
+    ]));
+    const keys = await apiKeysApi.list('t1');
+    const [url] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('/admin/api/api-keys?tenantId=t1');
+    expect(keys[0].keySuffix).toBe('a1c9');
+    expect('keySuffix' in keys[1]).toBe(false);
+  });
 });

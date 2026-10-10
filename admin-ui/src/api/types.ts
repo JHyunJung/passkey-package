@@ -53,6 +53,7 @@ export interface ApiKeyView {
   lastUsedAt?: string;
   expiresAt?: string;
   revokedAt?: string;
+  keySuffix?: string;      // 스펙 §6 ⑤ — 서버 후속 작업에서 추가. 없으면 렌더하지 않는다.
 }
 
 export interface ApiKeyCreateRequest {

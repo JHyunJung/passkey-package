@@ -16,6 +16,8 @@ function adapt(s: ApiKeyView): ApiKey {
     lastUsedAt: s.lastUsedAt ?? null,
     scopes: s.scopes ?? [],
     expiresAt: s.expiresAt ?? null,
+    // §6 ⑤: 서버가 보낼 때만 키를 만든다(undefined 키도 만들지 않음).
+    ...(s.keySuffix !== undefined ? { keySuffix: s.keySuffix } : {}),
   };
 }
 
