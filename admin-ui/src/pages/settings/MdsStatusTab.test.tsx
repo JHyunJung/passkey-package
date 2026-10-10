@@ -88,4 +88,48 @@ describe('MdsStatusTab V2', () => {
     await waitFor(() => expect(mdsStatusApi.get).toHaveBeenCalledTimes(2));
     expect(mdsStatusApi.history).toHaveBeenCalledTimes(2);
   });
+
+  it('한 번도 동기화되지 않은 설치(version 0, 1970 시드)는 중립 "동기화 이력 없음" — 정상·20000일 전을 보이지 않는다', async () => {
+    mock(mdsStatusApi.get).mockResolvedValue({
+      ...status, version: 0, fetchedAt: '1970-01-01T00:00:00Z', nextUpdate: '1970-01-01', trustAnchorCount: 0,
+      successRate30d: { ok: 0, total: 0 },
+    });
+    mock(mdsStatusApi.history).mockResolvedValue([]);
+    renderTab();
+    expect(await screen.findByText('동기화 이력 없음')).toBeInTheDocument();
+    expect(screen.queryByText(/정상/)).toBeNull();
+    expect(screen.queryByText(/일 전/)).toBeNull();
+    expect(screen.queryByText(/1970/)).toBeNull();
+    expect(screen.getByText('마지막 동기화').closest('.kpi')).toHaveTextContent('—');
+    expect(screen.getByText('알 수 없음')).toBeInTheDocument();
+  });
+
+  it('fetchedAt 이 2000년 이전이면 version 이 있어도 동기화 이력 없음', async () => {
+    mock(mdsStatusApi.get).mockResolvedValue({ ...status, fetchedAt: '1999-12-31T00:00:00Z' });
+    renderTab();
+    expect(await screen.findByText('동기화 이력 없음')).toBeInTheDocument();
+  });
+
+  it('이력이 오기 전에는 헤드라인(정상)을 먼저 그리지 않는다', async () => {
+    let resolveHistory: (v: MdsHistoryRow[]) => void = () => {};
+    mock(mdsStatusApi.history).mockReturnValue(new Promise((r) => { resolveHistory = r; }));
+    renderTab();
+    await waitFor(() => expect(mdsStatusApi.get).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('정상 · BLOB #87')).toBeNull();
+    resolveHistory([{ ...history[0], status: 'FAILED' }]);
+    expect(await screen.findByText('동기화 실패 · BLOB #87')).toBeInTheDocument();
+    expect(screen.queryByText('정상 · BLOB #87')).toBeNull();
+  });
+
+  it('상태 조회 실패는 "이력 없음"이 아니라 오류 상태', async () => {
+    mock(mdsStatusApi.get).mockRejectedValue(new Error('HTTP 500'));
+    renderTab();
+    expect(await screen.findByText('MDS 상태를 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.queryByText('동기화 이력 없음')).toBeNull();
+    expect(screen.queryByText(/정상/)).toBeNull();
+    mock(mdsStatusApi.get).mockResolvedValue(status);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('정상 · BLOB #87')).toBeInTheDocument();
+  });
 });

@@ -31,6 +31,17 @@ function fmtDateTime(iso: string | null | undefined): string {
   });
 }
 
+/** 서버 시드(mds_blob_cache: version 0, 1970-01-01)는 "한 번도 동기화되지 않음"이다. 2000년 이전 시각은 시드로 본다. */
+const SEED_CUTOFF_MS = Date.UTC(2000, 0, 1);
+function isSeedTime(iso: string | null | undefined): boolean {
+  if (!iso) return true;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) || t < SEED_CUTOFF_MS;
+}
+function isNeverSynced(s: MdsStatus): boolean {
+  return s.version === 0 || isSeedTime(s.fetchedAt);
+}
+
 const TABLE_ROWS = 6;
 const RUN: Record<MdsHistoryRow['status'], { tone: BadgeTone; label: string; strip: boolean | null }> = {
   SYNCED: { tone: 'ok', label: '동기화됨', strip: true },
@@ -63,25 +74,23 @@ export default function MdsStatusTab() {
   const [syncing, setSyncing] = useState(false);
   const toast = useToast();
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // 상태와 이력을 함께 읽고 둘 다 끝난 뒤에 그린다 — 이력이 늦게 와서 '정상' 헤드라인이 먼저 보이는 일을 막는다.
   async function load() {
     setLoading(true);
-    try {
-      const data = await mdsStatusApi.get();
-      setStatus(data);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '알 수 없는 오류';
+    const [st, hist] = await Promise.allSettled([mdsStatusApi.get(), mdsStatusApi.history(MDS_HISTORY_STRIP_LIMIT)]);
+    if (st.status === 'fulfilled') {
+      setStatus(st.value);
+      setLoadError(null);
+    } else {
+      const msg = st.reason instanceof Error ? st.reason.message : '알 수 없는 오류';
+      setStatus(null);
+      setLoadError(msg);
       toast({ kind: 'err', title: 'MDS 상태 로드 실패', message: msg });
-    } finally {
-      setLoading(false);
     }
-  }
-
-  async function loadHistory() {
-    try {
-      setHistory(await mdsStatusApi.history(MDS_HISTORY_STRIP_LIMIT));
-    } catch {
-      setHistory([]);
-    }
+    setHistory(hist.status === 'fulfilled' ? hist.value : []);
+    setLoading(false);
   }
 
   async function handleSync() {
@@ -95,7 +104,7 @@ export default function MdsStatusTab() {
       } else {
         toast({ kind: 'err', title: 'MDS 갱신 실패', message: result.error ?? '알 수 없는 오류' });
       }
-      await Promise.all([load(), loadHistory()]);
+      await load();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '알 수 없는 오류';
       toast({ kind: 'err', title: 'MDS 갱신 실패', message: msg });
@@ -104,7 +113,7 @@ export default function MdsStatusTab() {
     }
   }
 
-  useEffect(() => { void load(); void loadHistory(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -114,12 +123,31 @@ export default function MdsStatusTab() {
     );
   }
 
-  const versionText = status?.version != null ? `#${status.version}` : '—';
+  if (!status) {
+    return (
+      <section className="card" role="alert" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20, padding: '20px 24px' }}>
+        <span aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 12, background: HEAD_TONE.bad.bg, color: HEAD_TONE.bad.fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <Icons.Alert size={24} />
+        </span>
+        <div className="col" style={{ gap: 2, flex: '1 1 320px', minWidth: 0 }}>
+          <span className="t-over">MDS 동기화 상태</span>
+          <strong style={{ fontSize: 20, lineHeight: '28px' }}>MDS 상태를 불러오지 못했습니다</strong>
+          {loadError && <span className="card__sub">{loadError}</span>}
+        </div>
+        <Button onClick={() => void load()} icon={<Icons.Refresh size={14} />}>다시 시도</Button>
+      </section>
+    );
+  }
+
+  // 헤드라인의 기준은 상태(status). 시드뿐이면 중립, 아니면 가장 최근 실행이 실패일 때만 실패로 표시한다.
+  const neverSynced = isNeverSynced(status);
+  const nextUpdate = status.nextUpdate && !isSeedTime(status.nextUpdate) ? status.nextUpdate : null;
+  const versionText = !neverSynced && status.version != null ? `#${status.version}` : '—';
   const latest = history[0];
-  const headTone: 'ok' | 'bad' | 'neutral' = latest?.status === 'FAILED' ? 'bad' : !status?.fetchedAt ? 'neutral' : 'ok';
+  const headTone: 'ok' | 'bad' | 'neutral' = neverSynced ? 'neutral' : latest?.status === 'FAILED' ? 'bad' : 'ok';
   const headTitle = headTone === 'bad' ? `동기화 실패 · BLOB ${versionText}` : headTone === 'neutral' ? '동기화 이력 없음' : `정상 · BLOB ${versionText}`;
   const headIcon: ReactNode = headTone === 'ok' ? <Icons.Check size={24} /> : <Icons.Alert size={24} />;
-  const rate = status?.successRate30d ?? { ok: 0, total: 0 };
+  const rate = status.successRate30d ?? { ok: 0, total: 0 };
   const pct = rate.total > 0 ? Math.round((rate.ok / rate.total) * 100) : 0;
   const stripResults = [...history].reverse().map((r) => RUN[r.status].strip);
   const failCount = history.filter((r) => r.status === 'FAILED').length;
@@ -137,7 +165,7 @@ export default function MdsStatusTab() {
           <span className="t-over">MDS 동기화 상태</span>
           <strong style={{ fontSize: 20, lineHeight: '28px' }}>{headTitle}</strong>
           <span className="card__sub">
-            FIDO MDS3 BLOB 을 매일 03:00 KST 에 갱신합니다{status?.nextUpdate ? ` · 다음 갱신 ${status.nextUpdate} 03:00` : ''}
+            FIDO MDS3 BLOB 을 매일 03:00 KST 에 갱신합니다{nextUpdate ? ` · 다음 갱신 ${nextUpdate} 03:00` : ''}
           </span>
         </div>
         <Button onClick={() => void handleSync()} disabled={syncing} icon={<Icons.Refresh size={14} />}>
@@ -147,8 +175,8 @@ export default function MdsStatusTab() {
 
       <div className="kpis kpis--3">
         <KpiCard label="MDS BLOB 버전" value={<span className="mono">{versionText}</span>} />
-        <KpiCard label="Trust anchors" value={status?.trustAnchorCount ?? 0} />
-        <KpiCard label="마지막 동기화" value={timeAgo(status?.fetchedAt ?? null)} />
+        <KpiCard label="Trust anchors" value={status.trustAnchorCount ?? 0} />
+        <KpiCard label="마지막 동기화" value={neverSynced ? '—' : timeAgo(status.fetchedAt)} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.4fr)', gap: 20, alignItems: 'start' }}>
@@ -159,11 +187,11 @@ export default function MdsStatusTab() {
               <dt style={DT_STYLE}>endpoint</dt>
               <dd style={DD_STYLE} className="mono"><span style={{ fontSize: 12 }}>https://mds3.fidoalliance.org/</span></dd>
               <dt style={DT_STYLE}>next 갱신 예정</dt>
-              <dd style={DD_STYLE}>{status?.nextUpdate ? `${status.nextUpdate} 03:00 KST` : '알 수 없음'}</dd>
+              <dd style={DD_STYLE}>{nextUpdate ? `${nextUpdate} 03:00 KST` : '알 수 없음'}</dd>
               <dt style={DT_STYLE}>동기화 성공률 (30d)</dt>
               <dd style={DD_STYLE}><span>{pct}%</span><span className="muted"> · {rate.ok} / {rate.total}</span></dd>
               <dt style={DT_STYLE}>신뢰 모드</dt>
-              <dd style={DD_STYLE}><Badge tone="info" dot={false}>{status?.trustMode ?? 'MDS_STRICT_OPTIONAL'}</Badge></dd>
+              <dd style={DD_STYLE}><Badge tone="info" dot={false}>{status.trustMode ?? 'MDS_STRICT_OPTIONAL'}</Badge></dd>
             </dl>
           </CardBody>
         </section>
