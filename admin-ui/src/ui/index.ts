@@ -18,3 +18,8 @@ export * from './ChipInput';
 export * from './OtpInput';
 export * from './Dialog';
 export * from './ToastHost';
+export * from './Menu';
+export * from './SecretBox';
+export * from './ConfirmByTyping';
+export * from './Stepper';
+export * from './StatusStrip';

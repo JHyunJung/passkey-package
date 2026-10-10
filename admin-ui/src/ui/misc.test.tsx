@@ -1,0 +1,68 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Menu, ConfirmByTyping, StatusStrip, Stepper, SecretBox } from '@/ui';
+
+describe('Menu', () => {
+  function setup() {
+    const rotate = vi.fn(), revoke = vi.fn();
+    render(<Menu label="키 액션" items={[{ label: '회전', onSelect: rotate }, { label: '접두사 복사', onSelect: vi.fn() }]} dangerItems={[{ label: '회수', onSelect: revoke, danger: true }]} />);
+    fireEvent.click(screen.getByRole('button', { name: '키 액션' }));
+    return { rotate, revoke };
+  }
+  it('열리면 첫 항목에 포커스, 위험 구획 표시', () => {
+    setup();
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '회전' }));
+    expect(screen.getByText('위험')).toBeInTheDocument();
+  });
+  it('ArrowDown 순환 + Enter 선택 후 닫힘', () => {
+    const { revoke } = setup();
+    const menu = screen.getByRole('menu');
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '회수' }));
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '회전' }));
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    fireEvent.keyDown(document.activeElement!, { key: 'Enter' });
+    expect(revoke).toHaveBeenCalled();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+  it('Escape 로 닫히고 트리거로 포커스 복귀', () => {
+    setup();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '키 액션' }));
+  });
+});
+
+describe('ConfirmByTyping', () => {
+  it('정확히 일치할 때만 true', () => {
+    const onMatch = vi.fn();
+    render(<ConfirmByTyping expected="acme" label="slug 입력" onMatchChange={onMatch} id="c" />);
+    const input = screen.getByRole('textbox', { name: /slug 입력/ });
+    fireEvent.change(input, { target: { value: 'acm' } });
+    expect(onMatch).toHaveBeenLastCalledWith(false);
+    fireEvent.change(input, { target: { value: 'acme' } });
+    expect(onMatch).toHaveBeenLastCalledWith(true);
+    fireEvent.change(input, { target: { value: 'acme ' } });
+    expect(onMatch).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe('StatusStrip / Stepper / SecretBox', () => {
+  it('StatusStrip 은 요약 라벨을 가진 img', () => {
+    const { container } = render(<StatusStrip results={[true, true, false, null]} label="최근 4회 중 1회 위변조" />);
+    expect(screen.getByRole('img', { name: '최근 4회 중 1회 위변조' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.strip__bar--bad')).toHaveLength(1);
+    expect(container.querySelectorAll('.strip__bar--none')).toHaveLength(1);
+  });
+  it('Stepper done 은 체크, now 는 aria-current', () => {
+    render(<Stepper steps={[{ label: 'QR 스캔', state: 'done' }, { label: '코드 확인', state: 'now' }, { label: '복구 코드 저장', state: 'todo' }]} />);
+    expect(screen.getByText('코드 확인').closest('li')).toHaveAttribute('aria-current', 'step');
+  });
+  it('SecretBox 값과 복사 버튼', () => {
+    render(<SecretBox value="pk_live_x_secret" />);
+    expect(screen.getByText('pk_live_x_secret')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /클립보드/ })).toBeInTheDocument();
+  });
+});
