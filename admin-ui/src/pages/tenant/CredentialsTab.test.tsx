@@ -1,0 +1,128 @@
+// admin-ui/src/pages/tenant/CredentialsTab.test.tsx
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { ToastHost } from '@/ui';
+import type { Credential, Tenant } from '@/api/designTypes';
+
+const api = vi.hoisted(() => ({ list: vi.fn(), revoke: vi.fn(), authEvents: vi.fn() }));
+vi.mock('@/api/credentials', () => ({ credentialsApi: api }));
+
+import CredentialsTab from './CredentialsTab';
+
+const tenant: Tenant = {
+  id: 't1', name: 'Acme', slug: 'acme', rpId: 'acme.com', status: 'ACTIVE', credentials: 3, apiKeys: 0,
+  lastEventAt: null, createdAt: '2026-01-01T00:00:00Z', userVerification: 'PREFERRED', attestationConveyance: 'NONE', webauthnTimeoutMs: 60000,
+};
+const cred = (id: string, p: Partial<Credential> = {}): Credential => ({
+  credentialId: id, externalUserId: `user-${id}`, nickname: null, authenticatorName: 'iCloud Keychain', status: 'ACTIVE',
+  aaguid: 'fbfc3007-154e-4ecc-8c0b-6e020557d7bd', transports: ['internal'], signatureCounter: 0, lastUsedAt: null,
+  createdAt: '2026-06-01T00:00:00Z', attestationFormat: 'none', ...p,
+});
+const pageOf = (items: Credential[], total = items.length, page = 0) => ({ items, total, page, size: 50 });
+const renderTab = () => render(<ToastHost><CredentialsTab tenant={tenant} /></ToastHost>);
+
+describe('CredentialsTab V2', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.authEvents.mockResolvedValue([]);
+  });
+
+  it('검색어를 디바운스 후 서버 q 로 보낸다(앞뒤 공백 제거, 첫 페이지)', async () => {
+    api.list.mockResolvedValue(pageOf([cred('c1')]));
+    renderTab();
+    await screen.findByText('user-c1');
+    expect(api.list).toHaveBeenLastCalledWith('t1', 0, 50, undefined);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Credential 검색' }), { target: { value: ' abc ' } });
+    await waitFor(() => expect(api.list).toHaveBeenLastCalledWith('t1', 0, 50, 'abc'));
+  });
+
+  it('credential 이 하나도 없으면 빈 상태 일러스트', async () => {
+    api.list.mockResolvedValue(pageOf([], 0));
+    const { container } = renderTab();
+    expect(await screen.findByText('Credential이 없습니다')).toBeInTheDocument();
+    expect(container.querySelectorAll('img.empty__art')).toHaveLength(1);
+  });
+
+  it('검색 결과가 없으면 결과 없음 상태, 필터 지우기로 초기화', async () => {
+    api.list.mockImplementation((_t: string, _p: number, _s: number, q?: string) => Promise.resolve(q ? pageOf([], 0) : pageOf([cred('c1')])));
+    renderTab();
+    await screen.findByText('user-c1');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Credential 검색' }), { target: { value: 'zzz' } });
+    expect(await screen.findByText('검색 결과가 없습니다.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '필터 지우기' }));
+    expect(await screen.findByText('user-c1')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Credential 검색' })).toHaveValue('');
+    expect(api.list).toHaveBeenLastCalledWith('t1', 0, 50, undefined);
+  });
+
+  it('+ 필터: 필터 행 토글, status 를 고르면 적용 칩이 생기고 현재 페이지 안에서 거른다', async () => {
+    api.list.mockResolvedValue(pageOf([cred('c1'), cred('c2', { status: 'REVOKED' })]));
+    renderTab();
+    await screen.findByText('user-c1');
+    const toggle = screen.getByRole('button', { name: /필터 · aaguid · status/ });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(screen.getByRole('group', { name: 'status 필터' })).getByRole('button', { name: 'REVOKED' }));
+    expect(screen.getByText('status: REVOKED')).toBeInTheDocument();
+    expect(screen.queryByText('user-c1')).toBeNull();
+    expect(screen.getByText('user-c2')).toBeInTheDocument();
+    expect(screen.getByText('1건 (현재 페이지)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'status 필터 제거' }));
+    expect(screen.getByText('user-c1')).toBeInTheDocument();
+    expect(api.list).toHaveBeenCalledTimes(1); // 클라이언트 필터는 서버를 다시 부르지 않는다
+  });
+
+  it('상세 이전/다음: 페이지 안에서는 바로, 경계에서는 다음/이전 페이지를 불러와 이어간다', async () => {
+    const p0 = [cred('c1'), cred('c2')];
+    const p1 = [cred('c3')];
+    api.list.mockImplementation((_t: string, page: number) => Promise.resolve(page === 0 ? pageOf(p0, 51, 0) : pageOf(p1, 51, 1)));
+    renderTab();
+    fireEvent.click(await screen.findByText('user-c1'));
+    const dlg = screen.getByRole('dialog', { name: /Credential 상세/ });
+    expect(within(dlg).getByText('1 / 51')).toBeInTheDocument();
+    expect(within(dlg).getByRole('button', { name: '이전 credential' })).toBeDisabled();
+
+    fireEvent.click(within(dlg).getByRole('button', { name: '다음 credential' }));
+    expect(within(dlg).getByText('2 / 51')).toBeInTheDocument();
+    expect(within(dlg).getByText('user-c2')).toBeInTheDocument();
+    expect(api.list).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(dlg).getByRole('button', { name: '다음 credential' }));
+    await waitFor(() => expect(api.list).toHaveBeenLastCalledWith('t1', 1, 50, undefined));
+    expect(await within(dlg).findByText('51 / 51')).toBeInTheDocument();
+    expect(within(dlg).getByText('user-c3')).toBeInTheDocument();
+    expect(within(dlg).getByRole('button', { name: '다음 credential' })).toBeDisabled();
+
+    fireEvent.click(within(dlg).getByRole('button', { name: '이전 credential' }));
+    await waitFor(() => expect(api.list).toHaveBeenLastCalledWith('t1', 0, 50, undefined));
+    expect(await within(dlg).findByText('2 / 51')).toBeInTheDocument();
+    expect(within(dlg).getByText('user-c2')).toBeInTheDocument();
+  });
+
+  it('회수: 마지막 8자를 정확히 입력해야 실행, 상세 푸터에서도 진입', async () => {
+    api.list.mockResolvedValue(pageOf([cred('cred-0000-abcdefgh')]));
+    api.revoke.mockResolvedValue(undefined);
+    renderTab();
+    fireEvent.click(await screen.findByText('user-cred-0000-abcdefgh'));
+    fireEvent.click(screen.getByRole('button', { name: 'Credential 회수…' }));
+    expect(screen.queryByRole('dialog', { name: /Credential 상세/ })).toBeNull();
+
+    const dlg = screen.getByRole('alertdialog', { name: 'Credential 회수' });
+    const confirm = within(dlg).getByRole('button', { name: '확인 — 회수' });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: 'abcdefgh' } });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(api.revoke).toHaveBeenCalledWith('t1', 'cred-0000-abcdefgh'));
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('표의 휴지통 버튼은 ACTIVE 행에만', async () => {
+    api.list.mockResolvedValue(pageOf([cred('aaaa-11111111'), cred('bbbb-22222222', { status: 'REVOKED' })]));
+    renderTab();
+    await screen.findByText('user-aaaa-11111111');
+    expect(screen.getByRole('button', { name: '회수 · …11111111' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '회수 · …22222222' })).toBeNull();
+  });
+});

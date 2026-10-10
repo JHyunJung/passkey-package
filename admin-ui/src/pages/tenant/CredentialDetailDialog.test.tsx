@@ -75,4 +75,43 @@ describe('CredentialDetailDialog', () => {
     expect(screen.getByText('실패')).toBeInTheDocument();
     expect(screen.getByText('SIGN_COUNT_REPLAY')).toBeInTheDocument();
   });
+
+  it('position 이 있으면 위치와 이전/다음 버튼, 핸들러가 없으면 비활성', async () => {
+    vi.spyOn(credentialsApi, 'authEvents').mockResolvedValue([]);
+    const onNext = vi.fn();
+    render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} position={{ index: 3, total: 120 }} onNext={onNext} />);
+    expect(screen.getByText('3 / 120')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이전 credential' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '다음 credential' }));
+    expect(onNext).toHaveBeenCalledTimes(1);
+    await screen.findByText(/아직 인증 이력이 없습니다/);
+  });
+
+  it('position 이 없으면 이동 UI 를 렌더하지 않는다', async () => {
+    vi.spyOn(credentialsApi, 'authEvents').mockResolvedValue([]);
+    render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} />);
+    expect(screen.queryByRole('button', { name: '이전 credential' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '다음 credential' })).toBeNull();
+    await screen.findByText(/아직 인증 이력이 없습니다/);
+  });
+
+  it('c 가 바뀌면(이전/다음) 그 credential 의 인증 기록을 다시 불러온다', async () => {
+    const spy = vi.spyOn(credentialsApi, 'authEvents').mockResolvedValue([]);
+    const { rerender } = render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} position={{ index: 1, total: 2 }} />);
+    await screen.findByText(/아직 인증 이력이 없습니다/);
+    rerender(<CredentialDetailDialog c={{ ...cred, credentialId: 'cred-next-000000000000', externalUserId: 'user-handle-2' }} tenantId="t1" onClose={() => {}} position={{ index: 2, total: 2 }} />);
+    expect(screen.getByText('user-handle-2')).toBeInTheDocument();
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith('t1', 'cred-next-000000000000', 20));
+  });
+
+  it('섹션 3개와 푸터 좌측 회수 버튼(ACTIVE + onRevoke)', async () => {
+    vi.spyOn(credentialsApi, 'authEvents').mockResolvedValue([]);
+    const onRevoke = vi.fn();
+    render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} onRevoke={onRevoke} />);
+    // '인증기' 는 섹션 제목과 dt 둘 다 있으므로 섹션 제목(.t-over)으로 한정
+    for (const s of ['식별 정보', '인증기', '인증 기록 (최근 20건)']) expect(screen.getByText(s, { selector: '.t-over' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Credential 회수…' }));
+    expect(onRevoke).toHaveBeenCalledWith(cred);
+    await screen.findByText(/아직 인증 이력이 없습니다/);
+  });
 });

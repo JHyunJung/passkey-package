@@ -1,335 +1,220 @@
-import { useState, useEffect, useMemo } from 'react';
+// admin-ui/src/pages/tenant/CredentialsTab.tsx
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Dialog, StatusBadge, useToast } from '@/ui';
+import {
+  Button, Card, ConfirmByTyping, CopyBtn, DataTable, Dialog, EmptyState, FilterChip, IconButton, Pagination, RemovableChip,
+  Segmented, StatusBadge, useToast, type Column,
+} from '@/ui';
+import { illustrations } from '@/assets/illustrations';
 import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';
 import type { Tenant, Credential } from '@/api/designTypes';
 import CredentialDetailDialog from './CredentialDetailDialog';
+import { KvList } from './KvList';
+import { fmtNum, timeAgo } from './tabFormat';
+import { applyClientFilter, authenticatorLabel, hasClientFilter, type StatusFilter } from './credentialHelpers';
 
-// ── Local utilities (mirrors design globals) ──────────────────────────────────
-
-function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return '방금 전';
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}일 전`;
-  const mo = Math.floor(d / 30);
-  return `${mo}개월 전`;
-}
-
-function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function tail(s: string, n: number): string {
-  return s.slice(-n);
-}
-
-// ── Field ─────────────────────────────────────────────────────────────────────
-
-function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-// ── CredentialsTab ─────────────────────────────────────────────────────────────
+const PAGE_SIZES = [50, 100, 200];
+const SEARCH_DEBOUNCE_MS = 300;
+const tail = (s: string, n: number) => s.slice(-n);
 
 export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   const [items, setItems] = useState<Credential[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
-  const [size, setSize] = useState(50);  // 페이지당 조회 건수 (50/100/200)
-  const [q, setQ] = useState('');
-  const [searchMode, setSearchMode] = useState<'keyword' | 'aaguid' | 'status'>('keyword');
+  const [page, setPage] = useState(0);                 // 0-based (서버 page)
+  const [size, setSize] = useState(50);                // 50/100/200
+  const [q, setQ] = useState('');                      // 입력 중 검색어
+  const [appliedQ, setAppliedQ] = useState('');        // 서버에 보낸 검색어(q)
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [aaguid, setAaguid] = useState('');
+  const [status, setStatus] = useState<StatusFilter>('ALL');
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<Credential | null>(null);
   const [selected, setSelected] = useState<Credential | null>(null);
+  // 상세 이전/다음이 페이지 경계를 넘을 때, 새 페이지 로드 후 선택할 위치
+  const pendingSelect = useRef<'first' | 'last' | null>(null);
   const toast = useToast();
+
+  // 검색어 → 서버 q (디바운스, 바뀌면 첫 페이지로)
+  useEffect(() => {
+    const next = q.trim();
+    if (next === appliedQ) return;
+    const t = setTimeout(() => { setAppliedQ(next); setPage(0); }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [q, appliedQ]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    credentialsApi.list(tenant.id, page, size)
+    credentialsApi.list(tenant.id, page, size, appliedQ || undefined)
       .then((res) => {
         if (cancelled) return;
         setItems(res.items);
         setTotal(res.total);
+        const pend = pendingSelect.current;
+        pendingSelect.current = null;
+        if (pend && res.items.length > 0) setSelected(pend === 'first' ? res.items[0] : res.items[res.items.length - 1]);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        const msg = e instanceof Error ? e.message : String(e);
-        toast({ kind: 'err', title: 'credentials 로드 실패', message: msg });
+        pendingSelect.current = null;
+        toast({ kind: 'err', title: 'credentials 로드 실패', message: e instanceof Error ? e.message : String(e) });
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tenant.id, page, size]);
+  }, [tenant.id, page, size, appliedQ]);
 
   async function reload() {
     setLoading(true);
     try {
-      const res = await credentialsApi.list(tenant.id, page, size);
+      const res = await credentialsApi.list(tenant.id, page, size, appliedQ || undefined);
       setItems(res.items);
       setTotal(res.total);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: 'credentials 로드 실패', message: msg });
+      toast({ kind: 'err', title: 'credentials 로드 실패', message: e instanceof Error ? e.message : String(e) });
     } finally {
       setLoading(false);
     }
   }
 
-  // 클라이언트 사이드 검색 (디자인 패턴 그대로)
-  const filtered = useMemo(() => {
-    const ql = q.toLowerCase();
-    if (!ql) return items;
-    return items.filter((c) => {
-      if (searchMode === 'aaguid') {
-        return c.aaguid?.toLowerCase().includes(ql) ?? false;
-      }
-      if (searchMode === 'status') {
-        return c.status.toLowerCase().includes(ql);
-      }
-      return c.externalUserId.toLowerCase().includes(ql)
-          || (c.nickname?.toLowerCase().includes(ql) ?? false)
-          || c.credentialId.toLowerCase().includes(ql);
-    });
-  }, [items, q, searchMode]);
+  const clientFiltered = hasClientFilter({ aaguid, status });
+  const visible = useMemo(() => applyClientFilter(items, { aaguid, status }), [items, aaguid, status]);
+  const lastPage = Math.max(0, Math.ceil(total / size) - 1);
 
-  const totalPages = Math.max(1, Math.ceil(total / size));
+  function clearAll() {
+    setQ('');
+    setAppliedQ('');
+    setAaguid('');
+    setStatus('ALL');
+    setPage(0);
+  }
+
+  // ── 상세 이전/다음 ──
+  const selIdx = selected ? visible.findIndex((c) => c.credentialId === selected.credentialId) : -1;
+  const canPrev = selIdx > 0 || (selIdx === 0 && !clientFiltered && page > 0);
+  const canNext = (selIdx >= 0 && selIdx < visible.length - 1) || (selIdx === visible.length - 1 && selIdx >= 0 && !clientFiltered && page < lastPage);
+  function goPrev() {
+    if (selIdx > 0) { setSelected(visible[selIdx - 1]); return; }
+    pendingSelect.current = 'last';
+    setPage((p) => p - 1);
+  }
+  function goNext() {
+    if (selIdx < visible.length - 1) { setSelected(visible[selIdx + 1]); return; }
+    pendingSelect.current = 'first';
+    setPage((p) => p + 1);
+  }
+  const position = selIdx >= 0
+    ? (clientFiltered ? { index: selIdx + 1, total: visible.length } : { index: page * size + selIdx + 1, total })
+    : undefined;
 
   async function handleRevoke() {
     if (!revoking) return;
     try {
       await credentialsApi.revoke(tenant.id, revoking.credentialId);
-      toast({
-        kind: 'warn',
-        title: 'Credential이 회수되었습니다.',
-        message: `${tail(revoking.credentialId, 12)} · ${revoking.externalUserId}`,
-      });
+      toast({ kind: 'warn', title: 'Credential이 회수되었습니다.', message: `${tail(revoking.credentialId, 12)} · ${revoking.externalUserId}` });
       setRevoking(null);
       await reload();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: '회수 실패', message: msg });
+      toast({ kind: 'err', title: '회수 실패', message: e instanceof Error ? e.message : String(e) });
     }
   }
 
+  function exportCsv() {
+    if (visible.length === 0) return;
+    downloadCsv(
+      `credentials-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['credentialId', 'externalUserId', 'label', 'authenticatorName', 'status', 'aaguid', 'transports', 'signatureCounter', 'lastUsedAt', 'createdAt'],
+      visible.map((c) => [
+        c.credentialId, c.externalUserId, c.nickname ?? '', c.authenticatorName ?? '', c.status, c.aaguid ?? '',
+        c.transports.join('|'), c.signatureCounter, c.lastUsedAt ?? '', c.createdAt,
+      ]),
+    );
+  }
+
+  const columns: Column<Credential>[] = [
+    {
+      key: 'id', header: 'Credential ID',
+      render: (c) => (
+        <span className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+          <span className="mono truncate" style={{ fontSize: 12, maxWidth: 120 }} title={c.credentialId}>{c.credentialId}</span>
+          <CopyBtn value={c.credentialId} label="Credential ID 복사" iconOnly />
+        </span>
+      ),
+    },
+    { key: 'user', header: '사용자', render: (c) => <span className="mono" style={{ fontSize: 12 }}>{c.externalUserId}</span> },
+    { key: 'nick', header: '별칭', render: (c) => c.nickname ? <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{c.nickname}</span> : <span className="muted">—</span> },
+    {
+      key: 'authn', header: '인증기',
+      render: (c) => (
+        <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }} title={c.aaguid ?? undefined}>
+          <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--brand-100)', color: 'var(--brand-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+            <Icons.Fingerprint size={13} />
+          </span>
+          <span className={c.authenticatorName ? undefined : 'mono'} style={c.authenticatorName ? { fontSize: 13 } : { fontSize: 12, color: 'var(--mute)' }}>{authenticatorLabel(c)}</span>
+        </span>
+      ),
+    },
+    { key: 'tr', header: '전송 방식', render: (c) => <span className="row" style={{ gap: 4 }}>{c.transports.map((t) => <span key={t} className="tag">{t}</span>)}</span> },
+    {
+      key: 'cnt', header: '서명 카운터', align: 'right',
+      render: (c) => c.signatureCounter > 0
+        ? <span className="mono" style={{ fontSize: 12 }}>{c.signatureCounter}</span>
+        : c.lastUsedAt
+          // 인증됐는데 counter=0 → counterless 인증기(플랫폼·싱크 패스키). WebAuthn 정상, counter 기반 복제 탐지 미적용.
+          ? <span className="mono" style={{ fontSize: 12, color: 'var(--mute)' }} title="counterless 인증기 — 플랫폼·싱크 패스키는 signCount가 0으로 고정됩니다(WebAuthn 정상). counter 기반 복제 탐지 미적용.">N/A</span>
+          : <span className="mono" style={{ fontSize: 12, color: 'var(--mute)' }}>0</span>,
+    },
+    { key: 'st', header: '상태', render: (c) => <StatusBadge status={c.status} /> },
+    { key: 'used', header: '마지막 사용', render: (c) => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{timeAgo(c.lastUsedAt)}</span> },
+    {
+      key: 'revoke', header: '회수', srOnlyHeader: true, width: 48,
+      render: (c) => c.status === 'ACTIVE' ? (
+        <IconButton label={`회수 · …${tail(c.credentialId, 8)}`} tone="danger" icon={<Icons.Trash size={15} />}
+          onClick={(e) => { e.stopPropagation(); setRevoking(c); }} />
+      ) : null,
+    },
+  ];
+
+  const noData = total === 0 && appliedQ === '' && !clientFiltered;
+  const empty = noData
+    ? <EmptyState illustration={illustrations.emptyCredentials} title="Credential이 없습니다" description="사용자가 RP 에서 패스키를 등록하면 여기에 나타납니다." />
+    : <EmptyState illustration={illustrations.noResults} title="검색 결과가 없습니다." description="검색어나 필터를 바꿔 보세요." action={<Button size="sm" onClick={clearAll}>필터 지우기</Button>} />;
+
   return (
-    <div className="stack-4">
-      <div className="card">
-        <div className="card__head" style={{ gap: 10 }}>
-          <div className="row" style={{ gap: 10, flex: 1 }}>
-            <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
-              <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-mute)' }}><Icons.Search size={13} /></span>
-              <input
-                className="input"
-                placeholder={
-                  searchMode === 'aaguid' ? 'aaguid 검색 (예: ea9b8d66)'
-                  : searchMode === 'status' ? 'status: ACTIVE 또는 REVOKED'
-                  : 'externalUserId · nickname · credentialId 검색'
-                }
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                style={{ paddingLeft: 28, height: 30 }}
-              />
-            </div>
-            <button className="btn btn--sm" onClick={() => {
-              setSearchMode((m) => m === 'keyword' ? 'aaguid' : m === 'aaguid' ? 'status' : 'keyword');
-            }}>
-              <Icons.Filter size={12} /> aaguid · status
-            </button>
-            <span className="muted" style={{ fontSize: 12 }}>{filtered.length}건</span>
+    <div className="stack-6">
+      <Card>
+        <div className="card__head">
+          <div className="search" style={{ flex: '0 1 340px' }}>
+            <Icons.Search size={15} />
+            <input className="input" aria-label="Credential 검색" placeholder="externalUserId · credentialId 검색" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <div className="row">
-            <label className="row" style={{ gap: 6, fontSize: 12, color: 'var(--text-mute)' }}>
-              페이지당
-              <select
-                className="input"
-                value={size}
-                onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}
-                style={{ height: 30, padding: '0 8px', width: 'auto' }}
-              >
-                <option value={50}>50건</option>
-                <option value={100}>100건</option>
-                <option value={200}>200건</option>
-              </select>
+          <FilterChip active={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}><Icons.Plus size={13} />필터 · aaguid · status</FilterChip>
+          {aaguid.trim() !== '' && <RemovableChip mono removeLabel="aaguid 필터 제거" onRemove={() => setAaguid('')}>aaguid: {aaguid.trim()}</RemovableChip>}
+          {status !== 'ALL' && <RemovableChip removeLabel="status 필터 제거" onRemove={() => setStatus('ALL')}>status: {status}</RemovableChip>}
+          <div className="spacer" />
+          <span className="hint" style={{ margin: 0 }}>{clientFiltered ? `${fmtNum(visible.length)}건 (현재 페이지)` : `${fmtNum(total)}건`}</span>
+          <Button icon={<Icons.Download size={14} />} onClick={exportCsv} disabled={visible.length === 0}>CSV</Button>
+        </div>
+        {filtersOpen && (
+          <div className="row" style={{ gap: 16, padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', background: 'var(--canvas)' }}>
+            <label className="row" style={{ gap: 6, fontSize: 12, color: 'var(--mute)', flexWrap: 'nowrap' }}>
+              aaguid
+              <input className="input mono" style={{ width: 280, minHeight: 30 }} placeholder="예: ea9b8d66" value={aaguid} onChange={(e) => setAaguid(e.target.value)} />
             </label>
-            <button className="btn btn--sm" onClick={() => {
-              if (!filtered || filtered.length === 0) return;
-              downloadCsv(
-                `credentials-${tenant.slug}-${new Date().toISOString().slice(0,10)}.csv`,
-                ['credentialId', 'externalUserId', 'label', 'authenticatorName', 'status', 'aaguid', 'transports', 'signatureCounter', 'lastUsedAt', 'createdAt'],
-                filtered.map((c) => [
-                  c.credentialId,
-                  c.externalUserId,
-                  c.nickname ?? '',
-                  c.authenticatorName ?? '',
-                  c.status,
-                  c.aaguid ?? '',
-                  c.transports.join('|'),
-                  c.signatureCounter,
-                  c.lastUsedAt ?? '',
-                  c.createdAt,
-                ]),
-              );
-            }}>
-              <Icons.Download size={12} /> CSV
-            </button>
+            <Segmented ariaLabel="status 필터" value={status} onChange={setStatus}
+              options={[{ value: 'ALL', label: '전체' }, { value: 'ACTIVE', label: 'ACTIVE' }, { value: 'REVOKED', label: 'REVOKED' }]} />
+            <span className="hint" style={{ margin: 0 }}>현재 페이지 안에서 거릅니다.</span>
           </div>
-        </div>
-        {loading ? (
-          <div style={{ padding: '40px 14px', textAlign: 'center', color: 'var(--text-mute)', fontSize: 13 }}>로딩 중…</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Credential ID</th>
-                <th>사용자</th>
-                <th>별칭</th>
-                <th>인증기</th>
-                <th>전송 방식</th>
-                <th style={{ textAlign: 'right' }}>서명 카운터</th>
-                <th>상태</th>
-                <th>마지막 사용</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr
-                  key={c.credentialId}
-                  onClick={() => setSelected(c)}
-                  onKeyDown={(ev) => {
-                    // 행 자신에 포커스가 있을 때만 — 셀 내부 버튼(회수)에서 버블된
-                    // Enter/Space 가 상세 모달을 함께 열지 않도록 차단.
-                    if (ev.target !== ev.currentTarget) return;
-                    if (ev.key === 'Enter' || ev.key === ' ') {
-                      ev.preventDefault();
-                      setSelected(c);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  style={{ opacity: c.status === 'REVOKED' ? 0.55 : 1, cursor: 'pointer' }}
-                >
-                  <td className="mono" style={{ fontSize: 12 }}>{tail(c.credentialId, 12)}</td>
-                  <td className="mono" style={{ fontSize: 12 }}>{c.externalUserId}</td>
-                  <td>{c.nickname ?? <span className="faint">—</span>}</td>
-                  <td>
-                    <div className="row" style={{ gap: 6 }}>
-                      <Icons.Fingerprint size={12} />
-                      {c.authenticatorName ? (
-                        // MDS 룩업으로 모델/상태가 식별된 경우
-                        <span className="badge badge--accent" style={{ fontSize: 10 }} title={c.aaguid ?? undefined}>
-                          {c.authenticatorName}
-                        </span>
-                      ) : (
-                        // MDS 미식별 — aaguid 축약(없으면 unknown)
-                        <span className="badge" style={{ fontSize: 10 }} title={c.aaguid ?? undefined}>
-                          {c.aaguid ? tail(c.aaguid.replace(/-/g, ''), 8) : 'unknown'}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 3 }}>
-                      {c.transports.map((t) => <span key={t} className="badge" style={{ fontSize: 10 }}>{t}</span>)}
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'right' }} className="mono">
-                    {c.signatureCounter > 0 ? (
-                      c.signatureCounter
-                    ) : c.lastUsedAt ? (
-                      // 인증됐는데 counter=0 → counterless 인증기(Touch ID/Windows Hello/
-                      // iCloud·Android 싱크 패스키). WebAuthn 상 정상이며 counter 기반
-                      // 복제 탐지가 적용되지 않는다.
-                      <span className="faint" title="counterless 인증기 — 플랫폼·싱크 패스키는 signCount가 0으로 고정됩니다(WebAuthn 정상). counter 기반 복제 탐지 미적용.">
-                        N/A
-                      </span>
-                    ) : (
-                      // 아직 인증 이력 없음.
-                      <span className="faint">0</span>
-                    )}
-                  </td>
-                  <td><StatusBadge status={c.status} /></td>
-                  <td><span className="muted">{timeAgo(c.lastUsedAt)}</span></td>
-                  <td>
-                    {c.status === 'ACTIVE' && (
-                      <button
-                        className="btn btn--xs"
-                        onClick={(e) => { e.stopPropagation(); setRevoking(c); }}
-                        style={{ color: 'var(--danger)' }}
-                      >
-                        <Icons.Trash size={12} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '32px 14px', color: 'var(--text-mute)', fontSize: 13 }}>
-                    {q ? '검색 결과가 없습니다.' : 'Credential이 없습니다.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         )}
-        <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-mute)', borderTop: '1px solid var(--border)' }}>
-          <span>page {page + 1} of {totalPages} · 페이지당 {size}건</span>
-          <div className="row" style={{ gap: 4 }}>
-            <button className="btn btn--xs" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
-              <Icons.ChevronLeft size={12} />
-            </button>
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-              const start = Math.max(0, Math.min(page - 2, totalPages - 5));
-              const p = start + i;
-              return (
-                <button
-                  key={p}
-                  className="btn btn--xs"
-                  style={p === page ? { background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' } : {}}
-                  onClick={() => setPage(p)}
-                >
-                  {p + 1}
-                </button>
-              );
-            })}
-            <button className="btn btn--xs" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>
-              <Icons.ChevronRight size={12} />
-            </button>
-          </div>
-        </div>
-      </div>
+        {loading
+          ? <p className="muted" style={{ padding: '40px 20px', margin: 0, textAlign: 'center', fontSize: 13 }}>불러오는 중…</p>
+          : <DataTable columns={columns} rows={visible} rowKey={(c) => c.credentialId} onRowClick={setSelected} empty={empty} />}
+        <Pagination page={page + 1} pageSize={size} total={total} onPage={(p) => setPage(p - 1)}
+          pageSizeOptions={PAGE_SIZES} onPageSize={(n) => { setSize(n); setPage(0); }} />
+      </Card>
 
       {revoking && (
-        <RevokeCredentialDialog
-          c={revoking}
-          onClose={() => setRevoking(null)}
-          onConfirm={handleRevoke}
-        />
+        <RevokeCredentialDialog key={revoking.credentialId} c={revoking} onClose={() => setRevoking(null)} onConfirm={handleRevoke} />
       )}
 
       {selected && (
@@ -337,66 +222,38 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           c={selected}
           tenantId={tenant.id}
           onClose={() => setSelected(null)}
+          position={position}
+          onPrev={!loading && canPrev ? goPrev : undefined}
+          onNext={!loading && canNext ? goNext : undefined}
+          onRevoke={(c) => { setSelected(null); setRevoking(c); }}
         />
       )}
     </div>
   );
 }
 
-// ── RevokeCredentialDialog ────────────────────────────────────────────────────
+// ── Credential 회수 — 마지막 8자 확인 ────────────────────────────────────────
 
-function RevokeCredentialDialog({
-  c,
-  onClose,
-  onConfirm,
-}: {
-  c: Credential;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const [typed, setTyped] = useState('');
-  useEffect(() => { setTyped(''); }, [c]);
+function RevokeCredentialDialog({ c, onClose, onConfirm }: { c: Credential; onClose: () => void; onConfirm: () => void }) {
+  const [ok, setOk] = useState(false);
   const required = tail(c.credentialId, 8);
-  const ok = typed === required;
-
   return (
-    <Dialog
-      open
-      onClose={onClose}
-      title="Credential 회수"
-      sub="회수된 credential은 다음 ceremony부터 인증에 실패합니다. 사용자는 패스키를 재등록해야 합니다."
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>취소</button>
-          <button className="btn btn--danger" disabled={!ok} onClick={onConfirm}>확인 — 회수</button>
-        </>
-      }
-    >
-      <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', rowGap: 8, fontSize: 13 }}>
-          <div className="muted">externalUserId</div><div className="mono">{c.externalUserId}</div>
-          <div className="muted">nickname</div><div>{c.nickname ?? '—'}</div>
-          <div className="muted">authenticator</div>
-          <div>
-            <span className="badge badge--accent">
-              {c.aaguid ? tail(c.aaguid.replace(/-/g, ''), 8) : 'unknown'}
-            </span>
-          </div>
-          <div className="muted">credentialId</div><div className="mono" style={{ fontSize: 11 }}>{c.credentialId}</div>
-          <div className="muted">마지막 사용</div><div className="muted">{fmtDateTime(c.lastUsedAt)}</div>
-        </div>
-      </div>
-
-      <Field label={<>확인을 위해 credentialId의 마지막 8자를 입력하세요: <code style={{ background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 3, fontFamily: 'var(--mono)' }}>{required}</code></>}>
-        <input
-          autoFocus
-          className="input mono"
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          placeholder={required}
-          style={{ marginTop: 6 }}
-        />
-      </Field>
+    <Dialog open onClose={onClose} role="alertdialog" title="Credential 회수" sub="이 사용자는 해당 패스키로 더 이상 로그인할 수 없습니다."
+      footer={<>
+        <Button onClick={onClose}>취소</Button>
+        <Button variant="danger-solid" disabled={!ok} onClick={onConfirm}>확인 — 회수</Button>
+      </>}>
+      <KvList keyWidth={100} items={[
+        { k: 'credentialId', v: `…${required}`, mono: true },
+        { k: '사용자', v: c.externalUserId, mono: true },
+        { k: '인증기', v: authenticatorLabel(c) },
+      ]} />
+      <ConfirmByTyping
+        id="credential-revoke-confirm"
+        expected={required}
+        onMatchChange={setOk}
+        label={<>확인을 위해 마지막 8자 <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{required}</span> 를 입력하세요</>}
+      />
     </Dialog>
   );
 }

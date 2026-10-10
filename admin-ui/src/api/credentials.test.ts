@@ -48,3 +48,32 @@ describe('credentialsApi.list adapter', () => {
     expect(res.items[0].attestationFormat).toBe('packed');
   });
 });
+
+describe('credentialsApi.list search param (regression: server reads q, not search)', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+  const empty = () => envelope({ content: [], page: 0, size: 50, totalElements: 0, hasNext: false });
+
+  it('sends the keyword as q', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(empty());
+    await credentialsApi.list('t1', 2, 100, 'abc def');
+    const [url] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toMatch(/^\/admin\/api\/tenants\/t1\/credentials\?/);
+    const params = new URL(url, 'http://x').searchParams;
+    expect(params.get('q')).toBe('abc def');
+    expect(params.has('search')).toBe(false);
+    expect(params.get('page')).toBe('2');
+    expect(params.get('size')).toBe('100');
+  });
+
+  it('omits q when the keyword is empty or missing', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(empty()).mockResolvedValueOnce(empty());
+    await credentialsApi.list('t1', 0, 50, '');
+    await credentialsApi.list('t1', 0, 50);
+    for (const [url] of (fetch as ReturnType<typeof vi.fn>).mock.calls) {
+      const params = new URL(url, 'http://x').searchParams;
+      expect(params.has('q')).toBe(false);
+      expect(params.has('search')).toBe(false);
+    }
+  });
+});

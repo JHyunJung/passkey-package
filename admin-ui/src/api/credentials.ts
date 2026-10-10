@@ -27,10 +27,11 @@ export const credentialsApi = {
     size = 50,
     search?: string,
   ): Promise<{ items: Credential[]; total: number; page: number; size: number }> => {
-    const q = new URLSearchParams({ page: String(page), size: String(size) });
-    if (search) q.set('search', search);
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    // 서버 CredentialAdminController.list 는 검색어를 `q` 로 받는다(이전 `search` 는 무시되던 버그).
+    if (search) params.set('q', search);
     const res = await api.get<PageView<CredentialView>>(
-      `/admin/api/tenants/${tenantId}/credentials?${q}`,
+      `/admin/api/tenants/${tenantId}/credentials?${params}`,
     );
     return {
       items: res.content.map(adapt),
