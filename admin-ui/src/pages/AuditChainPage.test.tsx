@@ -168,4 +168,30 @@ describe('AuditChainPage V2', () => {
     expect(within(dialog).getByLabelText('시작일')).toHaveAttribute('type', 'date');
     expect(within(dialog).getByRole('button', { name: 'PDF 생성 → 다운로드' })).toBeEnabled();
   });
+
+  it('전체 즉시 검증은 읽기 전용 — overview 를 다시 읽고 backfill 을 부르지 않는다', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: '전체 즉시 검증' }));
+    await waitFor(() => expect(auditChainMonitorApi.overview).toHaveBeenCalledTimes(2));
+    expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
+  });
+
+  it('체인 백필은 별도 동작 — 위험을 설명하는 확인 다이얼로그(취소 기본 포커스) 후에만 실행', async () => {
+    vi.mocked(auditChainMonitorApi.backfill).mockReset().mockResolvedValue({ tenantsProcessed: 2, rowsUpdated: 5 } as never);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: '체인 백필(마이그레이션)…' }));
+    const dlg = screen.getByRole('alertdialog', { name: '체인 백필을 실행하시겠습니까?' });
+    expect(dlg).toHaveTextContent(/hash 를 다시 계산해 덮어씁니다/);
+    expect(dlg).toHaveTextContent(/삭제/);
+    expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
+    expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
+    fireEvent.click(within(dlg).getByRole('button', { name: '취소' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '체인 백필(마이그레이션)…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '백필 실행' }));
+    await waitFor(() => expect(auditChainMonitorApi.backfill).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('백필 완료')).toBeInTheDocument();
+  });
 });

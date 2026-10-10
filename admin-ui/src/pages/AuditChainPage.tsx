@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { auditChainMonitorApi, type ChainOverview, type IncidentView } from '@/api/auditChainMonitor';
@@ -148,7 +148,9 @@ export default function AuditChainPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
-  const [running, setRunning] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const backfillCancelRef = useRef<HTMLButtonElement>(null);
   const [incidents, setIncidents] = useState<IncidentView[]>([]);
   const [incidentError, setIncidentError] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -192,17 +194,20 @@ export default function AuditChainPage() {
 
   useEffect(() => { void load(); }, []);
 
-  async function handleRunAll() {
-    setRunning(true);
+  // 체인 백필은 검증이 아니다: 링크가 맞지 않는 행의 hash 를 다시 계산해 덮어쓰고 이후를 다시 잇는다.
+  // 행이 삭제된 체인에 실행하면 공백이 다시 이어져 위변조 흔적이 사라진다 — 확인 다이얼로그 뒤에서만 실행한다.
+  async function handleBackfill() {
+    setBackfilling(true);
     try {
       const r = await auditChainMonitorApi.backfill();
+      setBackfillOpen(false);
       toast({ kind: 'ok', title: '백필 완료', message: `${r.tenantsProcessed} tenants · ${r.rowsUpdated} updated` });
       await load();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '백필 실패';
       toast({ kind: 'err', title: '백필 실패', message: msg });
     } finally {
-      setRunning(false);
+      setBackfilling(false);
     }
   }
 
@@ -374,10 +379,10 @@ export default function AuditChainPage() {
         title={PAGE_TITLE}
         sub={PAGE_SUB}
         actions={<>
+          <Button onClick={() => setBackfillOpen(true)}>체인 백필(마이그레이션)…</Button>
           <Button icon={<Icons.Download size={14} />} onClick={() => setShowReport(true)}>월간 보고서</Button>
-          <Button variant="primary" icon={<Icons.Hash size={14} />} onClick={() => void handleRunAll()} disabled={running}>
-            {running ? '검증 중…' : '전체 즉시 검증'}
-          </Button>
+          {/* 읽기 전용: overview 호출 시 서버가 전 tenant chain 을 검증한다. */}
+          <Button variant="primary" icon={<Icons.Hash size={14} />} onClick={() => void load()}>전체 즉시 검증</Button>
         </>}
       />
 
@@ -533,6 +538,28 @@ export default function AuditChainPage() {
             placeholder="원인 · 조치 내용"
           />
         </Field>
+      </Dialog>
+
+      <Dialog
+        open={backfillOpen}
+        onClose={() => { if (!backfilling) setBackfillOpen(false); }}
+        role="alertdialog"
+        title="체인 백필을 실행하시겠습니까?"
+        initialFocusRef={backfillCancelRef}
+        footer={<>
+          <button ref={backfillCancelRef} type="button" className="btn" onClick={() => setBackfillOpen(false)} disabled={backfilling}>취소</button>
+          <Button variant="danger-solid" onClick={() => void handleBackfill()} disabled={backfilling}>
+            {backfilling ? '백필 중…' : '백필 실행'}
+          </Button>
+        </>}
+      >
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
+          백필은 검증이 아닙니다. 이전 행과 링크가 맞지 않는 모든 행의 hash 를 다시 계산해 덮어씁니다. 그 뒤의 체인도 모두 다시 연결합니다.
+        </p>
+        <Alert tone="bad">
+          행이 삭제된 체인에 실행하면 빈자리가 다시 이어져, 삭제 흔적(위변조 증거)이 사라집니다. 위변조가 감지된 상태라면 먼저 Incident 를 생성해 조사하세요.
+        </Alert>
+        <p className="hint" style={{ margin: 0 }}>hash 가 비어 있는 기존 데이터를 체인에 편입하는 마이그레이션 용도로만 사용하세요.</p>
       </Dialog>
 
       <MonthlyReportDialog open={showReport} onClose={() => setShowReport(false)} overview={overview} />
