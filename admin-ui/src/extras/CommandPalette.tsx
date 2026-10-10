@@ -2,6 +2,13 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icons } from '@/icons/Icons';
 import { searchAll, type SearchResult } from '@/lib/search';
 import type { AppRoute } from '@/appRoute';
+import { EmptyState } from '@/ui';
+import { illustrations } from '@/assets/illustrations';
+import { GO_SHORTCUTS } from './useGoShortcuts';
+
+const GO_BY_LABEL: Record<string, keyof typeof GO_SHORTCUTS> = {
+  'Tenants 목록': 'tenants', 'Activity': 'activity', 'Audit Chain Monitor': 'audit-chain', '설정': 'settings',
+};
 
 export type CommandPaletteProps = {
   open: boolean;
@@ -137,67 +144,55 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
 
   return (
     <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{
-        background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: 12, width: "min(640px, 92vw)", maxHeight: "70vh",
-        boxShadow: "var(--shadow-lg)", overflow: "hidden",
-        display: "flex", flexDirection: "column",
-        marginTop: "10vh",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-label="Command Palette" style={{ maxWidth: 640, marginTop: "10vh", maxHeight: "70vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <label className="row" style={{ flexWrap: "nowrap", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line-soft)" }}>
           <Icons.Search size={18} />
+          <span className="sr-only">검색</span>
           <input
             ref={inputRef}
+            aria-label="검색"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="tenant, credential, audit ID 검색…"
-            style={{ flex: 1, border: 0, outline: "none", background: "transparent", fontSize: 15, color: "var(--text)" }}
+            style={{ flex: 1, border: 0, outline: "none", font: "inherit", fontSize: 15, background: "transparent" }}
           />
-          <span className="kbd">esc</span>
-        </div>
-        <div style={{ flex: 1, overflow: "auto", padding: 6 }}>
+          <kbd>esc</kbd>
+        </label>
+        <div style={{ flex: 1, overflow: "auto", padding: "0 0 6px" }}>
           {Object.keys(groups).length === 0 && (
-            <div style={{ padding: 36, textAlign: "center", color: "var(--text-mute)", fontSize: 13 }}>
-              일치하는 결과가 없습니다.
-            </div>
+            <EmptyState compact illustration={illustrations.noResults} title="일치하는 결과가 없습니다." />
           )}
           {Object.entries(groups).map(([g, items]) => (
             <div key={g}>
-              <div style={{ padding: "8px 12px 4px", fontSize: 10, fontWeight: 600, color: "var(--text-mute)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{g}</div>
+              <span className="t-over" style={{ display: "block", padding: "10px 16px 4px" }}>{g}</span>
               {items.map((it) => {
-                const Active = it._i === selIdx;
+                const active = it._i === selIdx;
                 const Ic = (Icons as Record<string, React.ComponentType<{ size?: number }>>)[it.icon] || Icons.ChevronRight;
+                const goKey = it.group === "이동" ? GO_BY_LABEL[it.label] : undefined;
                 return (
                   <button
                     key={it._i}
+                    className={`menu__item${it.label === "로그아웃" ? " menu__item--danger" : ""}`}
+                    aria-current={active || undefined}
                     disabled={it.disabled}
                     onClick={() => { it.action(); onClose(); }}
                     onMouseEnter={() => setSelIdx(it._i)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10, width: "100%",
-                      padding: "8px 12px", border: 0, borderRadius: 6,
-                      background: Active ? "var(--accent-soft)" : "transparent",
-                      color: it.disabled ? "var(--text-faint)" : (Active ? "var(--accent)" : "var(--text)"),
-                      cursor: it.disabled ? "not-allowed" : "pointer",
-                      textAlign: "left", fontSize: 13,
-                    }}
+                    style={active ? { background: "var(--brand-100)", boxShadow: "inset 3px 0 0 var(--brand-700)" } : undefined}
                   >
-                    <Ic size={14} />
-                    <span style={{ flex: 1 }}>{it.label}</span>
-                    {it.hint && <span className="muted" style={{ fontSize: 11 }}>{it.hint}</span>}
-                    {Active && !it.disabled && <Icons.ChevronRight size={12} />}
+                    <Ic size={16} />
+                    <span>{it.label}</span>
+                    {it.hint && <span className="hint" style={{ margin: "0 0 0 auto" }}>{it.hint}</span>}
+                    {goKey && <kbd>{GO_SHORTCUTS[goKey]}</kbd>}
                   </button>
                 );
               })}
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderTop: "1px solid var(--border)", fontSize: 11, color: "var(--text-mute)" }}>
-          <div className="row" style={{ gap: 12 }}>
-            <span><span className="kbd">↑</span> <span className="kbd">↓</span> 이동</span>
-            <span><span className="kbd">↵</span> 실행</span>
-          </div>
-          <span>{filtered.length} 결과</span>
+        <div className="row" style={{ gap: 14, padding: "10px 16px", borderTop: "1px solid var(--line-soft)", background: "var(--canvas)", fontSize: 12, color: "var(--mute)" }}>
+          <span><kbd>↑</kbd><kbd>↓</kbd> 탐색</span>
+          <span><kbd>↵</kbd> 실행</span>
+          <span style={{ marginLeft: "auto" }}>{filtered.length} 결과</span>
         </div>
       </div>
     </div>

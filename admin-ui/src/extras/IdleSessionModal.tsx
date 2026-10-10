@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
 import { Dialog } from '@/ui';
-import { Icons } from '@/icons/Icons';
 
 export type IdleSessionModalProps = {
   idleTimeoutMinutes: number;
@@ -59,9 +58,23 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
   }, [open, secondsLeft, onLogout]);
 
   if (!open) return null;
+  const pct = secondsLeft / countdownSeconds;
+  const C = 2 * Math.PI * 28;
   return (
-    <Dialog open={open} onClose={() => {}} closeOnScrim={false}
-      title={<span style={{ display: "flex", alignItems: "center", gap: 8 }}><Icons.Lock size={18} /> 세션이 곧 만료됩니다</span>}
+    <Dialog open={open} onClose={() => {}} dismissible={false} role="alertdialog"
+      title={
+        <span className="row" style={{ gap: 16, flexWrap: "nowrap" }}>
+          <span style={{ position: "relative", width: 64, height: 64, flex: "none" }}>
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="32" cy="32" r="28" fill="none" stroke="var(--line-soft)" strokeWidth="6" />
+              <circle cx="32" cy="32" r="28" fill="none" stroke={secondsLeft > 20 ? "var(--warn-dot)" : "var(--bad)"} strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={`${C} ${C}`} strokeDashoffset={C * (1 - pct)} transform="rotate(-90 32 32)" style={{ transition: "stroke-dashoffset 1s linear" }} />
+            </svg>
+            <span className="mono" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600 }}>{secondsLeft}s</span>
+          </span>
+          <span>세션이 곧 만료됩니다</span>
+        </span>
+      }
       sub={`${secondsLeft}초 후 자동으로 로그아웃됩니다.`}
       footer={<>
         <button className="btn" onClick={() => { setOpen(false); onLogout(); }}>지금 로그아웃</button>
@@ -69,12 +82,9 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
       </>}
     >
       <div className="stack-3">
-        <p style={{ margin: 0, fontSize: 13, color: "var(--text-soft)", lineHeight: 1.6 }}>
+        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
           보안을 위해 {idleTimeoutMinutes}분 동안 활동이 없으면 자동으로 로그아웃됩니다. 작업을 계속하려면 <strong>세션 연장</strong>을 눌러주세요.
         </p>
-        <div style={{ height: 6, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
-          <div style={{ width: `${(secondsLeft / countdownSeconds) * 100}%`, height: "100%", background: secondsLeft > 20 ? "var(--accent)" : "var(--danger)", transition: "width 1s linear, background 220ms" }} />
-        </div>
         <div className="muted" style={{ fontSize: 12 }}>
           모든 mutation은 audit log에 기록되어 있으므로 작업 내역은 보존됩니다.
         </div>

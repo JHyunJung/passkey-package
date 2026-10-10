@@ -9,6 +9,8 @@ import { ErrorBoundary } from '@/shell/ErrorBoundary';
 import { Header } from '@/shell/Header';
 import { IdleSessionModal } from '@/extras/IdleSessionModal';
 import { CommandPalette } from '@/extras/CommandPalette';
+import { useGoShortcuts } from '@/extras/useGoShortcuts';
+import { isPlatform } from '@/me/roles';
 import LoginPage from '@/pages/LoginPage';
 import MfaChallenge from '@/pages/MfaChallenge';
 import ActivityPage from '@/pages/ActivityPage';
@@ -96,6 +98,8 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
+
+  useGoShortcuts(setRoute, isPlatform(me));
 
   // Phase E2 에서 tenant 로딩 추가
   const tenant = null;
