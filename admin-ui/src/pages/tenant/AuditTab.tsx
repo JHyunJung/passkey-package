@@ -21,7 +21,6 @@ const pretty = (e: AuditEvent) => JSON.stringify(e.payload ?? {}, null, 2);
 export default function AuditTab({ tenant, isPlatformOperator = false }: { tenant: Tenant; isPlatformOperator?: boolean }) {
   const [items, setItems] = useState<AuditEvent[]>([]);
   const [total, setTotal] = useState<number | undefined>(undefined);
-  const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<Set<string>>(new Set());
@@ -33,12 +32,19 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
   const [showVerify, setShowVerify] = useState(false);
   const [open, setOpen] = useState<AuditEvent | null>(null);
   const rangeRef = useRef<{ from: string; to: string } | null>(null); // 더 보기도 같은 구간으로
+  const genRef = useRef(0);       // 초기 로드마다 증가 — 늦게 온 더 보기 응답 폐기용
+  const pageRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
     const range = windowRange(WINDOWS[win].hours);
     rangeRef.current = range;
+    genRef.current += 1;
+    pageRef.current = 0;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
     setLoading(true);
     setExpanded(null);
     auditApi.list(tenant.id, 0, PAGE_SIZE, range)
@@ -46,7 +52,7 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
         if (cancelled) return;
         setItems(res.items);
         setTotal(res.total);
-        setPage(0);
+        pageRef.current = 0;
         setHasMore(res.items.length === PAGE_SIZE);
       })
       .catch((e: unknown) => {
@@ -57,18 +63,24 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
   }, [tenant.id, win]);
 
   async function loadMore() {
-    if (!rangeRef.current) return;
-    const next = page + 1;
+    if (!rangeRef.current || loadingMoreRef.current) return;
+    const gen = genRef.current;
+    const next = pageRef.current + 1;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const res = await auditApi.list(tenant.id, next, PAGE_SIZE, rangeRef.current);
+      if (gen !== genRef.current) return; // 기간·테넌트가 바뀜 — 이전 응답 폐기
       setItems((prev) => [...prev, ...res.items]);
-      setPage(next);
+      pageRef.current = next;
       setHasMore(res.items.length === PAGE_SIZE);
     } catch (e: unknown) {
-      toast({ kind: 'err', title: 'audit 로드 실패', message: e instanceof Error ? e.message : String(e) });
+      if (gen === genRef.current) toast({ kind: 'err', title: 'audit 로드 실패', message: e instanceof Error ? e.message : String(e) });
     } finally {
-      setLoadingMore(false);
+      if (gen === genRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
     }
   }
 

@@ -129,4 +129,23 @@ describe('AuditTab V2', () => {
     expect(await screen.findByText('위변조 0건')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Hash chain 검증' })).toBeNull();
   });
+
+  it('더 보기 진행 중 기간을 바꾸면 이전 기간의 응답은 버려진다', async () => {
+    const first = Array.from({ length: 50 }, (_, i) => ev(`a${i}`));
+    let resolveStale: (v: unknown) => void = () => {};
+    const stale = new Promise((r) => { resolveStale = r; });
+    api.list
+      .mockResolvedValueOnce(resp(first))
+      .mockReturnValueOnce(stale)
+      .mockResolvedValueOnce(resp([ev('n0', { eventType: 'AUTH_SUCCESS' })]));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '더 보기' }));
+    fireEvent.click(within(screen.getByRole('group', { name: '기간' })).getByRole('button', { name: '7일' }));
+    await screen.findByText('최근 1건');
+    resolveStale(resp([ev('stale0', { eventType: 'STALE_EVENT' })]));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('STALE_EVENT', { selector: 'tbody .badge' })).toBeNull();
+    expect(screen.getByText('최근 1건')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
+  });
 });
