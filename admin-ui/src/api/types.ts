@@ -6,6 +6,10 @@ export interface Me {
   mfaEnabled: boolean;
   mfaRequired: boolean;
   sessionIdleTimeoutMinutes: number;
+  /** 스펙 §6 ④ — MFA 등록 시각(ISO). 서버가 내려주기 전까지 undefined → 내 계정 "등록일" 줄을 렌더하지 않는다. */
+  mfaEnrolledAt?: string;
+  /** 스펙 §6 ④ — 남은 복구 코드 수(최대 10). undefined → "남은 복구 코드" 줄을 렌더하지 않는다. */
+  recoveryCodesRemaining?: number;
 }
 
 export interface TenantView {

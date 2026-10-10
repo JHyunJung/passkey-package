@@ -43,7 +43,7 @@ function errMsg(e: unknown): string {
 
 // ── AdminUsersTab ─────────────────────────────────────────────────────────────
 
-export default function AdminUsersTab() {
+export default function AdminUsersTab({ onPendingCountChange }: { onPendingCountChange?: (n: number) => void } = {}) {
   const [users, setUsers] = useState<AdminUserView[]>([]);
   const [requests, setRequests] = useState<SignupRequestView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +57,7 @@ export default function AdminUsersTab() {
       const [list, pending] = await Promise.all([adminUsersApi.list(), signupRequestsApi.list()]);
       setUsers(list);
       setRequests(pending);
+      onPendingCountChange?.(pending.length);
     } catch (e: unknown) {
       toast({ kind: 'err', title: 'Admin 사용자 로드 실패', message: errMsg(e) });
     } finally {

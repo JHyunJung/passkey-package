@@ -1,3 +1,4 @@
+// admin-ui/src/pages/settings/RecoveryCodesModal.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RecoveryCodesModal } from './RecoveryCodesModal';
@@ -13,6 +14,7 @@ vi.mock('@/lib/clipboard', () => ({
 
 const CODES = ['3f9a-2b71', '8c4d-9e02', 'a17b-44ff', '6620-d3a9', 'e591-7c08',
                '1bd4-aa3e', '9038-5f6c', '72e1-0b8d', 'c4a6-118f', '5d20-93b7'];
+const TITLE = '복구 코드 — 지금만 표시됩니다';
 
 describe('RecoveryCodesModal', () => {
   beforeEach(() => {
@@ -33,9 +35,12 @@ describe('RecoveryCodesModal', () => {
     await waitFor(() => expect(screen.getByText(/복사에 실패했습니다/)).toBeInTheDocument());
   });
 
-  it('renders all codes', () => {
+  it('renders all codes, numbered 01–10', () => {
     render(<RecoveryCodesModal codes={CODES} onClose={() => {}} />);
     for (const c of CODES) expect(screen.getByText(c)).toBeInTheDocument();
+    expect(screen.getByText('01')).toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: '복구 코드 목록' }).children).toHaveLength(10);
   });
 
   it('close button is disabled until saved-checkbox is checked', () => {
@@ -43,10 +48,29 @@ describe('RecoveryCodesModal', () => {
     render(<RecoveryCodesModal codes={CODES} onClose={onClose} />);
     const closeBtn = screen.getByRole('button', { name: /닫기|체크/ });
     expect(closeBtn).toBeDisabled();
-    fireEvent.click(screen.getByRole('checkbox'));
+    expect(closeBtn).toHaveTextContent('닫기 · 체크 필요');
+    fireEvent.click(screen.getByRole('checkbox', { name: '안전한 곳에 저장했습니다.' }));
     expect(closeBtn).not.toBeDisabled();
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('alertdialog 이고 Escape·스크림 클릭으로 닫히지 않는다 (체크 후에도)', () => {
+    const onClose = vi.fn();
+    render(<RecoveryCodesModal codes={CODES} onClose={onClose} />);
+    expect(screen.getByRole('alertdialog', { name: TITLE })).toHaveAttribute('aria-modal', 'true');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.mouseDown(document.querySelector('.scrim')!);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.mouseDown(document.querySelector('.scrim')!);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('복구 코드 일러스트는 장식(alt="")', () => {
+    render(<RecoveryCodesModal codes={CODES} onClose={() => {}} />);
+    const img = screen.getByRole('alertdialog').querySelector('img');
+    expect(img).toHaveAttribute('alt', '');
   });
 
   it('download filename includes sanitized account from accountEmail', () => {
