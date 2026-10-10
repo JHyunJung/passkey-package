@@ -198,9 +198,9 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
         <Tabs ariaLabel="Tenant 탭" items={tabs} active={currentTab} onChange={onTabChange} />
       </div>
       {currentTab === 'overview' && <TenantOverview tenant={tenant} isPlatformOperator={platform} expiringKeyCount={expiringKeyCount} />}
-      {currentTab === 'webauthn' && <WebauthnConfigTab tenant={tenant} />}
+      {currentTab === 'webauthn' && <WebauthnConfigTab tenant={tenant} onSaved={onReload} />}
       {currentTab === 'aaguid' && <AaguidPolicyTab tenant={tenant} onSaved={setAaguidPolicy} />}
-      {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} />}
+      {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} onChanged={onReload} />}
       {currentTab === 'credentials' && <CredentialsTab tenant={tenant} />}
       {currentTab === 'audit' && <AuditTab tenant={tenant} isPlatformOperator={platform} />}
       {currentTab === 'funnel' && <FunnelTab tenant={tenant} />}
@@ -220,22 +220,30 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
+  // 현재 주소의 id. A → B 로 빠르게 이동했을 때 늦게 온 A 응답을 버린다.
+  const currentId = useRef(id);
+  currentId.current = id;
+
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     setLoading(true);
     tenantsApi.get(id)
-      .then(setTenant)
+      .then((t) => { if (!cancelled) setTenant(t); })
       .catch((e: unknown) => {
+        if (cancelled) return;
         const msg = e instanceof Error ? e.message : String(e);
         toast({ kind: 'err', title: 'Tenant 로드 실패', message: msg });
         setTenant(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [id]);
 
   const reload = () => {
     if (!id) return;
-    tenantsApi.get(id).then(setTenant).catch(() => {});
+    const requested = id;
+    tenantsApi.get(requested).then((t) => { if (currentId.current === requested) setTenant(t); }).catch(() => {});
   };
 
   if (loading) return <div className="page"><p className="muted" style={{ margin: 0 }}>Loading…</p></div>;

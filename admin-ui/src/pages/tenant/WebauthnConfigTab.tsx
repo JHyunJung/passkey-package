@@ -118,9 +118,10 @@ const AT_OPTIONS = (['NONE', 'INDIRECT', 'DIRECT', 'ENTERPRISE'] as const).map((
 
 // ── WebauthnConfigTab ─────────────────────────────────────────────────────────
 
-type WebauthnConfigTabProps = { tenant: Tenant };
+/** onSaved: 저장 성공 뒤 호출 — tenant 셸(개요 WebAuthn 요약)을 갱신한다. */
+type WebauthnConfigTabProps = { tenant: Tenant; onSaved?: () => void };
 
-export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
+export default function WebauthnConfigTab({ tenant, onSaved }: WebauthnConfigTabProps) {
   const [cfg, setCfg] = useState<ConfigWithMds | null>(null);
   const [draft, setDraft] = useState<ConfigWithMds | null>(null);
   const [apkInput, setApkInput] = useState('');
@@ -212,6 +213,7 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
       setDraft({ ...updated });
       setShowDiff(false);
       toast({ kind: 'ok', title: 'WebAuthn config 저장됨', message: `${diffChanges.length}개 필드가 업데이트되었습니다.` });
+      onSaved?.();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast({ kind: 'err', title: '저장 실패', message: msg });

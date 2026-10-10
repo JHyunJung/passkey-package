@@ -11,13 +11,17 @@ vi.mock('@/api/apiKeys', () => ({ apiKeysApi: { list: vi.fn() } }));
 vi.mock('@/pages/tenant/TenantOverview', () => ({
   default: (p: { expiringKeyCount?: number; isPlatformOperator?: boolean }) => <div>OVERVIEW expiring={String(p.expiringKeyCount)} platform={String(p.isPlatformOperator)}</div>,
 }));
-vi.mock('@/pages/tenant/WebauthnConfigTab', () => ({ default: () => <div>WEBAUTHN TAB</div> }));
+vi.mock('@/pages/tenant/WebauthnConfigTab', () => ({
+  default: (p: { onSaved?: () => void }) => <button type="button" onClick={() => p.onSaved?.()}>WEBAUTHN 저장 시뮬레이션</button>,
+}));
 vi.mock('@/pages/tenant/AaguidPolicyTab', () => ({
   default: (p: { onSaved?: (x: unknown) => void }) => (
     <button type="button" onClick={() => p.onSaved?.({ mode: 'ALLOWLIST', mdsStrict: false, entries: [{ aaguid: 'a', note: null, mdsName: 'YubiKey 5' }] })}>AAGUID 저장 시뮬레이션</button>
   ),
 }));
-vi.mock('@/pages/tenant/ApiKeysTab', () => ({ default: () => <div>APIKEYS TAB</div> }));
+vi.mock('@/pages/tenant/ApiKeysTab', () => ({
+  default: (p: { onChanged?: () => void }) => <button type="button" onClick={() => p.onChanged?.()}>APIKEYS 발급 시뮬레이션</button>,
+}));
 vi.mock('@/pages/tenant/CredentialsTab', () => ({ default: () => <div>CREDENTIALS TAB</div> }));
 vi.mock('@/pages/tenant/AuditTab', () => ({ default: (p: { isPlatformOperator: boolean }) => <div>AUDIT TAB platform={String(p.isPlatformOperator)}</div> }));
 vi.mock('@/pages/tenant/FunnelTab', () => ({ default: () => <div>FUNNEL TAB</div> }));
@@ -25,7 +29,9 @@ vi.mock('@/pages/tenant/FunnelTab', () => ({ default: () => <div>FUNNEL TAB</div
 import { tenantsApi } from '@/api/tenants';
 import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import { apiKeysApi } from '@/api/apiKeys';
-import { TenantDetailPage, fmtDateKst } from './TenantDetailPage';
+import TenantDetailRoute, { TenantDetailPage, fmtDateKst } from './TenantDetailPage';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import '@/test/renderWithDataRouter';
 
 const DAY = 86_400_000;
 const T: Tenant = {
@@ -192,5 +198,36 @@ describe('테넌트 정지 / 정지 해제', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: '정지 해제' }));
     fireEvent.click(screen.getByRole('button', { name: '취소' }));
     expect(tenantsApi.activate).not.toHaveBeenCalled();
+  });
+});
+
+describe('편집 후 tenant 셸 갱신 (M5)', () => {
+  it('WebAuthn 저장 후 onReload — 개요 요약이 새 값을 보인다', () => {
+    const { onReload } = renderPage({ tab: 'webauthn' });
+    fireEvent.click(screen.getByRole('button', { name: 'WEBAUTHN 저장 시뮬레이션' }));
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+  it('API 키 발급·회전·회수 후 onReload — 탭 점과 키 수가 갱신된다', () => {
+    const { onReload } = renderPage({ tab: 'apikeys' });
+    fireEvent.click(screen.getByRole('button', { name: 'APIKEYS 발급 시뮬레이션' }));
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TenantDetailRoute (M14)', () => {
+  it('A → B 로 빠르게 이동하면 늦게 온 A 응답을 B 주소에 그리지 않는다', async () => {
+    let resolveA: (t: Tenant) => void = () => {};
+    (tenantsApi.get as ReturnType<typeof vi.fn>).mockImplementation((id: string) =>
+      id === 'a' ? new Promise((r) => { resolveA = r; }) : Promise.resolve({ ...T, id: 'b', name: 'Beta' }));
+    const router = createMemoryRouter(
+      [{ path: '/tenants/:id', element: <ToastHost><TenantDetailRoute me={PLATFORM} /></ToastHost> }],
+      { initialEntries: ['/tenants/a'] },
+    );
+    render(<RouterProvider router={router} />);
+    await act(async () => { await router.navigate('/tenants/b'); });
+    expect(await screen.findByRole('heading', { name: 'Beta' })).toBeInTheDocument();
+    await act(async () => { resolveA({ ...T, id: 'a', name: 'Alpha' }); });
+    expect(screen.queryByRole('heading', { name: 'Alpha' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Beta' })).toBeInTheDocument();
   });
 });

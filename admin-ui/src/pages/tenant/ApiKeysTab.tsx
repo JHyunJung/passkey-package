@@ -32,17 +32,22 @@ const EXPIRY_OPTIONS: { months: number | null; label: string }[] = [
   { months: null, label: '무기한' },
 ];
 
-type Issued = { key: ApiKey; plaintext: string; oldKeyExpiresAt?: string };
+/** expiryUnknown: 회전 응답에는 새 키의 만료가 없다 — 목록을 다시 읽어 찾을 때까지 만료 줄을 숨긴다. */
+type Issued = { key: ApiKey; plaintext: string; oldKeyExpiresAt?: string; expiryUnknown?: boolean };
 
 // ── ApiKeysTab ────────────────────────────────────────────────────────────────
 
-export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
+/** onChanged: 발급·회전·회수 성공 뒤 호출 — tenant 셸(키 수 KPI·탭 점 배지)을 갱신한다. */
+export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onChanged?: () => void }) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [issued, setIssued] = useState<Issued | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const [rotating, setRotating] = useState<ApiKey | null>(null);
+  // 발급·회전·회수 진행 중 표시. ref 는 같은 틱의 연타(두 번째 클릭)까지 막는다.
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const toast = useToast();
   // 평문 키는 이 다이얼로그에서 한 번만 보인다 — 닫기 전 이동·새로고침을 막는다.
   const leaveGuard = useUnsavedGuard(issued !== null, {
@@ -50,12 +55,15 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
     body: '이동하면 발급된 키를 다시 볼 수 없습니다. 키는 서버에서 계속 유효합니다.',
   });
 
-  async function reload() {
+  async function reload(): Promise<ApiKey[] | null> {
     setLoading(true);
     try {
-      setKeys(await apiKeysApi.list(tenant.id));
+      const list = await apiKeysApi.list(tenant.id);
+      setKeys(list);
+      return list;
     } catch (e: unknown) {
       toast({ kind: 'err', title: 'API key 로드 실패', message: e instanceof Error ? e.message : String(e) });
+      return null;
     } finally {
       setLoading(false);
     }
@@ -63,37 +71,64 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
 
   useEffect(() => { void reload(); }, [tenant.id]);
 
-  async function handleIssue(name: string, scopes: string[], expiresInMonths: number | null) {
+  async function guarded(run: () => Promise<void>) {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
     try {
-      const result = await apiKeysApi.create(tenant.id, name, scopes, expiresInMonths);
-      setShowNew(false);
-      setIssued(result);
-      await reload();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '발급 실패', message: e instanceof Error ? e.message : String(e) });
+      await run();
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   }
 
-  async function handleRevoke(k: ApiKey) {
-    try {
-      await apiKeysApi.revoke(k.id);
-      toast({ kind: 'warn', title: 'API key가 회수되었습니다.', message: `${k.prefix} · ${k.name}` });
-      setRevoking(null);
-      await reload();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '회수 실패', message: e instanceof Error ? e.message : String(e) });
-    }
+  function handleIssue(name: string, scopes: string[], expiresInMonths: number | null) {
+    return guarded(async () => {
+      try {
+        const result = await apiKeysApi.create(tenant.id, name, scopes, expiresInMonths);
+        setShowNew(false);
+        setIssued(result);
+        onChanged?.();
+        await reload();
+      } catch (e: unknown) {
+        toast({ kind: 'err', title: '발급 실패', message: e instanceof Error ? e.message : String(e) });
+      }
+    });
   }
 
-  async function handleRotate(k: ApiKey) {
-    try {
-      const res = await apiKeysApi.rotate(k.id);
-      setRotating(null);
-      setIssued({ key: { ...k, prefix: res.prefix, scopes: res.scopes }, plaintext: res.plaintextKey, oldKeyExpiresAt: res.oldKeyExpiresAt });
-      await reload();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '회전 실패', message: e instanceof Error ? e.message : String(e) });
-    }
+  function handleRevoke(k: ApiKey) {
+    return guarded(async () => {
+      try {
+        await apiKeysApi.revoke(k.id);
+        toast({ kind: 'warn', title: 'API key가 회수되었습니다.', message: `${k.prefix} · ${k.name}` });
+        setRevoking(null);
+        onChanged?.();
+        await reload();
+      } catch (e: unknown) {
+        toast({ kind: 'err', title: '회수 실패', message: e instanceof Error ? e.message : String(e) });
+      }
+    });
+  }
+
+  function handleRotate(k: ApiKey) {
+    return guarded(async () => {
+      try {
+        const res = await apiKeysApi.rotate(k.id);
+        setRotating(null);
+        // 회전 응답의 id 는 새 키다. 만료는 응답에 없으므로 목록에서 새 키를 찾을 때까지 숨긴다(이전 키 만료를 보이지 않음).
+        setIssued({
+          key: { ...k, id: res.id, prefix: res.prefix, scopes: res.scopes, createdAt: new Date().toISOString(), lastUsedAt: null },
+          plaintext: res.plaintextKey, oldKeyExpiresAt: res.oldKeyExpiresAt, expiryUnknown: true,
+        });
+        onChanged?.();
+        const list = await reload();
+        const fresh = list?.find((x) => x.id === res.id);
+        if (fresh) setIssued((prev) => (prev && prev.key.id === res.id ? { ...prev, key: fresh, expiryUnknown: false } : prev));
+      } catch (e: unknown) {
+        toast({ kind: 'err', title: '회전 실패', message: e instanceof Error ? e.message : String(e) });
+      }
+    });
   }
 
   async function copyPrefix(k: ApiKey) {
@@ -161,10 +196,10 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
         />
       </Card>
 
-      <NewKeyDialog open={showNew} onClose={() => setShowNew(false)} onIssue={handleIssue} />
+      <NewKeyDialog open={showNew} busy={busy} onClose={() => setShowNew(false)} onIssue={(n, s, m) => void handleIssue(n, s, m)} />
       <IssuedKeyDialog issued={issued} onClose={() => setIssued(null)} />
-      <RotateKeyDialog k={rotating} onClose={() => setRotating(null)} onConfirm={handleRotate} />
-      <RevokeKeyDialog k={revoking} onClose={() => setRevoking(null)} onConfirm={handleRevoke} />
+      <RotateKeyDialog k={rotating} busy={busy} onClose={() => setRotating(null)} onConfirm={(k) => void handleRotate(k)} />
+      <RevokeKeyDialog k={revoking} busy={busy} onClose={() => setRevoking(null)} onConfirm={(k) => void handleRevoke(k)} />
       {leaveGuard}
     </div>
   );
@@ -185,8 +220,9 @@ function ExpiryCell({ k }: { k: ApiKey }) {
 
 // ── 새 키 발급 ────────────────────────────────────────────────────────────────
 
-function NewKeyDialog({ open, onClose, onIssue }: {
+function NewKeyDialog({ open, busy = false, onClose, onIssue }: {
   open: boolean;
+  busy?: boolean;
   onClose: () => void;
   onIssue: (name: string, scopes: string[], expiresInMonths: number | null) => void;
 }) {
@@ -198,7 +234,7 @@ function NewKeyDialog({ open, onClose, onIssue }: {
     setScopes((prev) => (prev.includes(v) ? prev.filter((s) => s !== v) : [...prev, v]));
   }
   function submit() {
-    if (!name || scopes.length === 0) return;
+    if (busy || !name || scopes.length === 0) return;
     onIssue(name, scopes, expiresInMonths);
     setName('');
     setScopes(['registration', 'authentication']);
@@ -210,7 +246,7 @@ function NewKeyDialog({ open, onClose, onIssue }: {
     <Dialog open={open} onClose={onClose} title="새 API key 발급" sub="RP 서버가 Passkey API 를 호출할 때 쓰는 키입니다."
       footer={<>
         <Button onClick={onClose}>취소</Button>
-        <Button variant="primary" disabled={!name || scopes.length === 0} onClick={submit}>발급</Button>
+        <Button variant="primary" disabled={busy || !name || scopes.length === 0} onClick={submit}>발급</Button>
       </>}>
       <div>
         <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -282,7 +318,7 @@ function IssuedKeyDialog({ issued, onClose }: { issued: Issued | null; onClose: 
       <KvList boxed keyWidth={80} items={[
         { k: '이름', v: <>{issued.key.name} <span style={{ marginLeft: 6 }}><Badge tone="ok">발급 완료</Badge></span></> },
         { k: 'prefix', v: issued.key.prefix, mono: true },
-        { k: '만료', v: issued.key.expiresAt ? ymd(issued.key.expiresAt) : '무기한' },
+        ...(issued.expiryUnknown ? [] : [{ k: '만료', v: issued.key.expiresAt ? ymd(issued.key.expiresAt) : '무기한' }]),
         { k: 'id', v: issued.key.id, mono: true },
       ]} />
       <SecretBox value={issued.plaintext} />
@@ -296,14 +332,14 @@ function IssuedKeyDialog({ issued, onClose }: { issued: Issued | null; onClose: 
 
 // ── 회수 (위험) — 취소 기본 포커스 ───────────────────────────────────────────
 
-function RevokeKeyDialog({ k, onClose, onConfirm }: { k: ApiKey | null; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
+function RevokeKeyDialog({ k, busy = false, onClose, onConfirm }: { k: ApiKey | null; busy?: boolean; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   if (!k) return null;
   return (
     <Dialog open onClose={onClose} role="alertdialog" title="API key를 회수하시겠습니까?" initialFocusRef={cancelRef}
       footer={<>
         <button ref={cancelRef} type="button" className="btn" onClick={onClose}>취소</button>
-        <Button variant="danger-solid" onClick={() => onConfirm(k)}>회수</Button>
+        <Button variant="danger-solid" disabled={busy} onClick={() => onConfirm(k)}>회수</Button>
       </>}>
       <KvList keyWidth={80} items={[
         { k: 'prefix', v: k.prefix, mono: true },
@@ -317,13 +353,13 @@ function RevokeKeyDialog({ k, onClose, onConfirm }: { k: ApiKey | null; onClose:
 
 // ── 회전 — 기존 키 24시간 겹침 타임라인 ───────────────────────────────────────
 
-function RotateKeyDialog({ k, onClose, onConfirm }: { k: ApiKey | null; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
+function RotateKeyDialog({ k, busy = false, onClose, onConfirm }: { k: ApiKey | null; busy?: boolean; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
   if (!k) return null;
   return (
     <Dialog open onClose={onClose} title="API key를 회전하시겠습니까?"
       footer={<>
         <Button onClick={onClose}>취소</Button>
-        <Button variant="primary" onClick={() => onConfirm(k)}>회전 실행</Button>
+        <Button variant="primary" disabled={busy} onClick={() => onConfirm(k)}>회전 실행</Button>
       </>}>
       <KvList keyWidth={80} items={[
         { k: 'prefix', v: k.prefix, mono: true },

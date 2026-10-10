@@ -20,11 +20,12 @@ const CFG = {
   userVerification: 'REQUIRED' as const, attestationConveyance: 'NONE' as const, timeoutMs: 60000, _mdsRequired: true,
 };
 
+const onSaved = vi.fn();
 function Host() {
   const nav = useNavigate();
   return (
     <ToastHost>
-      <WebauthnConfigTab tenant={T} />
+      <WebauthnConfigTab tenant={T} onSaved={onSaved} />
       <button type="button" onClick={() => nav('/tenants/t-1?tab=aaguid')}>AAGUID 탭으로</button>
     </ToastHost>
   );
@@ -136,6 +137,7 @@ describe('WebauthnConfigTab V2', () => {
     await waitFor(() => expect(bar()).toBeNull());
     expect(screen.queryByRole('dialog', { name: '변경 사항 확인' })).toBeNull();
     expect(screen.getByText('WebAuthn config 저장됨')).toBeInTheDocument();
+    expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
   it('diff 가 비면 "변경 사항이 없습니다."', async () => {

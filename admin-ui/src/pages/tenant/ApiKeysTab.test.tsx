@@ -19,7 +19,7 @@ const key = (p: Partial<ApiKey>): ApiKey => ({
   id: 'k', prefix: 'pk_live_ab', name: 'prod', status: 'ACTIVE', createdAt: iso(-10), lastUsedAt: null,
   scopes: ['registration'], expiresAt: null, ...p,
 });
-const renderTab = () => renderWithDataRouter(<ToastHost><ApiKeysTab tenant={tenant} /></ToastHost>, { initialPath: '/tenants/t1?tab=apikeys' });
+const renderTab = (onChanged?: () => void) => renderWithDataRouter(<ToastHost><ApiKeysTab tenant={tenant} onChanged={onChanged} /></ToastHost>, { initialPath: '/tenants/t1?tab=apikeys' });
 
 describe('ApiKeysTab V2', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -126,5 +126,53 @@ describe('ApiKeysTab V2', () => {
     expect(router.state.location.pathname).toBe('/tenants/t1');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '머무르기' })); });
     expect(screen.getByText('pk_live_ab.secret')).toBeInTheDocument();
+  });
+
+  it('회전 다이얼로그는 새 키의 id 를 보이고, 만료는 새 키를 다시 읽은 값(이전 키 만료일 아님)', async () => {
+    const oldKey = key({ id: 'a', name: 'prod', expiresAt: iso(5) });
+    const newKey = key({ id: 'a2', name: 'prod', expiresAt: '2028-10-11T00:00:00Z' });
+    api.list.mockResolvedValueOnce([oldKey]).mockResolvedValue([oldKey, newKey]);
+    api.rotate.mockResolvedValue({ id: 'a2', plaintextKey: 'pk_live_ab.new', prefix: 'pk_live_ab', scopes: ['registration'], oldKeyExpiresAt: iso(1) });
+    const onChanged = vi.fn();
+    renderTab(onChanged);
+    fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '회전' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'API key를 회전하시겠습니까?' })).getByRole('button', { name: '회전 실행' }));
+    const issued = await screen.findByRole('alertdialog', { name: /새 API key가 발급되었습니다/ });
+    expect(within(issued).getByText('a2')).toBeInTheDocument();
+    expect(within(issued).queryByText(/^a$/)).toBeNull();
+    expect(await within(issued).findByText('2028-10-11')).toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('발급 버튼 연타는 키를 한 번만 발급한다', async () => {
+    api.list.mockResolvedValue([]);
+    let resolve: (v: unknown) => void = () => {};
+    api.create.mockReturnValue(new Promise((r) => { resolve = r; }));
+    const onChanged = vi.fn();
+    renderTab(onChanged);
+    fireEvent.click(await screen.findByRole('button', { name: '새 키 발급' }));
+    fireEvent.change(screen.getByLabelText('용도 (이름)'), { target: { value: 'staging' } });
+    const issue = screen.getByRole('button', { name: '발급' });
+    fireEvent.click(issue);
+    fireEvent.click(issue);
+    expect(api.create).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve({ key: key({ id: 'n1', name: 'staging' }), plaintext: 'pk_live_ab.secret' }); });
+    expect(await screen.findByRole('alertdialog', { name: /새 API key가 발급되었습니다/ })).toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('회수·회전 확인 버튼도 처리 중에는 다시 누를 수 없다', async () => {
+    api.list.mockResolvedValue([key({ id: 'a', name: 'prod' })]);
+    api.revoke.mockReturnValue(new Promise(() => {}));
+    api.rotate.mockReturnValue(new Promise(() => {}));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '회수' }));
+    const revokeBtn = within(screen.getByRole('alertdialog')).getByRole('button', { name: '회수' });
+    fireEvent.click(revokeBtn);
+    fireEvent.click(revokeBtn);
+    expect(api.revoke).toHaveBeenCalledTimes(1);
+    expect(revokeBtn).toBeDisabled();
   });
 });
