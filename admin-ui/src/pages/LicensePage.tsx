@@ -77,7 +77,7 @@ export default function LicensePage() {
     <div className="page">
       <PageHeader title="License" sub="온프레미스 라이선스 상태 및 상세 정보." />
 
-      <div className="stack-4" style={{ maxWidth: 820 }}>
+      <div className="stack-5" style={{ maxWidth: 820 }}>
         {/* 상태 헤드라인 */}
         <Card>
           <div className="row" style={{ gap: 20, padding: '20px 24px' }}>
@@ -103,16 +103,14 @@ export default function LicensePage() {
         {/* 상세 */}
         <Card>
           <CardHeader title="상세" />
-          <div style={{ padding: '4px 24px 20px' }}>
-            <dl className="kv">
-              {rows.map((r) => (
-                <Fragment key={r.k}>
-                  <dt>{r.k}</dt>
-                  <dd>{r.v}</dd>
-                </Fragment>
-              ))}
-            </dl>
-          </div>
+          <dl className="kv kv--rows">
+            {rows.map((r) => (
+              <Fragment key={r.k}>
+                <dt>{r.k}</dt>
+                <dd>{r.v}</dd>
+              </Fragment>
+            ))}
+          </dl>
         </Card>
       </div>
     </div>

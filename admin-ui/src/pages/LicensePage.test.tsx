@@ -61,6 +61,14 @@ describe('LicensePage V2', () => {
     expect(screen.queryByText('Grace remaining')).toBeNull();
   });
 
+  it('V2 레이아웃: 카드 간격 20px(stack-5), 상세는 행 구분선 kv(kv--rows)', async () => {
+    vi.mocked(licenseApi.get).mockResolvedValue(base);
+    const { container } = render(<LicensePage />);
+    await screen.findByRole('heading', { name: '상세' });
+    expect(container.querySelector('.stack-5')).not.toBeNull();
+    expect(container.querySelector('dl')).toHaveClass('kv', 'kv--rows');
+  });
+
   it('NETWORK_GRACE: 경고 배지와 Grace remaining 행', async () => {
     vi.mocked(licenseApi.get).mockResolvedValue({ ...base, state: 'NETWORK_GRACE', graceRemainingHours: 12 });
     render(<LicensePage />);

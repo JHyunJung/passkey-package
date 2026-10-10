@@ -17,6 +17,7 @@ a:hover { color: var(--brand-900); }
 .stack-2 { display: flex; flex-direction: column; gap: 8px; }
 .stack-3 { display: flex; flex-direction: column; gap: 12px; }
 .stack-4 { display: flex; flex-direction: column; gap: 16px; }
+.stack-5 { display: flex; flex-direction: column; gap: 20px; }
 .stack-6 { display: flex; flex-direction: column; gap: 24px; }
 .stack-8 { display: flex; flex-direction: column; gap: 32px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
@@ -185,9 +186,13 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .desc-box { border-radius: 8px; background: var(--canvas); padding: 10px 12px; font-size: 12px; line-height: 18px; color: var(--ink-2); }
 .kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px 16px; font-size: 13px; margin: 0; }
 .kv dt { color: var(--mute); }
-.kv dd { margin: 0; min-width: 0; }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .kv--4 { grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr); }
-@media (max-width: 760px) { .kv, .kv--4 { grid-template-columns: minmax(0, 1fr); } }
+/* 행 구분선 kv — 카드 본문을 꽉 채우는 상세 표(License). 200px 키 열, 행마다 하단 구분선. */
+.kv--rows { grid-template-columns: 200px minmax(0, 1fr); gap: 0; }
+.kv--rows > dt, .kv--rows > dd { padding: 14px 20px; border-bottom: 1px solid var(--line-soft); }
+.kv--rows > dt:last-of-type, .kv--rows > dd:last-of-type { border-bottom: 0; }
+@media (max-width: 760px) { .kv, .kv--4 { grid-template-columns: minmax(0, 1fr); } .kv--rows > dt { border-bottom: 0; padding-bottom: 0; } }
 @media (max-width: 900px) { .set { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── otp ────────────────────────────── */
@@ -285,9 +290,10 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 
 /* ── auth shell ─────────────────────── */
 .auth { min-height: 100vh; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 48px; padding: 56px 24px; box-sizing: border-box; background: var(--canvas); }
-.auth__col { display: flex; flex-direction: column; align-items: center; gap: 16px; flex: 0 1 420px; }
+.auth__col { display: flex; flex-direction: column; align-items: center; gap: 16px; flex: 0 1 400px; }
+.auth__col--wide { flex-basis: 420px; }
 .auth__logo { width: 140px; height: auto; }
-.auth-card { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; box-shadow: var(--sh-1); }
+.auth-card { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; box-shadow: var(--sh-1); }
 
 /* ── toast ──────────────────────────── */
 .toast-rack { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }

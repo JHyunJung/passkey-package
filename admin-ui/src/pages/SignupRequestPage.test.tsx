@@ -21,6 +21,8 @@ describe('SignupRequestPage V2', () => {
     const { container } = render(<SignupRequestPage />);
     expect(screen.getByAltText('CROSSCERT')).toHaveClass('auth__logo');
     expect(container.querySelector('.auth .auth-card')).not.toBeNull();
+    // V2 아트보드: 가입 요청만 420px 열(나머지 인증 화면은 400px)
+    expect(container.querySelector('.auth__col')).toHaveClass('auth__col--wide');
     expect(screen.getByRole('heading', { name: '관리자 계정 가입 요청' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '← 로그인으로' }).closest('.auth-card')).toBeNull();
   });

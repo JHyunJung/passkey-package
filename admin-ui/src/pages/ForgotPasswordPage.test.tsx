@@ -23,6 +23,7 @@ describe('ForgotPasswordPage V2', () => {
     const { container } = render(<ForgotPasswordPage />);
     expect(screen.getByAltText('CROSSCERT')).toHaveClass('auth__logo');
     expect(container.querySelector('.auth .auth-card')).not.toBeNull();
+    expect(container.querySelector('.auth__col')).not.toHaveClass('auth__col--wide');
     const back = screen.getByRole('link', { name: '← 로그인으로' });
     expect(back).toHaveAttribute('href', '/admin');
     expect(back.closest('.auth-card')).toBeNull();

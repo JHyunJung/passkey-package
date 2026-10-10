@@ -45,7 +45,7 @@ export default function SignupRequestPage() {
 
   return (
     <main className="auth">
-      <div className="auth__col">
+      <div className="auth__col auth__col--wide">
         <img className="auth__logo" src="/admin/crosscert-logo-transparent.png" alt="CROSSCERT" />
         <div className="auth-card" style={done ? { alignItems: 'center', textAlign: 'center' } : { gap: 18 }}>
           {done ? (
