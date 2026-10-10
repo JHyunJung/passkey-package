@@ -1,20 +1,20 @@
-import { useState, useEffect } from 'react';
+// admin-ui/src/pages/tenant/WebauthnConfigTab.tsx
+import { useState, useEffect, CSSProperties } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Dialog, useToast } from '@/ui';
 import { webauthnApi } from '@/api/webauthn';
 import type { Tenant, WebauthnConfig } from '@/api/designTypes';
 import { apkKeyHashFromFingerprint, isApkKeyHashOrigin, APK_KEY_HASH_PREFIX } from '@/lib/apkKeyHash';
+import { Alert, Badge, Button, Card, CardHeader, ChipInput, Dialog, SaveBar, Segmented, useToast, useUnsavedGuard } from '@/ui';
+import { SetRow } from './SetRow';
 
 // webauthnApi.get returns WebauthnConfig + _mdsRequired. Use this locally.
 type ConfigWithMds = WebauthnConfig & { _mdsRequired: boolean };
+type Change = { key: string; from: unknown; to: unknown };
 
 // ── util ──────────────────────────────────────────────────────────────────────
 
-function diffObjects(
-  a: WebauthnConfig,
-  b: WebauthnConfig,
-): { key: string; from: unknown; to: unknown }[] {
-  const out: { key: string; from: unknown; to: unknown }[] = [];
+function diffObjects(a: WebauthnConfig, b: WebauthnConfig): Change[] {
+  const out: Change[] = [];
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof WebauthnConfig>;
   keys.forEach((k) => {
     // Skip internal fields not shown in the UI
@@ -24,6 +24,14 @@ function diffObjects(
     }
   });
   return out;
+}
+
+const FIELD_ORDER = ['rpName', 'timeoutMs', 'origins', 'userVerification', 'attestationConveyance', 'formats'];
+
+/** SaveBar 요약용: 바뀐 필드 이름을 화면 순서로. */
+export function changedFieldNames(changes: { key: string }[]): string[] {
+  const keys = changes.map((c) => c.key);
+  return [...FIELD_ORDER.filter((k) => keys.includes(k)), ...keys.filter((k) => !FIELD_ORDER.includes(k))];
 }
 
 // origin 입력값을 검증한다. WebAuthn 스펙상 origin 의 host 는 rpId 와 같거나
@@ -70,11 +78,7 @@ export function validateOrigin(input: string, rpId: string): { ok: true; value: 
 }
 
 // ── 옵션별 설명 (선택값에 따라 동적으로 노출) ─────────────────────────────────
-// WebAuthn 스펙 기준. ceremony 동작에 직접 영향을 주므로 운영자가 선택 전후로
-// 무엇이 바뀌는지 한눈에 알 수 있게 한다.
 
-// UV·attestation 안내는 위험도와 무관하게 단일 색(info)으로 통일한다. 옵션 자체의
-// 의미를 설명하는 정보성 안내이므로, 톤으로 우열을 암시하지 않는다.
 const UV_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> = {
   REQUIRED: { tone: 'info', text: 'PIN·지문·얼굴 등 사용자 확인(UV)을 반드시 요구합니다. UV를 못 하는 인증기는 ceremony가 실패합니다. 2FA 수준의 보안이 필요할 때 권장.' },
   PREFERRED: { tone: 'info', text: '가능하면 UV를 수행하되, 지원하지 않는 인증기는 UV 없이도 허용합니다. 보안과 호환성의 균형 — 대부분의 서비스 기본값.' },
@@ -88,23 +92,6 @@ const AT_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> =
   ENTERPRISE: { tone: 'info', text: '기기를 개별 식별할 수 있는 attestation을 요구합니다. 사전 등록된 인증기만 쓰는 사내 환경 전용 — 일반 사용자 대상 서비스에는 부적합.' },
 };
 
-// ── OptionGuide — 선택값에 맞는 안내 박스 ────────────────────────────────────
-
-function OptionGuide({ guide }: { guide?: { tone: 'info' | 'ok' | 'warn'; text: string } }) {
-  if (!guide) return null;
-  const palette = {
-    info: { bg: 'var(--surface-3)', fg: 'var(--text-soft)', icon: 'var(--text-mute)' },
-    ok: { bg: 'var(--success-soft)', fg: 'var(--success)', icon: 'var(--success)' },
-    warn: { bg: 'var(--warning-soft)', fg: 'var(--warning)', icon: 'var(--warning)' },
-  }[guide.tone];
-  return (
-    <div style={{ marginTop: 8, padding: '8px 10px', background: palette.bg, borderRadius: 6, fontSize: 12, lineHeight: 1.6, color: palette.fg, display: 'flex', gap: 7 }}>
-      <span style={{ color: palette.icon, flexShrink: 0, marginTop: 1 }}><Icons.Info size={13} /></span>
-      <span>{guide.text}</span>
-    </div>
-  );
-}
-
 // ── timeoutMs → 초/분 환산 안내 ──────────────────────────────────────────────
 // 권장 범위 60000–120000ms(=60–120초). 벗어나면 warn 톤으로 주의.
 
@@ -113,9 +100,7 @@ function timeoutGuide(ms: number): { tone: 'info' | 'ok' | 'warn'; text: string 
     return { tone: 'warn', text: '0보다 큰 값을 입력하세요. 권장 60000–120000ms(60–120초).' };
   }
   const totalSec = ms / 1000;
-  // 정수 초면 "60초", 소수면 "1.5초"처럼 불필요한 0 제거
   const secLabel = Number.isInteger(totalSec) ? `${totalSec}초` : `${parseFloat(totalSec.toFixed(2))}초`;
-  // 60초 이상이면 분·초로도 풀어서 표기 (예: 90초 → 1분 30초)
   let human = `= ${secLabel}`;
   if (totalSec >= 60) {
     const m = Math.floor(totalSec / 60);
@@ -127,6 +112,10 @@ function timeoutGuide(ms: number): { tone: 'info' | 'ok' | 'warn'; text: string 
   return { tone: 'ok', text: `${human} — 권장 범위(60–120초) 안입니다.` };
 }
 
+const WARN_BORDER: CSSProperties = { borderColor: 'var(--warn-dot)' };
+const UV_OPTIONS = (['REQUIRED', 'PREFERRED', 'DISCOURAGED'] as const).map((v) => ({ value: v, label: v }));
+const AT_OPTIONS = (['NONE', 'INDIRECT', 'DIRECT', 'ENTERPRISE'] as const).map((v) => ({ value: v, label: v }));
+
 // ── WebauthnConfigTab ─────────────────────────────────────────────────────────
 
 type WebauthnConfigTabProps = { tenant: Tenant };
@@ -134,11 +123,10 @@ type WebauthnConfigTabProps = { tenant: Tenant };
 export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
   const [cfg, setCfg] = useState<ConfigWithMds | null>(null);
   const [draft, setDraft] = useState<ConfigWithMds | null>(null);
-  const [originInput, setOriginInput] = useState('');
   const [apkInput, setApkInput] = useState('');
-  const [originError, setOriginError] = useState<string | null>(null);
+  const [apkError, setApkError] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
-  const [diffChanges, setDiffChanges] = useState<{ key: string; from: unknown; to: unknown }[]>([]);
+  const [diffChanges, setDiffChanges] = useState<Change[]>([]);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -155,47 +143,53 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
       });
   }, [tenant.id]);
 
-  function addOrigin() {
+  const dirty = cfg !== null && draft !== null && JSON.stringify(cfg) !== JSON.stringify(draft);
+  const localChanges = cfg && draft ? diffObjects(cfg, draft) : [];
+  const changed = new Set(localChanges.map((c) => c.key));
+  const guard = useUnsavedGuard(dirty);
+
+  // ChipInput validate: 형식·rpId 범위 + 정규화 후 중복.
+  function validateOriginInput(v: string): string | null {
+    if (!draft) return null;
+    const r = validateOrigin(v, draft.rpId);
+    if (!r.ok) return r.error;
+    if (draft.origins.includes(r.value)) return `'${r.value}' 는 이미 추가되어 있습니다.`;
+    return null;
+  }
+
+  // ChipInput 은 입력 원문을 넘긴다 → 새로 들어온 값만 정규화(삭제는 그대로 반영).
+  function onOriginsChange(next: string[]) {
     if (!draft) return;
-    const v = originInput.trim();
-    if (!v) return;
-    const result = validateOrigin(v, draft.rpId);
-    if (!result.ok) {
-      setOriginError(result.error);
-      return;
-    }
-    if (draft.origins.includes(result.value)) {
-      setOriginError(`'${result.value}' 는 이미 추가되어 있습니다.`);
-      return;
-    }
-    setDraft({ ...draft, origins: [...draft.origins, result.value] });
-    setOriginInput('');
-    setOriginError(null);
+    const normalized = next.map((v) => {
+      if (draft.origins.includes(v)) return v;
+      const r = validateOrigin(v, draft.rpId);
+      return r.ok ? r.value : v;
+    });
+    setDraft({ ...draft, origins: Array.from(new Set(normalized)) });
   }
 
   function addApkKey() {
     if (!draft) return;
     const conv = apkKeyHashFromFingerprint(apkInput);
     if (!conv.ok) {
-      setOriginError(conv.error);
+      setApkError(conv.error);
       return;
     }
     if (draft.origins.includes(conv.value)) {
-      setOriginError('이미 추가된 Android 키입니다.');
+      setApkError('이미 추가된 Android 키입니다.');
       return;
     }
     setDraft({ ...draft, origins: [...draft.origins, conv.value] });
     setApkInput('');
-    setOriginError(null);
+    setApkError(null);
   }
 
-  function removeOrigin(o: string) {
-    if (!draft) return;
-    setDraft({ ...draft, origins: draft.origins.filter((x) => x !== o) });
+  function handleRevert() {
+    if (!cfg) return;
+    setDraft({ ...cfg });
+    setApkInput('');
+    setApkError(null);
   }
-
-  const dirty = cfg !== null && draft !== null && JSON.stringify(cfg) !== JSON.stringify(draft);
-  const localChanges = cfg && draft ? diffObjects(cfg, draft) : [];
 
   async function handlePreview() {
     if (!draft) return;
@@ -217,11 +211,7 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
       setCfg(updated);
       setDraft({ ...updated });
       setShowDiff(false);
-      toast({
-        kind: 'ok',
-        title: 'WebAuthn config 저장됨',
-        message: `${diffChanges.length}개 필드가 업데이트되었습니다.`,
-      });
+      toast({ kind: 'ok', title: 'WebAuthn config 저장됨', message: `${diffChanges.length}개 필드가 업데이트되었습니다.` });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast({ kind: 'err', title: '저장 실패', message: msg });
@@ -230,242 +220,141 @@ export default function WebauthnConfigTab({ tenant }: WebauthnConfigTabProps) {
     }
   }
 
-  if (!draft) {
-    return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
+  if (!draft || !cfg) {
+    return <div className="muted" style={{ padding: 40 }}>Loading…</div>;
   }
 
+  const tg = timeoutGuide(draft.timeoutMs);
+  const addedOrigins = draft.origins.filter((o) => !cfg.origins.includes(o));
+  const uv = UV_GUIDE[draft.userVerification];
+  const at = AT_GUIDE[draft.attestationConveyance];
+
   return (
-    <div className="stack-4">
-      <div className="card">
-        <div className="card__head">
-          <div>
-            <h3 className="card__title">WebAuthn Configuration</h3>
-            <div className="card__sub">RP가 ceremony 요청 시 사용하는 파라미터. 변경은 즉시 다음 ceremony부터 적용됩니다.</div>
-          </div>
-          <div className="row">
-            {dirty && <span className="badge badge--warning badge--dot">변경 사항 {localChanges.length}건</span>}
-            <button className="btn btn--sm" disabled={!dirty} onClick={() => cfg && setDraft({ ...cfg })}>되돌리기</button>
-            <button className="btn btn--primary btn--sm" disabled={!dirty} onClick={handlePreview}>저장…</button>
-          </div>
-        </div>
+    <div className="stack-6">
+      <Card>
+        <CardHeader title="WebAuthn Configuration" sub="변경 사항은 다음 ceremony부터 적용됩니다." />
 
-        <div className="card__body">
-          <div className="grid-2" style={{ gap: 24 }}>
-            <div className="stack-3">
-              <Field
-                label={<>rpId <span className="chip" style={{ fontSize: 10, padding: '1px 6px', gap: 3, background: 'var(--surface-3)', color: 'var(--text-mute)', verticalAlign: 'middle' }}><Icons.Lock size={10} /> 변경 불가</span></>}
-                hint="Relying Party hostname (생성 후 변경 불가)"
-              >
-                <div style={{ position: 'relative' }}>
-                  <input
-                    className="input mono"
-                    value={draft.rpId}
-                    readOnly
-                    aria-readonly="true"
-                    tabIndex={-1}
-                    title="rpId는 생성 후 변경할 수 없습니다"
-                    style={{ background: 'var(--surface-3)', color: 'var(--text-mute)', cursor: 'not-allowed', paddingRight: 32 }}
-                  />
-                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-mute)', pointerEvents: 'none', display: 'inline-flex' }}>
-                    <Icons.Lock size={13} />
-                  </span>
-                </div>
-              </Field>
-              <Field label="rpName" hint="UA 선택 화면에 표시되는 표시 이름">
-                <input className="input" value={draft.rpName} onChange={(e) => setDraft({ ...draft, rpName: e.target.value })} />
-              </Field>
-              <Field label="timeoutMs" hint="ceremony 타임아웃 (밀리초)">
-                <input className="input mono" type="number" value={draft.timeoutMs} onChange={(e) => setDraft({ ...draft, timeoutMs: parseInt(e.target.value || '0', 10) })} />
-                {/* 초/분 환산 안내는 값을 바꿨을 때만 노출(첫 진입 시엔 숨김). */}
-                {cfg && draft.timeoutMs !== cfg.timeoutMs && <OptionGuide guide={timeoutGuide(draft.timeoutMs)} />}
-              </Field>
-            </div>
-            <div className="stack-3">
-              <Field label="origins" hint={`rpId(${draft.rpId}) 또는 그 서브도메인만 허용`}>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 8px', border: `1px solid ${originError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 8, background: 'var(--surface)', minHeight: 38 }}>
-                  {draft.origins.map((o) => (
-                    <span key={o} className="chip mono" style={{ fontSize: 11 }}>
-                      {isApkKeyHashOrigin(o)
-                        ? `🤖 ${o.slice(APK_KEY_HASH_PREFIX.length, APK_KEY_HASH_PREFIX.length + 8)}…`
-                        : o}
-                      <button className="chip__x" onClick={() => removeOrigin(o)}><Icons.X size={11} /></button>
-                    </span>
-                  ))}
-                  <input
-                    placeholder={`https://${draft.rpId} 입력 후 Enter`}
-                    style={{ border: 0, outline: 'none', fontSize: 12, padding: '2px 4px', flex: 1, minWidth: 160, background: 'transparent', color: 'var(--text)' }}
-                    value={originInput}
-                    onChange={(e) => { setOriginInput(e.target.value); if (originError) setOriginError(null); }}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addOrigin())}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
-                  <input
-                    className="input mono"
-                    placeholder="Android 서명키 SHA-256 지문 (keytool 출력 붙여넣기) 후 Enter"
-                    style={{ flex: 1, fontSize: 12 }}
-                    value={apkInput}
-                    onChange={(e) => { setApkInput(e.target.value); if (originError) setOriginError(null); }}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addApkKey())}
-                  />
-                  <button className="btn btn--sm" onClick={addApkKey}>앱 키 추가</button>
-                </div>
-                {originError && (
-                  <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--danger-soft)', borderRadius: 6, fontSize: 12, lineHeight: 1.6, color: 'var(--danger)', display: 'flex', gap: 7 }}>
-                    <span style={{ flexShrink: 0, marginTop: 1 }}><Icons.Alert size={13} /></span>
-                    <span>{originError}</span>
-                  </div>
-                )}
-              </Field>
-              <Field label="userVerification" hint="사용자 확인(PIN·생체) 강제 수준">
-                <Segmented value={draft.userVerification} onChange={(v) => setDraft({ ...draft, userVerification: v as WebauthnConfig['userVerification'] })} options={['REQUIRED', 'PREFERRED', 'DISCOURAGED']} />
-                <OptionGuide guide={UV_GUIDE[draft.userVerification]} />
-              </Field>
-              <Field label="attestationConveyance" hint="인증기 출처 증명 전달 모드">
-                <Segmented value={draft.attestationConveyance} onChange={(v) => setDraft({ ...draft, attestationConveyance: v as WebauthnConfig['attestationConveyance'] })} options={['NONE', 'INDIRECT', 'DIRECT', 'ENTERPRISE']} />
-                <OptionGuide guide={AT_GUIDE[draft.attestationConveyance]} />
-              </Field>
-            </div>
+        <SetRow label="rpId" htmlFor="wa-rpid" desc="생성 시 고정. 기존 credential 이 이 값에 묶여 있습니다.">
+          <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}>
+            <input id="wa-rpid" className="input mono" value={draft.rpId} readOnly aria-readonly="true" title="rpId는 생성 후 변경할 수 없습니다" />
+            <Badge dot={false}><Icons.Lock size={11} />변경 불가</Badge>
           </div>
-        </div>
-      </div>
+        </SetRow>
 
-      <DiffDialog
-        open={showDiff}
-        onClose={() => setShowDiff(false)}
-        changes={diffChanges}
-        onConfirm={handleSave}
+        <SetRow label="rpName" htmlFor="wa-rpname" desc="사용자의 패스키 프롬프트에 보이는 이름">
+          <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}>
+            <input id="wa-rpname" className="input" value={draft.rpName} style={changed.has('rpName') ? WARN_BORDER : undefined}
+              onChange={(e) => setDraft({ ...draft, rpName: e.target.value })} />
+            {changed.has('rpName') && <Badge tone="warn" dot={false}>변경됨</Badge>}
+          </div>
+        </SetRow>
+
+        <SetRow label="timeoutMs" htmlFor="wa-timeout" desc="ceremony 대기 시간">
+          <div className="row" style={{ gap: 10 }}>
+            <input id="wa-timeout" className="input mono" type="number" value={draft.timeoutMs} aria-describedby="wa-timeout-hint"
+              style={{ maxWidth: 180, ...(changed.has('timeoutMs') ? WARN_BORDER : {}) }}
+              onChange={(e) => setDraft({ ...draft, timeoutMs: parseInt(e.target.value || '0', 10) })} />
+            {changed.has('timeoutMs') && <Badge tone="warn" dot={false}>변경됨</Badge>}
+          </div>
+          <p id="wa-timeout-hint" className="hint" style={tg.tone === 'warn' ? { color: 'var(--warn)' } : undefined}>{tg.text}</p>
+        </SetRow>
+
+        <SetRow label="origins" desc="허용할 웹 origin 과 Android 앱 키 해시. Enter 로 추가합니다." changed={changed.has('origins')}>
+          <div className="stack-3" style={{ gap: 10 }}>
+            <ChipInput mono values={draft.origins} addedValues={addedOrigins} onChange={onOriginsChange} validate={validateOriginInput}
+              ariaLabel="origin 추가" placeholder={`https://${draft.rpId} 입력 후 Enter`} />
+            <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
+              <input className="input mono" aria-label="Android APK 키 해시" placeholder="Android APK signing key SHA-256" value={apkInput} aria-invalid={!!apkError}
+                onChange={(e) => { setApkInput(e.target.value); if (apkError) setApkError(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addApkKey(); } }} />
+              <Button onClick={addApkKey}>앱 키 추가</Button>
+            </div>
+            {apkError && <p className="field__error" role="alert" style={{ margin: 0 }}>{apkError}</p>}
+          </div>
+        </SetRow>
+
+        <SetRow label="userVerification" desc="생체·PIN 검증 요구 수준" changed={changed.has('userVerification')}>
+          <div className="stack-2">
+            <Segmented ariaLabel="userVerification" value={draft.userVerification} options={UV_OPTIONS}
+              onChange={(v) => setDraft({ ...draft, userVerification: v })} />
+            {uv && <div className="desc-box">{draft.userVerification} — {uv.text}</div>}
+          </div>
+        </SetRow>
+
+        <SetRow label="attestationConveyance" desc="등록 시 인증기 증명 요청" changed={changed.has('attestationConveyance')}>
+          <div className="stack-2">
+            <Segmented ariaLabel="attestationConveyance" value={draft.attestationConveyance} options={AT_OPTIONS}
+              onChange={(v) => setDraft({ ...draft, attestationConveyance: v })} />
+            {at && <div className="desc-box">{draft.attestationConveyance} — {at.text}</div>}
+          </div>
+        </SetRow>
+      </Card>
+
+      <SaveBar
+        count={localChanges.length}
+        summary={changedFieldNames(localChanges).join(' · ')}
+        onRevert={handleRevert}
+        onSave={() => void handlePreview()}
         saving={saving}
+        saveLabel="저장…"
       />
+
+      <DiffDialog open={showDiff} onClose={() => setShowDiff(false)} changes={diffChanges} onConfirm={() => void handleSave()} saving={saving} />
+      {guard}
     </div>
   );
 }
 
-// ── Field ─────────────────────────────────────────────────────────────────────
-
-function Field({ label, hint, children }: { label: React.ReactNode; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      {/* 옵션 이름(굵게) 옆에 "- 설명"을 같은 줄에 표기. 설명은 일반 회색으로
-          이름과 톤을 구분. (.label 기본 500 → 이름만 700 오버라이드) */}
-      <label className="label" style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 700 }}>{label}</span>
-        {hint && <span style={{ fontWeight: 400, color: 'var(--text-mute)' }}>- {hint}</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-// ── Segmented ─────────────────────────────────────────────────────────────────
-
-function Segmented({ value, onChange, options }: {
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
-}) {
-  return (
-    <div style={{ display: 'inline-flex', padding: 3, background: 'var(--surface-3)', borderRadius: 8, border: '1px solid var(--border)' }}>
-      {options.map((o) => (
-        <button
-          key={o}
-          onClick={() => onChange(o)}
-          style={{
-            padding: '4px 10px',
-            border: 0, borderRadius: 6,
-            background: value === o ? 'var(--surface)' : 'transparent',
-            color: value === o ? 'var(--text)' : 'var(--text-mute)',
-            fontWeight: value === o ? 600 : 500,
-            fontSize: 11, letterSpacing: '0.02em',
-            boxShadow: value === o ? 'var(--shadow-sm)' : 'none',
-            cursor: 'pointer', fontFamily: 'var(--mono)',
-          }}
-        >
-          {o}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── DiffDialog ────────────────────────────────────────────────────────────────
+// ── DiffDialog (V2 "변경 사항 확인") ──────────────────────────────────────────
 
 function DiffDialog({ open, onClose, changes, onConfirm, saving }: {
   open: boolean;
   onClose: () => void;
-  changes: { key: string; from: unknown; to: unknown }[];
+  changes: Change[];
   onConfirm: () => void;
   saving?: boolean;
 }) {
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="변경 사항 확인"
-      sub="저장하면 다음 ceremony부터 라이브 RP에 즉시 적용됩니다."
-      wide
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>취소</button>
-          <button className="btn btn--primary" onClick={onConfirm} disabled={saving}>{changes.length}개 변경 사항 저장</button>
-        </>
-      }
-    >
-      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+    <Dialog open={open} onClose={onClose} title="변경 사항 확인" sub="다음 ceremony 부터 적용됩니다."
+      footer={<>
+        <Button onClick={onClose}>취소</Button>
+        <Button variant="primary" onClick={onConfirm} disabled={saving}>{changes.length}개 변경 사항 저장</Button>
+      </>}>
+      <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden' }}>
         {changes.map((c, i) => <DiffRow key={c.key} c={c} last={i === changes.length - 1} />)}
-        {changes.length === 0 && <div style={{ padding: 18, fontSize: 13, color: 'var(--text-mute)' }}>변경 사항이 없습니다.</div>}
+        {changes.length === 0 && <p className="muted" style={{ margin: 0, padding: '12px 14px', fontSize: 13 }}>변경 사항이 없습니다.</p>}
       </div>
-      <div style={{ marginTop: 12, padding: 10, background: 'var(--warning-soft)', color: 'var(--warning)', borderRadius: 6, fontSize: 12, display: 'flex', gap: 8 }}>
-        <Icons.Alert size={14} />
-        <span>이 변경은 즉시 라이브 RP에 영향을 줍니다. 변경 사항은 audit log에 <code style={{ background: 'rgba(0,0,0,0.05)', padding: '0 4px', borderRadius: 3 }}>WEBAUTHN_CONFIG_UPDATED</code>로 기록됩니다.</span>
-      </div>
+      <Alert tone="warn">저장 시 <span className="mono">WEBAUTHN_CONFIG_UPDATED</span> 감사 이벤트가 기록됩니다.</Alert>
     </Dialog>
   );
 }
 
-// ── DiffRow ───────────────────────────────────────────────────────────────────
+const FROM_TAG: CSSProperties = { background: 'var(--bad-soft)', color: 'var(--bad-ink)', textDecoration: 'line-through', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' };
+const TO_TAG: CSSProperties = { background: 'var(--ok-soft)', color: 'var(--ok-ink)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' };
 
-function DiffRow({ c, last }: { c: { key: string; from: unknown; to: unknown }; last?: boolean }) {
-  // origin-array diff: enumerate added / removed lines
+function DiffRow({ c, last }: { c: Change; last?: boolean }) {
+  const rowStyle: CSSProperties = { gap: 10, padding: '12px 14px', borderBottom: last ? 0 : '1px solid var(--line-soft)', fontSize: 12 };
+  const keyEl = <span className="mono" style={{ width: 92, flex: 'none', color: 'var(--mute)' }}>{c.key}</span>;
+  // origin-array diff: enumerate added / removed values
   if (Array.isArray(c.from) && Array.isArray(c.to)) {
-    const added = (c.to as string[]).filter((x) => !(c.from as string[]).includes(x));
-    const removed = (c.from as string[]).filter((x) => !(c.to as string[]).includes(x));
+    const from = c.from as string[];
+    const to = c.to as string[];
+    const added = to.filter((x) => !from.includes(x));
+    const removed = from.filter((x) => !to.includes(x));
     return (
-      <div style={{ padding: 14, borderBottom: last ? 0 : '1px solid var(--border)' }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{c.key}</div>
-        <div style={{ marginTop: 8, display: 'grid', gap: 4 }}>
-          {removed.map((x) => <DiffLine key={'-' + x} sign="-" value={x} />)}
-          {added.map((x) => <DiffLine key={'+' + x} sign="+" value={x} />)}
-        </div>
+      <div className="row" style={rowStyle}>
+        {keyEl}
+        {removed.map((x) => <span key={'-' + x} className="tag" style={FROM_TAG} title={x}>- {x}</span>)}
+        {added.map((x) => <span key={'+' + x} className="tag" style={TO_TAG} title={x}>+ {x}</span>)}
       </div>
     );
   }
   return (
-    <div style={{ padding: 14, borderBottom: last ? 0 : '1px solid var(--border)' }}>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600 }}>{c.key}</div>
-      <div style={{ marginTop: 8, display: 'grid', gap: 4 }}>
-        <DiffLine sign="-" value={c.from} />
-        <DiffLine sign="+" value={c.to} />
-      </div>
-    </div>
-  );
-}
-
-// ── DiffLine ──────────────────────────────────────────────────────────────────
-
-function DiffLine({ sign, value }: { sign: '+' | '-'; value: unknown }) {
-  const isAdd = sign === '+';
-  return (
-    <div style={{
-      display: 'flex', gap: 8,
-      padding: '4px 10px',
-      background: isAdd ? 'color-mix(in oklab, var(--success-soft) 70%, transparent)' : 'color-mix(in oklab, var(--danger-soft) 70%, transparent)',
-      borderRadius: 4,
-      fontFamily: 'var(--mono)', fontSize: 12,
-      color: isAdd ? 'var(--success)' : 'var(--danger)',
-    }}>
-      <span style={{ width: 10, fontWeight: 700 }}>{sign}</span>
-      <span style={{ color: 'var(--text)' }}>{String(value)}</span>
+    <div className="row" style={rowStyle}>
+      {keyEl}
+      <span className="tag" style={FROM_TAG}>{String(c.from)}</span>
+      <span aria-hidden="true" style={{ display: 'inline-flex', color: 'var(--mute)' }}><Icons.ChevronRight size={14} /></span>
+      <span className="tag" style={TO_TAG}>{String(c.to)}</span>
     </div>
   );
 }
