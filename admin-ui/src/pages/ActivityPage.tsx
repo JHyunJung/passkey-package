@@ -269,31 +269,44 @@ export default function ActivityPage() {
     tenantsApi.list().then(setTenants).catch(() => setTenants([]));
   }, []);
 
-  // 5-second polling
-  const cancelledRef = useRef(false);
+  // 5-second polling. 필터(category/tenant)가 바뀔 때마다 세대를 올리고, 이전 세대의 늦은 응답은 버린다.
+  const queryGenRef = useRef(0);
   // Track whether we've had at least one successful server response
   const hasServerDataRef = useRef(false);
 
+  function applyView(view: ActivityView, mode: 'replace' | 'merge') {
+    const adapted = adaptServerView(view);
+    hasServerDataRef.current = true;
+    setServerError(false);
+    // merge: 폴링은 최신 한 페이지만 받으므로, 아직 없는 행만 앞에 붙여 '더 보기'로 불러온 행을 유지한다.
+    setEvents((prev) => {
+      if (mode === 'replace' || prev === null) return adapted.events;
+      const have = new Set(prev.map((e) => e.id));
+      const fresh = adapted.events.filter((e) => !have.has(e.id));
+      return fresh.length === 0 ? prev : [...fresh, ...prev];
+    });
+    setKpi((prev) => ({
+      ...prev,
+      ...adapted.kpi,
+      // p95Ms: server may return null; keep previous value as fallback
+      p95Ms: adapted.kpi.p95Ms ?? prev.p95Ms,
+    }));
+    setTopTenants(adapted.topTenants);
+  }
+
   useEffect(() => {
-    cancelledRef.current = false;
+    let cancelled = false;
+    const gen = ++queryGenRef.current;
+    let first = true;
 
     async function fetchOnce() {
       try {
         const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant);
-        if (cancelledRef.current) return;
-        const adapted = adaptServerView(view);
-        hasServerDataRef.current = true;
-        setServerError(false);
-        setEvents(adapted.events);
-        setKpi((prev) => ({
-          ...prev,
-          ...adapted.kpi,
-          // p95Ms: server may return null; keep previous value as fallback
-          p95Ms: adapted.kpi.p95Ms ?? prev.p95Ms,
-        }));
-        setTopTenants(adapted.topTenants);
+        if (cancelled || gen !== queryGenRef.current) return;
+        applyView(view, first ? 'replace' : 'merge');
+        first = false;
       } catch {
-        if (cancelledRef.current) return;
+        if (cancelled) return;
         if (!hasServerDataRef.current) {
           // Never had server data: show error state rather than fixture
           setServerError(true);
@@ -309,7 +322,7 @@ export default function ActivityPage() {
     void fetchOnce();
     const id = setInterval(() => void fetchOnce(), 5000);
     return () => {
-      cancelledRef.current = true;
+      cancelled = true;
       clearInterval(id);
     };
   }, [categoryFilter, selectedTenant]);
@@ -325,19 +338,25 @@ export default function ActivityPage() {
     [displayEvents, actionQuery],
   );
 
+  // 마지막으로 연 상세 요청만 반영한다(A→B 순서로 열고 A 가 늦게 오거나, 로딩 중 닫은 경우).
+  const detailReqRef = useRef(0);
+
   function openDetail(id: string) {
+    const req = ++detailReqRef.current;
     setSelectedId(id);
     setDetailLoading(true);
     setDetail(null);
     activityApi
       .fetchDetail(id)
-      .then((d) => setDetail(d))
-      .catch(() => toast({ kind: 'err', title: '상세 로드 실패' }))
-      .finally(() => setDetailLoading(false));
+      .then((d) => { if (req === detailReqRef.current) setDetail(d); })
+      .catch(() => { if (req === detailReqRef.current) toast({ kind: 'err', title: '상세 로드 실패' }); })
+      .finally(() => { if (req === detailReqRef.current) setDetailLoading(false); });
   }
 
   function closeDetail() {
+    detailReqRef.current++;
     setDetail(null);
+    setDetailLoading(false);
     setSelectedId(null);
   }
 
@@ -347,20 +366,12 @@ export default function ActivityPage() {
   }
 
   function handleRefresh() {
+    const gen = queryGenRef.current;
     activityApi
       .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant)
       .then((view) => {
-        if (cancelledRef.current) return;
-        const adapted = adaptServerView(view);
-        hasServerDataRef.current = true;
-        setServerError(false);
-        setEvents(adapted.events);
-        setKpi((prev) => ({
-          ...prev,
-          ...adapted.kpi,
-          p95Ms: adapted.kpi.p95Ms ?? prev.p95Ms,
-        }));
-        setTopTenants(adapted.topTenants);
+        if (gen !== queryGenRef.current) return;
+        applyView(view, 'merge');
         toast({ kind: 'ok', title: '새로고침 완료' });
       })
       .catch(() => toast({ kind: 'warn', title: '새로고침 실패', message: '서버 응답 없음' }));
@@ -382,6 +393,7 @@ export default function ActivityPage() {
     if (!events || events.length === 0) return;
     const oldestEvent = events[events.length - 1];
     const oldest = oldestEvent.ts;
+    const gen = queryGenRef.current;
     try {
       const more = await activityApi.fetch(
         null,
@@ -393,8 +405,13 @@ export default function ActivityPage() {
         // microsecond timestamp as `oldest` is not dropped.
         oldestEvent.id,
       );
+      if (gen !== queryGenRef.current) return;
       const adapted = adaptServerView(more);
-      setEvents([...events, ...adapted.events]);
+      setEvents((prev) => {
+        const base = prev ?? [];
+        const have = new Set(base.map((e) => e.id));
+        return [...base, ...adapted.events.filter((e) => !have.has(e.id))];
+      });
       // Expand the visible window so newly-loaded rows actually appear in the feed
       setVisibleCount((n) => n + Math.max(adapted.events.length, 24));
     } catch (err: unknown) {
@@ -464,18 +481,15 @@ export default function ActivityPage() {
     <div className="page">
       {header}
 
-      <div className="kpis">
+      <div className={kpi.p95Ms != null ? 'kpis' : 'kpis kpis--3'}>
         <KpiCard label="활동 (24h)" value={fmt(kpi.events24h)} />
         <KpiCard label="운영 액션 (24h)" value={fmt(kpi.ops24h)} />
         <KpiCard
           label="보안 이벤트 (24h)"
           value={<span style={{ color: kpi.security24h > 0 ? 'var(--bad)' : undefined }}>{fmt(kpi.security24h)}</span>}
         />
-        <KpiCard
-          label="평균 응답"
-          value={kpi.p95Ms != null ? `${kpi.p95Ms}ms` : '—'}
-          hint={kpi.p95Ms != null ? `p95 ${kpi.p95Ms}ms` : undefined}
-        />
+        {/* §6: 서버가 p95Ms 를 주지 않으면(현재 항상 null) KPI 를 그리지 않는다. */}
+        {kpi.p95Ms != null && <KpiCard label="평균 응답" value={`${kpi.p95Ms}ms`} hint={`p95 ${kpi.p95Ms}ms`} />}
       </div>
 
       <div className="card" style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>

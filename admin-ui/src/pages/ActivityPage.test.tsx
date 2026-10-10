@@ -1,6 +1,6 @@
 // admin-ui/src/pages/ActivityPage.test.tsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { screen, fireEvent, within, waitFor, act } from '@testing-library/react';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
 import type { ActivityEvent, ActivityView, ActivityDetailView } from '@/api/types';
@@ -132,5 +132,78 @@ describe('ActivityPage V2', () => {
     renderPage();
     expect(await screen.findByText('Activity 데이터를 불러오지 못했습니다')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '재시도' })).toBeInTheDocument();
+  });
+
+  it('상세: A 를 연 뒤 B 를 열면 늦게 온 A 응답은 무시한다', async () => {
+    let resolveA: (d: ActivityDetailView) => void = () => {};
+    vi.mocked(activityApi.fetchDetail)
+      .mockImplementationOnce(() => new Promise((r) => { resolveA = r; }))
+      .mockImplementationOnce(() => Promise.resolve(detail({ id: 'e3', action: 'API_KEY_ISSUE', payload: null })));
+    renderPage();
+    const today = await screen.findByRole('group', { name: '오늘' });
+    fireEvent.click(within(today).getByRole('button', { name: '상세 열기' }));
+    const older = screen.getByRole('group', { name: '2026-10-08' });
+    fireEvent.click(within(older).getByRole('button', { name: '상세 열기' }));
+    const panel = await screen.findByRole('region', { name: '이벤트 상세' });
+    expect(await within(panel).findByText('API_KEY_ISSUE')).toBeInTheDocument();
+    await act(async () => { resolveA(detail()); });
+    expect(within(panel).getByText('API_KEY_ISSUE')).toBeInTheDocument();
+    expect(within(panel).queryByText('TENANT_UPDATE')).toBeNull();
+  });
+
+  it('상세: 불러오는 중에 닫으면 응답이 와도 다시 열리지 않는다', async () => {
+    let resolveA: (d: ActivityDetailView) => void = () => {};
+    vi.mocked(activityApi.fetchDetail).mockImplementationOnce(() => new Promise((r) => { resolveA = r; }));
+    renderPage();
+    const panel = await openFirstDetail();
+    fireEvent.click(within(panel).getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('region', { name: '이벤트 상세' })).toBeNull();
+    await act(async () => { resolveA(detail()); });
+    expect(screen.queryByRole('region', { name: '이벤트 상세' })).toBeNull();
+  });
+
+  it('필터를 바꾼 뒤 이전 필터의 늦은 응답은 버린다', async () => {
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    let resolveSec: (v: ActivityView) => void = () => {};
+    vi.mocked(activityApi.fetch).mockImplementationOnce(() => new Promise((r) => { resolveSec = r; }));
+    fireEvent.click(screen.getByRole('button', { name: '보안' }));
+    vi.mocked(activityApi.fetch).mockResolvedValue(view([FEED[0]]));
+    fireEvent.click(screen.getByRole('button', { name: '운영' }));
+    await waitFor(() => expect(activityApi.fetch).toHaveBeenLastCalledWith(null, 'ops', undefined, undefined));
+    await act(async () => { resolveSec(view([FEED[1]])); });
+    expect(await screen.findByRole('group', { name: '오늘' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '어제' })).toBeNull();
+  });
+
+  it('폴링은 새 행만 앞에 붙이고 "더 보기"로 불러온 행을 지우지 않는다', async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(NOW);
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    vi.mocked(activityApi.fetch).mockResolvedValueOnce(view([ev('old1', '2026-10-01T01:00:00Z', { action: 'API_KEY_REVOKE' })]));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이전 24시간 더 보기' })); });
+    expect(await screen.findByRole('group', { name: '2026-10-01' })).toBeInTheDocument();
+    vi.mocked(activityApi.fetch).mockResolvedValue(view([ev('new1', '2026-10-11T02:59:00Z'), ...FEED]));
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    await waitFor(() => expect(within(screen.getByRole('group', { name: '오늘' })).getByText('11:59')).toBeInTheDocument());
+    expect(screen.getByRole('group', { name: '2026-10-01' })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: '오늘' })).getAllByText('11:48')).toHaveLength(1);
+  });
+
+  it('평균 응답(p95) 이 없으면 KPI 를 그리지 않는다(kpis--3)', async () => {
+    const { container } = renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    expect(screen.queryByText('평균 응답')).toBeNull();
+    expect(container.querySelector('.kpis')).toHaveClass('kpis--3');
+  });
+
+  it('평균 응답(p95) 이 있으면 KPI 4개', async () => {
+    vi.mocked(activityApi.fetch).mockResolvedValue({ ...view(FEED), kpi: { events24h: 3, ops24h: 2, security24h: 1, p95Ms: 120 } });
+    const { container } = renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    expect(screen.getByText('평균 응답')).toBeInTheDocument();
+    expect(container.querySelector('.kpis')).not.toHaveClass('kpis--3');
   });
 });
