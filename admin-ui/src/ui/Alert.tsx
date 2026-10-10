@@ -7,7 +7,8 @@ const ICON: Record<AlertTone, ReactNode> = { ok: <Icons.Check size={18} />, warn
 
 export function Alert({ tone, title, children, actions, icon }: { tone: AlertTone; title?: ReactNode; children?: ReactNode; actions?: ReactNode; icon?: ReactNode }) {
   return (
-    <div className={`banner ${CLS[tone]}`} role={tone === 'bad' ? 'alert' : 'status'}>
+    // 제목+본문(두 줄 이상)이면 아이콘을 첫 줄에 맞춘다(V2 아트보드 align-items:flex-start).
+    <div className={`banner ${CLS[tone]}${title && children ? ' banner--top' : ''}`} role={tone === 'bad' ? 'alert' : 'status'}>
       <span className="banner__icon">{icon ?? ICON[tone]}</span>
       <div className="banner__body">
         {title && <div className="banner__title">{title}</div>}

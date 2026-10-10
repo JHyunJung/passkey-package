@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { systemInfoApi, type SystemInfoData, type SystemInfoComponent } from '@/api/systemInfo';
 import { Icons } from '@/icons/Icons';
 import { illustrations } from '@/assets/illustrations';
+import { kstDate, kstTime } from '@/lib/kst';
 import { Badge, Button, CardBody, CardHeader, EmptyState, KpiCard, type BadgeTone } from '@/ui';
 
 type ComponentStatus = SystemInfoComponent['status'];
@@ -19,9 +20,6 @@ function overallStatus(components: SystemInfoComponent[]): ComponentStatus {
   return 'OK';
 }
 
-const DL_STYLE = { display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', gap: '12px 16px', fontSize: 13, margin: 0 } as const;
-const DT_STYLE = { color: 'var(--mute)' } as const;
-const DD_STYLE = { margin: 0, minWidth: 0 } as const;
 const CAPTION = { margin: 0 } as const;
 
 export default function SystemInfoTab() {
@@ -108,7 +106,7 @@ export default function SystemInfoTab() {
                   <span className="mono truncate">{c.name}</span>
                   {c.note && <span className="hint" style={CAPTION}>{c.note}</span>}
                 </span>
-                <span className="hint mono" style={CAPTION}>{c.version}</span>
+                <span className="hint mono truncate" style={{ ...CAPTION, maxWidth: '45%' }} title={c.version}>{c.version}</span>
                 {c.latencyMs != null && <span className="hint" style={CAPTION}>{c.latencyMs}ms</span>}
                 <Badge tone={STATUS[c.status].tone}>{STATUS[c.status].label}</Badge>
               </li>
@@ -119,13 +117,13 @@ export default function SystemInfoTab() {
         <section className="card">
           <CardHeader title="호스트 정보" actions={<Badge tone="info" dot={false}>환경 · <span>{info.host.environment}</span></Badge>} />
           <CardBody>
-            <dl style={DL_STYLE}>
-              <dt style={DT_STYLE}>활성 프로필</dt>
-              <dd style={DD_STYLE}>
+            <dl className="kv" style={{ gridTemplateColumns: '120px minmax(0, 1fr)' }}>
+              <dt>활성 프로필</dt>
+              <dd>
                 <span className="chips">{profiles.map((p) => <span key={p} className="tag">{p}</span>)}</span>
               </dd>
-              <dt style={DT_STYLE}>배포 시각</dt>
-              <dd style={DD_STYLE} className="mono"><span style={{ fontSize: 12 }}>{info.deployedAt ?? '—'}</span></dd>
+              <dt>배포 시각</dt>
+              <dd className="mono" style={{ fontSize: 12 }}>{info.deployedAt ? `${kstDate(info.deployedAt)} ${kstTime(info.deployedAt)} KST` : '—'}</dd>
             </dl>
           </CardBody>
         </section>

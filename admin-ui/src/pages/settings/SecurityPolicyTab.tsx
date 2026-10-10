@@ -73,7 +73,7 @@ export default function SecurityPolicyTab() {
   return (
     <div className="stack-4">
       <section className="card">
-        <CardHeader title="세션 & 인증 정책" sub="모든 콘솔 운영자에게 적용" />
+        <CardHeader title="세션 & 인증 정책" cap="모든 콘솔 운영자에게 적용" />
 
         <div className="set">
           <div>

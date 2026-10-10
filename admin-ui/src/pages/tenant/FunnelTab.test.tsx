@@ -45,6 +45,13 @@ describe('FunnelTab V2', () => {
     for (const t of ['80.0%', '87.5%', '90.0%']) expect(screen.getByText(t)).toHaveClass('tag');
   });
 
+  it('이벤트 타입 범례는 본문 글꼴(아트보드 — mono 아님)', async () => {
+    render(<FunnelTab tenant={tenant} />);
+    const legend = (await screen.findAllByText('AUTH_SUCCESS')).find((el) => el.classList.contains('truncate'));
+    expect(legend).toBeDefined();
+    expect(legend).not.toHaveClass('mono');
+  });
+
   it('24h·30d 에서는 직전 기간 대비를 계산·표시하지 않는다', async () => {
     render(<FunnelTab tenant={tenant} />);
     await screen.findByText('직전 7일 대비 +30.0%p (인증 성공률)');

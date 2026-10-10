@@ -32,6 +32,13 @@ describe('CredentialDetailDialog', () => {
     await screen.findByText(/아직 인증 이력이 없습니다/);
   });
 
+  it('섹션(식별 정보·인증기·인증 기록)은 구분선으로 나뉜 dlg-sec', async () => {
+    vi.spyOn(credentialsApi, 'authEvents').mockResolvedValue([]);
+    const { baseElement } = render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} />);
+    expect(baseElement.querySelectorAll('.dlg-sec')).toHaveLength(3);
+    await screen.findByText(/아직 인증 이력이 없습니다/);
+  });
+
   it('shows auth events after load', async () => {
     vi.spyOn(credentialsApi, 'authEvents').mockResolvedValue([
       { result: 'SUCCESS', failureReason: null, signCount: 5, createdAt: '2026-06-07T05:00:00Z' },

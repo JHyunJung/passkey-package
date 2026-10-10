@@ -48,6 +48,17 @@ beforeEach(() => {
 });
 
 describe('AuditChainPage V2', () => {
+  it('카드 헤더 캡션은 제목 옆 한 줄(card__cap), 플랫폼 행 아바타는 첫 글자(괄호 아님)', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row(null as unknown as string, '[platform]', true)]));
+    const { container } = renderPage();
+    await screen.findByText('[platform]');
+    expect(screen.getByText('위변조 감지 시 등록되는 대응 incident')).toHaveClass('card__cap');
+    expect(screen.getByText(/검증 기준$/)).toHaveClass('card__cap');
+    const avatars = Array.from(container.querySelectorAll('.avatar')).map((a) => a.textContent);
+    expect(avatars).toContain('P');
+    expect(avatars).not.toContain('[');
+  });
+
   it('어떤 tenant 에도 recentRuns 가 없으면 스트립 열 전체를 숨긴다', async () => {
     renderPage();
     await screen.findByText('Acme');

@@ -29,6 +29,11 @@ async function setup() {
 }
 
 describe('SecurityPolicyTab V2', () => {
+  it('카드 헤더: 제목 옆 캡션 "모든 콘솔 운영자에게 적용"(card__cap)', async () => {
+    await setup();
+    expect(screen.getByText('모든 콘솔 운영자에게 적용')).toHaveClass('card__cap');
+  });
+
   it('.set 3행 + 변경 없으면 SaveBar 없음', async () => {
     await setup();
     expect(screen.getByRole('switch', { name: '모든 운영자에게 MFA 필수' })).toBeChecked();

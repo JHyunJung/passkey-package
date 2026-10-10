@@ -42,6 +42,18 @@ describe('SystemInfoTab', () => {
     expect(screen.getByText('4d')).toBeInTheDocument();
   });
 
+  it('긴 버전 문자열은 말줄임(title) — 컴포넌트 이름 열을 밀어내지 않는다, 배포 시각은 KST', async () => {
+    const longV = 'Oracle Database 21c Express Edition Release 21.0.0.0.0 - Production';
+    mockGet().mockResolvedValue({ ...sample, components: [{ name: 'Oracle DB', version: longV, status: 'OK', note: 'primary' }] });
+    const { container } = render(<SystemInfoTab />);
+    const v = await screen.findByText(longV);
+    expect(v).toHaveClass('truncate');
+    expect(v).toHaveAttribute('title', longV);
+    expect(screen.getByText('Oracle DB')).toBeInTheDocument();
+    expect(container.querySelector('dl')).toHaveClass('kv');
+    expect(screen.getByText('2026-05-31 09:00 KST')).toBeInTheDocument();
+  });
+
   it('shows a placeholder subtitle when deployedAt is null', async () => {
     mockGet().mockResolvedValue({ ...sample, deployedAt: null });
     render(<SystemInfoTab />);

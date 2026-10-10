@@ -210,7 +210,7 @@ function DistributionCard({ data, slug }: { data: FunnelByEventType[]; slug: str
                 {data.map((d, i) => (
                   <span key={d.type} className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
                     <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: 2, background: colorOf[i], flex: 'none' }} />
-                    <span className="mono truncate" style={{ fontSize: 12 }}>{d.type}</span>
+                    <span className="truncate">{d.type}</span>
                     <span className="spacer" />
                     <strong>{fmtNum(d.n)}</strong>
                   </span>

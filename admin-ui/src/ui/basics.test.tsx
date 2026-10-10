@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Badge, StatusBadge, Button, IconButton, KpiCard, PropChip, Alert, EmptyState } from '@/ui';
+import { Badge, StatusBadge, Button, IconButton, KpiCard, PropChip, Alert, EmptyState, CardHeader } from '@/ui';
 
 describe('ui basics', () => {
   it('Badge tone 이 기존 클래스 체계로 매핑된다', () => {
@@ -43,6 +43,18 @@ describe('ui basics', () => {
     expect(v).toHaveClass('propchip__v');
     expect(v).toHaveAttribute('title', long);
     expect(screen.getByRole('button', { name: 'RP ID 복사' })).toBeInTheDocument();
+  });
+  it('Alert: 제목+본문 두 줄이면 아이콘을 위로 정렬(banner--top), 한 줄이면 가운데', () => {
+    const { container, rerender } = render(<Alert tone="ok" title="메일을 확인하세요">본문</Alert>);
+    expect(container.querySelector('.banner')).toHaveClass('banner--top');
+    rerender(<Alert tone="ok">한 줄</Alert>);
+    expect(container.querySelector('.banner')).not.toHaveClass('banner--top');
+  });
+  it('CardHeader cap: 제목 옆 한 줄 캡션(t-cap), sub 는 제목 아래', () => {
+    render(<CardHeader title="Tenant별 Chain 상태" cap="방금 전 검증 기준" />);
+    const cap = screen.getByText('방금 전 검증 기준');
+    expect(cap).toHaveClass('card__cap');
+    expect(cap.parentElement).toContainElement(screen.getByRole('heading', { name: 'Tenant별 Chain 상태' }));
   });
   it('Alert bad 는 role=alert', () => {
     render(<Alert tone="bad" title="위변조 의심">본문</Alert>);

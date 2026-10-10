@@ -114,6 +114,10 @@ a:hover { color: var(--brand-900); }
 .card__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft); }
 .card__title { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
 .card__sub { margin: 0; font-size: 13px; line-height: 20px; color: var(--ink-2); }
+.card__cap { font-size: 12px; line-height: 16px; color: var(--mute); }
+/* 다이얼로그 본문 섹션 — 둘째부터 위 구분선(V2 Credential 상세) */
+.dlg-sec { display: flex; flex-direction: column; gap: 10px; }
+.dlg-sec + .dlg-sec { padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .card__body { padding: 20px; }
 .card__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line-soft); }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
@@ -227,6 +231,8 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 /* ── alerts (legacy banner 이름 유지) ── */
 .banner { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r); border: 1px solid; font-size: 13px; }
 .banner__icon { flex: none; display: inline-flex; }
+.banner--top { align-items: flex-start; }
+.banner--top .banner__icon { margin-top: 1px; }
 .banner__body { flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .banner__title { font-weight: 600; }
 .banner__actions { display: flex; gap: 8px; flex-wrap: wrap; }

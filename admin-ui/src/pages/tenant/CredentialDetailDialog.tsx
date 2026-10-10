@@ -73,7 +73,7 @@ export default function CredentialDetailDialog({ c, tenantId, onClose, position,
       footer={<Button onClick={onClose}>닫기</Button>}>
 
       {/* 상세 — 이미 가진 c 로 즉시 렌더 */}
-      <section className="stack-2">
+      <section className="dlg-sec">
         <span className="t-over">식별 정보</span>
         <KvList columns={2} items={[
           { k: 'externalUserId', v: c.externalUserId, mono: true },
@@ -83,7 +83,7 @@ export default function CredentialDetailDialog({ c, tenantId, onClose, position,
         ]} />
       </section>
 
-      <section className="stack-2">
+      <section className="dlg-sec">
         <span className="t-over">인증기</span>
         <KvList columns={2} items={[
           { k: '인증기', v: c.authenticatorName ?? (c.aaguid ?? 'unknown') },
@@ -94,7 +94,7 @@ export default function CredentialDetailDialog({ c, tenantId, onClose, position,
         ]} />
       </section>
 
-      <section className="stack-2">
+      <section className="dlg-sec">
         <span className="t-over">인증 기록 (최근 20건)</span>
         {loading ? (
           <div className="stack-2" aria-busy="true" style={{ padding: '8px 0' }}>

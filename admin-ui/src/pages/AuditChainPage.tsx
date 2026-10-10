@@ -137,6 +137,12 @@ const PAGE_TITLE = '감사 체인 모니터';
 // 스케줄러 없음: overview 호출 시마다 서버가 전체 tenant chain 을 검증한다(AuditChainMonitorController.overview).
 const PAGE_SUB = "tenant별 audit hash chain 무결성 — 화면을 열 때와 '새로 검증'·'전체 즉시 검증'을 누를 때 서버가 검증합니다.";
 
+/** 아바타 글자 — 첫 문자/숫자(예: "[platform]" → "P"). */
+function initial(name: string): string {
+  const m = name.match(/[\p{L}\p{N}]/u);
+  return (m ? m[0] : name.slice(0, 1)).toUpperCase();
+}
+
 export default function AuditChainPage() {
   const [overview, setOverview] = useState<ChainOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -318,7 +324,7 @@ export default function AuditChainPage() {
       key: 'tenant', header: 'Tenant',
       render: (c) => (
         <div className="row" style={{ gap: 10, flexWrap: 'nowrap', minWidth: 0 }}>
-          <span className="avatar avatar--sq avatar--sm" aria-hidden="true">{c.tenantName.slice(0, 1).toUpperCase()}</span>
+          <span className="avatar avatar--sq avatar--sm" aria-hidden="true">{initial(c.tenantName)}</span>
           <strong className="truncate" style={{ fontSize: 13, maxWidth: 260 }} title={c.tenantName}>{c.tenantName}</strong>
         </div>
       ),
@@ -425,7 +431,7 @@ export default function AuditChainPage() {
       <Card>
         <CardHeader
           title="Tenant별 Chain 상태"
-          sub={`${timeAgo(overview.verifiedAt)} 검증 기준${showStrip ? ` · 스트립은 최근 ${STRIP_RUNS}회 검증` : ''}`}
+          cap={`${timeAgo(overview.verifiedAt)} 검증 기준${showStrip ? ` · 스트립은 최근 ${STRIP_RUNS}회 검증` : ''}`}
           actions={
             <Segmented<'all' | 'tampered'>
               ariaLabel="상태 필터"
@@ -450,7 +456,7 @@ export default function AuditChainPage() {
       <Card>
         <CardHeader
           title="보안 Incident"
-          sub="위변조 감지 시 등록되는 대응 incident"
+          cap="위변조 감지 시 등록되는 대응 incident"
           actions={openCount > 0 ? <Badge tone="warn">{`${statusLabel('OPEN')} ${openCount}`}</Badge> : undefined}
         />
         {incidentError && (
