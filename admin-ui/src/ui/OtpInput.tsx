@@ -12,16 +12,22 @@ export function OtpInput({ length = 6, value, onChange, onComplete, disabled, ar
     refs.current[Math.min(focusIndex, length - 1)]?.focus();
     if (v.length === length) onComplete?.(v);
   }
-  function setAt(i: number, d: string) {
-    const arr = digits.slice();
-    arr[i] = d;
-    // value 는 연속 숫자열로 유지된다(빈 칸은 join 시 사라져 앞으로 당겨진다)
-    return arr.join('');
-  }
+  // 한 자리 입력: value 는 연속 숫자열이므로 빈 칸 앞이면 value 끝에 붙인다(위치 = min(i, value.length)).
   function onInput(i: number, raw: string) {
-    const d = raw.replace(/\D/g, '').slice(-1);
-    if (!d) return;
-    commit(setAt(i, d), i + 1);
+    const typed = raw.replace(/\D/g, '');
+    if (typed.length === 0) {
+      // filled 칸에서 Backspace: 이 칸과 뒤 값을 비우고 같은 칸에 포커스를 유지한다.
+      onChange(value.slice(0, i));
+      refs.current[i]?.focus();
+      return;
+    }
+    if (typed.length >= 2) {
+      // SMS/IME 자동 입력 등 여러 자리: 붙여넣기와 같은 경로로 처리한다.
+      commit(typed, typed.length);
+      return;
+    }
+    const target = Math.min(i, value.length);
+    commit(value.slice(0, target) + typed + value.slice(target + 1), target + 1);
   }
   function onPaste(e: ClipboardEvent<HTMLInputElement>) {
     e.preventDefault();
@@ -42,9 +48,24 @@ export function OtpInput({ length = 6, value, onChange, onComplete, disabled, ar
       <legend className="sr-only">{ariaLabel} {length}자리</legend>
       <div className="otp">
         {digits.map((d, i) => (
-          <input key={i} ref={(el) => { refs.current[i] = el; }} className="otp__cell" inputMode="numeric" autoComplete={i === 0 ? 'one-time-code' : 'off'}
-            aria-label={`${ariaLabel} ${i + 1}번째 자리`} value={d} disabled={disabled} autoFocus={autoFocus && i === 0} maxLength={1}
-            onChange={(e) => onInput(i, e.target.value)} onPaste={onPaste} onKeyDown={(e) => onKeyDown(i, e)} />
+          <input
+            key={i}
+            ref={(el) => { refs.current[i] = el; }}
+            className="otp__cell"
+            inputMode="numeric"
+            autoComplete={i === 0 ? 'one-time-code' : 'off'}
+            aria-label={`${ariaLabel} ${i + 1}번째 자리`}
+            value={d}
+            disabled={disabled}
+            // autoFocus 는 호출자가 명시적으로 켠 경우에만 적용되는 옵트인 prop 이다.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus={autoFocus && i === 0}
+            maxLength={1}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => onInput(i, e.target.value)}
+            onPaste={onPaste}
+            onKeyDown={(e) => onKeyDown(i, e)}
+          />
         ))}
       </div>
     </fieldset>

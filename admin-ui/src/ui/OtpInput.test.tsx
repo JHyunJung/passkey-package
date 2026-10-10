@@ -51,3 +51,39 @@ describe('OtpInput', () => {
     expect(document.activeElement).toBe(cells()[1]);
   });
 });
+
+describe('OtpInput 수정 라운드', () => {
+  it('filled 칸 Backspace 는 그 칸을 비우고 포커스를 유지한다', () => {
+    render(<Host onComplete={vi.fn()} />);
+    fireEvent.change(cells()[0], { target: { value: '1' } });
+    fireEvent.change(cells()[1], { target: { value: '2' } });
+    fireEvent.change(cells()[1], { target: { value: '' } });
+    expect(cells()[1]).toHaveValue('');
+    expect(cells()[0]).toHaveValue('1');
+    expect(document.activeElement).toBe(cells()[1]);
+  });
+  it('빈 값에서 칸 3 에 입력하면 0번 칸에 저장하고 1번 칸으로 포커스', () => {
+    render(<Host onComplete={vi.fn()} />);
+    fireEvent.change(cells()[3], { target: { value: '5' } });
+    expect(cells()[0]).toHaveValue('5');
+    expect(cells()[3]).toHaveValue('');
+    expect(document.activeElement).toBe(cells()[1]);
+  });
+  it("'123 456' 붙여넣기는 onComplete 를 정확히 한 번 호출한다", () => {
+    const onComplete = vi.fn();
+    render(<Host onComplete={onComplete} />);
+    fireEvent.paste(cells()[0], { clipboardData: { getData: () => '123 456' } });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith('123456');
+  });
+  it('0번 칸에 여러 자리가 들어오면 칸들을 채운다', () => {
+    const onComplete = vi.fn();
+    render(<Host onComplete={onComplete} />);
+    fireEvent.change(cells()[0], { target: { value: '12' } });
+    expect(cells().map((c) => (c as HTMLInputElement).value).join('')).toBe('12');
+    fireEvent.change(cells()[0], { target: { value: '123456' } });
+    expect(cells().map((c) => (c as HTMLInputElement).value).join('')).toBe('123456');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith('123456');
+  });
+});
