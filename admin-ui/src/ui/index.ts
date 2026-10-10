@@ -15,3 +15,4 @@ export * from './Segmented';
 export * from './ChoiceCard';
 export * from './Chips';
 export * from './ChipInput';
+export * from './OtpInput';
