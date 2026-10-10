@@ -10,6 +10,7 @@ import { Header } from '@/shell/Header';
 import { IdleSessionModal } from '@/extras/IdleSessionModal';
 import { CommandPalette } from '@/extras/CommandPalette';
 import { useGoShortcuts } from '@/extras/useGoShortcuts';
+import { usePaletteShortcut } from '@/extras/usePaletteShortcut';
 import { isPlatform } from '@/me/roles';
 import LoginPage from '@/pages/LoginPage';
 import MfaChallenge from '@/pages/MfaChallenge';
@@ -88,17 +89,9 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Cmd/Ctrl+K → open palette
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setPaletteOpen((v) => !v);
-      }
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  // Cmd/Ctrl+K → open palette (비밀값 alertdialog 가 열려 있으면 무시)
+  const togglePalette = useCallback(() => setPaletteOpen((v) => !v), []);
+  usePaletteShortcut(togglePalette);
 
   useGoShortcuts(setRoute, isPlatform(me));
 

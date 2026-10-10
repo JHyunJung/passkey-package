@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
 import {
   Alert, Badge, Button, Card, CardHeader, DataTable, Dialog, EmptyState, FilterChip, KpiCard, Menu, SecretBox, StatusBadge, useToast,
+  useUnsavedGuard,
   type Column,
 } from '@/ui';
 import { illustrations } from '@/assets/illustrations';
@@ -43,6 +44,11 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const [rotating, setRotating] = useState<ApiKey | null>(null);
   const toast = useToast();
+  // 평문 키는 이 다이얼로그에서 한 번만 보인다 — 닫기 전 이동·새로고침을 막는다.
+  const leaveGuard = useUnsavedGuard(issued !== null, {
+    title: '키를 아직 저장하지 않았습니다',
+    body: '이동하면 발급된 키를 다시 볼 수 없습니다. 키는 서버에서 계속 유효합니다.',
+  });
 
   async function reload() {
     setLoading(true);
@@ -159,6 +165,7 @@ export default function ApiKeysTab({ tenant }: { tenant: Tenant }) {
       <IssuedKeyDialog issued={issued} onClose={() => setIssued(null)} />
       <RotateKeyDialog k={rotating} onClose={() => setRotating(null)} onConfirm={handleRotate} />
       <RevokeKeyDialog k={revoking} onClose={() => setRevoking(null)} onConfirm={handleRevoke} />
+      {leaveGuard}
     </div>
   );
 }

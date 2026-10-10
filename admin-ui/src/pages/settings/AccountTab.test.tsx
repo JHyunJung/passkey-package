@@ -1,7 +1,8 @@
 // admin-ui/src/pages/settings/AccountTab.test.tsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
-import { useState } from 'react';
+import { screen, fireEvent, waitFor, within, cleanup, act } from '@testing-library/react';
+import { renderWithDataRouter } from '@/test/renderWithDataRouter';
+import { useState, type ReactElement } from 'react';
 import type { Me } from '@/api/types';
 import { ToastHost } from '@/ui';
 
@@ -19,6 +20,7 @@ const off: Me = { email: 'a@x.com', role: 'RP_ADMIN', tenantIds: ['t1'], mfaEnab
 const on: Me = { ...off, mfaEnabled: true };
 const CODES = ['AAAA-BBBB', 'CCCC-DDDD', 'EEEE-FFFF', 'GGGG-HHHH', 'JJJJ-KKKK', 'LLLL-MMMM', 'NNNN-PPPP', 'QQQQ-RRRR', 'SSSS-TTTT', 'UUUU-VVVV'];
 
+const renderHost = (ui: ReactElement) => renderWithDataRouter(ui, { initialPath: '/settings?tab=account' });
 const m = <T,>(fn: T) => fn as unknown as ReturnType<typeof vi.fn>;
 
 function Host({ initial }: { initial: Me }) {
@@ -37,7 +39,7 @@ afterEach(cleanup);
 
 describe('AccountTab — MFA 꺼짐', () => {
   it('일러스트(장식) + 2단계 인증 켜기 카드', () => {
-    const { container } = render(<Host initial={off} />);
+    const { container } = renderHost(<Host initial={off} />);
     expect(screen.getByText('꺼짐')).toHaveClass('badge');
     expect(screen.getByText('계정을 한 단계 더 보호하세요')).toBeInTheDocument();
     expect(container.querySelector('img')).toHaveAttribute('alt', '');
@@ -45,7 +47,7 @@ describe('AccountTab — MFA 꺼짐', () => {
   });
 
   it('stepper progression: QR 스캔 → 코드 확인 → 복구 코드 다이얼로그', async () => {
-    render(<Host initial={off} />);
+    renderHost(<Host initial={off} />);
     fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
     const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
 
@@ -78,7 +80,7 @@ describe('AccountTab — MFA 꺼짐', () => {
 
   it('confirm 성공 후 getMe 가 실패해도 복구 코드는 보여 준다', async () => {
     m(getMe).mockRejectedValue(new Error('boom'));
-    render(<Host initial={off} />);
+    renderHost(<Host initial={off} />);
     fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
     const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
     fireEvent.paste(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' }), { clipboardData: { getData: () => '123456' } });
@@ -91,7 +93,7 @@ describe('AccountTab — MFA 꺼짐', () => {
   it('잘못된 코드면 코드가 지워지고 다이얼로그는 유지', async () => {
     const { ApiError } = await import('@/api/types');
     m(mfaApi.confirm).mockRejectedValue(new ApiError(401, 'invalid_code', 'invalid_code'));
-    render(<Host initial={off} />);
+    renderHost(<Host initial={off} />);
     fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
     const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
     fireEvent.paste(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' }), { clipboardData: { getData: () => '000000' } });
@@ -102,7 +104,7 @@ describe('AccountTab — MFA 꺼짐', () => {
   });
 
   it('취소하면 다이얼로그가 닫히고 confirm 을 부르지 않는다', async () => {
-    render(<Host initial={off} />);
+    renderHost(<Host initial={off} />);
     fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
     const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
     fireEvent.click(within(dlg).getByRole('button', { name: '취소' }));
@@ -113,7 +115,7 @@ describe('AccountTab — MFA 꺼짐', () => {
 
 describe('AccountTab — MFA 켜짐', () => {
   it('optional rows hidden when undefined (§6 ④)', () => {
-    render(<Host initial={on} />);
+    renderHost(<Host initial={on} />);
     expect(screen.getByText('켜짐')).toHaveClass('badge--success');
     expect(screen.queryByText('등록일')).toBeNull();
     expect(screen.queryByText('남은 복구 코드')).toBeNull();
@@ -121,7 +123,7 @@ describe('AccountTab — MFA 켜짐', () => {
   });
 
   it('optional rows shown when defined', () => {
-    render(<Host initial={{ ...on, mfaEnrolledAt: '2026-09-01T10:00:00Z', recoveryCodesRemaining: 7 }} />);
+    renderHost(<Host initial={{ ...on, mfaEnrolledAt: '2026-09-01T10:00:00Z', recoveryCodesRemaining: 7 }} />);
     expect(screen.getByText('등록일')).toBeInTheDocument();
     expect(screen.getByText('2026-09-01')).toBeInTheDocument();
     expect(screen.getByText('남은 복구 코드')).toBeInTheDocument();
@@ -129,7 +131,7 @@ describe('AccountTab — MFA 켜짐', () => {
   });
 
   it('2단계 인증 끄기: alertdialog, 6자리 입력 후 disable(code)', async () => {
-    render(<Host initial={on} />);
+    renderHost(<Host initial={on} />);
     m(getMe).mockResolvedValue(off);
     fireEvent.click(screen.getByRole('button', { name: '2단계 인증 끄기' }));
     const dlg = screen.getByRole('alertdialog', { name: '2단계 인증 끄기' });
@@ -141,5 +143,26 @@ describe('AccountTab — MFA 켜짐', () => {
     await waitFor(() => expect(mfaApi.disable).toHaveBeenCalledWith('123456'));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(await screen.findByText('꺼짐')).toBeInTheDocument();
+  });
+});
+
+describe('AccountTab — 복구 코드 이동 가드', () => {
+  it('복구 코드가 표시된 동안 이동·새로고침을 막는다', async () => {
+    const { router } = renderHost(<Host initial={off} />);
+    fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
+    const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
+    fireEvent.paste(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' }), { clipboardData: { getData: () => '123456' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '확인 → 복구 코드' }));
+    await screen.findByRole('alertdialog', { name: '복구 코드 — 지금만 표시됩니다' });
+
+    const ev = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+
+    await act(async () => { await router.navigate('/tenants'); });
+    expect(screen.getByRole('alertdialog', { name: '복구 코드를 아직 저장하지 않았습니다' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/settings');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '머무르기' })); });
+    expect(screen.getByRole('alertdialog', { name: '복구 코드 — 지금만 표시됩니다' })).toBeInTheDocument();
   });
 });

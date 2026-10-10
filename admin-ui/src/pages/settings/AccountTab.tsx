@@ -5,7 +5,7 @@ import { getMe } from '@/api/client';
 import { ApiError, type Me } from '@/api/types';
 import { QrCode } from '@/shell/QrCode';
 import { illustrations } from '@/assets/illustrations';
-import { Badge, Button, Dialog, OtpInput, SecretBox, Stepper, useToast, type StepState } from '@/ui';
+import { Badge, Button, Dialog, OtpInput, SecretBox, Stepper, useToast, useUnsavedGuard, type StepState } from '@/ui';
 import { KvList, type KvItem } from '@/pages/tenant/KvList';
 import { RecoveryCodesModal } from './RecoveryCodesModal';
 
@@ -32,6 +32,11 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
   const [enrolling, setEnrolling] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  // 복구 코드는 1회만 표시된다 — 닫기 전 이동·새로고침을 막는다.
+  const leaveGuard = useUnsavedGuard(recoveryCodes !== null, {
+    title: '복구 코드를 아직 저장하지 않았습니다',
+    body: '이동하면 복구 코드를 다시 볼 수 없습니다.',
+  });
 
   // disable flow state
   const [disableOpen, setDisableOpen] = useState(false);
@@ -247,6 +252,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
       {recoveryCodes && (
         <RecoveryCodesModal codes={recoveryCodes} accountEmail={me.email} onClose={() => setRecoveryCodes(null)} />
       )}
+      {leaveGuard}
     </div>
   );
 }

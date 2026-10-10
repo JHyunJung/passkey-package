@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { screen, fireEvent, within, act } from '@testing-library/react';
+import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
 import type { ApiKey, Tenant } from '@/api/designTypes';
 
@@ -18,7 +19,7 @@ const key = (p: Partial<ApiKey>): ApiKey => ({
   id: 'k', prefix: 'pk_live_ab', name: 'prod', status: 'ACTIVE', createdAt: iso(-10), lastUsedAt: null,
   scopes: ['registration'], expiresAt: null, ...p,
 });
-const renderTab = () => render(<ToastHost><ApiKeysTab tenant={tenant} /></ToastHost>);
+const renderTab = () => renderWithDataRouter(<ToastHost><ApiKeysTab tenant={tenant} /></ToastHost>, { initialPath: '/tenants/t1?tab=apikeys' });
 
 describe('ApiKeysTab V2', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -105,5 +106,25 @@ describe('ApiKeysTab V2', () => {
     const issued = await screen.findByRole('alertdialog', { name: /새 API key가 발급되었습니다/ });
     expect(api.rotate).toHaveBeenCalledWith('a');
     expect(within(issued).getByText(/이전 키는 24시간 후/)).toBeInTheDocument();
+  });
+
+  it('발급 다이얼로그가 열린 동안 이동·새로고침을 막는다(평문 키 소실 방지)', async () => {
+    api.list.mockResolvedValue([]);
+    api.create.mockResolvedValue({ key: key({ id: 'n1', name: 'staging' }), plaintext: 'pk_live_ab.secret' });
+    const { router } = renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '새 키 발급' }));
+    fireEvent.change(screen.getByLabelText('용도 (이름)'), { target: { value: 'staging' } });
+    fireEvent.click(screen.getByRole('button', { name: '발급' }));
+    await screen.findByRole('alertdialog', { name: /새 API key가 발급되었습니다/ });
+
+    const ev = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+
+    await act(async () => { await router.navigate('/tenants'); });
+    expect(screen.getByRole('alertdialog', { name: '키를 아직 저장하지 않았습니다' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/tenants/t1');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '머무르기' })); });
+    expect(screen.getByText('pk_live_ab.secret')).toBeInTheDocument();
   });
 });
