@@ -6,7 +6,7 @@ import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import { ApiError } from '@/api/types';
 import { useToast } from '@/shell/ToastHost';
-import { StatusBadge } from '@/shell/StatusBadge';
+import { StatusBadge } from '@/ui';
 import { Dialog } from '@/shell/Dialog';
 
 // ── Local utilities ───────────────────────────────────────────────────────────

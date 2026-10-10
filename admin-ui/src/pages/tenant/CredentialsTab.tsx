@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icons } from '@/icons/Icons';
 import { Dialog } from '@/shell/Dialog';
-import { StatusBadge } from '@/shell/StatusBadge';
+import { StatusBadge } from '@/ui';
 import { useToast } from '@/shell/ToastHost';
 import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
-import { StatusBadge } from '@/shell/StatusBadge';
+import { StatusBadge } from '@/ui';
 import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import type { Me } from '@/api/types';

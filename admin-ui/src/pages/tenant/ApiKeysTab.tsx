@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import { Dialog } from '@/shell/Dialog';
-import { StatusBadge } from '@/shell/StatusBadge';
+import { StatusBadge } from '@/ui';
 import { useToast } from '@/shell/ToastHost';
 import { apiKeysApi } from '@/api/apiKeys';
 import { copyToClipboard } from '@/lib/clipboard';
