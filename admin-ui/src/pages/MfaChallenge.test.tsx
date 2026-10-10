@@ -1,55 +1,110 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import MfaChallenge from './MfaChallenge';
-import { ToastHost } from '@/ui';
+// admin-ui/src/pages/MfaChallenge.test.tsx (교체)
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-function renderChallenge() {
-  return render(
+vi.mock('@/api/mfa', () => ({ mfaApi: { verify: vi.fn() } }));
+
+import { mfaApi } from '@/api/mfa';
+import { ToastHost } from '@/ui';
+import MfaChallenge from './MfaChallenge';
+
+function renderChallenge(onVerified = vi.fn(), onLogout = vi.fn()) {
+  const utils = render(
     <ToastHost>
-      <MfaChallenge onVerified={vi.fn()} onLogout={vi.fn()} />
+      <MfaChallenge onVerified={onVerified} onLogout={onLogout} />
     </ToastHost>,
   );
+  return { onVerified, onLogout, ...utils };
 }
+const cell = (i: number) => screen.getByRole('textbox', { name: `인증 코드 ${i + 1}번째 자리` }) as HTMLInputElement;
+const cellValues = () => [0, 1, 2, 3, 4, 5].map((i) => cell(i).value).join('');
+const toRecovery = () => fireEvent.click(screen.getByRole('button', { name: /복구 코드로 로그인/ }));
 
-describe('MfaChallenge', () => {
-  it('TOTP mode strips non-digits and caps at 6', () => {
-    renderChallenge();
-    const input = screen.getByPlaceholderText('000000') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'a1b2c3d4e5f6g7' } }); // digits: 1234567 -> cap 6
-    expect(input.value).toBe('123456');
+beforeEach(() => {
+  vi.mocked(mfaApi.verify).mockReset().mockResolvedValue({ verified: true });
+});
+
+describe('MfaChallenge V2', () => {
+  it('공통 카드 셸: 워드마크·장식 일러스트·OTP 6칸·카드 밖 로그아웃', () => {
+    const { container, onLogout } = renderChallenge();
+    expect(container.querySelector('.auth .auth-card')).not.toBeNull();
+    expect(screen.getByAltText('CROSSCERT')).toHaveClass('auth__logo');
+    expect(container.querySelector('.auth-card img[alt=""]')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: '2단계 인증' })).toBeInTheDocument();
+    expect(screen.getAllByRole('textbox')).toHaveLength(6);
+    const logout = screen.getByRole('button', { name: '로그아웃' });
+    expect(logout.closest('.auth-card')).toBeNull();
+    fireEvent.click(logout);
+    expect(onLogout).toHaveBeenCalled();
   });
 
-  it('recovery mode auto-formats: uppercases and inserts dash after 4 chars', () => {
+  it('TOTP 칸은 숫자 아닌 입력을 무시하고, 붙여넣기는 숫자만 6자리로 자른다', () => {
     renderChallenge();
-    fireEvent.click(screen.getByRole('button', { name: /복구 코드로 로그인/ }));
-    const rec = screen.getByPlaceholderText('AB3F-2K7M') as HTMLInputElement;
+    fireEvent.change(cell(0), { target: { value: 'a' } });
+    expect(cell(0).value).toBe('');
+    fireEvent.paste(cell(0), { clipboardData: { getData: () => 'a1b2c3d4e5f6g7' } });
+    expect(cellValues()).toBe('123456');
+  });
+
+  it('6자리를 모두 입력하면 verify 를 정확히 한 번 호출한다(자동 제출)', async () => {
+    let resolve!: (v: { verified: boolean }) => void;
+    vi.mocked(mfaApi.verify).mockReturnValue(new Promise((r) => { resolve = r; }));
+    const { onVerified } = renderChallenge();
+    '123456'.split('').forEach((d, i) => fireEvent.change(cell(i), { target: { value: d } }));
+    // 진행 중 수동 확인(버튼·Enter)이 겹쳐도 중복 호출하지 않는다
+    fireEvent.submit(screen.getByRole('button', { name: /확인/ }).closest('form')!);
+    expect(mfaApi.verify).toHaveBeenCalledTimes(1);
+    expect(mfaApi.verify).toHaveBeenCalledWith('123456');
+    resolve({ verified: true });
+    await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
+    expect(mfaApi.verify).toHaveBeenCalledTimes(1);
+  });
+
+  it('수동 확인 버튼은 6자리 전에는 비활성, 실패하면 칸을 비우고 토스트', async () => {
+    vi.mocked(mfaApi.verify).mockRejectedValue(new Error('invalid_code'));
+    renderChallenge();
+    fireEvent.change(cell(0), { target: { value: '1' } });
+    expect(screen.getByRole('button', { name: '확인' })).toBeDisabled();
+    fireEvent.paste(cell(0), { clipboardData: { getData: () => '999999' } });
+    expect(await screen.findByText('인증 실패')).toBeInTheDocument();
+    await waitFor(() => expect(cellValues()).toBe(''));
+  });
+
+  it('복구 코드 모드는 같은 카드 안에서 전환되고 대문자·대시로 정형한다', () => {
+    const { container } = renderChallenge();
+    const card = container.querySelector('.auth-card');
+    toRecovery();
+    expect(container.querySelector('.auth-card')).toBe(card);
+    expect(screen.getByRole('heading', { name: '복구 코드로 로그인' })).toBeInTheDocument();
+    const rec = screen.getByLabelText('복구 코드') as HTMLInputElement;
+    expect(rec).toHaveAttribute('placeholder', 'AB3F-2K7M');
     fireEvent.change(rec, { target: { value: 'ab3f2k7m' } });
     expect(rec.value).toBe('AB3F-2K7M');
   });
 
-  it('toggling back to TOTP clears the input', () => {
+  it('TOTP 로 돌아가면 입력이 비워진다', () => {
     renderChallenge();
-    fireEvent.click(screen.getByRole('button', { name: /복구 코드로 로그인/ }));
-    const rec = screen.getByPlaceholderText('AB3F-2K7M') as HTMLInputElement;
-    fireEvent.change(rec, { target: { value: 'abcd' } });
+    toRecovery();
+    fireEvent.change(screen.getByLabelText('복구 코드'), { target: { value: 'abcd' } });
     fireEvent.click(screen.getByRole('button', { name: /authenticator 코드로 돌아가기/ }));
-    const totp = screen.getByPlaceholderText('000000') as HTMLInputElement;
-    expect(totp.value).toBe('');
+    expect(cellValues()).toBe('');
   });
 
-  it('recovery mode keeps submit disabled for a partial code', () => {
+  it('복구 코드가 부분 입력이면 확인 비활성', () => {
     renderChallenge();
-    fireEvent.click(screen.getByRole('button', { name: /복구 코드로 로그인/ }));
-    const rec = screen.getByPlaceholderText('AB3F-2K7M') as HTMLInputElement;
-    fireEvent.change(rec, { target: { value: 'ab3f2' } }); // -> AB3F-2 (incomplete)
+    toRecovery();
+    fireEvent.change(screen.getByLabelText('복구 코드'), { target: { value: 'ab3f2' } });
     expect(screen.getByRole('button', { name: '확인' })).toBeDisabled();
   });
 
-  it('recovery mode enables submit for a fully-formed code', () => {
-    renderChallenge();
-    fireEvent.click(screen.getByRole('button', { name: /복구 코드로 로그인/ }));
-    const rec = screen.getByPlaceholderText('AB3F-2K7M') as HTMLInputElement;
-    fireEvent.change(rec, { target: { value: 'ab3f2k7m' } }); // -> AB3F-2K7M
-    expect(screen.getByRole('button', { name: '확인' })).not.toBeDisabled();
+  it('복구 코드가 완성되면 확인 활성, 제출 시 그 코드로 verify', async () => {
+    const { onVerified } = renderChallenge();
+    toRecovery();
+    fireEvent.change(screen.getByLabelText('복구 코드'), { target: { value: 'ab3f2k7m' } });
+    const btn = screen.getByRole('button', { name: '확인' });
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
+    await waitFor(() => expect(onVerified).toHaveBeenCalled());
+    expect(mfaApi.verify).toHaveBeenCalledWith('AB3F-2K7M');
   });
 });
