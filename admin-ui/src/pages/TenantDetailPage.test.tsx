@@ -12,7 +12,11 @@ vi.mock('@/pages/tenant/TenantOverview', () => ({
   default: (p: { expiringKeyCount?: number; isPlatformOperator?: boolean }) => <div>OVERVIEW expiring={String(p.expiringKeyCount)} platform={String(p.isPlatformOperator)}</div>,
 }));
 vi.mock('@/pages/tenant/WebauthnConfigTab', () => ({ default: () => <div>WEBAUTHN TAB</div> }));
-vi.mock('@/pages/tenant/AaguidPolicyTab', () => ({ default: () => <div>AAGUID TAB</div> }));
+vi.mock('@/pages/tenant/AaguidPolicyTab', () => ({
+  default: (p: { onSaved?: (x: unknown) => void }) => (
+    <button type="button" onClick={() => p.onSaved?.({ mode: 'ALLOWLIST', mdsStrict: false, entries: [{ aaguid: 'a', note: null, mdsName: 'YubiKey 5' }] })}>AAGUID 저장 시뮬레이션</button>
+  ),
+}));
 vi.mock('@/pages/tenant/ApiKeysTab', () => ({ default: () => <div>APIKEYS TAB</div> }));
 vi.mock('@/pages/tenant/CredentialsTab', () => ({ default: () => <div>CREDENTIALS TAB</div> }));
 vi.mock('@/pages/tenant/AuditTab', () => ({ default: (p: { isPlatformOperator: boolean }) => <div>AUDIT TAB platform={String(p.isPlatformOperator)}</div> }));
@@ -110,6 +114,16 @@ describe('탭 점 배지', () => {
     await waitFor(() => expect(apiKeysApi.list).toHaveBeenCalled());
     expect(screen.queryByLabelText('확인 필요')).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+  it('AAGUID 저장 후 onSaved 로 점이 갱신된다', async () => {
+    (aaguidPolicyApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      mode: 'ALLOWLIST', mdsStrict: false, entries: [{ aaguid: 'a', note: null, mdsName: null }],
+    });
+    renderPage({ tab: 'aaguid' });
+    const tab = screen.getByRole('tab', { name: /AAGUID 정책/ });
+    expect(await within(tab).findByLabelText('확인 필요')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'AAGUID 저장 시뮬레이션' }));
+    expect(within(tab).queryByLabelText('확인 필요')).toBeNull();
   });
 });
 

@@ -1,9 +1,12 @@
+// admin-ui/src/pages/tenant/AaguidPolicyTab.tsx
 import { useState, useEffect } from 'react';
 import { Icons } from '@/icons/Icons';
 import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import type { Tenant, AaguidPolicy } from '@/api/designTypes';
-import { useToast } from '@/ui';
 import { AAGUID_MODE_LABELS } from '@/i18n/labels';
+import { Alert, Badge, Button, Card, CardHeader, ChoiceCard, IconButton, SaveBar, Switch, useToast, useUnsavedGuard } from '@/ui';
+import { SetRow } from './SetRow';
+import { unverifiedAaguidCount } from './tenantSignals';
 
 // ── AAGUID 입력 자동 포맷 ─────────────────────────────────────────────────────
 // 입력값에서 16진수만 남기고(최대 32자) UUID 형식 8-4-4-4-12 위치에 하이픈을
@@ -23,9 +26,25 @@ export function formatAaguid(raw: string): string {
   return out.join('-');
 }
 
+/** SaveBar 요약용 변경 필드 이름. */
+export function aaguidChangedFields(saved: AaguidPolicy | null, draft: AaguidPolicy | null): string[] {
+  if (!saved || !draft) return [];
+  const out: string[] = [];
+  if (saved.mode !== draft.mode) out.push('mode');
+  if (JSON.stringify(saved.entries) !== JSON.stringify(draft.entries)) out.push('AAGUID 목록');
+  if (saved.mdsStrict !== draft.mdsStrict) out.push('MDS strict');
+  return out;
+}
+
+const MODES: { v: AaguidPolicy['mode']; d: string }[] = [
+  { v: 'ANY', d: '모든 authenticator 허용' },
+  { v: 'ALLOWLIST', d: '지정된 AAGUID만 허용' },
+  { v: 'DENYLIST', d: '지정된 AAGUID만 차단' },
+];
+
 // ── AaguidPolicyTab ───────────────────────────────────────────────────────────
 
-export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
+export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; onSaved?: (p: AaguidPolicy) => void }) {
   const [policy, setPolicy] = useState<AaguidPolicy | null>(null);
   const [draft, setDraft] = useState<AaguidPolicy | null>(null);
   const [aaguidInput, setAaguidInput] = useState('');
@@ -35,6 +54,8 @@ export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const inputValid = uuidRe.test(aaguidInput);
   const dirty = policy !== null && draft !== null && JSON.stringify(policy) !== JSON.stringify(draft);
+  const changedFields = aaguidChangedFields(policy, draft);
+  const guard = useUnsavedGuard(dirty);
 
   useEffect(() => {
     aaguidPolicyApi
@@ -78,6 +99,7 @@ export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
       const updated = await aaguidPolicyApi.update(tenant.id, draft);
       setPolicy(updated);
       setDraft(updated);
+      onSaved?.(updated);
       toast({ kind: 'ok', title: 'AAGUID 정책 저장 완료' });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -92,177 +114,78 @@ export default function AaguidPolicyTab({ tenant }: { tenant: Tenant }) {
     setDraft({ ...policy, entries: [...policy.entries] });
   }
 
-  if (!draft) {
-    return <div style={{ padding: 40, color: 'var(--text-mute)' }}>Loading…</div>;
+  if (!draft || !policy) {
+    return <div className="muted" style={{ padding: 40 }}>Loading…</div>;
   }
 
+  // 탭 점과 같은 기준(저장된 정책). 방금 추가한 항목은 저장 후 서버가 mdsName 을 채운다.
+  const unknownCount = unverifiedAaguidCount(policy);
+
   return (
-    <div className="stack-4">
-      <div className="card">
-        <div className="card__head">
-          <div>
-            <h3 className="card__title">AAGUID Attestation Policy</h3>
-            <div className="card__sub">authenticator 모델별 허용/차단. ANY는 RP가 처음 온보딩할 때만 사용 권장.</div>
-          </div>
-          <div className="row">
-            <button className="btn btn--sm" disabled={!dirty} onClick={handleRevert}>되돌리기</button>
-            <button className="btn btn--primary btn--sm" disabled={!dirty || saving} onClick={handleSave}>저장</button>
-          </div>
-        </div>
+    <div className="stack-6">
+      {unknownCount > 0 && (
+        <Alert tone="warn">
+          <strong>탭 점 배지 사유</strong> · {AAGUID_MODE_LABELS[policy.mode]}에 MDS 에서 확인되지 않은 AAGUID 가 {unknownCount}건 있습니다.
+        </Alert>
+      )}
 
-        <div className="card__body stack-4">
-          <Field label="mode">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxWidth: 540 }}>
-              {[
-                { v: 'ANY', t: AAGUID_MODE_LABELS.ANY, d: '모든 authenticator 허용' },
-                { v: 'ALLOWLIST', t: AAGUID_MODE_LABELS.ALLOWLIST, d: '지정된 AAGUID만 허용' },
-                { v: 'DENYLIST', t: AAGUID_MODE_LABELS.DENYLIST, d: '지정된 AAGUID만 차단' },
-              ].map((o) => (
-                <button
-                  key={o.v}
-                  onClick={() => setDraft({ ...draft, mode: o.v as AaguidPolicy['mode'] })}
-                  style={{
-                    padding: 10,
-                    textAlign: 'left',
-                    border: `1px solid ${draft.mode === o.v ? 'var(--accent)' : 'var(--border)'}`,
-                    background: draft.mode === o.v ? 'var(--accent-soft)' : 'var(--surface)',
-                    color: draft.mode === o.v ? 'var(--accent)' : 'var(--text)',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{o.t}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-mute)', marginTop: 4 }}>{o.d}</div>
-                </button>
-              ))}
-            </div>
-          </Field>
+      <Card>
+        <CardHeader title="AAGUID Attestation Policy" sub="등록 시 허용할 authenticator 모델을 AAGUID 로 제한합니다." />
 
-          {draft.mode !== 'ANY' && (
-            <Field
-              label={draft.mode === 'ALLOWLIST' ? '허용된 AAGUID' : '차단된 AAGUID'}
-              hint="UUID v4 형식. FIDO MDS 매핑된 이름이 옆에 표시됩니다."
-            >
-              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <input
-                  className="input mono"
-                  placeholder="ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+        <SetRow label="mode" desc="정책 방식" changed={changedFields.includes('mode')}>
+          <div className="choices" role="radiogroup" aria-label="mode">
+            {MODES.map((o) => (
+              <ChoiceCard key={o.v} checked={draft.mode === o.v} onSelect={() => setDraft({ ...draft, mode: o.v })}
+                title={AAGUID_MODE_LABELS[o.v]} description={o.d} />
+            ))}
+          </div>
+        </SetRow>
+
+        {draft.mode !== 'ANY' && (
+          <SetRow label={draft.mode === 'ALLOWLIST' ? '허용된 AAGUID' : '차단된 AAGUID'} changed={changedFields.includes('AAGUID 목록')}
+            desc="mode 가 전체 허용이 아닐 때만 표시. MDS 에서 모델명을 자동으로 찾아 붙입니다.">
+            <div className="stack-3" style={{ gap: 10 }}>
+              <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
+                <input className="input mono" aria-label="AAGUID 입력" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxLength={36}
                   value={aaguidInput}
                   onChange={(e) => setAaguidInput(formatAaguid(e.target.value))}
-                  onKeyDown={(e) => e.key === 'Enter' && add()}
-                  maxLength={36}
-                  style={{ flex: 1, minWidth: 0 }}
-                />
-                <button className="btn btn--primary btn--sm" disabled={!inputValid} onClick={add} style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-                  <Icons.Plus size={12} /> 추가
-                </button>
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+                <Button icon={<Icons.Plus size={14} />} disabled={!inputValid} onClick={add}>추가</Button>
               </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden' }}>
                 {list.length === 0 ? (
-                  <div style={{ padding: 14, fontSize: 12, color: 'var(--text-mute)' }}>
-                    비어 있음 — 이 상태에서는{' '}
-                    {draft.mode === 'ALLOWLIST' ? '모든 ceremony가 차단' : '모든 ceremony가 허용'}됩니다.
-                  </div>
+                  <p className="hint" style={{ margin: 0, padding: '12px 14px' }}>
+                    비어 있음 — 이 상태에서는 {draft.mode === 'ALLOWLIST' ? '모든 ceremony가 차단' : '모든 ceremony가 허용'}됩니다.
+                  </p>
                 ) : (
-                  list.map((entry, i) => (
-                    <div
-                      key={entry.aaguid}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 12px',
-                        borderBottom: i === list.length - 1 ? 0 : '1px solid var(--border)',
-                      }}
-                    >
-                      <div className="row">
-                        <Icons.Fingerprint size={14} />
-                        <span className="mono" style={{ fontSize: 12 }}>{entry.aaguid}</span>
-                        {entry.mdsName && <span className="badge badge--accent">{entry.mdsName}</span>}
-                      </div>
-                      <button
-                        className="btn btn--ghost btn--xs"
-                        onClick={() => setList(list.filter((x) => x.aaguid !== entry.aaguid))}
-                      >
-                        <Icons.X size={12} />
-                      </button>
-                    </div>
-                  ))
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                    {list.map((entry, i) => (
+                      <li key={entry.aaguid} className="row" style={{ flexWrap: 'nowrap', gap: 12, padding: '12px 14px', borderBottom: i === list.length - 1 ? 0 : '1px solid var(--line-soft)' }}>
+                        <span className="avatar avatar--sq" aria-hidden="true"><Icons.Fingerprint size={16} /></span>
+                        <div className="col" style={{ flex: '1 1 0', minWidth: 0 }}>
+                          <strong className="truncate" style={{ fontSize: 13 }} title={entry.mdsName ?? undefined}>{entry.mdsName ?? 'MDS 에 없음'}</strong>
+                          <span className="mono hint truncate" style={{ margin: 0 }}>{entry.aaguid}</span>
+                        </div>
+                        {entry.mdsName == null ? <Badge tone="warn">미확인</Badge> : <Badge tone="ok">MDS 확인</Badge>}
+                        <IconButton size="sm" label={`${entry.aaguid} 삭제`} icon={<Icons.X size={14} />}
+                          onClick={() => setList(list.filter((x) => x.aaguid !== entry.aaguid))} />
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
-            </Field>
-          )}
+            </div>
+          </SetRow>
+        )}
 
-          <Field
-            label="MDS Strict 모드"
-            hint="FIDO Metadata Service의 trust anchor만 허용. MDS 서비스 다운 시 모든 등록이 차단됩니다."
-          >
-            <Toggle
-              on={draft.mdsStrict}
-              onChange={(v) => setDraft({ ...draft, mdsStrict: v })}
-              label={draft.mdsStrict ? 'MDS strict 켜짐' : 'MDS strict 꺼짐'}
-            />
-          </Field>
-        </div>
-      </div>
+        <SetRow label="MDS Strict 모드" desc="MDS 에 없거나 REVOKED 상태인 authenticator 의 등록을 거부합니다." changed={changedFields.includes('MDS strict')}>
+          <Switch checked={draft.mdsStrict} onChange={(v) => setDraft({ ...draft, mdsStrict: v })}
+            label={draft.mdsStrict ? 'MDS strict 켜짐' : 'MDS strict 꺼짐'} />
+        </SetRow>
+      </Card>
+
+      <SaveBar count={changedFields.length} summary={changedFields.join(' · ')} onRevert={handleRevert} onSave={() => void handleSave()} saving={saving} />
+      {guard}
     </div>
-  );
-}
-
-// ── Field ─────────────────────────────────────────────────────────────────────
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-      {hint && <div className="hint">{hint}</div>}
-    </div>
-  );
-}
-
-// ── Toggle ────────────────────────────────────────────────────────────────────
-
-function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <button
-      onClick={() => onChange(!on)}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        border: 0,
-        background: 'transparent',
-        padding: 0,
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        style={{
-          position: 'relative',
-          width: 36,
-          height: 20,
-          borderRadius: 999,
-          background: on ? 'var(--accent)' : 'var(--border-strong)',
-          transition: 'background 120ms ease',
-          display: 'inline-block',
-        }}
-      >
-        <span
-          style={{
-            position: 'absolute',
-            top: 2,
-            left: on ? 18 : 2,
-            width: 16,
-            height: 16,
-            borderRadius: 999,
-            background: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-            transition: 'left 120ms ease',
-          }}
-        />
-      </span>
-      <span style={{ fontSize: 13, color: 'var(--text)' }}>{label}</span>
-    </button>
   );
 }

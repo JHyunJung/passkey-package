@@ -198,7 +198,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
       </div>
       {currentTab === 'overview' && <TenantOverview tenant={tenant} isPlatformOperator={platform} expiringKeyCount={expiringKeyCount} />}
       {currentTab === 'webauthn' && <WebauthnConfigTab tenant={tenant} />}
-      {currentTab === 'aaguid' && <AaguidPolicyTab tenant={tenant} />}
+      {currentTab === 'aaguid' && <AaguidPolicyTab tenant={tenant} onSaved={setAaguidPolicy} />}
       {currentTab === 'apikeys' && <ApiKeysTab tenant={tenant} />}
       {currentTab === 'credentials' && <CredentialsTab tenant={tenant} />}
       {currentTab === 'audit' && <AuditTab tenant={tenant} isPlatformOperator={platform} />}
