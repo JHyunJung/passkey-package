@@ -16,10 +16,11 @@ export function useLoad<T>(fetcher: () => Promise<T>, deps: unknown[]): LoadStat
   const run = useCallback((isReload: boolean) => {
     const my = ++seq.current;
     if (isReload) setReloading(true); else setStatus('loading');
-    fetcherRef.current().then(
-      (v) => { if (my !== seq.current) return; setData(v); setError(undefined); setStatus('ok'); setReloading(false); },
-      (e) => { if (my !== seq.current) return; setError(e); setStatus('failed'); setReloading(false); },
-    );
+    const onOk = (v: T) => { if (my !== seq.current) return; setData(v); setError(undefined); setStatus('ok'); setReloading(false); };
+    const onFail = (e: unknown) => { if (my !== seq.current) return; setError(e); setStatus('failed'); setReloading(false); };
+    let p: Promise<T>;
+    try { p = fetcherRef.current(); } catch (e) { onFail(e); return; }
+    p.then(onOk, onFail);
   }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

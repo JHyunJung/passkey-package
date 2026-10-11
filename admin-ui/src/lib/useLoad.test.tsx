@@ -48,6 +48,30 @@ describe('useLoad', () => {
     expect(result.current.data).toBe(1);
   });
 
+  it('fetcher 가 동기적으로 던지면 failed 가 되고 error 가 남는다 (최초 로드)', async () => {
+    const err = new Error('sync');
+    const { result } = renderHook(() => useLoad((): Promise<number> => { throw err; }, []));
+    await waitFor(() => expect(result.current.status).toBe('failed'));
+    expect(result.current.error).toBe(err);
+    expect(result.current.reloading).toBe(false);
+  });
+
+  it('reload 중 fetcher 가 동기적으로 던지면 failed 이고 reloading 은 false 로 돌아온다', async () => {
+    let n = 0;
+    const err = new Error('sync-reload');
+    const fetcher = (): Promise<number> => {
+      if (n++ === 0) return Promise.resolve(1);
+      throw err;
+    };
+    const { result } = renderHook(() => useLoad(fetcher, []));
+    await waitFor(() => expect(result.current.data).toBe(1));
+    act(() => result.current.reload());
+    await waitFor(() => expect(result.current.status).toBe('failed'));
+    expect(result.current.error).toBe(err);
+    expect(result.current.data).toBe(1);
+    expect(result.current.reloading).toBe(false);
+  });
+
   it('deps 가 바뀐 뒤 늦게 끝난 이전 요청은 무시한다', async () => {
     const first = deferred<string>();
     const second = deferred<string>();
