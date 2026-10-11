@@ -28,3 +28,4 @@ export * from './DataTable';
 export * from './Pagination';
 export * from './SaveBar';
 export * from './useUnsavedGuard';
+export * from './LoadError';
