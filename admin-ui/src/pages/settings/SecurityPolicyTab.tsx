@@ -44,7 +44,8 @@ export default function SecurityPolicyTab() {
   const timeoutUntouched = saved !== null && sessionDraft.trim() === String(saved.sessionIdleTimeoutMinutes);
   const timeoutErr = timeoutUntouched ? null : timeoutError(sessionDraft);
   const hasConsole = (list: string[]) => list.some((o) => o.toLowerCase() === consoleOrigin.toLowerCase());
-  // 지금 쓰고 있는 콘솔 주소를 허용 목록에서 빼면 저장 즉시 이 콘솔이 잠긴다.
+  // 지금 쓰고 있는 콘솔 주소를 허용 목록에서 뺀다. 이 콘솔은 같은 출처(/admin/...)로 호출하므로 바로 잠기지는 않지만,
+  // 다른 도메인에서 콘솔 API 를 부르는 구성이면 막힐 수 있어 경고·L2 확인·되돌리기를 둔다.
   const removesConsole = saved !== null && hasConsole(saved.corsAllowlist) && !hasConsole(corsAllowlist);
 
   /** 저장 본체. 실패는 throw — SaveBar 경로는 토스트로, 확인 다이얼로그 경로는 다이얼로그 안에서 보인다. */
@@ -182,7 +183,7 @@ export default function SecurityPolicyTab() {
             <p className="hint" style={{ margin: 0 }}>https://호스트[:포트] 형식. 경로 · 와일드카드(*) 불가.</p>
             {removesConsole && (
               <Alert tone="warn" actions={<Button size="sm" onClick={restoreConsoleOrigin} disabled={saving}>삭제 되돌리기</Button>}>
-                <span className="mono">{consoleOrigin}</span> 은 지금 쓰고 있는 콘솔 주소입니다. 저장하면 이 콘솔에서 API 를 호출할 수 없어 바로 잠깁니다.
+                <span className="mono">{consoleOrigin}</span> 은 지금 쓰고 있는 콘솔 주소입니다. 이 주소가 CORS 허용 목록에서 빠집니다. 다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.
               </Alert>
             )}
           </div>
@@ -207,9 +208,9 @@ export default function SecurityPolicyTab() {
         onConfirm={save}
       >
         <p className="card__sub" style={{ margin: 0 }}>
-          <span className="mono">{consoleOrigin}</span> 이 CORS 허용 목록에서 빠집니다. 저장하는 즉시 이 콘솔에서 API 를 호출할 수 없어 화면이 잠깁니다.
+          <span className="mono">{consoleOrigin}</span> 이 CORS 허용 목록에서 빠집니다. 다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.
         </p>
-        <p className="hint" style={{ margin: 0 }}>다른 주소의 콘솔에서 이 주소를 다시 추가해야 풀립니다.</p>
+        <p className="hint" style={{ margin: 0 }}>필요하면 이 주소를 다시 추가해 저장하세요.</p>
       </ConfirmDialog>
       {guard}
     </div>

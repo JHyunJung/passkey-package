@@ -167,6 +167,20 @@ describe('SecurityPolicyTab V3', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
   });
 
+  it('현재 콘솔 origin 경고는 같은 출처 콘솔이 잠긴다고 주장하지 않고 실제 영향(CORS 허용 목록·다른 도메인 호출)을 말한다', async () => {
+    const origin = window.location.origin;
+    mock(securityPolicyApi.get).mockResolvedValue({ ...view, corsAllowlist: [origin, 'https://admin.example.com'] });
+    await setup();
+    fireEvent.click(screen.getByRole('button', { name: `${origin} 삭제` }));
+    const warn = screen.getByText(/지금 쓰고 있는 콘솔 주소입니다/);
+    expect(warn).toHaveTextContent('이 주소가 CORS 허용 목록에서 빠집니다. 다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.');
+    expect(warn).not.toHaveTextContent(/잠깁니다/);
+    fireEvent.click(within(bar()!).getByRole('button', { name: '저장' }));
+    const dlg = screen.getByRole('alertdialog', { name: '현재 콘솔 주소를 빼고 저장할까요?' });
+    expect(dlg).toHaveTextContent('다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.');
+    expect(dlg).not.toHaveTextContent(/잠깁니다|화면이 잠/);
+  });
+
   it('저장 중에는 입력을 바꿀 수 없고 저장은 한 번만 나간다', async () => {
     let resolve!: (v: SecurityPolicyView) => void;
     mock(securityPolicyApi.update).mockReturnValue(new Promise<SecurityPolicyView>((r) => { resolve = r; }));
