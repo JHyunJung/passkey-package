@@ -1,30 +1,41 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { passwordResetApi } from '@/api/passwordReset';
+import { ApiError } from '@/api/types';
+import { isTransientError } from '@/lib/transientError';
 import { Alert, Button, Field } from '@/ui';
 
 /**
  * 미인증 public 화면 — 이메일로 재설정 링크 요청.
- * enumeration 방지: 항상 동일한 "메일을 확인하세요" 안내(계정 존재 비노출).
+ * enumeration 방지: 2xx·4xx 는 항상 동일한 "메일을 확인하세요" 안내(계정 존재 비노출).
+ * 네트워크·5xx 는 실제로 보내지 못했으므로 실패로 알리고 입력을 유지한다(H9).
  * 제출 후 같은 카드 안에서 완료 상태로 전환한다.
  */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [failure, setFailure] = useState<{ error: unknown } | null>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => { if (failure) submitRef.current?.focus(); }, [failure]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting || !email.trim()) return;
     setSubmitting(true);
+    setFailure(null);
     try {
       await passwordResetApi.request(email.trim());
-    } catch {
-      /* enumeration 방지: 실패해도 동일 안내. */
+      setSent(true);
+    } catch (err) {
+      if (isTransientError(err)) setFailure({ error: err });
+      else setSent(true); /* enumeration 방지: 4xx 는 성공과 같은 안내. */
     } finally {
       setSubmitting(false);
-      setSent(true);
     }
   }
+
+  const status = failure?.error instanceof ApiError ? failure.error.httpStatus : undefined;
 
   return (
     <main className="auth">
@@ -46,20 +57,28 @@ export default function ForgotPasswordPage() {
             </>
           ) : (
             <form className="col" style={{ gap: 20 }} onSubmit={submit}>
-              <Field label="이메일" htmlFor="forgot-email">
+              {failure && (
+                <Alert tone="bad" title="요청을 보내지 못했습니다.">
+                  네트워크 또는 서버 문제입니다. 메일은 발송되지 않았습니다. 잠시 후 다시 시도하세요.
+                  {status !== undefined && <span className="mono" style={{ display: 'block', fontSize: 11 }}>HTTP {status}</span>}
+                </Alert>
+              )}
+              <Field label="이메일" htmlFor="forgot-email" help={failure ? '입력한 이메일은 그대로 있습니다.' : undefined}>
                 <input
                   id="forgot-email"
                   className="input input--lg"
                   type="email"
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
                   autoFocus
                   autoComplete="username"
+                  readOnly={submitting}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@crosscert.com"
                 />
               </Field>
-              <Button type="submit" variant="primary" size="lg" disabled={submitting || !email.trim()}>
-                {submitting ? '전송 중…' : '재설정 링크 보내기'}
+              <Button ref={submitRef} type="submit" variant="primary" size="lg" disabled={submitting || !email.trim()}>
+                {submitting ? '전송 중…' : failure ? '다시 시도' : '재설정 링크 보내기'}
               </Button>
             </form>
           )}
