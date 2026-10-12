@@ -360,6 +360,15 @@ export default function ActivityPage() {
     const gen = ++queryGenRef.current;
     replaceNextRef.current = true;
     pollInFlightRef.current = false;
+    // 조회 조건이 바뀌면 이전 조건의 이벤트·KPI 를 버린다. 새 조건의 첫 조회가 실패하면
+    // "연결 끊김"(이전 목록 유지)이 아니라 전체 LoadError(KPI "—", 내보내기 비활성)로 보인다.
+    hasServerDataRef.current = false;
+    setEvents(null);
+    setKpi(EMPTY_KPI);
+    setTopTenants([]);
+    setLoadError(null);
+    setDisconnected(false);
+    setLastOkAt(null);
 
     async function fetchOnce() {
       if (pollInFlightRef.current) return;
@@ -508,6 +517,55 @@ export default function ActivityPage() {
     />
   );
 
+  const selectedTenantSlug = selectedTenant
+    ? (tenants.find((t) => t.id === selectedTenant)?.slug ?? topTenants.find((t) => t.tenantId === selectedTenant)?.tenantSlug ?? selectedTenant)
+    : null;
+  const hasApplied = categoryFilter !== 'all' || !!selectedTenant || actionQuery.trim() !== '';
+  // 필터는 로딩·실패 화면에서도 보인다 — 바꾼 조건의 조회가 실패하면 되돌릴 수 있어야 한다.
+  const filters = (
+    <div className="card" style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="row" style={{ gap: 12 }}>
+        <Segmented<ActivityCategory>
+          ariaLabel="카테고리"
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+          options={[{ value: 'all', label: '전체' }, { value: 'ops', label: '운영' }, { value: 'security', label: '보안' }]}
+        />
+        <select
+          className="input"
+          aria-label="테넌트"
+          style={{ width: 200 }}
+          value={selectedTenant ?? ''}
+          onChange={(ev) => setSelectedTenant(ev.target.value || undefined)}
+        >
+          <option value="">테넌트 · 전체</option>
+          {tenants.map((t) => (
+            <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
+          ))}
+        </select>
+        <div className="search" style={{ flex: '1 1 220px' }}>
+          <Icons.Search size={15} />
+          <input className="input" aria-label="액션 검색" placeholder="액션 검색…" value={actionQuery} onChange={(ev) => setActionQuery(ev.target.value)} />
+        </div>
+      </div>
+      {hasApplied && (
+        <div className="row" style={{ gap: 8 }}>
+          <span className="muted" style={{ fontSize: 12 }}>적용된 필터</span>
+          {categoryFilter !== 'all' && (
+            <RemovableChip removeLabel="카테고리 필터 제거" onRemove={() => setCategoryFilter('all')}>{`카테고리: ${CATEGORY_LABEL[categoryFilter]}`}</RemovableChip>
+          )}
+          {selectedTenantSlug && (
+            <RemovableChip removeLabel="테넌트 필터 제거" onRemove={() => setSelectedTenant(undefined)}>{`테넌트: ${selectedTenantSlug}`}</RemovableChip>
+          )}
+          {actionQuery.trim() !== '' && (
+            <RemovableChip removeLabel="액션 검색 제거" onRemove={() => setActionQuery('')}>{`액션: ${actionQuery.trim()}`}</RemovableChip>
+          )}
+          <Button variant="ghost" size="sm" onClick={clearFilters}>모두 지우기</Button>
+        </div>
+      )}
+    </div>
+  );
+
   // 응답 전·실패 시 KPI 는 0 이 아니라 "—".
   const kpiValue = (n: number) => (events === null ? '—' : fmt(n));
   const kpis = (
@@ -529,6 +587,7 @@ export default function ActivityPage() {
       <div className="page">
         {header}
         {kpis}
+        {filters}
         <div className="card">
           {loadError != null
             ? <LoadError what="활동" error={loadError} onRetry={handleRefresh} retrying={retrying} />
@@ -540,11 +599,6 @@ export default function ActivityPage() {
 
   const groups = groupByDay(filtered.slice(0, visibleCount), (e) => e.ts, new Date());
   const maxTop = Math.max(1, ...topTenants.map((t) => t.count));
-  const selectedTenantSlug = selectedTenant
-    ? (tenants.find((t) => t.id === selectedTenant)?.slug ?? topTenants.find((t) => t.tenantId === selectedTenant)?.tenantSlug ?? selectedTenant)
-    : null;
-  const hasApplied = categoryFilter !== 'all' || !!selectedTenant || actionQuery.trim() !== '';
-
   return (
     <div className="page">
       {header}
@@ -561,47 +615,7 @@ export default function ActivityPage() {
 
       {kpis}
 
-      <div className="card" style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div className="row" style={{ gap: 12 }}>
-          <Segmented<ActivityCategory>
-            ariaLabel="카테고리"
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            options={[{ value: 'all', label: '전체' }, { value: 'ops', label: '운영' }, { value: 'security', label: '보안' }]}
-          />
-          <select
-            className="input"
-            aria-label="테넌트"
-            style={{ width: 200 }}
-            value={selectedTenant ?? ''}
-            onChange={(ev) => setSelectedTenant(ev.target.value || undefined)}
-          >
-            <option value="">테넌트 · 전체</option>
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
-            ))}
-          </select>
-          <div className="search" style={{ flex: '1 1 220px' }}>
-            <Icons.Search size={15} />
-            <input className="input" aria-label="액션 검색" placeholder="액션 검색…" value={actionQuery} onChange={(ev) => setActionQuery(ev.target.value)} />
-          </div>
-        </div>
-        {hasApplied && (
-          <div className="row" style={{ gap: 8 }}>
-            <span className="muted" style={{ fontSize: 12 }}>적용된 필터</span>
-            {categoryFilter !== 'all' && (
-              <RemovableChip removeLabel="카테고리 필터 제거" onRemove={() => setCategoryFilter('all')}>{`카테고리: ${CATEGORY_LABEL[categoryFilter]}`}</RemovableChip>
-            )}
-            {selectedTenantSlug && (
-              <RemovableChip removeLabel="테넌트 필터 제거" onRemove={() => setSelectedTenant(undefined)}>{`테넌트: ${selectedTenantSlug}`}</RemovableChip>
-            )}
-            {actionQuery.trim() !== '' && (
-              <RemovableChip removeLabel="액션 검색 제거" onRemove={() => setActionQuery('')}>{`액션: ${actionQuery.trim()}`}</RemovableChip>
-            )}
-            <Button variant="ghost" size="sm" onClick={clearFilters}>모두 지우기</Button>
-          </div>
-        )}
-      </div>
+      {filters}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
         <section className="card" style={{ flex: '999 1 460px', minWidth: 0 }}>

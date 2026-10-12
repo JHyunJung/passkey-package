@@ -354,4 +354,33 @@ describe('ActivityPage V2', () => {
     await act(async () => { resolveRefresh(view(FEED)); });
     expect(screen.getByRole('button', { name: '새로고침' })).toBeEnabled();
   });
+
+  it('필터(카테고리)를 바꾼 조회가 실패하면 이전 필터의 이벤트·KPI 를 남기지 않고 LoadError(KPI "—", 내보내기 비활성), 필터는 그대로 바꿀 수 있다', async () => {
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    expect(screen.getByText('활동 (24h)').parentElement).toHaveTextContent('3');
+    vi.mocked(activityApi.fetch).mockRejectedValue(new Error('down'));
+    fireEvent.click(screen.getByRole('button', { name: '보안' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('활동을 불러오지 못했습니다');
+    expect(screen.queryByRole('group', { name: '오늘' })).toBeNull();
+    expect(screen.getAllByText('—')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: '내보내기' })).toBeDisabled();
+    expect(screen.queryByText('새 이벤트를 받지 못하고 있습니다')).toBeNull();
+    // 필터를 되돌려 다시 조회할 수 있다.
+    vi.mocked(activityApi.fetch).mockResolvedValue(view(FEED));
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    expect(await screen.findByRole('group', { name: '오늘' })).toBeInTheDocument();
+  });
+
+  it('tenant 를 바꾼 조회가 실패해도 이전 tenant 의 이벤트를 보이지 않는다', async () => {
+    vi.mocked(tenantsApi.list).mockResolvedValue([{ id: 't2', name: 'Globex', slug: 'globex' } as never]);
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    vi.mocked(activityApi.fetch).mockRejectedValue(new Error('down'));
+    fireEvent.change(screen.getByRole('combobox', { name: '테넌트' }), { target: { value: 't2' } });
+    expect(await screen.findByText('활동을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '오늘' })).toBeNull();
+    expect(screen.getByRole('button', { name: '내보내기' })).toBeDisabled();
+  });
 });
