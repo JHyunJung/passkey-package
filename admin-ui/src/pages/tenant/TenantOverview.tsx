@@ -1,13 +1,15 @@
 // admin-ui/src/pages/tenant/TenantOverview.tsx
-import { useState, useEffect, CSSProperties } from 'react';
+import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import type { AuditEvent, Tenant } from '@/api/designTypes';
 import { auditChainApi, type TenantChainVerify } from '@/api/auditChain';
-import { funnelApi, type FunnelData } from '@/api/funnel';
+import { funnelApi, type FunnelStage } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
 import { auditApi } from '@/api/audit';
-import { Alert, Button, Card, CardBody, CardHeader, KpiCard, StatusStrip, useToast } from '@/ui';
+import { describeError } from '@/lib/describeError';
+import { useLoad } from '@/lib/useLoad';
+import { Alert, Badge, Button, Card, CardBody, CardHeader, KpiCard, LoadError, StatusStrip, useToast } from '@/ui';
 import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
 import { recentRunsLabel, type ChainRun } from './tenantSignals';
 
@@ -53,11 +55,21 @@ const iconBox = (bg: string, fg: string): CSSProperties => ({
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none',
 });
 
-// ── ChainSummaryCard ─────────────────────────────────────────────────────────
+/** 체인 검증 응답을 이 시간까지 기다린 뒤 "확인 불가"로 바꾼다(V3 개요 — "확인 중"에 멈추지 않음). */
+export const CHAIN_TIMEOUT_MS = 15_000;
 
-function ChainSummaryCard({ state, recentRuns, onManualVerify, onMonthlyReport, onDetail }: {
-  state: TenantChainVerify | null;
+type ChainView =
+  | { kind: 'checking' }
+  | { kind: 'done'; r: TenantChainVerify }
+  | { kind: 'unavailable'; reason: string };
+
+// ── ChainSummaryCard — 무결 · 위변조 · 확인 중 · 확인 불가 + 검증 중 ─────────────
+
+function ChainSummaryCard({ view, verifying, recentRuns, onRetry, onManualVerify, onMonthlyReport, onDetail }: {
+  view: ChainView;
+  verifying: boolean;
   recentRuns?: ChainRun[];
+  onRetry: () => void;
   onManualVerify: () => void;
   onMonthlyReport: () => void;
   onDetail: () => void;
@@ -66,34 +78,54 @@ function ChainSummaryCard({ state, recentRuns, onManualVerify, onMonthlyReport, 
     <Card>
       <CardHeader title="감사 체인" actions={<Button variant="ghost" size="sm" onClick={onDetail}>자세히 <Icons.ChevronRight size={12} /></Button>} />
       <CardBody className="stack-3">
-        {state === null ? (
+        {verifying ? (
+          <div className="row" style={{ gap: 10 }} aria-busy="true">
+            <Badge>검증 중</Badge>
+            <span className="hint" style={{ margin: 0 }}>수동 검증을 실행하고 있습니다.</span>
+          </div>
+        ) : view.kind === 'checking' ? (
           <div className="row" style={{ gap: 12, flexWrap: 'nowrap' }}>
             <span style={iconBox('var(--sunk)', 'var(--mute)')} aria-hidden="true"><Icons.Shield size={20} /></span>
             <div className="col" style={{ minWidth: 0 }}>
               <strong>확인 중</strong>
-              <span className="hint" style={{ margin: 0 }}>체인 무결성 상태를 불러오는 중입니다.</span>
+              <span className="hint" style={{ margin: 0 }}>체인 무결성 상태를 확인하고 있습니다.</span>
             </div>
           </div>
-        ) : state.intact ? (
+        ) : view.kind === 'unavailable' ? (
+          <div className="stack-2">
+            <div className="row" style={{ gap: 10 }}>
+              <Badge>확인 불가</Badge>
+              <strong>검증 결과를 받지 못했습니다</strong>
+            </div>
+            <span className="hint" style={{ margin: 0 }}>{view.reason} 다시 시도하거나 감사 로그에서 확인하세요.</span>
+          </div>
+        ) : view.r.intact ? (
           <div className="row" style={{ gap: 12, flexWrap: 'nowrap' }}>
             <span style={iconBox('var(--ok-soft)', 'var(--ok)')} aria-hidden="true"><Icons.Shield size={20} /></span>
             <div className="col" style={{ minWidth: 0 }}>
               <strong>무결 · 위변조 0건</strong>
-              <span className="hint" style={{ margin: 0 }}>마지막 검증 {timeAgo(state.verifiedAt)}</span>
+              <span className="hint" style={{ margin: 0 }}>마지막 검증 {timeAgo(view.r.verifiedAt)}</span>
             </div>
           </div>
         ) : (
           <Alert tone="bad" title="위변조 감지">
-            마지막 검증 {timeAgo(state.verifiedAt)}{state.tamperedEntryId ? ` · 위변조 항목 …${tail(state.tamperedEntryId, 8)}` : ''}
+            마지막 검증 {timeAgo(view.r.verifiedAt)}{view.r.tamperedEntryId ? ` · 위변조 항목 …${tail(view.r.tamperedEntryId, 8)}` : ''}
           </Alert>
         )}
         {recentRuns && recentRuns.length > 0 && (
           <StatusStrip fluid results={recentRuns.map((r) => r.ok)} label={recentRunsLabel(recentRuns)} />
         )}
-        <div className="row">
-          <Button size="sm" onClick={onManualVerify}>수동 검증</Button>
-          <Button size="sm" onClick={onMonthlyReport}>월간 보고서</Button>
-        </div>
+        {view.kind === 'unavailable' && !verifying ? (
+          <div className="row">
+            <Button size="sm" variant="primary" onClick={onRetry}>다시 시도</Button>
+            <Button size="sm" variant="ghost" onClick={onDetail}>감사 로그로</Button>
+          </div>
+        ) : (
+          <div className="row">
+            <Button size="sm" onClick={onManualVerify} disabled={verifying || view.kind === 'checking'}>{verifying ? '검증 중…' : '수동 검증'}</Button>
+            <Button size="sm" onClick={onMonthlyReport} disabled={verifying}>월간 보고서</Button>
+          </div>
+        )}
       </CardBody>
     </Card>
   );
@@ -101,50 +133,70 @@ function ChainSummaryCard({ state, recentRuns, onManualVerify, onMonthlyReport, 
 
 // ── TenantOverview ───────────────────────────────────────────────────────────
 
-type Props = { tenant: Tenant; isPlatformOperator?: boolean; expiringKeyCount?: number };
+type Props = { tenant: Tenant; isPlatformOperator?: boolean; expiringKeyCount?: number; chainTimeoutMs?: number };
 
-export default function TenantOverview({ tenant, isPlatformOperator = false, expiringKeyCount }: Props) {
+export default function TenantOverview({ tenant, isPlatformOperator = false, expiringKeyCount, chainTimeoutMs = CHAIN_TIMEOUT_MS }: Props) {
   const navigate = useNavigate();
   const toast = useToast();
-  const [chainState, setChainState] = useState<TenantChainVerify | null>(null);
-  const [funnel, setFunnel] = useState<FunnelData | null>(null);
+  const [chain, setChain] = useState<ChainView>({ kind: 'checking' });
+  const [chainAttempt, setChainAttempt] = useState(0);
+  const [verifying, setVerifying] = useState(false);
+  const verifyingRef = useRef(false);
+  const chainSeq = useRef(0); // 최신 검증 요청만 상태를 바꾼다(늦은 응답·타임아웃 이후 응답·재검증에 덮이지 않게)
+  const chainTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const [recentEvents, setRecentEvents] = useState<RecentActivityEvent[]>([]);
+  const funnel = useLoad(() => funnelApi.get(tenant.id, 7), [tenant.id]);
 
-  async function handleManualVerify() {
-    try {
-      const result = await auditChainApi.verifyTenant(tenant.id);
-      setChainState(result);
-      toast({ kind: result.intact ? 'ok' : 'warn', title: '수동 검증 완료', message: result.intact ? '체인 무결' : '위변조 감지' });
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: '수동 검증 실패', message: msg });
-    }
+  /** 자동 검증(manual=false)과 수동 검증(manual=true)이 같은 seq·타이머를 쓴다. 어느 경로로 끝나도 verifying 을 푼다. */
+  function runChainVerify(manual: boolean) {
+    const my = ++chainSeq.current; // 진행 중이던 이전 요청은 여기서 무효화
+    clearTimeout(chainTimer.current);
+    verifyingRef.current = manual;
+    setVerifying(manual);
+    if (!manual) setChain({ kind: 'checking' });
+    const settle = () => { clearTimeout(chainTimer.current); verifyingRef.current = false; setVerifying(false); };
+    chainTimer.current = setTimeout(() => {
+      if (my !== chainSeq.current) return;
+      chainSeq.current++; // 이후 도착하는 응답은 버린다
+      settle();
+      const reason = `${Math.round(chainTimeoutMs / 1000)}초 안에 응답이 없었습니다.`;
+      if (manual) toastRef.current({ kind: 'err', title: '수동 검증 실패', message: reason });
+      else setChain({ kind: 'unavailable', reason });
+    }, chainTimeoutMs);
+    auditChainApi.verifyTenant(tenant.id).then(
+      (r) => {
+        if (my !== chainSeq.current) return;
+        settle();
+        setChain({ kind: 'done', r });
+        if (manual) toastRef.current({ kind: r.intact ? 'ok' : 'warn', title: '수동 검증 완료', message: r.intact ? '체인 무결' : '위변조 감지' });
+      },
+      (e: unknown) => {
+        if (my !== chainSeq.current) return;
+        settle();
+        const info = describeError(e);
+        if (manual) toastRef.current({ kind: 'err', title: '수동 검증 실패', message: `${info.title}. ${info.detail}` });
+        else setChain({ kind: 'unavailable', reason: `${info.title}.` });
+      },
+    );
   }
 
-  function handleMonthlyReport() {
-    navigate('/audit-chain');
+  function handleManualVerify() {
+    if (verifyingRef.current) return; // 같은 틱의 연타까지 막는다
+    runChainVerify(true);
   }
 
   // 감사 체인 검증(verifyTenant)은 PLATFORM 전용 API — RP_ADMIN 에게는 카드 자체를 그리지 않는다.
   useEffect(() => {
     if (!isPlatformOperator) return;
-    let cancelled = false;
-    auditChainApi.verifyTenant(tenant.id)
-      .then((r) => { if (!cancelled) setChainState(r); })
-      .catch(() => { if (!cancelled) setChainState(null); });
-    return () => { cancelled = true; };
-  }, [tenant.id, isPlatformOperator]);
+    runChainVerify(false);
+    return () => { chainSeq.current++; clearTimeout(chainTimer.current); verifyingRef.current = false; setVerifying(false); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant.id, isPlatformOperator, chainAttempt, chainTimeoutMs]);
 
-  // ★ 최근 검증 이력(recentRuns, 스펙 §6 ②)은 서버에 아직 없다. 그 필드를 찾으려고 전 tenant 체인을 검증하는
+  // ★ 최근 검증 이력(recentRuns)은 서버에 아직 없다. 그 필드를 찾으려고 전 tenant 체인을 검증하는
   // overview 를 부르지 않는다 — 서버가 필드를 주면 여기서 읽어 ChainSummaryCard 의 recentRuns 로 넘긴다.
-
-  useEffect(() => {
-    let cancelled = false;
-    funnelApi.get(tenant.id, 7)
-      .then((data) => { if (!cancelled) setFunnel(data); })
-      .catch(() => { if (!cancelled) setFunnel(null); });
-    return () => { cancelled = true; };
-  }, [tenant.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,11 +210,20 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
     return () => { cancelled = true; };
   }, [tenant.id, isPlatformOperator]);
 
-  const f = funnel ?? {
-    registration: { attempts: 0, success: 0, ratio: 0 },
-    authentication: { attempts: 0, success: 0, ratio: 0 },
-  };
   const delta = tenant.credentialsDelta7d;
+  const f = funnel.status === 'ok' ? funnel.data : undefined;
+
+  // 실패는 "—" + 원인, 로딩은 "—" 만. "시도 없음"은 조회가 성공했을 때만.
+  function rateKpi(label: string, stage: 'registration' | 'authentication', none: string) {
+    if (funnel.status === 'failed') return <KpiCard label={label} value="—" hint="불러오지 못했습니다" hintTone="warn" />;
+    if (!f) return <KpiCard label={label} value="—" />;
+    const s: FunnelStage = f[stage];
+    return (
+      <KpiCard label={label}
+        value={s.attempts > 0 ? `${(s.ratio * 100).toFixed(1)}%` : '—'}
+        hint={s.attempts > 0 ? `${fmt(s.success)} / ${fmt(s.attempts)} 시도` : none} />
+    );
+  }
 
   return (
     <div className="stack-6">
@@ -172,13 +233,12 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
         <KpiCard label="유효 API Key" value={tenant.apiKeys}
           hint={expiringKeyCount !== undefined ? `만료 임박 ${expiringKeyCount}` : undefined}
           hintTone={expiringKeyCount ? 'warn' : 'default'} />
-        <KpiCard label="등록 성공률 (7d)"
-          value={f.registration.attempts > 0 ? `${(f.registration.ratio * 100).toFixed(1)}%` : '—'}
-          hint={f.registration.attempts > 0 ? `${fmt(f.registration.success)} / ${fmt(f.registration.attempts)} 시도` : '최근 7일 등록 시도 없음'} />
-        <KpiCard label="인증 성공률 (7d)"
-          value={f.authentication.attempts > 0 ? `${(f.authentication.ratio * 100).toFixed(1)}%` : '—'}
-          hint={f.authentication.attempts > 0 ? `${fmt(f.authentication.success)} / ${fmt(f.authentication.attempts)} 시도` : '최근 7일 인증 시도 없음'} />
+        {rateKpi('등록 성공률 (7d)', 'registration', '최근 7일 등록 시도 없음')}
+        {rateKpi('인증 성공률 (7d)', 'authentication', '최근 7일 인증 시도 없음')}
       </div>
+      {funnel.status === 'failed' && (
+        <LoadError compact what="퍼널 지표" error={funnel.error} onRetry={funnel.reload} retrying={funnel.reloading} />
+      )}
 
       <div className={isPlatformOperator ? 'grid-3' : 'grid-2'}>
         <Card>
@@ -221,9 +281,11 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
 
         {isPlatformOperator && (
           <ChainSummaryCard
-            state={chainState}
-            onManualVerify={() => void handleManualVerify()}
-            onMonthlyReport={handleMonthlyReport}
+            view={chain}
+            verifying={verifying}
+            onRetry={() => setChainAttempt((n) => n + 1)}
+            onManualVerify={handleManualVerify}
+            onMonthlyReport={() => navigate('/audit-chain')}
             onDetail={() => navigate(`/tenants/${tenant.id}?tab=audit`)}
           />
         )}
