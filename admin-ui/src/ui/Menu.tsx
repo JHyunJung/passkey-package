@@ -3,7 +3,8 @@ import { Icons } from '@/icons/Icons';
 import { cn } from '@/lib/cn';
 import { IconButton } from './IconButton';
 
-export type MenuItem = { label: ReactNode; onSelect: () => void; icon?: ReactNode; danger?: boolean };
+/** disabled: 보이되 실행되지 않는 항목(aria-disabled, 포커스 순서 유지). disabledReason 은 라벨 아래와 툴팁에 보인다. */
+export type MenuItem = { label: ReactNode; onSelect: () => void; icon?: ReactNode; danger?: boolean; disabled?: boolean; disabledReason?: string };
 
 // 메뉴 높이 추정(열기 전이라 측정 불가): 패딩 12 + 항목 36 + 위험 구획(구분선 13 + 제목 22).
 const ITEM_H = 36;
@@ -59,11 +60,26 @@ export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', t
     const i = els.indexOf(document.activeElement as HTMLElement);
     if (e.key === 'ArrowDown') { e.preventDefault(); els[(i + 1) % els.length]?.focus(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); els[i < 0 ? els.length - 1 : (i - 1 + els.length) % els.length]?.focus(); }
-    else if ((e.key === 'Enter' || e.key === ' ') && i >= 0) { e.preventDefault(); all[i].onSelect(); close(true); }
+    else if ((e.key === 'Enter' || e.key === ' ') && i >= 0) { e.preventDefault(); if (all[i].disabled) return; all[i].onSelect(); close(true); }
   }
   const renderItem = (it: MenuItem, k: number) => (
-    <button key={k} type="button" role="menuitem" tabIndex={-1} className={cn('menu__item', it.danger && 'menu__item--danger')} onClick={(e) => { e.stopPropagation(); it.onSelect(); close(true); }}>
-      {it.icon}{it.label}
+    <button
+      key={k}
+      type="button"
+      role="menuitem"
+      tabIndex={-1}
+      aria-disabled={it.disabled || undefined}
+      title={it.disabled ? it.disabledReason : undefined}
+      className={cn('menu__item', it.danger && 'menu__item--danger')}
+      onClick={(e) => { e.stopPropagation(); if (it.disabled) return; it.onSelect(); close(true); }}
+    >
+      {it.icon}
+      {it.disabled && it.disabledReason ? (
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start', padding: '6px 0' }}>
+          <span>{it.label}</span>
+          <span className="hint" style={{ margin: 0, whiteSpace: 'normal' }}>{it.disabledReason}</span>
+        </span>
+      ) : it.label}
     </button>
   );
   return (
