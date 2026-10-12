@@ -81,31 +81,35 @@ function RpSwitcher({ onSwitch }: { onSwitch: () => void }) {
 function HelpMenu({ onOpenShortcuts }: { onOpenShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useOutsideClose(open, () => setOpen(false));
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  /** 닫고 포커스를 트리거로 돌린다. 항목이 사라지기 전에 돌려야 이후 열리는 시트도 트리거로 복귀한다. */
+  const closeToTrigger = () => { triggerRef.current?.focus(); setOpen(false); };
   useEffect(() => {
     if (open) ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }, [open, ref]);
   const external = (href: string, label: string) => (
-    <a role="menuitem" className="menu__item" href={href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>
+    <a role="menuitem" className="menu__item" href={href} target="_blank" rel="noopener noreferrer" onClick={closeToTrigger}>
       {label}
       <span className="hint" style={{ margin: '0 0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>새 창 <Icons.ExternalLink size={13} /></span>
     </a>
   );
   return (
-    <div className="menu-wrap" ref={ref} onKeyDown={(e) => { if (open) moveFocus(ref.current, e); }}>
-      <button type="button" className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+    <div className="menu-wrap" ref={ref}>
+      <button ref={triggerRef} type="button" className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <Icons.Help size={16} />도움말
       </button>
       {open && (
-        <div className="menu" role="menu" aria-label="도움말" style={{ minWidth: 220 }}>
+        <div className="menu" role="menu" aria-label="도움말" tabIndex={-1} style={{ minWidth: 220 }}
+          onKeyDown={(e) => { if (e.key === 'Escape') closeToTrigger(); else moveFocus(ref.current, e); }}>
           {HELP_LINKS.apiDocs && external(HELP_LINKS.apiDocs, 'API 문서 열기')}
           {HELP_LINKS.rpGuide && external(HELP_LINKS.rpGuide, 'RP 연동 가이드')}
-          <button type="button" role="menuitem" className="menu__item" aria-keyshortcuts="?" onClick={() => { setOpen(false); onOpenShortcuts(); }}>
+          <button type="button" role="menuitem" className="menu__item" aria-keyshortcuts="?" onClick={() => { closeToTrigger(); onOpenShortcuts(); }}>
             키보드 단축키<kbd aria-hidden="true" style={{ marginLeft: 'auto' }}>?</kbd>
           </button>
           {HELP_LINKS.support && (
             <>
               <div className="menu__sep" />
-              <a role="menuitem" className="menu__item" href={HELP_LINKS.support} onClick={() => setOpen(false)}>운영자에게 문의</a>
+              <a role="menuitem" className="menu__item" href={HELP_LINKS.support} onClick={closeToTrigger}>운영자에게 문의</a>
             </>
           )}
         </div>

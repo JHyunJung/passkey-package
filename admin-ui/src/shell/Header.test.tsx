@@ -81,6 +81,26 @@ describe('Header V3', () => {
     expect(screen.getByRole('menuitem', { name: '운영자에게 문의' })).toHaveAttribute('href', 'mailto:ops@example.com');
   });
 
+  it('도움말: Escape 로 닫으면 포커스가 도움말 버튼으로 돌아간다', () => {
+    renderHeader();
+    const trigger = screen.getByRole('button', { name: /도움말/ });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: '도움말' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('도움말: 키보드 단축키를 고르면 시트를 열기 전에 포커스가 도움말 버튼에 있다', () => {
+    let focusedAtCall: Element | null = null;
+    const onOpenShortcuts = vi.fn(() => { focusedAtCall = document.activeElement; });
+    renderHeader({ onOpenShortcuts });
+    const trigger = screen.getByRole('button', { name: /도움말/ });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: '키보드 단축키' }));
+    expect(onOpenShortcuts).toHaveBeenCalledTimes(1);
+    expect(focusedAtCall).toBe(trigger);
+  });
+
   it('RP 전환이 실패하면 오류 토스트를 띄우고 화면은 그대로 둔다', async () => {
     vi.mocked(activeTenantApi.get).mockResolvedValueOnce({
       activeTenantId: 't1', allowedTenantIds: ['t1', 't2'],
