@@ -126,7 +126,11 @@ export const api = {
   put:     <T>(path: string, body: unknown) => request<T>('PUT',    path, body),
   putRaw:  <T>(path: string, body: unknown) => rawRequest<T>('PUT',  path, body),
   delete:  <T>(path: string)               => request<T>('DELETE', path),
-  loginForm: async (email: string, password: string) => {
+  /**
+   * 폼 로그인. 성공 여부와 HTTP 상태를 돌려준다 — 화면이 5xx(일시 오류)를 자격 증명 오류와 구분한다.
+   * 423/429 잠김 구분은 백엔드 2단계(스펙 §8). 네트워크 오류는 fetch 의 TypeError 를 그대로 던진다.
+   */
+  loginForm: async (email: string, password: string): Promise<{ ok: boolean; status: number }> => {
     const csrf = getCookie('XSRF-TOKEN');
     const form = new URLSearchParams();
     form.set('email', email);
@@ -140,7 +144,7 @@ export const api = {
       credentials: 'include',
       body: form.toString(),
     });
-    return res.ok;
+    return { ok: res.ok, status: res.status };
   },
 };
 

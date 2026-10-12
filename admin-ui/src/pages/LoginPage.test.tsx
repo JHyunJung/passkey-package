@@ -49,7 +49,7 @@ describe('LoginPage V2', () => {
   });
 
   it('로그인 실패: 폼 맨 위 alert 에 메시지와 코드', async () => {
-    vi.mocked(api.loginForm).mockResolvedValue(false);
+    vi.mocked(api.loginForm).mockResolvedValue({ ok: false, status: 401 });
     renderLogin();
     fillAndSubmit('a@x.com', 'wrong');
     const alert = await screen.findByRole('alert');
@@ -70,7 +70,7 @@ describe('LoginPage V2', () => {
   });
 
   it('성공하면 getMe 결과로 onLogin', async () => {
-    vi.mocked(api.loginForm).mockResolvedValue(true);
+    vi.mocked(api.loginForm).mockResolvedValue({ ok: true, status: 200 });
     vi.mocked(getMe).mockResolvedValue(me);
     const { onLogin } = renderLogin();
     fillAndSubmit('alice@crosscert.com', 'pw');

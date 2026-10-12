@@ -55,7 +55,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setError(null);
     setSubmitting(true);
     try {
-      const ok = await api.loginForm(email, password);
+      const { ok } = await api.loginForm(email, password);
       if (!ok) {
         const msg = '이메일 또는 비밀번호가 올바르지 않습니다.';
         setError({ code: 'A001', message: msg });
