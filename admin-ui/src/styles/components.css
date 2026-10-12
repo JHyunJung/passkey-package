@@ -316,3 +316,9 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 /* ── skeleton ──────────────────────── */
 .skeleton-block { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
 .skeleton-block__line { display: block; height: 10px; border-radius: 5px; background: #E1E7EF; }
+
+/* ── indeterminate progress (진행률을 모를 때 — 퍼센트 없음) ── */
+.indet { position: relative; height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
+.indet::after { content: ""; position: absolute; top: 0; bottom: 0; left: -30%; width: 30%; border-radius: 3px; background: var(--brand-700); animation: indet 1.2s ease-in-out infinite; }
+@keyframes indet { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .indet::after { animation: none; left: 0; width: 100%; opacity: .35; } }

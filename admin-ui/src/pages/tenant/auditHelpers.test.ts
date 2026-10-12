@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { windowRange, isFailure, eventTone, payloadDiff, diffValue, dayLabel, WINDOWS } from './auditHelpers';
+import { windowRange, isFailure, eventTone, payloadDiff, diffValue, dayLabel, WINDOWS, eventGroup, EVENT_GROUPS } from './auditHelpers';
 
 describe('auditHelpers', () => {
   it('windowRange: now 기준 hours 시간 전 ~ now', () => {
@@ -50,5 +50,24 @@ describe('auditHelpers', () => {
     expect(dayLabel('2026-10-10T14:59:00Z', now)).toBe('어제');   // KST 10-10 23:59
     expect(dayLabel('2026-10-10T15:00:00Z', now)).toBe('오늘');   // KST 10-11 00:00
     expect(dayLabel('2026-10-08T05:00:00Z', now)).toBe('2026-10-08');
+  });
+  it('eventGroup: 인증 · 등록 · 설정 변경 · 키 관리, 그 밖은 기타', () => {
+    expect(eventGroup('AUTH_SUCCESS')).toBe('auth');
+    expect(eventGroup('AUTH_FAIL')).toBe('auth');
+    expect(eventGroup('AUTHENTICATION_FINISH_OK')).toBe('auth');
+    expect(eventGroup('CREDENTIAL_AUTHENTICATED')).toBe('auth');
+    expect(eventGroup('SIGNATURE_COUNTER_REGRESSION')).toBe('auth');
+    expect(eventGroup('REGISTRATION_FINISH_OK')).toBe('registration');
+    expect(eventGroup('CREDENTIAL_REGISTERED')).toBe('registration');
+    expect(eventGroup('ATTESTATION_TRUST_FAILED')).toBe('registration');
+    expect(eventGroup('WEBAUTHN_CONFIG_UPDATED')).toBe('config');
+    expect(eventGroup('AAGUID_POLICY_UPDATED')).toBe('config');
+    expect(eventGroup('TENANT_SUSPEND')).toBe('config');
+    expect(eventGroup('API_KEY_ROTATED')).toBe('keys');
+    expect(eventGroup('CREDENTIAL_REVOKE')).toBe('keys');
+    expect(eventGroup('CREDENTIAL_REVOKED')).toBe('keys');
+    // 어느 그룹에도 안 맞는 이벤트도 필터로 볼 수 있어야 한다 → 기타
+    expect(eventGroup('MDS_BLOB_SYNC')).toBe('other');
+    expect(EVENT_GROUPS.map((g) => g.label)).toEqual(['인증', '등록', '설정 변경', '키 관리', '기타']);
   });
 });

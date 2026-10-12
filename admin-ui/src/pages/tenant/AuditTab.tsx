@@ -2,16 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import {
-  Badge, Button, Card, CardFooter, DataTable, Dialog, EmptyState, FilterChip, Segmented, Switch, useToast,
+  Badge, Button, Card, CardFooter, DataTable, Dialog, EmptyState, FilterChip, LoadError, Segmented, Skeleton, Switch, useToast,
   type Column,
 } from '@/ui';
 import { auditApi } from '@/api/audit';
 import { copyToClipboard } from '@/lib/clipboard';
 import { downloadCsv } from '@/lib/csvExport';
+import { describeError } from '@/lib/describeError';
 import { kstToday } from '@/lib/kst';
 import type { Tenant, AuditEvent, ChainVerifyResult } from '@/api/designTypes';
-import { fmtNum, hms, timeAgo, ymdHms } from './tabFormat';
-import { WINDOWS, type WindowKey, dayLabel, diffValue, eventTone, isFailure, payloadDiff, windowRange } from './auditHelpers';
+import { fmtNum, hms, timeAgo, ymdHm, ymdHms } from './tabFormat';
+import {
+  EVENT_GROUPS, WINDOWS, type EventGroup, type WindowKey, dayLabel, diffValue, eventGroup, eventTone, isFailure, payloadDiff, windowRange,
+} from './auditHelpers';
 
 const PAGE_SIZE = 50;
 const tail = (s: string | null | undefined, n: number) => (s ? s.slice(-n) : '');
@@ -24,13 +27,18 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
   const [total, setTotal] = useState<number | undefined>(undefined);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [filter, setFilter] = useState<Set<string>>(new Set());
+  const [groups, setGroups] = useState<Set<EventGroup>>(new Set());
   const [onlyFailures, setOnlyFailures] = useState(false);
   const [win, setWin] = useState<WindowKey>('24h');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [attempt, setAttempt] = useState(0);        // 다시 시도
   const [expanded, setExpanded] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<ChainVerifyResult | null>(null);
   const [showVerify, setShowVerify] = useState(false);
+  const [verifyStartedAt, setVerifyStartedAt] = useState<number | null>(null);
+  const verifyingRef = useRef(false);
+  const verifyGenRef = useRef(0); // 테넌트가 바뀌면 증가 — 이전 테넌트의 검증 응답 폐기용
   const [open, setOpen] = useState<AuditEvent | null>(null);
   const rangeRef = useRef<{ from: string; to: string } | null>(null); // 더 보기도 같은 구간으로
   const genRef = useRef(0);       // 초기 로드마다 증가 — 늦게 온 더 보기 응답 폐기용
@@ -47,6 +55,7 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
     loadingMoreRef.current = false;
     setLoadingMore(false);
     setLoading(true);
+    setLoadError(null);
     setExpanded(null);
     auditApi.list(tenant.id, 0, PAGE_SIZE, range)
       .then((res) => {
@@ -57,11 +66,27 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
         setHasMore(res.items.length === PAGE_SIZE);
       })
       .catch((e: unknown) => {
-        if (!cancelled) toast({ kind: 'err', title: 'audit 로드 실패', message: e instanceof Error ? e.message : String(e) });
+        if (cancelled) return;
+        // 기간·테넌트가 바뀐 로드이므로 이전 행을 남기지 않는다 — 실패를 "이벤트 없음"으로 보이지 않게 오류를 남긴다.
+        setItems([]);
+        setTotal(undefined);
+        setHasMore(false);
+        setLoadError(e ?? new Error('unknown'));
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tenant.id, win]);
+  }, [tenant.id, win, attempt]);
+
+  // 테넌트가 바뀌면 이전 테넌트의 검증 상태·진행 중 응답을 버린다.
+  useEffect(() => {
+    return () => {
+      verifyGenRef.current += 1;
+      verifyingRef.current = false;
+      setVerifyResult(null);
+      setVerifyStartedAt(null);
+      setShowVerify(false);
+    };
+  }, [tenant.id]);
 
   async function loadMore() {
     if (!rangeRef.current || loadingMoreRef.current) return;
@@ -76,7 +101,10 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
       pageRef.current = next;
       setHasMore(res.items.length === PAGE_SIZE);
     } catch (e: unknown) {
-      if (gen === genRef.current) toast({ kind: 'err', title: 'audit 로드 실패', message: e instanceof Error ? e.message : String(e) });
+      if (gen === genRef.current) {
+        const info = describeError(e);
+        toast({ kind: 'err', title: '감사 로그를 더 불러오지 못했습니다', message: `${info.title}. ${info.detail}` });
+      }
     } finally {
       if (gen === genRef.current) {
         loadingMoreRef.current = false;
@@ -85,17 +113,20 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
     }
   }
 
-  // 선택된 유형은 기간을 바꿔 목록에서 사라져도 칩으로 남긴다(해제 가능해야 함)
-  const types = useMemo(() => Array.from(new Set([...items.map((e) => e.eventType), ...filter])), [items, filter]);
+  const filtering = groups.size > 0 || onlyFailures;
   const filtered = useMemo(
-    () => items.filter((e) => (filter.size === 0 || filter.has(e.eventType)) && (!onlyFailures || isFailure(e))),
-    [items, filter, onlyFailures],
+    () => items.filter((e) => (groups.size === 0 || groups.has(eventGroup(e.eventType))) && (!onlyFailures || isFailure(e))),
+    [items, groups, onlyFailures],
   );
 
-  function toggleType(t: string) {
-    const next = new Set(filter);
-    if (next.has(t)) next.delete(t); else next.add(t);
-    setFilter(next);
+  function toggleGroup(g: EventGroup) {
+    const next = new Set(groups);
+    if (next.has(g)) next.delete(g); else next.add(g);
+    setGroups(next);
+  }
+  function clearFilters() {
+    setGroups(new Set());
+    setOnlyFailures(false);
   }
 
   async function copyJson(e: AuditEvent) {
@@ -113,15 +144,27 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
   }
 
   async function handleVerifyRun() {
+    if (verifyingRef.current) return; // 연타 방지
+    verifyingRef.current = true;
+    const gen = verifyGenRef.current;
+    setVerifyStartedAt(Date.now());
     try {
-      // 서버 /chain/verify 는 기간을 받지 않고 항상 전체 체인을 검증한다.
+      // 서버 /chain/verify 는 기간을 받지 않고 항상 전체 체인을 검증한다. 진행률도 주지 않는다.
       const result = await auditApi.verify(tenant.id);
+      if (gen !== verifyGenRef.current) return; // 테넌트가 바뀜 — 이전 응답 폐기
       setVerifyResult(result);
       setShowVerify(false);
     } catch (e: unknown) {
-      toast({ kind: 'err', title: 'chain 검증 실패', message: e instanceof Error ? e.message : String(e) });
-      setShowVerify(false);
-      throw e; // 다이얼로그가 running 상태를 끝내도록
+      if (gen !== verifyGenRef.current) return;
+      const info = describeError(e);
+      // 다이얼로그를 닫은 뒤 끝날 수도 있으므로 오류는 토스트로 알린다.
+      toast({ kind: 'err', title: '체인 검증에 실패했습니다', message: `${info.title}. ${info.detail}` });
+    } finally {
+      // 테넌트가 바뀌었다면 정리 effect 가 이미 해제했고 새 검증이 돌고 있을 수 있어 건드리지 않는다.
+      if (gen === verifyGenRef.current) {
+        verifyingRef.current = false;
+        setVerifyStartedAt(null);
+      }
     }
   }
 
@@ -164,27 +207,38 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
     },
   ];
 
-  const countText = total !== undefined ? `${WINDOWS[win].long} · ${fmtNum(total)}건` : `최근 ${fmtNum(items.length)}건`;
+  const failed = loadError !== null;
+  const countText = failed
+    ? '—'
+    : filtering
+      ? `이 페이지 ${fmtNum(items.length)}건 중 ${fmtNum(filtered.length)}건`
+      : total !== undefined ? `${WINDOWS[win].long} · ${fmtNum(total)}건` : `최근 ${fmtNum(items.length)}건`;
 
   return (
     <div className="stack-6">
-      {isPlatformOperator && <ChainVerifyCard onOpen={() => setShowVerify(true)} result={verifyResult} />}
+      {isPlatformOperator && <ChainVerifyCard onOpen={() => setShowVerify(true)} result={verifyResult} verifying={verifyStartedAt !== null} />}
 
       <Card>
         <div className="card__head">
-          <div className="row" style={{ gap: 6 }}>
-            {types.map((t) => <FilterChip key={t} active={filter.has(t)} onClick={() => toggleType(t)}>{t}</FilterChip>)}
-            {filter.size > 0 && <Button variant="ghost" size="sm" onClick={() => setFilter(new Set())}>전체 해제</Button>}
+          <div className="row" role="group" aria-label="이벤트 종류" style={{ gap: 6 }}>
+            {EVENT_GROUPS.map((g) => (
+              <FilterChip key={g.id} active={groups.has(g.id)} title={g.codes} onClick={() => toggleGroup(g.id)}>{g.label}</FilterChip>
+            ))}
           </div>
+          {filtering && <Button variant="ghost" size="sm" onClick={clearFilters}>필터 지우기</Button>}
           <div className="spacer" />
           <Switch checked={onlyFailures} onChange={setOnlyFailures} label="실패만" />
           <Segmented ariaLabel="기간" value={win} onChange={setWin}
             options={(Object.keys(WINDOWS) as WindowKey[]).map((k) => ({ value: k, label: WINDOWS[k].label }))} />
-          <Button icon={<Icons.Download size={14} />} onClick={exportCsv} disabled={filtered.length === 0}>내보내기</Button>
+          <Button icon={<Icons.Download size={14} />} onClick={exportCsv} disabled={failed || loading || filtered.length === 0}>
+            CSV 내보내기 (현재 페이지 {fmtNum(filtered.length)}건)
+          </Button>
         </div>
 
         {loading ? (
-          <p className="muted" style={{ padding: '40px 20px', margin: 0, textAlign: 'center', fontSize: 13 }}>불러오는 중…</p>
+          <Skeleton rows={6} label="감사 로그 불러오는 중" />
+        ) : failed ? (
+          <LoadError what="감사 로그" error={loadError} onRetry={() => setAttempt((n) => n + 1)} />
         ) : (
           <DataTable
             columns={columns}
@@ -194,18 +248,21 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
             onRowClick={(e) => setExpanded((k) => (k === e.id ? null : e.id))}
             expandedKey={expanded}
             renderExpanded={(e) => <ExpandedEvent e={e} onCopy={() => void copyJson(e)} onOpen={() => setOpen(e)} />}
-            empty={<EmptyState compact title={filter.size > 0 || onlyFailures ? '조건에 맞는 이벤트가 없습니다.' : '이 기간에 감사 이벤트가 없습니다.'} />}
+            empty={<EmptyState compact title={filtering ? '조건에 맞는 이벤트가 없습니다.' : '이 기간에 감사 이벤트가 없습니다.'} />}
           />
         )}
 
         <CardFooter>
           <span className="hint" style={{ margin: 0 }}>{countText}</span>
           <div className="spacer" />
-          {hasMore && <Button size="sm" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? '불러오는 중…' : '더 보기'}</Button>}
+          {hasMore && !failed && !loading && <Button size="sm" disabled={loadingMore} aria-busy={loadingMore} onClick={() => void loadMore()}>더 보기</Button>}
         </CardFooter>
       </Card>
 
-      {isPlatformOperator && <ChainVerifyDialog open={showVerify} onClose={() => setShowVerify(false)} onRun={handleVerifyRun} />}
+      {isPlatformOperator && (
+        <ChainVerifyDialog open={showVerify} onClose={() => setShowVerify(false)} onRun={() => void handleVerifyRun()}
+          startedAt={verifyStartedAt} tenantName={tenant.name} />
+      )}
       {open && <AuditEventDialog event={open} onClose={() => setOpen(null)} onCopy={() => void copyJson(open)} />}
     </div>
   );
@@ -269,7 +326,7 @@ function AuditEventDialog({ event, onClose, onCopy }: { event: AuditEvent; onClo
 
 // ── 체인 검증 카드 (PLATFORM 전용) ─────────────────────────────────────────────
 
-function ChainVerifyCard({ onOpen, result }: { onOpen: () => void; result: ChainVerifyResult | null }) {
+function ChainVerifyCard({ onOpen, result, verifying }: { onOpen: () => void; result: ChainVerifyResult | null; verifying: boolean }) {
   const navigate = useNavigate();
   const tampered = result != null && !result.intact;
   return (
@@ -280,68 +337,59 @@ function ChainVerifyCard({ onOpen, result }: { onOpen: () => void; result: Chain
         </span>
         <div className="stack-1" style={{ gap: 2, flex: '1 1 320px', minWidth: 0 }}>
           <div className="row" style={{ gap: 8 }}>
-            <h2 className="card__title">Audit Hash Chain 검증</h2>
-            {result && (result.intact
+            <h2 className="card__title">감사 로그 위변조 검증</h2>
+            {verifying ? <Badge>검증 중</Badge> : result && (result.intact
               ? <Badge tone="ok">위변조 0건</Badge>
               : <Badge tone="bad">위변조 {result.tamperedEntryIds.length}건</Badge>)}
             <Badge tone="plat" dot={false}>PLATFORM 전용</Badge>
           </div>
-          <p className="card__sub">이 tenant 의 감사 로그 행이 hash 로 연결되어 변경·삭제되지 않았는지 검증합니다.</p>
+          <p className="card__sub">
+            감사 로그 행이 해시로 이어져 바뀌거나 지워지지 않았는지 확인합니다.{result ? ` 마지막 검증 ${ymdHm(result.verifiedAt)} KST` : ''}
+          </p>
         </div>
-        {result?.intact && <Button onClick={() => navigate('/audit-chain')}>보고서</Button>}
-        <Button variant="primary" onClick={onOpen}>검증 실행</Button>
+        {result?.intact && <Button onClick={() => navigate('/audit-chain')}>월간 보고서</Button>}
+        <Button variant="primary" onClick={onOpen} disabled={verifying}>{verifying ? '검증 중…' : '검증 실행'}</Button>
       </div>
     </Card>
   );
 }
 
-// ── Hash chain 검증 다이얼로그 (진행률) ────────────────────────────────────────
+// ── 해시 체인 검증 다이얼로그 — 진행률을 모르므로 퍼센트 없이 "검증 중…" + 경과 시간 ──
 
-function ChainVerifyDialog({ open, onClose, onRun }: { open: boolean; onClose: () => void; onRun: () => Promise<void> }) {
-  const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
-
-  async function run() {
-    setRunning(true);
-    setProgress(0);
-    // API 응답 전까지 진행 막대를 95% 까지 움직인다(서버는 진행률을 주지 않음).
-    const tick = setInterval(() => {
-      setProgress((p) => Math.min(95, p + 7 + Math.random() * 9));
-    }, 90);
-    try {
-      await onRun();
-      setProgress(100);
-    } catch {
-      // 오류 토스트는 부모가 띄운다
-    } finally {
-      clearInterval(tick);
-      setRunning(false);
-    }
-  }
-  const pct = Math.floor(progress);
+function ChainVerifyDialog({ open, onClose, onRun, startedAt, tenantName }: {
+  open: boolean; onClose: () => void; onRun: () => void; startedAt: number | null; tenantName: string;
+}) {
+  const running = startedAt !== null;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+  const elapsed = startedAt !== null ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
 
   return (
-    <Dialog open={open} onClose={onClose} dismissible={!running} title="Hash chain 검증" sub="읽기 전용 검증입니다. 데이터는 변경되지 않습니다."
+    <Dialog open={open} onClose={onClose} title="해시 체인 검증" sub={`${tenantName}의 감사 로그 전체를 검증합니다. 읽기 전용이며 데이터는 바뀌지 않습니다.`}
       footer={<>
-        <Button onClick={onClose} disabled={running}>취소</Button>
-        <Button variant="primary" disabled={running} onClick={() => void run()}>{running ? `검증 중… ${pct}%` : '검증 실행'}</Button>
+        <Button onClick={onClose}>{running ? '닫기 (계속 실행)' : '취소'}</Button>
+        <Button variant="primary" disabled={running} onClick={onRun}>{running ? '검증 중…' : '검증 실행'}</Button>
       </>}>
       <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
-        전체 체인 검증 — 이 tenant 의 감사 로그 전체를 처음부터 hash 로 다시 계산해 확인합니다. 기간은 지정하지 않습니다.
+        전체 체인 검증 — 처음부터 해시를 다시 계산해 확인합니다. 기간은 지정하지 않습니다.
       </p>
-      {running && (
+      {startedAt !== null && (
         <div className="stack-2">
           <div className="row">
-            <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>검증 중…</span>
+            <strong style={{ fontSize: 13 }} role="status" aria-live="polite">검증 중…</strong>
             <div className="spacer" />
-            <span className="mono hint" style={{ margin: 0 }}>{pct}%</span>
+            {/* 경과 시간은 매초 바뀌므로 aria-live 밖에 둔다 */}
+            <span className="hint" style={{ margin: 0 }}>시작 {hms(new Date(startedAt).toISOString())} · 경과 {elapsed}초</span>
           </div>
-          <div role="progressbar" aria-label="검증 진행률" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
-            style={{ height: 8, borderRadius: 4, background: 'var(--line-soft)', overflow: 'hidden' }}>
-            <div style={{ width: `${pct}%`, height: 8, background: 'var(--brand-700)', transition: 'width 90ms linear' }} />
-          </div>
+          <div className="indet" role="progressbar" aria-label="검증 진행 중" />
         </div>
       )}
+      <p className="hint" style={{ margin: 0 }}>진행률을 알 수 없어 퍼센트를 표시하지 않습니다. 창을 닫아도 검증은 계속되고 결과는 위 카드에 표시됩니다.</p>
     </Dialog>
   );
 }
