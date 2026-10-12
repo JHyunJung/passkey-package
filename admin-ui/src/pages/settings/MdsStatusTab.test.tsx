@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, cleanup, act } from '@testing-library/react';
 import { ToastHost } from '@/ui';
 import { ApiError } from '@/api/types';
 import type { MdsHistoryRow, MdsStatus } from '@/api/mdsStatus';
@@ -147,7 +147,7 @@ describe('MdsStatusTab V3', () => {
     renderTab();
     const badge = await screen.findByText('MDS 확인 권장');
     expect(badge.closest('[title]')).toHaveAttribute('title', 'MDS_STRICT_OPTIONAL');
-    expect(screen.getByText('MDS 에 없는 인증기도 기본은 허용합니다. 테넌트에서 ‘MDS 필수’ 를 켠 경우에만 MDS 미등록 인증기를 거부합니다.')).toBeInTheDocument();
+    expect(screen.getByText('MDS 에 없는 인증기도 기본은 허용합니다. 테넌트에서 ‘MDS 엄격 모드’ 를 켠 경우에만 MDS 미등록 인증기를 거부합니다.')).toBeInTheDocument();
     expect(screen.queryByText('MDS_STRICT_OPTIONAL')).toBeNull();
   });
 
@@ -261,6 +261,35 @@ describe('MdsStatusTab V3', () => {
     expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.queryByText('동기화 이력이 없습니다.')).toBeNull();
+    // 오래된 이력으로 "정상" 을 주장하지 않는다
+    expect(screen.queryByText(/^정상/)).toBeNull();
+    expect(screen.getByText('이력 확인 불가 · BLOB #87')).toBeInTheDocument();
+  });
+
+  it('겹친 재조회가 순서 뒤바뀌어 끝나도, 이력 실패 시 유지되는 이력은 채택된 최신 응답', async () => {
+    const pend: Array<(v: MdsHistoryRow[]) => void> = [];
+    const hold = () => new Promise<MdsHistoryRow[]>((r) => { pend.push(r); });
+    renderTab();
+    const btn = async () => screen.findByRole('button', { name: /즉시 갱신/ });
+    await btn(); // 최초 로드 완료
+    mock(mdsStatusApi.history).mockReturnValueOnce(hold()); // 재조회 A
+    fireEvent.click(await btn());
+    await waitFor(() => expect(pend).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: /즉시 갱신/ })).toBeEnabled());
+    mock(mdsStatusApi.history).mockReturnValueOnce(hold()); // 재조회 B (더 최신)
+    fireEvent.click(await btn());
+    await waitFor(() => expect(pend).toHaveLength(2));
+    await act(async () => { pend[1]([{ ...history[0], changeSummary: '+9 항목' }]); });
+    expect(await screen.findByText('+9 항목')).toBeInTheDocument();
+    await act(async () => { pend[0]([{ ...history[0], changeSummary: '+3 항목' }]); }); // 낡은 응답은 버려진다
+    expect(screen.queryByText('+3 항목')).toBeNull();
+    // 이력만 실패하는 재조회 → 채택된 최신(+9) 이 유지돼야 한다
+    mock(mdsStatusApi.history).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /즉시 갱신/ })).toBeEnabled());
+    fireEvent.click(await btn());
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('+9 항목')).toBeInTheDocument();
+    expect(screen.queryByText('+3 항목')).toBeNull();
   });
 
   it('Object.prototype 이름 같은 신뢰 모드도 원문 그대로 표시', async () => {

@@ -1,4 +1,4 @@
-import { useRef, useState, ReactNode } from 'react';
+import { useEffect, useRef, useState, ReactNode } from 'react';
 import { Icons } from '@/icons/Icons';
 import { kstDateTimeMin } from '@/lib/kst';
 import { useLoad } from '@/lib/useLoad';
@@ -62,16 +62,16 @@ const columns: Column<MdsHistoryRow>[] = [
 ];
 
 // history: null = 이력 조회 실패(없음이 아니다). historyError 가 있으면 그 이유.
-type MdsData = { status: MdsStatus; history: MdsHistoryRow[] | null; historyError?: unknown; historyStale?: boolean };
+type MdsData = { status: MdsStatus; history: MdsHistoryRow[] | null; historyError?: unknown };
 
 // 상태와 이력을 함께 읽고 둘 다 끝난 뒤에 그린다 — 이력이 늦게 와서 '정상' 헤드라인이 먼저 보이는 일을 막는다.
 // 상태 조회 실패는 로드 실패. 이력 조회 실패는 "이력 없음"이 아니라 이력 실패로 따로 알리고,
-// 같은 화면의 재조회라면 이전 이력을 유지한다(prev).
-async function fetchMds(prev: MdsHistoryRow[] | null): Promise<MdsData> {
+// 같은 화면의 재조회라면 화면이 이전 이력을 유지한다(채택된 응답 기준 — 아래 lastHistory).
+async function fetchMds(): Promise<MdsData> {
   const [st, hist] = await Promise.allSettled([mdsStatusApi.get(), mdsStatusApi.history(MDS_HISTORY_STRIP_LIMIT)]);
   if (st.status === 'rejected') throw st.reason;
   if (hist.status === 'fulfilled') return { status: st.value, history: hist.value };
-  return { status: st.value, history: prev, historyError: hist.reason, historyStale: prev != null };
+  return { status: st.value, history: null, historyError: hist.reason };
 }
 
 /** 신뢰 모드: 사람이 읽는 라벨 + 설명, 원문은 툴팁. 값이 없으면 기본값을 지어내지 않고 "—". */
@@ -89,12 +89,12 @@ function TrustMode({ mode }: { mode: string | null | undefined }) {
 // ── MdsStatusTab ──────────────────────────────────────────────────────────────
 
 export default function MdsStatusTab() {
+  const load = useLoad(fetchMds, []);
+  // 이력 조회가 실패했을 때 보여 줄 "마지막으로 채택된 이력". useLoad 가 낡은 응답을 버린 뒤의 data 에서만 갱신한다.
   const lastHistory = useRef<MdsHistoryRow[] | null>(null);
-  const load = useLoad(async () => {
-    const d = await fetchMds(lastHistory.current);
-    lastHistory.current = d.history;
-    return d;
-  }, []);
+  useEffect(() => {
+    if (load.status === 'ok' && load.data?.history) lastHistory.current = load.data.history;
+  }, [load.status, load.data]);
   const [syncing, setSyncing] = useState(false);
   const toast = useToast();
 
@@ -134,16 +134,19 @@ export default function MdsStatusTab() {
     return <section className="card"><Skeleton rows={5} label="MDS 상태 불러오는 중" /></section>;
   }
 
-  const { status, history: historyRaw, historyError, historyStale } = load.data;
-  const history = historyRaw ?? [];
-  const historyFailed = historyRaw == null;
+  const { status, history: fresh, historyError } = load.data;
+  // 이력 조회 실패: 이전에 채택된 이력이 있으면 그것을 (낡은 것으로 표시하며) 유지하고, 없으면 실패 상태.
+  const history = fresh ?? lastHistory.current ?? [];
+  const historyUnconfirmed = fresh == null;
+  const historyStale = historyUnconfirmed && lastHistory.current != null;
+  const historyFailed = historyUnconfirmed && !historyStale;
   // 헤드라인의 기준은 상태(status). 시드뿐이면 중립, 아니면 가장 최근 실행이 실패일 때만 실패로 표시한다.
   const neverSynced = isNeverSynced(status);
   const nextUpdate = status.nextUpdate && !isSeedTime(status.nextUpdate) ? status.nextUpdate : null;
   const versionText = !neverSynced && status.version != null ? `#${status.version}` : '—';
   const latest = history[0];
-  const headTone: 'ok' | 'bad' | 'neutral' = neverSynced || historyFailed ? 'neutral' : latest?.status === 'FAILED' ? 'bad' : 'ok';
-  const headTitle = headTone === 'bad' ? `동기화 실패 · BLOB ${versionText}` : headTone === 'neutral' ? (historyFailed && !neverSynced ? `이력 확인 불가 · BLOB ${versionText}` : '동기화 이력 없음') : `정상 · BLOB ${versionText}`;
+  const headTone: 'ok' | 'bad' | 'neutral' = neverSynced || historyUnconfirmed ? 'neutral' : latest?.status === 'FAILED' ? 'bad' : 'ok';
+  const headTitle = headTone === 'bad' ? `동기화 실패 · BLOB ${versionText}` : headTone === 'neutral' ? (historyUnconfirmed && !neverSynced ? `이력 확인 불가 · BLOB ${versionText}` : '동기화 이력 없음') : `정상 · BLOB ${versionText}`;
   const headIcon: ReactNode = headTone === 'ok' ? <Icons.Check size={24} /> : <Icons.Alert size={24} />;
   const rate = status.successRate30d;
   const stripResults = [...history].reverse().map((r) => RUN[r.status].strip);

@@ -47,6 +47,15 @@ describe('aaguidChangedFields', () => {
   });
 });
 
+describe('AaguidPolicyTab MDS 엄격 모드 설명', () => {
+  it('MDS 등록 여부만 검사한다 — 폐기(REVOKED) 판정 거부를 약속하지 않는다', async () => {
+    renderTab();
+    await screen.findByRole('radiogroup', { name: 'mode' });
+    expect(screen.queryByText(/REVOKED|폐기/)).toBeNull();
+    expect(screen.getByText(/MDS에 등록되지 않은 모든 인증기의 등록이 거부됩니다/)).toBeInTheDocument();
+  });
+});
+
 describe('AaguidPolicyTab V2', () => {
   it('mode radiogroup, MDS 확인/미확인 배지, 무엇을·왜·어떻게 담은 경고 제목', async () => {
     renderTab();

@@ -248,7 +248,7 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
           </div>
         )}
 
-        <SetRow label="MDS 엄격 모드" desc="MDS 에 없거나 폐기(REVOKED)된 인증기의 등록을 거부합니다." changed={changedFields.includes('MDS strict')}>
+        <SetRow label="MDS 엄격 모드" desc="MDS 에 등록되지 않은 인증기의 등록을 거부합니다." changed={changedFields.includes('MDS strict')}>
           <div className="stack-2">
             <Switch checked={draft.mdsStrict} onChange={(v) => setDraft({ ...draft, mdsStrict: v })}
               label={draft.mdsStrict ? 'MDS strict 켜짐' : 'MDS strict 꺼짐'} />
