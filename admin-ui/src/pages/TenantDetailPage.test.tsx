@@ -287,4 +287,31 @@ describe('TenantDetailRoute (M14)', () => {
     expect(screen.queryByText('Tenant 로드 실패')).toBeNull();
     expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
+
+  it('상세를 연 뒤 재조회가 503 으로 실패하면 상세를 유지하고 경고 + 다시 시도, 성공하면 경고가 사라진다', async () => {
+    (tenantsApi.get as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(T)
+      .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'))
+      .mockResolvedValueOnce({ ...T, name: 'Acme2' });
+    renderRoute('/tenants/t-1?tab=webauthn');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'WEBAUTHN 저장 시뮬레이션' })); });
+    const warn = await screen.findByText('Tenant 정보를 새로 고치지 못했습니다');
+    expect(warn).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '다시 시도' })); });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme2' })).toBeInTheDocument();
+    expect(screen.queryByText('Tenant 정보를 새로 고치지 못했습니다')).toBeNull();
+  });
+
+  it('상세를 연 뒤 재조회가 404 면 not-found 상태를 보인다', async () => {
+    (tenantsApi.get as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(T)
+      .mockRejectedValueOnce(new ApiError(404, 'C404', 'not found'));
+    renderRoute('/tenants/t-1?tab=webauthn');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'WEBAUTHN 저장 시뮬레이션' })); });
+    expect(await screen.findByText('Tenant를 찾을 수 없습니다')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Acme' })).toBeNull();
+  });
 });

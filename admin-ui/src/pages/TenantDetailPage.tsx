@@ -1,5 +1,5 @@
 // admin-ui/src/pages/TenantDetailPage.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { tenantsApi } from '@/api/tenants';
@@ -7,6 +7,7 @@ import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import { apiKeysApi } from '@/api/apiKeys';
 import type { Tenant, AaguidPolicy, ApiKey } from '@/api/designTypes';
 import type { Me } from '@/api/types';
+import { describeError } from '@/lib/describeError';
 import { ApiError } from '@/api/types';
 import { useLoad } from '@/lib/useLoad';
 import { illustrations } from '@/assets/illustrations';
@@ -47,6 +48,8 @@ type TenantDetailPageProps = {
   onTabChange: (tab: string) => void;
   me: Me;
   onReload: () => void;
+  /** 재조회 실패 안내 등, 상세 위에 띄울 알림. */
+  notice?: ReactNode;
 };
 
 // ── SuspendDialog — 영향 범위 + slug 타이핑 확인 ─────────────────────────────
@@ -170,7 +173,7 @@ function TenantHeader({ tenant, canManage, onSuspend, onActivate }: {
 
 // ── TenantDetailPage ─────────────────────────────────────────────────────────
 
-export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload }: TenantDetailPageProps) {
+export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload, notice }: TenantDetailPageProps) {
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [aaguidPolicy, setAaguidPolicy] = useState<AaguidPolicy | null>(null);
@@ -196,6 +199,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
 
   return (
     <div className="page">
+      {notice}
       <div className="stack-3" style={{ gap: 14 }}>
         <TenantHeader tenant={tenant} canManage={platform} onSuspend={() => setSuspendOpen(true)} onActivate={() => setResumeOpen(true)} />
         <Tabs ariaLabel="Tenant 탭" items={tabs} active={currentTab} onChange={onTabChange} />
@@ -210,6 +214,21 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
       <SuspendDialog tenant={tenant} open={suspendOpen} onClose={() => setSuspendOpen(false)} onConfirmed={onReload} />
       <ResumeDialog tenant={tenant} open={resumeOpen} onClose={() => setResumeOpen(false)} onConfirmed={onReload} />
     </div>
+  );
+}
+
+// ── RefreshFailed — 상세를 연 뒤 재조회가 실패했을 때(이전 상세는 유지) ─────────
+
+function RefreshFailed({ error, onRetry, retrying }: { error: unknown; onRetry: () => void; retrying: boolean }) {
+  const info = describeError(error);
+  return (
+    <Alert
+      tone="warn"
+      title="Tenant 정보를 새로 고치지 못했습니다"
+      actions={<Button variant="secondary" size="sm" onClick={onRetry} disabled={retrying}>{retrying ? '다시 시도 중…' : '다시 시도'}</Button>}
+    >
+      {info.title}. {info.detail} 화면의 내용은 이전에 불러온 상태일 수 있습니다.
+    </Alert>
   );
 }
 
@@ -241,11 +260,12 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
   // 주소가 막 바뀐 경우 이전 tenant 를 새 주소에 그리지 않는다.
   const tenant = load.data && load.data.id === id ? load.data : undefined;
 
+  const notFound = load.status === 'failed' && load.error instanceof ApiError && load.error.httpStatus === 404;
+  if (notFound) return <TenantNotFound />;
   if (!tenant && load.status !== 'failed') {
     return <div className="page"><Skeleton rows={6} label="Tenant 정보 불러오는 중" /></div>;
   }
   if (!tenant) {
-    if (load.error instanceof ApiError && load.error.httpStatus === 404) return <TenantNotFound />;
     return (
       <div className="page">
         <LoadError what="Tenant 정보" error={load.error} onRetry={load.reload} retrying={load.reloading} />
@@ -263,6 +283,7 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
       onTabChange={(t) => setSearchParams({ tab: t })}
       me={me}
       onReload={load.reload}
+      notice={load.status === 'failed' ? <RefreshFailed error={load.error} onRetry={load.reload} retrying={load.reloading} /> : undefined}
     />
   );
 }
