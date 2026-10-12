@@ -49,12 +49,20 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   }, [q, appliedQ]);
 
   // useLoad 는 최신 요청만 반영한다(늦게 끝난 이전 검색·페이지 응답은 버림).
-  const load = useLoad(() => credentialsApi.list(tenant.id, page, size, appliedQ || undefined), [tenant.id, page, size, appliedQ]);
+  // 응답마다 어떤 화면(tenant·페이지·크기·검색어)의 것인지 기억해 둔다.
+  const viewKey = `${tenant.id}|${page}|${size}|${appliedQ}`;
+  const dataView = useRef(new WeakMap<object, string>());
+  const load = useLoad(
+    () => credentialsApi.list(tenant.id, page, size, appliedQ || undefined).then((r) => { dataView.current.set(r, viewKey); return r; }),
+    [tenant.id, page, size, appliedQ],
+  );
   const items = useMemo(() => load.data?.items ?? [], [load.data]);
   const total = load.data?.total ?? 0;
-  // 이미 받은 목록이 있으면(새로고침 실패) 그대로 보이고 경고만 띄운다. 받은 게 없을 때만 전체 오류.
-  const failed = load.status === 'failed' && load.data === undefined;
-  const staleFailed = load.status === 'failed' && load.data !== undefined;
+  // 받아 둔 목록이 지금 보는 화면의 것일 때만, 새로고침 실패에도 그 목록을 남기고 경고만 띄운다.
+  // 다른 페이지·검색어 요청이 실패했는데 이전 행을 새 위치처럼 보이면 안 되므로 그때는 전체 오류.
+  const sameView = load.data !== undefined && dataView.current.get(load.data) === viewKey;
+  const failed = load.status === 'failed' && !sameView;
+  const staleFailed = load.status === 'failed' && sameView;
   const busy = load.status === 'loading' || load.reloading;
 
   // 경계를 넘은 이전/다음: 새 페이지가 도착하면 첫/마지막 항목을 고른다. 실패하면 대기만 지운다.
@@ -201,7 +209,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           const info = describeError(load.error);
           return (
             <Alert tone="warn" title="Credential 목록을 새로 고치지 못했습니다"
-              actions={<Button size="sm" onClick={() => void load.reload()} disabled={load.reloading}>다시 시도</Button>}>
+              actions={<Button variant="secondary" size="sm" onClick={() => void load.reload()} disabled={load.reloading}>{load.reloading ? '다시 시도 중…' : '다시 시도'}</Button>}>
               {info.title}. {info.detail} 아래 목록은 이전에 불러온 내용입니다.
             </Alert>
           );

@@ -202,8 +202,22 @@ describe('CredentialsTab V2', () => {
     expect(screen.queryByText('Credential 목록을 불러오지 못했습니다')).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Credential 검색' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(screen.getByRole('button', { name: '다시 시도 중…' })).toBeDisabled();
     await waitFor(() => expect(screen.queryByText('user-aaaa-11111111')).toBeNull());
     expect(screen.queryByText('Credential 목록을 새로 고치지 못했습니다')).toBeNull();
+  });
+
+  it('다른 페이지 요청이 실패하면 이전 페이지 행을 남기지 않고 전체 오류 + 다시 시도', async () => {
+    api.list.mockImplementation((_t: string, page: number) => (page === 0
+      ? Promise.resolve(pageOf([cred('c1')], 120, 0))
+      : Promise.reject(new ApiError(503, 'C999', 'HTTP 503'))));
+    renderTab();
+    await screen.findByText('user-c1');
+    fireEvent.click(screen.getByRole('button', { name: '다음 페이지' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Credential 목록을 불러오지 못했습니다');
+    expect(screen.queryByText('user-c1')).toBeNull();
+    expect(screen.queryByText('Credential 목록을 새로 고치지 못했습니다')).toBeNull();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
   });
 
   it('표의 휴지통 버튼은 ACTIVE 행에만', async () => {
