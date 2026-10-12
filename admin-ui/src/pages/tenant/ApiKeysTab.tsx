@@ -9,7 +9,7 @@ import {
 import { illustrations } from '@/assets/illustrations';
 import { apiKeysApi } from '@/api/apiKeys';
 import { copyToClipboard } from '@/lib/clipboard';
-import { describeError } from '@/lib/describeError';
+import { ActionBlockedError, describeError } from '@/lib/describeError';
 import { eulReul } from '@/lib/josa';
 import { useLoad } from '@/lib/useLoad';
 import { HELP_LINKS } from '@/config/links';
@@ -71,7 +71,7 @@ export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onCh
 
   /** 발급·회전·회수 공용 가드 — 다른 작업이 진행 중이면 throw 해서 다이얼로그 안에 오류를 보인다(입력은 유지). */
   async function guarded<T>(run: () => Promise<T>): Promise<T> {
-    if (busyRef.current) throw new Error('다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.');
+    if (busyRef.current) throw new ActionBlockedError('다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.');
     busyRef.current = true;
     try {
       return await run();
@@ -166,7 +166,7 @@ export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onCh
       <div className="kpis kpis--3">
         <KpiCard label="총 API Key" value={failed ? '—' : keys.length} hint={failed ? undefined : `활성 ${counts.active} · 만료 ${counts.expired} · 회수 ${counts.revoked}`} />
         <KpiCard label="최근 발급" value={!failed && latest ? timeAgo(latest) : '—'} />
-        <KpiCard label="권장 rotation" value={`${ROTATION_DAYS}일`} hint={failed ? undefined : `초과 키 ${overdue}개`} hintTone={overdue > 0 ? 'warn' : 'default'} />
+        <KpiCard label="권장 회전 주기" value={`${ROTATION_DAYS}일`} hint={failed ? undefined : `초과 키 ${overdue}개`} hintTone={overdue > 0 ? 'warn' : 'default'} />
       </div>
 
       <Card>
@@ -268,7 +268,7 @@ function NewKeyDialog({ open, onClose, onIssue }: {
       </>}>
       {info && (
         <Alert tone="bad" title="API 키를 발급하지 못했습니다.">
-          {`${info.title}. ${info.detail.replace(/[.。]$/, '')}. 입력한 내용은 그대로 있습니다.`}
+          {[info.title, info.detail.trim().replace(/[.。]$/, '')].filter(Boolean).join('. ')}. 입력한 내용은 그대로 있습니다.
         </Alert>
       )}
       <div>

@@ -353,5 +353,29 @@ describe('ApiKeysTab V2', () => {
     await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '회수' })); });
     expect(api.revoke).not.toHaveBeenCalled();
     expect(within(dlg).getByText(/다른 작업이 진행 중/)).toBeInTheDocument();
+    // 막힌 이유는 쉬운 제목으로(알 수 없는 오류가 아니다).
+    const blocked = within(dlg).getAllByRole('alert').find((x) => x.textContent?.includes('회수하지 못했습니다'));
+    expect(blocked).toHaveTextContent('지금은 실행할 수 없습니다');
+    expect(blocked).not.toHaveTextContent('알 수 없는 오류');
+  });
+
+  it('KPI 라벨은 "권장 회전 주기"(rotation 영문 없음)', async () => {
+    api.list.mockResolvedValue([key({ id: 'a', name: 'prod' })]);
+    renderTab();
+    expect(await screen.findByText('권장 회전 주기')).toBeInTheDocument();
+    expect(screen.queryByText(/권장 rotation/)).toBeNull();
+  });
+
+  it('발급 실패의 서버 설명이 비어 있어도 마침표가 겹치지 않는다', async () => {
+    api.list.mockResolvedValue([]);
+    api.create.mockRejectedValueOnce(new ApiError(400, 'K400', ''));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '새 키 발급' }));
+    const dlg = screen.getByRole('dialog', { name: '새 API 키 발급' });
+    fireEvent.change(within(dlg).getByLabelText('용도 (이름)'), { target: { value: 'staging' } });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '발급' })); });
+    const alert = within(dlg).getByRole('alert');
+    expect(alert).toHaveTextContent('요청을 처리하지 못했습니다. 입력한 내용은 그대로 있습니다.');
+    expect(alert.textContent).not.toMatch(/\.\s*\./);
   });
 });
