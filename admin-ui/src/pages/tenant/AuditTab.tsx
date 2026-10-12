@@ -8,7 +8,7 @@ import {
 import { auditApi } from '@/api/audit';
 import { copyToClipboard } from '@/lib/clipboard';
 import { downloadCsv } from '@/lib/csvExport';
-import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import { kstToday } from '@/lib/kst';
 import type { Tenant, AuditEvent, ChainVerifyResult } from '@/api/designTypes';
 import { fmtNum, hms, timeAgo, ymdHm, ymdHms } from './tabFormat';
@@ -102,8 +102,7 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
       setHasMore(res.items.length === PAGE_SIZE);
     } catch (e: unknown) {
       if (gen === genRef.current) {
-        const info = describeError(e);
-        toast({ kind: 'err', title: '감사 로그를 더 불러오지 못했습니다', message: `${info.title}. ${info.detail}` });
+        toast(errorToast(e, '감사 로그를 더 불러오지 못했습니다'));
       }
     } finally {
       if (gen === genRef.current) {
@@ -156,9 +155,8 @@ export default function AuditTab({ tenant, isPlatformOperator = false }: { tenan
       setShowVerify(false);
     } catch (e: unknown) {
       if (gen !== verifyGenRef.current) return;
-      const info = describeError(e);
       // 다이얼로그를 닫은 뒤 끝날 수도 있으므로 오류는 토스트로 알린다.
-      toast({ kind: 'err', title: '체인 검증에 실패했습니다', message: `${info.title}. ${info.detail}` });
+      toast(errorToast(e, '체인 검증에 실패했습니다'));
     } finally {
       // 테넌트가 바뀌었다면 정리 effect 가 이미 해제했고 새 검증이 돌고 있을 수 있어 건드리지 않는다.
       if (gen === verifyGenRef.current) {

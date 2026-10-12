@@ -6,7 +6,7 @@ import type { Tenant, WebauthnConfig } from '@/api/designTypes';
 import { apkKeyHashFromFingerprint, isApkKeyHashOrigin, APK_KEY_HASH_PREFIX } from '@/lib/apkKeyHash';
 import { Alert, Badge, Button, Card, CardHeader, ChipInput, ConfirmDialog, LoadError, SaveBar, Segmented, Skeleton, useToast, useUnsavedGuard } from '@/ui';
 import { useLoad } from '@/lib/useLoad';
-import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import { HELP_LINKS } from '@/config/links';
 import { SetRow } from './SetRow';
 
@@ -240,8 +240,7 @@ export default function WebauthnConfigTab({ tenant, onSaved }: WebauthnConfigTab
       setDiffChanges(r);
       setShowDiff(true);
     } catch (e: unknown) {
-      const info = describeError(e);
-      toast({ kind: 'err', title: '변경 사항을 비교하지 못했습니다', message: `${info.title}. ${info.detail}` });
+      toast(errorToast(e, '변경 사항을 비교하지 못했습니다'));
     }
   }
 

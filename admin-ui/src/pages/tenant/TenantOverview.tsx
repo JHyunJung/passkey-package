@@ -8,6 +8,7 @@ import { funnelApi, type FunnelStage } from '@/api/funnel';
 import { activityApi } from '@/api/activity';
 import { auditApi } from '@/api/audit';
 import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import { useLoad } from '@/lib/useLoad';
 import { Alert, Badge, Button, Card, CardBody, CardHeader, KpiCard, LoadError, StatusStrip, useToast } from '@/ui';
 import { adaptFeedItems, type RecentActivityEvent } from './recentActivityAdapter';
@@ -175,9 +176,8 @@ export default function TenantOverview({ tenant, isPlatformOperator = false, exp
       (e: unknown) => {
         if (my !== chainSeq.current) return;
         settle();
-        const info = describeError(e);
-        if (manual) toastRef.current({ kind: 'err', title: '수동 검증 실패', message: `${info.title}. ${info.detail}` });
-        else setChain({ kind: 'unavailable', reason: `${info.title}.` });
+        if (manual) toastRef.current(errorToast(e, '수동 검증 실패'));
+        else setChain({ kind: 'unavailable', reason: `${describeError(e).title}.` });
       },
     );
   }

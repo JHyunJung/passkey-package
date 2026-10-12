@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { securityPolicyApi, type SecurityPolicyView } from '@/api/securityPolicy';
 import { useLoad } from '@/lib/useLoad';
 import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import {
   MAX_ORIGINS, MAX_ORIGIN_LENGTH, ORIGIN_COUNT_ERROR, ORIGIN_LENGTH_ERROR, normalizeOrigin, timeoutError, validateOrigin,
 } from '@/lib/policyValidation';
@@ -71,8 +72,7 @@ export default function SecurityPolicyTab() {
     try {
       await save();
     } catch (e: unknown) {
-      const info = describeError(e);
-      toast({ kind: 'err', title: '보안 정책을 저장하지 못했습니다', message: `${info.title}. 입력한 내용은 그대로 있습니다.` });
+      toast(errorToast(e, '보안 정책을 저장하지 못했습니다', `${describeError(e).title}. 입력한 내용은 그대로 있습니다.`));
     }
   }
 
@@ -81,8 +81,7 @@ export default function SecurityPolicyTab() {
       const v = await securityPolicyApi.get();
       applyView(v);
     } catch (e: unknown) {
-      const info = describeError(e);
-      toast({ kind: 'err', title: '되돌리지 못했습니다', message: info.title });
+      toast(errorToast(e, '되돌리지 못했습니다'));
     }
   }
 

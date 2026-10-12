@@ -6,6 +6,7 @@ import { ApiError, type Me } from '@/api/types';
 import { QrCode } from '@/shell/QrCode';
 import { kstDate } from '@/lib/kst';
 import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import { illustrations } from '@/assets/illustrations';
 import { Alert, Badge, Button, Dialog, OtpInput, SecretBox, Stepper, useToast, useUnsavedGuard, type StepState } from '@/ui';
 import { KvList, type KvItem } from '@/pages/tenant/KvList';
@@ -66,8 +67,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
       setEnrollCode('');
       setEnrollError(null);
     } catch (e: unknown) {
-      const info = describeError(e);
-      toast({ kind: 'err', title: '2단계 인증을 시작하지 못했습니다', message: `${info.title}. ${info.detail}` });
+      toast(errorToast(e, '2단계 인증을 시작하지 못했습니다'));
     } finally {
       setEnrolling(false);
     }

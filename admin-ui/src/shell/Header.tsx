@@ -6,6 +6,7 @@ import { Badge, useToast } from '@/ui';
 import { HELP_LINKS } from '@/config/links';
 import { paletteShortcutLabel } from '@/lib/platform';
 import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 
 function useOutsideClose(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -50,9 +51,8 @@ function RpSwitcher({ onSwitch }: { onSwitch: () => void }) {
       onSwitch();
     } catch (e) {
       // 실패를 삼키지 않는다(H9). 서버는 활성 RP 를 바꾸지 않았으므로 화면도 그대로다.
-      const info = describeError(e);
       setOpen(false);
-      toast({ kind: 'err', title: 'RP를 전환하지 못했습니다', message: `${info.title}. 지금 보고 있는 RP(${label})는 그대로입니다.`, traceId: info.traceId });
+      toast(errorToast(e, 'RP를 전환하지 못했습니다', `${describeError(e).title}. 지금 보고 있는 RP(${label})는 그대로입니다.`));
     } finally {
       setSwitching(false);
     }

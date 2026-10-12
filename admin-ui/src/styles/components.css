@@ -310,6 +310,9 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .toast__title { font-weight: 600; }
 .toast__sub { color: #C9D3DF; margin-top: 2px; }
 .toast__trace { font-family: var(--mono); font-size: 11px; color: #9AA6B5; margin-top: 4px; }
+.toast__details { margin-top: 4px; }
+.toast__details > summary { cursor: pointer; font-size: 12px; color: #C9D3DF; }
+.toast__details .toast__trace { overflow-wrap: anywhere; }
 .toast__action { background: transparent; border-color: #5B6778; color: #fff; align-self: center; }
 .toast .btn--ghost { color: #C9D3DF; }
 

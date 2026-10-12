@@ -58,6 +58,15 @@ function renderTab(props: { me?: { email: string }; onPendingCountChange?: (n: n
 }
 const approveDialog = () => screen.getByRole('dialog', { name: '가입 요청 승인' });
 
+
+/** 오류 토스트: 원문(raw)은 제목·본문에 없고 접힌 "자세히" 안에만 있다(스펙 §2 알림 규칙). */
+function expectRawOnlyInDetails(title: string, raw: RegExp) {
+  const toast = screen.getByText(title).closest('.toast') as HTMLElement;
+  expect(toast.querySelector('.toast__title')).not.toHaveTextContent(raw);
+  expect(toast.querySelector('.toast__sub')).not.toHaveTextContent(raw);
+  expect(toast.querySelector('details:not([open])')).toHaveTextContent(raw);
+}
+
 describe('AdminUsersTab signup requests', () => {
   it('renders pending requests with count badge, email and reason', async () => {
     renderTab();
@@ -242,8 +251,8 @@ describe('AdminUsersTab signup requests', () => {
     fireEvent.click(within(approveDialog()).getByRole('checkbox', { name: /Acme/ }));
     fireEvent.click(within(approveDialog()).getByRole('button', { name: '승인하고 계정 생성' }));
     expect(await screen.findByText('승인 실패')).toBeInTheDocument();
-    expect(screen.getByText('서버가 잠시 응답하지 않습니다')).toBeInTheDocument();
-    expect(screen.queryByText(/SECRET-RAW/)).toBeNull();
+    expect(screen.getByText(/^서버가 잠시 응답하지 않습니다/)).toBeInTheDocument();
+    expectRawOnlyInDetails('승인 실패', /SECRET-RAW/);
   });
 });
 
@@ -528,7 +537,7 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     fireEvent.click(undo);
     expect(await screen.findByText('정지를 되돌리지 못했습니다')).toBeInTheDocument();
     expect(screen.getByText(/서버가 잠시 응답하지 않습니다/)).toBeInTheDocument();
-    expect(screen.queryByText(/SECRET-RAW/)).toBeNull();
+    expectRawOnlyInDetails('정지를 되돌리지 못했습니다', /SECRET-RAW/);
   });
 
   it('활성화 실패 토스트도 describeError 문구', async () => {
@@ -537,8 +546,8 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     await screen.findByText('gone@globex.com');
     fireEvent.click(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' }));
     expect(await screen.findByText('활성화하지 못했습니다')).toBeInTheDocument();
-    expect(screen.getByText('서버가 잠시 응답하지 않습니다')).toBeInTheDocument();
-    expect(screen.queryByText(/SECRET-RAW/)).toBeNull();
+    expect(screen.getByText(/^서버가 잠시 응답하지 않습니다/)).toBeInTheDocument();
+    expectRawOnlyInDetails('활성화하지 못했습니다', /SECRET-RAW/);
   });
 
   it('서로 다른 운영자의 처리가 겹쳐도 각 행의 처리 중 표시는 독립적이다', async () => {

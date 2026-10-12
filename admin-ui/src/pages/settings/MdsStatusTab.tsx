@@ -3,6 +3,7 @@ import { Icons } from '@/icons/Icons';
 import { kstDateTimeMin } from '@/lib/kst';
 import { useLoad } from '@/lib/useLoad';
 import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import { MDS_TRUST_MODES } from '@/i18n/labels';
 import { mdsStatusApi, MDS_HISTORY_STRIP_LIMIT, type MdsStatus, type MdsHistoryRow } from '@/api/mdsStatus';
 import {
@@ -116,7 +117,7 @@ export default function MdsStatusTab() {
       }
       void load.reload();
     } catch (e: unknown) {
-      toast({ kind: 'err', title: 'MDS 갱신 실패', message: describeError(e).title });
+      toast(errorToast(e, 'MDS 갱신 실패'));
     } finally {
       syncingRef.current = false;
       setSyncing(false);

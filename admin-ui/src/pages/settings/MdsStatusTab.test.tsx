@@ -227,8 +227,12 @@ describe('MdsStatusTab V3', () => {
     renderTab();
     fireEvent.click(await screen.findByRole('button', { name: /즉시 갱신/ }));
     expect(await screen.findByText('MDS 갱신 실패')).toBeInTheDocument();
-    expect(screen.getByText('서버가 잠시 응답하지 않습니다')).toBeInTheDocument();
-    expect(screen.queryByText(/NullPointerException/)).toBeNull();
+    const toast = screen.getByRole('alert');
+    expect(toast.querySelector('.toast__sub')).toHaveTextContent(/^서버가 잠시 응답하지 않습니다/);
+    // 원문은 본문이 아니라 접힌 "자세히" 안에만(스펙 §2 알림 규칙).
+    expect(toast.querySelector('.toast__title')).not.toHaveTextContent(/NullPointerException/);
+    expect(toast.querySelector('.toast__sub')).not.toHaveTextContent(/NullPointerException/);
+    expect(toast.querySelector('details:not([open])')).toHaveTextContent(/NullPointerException/);
     expect(screen.getByRole('button', { name: /즉시 갱신/ })).toBeEnabled();
   });
 

@@ -5,7 +5,7 @@ import { Icons } from '@/icons/Icons';
 import { activityApi } from '@/api/activity';
 import { downloadCsv } from '@/lib/csvExport';
 import { kstDateTime, kstTime, kstToday, utcIso, groupByDay } from '@/lib/kst';
-import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import type { ActivityView, ActivityCategory, ActivityDetailView } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 import { actionLabel, eventSentence } from './activityLabels';
@@ -482,8 +482,7 @@ export default function ActivityPage() {
       // Expand the visible window so newly-loaded rows actually appear in the feed
       setVisibleCount((n) => n + Math.max(adapted.events.length, 24));
     } catch (err: unknown) {
-      const info = describeError(err);
-      toast({ kind: 'err', title: '이전 기록을 불러오지 못했습니다', message: `${info.title}. ${info.detail}` });
+      toast(errorToast(err, '이전 기록을 불러오지 못했습니다'));
     }
   }
 

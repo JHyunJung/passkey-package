@@ -9,6 +9,7 @@ import { ApiError, type Me } from '@/api/types';
 import { illustrations } from '@/assets/illustrations';
 import { eulReul } from '@/lib/josa';
 import { describeError } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import { useLoad } from '@/lib/useLoad';
 import {
   Alert, Badge, Button, ChoiceCard, ConfirmDialog, DataTable, Dialog, EmptyState, LoadError, Segmented, Skeleton, StatusBadge, useToast, type Column,
@@ -114,7 +115,7 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
         setApproving(null);
         reloadAll();
       } else {
-        toast({ kind: 'err', title: '승인 실패', message: describeError(e).title });
+        toast(errorToast(e, '승인 실패'));
       }
     }
   }
@@ -192,7 +193,7 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
         await adminUsersApi.activate(u.id);
         toast({ kind: 'ok', title: `${u.email} 운영자의 정지를 되돌렸습니다.` });
       } catch (e: unknown) {
-        toast({ kind: 'err', title: '정지를 되돌리지 못했습니다', message: `${describeError(e).title}. 목록에서 “활성화”를 눌러 다시 시도하세요.` });
+        toast(errorToast(e, '정지를 되돌리지 못했습니다', `${describeError(e).title}. 목록에서 “활성화”를 눌러 다시 시도하세요.`));
       }
       void users.reload();
     });
@@ -205,7 +206,7 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
         toast({ kind: 'ok', title: '운영자를 다시 활성화했습니다.', message: u.email });
         void users.reload();
       } catch (e: unknown) {
-        toast({ kind: 'err', title: '활성화하지 못했습니다', message: describeError(e).title });
+        toast(errorToast(e, '활성화하지 못했습니다'));
       }
     });
   }
