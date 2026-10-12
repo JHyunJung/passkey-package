@@ -36,7 +36,7 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
   const [extendError, setExtendError] = useState<ErrorInfo | null>(null);
   const mounted = useRef(true);
   const expiredRef = useRef(false); // 카운트다운이 0 에 도달함
-  const loggedOutRef = useRef(false); // 만료 로그아웃이 이미 발화함
+  const loggedOutRef = useRef(false); // 로그아웃이 이미 발화함 — 이후 다시 무장하지 않는다
   const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     mounted.current = true;
@@ -79,6 +79,8 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
     // 모달이 이미 열려 있는 동안에는 idle 타이머를 다시 무장하지 않는다.
     // (그렇지 않으면 warn 타이머가 카운트다운 도중 다시 발화해 secondsLeft가 리셋됨.)
     if (open) return;
+    // 로그아웃한 뒤에는(서버 응답이 늦어 화면이 남아 있어도) 경고를 다시 띄우지 않는다.
+    if (loggedOutRef.current) return;
     const warnAfterMs = warnAfterSeconds * 1000;
     function bumpIdle() {
       clearTimeout(idleTimer.current!);
@@ -86,7 +88,6 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
         setSecondsLeft(countdownSeconds);
         setExtendError(null);
         expiredRef.current = false;
-        loggedOutRef.current = false;
         setOpen(true);
       }, warnAfterMs);
     }

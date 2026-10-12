@@ -5,16 +5,26 @@
 //   3. Does NOT misinterpret a { success: false } error envelope as data
 
 import { ApiError } from './types';
+import { DEFAULT_TIMEOUT_MS, withTimeout } from './timeout';
 
 function getCookie(name: string): string | null {
   const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-export async function adminFetch<T>(
+export function adminFetch<T>(
   method: string,
   path: string,
   body?: unknown,
+): Promise<T> {
+  return withTimeout(DEFAULT_TIMEOUT_MS, (signal) => adminFetchOnce<T>(method, path, body, signal));
+}
+
+async function adminFetchOnce<T>(
+  method: string,
+  path: string,
+  body: unknown,
+  signal: AbortSignal,
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -27,6 +37,7 @@ export async function adminFetch<T>(
     headers,
     credentials: 'include',
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
 
   if (res.status === 401) {

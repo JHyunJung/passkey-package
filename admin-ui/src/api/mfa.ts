@@ -1,4 +1,5 @@
 import { ApiError } from './types';
+import { DEFAULT_TIMEOUT_MS, withTimeout } from './timeout';
 
 function getCookie(name: string): string | null {
   const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
@@ -8,13 +9,18 @@ function getCookie(name: string): string | null {
 // MFA-only POST — 401 (invalid_code) must surface as ApiError WITHOUT the
 // shared client's login redirect, so the challenge/account screens can show
 // a retry toast instead of bouncing to /admin/login.
-async function mfaPost<T>(path: string, body: unknown): Promise<T> {
+function mfaPost<T>(path: string, body: unknown): Promise<T> {
+  return withTimeout(DEFAULT_TIMEOUT_MS, (signal) => mfaPostOnce<T>(path, body, signal));
+}
+
+async function mfaPostOnce<T>(path: string, body: unknown, signal: AbortSignal): Promise<T> {
   const csrf = getCookie('XSRF-TOKEN');
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-XSRF-TOKEN': csrf } : {}) },
     credentials: 'include',
     body: JSON.stringify(body),
+    signal,
   });
   let json: unknown = null;
   try { json = await res.json(); } catch { /* empty body ok */ }

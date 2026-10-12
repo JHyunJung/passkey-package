@@ -1,6 +1,7 @@
 import { api } from './client';
 import type { AuditLogView } from './types';
 import type { AuditEvent, ChainVerifyResult } from './designTypes';
+import { LONG_TIMEOUT_MS } from './timeout';
 
 // /admin/api/audit returns ApiResponse<List<AuditLogView>> (envelope)
 // /admin/api/audit/chain/verify returns raw TenantVerifyResponse (no envelope)
@@ -66,7 +67,7 @@ export const auditApi = {
       }
     }
     const url = `/admin/api/audit/chain/verify?tenantId=${encodeURIComponent(tenantId)}&windowHours=${windowHours}`;
-    const s = await api.getRaw<TenantVerifyRaw>(url);
+    const s = await api.getRaw<TenantVerifyRaw>(url, { timeoutMs: LONG_TIMEOUT_MS });
     // getRaw returns the raw JSON — check for error envelopes (non-2xx responses
     // return an object with 'success: false' or just an error shape)
     if (!s || typeof s !== 'object') {

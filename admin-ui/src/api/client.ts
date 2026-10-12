@@ -10,6 +10,7 @@ import type {
   AuditLogView,
 } from './types';
 import { ApiError } from './types';
+import { DEFAULT_TIMEOUT_MS, withTimeout, type RequestOptions } from './timeout';
 
 function getCookie(name: string): string | null {
   const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
@@ -31,7 +32,11 @@ function isOnLoginScreen(): boolean {
 
 // Used for endpoints that return raw JSON (no ApiResponse envelope),
 // e.g. POST /admin/api/tenants/{id}/webauthn-config/diff
-async function rawRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+function rawRequest<T>(method: string, path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+  return withTimeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS, (signal) => rawRequestOnce<T>(method, path, body, signal));
+}
+
+async function rawRequestOnce<T>(method: string, path: string, body: unknown, signal: AbortSignal): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET' && method !== 'HEAD') {
@@ -43,6 +48,7 @@ async function rawRequest<T>(method: string, path: string, body?: unknown): Prom
     headers,
     credentials: 'include',
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
   if (res.status === 401) {
     // 미인증 401 → 로그인 화면(/admin)으로 리다이렉트. 로그인 화면은 SPA basename
@@ -72,7 +78,11 @@ async function rawRequest<T>(method: string, path: string, body?: unknown): Prom
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+function request<T>(method: string, path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+  return withTimeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS, (signal) => requestOnce<T>(method, path, body, signal));
+}
+
+async function requestOnce<T>(method: string, path: string, body: unknown, signal: AbortSignal): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET' && method !== 'HEAD') {
@@ -84,6 +94,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers,
     credentials: 'include',
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
   if (res.status === 401) {
     // 미인증 401 → 로그인 화면(/admin)으로 리다이렉트. 로그인 화면은 SPA basename
@@ -119,32 +130,35 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  get:     <T>(path: string)               => request<T>('GET',    path),
-  getRaw:  <T>(path: string)               => rawRequest<T>('GET',  path),
-  post:    <T>(path: string, body: unknown) => request<T>('POST',   path, body),
-  postRaw: <T>(path: string, body: unknown) => rawRequest<T>('POST', path, body),
-  put:     <T>(path: string, body: unknown) => request<T>('PUT',    path, body),
-  putRaw:  <T>(path: string, body: unknown) => rawRequest<T>('PUT',  path, body),
-  delete:  <T>(path: string)               => request<T>('DELETE', path),
+  get:     <T>(path: string, opts?: RequestOptions)                => request<T>('GET',    path, undefined, opts),
+  getRaw:  <T>(path: string, opts?: RequestOptions)                => rawRequest<T>('GET',  path, undefined, opts),
+  post:    <T>(path: string, body: unknown, opts?: RequestOptions) => request<T>('POST',   path, body, opts),
+  postRaw: <T>(path: string, body: unknown, opts?: RequestOptions) => rawRequest<T>('POST', path, body, opts),
+  put:     <T>(path: string, body: unknown, opts?: RequestOptions) => request<T>('PUT',    path, body, opts),
+  putRaw:  <T>(path: string, body: unknown, opts?: RequestOptions) => rawRequest<T>('PUT',  path, body, opts),
+  delete:  <T>(path: string, opts?: RequestOptions)                => request<T>('DELETE', path, undefined, opts),
   /**
    * 폼 로그인. 성공 여부와 HTTP 상태를 돌려준다 — 화면이 5xx(일시 오류)를 자격 증명 오류와 구분한다.
-   * 423/429 잠김 구분은 백엔드 2단계(스펙 §8). 네트워크 오류는 fetch 의 TypeError 를 그대로 던진다.
+   * 423/429 잠김 구분은 백엔드 2단계(스펙 §8). 네트워크 오류는 fetch 의 TypeError 를, 시간 초과는 RequestTimeoutError 를 던진다.
    */
   loginForm: async (email: string, password: string): Promise<{ ok: boolean; status: number }> => {
     const csrf = getCookie('XSRF-TOKEN');
     const form = new URLSearchParams();
     form.set('email', email);
     form.set('password', password);
-    const res = await fetch('/admin/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        ...(csrf ? { 'X-XSRF-TOKEN': csrf } : {}),
-      },
-      credentials: 'include',
-      body: form.toString(),
+    return withTimeout(DEFAULT_TIMEOUT_MS, async (signal) => {
+      const res = await fetch('/admin/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          ...(csrf ? { 'X-XSRF-TOKEN': csrf } : {}),
+        },
+        credentials: 'include',
+        body: form.toString(),
+        signal,
+      });
+      return { ok: res.ok, status: res.status };
     });
-    return { ok: res.ok, status: res.status };
   },
 };
 

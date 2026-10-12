@@ -182,9 +182,11 @@ function App() {
   if (location.pathname === '/reset-password') return <ResetPasswordPage />;
   if (location.pathname === '/signup') return <SignupRequestPage />;
 
-  async function handleLogout() {
-    try { await api.post<void>('/admin/logout', {}); } catch { /* ignore */ }
+  // 로컬 인증 상태를 먼저 지워 콘솔을 즉시 닫는다. 서버 로그아웃은 뒤에서 보낸다 —
+  // 응답이 늦거나 없어도 화면이 열린 채 남거나 유휴 모달이 다시 뜨지 않게.
+  function handleLogout() {
     setMe(null);
+    api.post<void>('/admin/logout', {}).catch(() => { /* 세션은 서버에서도 곧 만료된다 */ });
   }
 
   async function reloadMe() {

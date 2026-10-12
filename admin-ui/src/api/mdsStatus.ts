@@ -1,4 +1,5 @@
 import { api } from './client';
+import { LONG_TIMEOUT_MS } from './timeout';
 
 export type MdsSuccessRate = {
   ok: number;
@@ -39,7 +40,7 @@ export const MDS_HISTORY_STRIP_LIMIT = 30;
 
 export const mdsStatusApi = {
   get: (): Promise<MdsStatus> => api.get<MdsStatus>('/admin/api/mds/status'),
-  sync: (): Promise<MdsSyncResult> => api.post<MdsSyncResult>('/admin/api/mds/sync', {}),
+  sync: (): Promise<MdsSyncResult> => api.post<MdsSyncResult>('/admin/api/mds/sync', {}, { timeoutMs: LONG_TIMEOUT_MS }),
   history: (limit = 5): Promise<MdsHistoryRow[]> =>
     api.get<MdsHistoryRow[]>(`/admin/api/mds/history?limit=${limit}`),
 };

@@ -94,6 +94,29 @@ describe('IdleSessionModal', () => {
     expect(onLogout).toHaveBeenCalledTimes(1);
   });
 
+  it('로그아웃한 뒤에는(로그아웃 요청이 끝나지 않아 화면이 남아 있어도) 다시 무장하지 않아 모달이 다시 뜨지 않고 onLogout 도 한 번뿐', () => {
+    const onLogout = vi.fn();
+    render(<IdleSessionModal idleTimeoutMinutes={2} onExtend={vi.fn()} onLogout={onLogout} />);
+    act(() => { vi.advanceTimersByTime(60 * 1000); });
+    fireEvent.click(screen.getByRole('button', { name: '로그아웃' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    act(() => { vi.advanceTimersByTime(5 * 60 * 1000); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onLogout).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('만료 로그아웃 뒤에도 다시 무장하지 않는다', () => {
+    const onLogout = vi.fn();
+    render(<IdleSessionModal idleTimeoutMinutes={2} onExtend={vi.fn()} onLogout={onLogout} />);
+    act(() => { vi.advanceTimersByTime(60 * 1000); }); // 모달 표시
+    act(() => { vi.advanceTimersByTime(60 * 1000); }); // 카운트다운 종료
+    expect(onLogout).toHaveBeenCalledTimes(1);
+    act(() => { vi.advanceTimersByTime(5 * 60 * 1000); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
   it('"세션 연장" 실패는 모달 안에 오류로 표시되고 모달은 열린 채 유지, 연타해도 한 번만 호출', async () => {
     let rejectExtend!: (e: unknown) => void;
     const onExtend = vi.fn(() => new Promise<void>((_, rej) => { rejectExtend = rej; }));

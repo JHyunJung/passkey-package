@@ -224,6 +224,14 @@ export class ApiError extends Error {
   }
 }
 
+/** 응답이 시간 제한 안에 오지 않아 요청을 중단함 — 일시 오류로 취급한다(isTransientError). */
+export class RequestTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Request timed out after ${timeoutMs}ms`);
+    this.name = 'RequestTimeoutError';
+  }
+}
+
 export interface TenantUpdateRequest {
   displayName: string;
   rpId: string;

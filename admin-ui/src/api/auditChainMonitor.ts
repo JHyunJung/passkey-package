@@ -1,4 +1,5 @@
 import { api } from './client';
+import { LONG_TIMEOUT_MS } from './timeout';
 
 export type ChainOverview = {
   verifiedAt: string;
@@ -54,10 +55,11 @@ export const auditChainMonitorApi = {
   overview: async (windowHours = 24): Promise<ChainOverview> => {
     return api.getRaw<ChainOverview>(
       `/admin/api/audit/chain/overview?windowHours=${windowHours}`,
+      { timeoutMs: LONG_TIMEOUT_MS },
     );
   },
   backfill: async (): Promise<BackfillResult> => {
-    return api.postRaw<BackfillResult>('/admin/api/audit/chain/backfill', {});
+    return api.postRaw<BackfillResult>('/admin/api/audit/chain/backfill', {}, { timeoutMs: LONG_TIMEOUT_MS });
   },
   listIncidents: async (): Promise<IncidentView[]> => {
     return api.getRaw<IncidentView[]>('/admin/api/audit/chain/incidents');

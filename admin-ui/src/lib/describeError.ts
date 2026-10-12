@@ -1,4 +1,4 @@
-import { ApiError } from '@/api/types';
+import { ApiError, RequestTimeoutError } from '@/api/types';
 
 export type ErrorInfo = { title: string; detail: string; httpStatus?: number; traceId?: string; code?: string };
 
@@ -11,6 +11,7 @@ export function describeError(e: unknown): ErrorInfo {
     if (e.httpStatus === 404) return { ...base, title: '찾을 수 없습니다', detail: '삭제되었거나 주소가 바뀌었을 수 있습니다.' };
     return { ...base, title: '요청을 처리하지 못했습니다', detail: e.serverMessage };
   }
+  if (e instanceof RequestTimeoutError) return { title: '서버가 잠시 응답하지 않습니다', detail: '응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요.' };
   if (e instanceof TypeError) return { title: '네트워크에 연결할 수 없습니다', detail: '연결 상태를 확인한 뒤 다시 시도하세요.' };
   return { title: '알 수 없는 오류가 발생했습니다', detail: e instanceof Error ? e.message : String(e) };
 }
