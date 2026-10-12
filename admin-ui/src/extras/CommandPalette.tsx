@@ -21,7 +21,11 @@ const TENANT_TABS = [
   { id: 'funnel', label: '퍼널', icon: 'Activity' },
 ];
 
-type Command = { group: string; icon: string; label: string; hint?: string; path?: string; action: () => void; disabled?: boolean };
+/** keepOpen: 실행 뒤 팔레트를 닫지 않는다(예: 현재 tenant 다시 확인). */
+type Command = { group: string; icon: string; label: string; hint?: string; path?: string; action: () => void; disabled?: boolean; keepOpen?: boolean };
+
+/** RP 관리자의 현재(활성) tenant. 확인되기 전·실패 시에는 첫 tenant 를 짐작하지 않는다. */
+type ActiveTenantState = { status: 'loading' } | { status: 'ok'; id: string; name?: string } | { status: 'failed' };
 
 /** dir 방향으로 다음 실행 가능한 항목. 없으면 제자리 — 비활성 항목에 선택이 멈추지 않는다. */
 function stepEnabled(list: Command[], from: number, dir: 1 | -1): number {
@@ -44,7 +48,8 @@ export type CommandPaletteProps = {
 export function CommandPalette({ open, onClose, me, onNavigate, onAction }: CommandPaletteProps) {
   const [q, setQ] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [activeTenant, setActiveTenant] = useState<{ id: string; name?: string } | null>(null);
+  const [activeTenant, setActiveTenant] = useState<ActiveTenantState>({ status: 'loading' });
+  const [activeTenantTry, setActiveTenantTry] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const listId = useId();
@@ -57,19 +62,21 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
   }, [open]);
 
   // RP 관리자: 첫 tenant 가 아니라 지금 활성인 tenant 가 대상(상단 바 RP 전환과 같은 출처). 열 때마다 다시 읽어 전환을 반영한다.
+  // 확인 중·실패 시에는 tenant 항목을 비활성으로 두고(사유 표시), 실패하면 "현재 tenant 다시 확인"을 제공한다.
   useEffect(() => {
     if (!open || isPlatform) return;
     let cancelled = false;
-    setActiveTenant(null); // 이전에 열었을 때의 tenant 를 남기지 않는다(조회 실패 시 첫 tenant 기준)
+    setActiveTenant({ status: 'loading' }); // 이전에 열었을 때의 tenant 를 남기지 않는다
     activeTenantApi.get()
       .then((v) => {
-        if (cancelled || !v.activeTenantId) return;
+        if (cancelled) return;
+        if (!v.activeTenantId) { setActiveTenant({ status: 'failed' }); return; }
         const name = v.allowedTenants.find((t) => t.id === v.activeTenantId)?.name;
-        setActiveTenant({ id: v.activeTenantId, name });
+        setActiveTenant({ status: 'ok', id: v.activeTenantId, name });
       })
-      .catch(() => { if (!cancelled) setActiveTenant(null); /* 실패 시 me.tenantIds[0] 기준 + 라벨 "현재 Tenant" */ });
+      .catch(() => { if (!cancelled) setActiveTenant({ status: 'failed' }); });
     return () => { cancelled = true; };
-  }, [open, isPlatform]);
+  }, [open, isPlatform, activeTenantTry]);
 
   // navigate adapter: path like "/tenants/:id?tab=overview" → onNavigate route object
   function navigateFromPath(path: string) {
@@ -99,14 +106,22 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
       items.push({ group: '이동', icon: 'Cog', label: '설정', hint: 'Admin · MDS · 시스템', path: '관리', action: () => onNavigate({ name: 'settings' }) });
     }
 
-    const fallbackId = !isPlatform && me?.tenantIds && me.tenantIds.length > 0 ? me.tenantIds[0] : null;
-    const tenantId = activeTenant?.id ?? fallbackId;
-    if (!isPlatform && tenantId) {
-      const group = activeTenant?.name ? `현재 Tenant · ${activeTenant.name}` : '현재 Tenant';
-      TENANT_TABS.forEach((tb) => items.push({
-        group, icon: tb.icon, label: tb.label,
-        action: () => onNavigate({ name: 'tenant', tenantId, tab: tb.id }),
-      }));
+    const hasTenants = (me?.tenantIds?.length ?? 0) > 0 || activeTenant.status === 'ok';
+    if (!isPlatform && hasTenants) {
+      if (activeTenant.status === 'ok') {
+        const { id: tenantId, name } = activeTenant;
+        const group = name ? `현재 Tenant · ${name}` : '현재 Tenant';
+        TENANT_TABS.forEach((tb) => items.push({
+          group, icon: tb.icon, label: tb.label,
+          action: () => onNavigate({ name: 'tenant', tenantId, tab: tb.id }),
+        }));
+      } else {
+        const reason = activeTenant.status === 'loading' ? '현재 tenant 확인 중…' : '현재 tenant를 확인하지 못했습니다';
+        TENANT_TABS.forEach((tb) => items.push({ group: '현재 Tenant', icon: tb.icon, label: tb.label, hint: reason, action: () => {}, disabled: true }));
+        if (activeTenant.status === 'failed') {
+          items.push({ group: '현재 Tenant', icon: 'Refresh', label: '현재 tenant 다시 확인', action: () => setActiveTenantTry((n) => n + 1), keepOpen: true });
+        }
+      }
     }
 
     items.push({ group: '도움말', icon: 'Help', label: '키보드 단축키', hint: '?', action: () => onAction('shortcuts') });
@@ -142,7 +157,8 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
 
   const [selIdx, setSelIdx] = useState(0);
   // 검색어가 바뀌거나 다시 열리면 첫 실행 가능한 항목을 선택한다.
-  useEffect(() => { setSelIdx(firstEnabled(filtered)); }, [q, open]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 현재 tenant 확인 상태가 바뀌면 항목이 바뀌므로(비활성↔활성, 다시 확인 추가) 선택도 다시 잡는다.
+  useEffect(() => { setSelIdx(firstEnabled(filtered)); }, [q, open, activeTenant.status]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
     function k(e: KeyboardEvent) {
@@ -154,7 +170,7 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
         if (e.target instanceof HTMLElement && e.target.closest('button')) return;
         e.preventDefault();
         const it = filtered[selIdx];
-        if (it && !it.disabled) { it.action(); onClose(); }
+        if (it && !it.disabled) { it.action(); if (!it.keepOpen) onClose(); }
       }
     }
     window.addEventListener('keydown', k);
@@ -221,7 +237,7 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
                     aria-disabled={it.disabled || undefined}
                     className={`menu__item${it.label === '로그아웃' ? ' menu__item--danger' : ''}`}
                     disabled={it.disabled}
-                    onClick={() => { it.action(); onClose(); }}
+                    onClick={() => { it.action(); if (!it.keepOpen) onClose(); }}
                     onMouseEnter={() => { if (!it.disabled) setSelIdx(it._i); }}
                     style={{ minHeight: 40, padding: '0 16px', ...(active ? { background: 'var(--brand-100)', boxShadow: 'inset 3px 0 0 var(--brand-700)' } : {}) }}
                   >

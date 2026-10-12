@@ -95,13 +95,40 @@ describe('CommandPalette V3', () => {
     expect(onNavigate).toHaveBeenCalledWith({ name: 'tenant', tenantId: 't2', tab: 'overview' });
   });
 
-  it('활성 tenant 조회 실패면 첫 tenant, 라벨 "현재 Tenant"', async () => {
-    vi.mocked(activeTenantApi.get).mockRejectedValue(new Error('x'));
+  it('활성 tenant 조회 실패면 첫 tenant 를 짐작하지 않는다: tenant 항목은 비활성 + 사유, "현재 tenant 다시 확인"으로 회복', async () => {
+    vi.mocked(activeTenantApi.get).mockRejectedValueOnce(new Error('x'));
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+    render(<CommandPalette open onClose={onClose} me={rp} onNavigate={onNavigate} onAction={() => {}} />);
+    const retry = await screen.findByRole('option', { name: /현재 tenant 다시 확인/ });
+    const overview = screen.getByRole('option', { name: /^개요/ });
+    expect(overview).toHaveAttribute('aria-disabled', 'true');
+    expect(overview).toHaveTextContent('현재 tenant를 확인하지 못했습니다');
+    fireEvent.click(overview);
+    expect(onNavigate).not.toHaveBeenCalled();
+    // 다시 확인: 팔레트는 열린 채 다시 조회하고, 성공하면 활성 tenant 기준으로 바뀐다.
+    await act(async () => { fireEvent.click(retry); });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(activeTenantApi.get).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('현재 Tenant · Globex')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /현재 tenant 다시 확인/ })).toBeNull();
+    fireEvent.click(screen.getByRole('option', { name: /^개요/ }));
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'tenant', tenantId: 't2', tab: 'overview' });
+  });
+
+  it('활성 tenant 를 확인하는 동안 tenant 항목은 비활성 + "현재 tenant 확인 중…", Enter 로도 실행되지 않는다', async () => {
+    let resolve!: (v: typeof ACTIVE) => void;
+    vi.mocked(activeTenantApi.get).mockReturnValue(new Promise((r) => { resolve = r; }));
     const onNavigate = vi.fn();
     render(<CommandPalette open onClose={() => {}} me={rp} onNavigate={onNavigate} onAction={() => {}} />);
-    expect(await screen.findByText('현재 Tenant')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('option', { name: /^개요/ }));
-    expect(onNavigate).toHaveBeenCalledWith({ name: 'tenant', tenantId: 't1', tab: 'overview' });
+    const overview = screen.getByRole('option', { name: /^개요/ });
+    expect(overview).toHaveAttribute('aria-disabled', 'true');
+    expect(overview).toHaveTextContent('현재 tenant 확인 중…');
+    fireEvent.change(screen.getByRole('combobox', { name: '검색' }), { target: { value: '개요' } });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '검색' }), { key: 'Enter' });
+    expect(onNavigate).not.toHaveBeenCalled();
+    await act(async () => { resolve(ACTIVE); });
+    expect(screen.getByRole('option', { name: /^개요/ })).not.toHaveAttribute('aria-disabled');
   });
 
   it('PLATFORM 은 활성 tenant 를 조회하지 않는다', () => {
@@ -153,8 +180,11 @@ describe('CommandPalette fix round 1', () => {
     await flush();
     expect(screen.getByText('현재 Tenant')).toBeInTheDocument();
     expect(screen.queryByText(/Globex/)).toBeNull();
+    // 이전 tenant 로도, 첫 tenant 로도 이동하지 않는다(짐작 금지 — 비활성 + 다시 확인).
+    expect(screen.getByRole('option', { name: /^개요/ })).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(screen.getByRole('option', { name: /^개요/ }));
-    expect(onNavigate).toHaveBeenCalledWith({ name: 'tenant', tenantId: 't1', tab: 'overview' });
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(screen.getByRole('option', { name: /현재 tenant 다시 확인/ })).toBeInTheDocument();
   });
 
   it('콤보박스 ARIA: aria-expanded·aria-controls·aria-activedescendant 가 선택 항목을 가리키고 비활성은 aria-disabled', async () => {
