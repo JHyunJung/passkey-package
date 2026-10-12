@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatAaguid, saveConfirmKind } from './AaguidPolicyTab';
+import { formatAaguid, saveConfirmKind, policyChanges } from './AaguidPolicyTab';
 import type { AaguidPolicy } from '@/api/designTypes';
 
 describe('formatAaguid', () => {
@@ -63,5 +63,21 @@ describe('saveConfirmKind', () => {
   it('MDS 엄격을 켜면 mds-strict, 끄는 것은 diff', () => {
     expect(saveConfirmKind(p({}), p({ mdsStrict: true }))).toBe('mds-strict');
     expect(saveConfirmKind(p({ mdsStrict: true }), p({ mdsStrict: false }))).toBe('diff');
+  });
+});
+
+describe('policyChanges', () => {
+  const e = (aaguid: string, note: string | null = null, mdsName: string | null = null) => ({ aaguid, note, mdsName });
+  const p = (over: Partial<AaguidPolicy>): AaguidPolicy => ({ mode: 'ALLOWLIST', mdsStrict: false, entries: [e('a'), e('b')], ...over });
+  it('같으면 변경 없음, 순서만 바뀐 것과 mdsName 차이는 변경이 아니다', () => {
+    expect(policyChanges(p({}), p({}))).toEqual([]);
+    expect(policyChanges(p({}), p({ entries: [e('b'), e('a', null, 'X')] }))).toEqual([]);
+  });
+  it('삭제 후 같은 항목을 다시 추가하면 변경 없음', () => {
+    expect(policyChanges(p({}), p({ entries: [e('b'), e('a')] }))).toEqual([]);
+  });
+  it('방식·추가·삭제·메모·MDS 엄격 변경을 각각 한 건씩 낸다', () => {
+    const c = policyChanges(p({}), p({ mode: 'DENYLIST', mdsStrict: true, entries: [e('a', 'n'), e('c')] }));
+    expect(c.map((x) => x.kind).sort()).toEqual(['added', 'mds', 'mode', 'note', 'removed']);
   });
 });

@@ -181,13 +181,14 @@ describe('AaguidPolicyTab V2', () => {
     (aaguidPolicyApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({ ...POLICY, mdsStrict: true });
     renderTab();
     const sw = await screen.findByRole('switch', { name: 'MDS strict 꺼짐' });
-    expect(screen.getByText('켜면 현재 목록 중 MDS 미확인 1개 모델의 신규 등록이 막힙니다.')).toBeInTheDocument();
+    expect(screen.getByText(/켜면 MDS에 등록되지 않은 모든 인증기의 등록이 거부됩니다/)).toBeInTheDocument();
+    expect(screen.getByText(/허용 목록 중 MDS 미확인 1개도 차단됩니다/)).toBeInTheDocument();
     fireEvent.click(sw);
-    expect(screen.getByText('현재 목록 중 MDS 미확인 1개 모델의 신규 등록이 막힙니다.')).toBeInTheDocument();
+    expect(screen.getByText(/MDS에 등록되지 않은 모든 인증기의 등록이 거부됩니다/)).toBeInTheDocument();
     fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' }));
     const dlg = screen.getByRole('alertdialog', { name: 'MDS 엄격 모드를 켜고 저장할까요?' });
     expect(dlg).toHaveTextContent('MDS 엄격: 꺼짐 → 켜짐');
-    expect(dlg).toHaveTextContent('미확인 모델 1개');
+    expect(dlg).toHaveTextContent('허용 목록 중 MDS 미확인 1개도 차단됩니다');
     expect(dlg).toHaveTextContent('기존 Credential은 유지');
     expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
     await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '저장' })); });
@@ -247,5 +248,28 @@ describe('AaguidPolicyTab V2', () => {
     expect(dlg).toHaveTextContent('방식: 허용 목록 → 차단 목록');
     expect(dlg).toHaveTextContent('MDS 엄격: 켜짐 → 꺼짐');
     expect(dlg).not.toHaveTextContent(YUBI.aaguid);
+  });
+
+  it('삭제 후 같은 항목을 다시 추가하면 변경 없음 — SaveBar 가 뜨지 않는다', async () => {
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: `${YUBI.aaguid} 삭제` }));
+    expect(bar()).not.toBeNull();
+    const input = screen.getByRole('textbox', { name: 'AAGUID 입력' });
+    fireEvent.change(input, { target: { value: YUBI.aaguid } });
+    fireEvent.click(screen.getByRole('button', { name: '추가' }));
+    expect(bar()).toBeNull();
+  });
+
+  it('MDS 엄격 영향은 목록과 무관하게 MDS 미등록 모든 인증기 거부로 안내한다', async () => {
+    (aaguidPolicyApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ mode: 'ANY', mdsStrict: false, entries: [] });
+    (aaguidPolicyApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({ mode: 'ANY', mdsStrict: true, entries: [] });
+    renderTab();
+    fireEvent.click(await screen.findByRole('switch', { name: 'MDS strict 꺼짐' }));
+    expect(screen.getByText('MDS에 등록되지 않은 모든 인증기의 등록이 거부됩니다.')).toBeInTheDocument();
+    fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'MDS 엄격 모드를 켜고 저장할까요?' });
+    expect(dlg).toHaveTextContent('MDS에 등록되지 않은 모든 인증기의 등록이 거부됩니다.');
+    expect(dlg).toHaveTextContent('기존 Credential은 유지');
+    expect(dlg).not.toHaveTextContent('현재 목록');
   });
 });

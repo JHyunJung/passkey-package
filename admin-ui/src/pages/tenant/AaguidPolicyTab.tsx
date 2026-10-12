@@ -29,13 +29,39 @@ export function formatAaguid(raw: string): string {
   return out.join('-');
 }
 
+export type PolicyChange =
+  | { kind: 'mode'; from: AaguidPolicy['mode']; to: AaguidPolicy['mode'] }
+  | { kind: 'added' | 'removed'; aaguid: string }
+  | { kind: 'note'; aaguid: string; from: string | null; to: string | null }
+  | { kind: 'mds'; from: boolean; to: boolean };
+
+/**
+ * 저장된 정책과 편집 중인 정책의 실제 차이 — 변경 감지·SaveBar·확인 창의 개수와 목록이 모두 이 하나를 쓴다.
+ * 백엔드는 entries 를 집합(AAGUID)으로 쓰므로 순서와 서버가 채우는 mdsName 은 변경이 아니다.
+ */
+export function policyChanges(saved: AaguidPolicy, draft: AaguidPolicy): PolicyChange[] {
+  const out: PolicyChange[] = [];
+  if (saved.mode !== draft.mode) out.push({ kind: 'mode', from: saved.mode, to: draft.mode });
+  const savedMap = new Map(saved.entries.filter((e) => e.aaguid).map((e) => [e.aaguid, e]));
+  const draftMap = new Map(draft.entries.filter((e) => e.aaguid).map((e) => [e.aaguid, e]));
+  for (const [aaguid, e] of draftMap) {
+    const before = savedMap.get(aaguid);
+    if (!before) out.push({ kind: 'added', aaguid });
+    else if ((before.note ?? null) !== (e.note ?? null)) out.push({ kind: 'note', aaguid, from: before.note ?? null, to: e.note ?? null });
+  }
+  for (const aaguid of savedMap.keys()) if (!draftMap.has(aaguid)) out.push({ kind: 'removed', aaguid });
+  if (saved.mdsStrict !== draft.mdsStrict) out.push({ kind: 'mds', from: saved.mdsStrict, to: draft.mdsStrict });
+  return out;
+}
+
 /** SaveBar 요약용 변경 필드 이름. */
 export function aaguidChangedFields(saved: AaguidPolicy | null, draft: AaguidPolicy | null): string[] {
   if (!saved || !draft) return [];
+  const kinds = new Set(policyChanges(saved, draft).map((c) => c.kind));
   const out: string[] = [];
-  if (saved.mode !== draft.mode) out.push('mode');
-  if (JSON.stringify(saved.entries) !== JSON.stringify(draft.entries)) out.push('AAGUID 목록');
-  if (saved.mdsStrict !== draft.mdsStrict) out.push('MDS strict');
+  if (kinds.has('mode')) out.push('mode');
+  if (kinds.has('added') || kinds.has('removed') || kinds.has('note')) out.push('AAGUID 목록');
+  if (kinds.has('mds')) out.push('MDS strict');
   return out;
 }
 
@@ -57,23 +83,26 @@ const MODES: { v: AaguidPolicy['mode']; d: string }[] = [
 const onOff = (b: boolean) => (b ? '켜짐' : '꺼짐');
 const modeLabel = (m: AaguidPolicy['mode']) => <span title={m}>{AAGUID_MODE_LABELS[m]}</span>;
 
-/** 저장 확인에 보일 실제 변경 항목 수 — ChangeList 가 그리는 줄과 같은 기준. */
-function changeCount(saved: AaguidPolicy, draft: AaguidPolicy): number {
-  const added = draft.entries.filter((e) => e.aaguid && !saved.entries.some((s) => s.aaguid === e.aaguid)).length;
-  const removed = saved.entries.filter((s) => s.aaguid && !draft.entries.some((e) => e.aaguid === s.aaguid)).length;
-  return (saved.mode !== draft.mode ? 1 : 0) + added + removed + (saved.mdsStrict !== draft.mdsStrict ? 1 : 0);
-}
+const MDS_STRICT_IMPACT = 'MDS에 등록되지 않은 모든 인증기의 등록이 거부됩니다.';
+/** 허용 목록 모드에서는 목록 안의 MDS 미확인 모델도 같이 막힌다. */
+const allowlistUnknownNote = (p: AaguidPolicy) => {
+  const n = p.mode === 'ALLOWLIST' ? unverifiedAaguidCount(p) : 0;
+  return n > 0 ? ` 허용 목록 중 MDS 미확인 ${n}개도 차단됩니다.` : '';
+};
 
-/** L2 변경 비교 목록 — 방식 · 추가/삭제된 AAGUID · MDS 엄격. */
-function ChangeList({ saved, draft }: { saved: AaguidPolicy; draft: AaguidPolicy }) {
-  const added = draft.entries.filter((e) => e.aaguid && !saved.entries.some((s) => s.aaguid === e.aaguid));
-  const removed = saved.entries.filter((s) => s.aaguid && !draft.entries.some((e) => e.aaguid === s.aaguid));
+/** L2 변경 비교 목록 — policyChanges 의 모든 항목을 그대로 보인다. */
+function ChangeList({ changes }: { changes: PolicyChange[] }) {
   return (
     <ul className="stack-1" style={{ listStyle: 'none', margin: 0, padding: '12px 14px', border: '1px solid var(--line)', borderRadius: 'var(--r)', fontSize: 13 }}>
-      {saved.mode !== draft.mode && <li>방식: {modeLabel(saved.mode)} → {modeLabel(draft.mode)}</li>}
-      {added.map((e) => <li key={'+' + e.aaguid} className="mono">+ {e.aaguid}</li>)}
-      {removed.map((e) => <li key={'-' + e.aaguid} className="mono">- {e.aaguid}</li>)}
-      {saved.mdsStrict !== draft.mdsStrict && <li>MDS 엄격: {onOff(saved.mdsStrict)} → {onOff(draft.mdsStrict)}</li>}
+      {changes.map((c) => {
+        switch (c.kind) {
+          case 'mode': return <li key="mode">방식: {modeLabel(c.from)} → {modeLabel(c.to)}</li>;
+          case 'added': return <li key={'+' + c.aaguid} className="mono">+ {c.aaguid}</li>;
+          case 'removed': return <li key={'-' + c.aaguid} className="mono">- {c.aaguid}</li>;
+          case 'note': return <li key={'n' + c.aaguid} className="mono">{c.aaguid} 메모: {c.from ?? '없음'} → {c.to ?? '없음'}</li>;
+          case 'mds': return <li key="mds">MDS 엄격: {onOff(c.from)} → {onOff(c.to)}</li>;
+        }
+      })}
     </ul>
   );
 }
@@ -93,7 +122,8 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
 
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const inputValid = uuidRe.test(aaguidInput);
-  const dirty = policy !== null && draft !== null && JSON.stringify(policy) !== JSON.stringify(draft);
+  const changes = policy && draft ? policyChanges(policy, draft) : [];
+  const dirty = changes.length > 0;
   const changedFields = aaguidChangedFields(policy, draft);
   const guard = useUnsavedGuard(dirty);
 
@@ -147,7 +177,6 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
 
   // 탭 배지와 같은 기준(저장된 정책). 방금 추가한 항목은 저장 후 서버가 mdsName 을 채운다.
   const unknownCount = unverifiedAaguidCount(policy);
-  const draftUnknown = unverifiedAaguidCount(draft);
   const closeConfirm = () => setConfirm(null);
 
   return (
@@ -223,11 +252,9 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
           <div className="stack-2">
             <Switch checked={draft.mdsStrict} onChange={(v) => setDraft({ ...draft, mdsStrict: v })}
               label={draft.mdsStrict ? 'MDS strict 켜짐' : 'MDS strict 꺼짐'} />
-            {draftUnknown > 0 && (
-              <p className="hint" style={{ margin: 0 }}>
-                {draft.mdsStrict ? `현재 목록 중 MDS 미확인 ${draftUnknown}개 모델의 신규 등록이 막힙니다.` : `켜면 현재 목록 중 MDS 미확인 ${draftUnknown}개 모델의 신규 등록이 막힙니다.`}
-              </p>
-            )}
+            <p className="hint" style={{ margin: 0 }}>
+              {draft.mdsStrict ? '' : '켜면 '}{MDS_STRICT_IMPACT}{allowlistUnknownNote(draft)}
+            </p>
           </div>
         </SetRow>
         </fieldset>
@@ -241,21 +268,21 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
           결과: 허용 목록(0개)<br />
           영향: 이 tenant의 모든 사용자가 패스키로 등록·인증할 수 없습니다.
         </p>
-        <ChangeList saved={policy} draft={draft} />
+        <ChangeList changes={changes} />
       </ConfirmDialog>
 
       <ConfirmDialog open={confirm === 'mds-strict'} onClose={closeConfirm} level="L2" danger={false} verb="저장"
         title="MDS 엄격 모드를 켜고 저장할까요?" onConfirm={save}>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
           MDS 엄격: 꺼짐 → 켜짐<br />
-          영향: MDS에 없거나 폐기된 인증기의 신규 등록 거부{draftUnknown > 0 ? `(현재 목록의 미확인 모델 ${draftUnknown}개 포함)` : ''}, 기존 Credential은 유지
+          영향: {MDS_STRICT_IMPACT}{allowlistUnknownNote(draft)} 기존 Credential은 유지됩니다.
         </p>
-        <ChangeList saved={policy} draft={draft} />
+        <ChangeList changes={changes} />
       </ConfirmDialog>
 
       <ConfirmDialog open={confirm === 'diff'} onClose={closeConfirm} level="L2" danger={false} verb="저장"
-        title={`변경 사항 ${changeCount(policy, draft)}개를 저장할까요?`} sub="다음 패스키 등록부터 적용됩니다." onConfirm={save}>
-        <ChangeList saved={policy} draft={draft} />
+        title={`변경 사항 ${changes.length}개를 저장할까요?`} sub="다음 패스키 등록부터 적용됩니다." onConfirm={save}>
+        <ChangeList changes={changes} />
       </ConfirmDialog>
       {guard}
     </div>
