@@ -3,7 +3,7 @@ import { LicenseBanner } from '@/components/LicenseBanner';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TenantsListPage from '@/pages/TenantsListPage';
 import TenantDetailRoute from '@/pages/TenantDetailPage';
-import { ToastHost } from '@/ui';
+import { ToastHost, Skeleton } from '@/ui';
 import { Sidebar } from '@/shell/Sidebar';
 import { ErrorBoundary } from '@/shell/ErrorBoundary';
 import { Header } from '@/shell/Header';
@@ -113,7 +113,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 
   return (
     <Fragment>
-      <LicenseBanner />
+      <LicenseBanner showLink={isPlatform(me)} />
       <div className="app">
         <ErrorBoundary fallback={null}>
           <Sidebar me={me} currentRoute={route} onNavigate={setRoute} />
@@ -192,7 +192,7 @@ function App() {
   }
 
   if (loading) {
-    return <div style={{ padding: 40, color: 'var(--mute)' }}>Loading…</div>;
+    return <div style={{ padding: 40 }}><Skeleton /></div>;
   }
 
   if (!me) {
