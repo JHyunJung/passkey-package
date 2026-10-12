@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, ReactNode, KeyboardEvent, CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, ReactNode, KeyboardEvent, CSSProperties } from 'react';
 import { Icons } from '@/icons/Icons';
 import { cn } from '@/lib/cn';
 import { IconButton } from './IconButton';
@@ -15,6 +15,13 @@ function estimateHeight(items: MenuItem[], hasDanger: boolean) {
   const body = items.reduce((h, it) => h + (it.disabled && it.disabledReason ? REASON_ITEM_H : ITEM_H), 0);
   return 12 + body + (hasDanger ? 35 : 0);
 }
+// 메뉴 높이 h 로 트리거 아래에 들어가면 아래, 아니면 위. 열기 직전 추정과 열린 뒤 실측에 같이 쓴다.
+function placeMenu(t: Pick<DOMRect, 'top' | 'bottom' | 'right'>, h: number): CSSProperties {
+  const right = window.innerWidth - t.right;
+  return t.bottom + GAP + h <= window.innerHeight
+    ? { position: 'fixed', top: t.bottom + GAP, right }
+    : { position: 'fixed', top: 'auto', bottom: window.innerHeight - t.top + GAP, right };
+}
 
 /**
  * ⋯ 메뉴. 열린 목록은 position:fixed 로 트리거 기준에 붙인다 — 표의 가로 스크롤 컨테이너(.tw)
@@ -26,7 +33,17 @@ export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', t
   const [pos, setPos] = useState<CSSProperties>({});
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const all = [...items, ...dangerItems];
+
+  // 추정으로 먼저 연 뒤, 렌더된 메뉴 높이로 방향을 다시 정한다(사유가 여러 줄로 감기면 추정이 틀린다).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const t = triggerRef.current?.getBoundingClientRect();
+    const m = menuRef.current?.getBoundingClientRect();
+    // 높이 0 은 측정 불가(레이아웃 없는 환경)로 보고 추정을 그대로 둔다.
+    if (t && m && m.height > 0) setPos(placeMenu(t, m.height));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,13 +63,7 @@ export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', t
   function toggle() {
     if (open) { setOpen(false); return; }
     const r = triggerRef.current?.getBoundingClientRect();
-    if (r) {
-      const right = window.innerWidth - r.right;
-      const fitsBelow = r.bottom + GAP + estimateHeight(all, dangerItems.length > 0) <= window.innerHeight;
-      setPos(fitsBelow
-        ? { position: 'fixed', top: r.bottom + GAP, right }
-        : { position: 'fixed', top: 'auto', bottom: window.innerHeight - r.top + GAP, right });
-    }
+    if (r) setPos(placeMenu(r, estimateHeight(all, dangerItems.length > 0)));
     setOpen(true);
   }
 
@@ -99,7 +110,7 @@ export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', t
       {open && (
         // 메뉴 클릭이 상위 행 핸들러로 올라가지 않도록 막는다. 키보드는 .menu-wrap 에서 처리.
         // eslint-disable-next-line jsx-a11y/click-events-have-key-events
-        <div className="menu" role="menu" tabIndex={-1} aria-label={label} style={pos} onClick={(e) => e.stopPropagation()}>
+        <div ref={menuRef} className="menu" role="menu" tabIndex={-1} aria-label={label} style={pos} onClick={(e) => e.stopPropagation()}>
           {items.map(renderItem)}
           {dangerItems.length > 0 && <><div className="menu__sep" /><span className="menu__section">{dangerTitle}</span>{dangerItems.map((it, k) => renderItem(it, items.length + k))}</>}
         </div>
