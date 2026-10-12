@@ -90,19 +90,35 @@ describe('Sidebar V3', () => {
     expect(screen.getByText('서버 응답이 없습니다 · 10:02 마지막 확인')).toBeInTheDocument();
   });
 
-  it('겹친 조회가 순서를 바꿔 끝나도 나중에 시작한 조회의 결과(위변조)를 유지한다', async () => {
+  it('응답이 폴링 주기보다 늦어도 진행 중인 조회를 덮어쓰지 않고, 도착하면 결과를 보여 준다', async () => {
     vi.useFakeTimers();
     let resolveFirst: (v: ReturnType<typeof okOverview>) => void = () => {};
-    let resolveSecond: (v: ReturnType<typeof okOverview>) => void = () => {};
-    overview
-      .mockReturnValueOnce(new Promise((r) => { resolveFirst = r; }))
-      .mockReturnValueOnce(new Promise((r) => { resolveSecond = r; }));
+    overview.mockReturnValueOnce(new Promise((r) => { resolveFirst = r; }));
     render(<Sidebar me={platform} currentRoute={{ name: 'tenants' }} onNavigate={() => {}} />);
-    await act(async () => { vi.advanceTimersByTime(30_000); }); // 두 번째 조회 시작(첫 조회는 아직 진행 중)
+    await act(async () => { vi.advanceTimersByTime(65_000); });
+    expect(overview).toHaveBeenCalledTimes(1);
+    await act(async () => { resolveFirst(okOverview(0)); });
+    expect(screen.getByText('AUDIT CHAIN OK')).toBeInTheDocument();
+  });
+
+  it('다시 시도가 진행 중인 폴링 조회를 대체하면, 늦게 도착한 옛 응답은 무시한다', async () => {
+    vi.useFakeTimers();
+    let resolvePoll: (v: ReturnType<typeof okOverview>) => void = () => {};
+    let resolveRetry: (v: ReturnType<typeof okOverview>) => void = () => {};
+    overview
+      .mockRejectedValueOnce(new Error('503'))
+      .mockReturnValueOnce(new Promise((r) => { resolvePoll = r; }))
+      .mockReturnValueOnce(new Promise((r) => { resolveRetry = r; }));
+    render(<Sidebar me={platform} currentRoute={{ name: 'tenants' }} onNavigate={() => {}} />);
+    await act(async () => {});
+    expect(screen.getByText('검증 상태 확인 불가')).toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(30_000); }); // 폴링 조회 시작(진행 중)
     expect(overview).toHaveBeenCalledTimes(2);
-    await act(async () => { resolveSecond(okOverview(1)); });
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' })); // 대체 조회
+    expect(overview).toHaveBeenCalledTimes(3);
+    await act(async () => { resolveRetry(okOverview(1)); });
     expect(screen.getByText('위변조 의심 · 1 tenant')).toBeInTheDocument();
-    await act(async () => { resolveFirst(okOverview(0)); }); // 오래된 응답이 늦게 도착
+    await act(async () => { resolvePoll(okOverview(0)); }); // 옛 응답이 늦게 도착
     expect(screen.getByText('위변조 의심 · 1 tenant')).toBeInTheDocument();
     expect(screen.queryByText('AUDIT CHAIN OK')).toBeNull();
   });

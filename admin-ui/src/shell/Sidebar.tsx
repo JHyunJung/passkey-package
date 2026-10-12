@@ -29,6 +29,7 @@ export function Sidebar({ me, currentRoute, onNavigate }: { me: Me; currentRoute
   const [now, setNow] = useState(() => Date.now());
   const [mode, setMode] = useState<'saas' | 'onprem' | null>(null);
   const alive = useRef(true);
+  const inFlight = useRef(false); // 폴링은 진행 중인 조회를 대체하지 않는다(수동 다시 시도만 대체)
   const seq = useRef(0); // 가장 나중에 시작한 조회만 상태를 바꾼다(겹친 조회의 역순 완료 방지)
 
   useEffect(() => { licenseApi.get().then((v) => setMode(v.deploymentMode)).catch(() => setMode('saas')); }, []);
@@ -36,7 +37,9 @@ export function Sidebar({ me, currentRoute, onNavigate }: { me: Me; currentRoute
   // 실패를 "확인 중"으로 감추지 않는다(H1·H9): 실패하면 확인 불가 + 다시 시도.
   const loadChain = useCallback((showChecking: boolean) => {
     if (showChecking) { const t = Date.now(); setChainStatus('checking'); setCheckStart(t); setNow(t); }
+    if (!showChecking && inFlight.current) return;
     const mine = ++seq.current;
+    inFlight.current = true;
     auditChainMonitorApi.overview(24)
       .then((o) => {
         if (!o?.totals) throw new Error('empty overview');
@@ -45,7 +48,8 @@ export function Sidebar({ me, currentRoute, onNavigate }: { me: Me; currentRoute
         setLastCheckedAt(new Date().toISOString());
         setChainStatus('ok');
       })
-      .catch(() => { if (alive.current && mine === seq.current) setChainStatus('unknown'); });
+      .catch(() => { if (alive.current && mine === seq.current) setChainStatus('unknown'); })
+      .finally(() => { if (mine === seq.current) inFlight.current = false; });
   }, []);
 
   useEffect(() => {
