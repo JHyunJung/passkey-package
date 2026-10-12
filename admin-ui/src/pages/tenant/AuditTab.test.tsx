@@ -255,4 +255,26 @@ describe('AuditTab V2', () => {
     expect(screen.queryByText('위변조 0건')).toBeNull();
     expect(screen.getByRole('button', { name: '검증 실행' })).toBeEnabled();
   });
+
+  it('체인 검증 중 경과 시간이 실제로 늘어난다 (0초에 멈추지 않음)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    try {
+      api.list.mockResolvedValue(resp([]));
+      let resolve: (v: unknown) => void = () => {};
+      api.verify.mockReturnValue(new Promise((r) => { resolve = r; }));
+      renderTab(true);
+      fireEvent.click(await screen.findByRole('button', { name: '검증 실행' }));
+      const dlg = screen.getByRole('dialog', { name: '해시 체인 검증' });
+      fireEvent.click(within(dlg).getByRole('button', { name: '검증 실행' }));
+      expect(dlg).toHaveTextContent('경과 0초');
+      act(() => { vi.advanceTimersByTime(2000); });
+      expect(dlg).toHaveTextContent('경과 2초');
+      act(() => { vi.advanceTimersByTime(3000); });
+      expect(dlg).toHaveTextContent('경과 5초');
+      await act(async () => { resolve({ intact: true, verifiedRows: 0, tamperedEntryIds: [], verifiedAt: new Date().toISOString() }); });
+      expect(screen.getByText('위변조 0건')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
