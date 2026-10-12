@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react';
 import { LicenseBanner } from '@/components/LicenseBanner';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TenantsListPage from '@/pages/TenantsListPage';
@@ -166,13 +166,21 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  // 인증 세대. 로그아웃마다 올린다. 비동기 경로의 setMe 는 시작할 때의 세대가 아직 현재일 때만 반영한다 —
+  // 로그아웃 전에 시작한 /me 응답이 늦게 와서 콘솔을 다시 여는 일을 막는다.
+  const authEpoch = useRef(0);
+  /** 지금 세대에 묶인 setMe. 세대가 바뀐 뒤(로그아웃 뒤) 호출되면 버린다. */
+  function setMeForEpoch(epoch: number) {
+    return (m: Me | null) => { if (epoch === authEpoch.current) setMe(m); };
+  }
   const location = useLocation();
   const isPublicPath = location.pathname === '/forgot-password' || location.pathname === '/reset-password' || location.pathname === '/signup';
 
   useEffect(() => {
     if (isPublicPath) { setLoading(false); return; }
+    const apply = setMeForEpoch(authEpoch.current);
     api.get<Me>('/admin/api/me')
-      .then(setMe)
+      .then(apply)
       .catch(() => { /* 인증 안됨 — LoginPage 표시 */ })
       .finally(() => setLoading(false));
   }, [isPublicPath]);
@@ -185,14 +193,18 @@ function App() {
   // 로컬 인증 상태를 먼저 지워 콘솔을 즉시 닫는다. 서버 로그아웃은 뒤에서 보낸다 —
   // 응답이 늦거나 없어도 화면이 열린 채 남거나 유휴 모달이 다시 뜨지 않게.
   function handleLogout() {
+    authEpoch.current++;
     setMe(null);
     api.post<void>('/admin/logout', {}).catch(() => { /* 세션은 서버에서도 곧 만료된다 */ });
   }
 
   async function reloadMe() {
-    try { setMe(await api.get<Me>('/admin/api/me')); }
-    catch { setMe(null); }
+    const apply = setMeForEpoch(authEpoch.current);
+    try { apply(await api.get<Me>('/admin/api/me')); }
+    catch { apply(null); }
   }
+  // 하위 화면에 넘기는 setMe 도 렌더 시점의 세대에 묶는다(로그인·계정 화면의 비동기 갱신).
+  const setMeCurrent = setMeForEpoch(authEpoch.current);
 
   if (loading) {
     return <div style={{ padding: 40 }}><Skeleton /></div>;
@@ -201,7 +213,7 @@ function App() {
   if (!me) {
     return (
       <ToastHost>
-        <LoginPage onLogin={setMe} />
+        <LoginPage onLogin={setMeCurrent} />
       </ToastHost>
     );
   }
@@ -217,7 +229,7 @@ function App() {
   return (
     <ToastHost>
       <Routes>
-        <Route path="*" element={<AuthenticatedApp me={me} onLogout={handleLogout} onMeChange={setMe} />} />
+        <Route path="*" element={<AuthenticatedApp me={me} onLogout={handleLogout} onMeChange={setMeCurrent} />} />
       </Routes>
     </ToastHost>
   );
