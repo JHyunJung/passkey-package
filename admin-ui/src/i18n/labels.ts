@@ -32,6 +32,6 @@ export const AAGUID_MODE_LABELS: Record<string, string> = {
 export const MDS_TRUST_MODES: Record<string, { label: string; description: string }> = {
   MDS_STRICT_OPTIONAL: {
     label: 'MDS 확인 권장',
-    description: 'MDS 에 없는 인증기도 등록은 허용하고, 폐기·취약 판정된 인증기는 거부합니다.',
+    description: 'MDS 에 없는 인증기도 기본은 허용합니다. 테넌트에서 ‘MDS 필수’ 를 켠 경우에만 MDS 미등록 인증기를 거부합니다.',
   },
 };

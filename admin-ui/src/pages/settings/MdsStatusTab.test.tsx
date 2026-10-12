@@ -147,7 +147,7 @@ describe('MdsStatusTab V3', () => {
     renderTab();
     const badge = await screen.findByText('MDS 확인 권장');
     expect(badge.closest('[title]')).toHaveAttribute('title', 'MDS_STRICT_OPTIONAL');
-    expect(screen.getByText('MDS 에 없는 인증기도 등록은 허용하고, 폐기·취약 판정된 인증기는 거부합니다.')).toBeInTheDocument();
+    expect(screen.getByText('MDS 에 없는 인증기도 기본은 허용합니다. 테넌트에서 ‘MDS 필수’ 를 켠 경우에만 MDS 미등록 인증기를 거부합니다.')).toBeInTheDocument();
     expect(screen.queryByText('MDS_STRICT_OPTIONAL')).toBeNull();
   });
 
@@ -239,5 +239,33 @@ describe('MdsStatusTab V3', () => {
     expect(await screen.findByText('MDS 갱신 실패')).toBeInTheDocument();
     expect(screen.queryByText(/SSLHandshake/)).toBeNull();
     expect(screen.getByRole('button', { name: /즉시 갱신/ })).toBeEnabled();
+  });
+
+  it('이력 조회만 실패하면 "이력 없음"이나 "정상" 헤드라인을 만들지 않고, 이력 영역에 다시 시도', async () => {
+    mock(mdsStatusApi.history).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    expect(await screen.findByText('동기화 이력을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.queryByText('동기화 이력이 없습니다.')).toBeNull();
+    expect(screen.queryByText(/^정상/)).toBeNull();
+    expect(screen.getByText('MDS BLOB 버전').closest('.kpi')).toHaveTextContent('#87');
+    mock(mdsStatusApi.history).mockResolvedValue(history);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('정상 · BLOB #87')).toBeInTheDocument();
+    expect(screen.queryByText('동기화 이력을 불러오지 못했습니다')).toBeNull();
+  });
+
+  it('재조회에서 이력만 실패하면 이전 이력을 유지하고 경고', async () => {
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: /즉시 갱신/ }));
+    mock(mdsStatusApi.history).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.queryByText('동기화 이력이 없습니다.')).toBeNull();
+  });
+
+  it('Object.prototype 이름 같은 신뢰 모드도 원문 그대로 표시', async () => {
+    mock(mdsStatusApi.get).mockResolvedValue({ ...status, trustMode: 'constructor' });
+    renderTab();
+    expect(await screen.findByText('constructor')).toHaveClass('badge--info');
   });
 });
