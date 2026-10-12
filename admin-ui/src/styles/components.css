@@ -307,3 +307,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .toast__sub { color: #C9D3DF; margin-top: 2px; }
 .toast__trace { font-family: var(--mono); font-size: 11px; color: #9AA6B5; margin-top: 4px; }
 .toast .btn--ghost { color: #C9D3DF; }
+
+/* ── skeleton ──────────────────────── */
+.skeleton-block { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.skeleton-block__line { display: block; height: 10px; border-radius: 5px; background: #E1E7EF; }
