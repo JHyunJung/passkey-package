@@ -1,6 +1,6 @@
 // admin-ui/src/pages/TenantsListPage.tsx
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { tenantsApi } from '@/api/tenants';
 import { apiKeysApi } from '@/api/apiKeys';
@@ -64,6 +64,18 @@ export default function TenantsListPage() {
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
   const navigate = useNavigate();
   const toast = useToast();
+  const [params, setParams] = useSearchParams();
+
+  // 커맨드 팔레트의 "신규 tenant 생성"은 /tenants?new=1 로 온다 — 다이얼로그를 바로 열고,
+  // 새로고침·뒤로가기 때 다시 열리지 않게 new 를 주소에서 지운다.
+  // (이 페이지는 RequirePlatform 가드 뒤라 PLATFORM 만 도달 — 별도 권한 검사 불필요.)
+  useEffect(() => {
+    if (params.get('new') !== '1') return;
+    setShowNew(true);
+    const next = new URLSearchParams(params);
+    next.delete('new');
+    setParams(next, { replace: true });
+  }, [params, setParams]);
 
   // 만료 임박 키 계산용 전체 키 목록. 실패해도 목록 화면은 그대로 — KPI 보조 줄만 숨긴다.
   useEffect(() => {

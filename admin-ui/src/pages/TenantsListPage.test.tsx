@@ -1,6 +1,6 @@
 // admin-ui/src/pages/TenantsListPage.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { screen, fireEvent, within, waitFor, act } from '@testing-library/react';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
 import type { Tenant } from '@/api/designTypes';
@@ -231,5 +231,20 @@ describe('TenantsListPage V2', () => {
     fillAndSubmit();
     await waitFor(() => expect(router.state.location.pathname).toBe('/tenants/new1'));
     expect(router.state.location.search).toBe('?tab=webauthn');
+  });
+  it('?new=1 로 들어오면(커맨드 팔레트) 생성 다이얼로그를 바로 열고 주소에서 new 를 지운다', async () => {
+    vi.mocked(tenantsApi.list).mockResolvedValue([]);
+    const { router } = renderWithDataRouter(<ToastHost><TenantsListPage /></ToastHost>, { initialPath: '/tenants?new=1' });
+    expect(await screen.findByRole('dialog', { name: '신규 Tenant 생성' })).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.search).toBe(''));
+    expect(screen.getByRole('dialog', { name: '신규 Tenant 생성' })).toBeInTheDocument();
+  });
+
+  it('new 파라미터가 없으면 다이얼로그를 열지 않는다', async () => {
+    vi.mocked(tenantsApi.list).mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => expect(tenantsApi.list).toHaveBeenCalled());
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(screen.queryByRole('dialog', { name: '신규 Tenant 생성' })).toBeNull();
   });
 });

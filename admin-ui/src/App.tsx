@@ -107,7 +107,8 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 
   function paletteAction(kind: string) {
     if (kind === 'logout') onLogout();
-    if (kind === 'new-tenant') setRoute({ name: 'tenants' });
+    // 목록으로 보내고 끝내지 않고 생성 다이얼로그까지 연다(TenantsListPage 가 ?new=1 을 처리).
+    if (kind === 'new-tenant') navigate('/tenants?new=1');
     if (kind === 'shortcuts') openSheet();
   }
 
