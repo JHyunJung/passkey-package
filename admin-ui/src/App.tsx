@@ -152,7 +152,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
       <ShortcutSheet open={sheetOpen} onClose={() => setSheetOpen(false)} platform={isPlatform(me)} />
       <IdleSessionModal
         idleTimeoutMinutes={me.sessionIdleTimeoutMinutes}
-        onExtend={() => { getMe().catch(() => { /* 401은 client가 로그인으로 redirect 처리 */ }); }}
+        onExtend={async () => { await getMe(); }}
         onLogout={onLogout}
       />
 

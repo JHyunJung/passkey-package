@@ -1,13 +1,22 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
-import { Dialog } from '@/ui';
+import { Alert, Button, Dialog } from '@/ui';
+import { describeError, type ErrorInfo } from '@/lib/describeError';
 
 export type IdleSessionModalProps = {
   idleTimeoutMinutes: number;
-  onExtend: () => void;
+  /** 실패하면 reject — 모달이 열린 채 오류를 인라인으로 보여 준다. */
+  onExtend: () => void | Promise<void>;
   onLogout: () => void;
 };
 
 const WARN_LEAD_SECONDS = 60;
+
+/** 스크린리더에는 매초가 아니라 30초·10초 남았을 때만 알린다. */
+function announcement(secondsLeft: number): string {
+  if (secondsLeft <= 10) return '세션 만료까지 10초 남았습니다.';
+  if (secondsLeft <= 30) return '세션 만료까지 30초 남았습니다.';
+  return '';
+}
 
 export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: IdleSessionModalProps): ReactNode {
   // 카운트다운 길이를 전체 idle 시간에서 파생한다.
@@ -19,6 +28,31 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
   const [open, setOpen] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(countdownSeconds);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const extendRef = useRef<HTMLButtonElement>(null);
+  const [extending, setExtending] = useState(false);
+  const extendingRef = useRef(false);
+  const [extendError, setExtendError] = useState<ErrorInfo | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+
+  async function extend() {
+    if (extendingRef.current) return; // 연타로 중복 호출 방지
+    extendingRef.current = true;
+    setExtending(true);
+    setExtendError(null);
+    try {
+      await onExtend();
+      if (mounted.current) setOpen(false);
+    } catch (e) {
+      if (mounted.current) {
+        setExtendError(describeError(e));
+        queueMicrotask(() => extendRef.current?.focus());
+      }
+    } finally {
+      extendingRef.current = false;
+      if (mounted.current) setExtending(false);
+    }
+  }
 
   useEffect(() => {
     // 모달이 이미 열려 있는 동안에는 idle 타이머를 다시 무장하지 않는다.
@@ -29,15 +63,16 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
       clearTimeout(idleTimer.current!);
       idleTimer.current = setTimeout(() => {
         setSecondsLeft(countdownSeconds);
+        setExtendError(null);
         setOpen(true);
       }, warnAfterMs);
     }
     bumpIdle();
     const handler = () => bumpIdle();
-    ["mousemove", "keydown", "click", "scroll"].forEach((e) => window.addEventListener(e, handler, { passive: true }));
+    ['mousemove', 'keydown', 'click', 'scroll'].forEach((e) => window.addEventListener(e, handler, { passive: true }));
     return () => {
       clearTimeout(idleTimer.current!);
-      ["mousemove", "keydown", "click", "scroll"].forEach((e) => window.removeEventListener(e, handler));
+      ['mousemove', 'keydown', 'click', 'scroll'].forEach((e) => window.removeEventListener(e, handler));
     };
   }, [open, warnAfterSeconds, countdownSeconds]);
 
@@ -60,32 +95,47 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
   if (!open) return null;
   const pct = secondsLeft / countdownSeconds;
   const C = 2 * Math.PI * 28;
+  const tone = secondsLeft > 20 ? 'var(--warn-dot)' : 'var(--bad)';
   return (
-    <Dialog open={open} onClose={() => {}} dismissible={false} role="alertdialog"
+    // 기본 포커스 = "세션 연장": 실수로 Enter 를 눌러도 작업이 사라지지 않는다.
+    <Dialog open={open} onClose={() => {}} dismissible={false} role="alertdialog" initialFocusRef={extendRef}
       headerIcon={
-          <span style={{ position: "relative", width: 64, height: 64, flex: "none" }}>
+          <span style={{ position: 'relative', width: 64, height: 64, flex: 'none' }}>
             <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
               <circle cx="32" cy="32" r="28" fill="none" stroke="var(--line-soft)" strokeWidth="6" />
-              <circle cx="32" cy="32" r="28" fill="none" stroke={secondsLeft > 20 ? "var(--warn-dot)" : "var(--bad)"} strokeWidth="6" strokeLinecap="round"
-                strokeDasharray={`${C} ${C}`} strokeDashoffset={C * (1 - pct)} transform="rotate(-90 32 32)" style={{ transition: "stroke-dashoffset 1s linear" }} />
+              <circle cx="32" cy="32" r="28" fill="none" stroke={tone} strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={`${C} ${C}`} strokeDashoffset={C * (1 - pct)} transform="rotate(-90 32 32)" style={{ transition: 'stroke-dashoffset 1s linear' }} />
             </svg>
-            <span className="mono" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600 }}>{secondsLeft}s</span>
+            <span className="mono" aria-hidden="true" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600 }}>{secondsLeft}초</span>
           </span>
       }
       title="세션이 곧 만료됩니다"
       sub={`${secondsLeft}초 후 자동으로 로그아웃됩니다.`}
       footer={<>
-        <button className="btn" onClick={() => { setOpen(false); onLogout(); }}>지금 로그아웃</button>
-        <button className="btn btn--primary" onClick={() => { setOpen(false); onExtend(); }}>세션 연장</button>
+        <Button onClick={() => { setOpen(false); onLogout(); }}>로그아웃</Button>
+        <Button ref={extendRef} variant="primary" onClick={extend} disabled={extending}>세션 연장</Button>
       </>}
     >
       <div className="stack-3">
-        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
-          보안을 위해 {idleTimeoutMinutes}분 동안 활동이 없으면 자동으로 로그아웃됩니다. 작업을 계속하려면 <strong>세션 연장</strong>을 눌러주세요.
-        </p>
-        <div className="muted" style={{ fontSize: 12 }}>
-          모든 mutation은 audit log에 기록되어 있으므로 작업 내역은 보존됩니다.
+        <div
+          className="idle-progress"
+          role="progressbar"
+          aria-label="세션 만료까지 남은 시간"
+          aria-valuemin={0}
+          aria-valuemax={countdownSeconds}
+          aria-valuenow={secondsLeft}
+          aria-valuetext={`${secondsLeft}초 남음`}
+        >
+          <span className="idle-progress__bar" style={{ width: `${pct * 100}%`, background: tone }} />
         </div>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+          보안 정책에 따라 {idleTimeoutMinutes}분 동안 활동이 없어 세션을 종료하려고 합니다. 작업 중이라면 세션을 연장하세요.
+        </p>
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+          <strong>로그아웃하면 저장하지 않은 변경이 사라집니다.</strong>
+        </p>
+        {extendError && <Alert tone="bad" title={extendError.title}>{extendError.detail}</Alert>}
+        <span className="sr-only" aria-live="polite">{announcement(secondsLeft)}</span>
       </div>
     </Dialog>
   );
