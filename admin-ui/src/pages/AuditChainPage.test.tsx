@@ -1,6 +1,6 @@
 // admin-ui/src/pages/AuditChainPage.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { screen, fireEvent, within, waitFor, act } from '@testing-library/react';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
 import type { ChainOverview, IncidentView } from '@/api/auditChainMonitor';
@@ -114,9 +114,11 @@ describe('AuditChainPage V2', () => {
   it('overview 실패 시 오류 상태 + 다시 시도', async () => {
     vi.mocked(auditChainMonitorApi.overview).mockRejectedValue(new Error('overview down'));
     renderPage();
-    expect(await screen.findByText('감사 체인 상태를 불러오지 못했습니다')).toBeInTheDocument();
-    expect(screen.getByText('overview down')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('감사 체인 상태를 불러오지 못했습니다');
+    expect(alert).toHaveTextContent('overview down');
+    expect(within(alert).getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+    expect(screen.queryByText(/모든 tenant 정상/)).toBeNull();
   });
 
   it('위변조면 bad 배너 → Incident 생성 다이얼로그 → createIncident(tenantId)', async () => {
@@ -124,7 +126,7 @@ describe('AuditChainPage V2', () => {
     vi.mocked(auditChainMonitorApi.createIncident).mockResolvedValue(incident());
     renderPage();
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('위변조 의심 — 즉시 조사 필요');
+    expect(alert).toHaveTextContent('위변조 의심 — 1개 tenant 모두 조사가 필요합니다');
     expect(alert).toHaveTextContent('Globex chain 에서 hash 불일치가 감지되었습니다.');
     fireEvent.click(within(alert).getByRole('button', { name: 'Incident 생성' }));
     const dialog = screen.getByRole('dialog', { name: 'Incident 생성' });
@@ -169,9 +171,9 @@ describe('AuditChainPage V2', () => {
     expect(within(dialog).getByRole('button', { name: 'PDF 생성 → 다운로드' })).toBeEnabled();
   });
 
-  it('전체 즉시 검증은 읽기 전용 — overview 를 다시 읽고 backfill 을 부르지 않는다', async () => {
+  it('지금 검증은 읽기 전용 — overview 를 다시 읽고 backfill 을 부르지 않는다', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: '전체 즉시 검증' }));
+    fireEvent.click(await screen.findByRole('button', { name: '지금 검증' }));
     await waitFor(() => expect(auditChainMonitorApi.overview).toHaveBeenCalledTimes(2));
     expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
   });
@@ -193,5 +195,83 @@ describe('AuditChainPage V2', () => {
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '백필 실행' }));
     await waitFor(() => expect(auditChainMonitorApi.backfill).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('백필 완료')).toBeInTheDocument();
+  });
+
+  it('검증 버튼은 "지금 검증" 하나뿐(새로 검증·전체 즉시 검증 통합)', async () => {
+    renderPage();
+    await screen.findByText('Acme');
+    expect(screen.getAllByRole('button', { name: '지금 검증' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: '새로 검증' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '전체 즉시 검증' })).toBeNull();
+  });
+
+  it('재검증 중에도 표를 유지하고 버튼은 "검증 중…"(비활성, 가짜 진행률 없음), 끝나면 새 결과', async () => {
+    renderPage();
+    await screen.findByText('Acme');
+    let resolve!: (o: ChainOverview) => void;
+    vi.mocked(auditChainMonitorApi.overview).mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
+    fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+    expect(screen.getByRole('button', { name: '검증 중…' })).toBeDisabled();
+    expect(screen.getByText('Acme')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: '불러오는 중' })).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    await act(async () => { resolve(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)])); });
+    expect(screen.getByRole('button', { name: '지금 검증' })).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Globex');
+  });
+
+  it('다시 검증이 실패해도 이전 결과를 유지하고 경고를 보인다', async () => {
+    renderPage();
+    await screen.findByText('Acme');
+    vi.mocked(auditChainMonitorApi.overview).mockRejectedValueOnce(new Error('down'));
+    fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+    expect(await screen.findByText('다시 검증하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('Acme')).toBeInTheDocument();
+  });
+
+  it('위변조 tenant 가 여럿이면 배너에 모두 나열하고 행마다 Incident 생성', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(
+      overview([row('t1', 'Acme', true), row('t2', 'Globex', false), row('t3', 'Initech', false)]),
+    );
+    vi.mocked(auditChainMonitorApi.createIncident).mockResolvedValue(incident({ tenantId: 't3', tenantName: 'Initech' }));
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('위변조 의심 — 2개 tenant 모두 조사가 필요합니다');
+    const items = within(alert).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    const initech = items.find((li) => li.textContent?.includes('Initech'));
+    expect(initech).toBeDefined();
+    fireEvent.click(within(initech!).getByRole('button', { name: 'Incident 생성' }));
+    const dialog = screen.getByRole('dialog', { name: 'Incident 생성' });
+    expect(dialog).toHaveTextContent('Initech');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Incident 생성' }));
+    await waitFor(() => expect(auditChainMonitorApi.createIncident).toHaveBeenCalledWith('t3'));
+  });
+
+  it('OPEN incident 가 있는 tenant 는 생성 버튼 대신 "Incident 처리 중"', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)]));
+    vi.mocked(auditChainMonitorApi.listIncidents).mockResolvedValue([incident()]); // t2 OPEN
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    expect(await within(alert).findByText('Incident 처리 중')).toBeInTheDocument();
+    expect(within(alert).queryByRole('button', { name: 'Incident 생성' })).toBeNull();
+  });
+
+  it('배너의 "감사 로그 열기"는 그 tenant 의 감사 로그 탭으로 이동', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)]));
+    const { router } = renderPage();
+    const alert = await screen.findByRole('alert');
+    fireEvent.click(within(alert).getByRole('button', { name: '감사 로그 열기' }));
+    expect(router.state.location.pathname).toBe('/tenants/t2');
+    expect(router.state.location.search).toBe('?tab=audit');
+  });
+
+  it('처음 불러오는 동안은 Skeleton', async () => {
+    let resolve!: (o: ChainOverview) => void;
+    vi.mocked(auditChainMonitorApi.overview).mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderPage();
+    expect(await screen.findByRole('status', { name: '불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중…')).toBeNull();
+    await act(async () => { resolve(overview([row('t1', 'Acme', true)])); });
   });
 });
