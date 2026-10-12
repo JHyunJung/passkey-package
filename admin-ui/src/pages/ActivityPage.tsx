@@ -318,6 +318,7 @@ export default function ActivityPage() {
   // 가장 나중에 시작한 요청만 상태를 바꾼다(폴링·수동 새로고침 공통). 폴링은 진행 중이면 겹쳐 시작하지 않는다.
   const reqSeqRef = useRef(0);
   const pollInFlightRef = useRef(false);
+  const manualInFlightRef = useRef(0);
   // 필터가 바뀐 뒤 첫 응답은 이전 필터의 목록을 병합하지 않고 통째로 교체한다.
   const replaceNextRef = useRef(true);
   // Track whether we've had at least one successful server response
@@ -433,12 +434,14 @@ export default function ActivityPage() {
     const gen = queryGenRef.current;
     const seq = ++reqSeqRef.current;
     const latest = () => gen === queryGenRef.current && seq === reqSeqRef.current;
+    manualInFlightRef.current++;
     setRetrying(true);
     activityApi
       .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant)
       .then((view) => { if (latest()) applyView(view); })
       .catch((e: unknown) => { if (latest()) onFetchFailed(e); })
-      .finally(() => { if (latest()) setRetrying(false); });
+      // 완료 표시는 응답이 최신인지와 무관하게 이 새로고침 자신의 종료로 정한다(추월당해도 버튼이 잠기지 않게).
+      .finally(() => { manualInFlightRef.current--; if (manualInFlightRef.current === 0) setRetrying(false); });
   }
 
   function handleExport() {

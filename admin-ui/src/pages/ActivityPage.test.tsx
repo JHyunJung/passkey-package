@@ -326,4 +326,32 @@ describe('ActivityPage V2', () => {
     expect(await within(panel).findByRole('group', { name: '언제' })).toBeInTheDocument();
     expect(activityApi.fetchDetail).toHaveBeenCalledTimes(2);
   });
+
+  it('새로고침이 폴링에 추월당해도 새로고침 응답이 끝나면 버튼이 다시 활성화된다', async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(NOW);
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    let resolveRefresh: (v: ActivityView) => void = () => {};
+    vi.mocked(activityApi.fetch).mockImplementationOnce(() => new Promise((r) => { resolveRefresh = r; }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '새로고침' })); });
+    expect(screen.getByRole('button', { name: '새로고침' })).toBeDisabled();
+    await act(async () => { vi.advanceTimersByTime(5000); }); // 폴링이 새로고침을 추월
+    await act(async () => { resolveRefresh(view(FEED)); });
+    expect(screen.getByRole('button', { name: '새로고침' })).toBeEnabled();
+  });
+
+  it('새로고침 중 필터를 바꿔도 새로고침 응답이 끝나면 버튼이 다시 활성화된다', async () => {
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    let resolveRefresh: (v: ActivityView) => void = () => {};
+    vi.mocked(activityApi.fetch).mockImplementationOnce(() => new Promise((r) => { resolveRefresh = r; }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '새로고침' })); });
+    expect(screen.getByRole('button', { name: '새로고침' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '보안' }));
+    await waitFor(() => expect(activityApi.fetch).toHaveBeenLastCalledWith(null, 'security', undefined, undefined));
+    await act(async () => { resolveRefresh(view(FEED)); });
+    expect(screen.getByRole('button', { name: '새로고침' })).toBeEnabled();
+  });
 });
