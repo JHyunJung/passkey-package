@@ -5,9 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { ToastHost } from '@/ui';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import type { Tenant } from '@/api/designTypes';
+import { ApiError } from '@/api/types';
 
+vi.mock('@/config/links', () => ({ HELP_LINKS: { rpGuide: 'https://docs.example/rp', apiDocs: '', support: '' } }));
 vi.mock('@/api/webauthn', () => ({ webauthnApi: { get: vi.fn(), diff: vi.fn(), update: vi.fn() } }));
 
+import { HELP_LINKS } from '@/config/links';
 import { webauthnApi } from '@/api/webauthn';
 import WebauthnConfigTab, { changedFieldNames } from './WebauthnConfigTab';
 
@@ -48,22 +51,25 @@ describe('changedFieldNames', () => {
 describe('WebauthnConfigTab V2', () => {
   it('설명 좌/컨트롤 우 행, rpId 는 읽기 전용 + 변경 불가', async () => {
     renderTab();
-    const rpId = await screen.findByLabelText('rpId');
+    const rpId = await screen.findByLabelText('RP ID');
     expect(rpId).toHaveAttribute('readonly');
     expect(rpId).toHaveValue('dev-passkey.crosscert.com');
     expect(screen.getByText('변경 불가')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'WebAuthn Configuration' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'userVerification' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'REQUIRED' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'WebAuthn 설정' })).toBeInTheDocument();
+    expect(screen.getByText('변경 사항은 저장 후 다음 패스키 등록·인증부터 적용됩니다.')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '사용자 검증' })).toBeInTheDocument();
+    expect(screen.getByText('대기 시간')).toHaveAttribute('title', 'timeoutMs');
+    expect(within(screen.getByRole('button', { name: '필수' })).getByText('필수')).toHaveAttribute('title', 'REQUIRED');
+    expect(screen.getByRole('button', { name: '필수' })).toHaveAttribute('aria-pressed', 'true');
     expect(bar()).toBeNull();
     expect(screen.queryByText(/변경 사항 \d+건/)).toBeNull();
   });
 
   it('dirty → SaveBar 건수·요약, 변경 필드 표시, 실시간 timeout 안내, 되돌리기', async () => {
     renderTab();
-    fireEvent.change(await screen.findByLabelText('timeoutMs'), { target: { value: '120000' } });
+    fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
     expect(bar()).toHaveTextContent('저장하지 않은 변경 1건');
-    expect(bar()).toHaveTextContent('timeoutMs');
+    expect(bar()).toHaveTextContent('대기 시간');
     expect(screen.getAllByText('변경됨')).toHaveLength(1);
     expect(screen.getByText(/= 120초 \(2분\)/)).toBeInTheDocument();
 
@@ -72,7 +78,7 @@ describe('WebauthnConfigTab V2', () => {
     fireEvent.keyDown(origin, { key: 'Enter' });
     expect(screen.getByText('https://sub.dev-passkey.crosscert.com')).toBeInTheDocument();
     expect(bar()).toHaveTextContent('저장하지 않은 변경 2건');
-    expect(bar()).toHaveTextContent('timeoutMs · origins');
+    expect(bar()).toHaveTextContent('대기 시간 · 허용 origin');
 
     fireEvent.click(within(bar()!).getByRole('button', { name: '되돌리기' }));
     expect(bar()).toBeNull();
@@ -100,51 +106,133 @@ describe('WebauthnConfigTab V2', () => {
     fireEvent.change(apk, { target: { value: '00:'.repeat(31) + '00' } });
     fireEvent.click(screen.getByRole('button', { name: '앱 키 추가' }));
     expect(screen.getByText(`android:apk-key-hash:${'A'.repeat(43)}`)).toBeInTheDocument();
-    expect(bar()).toHaveTextContent('origins');
+    expect(bar()).toHaveTextContent('허용 origin');
   });
 
   it('dirty 가 아니면 탭 이동이 바로 된다', async () => {
     const { router } = renderTab();
-    await screen.findByLabelText('timeoutMs');
+    await screen.findByLabelText('대기 시간');
     await act(async () => { fireEvent.click(screen.getByText('AAGUID 탭으로')); });
     expect(router.state.location.search).toBe('?tab=aaguid');
   });
 
   it('dirty 면 ?tab=aaguid 이동이 막히고 확인 다이얼로그', async () => {
     const { router } = renderTab();
-    fireEvent.change(await screen.findByLabelText('rpName'), { target: { value: 'Dev 2' } });
+    fireEvent.change(await screen.findByLabelText('RP 표시 이름'), { target: { value: 'Dev 2' } });
     await act(async () => { fireEvent.click(screen.getByText('AAGUID 탭으로')); });
     expect(screen.getByRole('alertdialog', { name: '저장하지 않은 변경이 있습니다' })).toBeInTheDocument();
     expect(router.state.location.search).toBe('?tab=webauthn');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '머무르기' })); });
     expect(router.state.location.search).toBe('?tab=webauthn');
-    expect(screen.getByLabelText('rpName')).toHaveValue('Dev 2');
+    expect(screen.getByLabelText('RP 표시 이름')).toHaveValue('Dev 2');
   });
 
-  it('저장… → diff 확인 다이얼로그 → 기존과 같은 payload 로 update', async () => {
+  it('저장… → L2 변경 비교(화면 라벨·초 단위) → 기존과 같은 payload 로 update', async () => {
     (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([{ key: 'timeoutMs', from: 60000, to: 120000 }]);
     (webauthnApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({ ...CFG, timeoutMs: 120000 });
     renderTab();
-    fireEvent.change(await screen.findByLabelText('timeoutMs'), { target: { value: '120000' } });
+    fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
     await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
     expect(webauthnApi.diff).toHaveBeenCalledWith('t-1', { ...CFG, timeoutMs: 120000 }, true);
-    const dlg = screen.getByRole('dialog', { name: '변경 사항 확인' });
-    expect(within(dlg).getByText('60000')).toBeInTheDocument();
-    expect(within(dlg).getByText('120000')).toBeInTheDocument();
-    expect(within(dlg).getByText('WEBAUTHN_CONFIG_UPDATED')).toBeInTheDocument();
-    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '1개 변경 사항 저장' })); });
+    const dlg = screen.getByRole('alertdialog', { name: '변경 사항 1개를 저장할까요?' });
+    expect(within(dlg).getByText('다음 패스키 등록·인증부터 적용됩니다.')).toBeInTheDocument();
+    expect(within(dlg).getByText('대기 시간')).toHaveAttribute('title', 'timeoutMs');
+    expect(within(dlg).getByText('60초')).toBeInTheDocument();
+    expect(within(dlg).getByText('120초')).toBeInTheDocument();
+    expect(within(dlg).getByText(/WebAuthn 설정 변경/)).toBeInTheDocument();
+    expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '저장' })); });
     expect(webauthnApi.update).toHaveBeenCalledWith('t-1', 'Acme', { ...CFG, timeoutMs: 120000 }, true);
     await waitFor(() => expect(bar()).toBeNull());
-    expect(screen.queryByRole('dialog', { name: '변경 사항 확인' })).toBeNull();
-    expect(screen.getByText('WebAuthn config 저장됨')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByText('WebAuthn 설정을 저장했습니다')).toBeInTheDocument();
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
-  it('diff 가 비면 "변경 사항이 없습니다."', async () => {
+  it('diff 가 비면 확인 다이얼로그 없이 "변경 사항이 없습니다."', async () => {
     (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     renderTab();
-    fireEvent.change(await screen.findByLabelText('timeoutMs'), { target: { value: '90000' } });
+    fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '90000' } });
     await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
-    expect(within(screen.getByRole('dialog', { name: '변경 사항 확인' })).getByText('변경 사항이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('변경 사항이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('저장 실패는 다이얼로그 안 인라인 오류, 입력과 SaveBar 는 그대로', async () => {
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([{ key: 'timeoutMs', from: 60000, to: 120000 }]);
+    (webauthnApi.update as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
+    await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
+    const dlg = screen.getByRole('alertdialog', { name: '변경 사항 1개를 저장할까요?' });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '저장' })); });
+    expect(within(dlg).getByText('저장하지 못했습니다')).toBeInTheDocument();
+    expect(within(dlg).getByText(/서버가 잠시 응답하지 않습니다/)).toBeInTheDocument();
+    expect(screen.getByLabelText('대기 시간')).toHaveValue(120000);
+    expect(bar()).toHaveTextContent('저장하지 않은 변경 1건');
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('저장 중에는 입력을 잠그고 저장이 두 번 나가지 않는다', async () => {
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([{ key: 'timeoutMs', from: 60000, to: 120000 }]);
+    let resolve!: (v: unknown) => void;
+    (webauthnApi.update as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderTab();
+    fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
+    await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
+    const dlg = screen.getByRole('alertdialog');
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '저장' })); });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '저장 중…' })); });
+    expect(webauthnApi.update).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('대기 시간')).toBeDisabled();
+    expect(screen.getByLabelText('RP 표시 이름')).toBeDisabled();
+    expect(within(bar()!).getByRole('button', { name: '저장 중…' })).toBeDisabled();
+    await act(async () => { resolve({ ...CFG, timeoutMs: 120000 }); });
+    await waitFor(() => expect(bar()).toBeNull());
+    expect(screen.getByLabelText('대기 시간')).not.toBeDisabled();
+  });
+
+  it('로드 실패: "Loading…"에 멈추지 않고 LoadError, 다시 시도로 복구', async () => {
+    (webauthnApi.get as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'))
+      .mockResolvedValueOnce({ ...CFG, origins: [...CFG.origins] });
+    renderTab();
+    expect(await screen.findByText('WebAuthn 설정을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.queryByText('config 로드 실패')).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '다시 시도' })); });
+    expect(await screen.findByLabelText('RP ID')).toHaveValue('dev-passkey.crosscert.com');
+  });
+
+  it('로딩 중에는 Skeleton', () => {
+    (webauthnApi.get as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderTab();
+    expect(screen.getByRole('status', { name: 'WebAuthn 설정 불러오는 중' })).toBeInTheDocument();
+  });
+
+  it('"자세히" 문서 링크와 RP 연동 가이드 — 주소가 비면 숨긴다', async () => {
+    const { unmount } = renderTab();
+    await screen.findByLabelText('RP ID');
+    expect(screen.getByRole('link', { name: /RP 연동 가이드/ })).toHaveAttribute('href', 'https://docs.example/rp');
+    expect(screen.getByRole('link', { name: '허용 origin 자세히' })).toHaveAttribute('href', 'https://docs.example/rp#origins');
+    expect(screen.getByRole('link', { name: '사용자 검증 자세히' })).toHaveAttribute('href', 'https://docs.example/rp#user-verification');
+    expect(screen.getByRole('link', { name: '인증기 증명 자세히' })).toHaveAttribute('target', '_blank');
+    unmount();
+    const links = HELP_LINKS as { rpGuide: string };
+    links.rpGuide = '';
+    try {
+      renderTab();
+      await screen.findByLabelText('RP ID');
+      await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+      expect(screen.queryByRole('link', { name: /자세히|RP 연동 가이드/ })).toBeNull();
+    } finally {
+      links.rpGuide = 'https://docs.example/rp';
+    }
+  });
+
+  it('사용자 문구에 ceremony 를 쓰지 않는다', async () => {
+    const { container } = renderTab();
+    await screen.findByLabelText('RP ID');
+    expect(container).not.toHaveTextContent(/ceremony/i);
   });
 });
