@@ -186,8 +186,8 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
 
   const expiringKeyCount = apiKeys ? countExpiringKeys(apiKeys, Date.now()) : undefined;
   const tabs: TabItem[] = TENANT_TABS.map((t) => {
-    if (t.id === 'aaguid') return { ...t, dot: hasUnverifiedAaguid(aaguidPolicy) };
-    if (t.id === 'apikeys') return { ...t, dot: (expiringKeyCount ?? 0) > 0 };
+    if (t.id === 'aaguid') return hasUnverifiedAaguid(aaguidPolicy) ? { ...t, badge: { text: '확인 필요', reason: 'MDS 미확인 AAGUID' } } : t;
+    if (t.id === 'apikeys') return (expiringKeyCount ?? 0) > 0 ? { ...t, badge: { text: '확인 필요', reason: '30일 안에 만료되는 키' } } : t;
     return t;
   });
 

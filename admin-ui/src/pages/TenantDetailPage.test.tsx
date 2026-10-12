@@ -95,8 +95,8 @@ describe('탭 점 배지', () => {
     });
     renderPage();
     const tab = screen.getByRole('tab', { name: /AAGUID 정책/ });
-    expect(await within(tab).findByLabelText('확인 필요')).toBeInTheDocument();
-    expect(within(screen.getByRole('tab', { name: /API 키/ })).queryByLabelText('확인 필요')).toBeNull();
+    expect(await within(tab).findByText(/확인 필요/)).toBeInTheDocument();
+    expect(within(screen.getByRole('tab', { name: /API 키/ })).queryByText(/확인 필요/)).toBeNull();
   });
   it('API 키: 30일 이내 만료 ACTIVE 키가 있으면 점, 개요에 개수 전달', async () => {
     (apiKeysApi.list as ReturnType<typeof vi.fn>).mockResolvedValue([
@@ -105,20 +105,20 @@ describe('탭 점 배지', () => {
     ]);
     renderPage();
     const tab = screen.getByRole('tab', { name: /API 키/ });
-    expect(await within(tab).findByLabelText('확인 필요')).toBeInTheDocument();
+    expect(await within(tab).findByText(/확인 필요/)).toBeInTheDocument();
     expect(screen.getByText('OVERVIEW expiring=1 platform=true')).toBeInTheDocument();
   });
   it('조건이 없으면 점이 없다', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('OVERVIEW expiring=0 platform=true')).toBeInTheDocument());
-    expect(screen.queryByLabelText('확인 필요')).toBeNull();
+    expect(screen.queryByText(/확인 필요/)).toBeNull();
   });
   it('신호 조회 실패는 조용히 무시', async () => {
     (aaguidPolicyApi.get as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('403'));
     (apiKeysApi.list as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('403'));
     renderPage();
     await waitFor(() => expect(apiKeysApi.list).toHaveBeenCalled());
-    expect(screen.queryByLabelText('확인 필요')).toBeNull();
+    expect(screen.queryByText(/확인 필요/)).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
   });
   it('AAGUID 저장 후 onSaved 로 점이 갱신된다', async () => {
@@ -127,9 +127,9 @@ describe('탭 점 배지', () => {
     });
     renderPage({ tab: 'aaguid' });
     const tab = screen.getByRole('tab', { name: /AAGUID 정책/ });
-    expect(await within(tab).findByLabelText('확인 필요')).toBeInTheDocument();
+    expect(await within(tab).findByText(/확인 필요/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'AAGUID 저장 시뮬레이션' }));
-    expect(within(tab).queryByLabelText('확인 필요')).toBeNull();
+    expect(within(tab).queryByText(/확인 필요/)).toBeNull();
   });
 });
 

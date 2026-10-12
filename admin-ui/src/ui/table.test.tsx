@@ -7,11 +7,11 @@ const cols: Column<R>[] = [{ key: 'name', header: '이름', render: (r) => r.nam
 const rows: R[] = [{ id: '1', day: '오늘', name: 'a' }, { id: '2', day: '오늘', name: 'b' }, { id: '3', day: '어제', name: 'c' }];
 
 describe('Tabs', () => {
-  it('aria-selected 와 dot/count', () => {
+  it('aria-selected 와 badge/count', () => {
     const onChange = vi.fn();
-    render(<Tabs ariaLabel="Tenant 탭" active="overview" onChange={onChange} items={[{ id: 'overview', label: '개요' }, { id: 'aaguid', label: 'AAGUID 정책', dot: true }, { id: 'admins', label: 'Admin 사용자', count: 3 }]} />);
+    render(<Tabs ariaLabel="Tenant 탭" active="overview" onChange={onChange} items={[{ id: 'overview', label: '개요' }, { id: 'aaguid', label: 'AAGUID 정책', badge: { text: '확인 필요 1', reason: 'MDS 미확인 AAGUID 1건' } }, { id: 'admins', label: 'Admin 사용자', count: 3 }]} />);
     expect(screen.getByRole('tab', { name: '개요' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByLabelText('확인 필요')).toBeInTheDocument();
+    expect(screen.getByText('확인 필요 1')).toHaveAttribute('title', 'MDS 미확인 AAGUID 1건');
     expect(screen.getByText('3')).toHaveClass('tabs__count');
     fireEvent.click(screen.getByRole('tab', { name: /AAGUID/ }));
     expect(onChange).toHaveBeenCalledWith('aaguid');
