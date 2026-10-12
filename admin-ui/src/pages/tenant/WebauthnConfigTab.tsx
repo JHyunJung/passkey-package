@@ -36,6 +36,8 @@ export const FIELD_LABELS: Record<string, string> = {
   timeoutMs: '대기 시간',
   origins: '허용 origin',
   userVerification: '사용자 검증',
+  requireUserVerification: '사용자 검증',
+  mdsRequired: 'MDS 검증 필수',
   attestationConveyance: '인증기 증명',
   formats: '허용 증명 형식',
 };
@@ -51,6 +53,18 @@ const AT_LABELS: Record<string, string> = { NONE: '요청 안 함', INDIRECT: '�
 const FIELD_ORDER = ['rpName', 'timeoutMs', 'origins', 'userVerification', 'attestationConveyance', 'formats'];
 
 /** SaveBar 요약용: 바뀐 필드 이름을 화면 순서로. */
+/**
+ * L2 확인 목록 = 서버 diff + 로컬 diff 중 서버가 비교하지 않는 필드.
+ * 서버 diff 는 timeoutMs·attestationConveyance 를 비교하지 않고, 사용자 검증은 requireUserVerification(boolean) 로 보낸다.
+ */
+export function mergeChanges(server: Change[], local: Change[]): Change[] {
+  const norm = (k: string) => (k === 'requireUserVerification' ? 'userVerification' : k);
+  const covered = new Set(server.map((c) => norm(c.key)));
+  const merged = [...server, ...local.filter((c) => !covered.has(norm(c.key)))];
+  const rank = (k: string) => { const i = FIELD_ORDER.indexOf(norm(k)); return i < 0 ? FIELD_ORDER.length : i; };
+  return merged.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c.key) - rank(b.c.key) || a.i - b.i).map((x) => x.c);
+}
+
 export function changedFieldNames(changes: { key: string }[]): string[] {
   const keys = changes.map((c) => c.key);
   return [...FIELD_ORDER.filter((k) => keys.includes(k)), ...keys.filter((k) => !FIELD_ORDER.includes(k))];
@@ -217,7 +231,8 @@ export default function WebauthnConfigTab({ tenant, onSaved }: WebauthnConfigTab
   async function handlePreview() {
     if (!draft || saving) return;
     try {
-      const r = await webauthnApi.diff(tenant.id, draft, draft._mdsRequired);
+      const server = await webauthnApi.diff(tenant.id, draft, draft._mdsRequired);
+      const r = mergeChanges(server, localChanges);
       if (r.length === 0) {
         toast({ kind: 'warn', title: '변경 사항이 없습니다.' });
         return;
@@ -367,6 +382,9 @@ const TO_TAG: CSSProperties = { background: 'var(--ok-soft)', color: 'var(--ok-i
 function showValue(key: string, v: unknown): string {
   if (key === 'timeoutMs' && typeof v === 'number') return `${parseFloat((v / 1000).toFixed(2))}초`;
   if (key === 'userVerification' && typeof v === 'string') return UV_LABELS[v] ?? v;
+  // 서버 diff 의 boolean: 탭은 true→필수, false→권장 으로 매핑한다(webauthn.ts adaptConfig).
+  if (key === 'requireUserVerification' && typeof v === 'boolean') return UV_LABELS[v ? 'REQUIRED' : 'PREFERRED'];
+  if (key === 'mdsRequired' && typeof v === 'boolean') return v ? '필수' : '필수 아님';
   if (key === 'attestationConveyance' && typeof v === 'string') return AT_LABELS[v] ?? v;
   return String(v);
 }

@@ -128,7 +128,8 @@ describe('WebauthnConfigTab V2', () => {
   });
 
   it('저장… → L2 변경 비교(화면 라벨·초 단위) → 기존과 같은 payload 로 update', async () => {
-    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([{ key: 'timeoutMs', from: 60000, to: 120000 }]);
+    // 실제 서버 diff 는 timeoutMs·attestationConveyance 를 비교하지 않는다 → 빈 목록.
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (webauthnApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({ ...CFG, timeoutMs: 120000 });
     renderTab();
     fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
@@ -149,17 +150,39 @@ describe('WebauthnConfigTab V2', () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
-  it('diff 가 비면 확인 다이얼로그 없이 "변경 사항이 없습니다."', async () => {
+  it('서버 diff 가 비어도 로컬 변경(대기 시간)이 있으면 저장을 막지 않고 확인 목록에 보인다', async () => {
     (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (webauthnApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({ ...CFG, timeoutMs: 90000 });
     renderTab();
     fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '90000' } });
     await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
-    expect(screen.getByText('변경 사항이 없습니다.')).toBeInTheDocument();
-    expect(screen.queryByRole('alertdialog')).toBeNull();
+    const dlg = screen.getByRole('alertdialog', { name: '변경 사항 1개를 저장할까요?' });
+    expect(within(dlg).getByText('60초')).toBeInTheDocument();
+    expect(within(dlg).getByText('90초')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '저장' })); });
+    expect(webauthnApi.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('서버 diff(requireUserVerification 불리언)와 로컬 변경(인증기 증명)을 합쳐 한국어로 보인다', async () => {
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([{ key: 'requireUserVerification', from: true, to: false }]);
+    renderTab();
+    await screen.findByLabelText('대기 시간');
+    fireEvent.click(screen.getByRole('button', { name: '권장' }));
+    fireEvent.click(screen.getByRole('button', { name: '직접' }));
+    await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
+    const dlg = screen.getByRole('alertdialog', { name: '변경 사항 2개를 저장할까요?' });
+    expect(within(dlg).getByText('사용자 검증')).toHaveAttribute('title', 'requireUserVerification');
+    expect(within(dlg).getByText('필수')).toBeInTheDocument();
+    expect(within(dlg).getByText('권장')).toBeInTheDocument();
+    expect(within(dlg).getByText('인증기 증명')).toBeInTheDocument();
+    expect(within(dlg).getByText('요청 안 함')).toBeInTheDocument();
+    expect(within(dlg).getByText('직접')).toBeInTheDocument();
+    expect(dlg).not.toHaveTextContent(/requireUserVerification|true|false/);
   });
 
   it('저장 실패는 다이얼로그 안 인라인 오류, 입력과 SaveBar 는 그대로', async () => {
-    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([{ key: 'timeoutMs', from: 60000, to: 120000 }]);
+    // 실제 서버 diff 는 timeoutMs·attestationConveyance 를 비교하지 않는다 → 빈 목록.
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (webauthnApi.update as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
     renderTab();
     fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
@@ -174,7 +197,8 @@ describe('WebauthnConfigTab V2', () => {
   });
 
   it('저장 중에는 입력을 잠그고 저장이 두 번 나가지 않는다', async () => {
-    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([{ key: 'timeoutMs', from: 60000, to: 120000 }]);
+    // 실제 서버 diff 는 timeoutMs·attestationConveyance 를 비교하지 않는다 → 빈 목록.
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     let resolve!: (v: unknown) => void;
     (webauthnApi.update as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => { resolve = r; }));
     renderTab();
