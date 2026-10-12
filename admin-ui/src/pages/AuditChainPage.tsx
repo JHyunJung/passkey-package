@@ -8,7 +8,8 @@ import { ApiError } from '@/api/types';
 import { statusLabel } from '@/i18n/labels';
 import { kstDateTime, kstPrevMonthRange } from '@/lib/kst';
 import { useLoad } from '@/lib/useLoad';
-import { describeError } from '@/lib/describeError';
+import { describeError, type ErrorInfo } from '@/lib/describeError';
+import { errorToast } from '@/lib/errorToast';
 import { illustrations } from '@/assets/illustrations';
 import {
   Alert, Badge, Button, Card, CardHeader, ConfirmDialog, DataTable, Dialog, EmptyState, Field, KpiCard, LoadError, Menu,
@@ -80,8 +81,7 @@ function MonthlyReportDialog({ open, onClose, overview }: {
       URL.revokeObjectURL(url);
       onClose();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: 'PDF 생성 실패', message: msg });
+      toast(errorToast(e, 'PDF 생성 실패'));
     } finally {
       setBusy(false);
     }
@@ -147,11 +147,13 @@ export default function AuditChainPage() {
   const [incidents, setIncidents] = useState<IncidentView[] | null>(null); // null = 아직 모름(로딩 중이거나 실패);
   const [incidentError, setIncidentError] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<ErrorInfo | null>(null);
   const creatingRef = useRef(false);
   const [createTarget, setCreateTarget] = useState<ChainRow | null>(null);
   const [resolving, setResolving] = useState<IncidentView | null>(null);
   const [resolveNote, setResolveNote] = useState('');
   const [resolveBusy, setResolveBusy] = useState(false);
+  const [resolveError, setResolveError] = useState<ErrorInfo | null>(null);
   const [view, setView] = useState<'all' | 'tampered'>('all');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -184,10 +186,11 @@ export default function AuditChainPage() {
   }
 
   // 체인 백필은 검증이 아니다: 링크가 맞지 않는 행의 hash 를 다시 계산해 덮어쓰고 이후를 다시 잇는다.
-  // 행이 삭제된 체인에 실행하면 공백이 다시 이어져 위변조 흔적이 사라진다 — 위변조가 있으면 메뉴에서 막고,
-  // L3 확인 뒤에만 실행한다. 실패(throw)는 ConfirmDialog 가 다이얼로그 안에 보여 준다.
+  // 행이 삭제된 체인에 실행하면 공백이 다시 이어져 위변조 흔적이 사라진다 — 가장 최근 검증이 성공했고
+  // 위변조가 없을 때만 메뉴를 열고, L3 확인 뒤에만 실행한다. 실패(throw)는 ConfirmDialog 가 다이얼로그 안에 보여 준다.
   async function runBackfill() {
-    if (hasTampering) return; // 위변조가 처음 나타난 렌더(리셋 effect 전)에도 실행되지 않게 한다
+    // 위변조·검증 실패·재검증이 처음 나타난 렌더(닫기 effect 전)에도 실행되지 않게 한다.
+    if (!backfillAllowed) return;
     const r = await auditChainMonitorApi.backfill();
     toast({ kind: 'ok', title: '백필 완료', message: `tenant ${fmt(r.tenantsProcessed)}개 처리 · 행 ${fmt(r.rowsUpdated)}개 갱신` });
     reverify();
@@ -210,8 +213,7 @@ export default function AuditChainPage() {
         : { kind: 'err', title: '위변조 의심', message: r.tamperedEntryId ? `불일치 entry ${r.tamperedEntryId}` : 'hash 불일치' });
       reverify();
     } catch (e: unknown) {
-      const info = describeError(e);
-      toast({ kind: 'err', title: '검증하지 못했습니다', message: `${info.title}. ${info.detail}` });
+      toast(errorToast(e, '검증하지 못했습니다'));
     } finally {
       setVerifyingId(null);
     }
@@ -221,6 +223,7 @@ export default function AuditChainPage() {
     if (creatingRef.current) return; // 더블 클릭으로 같은 요청이 두 번 나가지 않게
     creatingRef.current = true;
     setCreating(true);
+    setCreateError(null);
     try {
       await auditChainMonitorApi.createIncident(tenantId);
       setCreateTarget(null);
@@ -234,8 +237,8 @@ export default function AuditChainPage() {
       } else if (e instanceof ApiError && e.status === 422) {
         toast({ kind: 'warn', title: '위변조 미확인', message: '재검증 결과 위변조가 확인되지 않아 incident 를 생성하지 않았습니다.' });
       } else {
-        const msg = e instanceof Error ? e.message : 'incident 생성 실패';
-        toast({ kind: 'err', title: 'Incident 생성 실패', message: msg });
+        // 다이얼로그를 연 채 안에 보여 준다(같은 오류를 토스트로 또 띄우지 않는다).
+        setCreateError(describeError(e));
       }
       // 어느 실패 경로든 서버 상태와 목록을 동기화(409 의 stale OPEN incident 노출).
       await refreshIncidents();
@@ -248,6 +251,7 @@ export default function AuditChainPage() {
   async function handleResolveIncident() {
     if (!resolving || !resolveNote.trim()) return;
     setResolveBusy(true);
+    setResolveError(null);
     try {
       await auditChainMonitorApi.resolveIncident(resolving.id, resolveNote.trim());
       setResolving(null);
@@ -265,8 +269,7 @@ export default function AuditChainPage() {
         setResolveNote('');
         toast({ kind: 'warn', title: '대상 없음', message: 'incident 를 찾을 수 없습니다.' });
       } else {
-        const msg = e instanceof Error ? e.message : 'incident 해결 실패';
-        toast({ kind: 'err', title: '해결 실패', message: msg });
+        setResolveError(describeError(e));
       }
       await refreshIncidents();
     } finally {
@@ -277,7 +280,14 @@ export default function AuditChainPage() {
   // 다이얼로그가 열린 사이 위변조가 나타나면 백필 요청 자체를 접는다. 단순히 숨기기만 하면
   // 위변조가 해소됐을 때 L3 다이얼로그가 조용히 다시 열린다.
   const hasTampering = !!overview && (overview.totals.tenantsTampered > 0 || overview.tenants.some((c) => !c.intact));
-  useEffect(() => { if (hasTampering) setBackfillOpen(false); }, [hasTampering]);
+  // 백필은 가장 최근 검증이 성공했고(재검증 중·재검증 실패 아님) 위변조가 없을 때만. 이전 성공 결과만으로는 열지 않는다.
+  const backfillAllowed = !!overview && chain.status === 'ok' && !chain.reloading && !hasTampering;
+  const backfillBlockedReason = hasTampering
+    ? '위변조 의심 tenant가 있으면 쓸 수 없습니다. 먼저 조사·해결하세요.'
+    : chain.reloading
+      ? '검증 중에는 쓸 수 없습니다. 검증이 끝난 뒤 다시 시도하세요.'
+      : '최근 검증에 실패했습니다. 다시 검증해 정상임을 확인한 뒤 쓸 수 있습니다.';
+  useEffect(() => { if (!backfillAllowed) setBackfillOpen(false); }, [backfillAllowed]);
 
   // 결과가 한 번도 없을 때만 로딩/실패 화면. 재검증 중·재검증 실패에는 이전 결과를 유지한다.
   if (!overview) {
@@ -355,7 +365,7 @@ export default function AuditChainPage() {
     {
       key: 'actions', header: '액션',
       render: (i) => i.status === 'OPEN'
-        ? <Button size="sm" icon={<Icons.Check size={14} />} onClick={() => { setResolving(i); setResolveNote(''); }}>해결</Button>
+        ? <Button size="sm" icon={<Icons.Check size={14} />} onClick={() => { setResolving(i); setResolveNote(''); setResolveError(null); }}>해결</Button>
         : null,
     },
   ];
@@ -377,8 +387,8 @@ export default function AuditChainPage() {
             items={[{
               label: '체인 백필…',
               danger: true,
-              disabled: tampered,
-              disabledReason: '위변조 의심 tenant가 있으면 쓸 수 없습니다. 먼저 조사·해결하세요.',
+              disabled: !backfillAllowed,
+              disabledReason: backfillBlockedReason,
               onSelect: () => setBackfillOpen(true),
             }]}
           />
@@ -427,7 +437,7 @@ export default function AuditChainPage() {
                     <Button
                       size="sm"
                       variant="danger-solid"
-                      onClick={() => setCreateTarget(c)}
+                      onClick={() => { setCreateError(null); setCreateTarget(c); }}
                       disabled={!c.tenantId || !incidentsKnown}
                       title={!c.tenantId ? '플랫폼 체인은 incident 대상이 아닙니다' : !incidentsKnown ? 'Incident 목록을 확인한 뒤 생성할 수 있습니다' : undefined}
                     >
@@ -524,6 +534,7 @@ export default function AuditChainPage() {
           </Button>
         </>}
       >
+        {createError && <Alert tone="bad" title="Incident를 생성하지 못했습니다">{`${createError.title}. ${createError.detail}`}</Alert>}
         <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
           {`${createTarget?.tenantName ?? '—'} 의 위변조 의심을 보안 incident 로 등록하고 대응 이력을 남깁니다.`}
         </p>
@@ -548,6 +559,7 @@ export default function AuditChainPage() {
           </Button>
         </>}
       >
+        {resolveError && <Alert tone="bad" title="해결로 표시하지 못했습니다">{`${resolveError.title}. ${resolveError.detail}`}</Alert>}
         <Field label="해결 메모" htmlFor="resolve-note" required help="필수 · 감사 로그에 함께 기록됩니다.">
           <textarea
             id="resolve-note"
@@ -563,7 +575,7 @@ export default function AuditChainPage() {
       </Dialog>
 
       <ConfirmDialog
-        open={backfillOpen && !hasTampering}
+        open={backfillOpen && backfillAllowed}
         onClose={() => setBackfillOpen(false)}
         level="L3"
         title="체인 백필을 실행할까요?"

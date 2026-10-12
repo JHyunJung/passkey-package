@@ -2,7 +2,7 @@
 // runBackfill 의 위변조 가드 회귀 테스트: 위변조가 처음 나타난 렌더에서는 다이얼로그가 UI 로 닿지 않으므로
 // ConfirmDialog 를 가로채 onConfirm 을 직접 호출한다.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import type { ChainOverview } from '@/api/auditChainMonitor';
 
@@ -51,6 +51,19 @@ describe('AuditChainPage 백필 위변조 가드', () => {
     vi.mocked(auditChainMonitorApi.backfill).mockResolvedValue({ tenantsProcessed: 1, rowsUpdated: 1, rowsSkipped: 0 } as never);
     renderWithDataRouter(<ToastHost><AuditChainPage /></ToastHost>, { initialPath: '/audit-chain' });
     await screen.findByRole('alert');
+    await waitFor(() => expect(captured.onConfirm).toBeDefined());
+    await captured.onConfirm!();
+    expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
+  });
+
+  it('정상이던 체인을 다시 검증하다 실패하면 onConfirm 이 호출돼도 backfill 은 실행되지 않는다', async () => {
+    const intact = { ...tamperedOverview, totals: { ...tamperedOverview.totals, tenantsIntact: 2, tenantsTampered: 0 },
+      tenants: tamperedOverview.tenants.map((t) => ({ ...t, intact: true, tamperedEntryId: null })) } as ChainOverview;
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValueOnce(intact).mockRejectedValueOnce(new Error('down'));
+    vi.mocked(auditChainMonitorApi.backfill).mockResolvedValue({ tenantsProcessed: 1, rowsUpdated: 1, rowsSkipped: 0 } as never);
+    renderWithDataRouter(<ToastHost><AuditChainPage /></ToastHost>, { initialPath: '/audit-chain' });
+    fireEvent.click(await screen.findByRole('button', { name: '지금 검증' }));
+    await screen.findByText('다시 검증하지 못했습니다');
     await waitFor(() => expect(captured.onConfirm).toBeDefined());
     await captured.onConfirm!();
     expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();

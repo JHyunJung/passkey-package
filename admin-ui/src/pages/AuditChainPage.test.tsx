@@ -15,6 +15,8 @@ vi.mock('@/api/auditChain', () => ({ auditChainApi: { verifyTenant: vi.fn() } })
 vi.mock('@/api/monthlyReport', () => ({ monthlyReportApi: { download: vi.fn() } }));
 
 import { auditChainMonitorApi } from '@/api/auditChainMonitor';
+import { auditChainApi } from '@/api/auditChain';
+import { monthlyReportApi } from '@/api/monthlyReport';
 import AuditChainPage from './AuditChainPage';
 
 type Row = ChainOverview['tenants'][number];
@@ -408,7 +410,106 @@ describe('AuditChainPage V2', () => {
     fireEvent.click(within(alert).getByRole('button', { name: 'Incident 생성' }));
     const dialog = screen.getByRole('dialog', { name: 'Incident 생성' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Incident 생성' }));
-    expect(await screen.findByText('Incident 생성 실패')).toBeInTheDocument();
-    expect(within(screen.getByRole('dialog', { name: 'Incident 생성' })).getByRole('button', { name: 'Incident 생성' })).toBeEnabled();
+    // 실패는 다이얼로그 안에 인라인으로(토스트 아님), 다이얼로그는 열린 채.
+    const dlg = screen.getByRole('dialog', { name: 'Incident 생성' });
+    expect(await within(dlg).findByText('Incident를 생성하지 못했습니다')).toBeInTheDocument();
+    expect(within(dlg).getByRole('button', { name: 'Incident 생성' })).toBeEnabled();
+  });
+
+  describe('백필은 가장 최근 검증이 성공·위변조 없음일 때만 (A1)', () => {
+    it('정상 → 다시 검증 실패: 백필 메뉴는 비활성 + 사유', async () => {
+      renderPage();
+      await screen.findByText('Acme');
+      vi.mocked(auditChainMonitorApi.overview).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+      fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+      expect(await screen.findByText('다시 검증하지 못했습니다')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+      const item = screen.getByRole('menuitem', { name: /체인 백필…/ });
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).toHaveTextContent('최근 검증에 실패했습니다. 다시 검증해 정상임을 확인한 뒤 쓸 수 있습니다.');
+      fireEvent.click(item);
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
+
+    it('다시 검증하는 동안에도 백필 메뉴는 비활성 + 사유', async () => {
+      renderPage();
+      await screen.findByText('Acme');
+      let resolve!: (o: ChainOverview) => void;
+      vi.mocked(auditChainMonitorApi.overview).mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
+      fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+      fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+      const item = screen.getByRole('menuitem', { name: /체인 백필…/ });
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).toHaveTextContent('검증 중에는 쓸 수 없습니다. 검증이 끝난 뒤 다시 시도하세요.');
+      await act(async () => { resolve(overview([row('t1', 'Acme', true), row('t2', 'Globex', true)])); });
+    });
+
+    it('다이얼로그가 열린 사이 다시 검증이 실패하면 다이얼로그가 닫힌다', async () => {
+      renderPage();
+      await screen.findByText('Acme');
+      fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: '체인 백필…' }));
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      vi.mocked(auditChainMonitorApi.overview).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+      fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+      expect(await screen.findByText('다시 검증하지 못했습니다')).toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
+  });
+
+  describe('오류 문구 (A9)', () => {
+    it('Incident 해결 실패는 다이얼로그 안에 인라인으로, 다이얼로그와 메모는 그대로', async () => {
+      vi.mocked(auditChainMonitorApi.listIncidents).mockResolvedValue([incident()]);
+      vi.mocked(auditChainMonitorApi.resolveIncident).mockRejectedValue(new ApiError(500, 'C999', 'NullPointerException at X'));
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: '해결' }));
+      const dialog = screen.getByRole('dialog', { name: 'Incident 해결' });
+      fireEvent.change(within(dialog).getByLabelText(/해결 메모/), { target: { value: 'DBA 확인' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: '해결로 표시' }));
+      const inline = await within(dialog).findByRole('alert');
+      expect(inline).toHaveTextContent('해결로 표시하지 못했습니다');
+      expect(inline).toHaveTextContent('서버가 잠시 응답하지 않습니다');
+      expect(inline).not.toHaveTextContent('NullPointerException');
+      expect(within(dialog).getByLabelText(/해결 메모/)).toHaveValue('DBA 확인');
+      expect(screen.queryByText('해결 실패')).toBeNull();
+    });
+
+    it('Incident 생성 실패 원문([CODE] message)은 다이얼로그에 보이지 않는다', async () => {
+      vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t2', 'Globex', false)]));
+      vi.mocked(auditChainMonitorApi.createIncident).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+      renderPage();
+      const alert = await screen.findByRole('alert');
+      await waitFor(() => expect(within(alert).getByRole('button', { name: 'Incident 생성' })).toBeEnabled());
+      fireEvent.click(within(alert).getByRole('button', { name: 'Incident 생성' }));
+      const dialog = screen.getByRole('dialog', { name: 'Incident 생성' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Incident 생성' }));
+      const inline = await within(dialog).findByRole('alert');
+      expect(inline).toHaveTextContent('서버가 잠시 응답하지 않습니다');
+      expect(inline).not.toHaveTextContent('[C999]');
+    });
+
+    it('tenant 검증 실패 토스트는 쉬운 문구, 원문은 "자세히"에만', async () => {
+      vi.mocked(auditChainApi.verifyTenant).mockRejectedValue(new ApiError(400, 'C001', 'tenantId invalid'));
+      renderPage();
+      await screen.findByText('Acme');
+      fireEvent.click(within(screen.getByRole('table')).getAllByRole('button', { name: '검증' })[0]);
+      const toast = await screen.findByRole('alert');
+      expect(toast.querySelector('.toast__title')).toHaveTextContent('검증하지 못했습니다');
+      expect(toast.querySelector('.toast__sub')).toHaveTextContent('요청을 처리하지 못했습니다');
+      expect(toast.querySelector('.toast__sub')).not.toHaveTextContent('tenantId invalid');
+      expect(toast.querySelector('details')).toHaveTextContent('[C001] tenantId invalid');
+    });
+
+    it('PDF 생성 실패 토스트에 원문(PDF download failed …)이 본문으로 나오지 않는다', async () => {
+      vi.mocked(monthlyReportApi.download).mockRejectedValue(new ApiError(500, 'C999', 'HTTP 500'));
+      renderPage();
+      await screen.findByText('Acme');
+      fireEvent.click(screen.getByRole('button', { name: '월간 보고서' }));
+      fireEvent.click(within(screen.getByRole('dialog', { name: '월간 무결성 보고서 발급' })).getByRole('button', { name: 'PDF 생성 → 다운로드' }));
+      const toast = await screen.findByRole('alert');
+      expect(toast.querySelector('.toast__title')).toHaveTextContent('PDF 생성 실패');
+      expect(toast.querySelector('.toast__sub')).toHaveTextContent('서버가 잠시 응답하지 않습니다');
+      expect(toast.querySelector('.toast__sub')).not.toHaveTextContent('HTTP 500');
+    });
   });
 });
