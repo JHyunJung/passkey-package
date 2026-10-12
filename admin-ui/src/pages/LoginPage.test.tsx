@@ -135,6 +135,20 @@ describe('LoginPage V3', () => {
     expect(api.loginForm).toHaveBeenCalledWith('alice@crosscert.com', 'pw');
   });
 
+  it('요청 중에는 입력이 읽기 전용이고, 응답 뒤 다시 편집할 수 있다', async () => {
+    let resolve!: (v: { ok: boolean; status: number }) => void;
+    vi.mocked(api.loginForm).mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderLogin();
+    fillAndSubmit('a@x.com', 'wrong');
+    await waitFor(() => expect(screen.getByLabelText('이메일')).toHaveAttribute('readonly'));
+    expect(screen.getByLabelText('비밀번호')).toHaveAttribute('readonly');
+    resolve({ ok: false, status: 401 });
+    expect(await screen.findByRole('alert')).toHaveTextContent('로그인 실패');
+    expect(screen.getByLabelText('비밀번호')).toHaveValue('');
+    expect(screen.getByLabelText('이메일')).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText('비밀번호')).not.toHaveAttribute('readonly');
+  });
+
   it('비밀번호 표시 토글', () => {
     renderLogin();
     const pw = screen.getByLabelText('비밀번호');

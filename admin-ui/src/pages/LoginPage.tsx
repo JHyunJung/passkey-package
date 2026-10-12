@@ -149,6 +149,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               // 로그인 화면의 유일한 할 일이라 바로 입력할 수 있게 한다(H1).
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
+              readOnly={submitting}
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(null); }}
               autoComplete="username"
@@ -169,6 +170,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); }}
                 autoComplete="current-password"
+                readOnly={submitting}
                 placeholder="비밀번호"
                 style={{ flex: '1 1 0', minWidth: 0 }}
               />
