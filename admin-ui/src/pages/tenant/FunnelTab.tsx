@@ -1,7 +1,8 @@
 // admin-ui/src/pages/tenant/FunnelTab.tsx
 import { Fragment, useEffect, useState } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Alert, Button, Card, CardBody, CardHeader, DataTable, KpiCard, Segmented, type Column } from '@/ui';
+import { Button, Card, CardBody, CardHeader, DataTable, KpiCard, LoadError, Segmented, Skeleton, type Column } from '@/ui';
+import { useLoad } from '@/lib/useLoad';
 import { funnelApi } from '@/api/funnel';
 import type { FunnelData, FunnelSeries, FunnelByEventType } from '@/api/funnel';
 import type { Tenant } from '@/api/designTypes';
@@ -21,19 +22,10 @@ const today = () => ymd(new Date().toISOString());
 
 export default function FunnelTab({ tenant }: { tenant: Tenant }) {
   const [windowDays, setWindowDays] = useState<Win>(7);
-  const [data, setData] = useState<FunnelData | null>(null);
-  const [failed, setFailed] = useState(false);
+  const load = useLoad(() => funnelApi.get(tenant.id, windowDays), [tenant.id, windowDays]);
+  // 기간·테넌트 전환 중(status=loading)에는 이전 숫자를 새 라벨 아래 보이지 않게 data 를 쓰지 않는다.
+  const data: FunnelData | null = load.status === 'ok' ? load.data ?? null : null;
   const [series30, setSeries30] = useState<FunnelSeries[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setFailed(false);
-    setData(null); // 기간·테넌트 전환 시 이전 숫자가 새 라벨 아래 보이지 않게
-    funnelApi.get(tenant.id, windowDays)
-      .then((d) => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) { setData(null); setFailed(true); } });
-    return () => { cancelled = true; };
-  }, [tenant.id, windowDays]);
 
   // 직전 기간 대비: 7d 에서만. 30일 series 로 최근 7일 vs 그 앞 7일 인증 성공률을 비교한다.
   useEffect(() => {
@@ -67,9 +59,10 @@ export default function FunnelTab({ tenant }: { tenant: Tenant }) {
         <Button icon={<Icons.Download size={14} />} onClick={exportFunnel} disabled={!s}>내보내기</Button>
       </div>
 
-      {failed && <Alert tone="bad" title="퍼널 데이터를 불러오지 못했습니다." />}
-      {!data || !s ? (
-        !failed && <p className="muted" style={{ margin: 0 }}>불러오는 중…</p>
+      {load.status === 'failed' ? (
+        <LoadError what="퍼널 데이터" error={load.error} onRetry={load.reload} retrying={load.reloading} />
+      ) : !data || !s ? (
+        <Skeleton rows={6} label="퍼널 데이터 불러오는 중" />
       ) : (
         <>
           <div className="kpis kpis--3">

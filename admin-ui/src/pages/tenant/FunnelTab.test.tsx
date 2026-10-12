@@ -1,6 +1,6 @@
 // admin-ui/src/pages/tenant/FunnelTab.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import type { FunnelData, FunnelSeries } from '@/api/funnel';
 import type { Tenant } from '@/api/designTypes';
 
@@ -72,12 +72,16 @@ describe('FunnelTab V2', () => {
   it('기간 전환 중에는 이전 기간 숫자를 새 라벨 아래 보이지 않는다', async () => {
     render(<FunnelTab tenant={tenant} />);
     await screen.findByText('63.0%');
-    api.get.mockImplementation(() => new Promise(() => {}));
+    let release!: (d: FunnelData) => void;
+    api.get.mockImplementation(() => new Promise<FunnelData>((r) => { release = r; }));
     fireEvent.click(within(screen.getByRole('group', { name: '기간' })).getByRole('button', { name: '30d' }));
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('t1', 30));
     expect(screen.queryByText('63.0%')).toBeNull();
     expect(screen.queryByText('최근 30일')).toBeNull();
-    expect(screen.getByText('불러오는 중…')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '퍼널 데이터 불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중…')).toBeNull();
+    await act(async () => { release(data(30, days(30, () => 9))); });
+    expect(await screen.findByText('최근 30일')).toBeInTheDocument();
   });
 
   it('표로 보기: 같은 데이터를 표로, CSV 는 일별 시리즈', async () => {
@@ -95,9 +99,26 @@ describe('FunnelTab V2', () => {
     expect(csv.downloadCsv).toHaveBeenCalledWith(expect.stringMatching(/^funnel-series-acme-/), ['day', 'attempts', 'success'], expect.arrayContaining([['10-01', 10, 9]]));
   });
 
-  it('조회 실패 시 오류 배너', async () => {
-    api.get.mockRejectedValue(new Error('boom'));
+  it('조회 실패: 재시도 없는 배너 대신 LoadError — 지표·차트 없음, 내보내기 비활성, 다시 시도로 복구', async () => {
+    api.get.mockRejectedValueOnce(new Error('boom'));
     render(<FunnelTab tenant={tenant} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('퍼널 데이터를 불러오지 못했습니다.');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('퍼널 데이터를 불러오지 못했습니다');
+    expect(screen.queryByText('63.0%')).toBeNull();
+    expect(screen.getByRole('button', { name: '내보내기' })).toBeDisabled();
+    expect(within(alert).getByRole('button', { name: '오류 정보 복사' })).toBeInTheDocument();
+    fireEvent.click(within(alert).getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('63.0%')).toBeInTheDocument();
+  });
+
+  it('기간 전환 후 새 요청이 실패하면 이전 기간 숫자 대신 LoadError', async () => {
+    render(<FunnelTab tenant={tenant} />);
+    await screen.findByText('63.0%');
+    api.get.mockRejectedValue(new Error('boom'));
+    fireEvent.click(within(screen.getByRole('group', { name: '기간' })).getByRole('button', { name: '30d' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('퍼널 데이터를 불러오지 못했습니다');
+    expect(screen.queryByText('63.0%')).toBeNull();
+    expect(screen.queryByText('최근 7일')).toBeNull();
   });
 });
