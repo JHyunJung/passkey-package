@@ -72,4 +72,18 @@ describe('ToastHost', () => {
     setup({ kind: 'err', title: '저장하지 못했습니다' });
     expect(screen.getByRole('alert').querySelector('details')).toBeNull();
   });
+
+  it('traceId 도 원문과 함께 접힌 "자세히" 안에만 보인다(본문에 없음)', () => {
+    setup({ kind: 'err', title: '저장하지 못했습니다', message: '서버가 잠시 응답하지 않습니다', detail: 'HTTP 503 · [C999] HTTP 503', traceId: 'tr-42' });
+    const alert = screen.getByRole('alert');
+    const details = alert.querySelector('details:not([open])') as HTMLElement;
+    expect(details).toHaveTextContent('traceId · tr-42');
+    const outside = Array.from(alert.querySelectorAll('*')).filter((el) => !details.contains(el) && el.textContent?.includes('tr-42') && el.children.length === 0);
+    expect(outside).toHaveLength(0);
+  });
+
+  it('detail 없이 traceId 만 있어도 "자세히" 안에 둔다', () => {
+    setup({ kind: 'err', title: 'RP를 전환하지 못했습니다', traceId: 'tr-7' });
+    expect(screen.getByRole('alert').querySelector('details')).toHaveTextContent('traceId · tr-7');
+  });
 });

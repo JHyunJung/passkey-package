@@ -6,7 +6,7 @@ export type ToastInput = {
   title?: string;
   message?: string;
   traceId?: string;
-  /** 오류 원문(코드·서버 메시지 등). 본문에는 쉬운 문구만 두고 원문은 접힌 "자세히" 안에만 보인다. */
+  /** 오류 원문(코드·서버 메시지 등). 본문에는 쉬운 문구만 두고 원문·traceId 는 접힌 "자세히" 안에만 보인다. */
   detail?: string;
   duration?: number;
   action?: { label: string; onClick: () => void };
@@ -38,11 +38,12 @@ function Toast({ t, onClose }: { t: ToastItem; onClose: () => void }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="toast__title">{t.title}</div>
         {t.message && <div className="toast__sub">{t.message}</div>}
-        {t.traceId && <div className="toast__trace">traceId · {t.traceId}</div>}
-        {t.detail && (
+        {(t.detail || t.traceId) && (
+          // 원문(코드·서버 메시지)과 traceId 는 지원 문의용 — 본문이 아니라 접힌 "자세히" 안에만 둔다.
           <details className="toast__details">
             <summary>자세히</summary>
-            <div className="toast__trace">{t.detail}</div>
+            {t.detail && <div className="toast__trace">{t.detail}</div>}
+            {t.traceId && <div className="toast__trace">traceId · {t.traceId}</div>}
           </details>
         )}
       </div>
