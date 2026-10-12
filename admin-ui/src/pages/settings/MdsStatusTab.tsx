@@ -54,10 +54,23 @@ const DL_STYLE = { display: 'grid', gridTemplateColumns: '150px minmax(0, 1fr)',
 const DT_STYLE = { color: 'var(--mute)' } as const;
 const DD_STYLE = { margin: 0, minWidth: 0 } as const;
 
+const ERROR_PREVIEW_MAX = 80;
+/** 실패 사유(서버 errorMessage)를 한 줄 평문으로. 길면 줄이고 전체는 title 툴팁. React 가 텍스트로만 넣는다. */
+function FailureReason({ message }: { message: string }) {
+  const flat = message.replace(/\s+/g, ' ').trim();
+  const short = flat.length > ERROR_PREVIEW_MAX ? `${flat.slice(0, ERROR_PREVIEW_MAX - 1)}…` : flat;
+  return <span className="truncate" style={{ display: 'inline-block', maxWidth: 360, verticalAlign: 'middle', fontSize: 13, color: 'var(--bad-ink)' }} title={flat}>{short}</span>;
+}
+
 const columns: Column<MdsHistoryRow>[] = [
   { key: 'at', header: '시각 (KST)', render: (r) => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{fmtDateTime(r.startedAt)}</span> },
   { key: 'ver', header: '버전', render: (r) => <span className="mono" style={{ fontSize: 12 }}>{r.version != null ? `#${r.version}` : '—'}</span> },
-  { key: 'change', header: '변경', render: (r) => <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{r.changeSummary ?? '—'}</span> },
+  {
+    key: 'change', header: '변경',
+    render: (r) => r.status === 'FAILED' && r.errorMessage?.trim()
+      ? <FailureReason message={r.errorMessage} />
+      : <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{r.changeSummary ?? '—'}</span>,
+  },
   { key: 'status', header: '상태', render: (r) => <Badge tone={RUN[r.status].tone}>{RUN[r.status].label}</Badge> },
   { key: 'ms', header: '응답 시간', align: 'right', render: (r) => <span className="mono" style={{ fontSize: 12 }}>{r.durationMs != null ? `${r.durationMs}ms` : '—'}</span> },
 ];

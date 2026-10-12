@@ -40,6 +40,22 @@ afterEach(cleanup);
 const renderTab = () => render(<ToastHost><MdsStatusTab /></ToastHost>);
 
 describe('MdsStatusTab V2', () => {
+  it('실패한 동기화 행은 errorMessage 를 한 줄 평문으로 보이고(길면 줄임), 전체는 title 툴팁', async () => {
+    const longMsg = 'SSLHandshakeException: PKIX path\n  building failed: <b>unable</b> to find valid certification path ' + 'x'.repeat(200);
+    mock(mdsStatusApi.history).mockResolvedValue([{ ...history[0], status: 'FAILED', changeSummary: null, errorMessage: longMsg }, ...history.slice(1)]);
+    renderTab();
+    const table = await screen.findByRole('table');
+    const cell = within(table).getByText(/^SSLHandshakeException: PKIX path building failed/);
+    const flat = longMsg.replace(/\s+/g, ' ').trim();
+    expect(cell).toHaveAttribute('title', flat);
+    expect(cell.textContent!.length).toBeLessThan(flat.length);
+    expect(cell.textContent).toMatch(/…$/);
+    expect(cell.textContent).not.toMatch(/\n/);
+    expect(cell.querySelector('b')).toBeNull(); // HTML 로 해석하지 않는다
+    // 실패가 아닌 행은 그대로 변경 요약
+    expect(within(table).getAllByText('—').length).toBeGreaterThan(0);
+  });
+
   it('이력은 limit=30 으로 요청하고, 스트립 막대 수 = 이력 수', async () => {
     const { container } = renderTab();
     const strip = await screen.findByRole('img', { name: '최근 12회 동기화 결과 · 실패 1회' });
