@@ -4,7 +4,7 @@ import type { AppRoute } from '@/appRoute';
 export const GO_SHORTCUTS = { tenants: 'G T', activity: 'G A', 'audit-chain': 'G C', settings: 'G S' } as const;
 const KEY_TO_ROUTE: Record<string, AppRoute> = { t: { name: 'tenants' }, a: { name: 'activity' }, c: { name: 'audit-chain' }, s: { name: 'settings' } };
 
-function isTyping(t: EventTarget | null): boolean {
+export function isTyping(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el || !el.tagName) return false;
   return /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable || !!el.closest?.('[contenteditable]:not([contenteditable="false"])');

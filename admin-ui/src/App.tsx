@@ -11,6 +11,8 @@ import { IdleSessionModal } from '@/extras/IdleSessionModal';
 import { CommandPalette } from '@/extras/CommandPalette';
 import { useGoShortcuts } from '@/extras/useGoShortcuts';
 import { usePaletteShortcut } from '@/extras/usePaletteShortcut';
+import { useHelpShortcut } from '@/extras/useHelpShortcut';
+import { ShortcutSheet } from '@/extras/ShortcutSheet';
 import { isPlatform } from '@/me/roles';
 import LoginPage from '@/pages/LoginPage';
 import MfaChallenge from '@/pages/MfaChallenge';
@@ -95,12 +97,18 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
 
   useGoShortcuts(setRoute, isPlatform(me));
 
+  // ? → 키보드 단축키 시트 (입력 중·모달 열림이면 무시)
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const openSheet = useCallback(() => setSheetOpen(true), []);
+  useHelpShortcut(openSheet);
+
   const tenant = useCrumbTenant(route.name === 'tenant' ? route.tenantId : null);
   const breadcrumb = buildBreadcrumb(route, tenant, me, setRoute);
 
   function paletteAction(kind: string) {
     if (kind === 'logout') onLogout();
     if (kind === 'new-tenant') setRoute({ name: 'tenants' });
+    if (kind === 'shortcuts') openSheet();
   }
 
   return (
@@ -139,6 +147,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
         onNavigate={setRoute}
         onAction={paletteAction}
       />
+      <ShortcutSheet open={sheetOpen} onClose={() => setSheetOpen(false)} platform={isPlatform(me)} />
       <IdleSessionModal
         idleTimeoutMinutes={me.sessionIdleTimeoutMinutes}
         onExtend={() => { getMe().catch(() => { /* 401은 client가 로그인으로 redirect 처리 */ }); }}
