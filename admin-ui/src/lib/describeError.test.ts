@@ -16,6 +16,9 @@ describe('describeError', () => {
     expect(describeError(new ApiError(403, 'A003', 'Forbidden')).title).toBe('권한이 없습니다');
     expect(describeError(new ApiError(404, 'C404', 'Not found')).title).toBe('찾을 수 없습니다');
   });
+  it('429 는 요청 과다 — 잠시 후 다시 시도', () => {
+    expect(describeError(new ApiError(429, 'error', 'error'))).toMatchObject({ title: '요청이 너무 많습니다', detail: '잠시 후 다시 시도하세요.' });
+  });
   it('그 밖의 ApiError 는 서버 메시지를 detail 로', () => {
     const i = describeError(new ApiError(400, 'V001', 'slug 형식이 올바르지 않습니다'));
     expect(i.title).toBe('요청을 처리하지 못했습니다');

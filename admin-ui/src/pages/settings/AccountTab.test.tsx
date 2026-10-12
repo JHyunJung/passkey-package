@@ -122,6 +122,30 @@ describe('AccountTab — MFA 꺼짐', () => {
     expect(within(dlg).queryByText(CODE_MISMATCH)).toBeNull();
   });
 
+  it('403(권한)은 코드 불일치가 아니라 권한 문구로 인라인 표시', async () => {
+    const { ApiError } = await import('@/api/types');
+    m(mfaApi.confirm).mockRejectedValue(new ApiError(403, 'mfa_required', 'mfa_required'));
+    renderHost(<Host initial={off} />);
+    fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
+    const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
+    fireEvent.paste(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' }), { clipboardData: { getData: () => '123456' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '확인 → 복구 코드' }));
+    expect(await within(dlg).findByText(/권한이 없습니다/)).toBeInTheDocument();
+    expect(within(dlg).queryByText(CODE_MISMATCH)).toBeNull();
+  });
+
+  it('429(요청 과다)는 코드 불일치가 아니라 잠시 후 다시 시도 안내로 인라인 표시(끄기)', async () => {
+    const { ApiError } = await import('@/api/types');
+    m(mfaApi.disable).mockRejectedValue(new ApiError(429, 'error', 'error'));
+    renderHost(<Host initial={on} />);
+    fireEvent.click(screen.getByRole('button', { name: '2단계 인증 끄기' }));
+    const dlg = screen.getByRole('alertdialog', { name: '2단계 인증 끄기' });
+    fireEvent.change(within(dlg).getByLabelText('인증 코드'), { target: { value: '123456' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '끄기' }));
+    expect(await within(dlg).findByText(/요청이 너무 많습니다/)).toBeInTheDocument();
+    expect(within(dlg).queryByText(CODE_MISMATCH)).toBeNull();
+  });
+
   it('취소하면 다이얼로그가 닫히고 confirm 을 부르지 않는다', async () => {
     renderHost(<Host initial={off} />);
     fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));

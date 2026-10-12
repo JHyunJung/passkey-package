@@ -19,6 +19,7 @@ export function describeError(e: unknown): ErrorInfo {
     const base = { httpStatus: e.httpStatus, traceId: e.traceId, code: e.code };
     if (e.httpStatus >= 500) return { ...base, title: '서버가 잠시 응답하지 않습니다', detail: '저장된 데이터는 그대로 있습니다. 잠시 후 다시 시도하세요.' };
     if (e.httpStatus === 403) return { ...base, title: '권한이 없습니다', detail: '이 작업을 할 권한이 없습니다. 운영자에게 문의하세요.' };
+    if (e.httpStatus === 429) return { ...base, title: '요청이 너무 많습니다', detail: '잠시 후 다시 시도하세요.' };
     if (e.httpStatus === 404) return { ...base, title: '찾을 수 없습니다', detail: '삭제되었거나 주소가 바뀌었을 수 있습니다.' };
     return { ...base, title: '요청을 처리하지 못했습니다', detail: e.serverMessage };
   }

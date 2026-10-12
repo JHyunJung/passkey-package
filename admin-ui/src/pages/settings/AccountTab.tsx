@@ -18,9 +18,12 @@ function sanitizeCode(v: string): string {
 
 const CODE_MISMATCH = '코드가 맞지 않습니다. 앱에 표시된 새 코드(30초마다 바뀜)를 입력하세요.';
 
-/** OTP 확인 실패 문구. 4xx 는 코드 불일치, 그 밖(5xx·네트워크)은 쉬운 오류 문구. 토스트 없이 입력칸 아래에만 보인다. */
+/**
+ * OTP 확인 실패 문구. 서버의 코드 불일치 응답(MfaController: 401 {"error":"invalid_code"})만 코드 불일치,
+ * 그 밖(403 권한·429 요청 과다·5xx·네트워크 등)은 describeError 의 쉬운 문구. 토스트 없이 입력칸 아래에만 보인다.
+ */
 function codeErrorText(e: unknown): string {
-  if (e instanceof ApiError && e.httpStatus < 500) return CODE_MISMATCH;
+  if (e instanceof ApiError && e.httpStatus === 401 && e.code === 'invalid_code') return CODE_MISMATCH;
   const info = describeError(e);
   return `${info.title}. ${info.detail}`;
 }
