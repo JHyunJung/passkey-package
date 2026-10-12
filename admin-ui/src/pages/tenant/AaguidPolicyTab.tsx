@@ -1,10 +1,13 @@
 // admin-ui/src/pages/tenant/AaguidPolicyTab.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icons } from '@/icons/Icons';
 import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import type { Tenant, AaguidPolicy } from '@/api/designTypes';
 import { AAGUID_MODE_LABELS } from '@/i18n/labels';
-import { Alert, Badge, Button, Card, CardHeader, ChoiceCard, IconButton, SaveBar, Switch, useToast, useUnsavedGuard } from '@/ui';
+import { useLoad } from '@/lib/useLoad';
+import {
+  Alert, Badge, Button, Card, CardHeader, ChoiceCard, ConfirmDialog, IconButton, LoadError, SaveBar, Skeleton, Switch, useToast, useUnsavedGuard,
+} from '@/ui';
 import { SetRow } from './SetRow';
 import { unverifiedAaguidCount } from './tenantSignals';
 
@@ -36,19 +39,56 @@ export function aaguidChangedFields(saved: AaguidPolicy | null, draft: AaguidPol
   return out;
 }
 
+export type SaveConfirmKind = 'block-all' | 'mds-strict' | 'diff';
+
+/** 저장 확인 등급(V3 가이드). 빈 허용 목록 = L3 체크, MDS 엄격 켜기 = L2 영향 요약, 그 밖 = L2 변경 비교. */
+export function saveConfirmKind(saved: AaguidPolicy, draft: AaguidPolicy): SaveConfirmKind {
+  if (draft.mode === 'ALLOWLIST' && draft.entries.filter((e) => e.aaguid).length === 0) return 'block-all';
+  if (!saved.mdsStrict && draft.mdsStrict) return 'mds-strict';
+  return 'diff';
+}
+
 const MODES: { v: AaguidPolicy['mode']; d: string }[] = [
-  { v: 'ANY', d: '모든 authenticator 허용' },
-  { v: 'ALLOWLIST', d: '지정된 AAGUID만 허용' },
-  { v: 'DENYLIST', d: '지정된 AAGUID만 차단' },
+  { v: 'ANY', d: '모든 인증기 허용' },
+  { v: 'ALLOWLIST', d: '목록의 모델만 허용' },
+  { v: 'DENYLIST', d: '목록의 모델만 차단' },
 ];
+
+const onOff = (b: boolean) => (b ? '켜짐' : '꺼짐');
+const modeLabel = (m: AaguidPolicy['mode']) => <span title={m}>{AAGUID_MODE_LABELS[m]}</span>;
+
+/** 저장 확인에 보일 실제 변경 항목 수 — ChangeList 가 그리는 줄과 같은 기준. */
+function changeCount(saved: AaguidPolicy, draft: AaguidPolicy): number {
+  const added = draft.entries.filter((e) => e.aaguid && !saved.entries.some((s) => s.aaguid === e.aaguid)).length;
+  const removed = saved.entries.filter((s) => s.aaguid && !draft.entries.some((e) => e.aaguid === s.aaguid)).length;
+  return (saved.mode !== draft.mode ? 1 : 0) + added + removed + (saved.mdsStrict !== draft.mdsStrict ? 1 : 0);
+}
+
+/** L2 변경 비교 목록 — 방식 · 추가/삭제된 AAGUID · MDS 엄격. */
+function ChangeList({ saved, draft }: { saved: AaguidPolicy; draft: AaguidPolicy }) {
+  const added = draft.entries.filter((e) => e.aaguid && !saved.entries.some((s) => s.aaguid === e.aaguid));
+  const removed = saved.entries.filter((s) => s.aaguid && !draft.entries.some((e) => e.aaguid === s.aaguid));
+  return (
+    <ul className="stack-1" style={{ listStyle: 'none', margin: 0, padding: '12px 14px', border: '1px solid var(--line)', borderRadius: 'var(--r)', fontSize: 13 }}>
+      {saved.mode !== draft.mode && <li>방식: {modeLabel(saved.mode)} → {modeLabel(draft.mode)}</li>}
+      {added.map((e) => <li key={'+' + e.aaguid} className="mono">+ {e.aaguid}</li>)}
+      {removed.map((e) => <li key={'-' + e.aaguid} className="mono">- {e.aaguid}</li>)}
+      {saved.mdsStrict !== draft.mdsStrict && <li>MDS 엄격: {onOff(saved.mdsStrict)} → {onOff(draft.mdsStrict)}</li>}
+    </ul>
+  );
+}
 
 // ── AaguidPolicyTab ───────────────────────────────────────────────────────────
 
 export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; onSaved?: (p: AaguidPolicy) => void }) {
+  const load = useLoad(() => aaguidPolicyApi.get(tenant.id), [tenant.id]);
   const [policy, setPolicy] = useState<AaguidPolicy | null>(null);
   const [draft, setDraft] = useState<AaguidPolicy | null>(null);
   const [aaguidInput, setAaguidInput] = useState('');
+  // 확인 창을 연 시점의 종류를 고정한다 — 저장 성공으로 policy 가 바뀌어도 다른 창으로 바뀌지 않게.
+  const [confirm, setConfirm] = useState<SaveConfirmKind | null>(null);
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,26 +98,12 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
   const guard = useUnsavedGuard(dirty);
 
   useEffect(() => {
-    aaguidPolicyApi
-      .get(tenant.id)
-      .then((p) => {
-        setPolicy(p);
-        setDraft(p);
-      })
-      .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        toast({ kind: 'err', title: 'AAGUID policy 로드 실패', message: msg });
-      });
-  }, [tenant.id]);
+    if (!load.data) return;
+    setPolicy(load.data);
+    setDraft(load.data);
+  }, [load.data]);
 
-  const list =
-    draft == null
-      ? []
-      : draft.mode === 'ALLOWLIST'
-        ? draft.entries.filter((e) => e.aaguid)
-        : draft.mode === 'DENYLIST'
-          ? draft.entries.filter((e) => e.aaguid)
-          : [];
+  const list = draft == null || draft.mode === 'ANY' ? [] : draft.entries.filter((e) => e.aaguid);
 
   function setList(next: AaguidPolicy['entries']) {
     if (!draft) return;
@@ -92,8 +118,9 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
     setAaguidInput('');
   }
 
-  async function handleSave() {
-    if (!draft) return;
+  /** ConfirmDialog 의 onConfirm — 실패하면 throw 해서 다이얼로그 안에 오류를 보인다(입력 유지). */
+  async function save() {
+    if (!draft || saving) return;
     setSaving(true);
     try {
       const updated = await aaguidPolicyApi.update(tenant.id, draft);
@@ -101,9 +128,6 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
       setDraft(updated);
       onSaved?.(updated);
       toast({ kind: 'ok', title: 'AAGUID 정책 저장 완료' });
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: '저장 실패', message: msg });
     } finally {
       setSaving(false);
     }
@@ -114,51 +138,68 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
     setDraft({ ...policy, entries: [...policy.entries] });
   }
 
+  if (load.status === 'failed' && !policy) {
+    return <LoadError what="AAGUID 정책" error={load.error} onRetry={load.reload} retrying={load.reloading} />;
+  }
   if (!draft || !policy) {
-    return <div className="muted" style={{ padding: 40 }}>Loading…</div>;
+    return <Skeleton rows={6} label="AAGUID 정책 불러오는 중" />;
   }
 
-  // 탭 점과 같은 기준(저장된 정책). 방금 추가한 항목은 저장 후 서버가 mdsName 을 채운다.
+  // 탭 배지와 같은 기준(저장된 정책). 방금 추가한 항목은 저장 후 서버가 mdsName 을 채운다.
   const unknownCount = unverifiedAaguidCount(policy);
+  const draftUnknown = unverifiedAaguidCount(draft);
+  const closeConfirm = () => setConfirm(null);
 
   return (
     <div className="stack-6">
       {unknownCount > 0 && (
-        <Alert tone="warn">
-          <strong>탭 점 배지 사유</strong> · {AAGUID_MODE_LABELS[policy.mode]}에 MDS 에서 확인되지 않은 AAGUID 가 {unknownCount}건 있습니다.
+        <Alert tone="warn" title={`MDS 미확인 AAGUID ${unknownCount}건 — 인증기 모델을 확인하세요`}
+          actions={<Button size="sm" onClick={() => document.getElementById('aaguid-list')?.scrollIntoView?.({ block: 'start' })}>항목 보기</Button>}>
+          {modeLabel(policy.mode)}의 아래 “MDS 미확인” 항목이 MDS에 없습니다.
         </Alert>
       )}
 
       <Card>
-        <CardHeader title="AAGUID Attestation Policy" sub="등록 시 허용할 authenticator 모델을 AAGUID 로 제한합니다." />
+        <CardHeader title="AAGUID 정책" sub="등록할 수 있는 인증기 모델을 AAGUID로 제한합니다." />
+        <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
 
-        <SetRow label="mode" desc="정책 방식" changed={changedFields.includes('mode')}>
+        <SetRow label="mode" desc="정책 방식 · 저장 전 영향 요약을 보여 줍니다." changed={changedFields.includes('mode')}>
           <div className="choices" role="radiogroup" aria-label="mode">
             {MODES.map((o) => (
               <ChoiceCard key={o.v} checked={draft.mode === o.v} onSelect={() => setDraft({ ...draft, mode: o.v })}
-                title={AAGUID_MODE_LABELS[o.v]} description={o.d} />
+                title={modeLabel(o.v)} description={o.d} />
             ))}
           </div>
         </SetRow>
 
         {draft.mode !== 'ANY' && (
-          <SetRow label={draft.mode === 'ALLOWLIST' ? '허용된 AAGUID' : '차단된 AAGUID'} changed={changedFields.includes('AAGUID 목록')}
-            desc="mode 가 전체 허용이 아닐 때만 표시. MDS 에서 모델명을 자동으로 찾아 붙입니다.">
-            <div className="stack-3" style={{ gap: 10 }}>
-              <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
-                <input className="input mono" aria-label="AAGUID 입력" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxLength={36}
-                  value={aaguidInput}
-                  onChange={(e) => setAaguidInput(formatAaguid(e.target.value))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-                <Button icon={<Icons.Plus size={14} />} disabled={!inputValid} onClick={add}>추가</Button>
-              </div>
-              <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden' }}>
+          <div id="aaguid-list">
+            <SetRow label={draft.mode === 'ALLOWLIST' ? '허용된 AAGUID' : '차단된 AAGUID'} changed={changedFields.includes('AAGUID 목록')}
+              desc="MDS 에서 모델명을 자동으로 찾아 붙입니다.">
+              <div className="stack-3" style={{ gap: 10 }}>
+                <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
+                  <input ref={inputRef} className="input mono" aria-label="AAGUID 입력" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxLength={36}
+                    value={aaguidInput}
+                    onChange={(e) => setAaguidInput(formatAaguid(e.target.value))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+                  <Button icon={<Icons.Plus size={14} />} disabled={!inputValid} onClick={add}>추가</Button>
+                </div>
                 {list.length === 0 ? (
-                  <p className="hint" style={{ margin: 0, padding: '12px 14px' }}>
-                    비어 있음 — 이 상태에서는 {draft.mode === 'ALLOWLIST' ? '모든 ceremony가 차단' : '모든 ceremony가 허용'}됩니다.
-                  </p>
+                  draft.mode === 'ALLOWLIST' ? (
+                    <Alert tone="bad" title="허용 목록이 비어 있습니다"
+                      actions={<>
+                        <Button size="sm" onClick={() => inputRef.current?.focus()}>AAGUID 추가</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDraft({ ...draft, mode: 'ANY' })}>전체 허용으로 되돌리기</Button>
+                      </>}>
+                      이대로 저장하면 이 tenant의 모든 패스키 등록·인증이 차단됩니다.
+                    </Alert>
+                  ) : (
+                    <p className="hint" style={{ margin: 0, padding: '12px 14px', border: '1px solid var(--line)', borderRadius: 'var(--r)' }}>
+                      비어 있음 — 이 상태에서는 모든 패스키 등록·인증이 허용됩니다.
+                    </p>
+                  )
                 ) : (
-                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden' }}>
                     {list.map((entry, i) => (
                       <li key={entry.aaguid} className="row" style={{ flexWrap: 'nowrap', gap: 12, padding: '12px 14px', borderBottom: i === list.length - 1 ? 0 : '1px solid var(--line-soft)' }}>
                         <span className="avatar avatar--sq" aria-hidden="true"><Icons.Fingerprint size={16} /></span>
@@ -166,7 +207,7 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
                           <strong className="truncate" style={{ fontSize: 13 }} title={entry.mdsName ?? undefined}>{entry.mdsName ?? 'MDS 에 없음'}</strong>
                           <span className="mono hint truncate" style={{ margin: 0 }}>{entry.aaguid}</span>
                         </div>
-                        {entry.mdsName == null ? <Badge tone="warn">미확인</Badge> : <Badge tone="ok">MDS 확인</Badge>}
+                        {entry.mdsName == null ? <Badge tone="warn">MDS 미확인</Badge> : <Badge tone="ok">MDS 확인</Badge>}
                         <IconButton size="sm" label={`${entry.aaguid} 삭제`} icon={<Icons.X size={14} />}
                           onClick={() => setList(list.filter((x) => x.aaguid !== entry.aaguid))} />
                       </li>
@@ -174,17 +215,48 @@ export default function AaguidPolicyTab({ tenant, onSaved }: { tenant: Tenant; o
                   </ul>
                 )}
               </div>
-            </div>
-          </SetRow>
+            </SetRow>
+          </div>
         )}
 
-        <SetRow label="MDS Strict 모드" desc="MDS 에 없거나 REVOKED 상태인 authenticator 의 등록을 거부합니다." changed={changedFields.includes('MDS strict')}>
-          <Switch checked={draft.mdsStrict} onChange={(v) => setDraft({ ...draft, mdsStrict: v })}
-            label={draft.mdsStrict ? 'MDS strict 켜짐' : 'MDS strict 꺼짐'} />
+        <SetRow label="MDS 엄격 모드" desc="MDS 에 없거나 폐기(REVOKED)된 인증기의 등록을 거부합니다." changed={changedFields.includes('MDS strict')}>
+          <div className="stack-2">
+            <Switch checked={draft.mdsStrict} onChange={(v) => setDraft({ ...draft, mdsStrict: v })}
+              label={draft.mdsStrict ? 'MDS strict 켜짐' : 'MDS strict 꺼짐'} />
+            {draftUnknown > 0 && (
+              <p className="hint" style={{ margin: 0 }}>
+                {draft.mdsStrict ? `현재 목록 중 MDS 미확인 ${draftUnknown}개 모델의 신규 등록이 막힙니다.` : `켜면 현재 목록 중 MDS 미확인 ${draftUnknown}개 모델의 신규 등록이 막힙니다.`}
+              </p>
+            )}
+          </div>
         </SetRow>
+        </fieldset>
       </Card>
 
-      <SaveBar count={changedFields.length} summary={changedFields.join(' · ')} onRevert={handleRevert} onSave={() => void handleSave()} saving={saving} />
+      <SaveBar count={changedFields.length} summary={changedFields.join(' · ')} onRevert={handleRevert} onSave={() => setConfirm(saveConfirmKind(policy, draft))} saving={saving} saveLabel="저장…" />
+
+      <ConfirmDialog open={confirm === 'block-all'} onClose={closeConfirm} level="L3" verb="차단"
+        title="모든 등록·인증을 차단할까요?" acknowledge="차단된다는 것을 이해했습니다" onConfirm={save}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
+          결과: 허용 목록(0개)<br />
+          영향: 이 tenant의 모든 사용자가 패스키로 등록·인증할 수 없습니다.
+        </p>
+        <ChangeList saved={policy} draft={draft} />
+      </ConfirmDialog>
+
+      <ConfirmDialog open={confirm === 'mds-strict'} onClose={closeConfirm} level="L2" danger={false} verb="저장"
+        title="MDS 엄격 모드를 켜고 저장할까요?" onConfirm={save}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
+          MDS 엄격: 꺼짐 → 켜짐<br />
+          영향: MDS에 없거나 폐기된 인증기의 신규 등록 거부{draftUnknown > 0 ? `(현재 목록의 미확인 모델 ${draftUnknown}개 포함)` : ''}, 기존 Credential은 유지
+        </p>
+        <ChangeList saved={policy} draft={draft} />
+      </ConfirmDialog>
+
+      <ConfirmDialog open={confirm === 'diff'} onClose={closeConfirm} level="L2" danger={false} verb="저장"
+        title={`변경 사항 ${changeCount(policy, draft)}개를 저장할까요?`} sub="다음 패스키 등록부터 적용됩니다." onConfirm={save}>
+        <ChangeList saved={policy} draft={draft} />
+      </ConfirmDialog>
       {guard}
     </div>
   );

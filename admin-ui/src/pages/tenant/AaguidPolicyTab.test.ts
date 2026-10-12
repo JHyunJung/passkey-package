@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { formatAaguid } from './AaguidPolicyTab';
+import { formatAaguid, saveConfirmKind } from './AaguidPolicyTab';
+import type { AaguidPolicy } from '@/api/designTypes';
 
 describe('formatAaguid', () => {
   it('하이픈 없는 32 hex 를 UUID 형식으로 변환한다', () => {
@@ -46,5 +47,21 @@ describe('formatAaguid', () => {
     expect(formatAaguid('ea9b8d664d01')).toBe('ea9b8d66-4d01');       // 12 → seg2 끝
     expect(formatAaguid('ea9b8d664d011d21')).toBe('ea9b8d66-4d01-1d21'); // 16 → seg3 끝
     expect(formatAaguid('ea9b8d664d011d213ce4')).toBe('ea9b8d66-4d01-1d21-3ce4'); // 20 → seg4 끝
+  });
+});
+
+describe('saveConfirmKind', () => {
+  const p = (over: Partial<AaguidPolicy>): AaguidPolicy => ({ mode: 'ALLOWLIST', mdsStrict: false, entries: [{ aaguid: 'a', note: null, mdsName: 'X' }], ...over });
+  it('허용 목록이 비면 block-all (MDS 엄격보다 우선)', () => {
+    expect(saveConfirmKind(p({}), p({ entries: [], mdsStrict: true }))).toBe('block-all');
+    expect(saveConfirmKind(p({}), p({ entries: [{ aaguid: '', note: null, mdsName: null }] }))).toBe('block-all');
+  });
+  it('차단 목록·전체 허용이 비는 것은 block-all 이 아니다', () => {
+    expect(saveConfirmKind(p({}), p({ mode: 'DENYLIST', entries: [] }))).toBe('diff');
+    expect(saveConfirmKind(p({}), p({ mode: 'ANY', entries: [] }))).toBe('diff');
+  });
+  it('MDS 엄격을 켜면 mds-strict, 끄는 것은 diff', () => {
+    expect(saveConfirmKind(p({}), p({ mdsStrict: true }))).toBe('mds-strict');
+    expect(saveConfirmKind(p({ mdsStrict: true }), p({ mdsStrict: false }))).toBe('diff');
   });
 });
