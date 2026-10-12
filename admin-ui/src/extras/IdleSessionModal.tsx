@@ -10,6 +10,8 @@ export type IdleSessionModalProps = {
 };
 
 const WARN_LEAD_SECONDS = 60;
+/** 연장 요청이 진행 중이면 만료 로그아웃을 이만큼까지만 미룬다. */
+const EXTEND_GRACE_MS = 10_000;
 
 /** 스크린리더에는 매초가 아니라 30초·10초 남았을 때만 알린다. */
 function announcement(secondsLeft: number): string {
@@ -33,7 +35,22 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
   const extendingRef = useRef(false);
   const [extendError, setExtendError] = useState<ErrorInfo | null>(null);
   const mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const expiredRef = useRef(false); // 카운트다운이 0 에 도달함
+  const loggedOutRef = useRef(false); // 만료 로그아웃이 이미 발화함
+  const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; clearTimeout(graceTimer.current!); };
+  }, []);
+
+  function expireLogout() {
+    if (loggedOutRef.current) return;
+    loggedOutRef.current = true;
+    clearTimeout(graceTimer.current!);
+    graceTimer.current = null;
+    setOpen(false);
+    onLogout?.();
+  }
 
   async function extend() {
     if (extendingRef.current) return; // 연타로 중복 호출 방지
@@ -42,12 +59,16 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
     setExtendError(null);
     try {
       await onExtend();
-      if (mounted.current) setOpen(false);
-    } catch (e) {
-      if (mounted.current) {
-        setExtendError(describeError(e));
-        queueMicrotask(() => extendRef.current?.focus());
+      if (mounted.current && !loggedOutRef.current) {
+        clearTimeout(graceTimer.current!);
+        graceTimer.current = null;
+        setOpen(false);
       }
+    } catch (e) {
+      if (!mounted.current || loggedOutRef.current) return;
+      // 요청 도중 이미 만료됐다면 실패한 연장은 로그아웃으로 이어진다.
+      if (expiredRef.current) { expireLogout(); return; }
+      setExtendError(describeError(e));
     } finally {
       extendingRef.current = false;
       if (mounted.current) setExtending(false);
@@ -64,6 +85,8 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
       idleTimer.current = setTimeout(() => {
         setSecondsLeft(countdownSeconds);
         setExtendError(null);
+        expiredRef.current = false;
+        loggedOutRef.current = false;
         setOpen(true);
       }, warnAfterMs);
     }
@@ -86,11 +109,21 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
 
   // 카운트다운이 0에 도달하면 로그아웃 (부작용은 updater 밖, 렌더 후 effect에서 1회만).
   useEffect(() => {
-    if (open && secondsLeft === 0) {
-      setOpen(false);
-      onLogout?.();
+    if (!open || secondsLeft !== 0) return;
+    expiredRef.current = true;
+    if (extendingRef.current) {
+      // 연장 요청이 진행 중: 결과를 기다리되 유예 시간이 지나면 로그아웃.
+      if (!graceTimer.current) graceTimer.current = setTimeout(expireLogout, EXTEND_GRACE_MS);
+      return;
     }
+    expireLogout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, secondsLeft, onLogout]);
+
+  // 연장 실패 후 버튼이 다시 활성화된 뒤에 포커스를 되돌린다(비활성 버튼은 포커스를 받지 못함).
+  useEffect(() => {
+    if (extendError && !extending) extendRef.current?.focus();
+  }, [extendError, extending]);
 
   if (!open) return null;
   const pct = secondsLeft / countdownSeconds;
