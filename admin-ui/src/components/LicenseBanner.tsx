@@ -21,7 +21,8 @@ export function LicenseBanner({ showLink = false }: { showLink?: boolean }) {
         const view = await licenseApi.get();
         if (!cancelled) setLicense(view);
       } catch {
-        // Silent — banner is best-effort UI.
+        // 의도된 예외: 배너는 주변(ambient) UI 라 조회 실패를 알리지 않는다. 최초 실패면 배너를 숨기고,
+        // 이후 실패면 마지막으로 알던 상태를 유지한다. 실패 안내와 재시도는 /license 화면의 LoadError 가 맡는다.
       }
     }
     poll();

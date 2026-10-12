@@ -62,4 +62,36 @@ describe('LicenseBanner', () => {
     await vi.waitFor(() => expect(licenseApi.get).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('SaaS 는 WARNING·DEAD 상태여도 아무것도 그리지 않는다', async () => {
+    for (const state of ['WARNING', 'DEAD'] as const) {
+      vi.mocked(licenseApi.get).mockReset();
+      vi.mocked(licenseApi.get).mockResolvedValue({ ...base, deploymentMode: 'saas', state });
+      const { container, unmount } = renderBanner({ showLink: true });
+      await vi.waitFor(() => expect(licenseApi.get).toHaveBeenCalled());
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
+  });
+
+  it('조회가 실패하면 아무것도 그리지 않고 깨지지 않는다', async () => {
+    vi.mocked(licenseApi.get).mockRejectedValue(new Error('boom'));
+    const { container } = renderBanner({ showLink: true });
+    await vi.waitFor(() => expect(licenseApi.get).toHaveBeenCalled());
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('이후 조회가 실패하면 마지막으로 알던 배너를 유지한다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(licenseApi.get).mockResolvedValueOnce(base).mockRejectedValue(new Error('boom'));
+      renderBanner({ showLink: true });
+      expect(await screen.findByText(/30일 후 만료됩니다/)).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
+      expect(licenseApi.get).toHaveBeenCalledTimes(2);
+      expect(screen.getByText(/30일 후 만료됩니다/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
