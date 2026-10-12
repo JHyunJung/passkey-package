@@ -1,5 +1,5 @@
 // admin-ui/src/pages/TenantDetailPage.tsx
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { tenantsApi } from '@/api/tenants';
@@ -12,7 +12,7 @@ import { ApiError } from '@/api/types';
 import { useLoad } from '@/lib/useLoad';
 import { illustrations } from '@/assets/illustrations';
 import { isPlatform } from '@/me/roles';
-import { Alert, Button, ConfirmByTyping, Dialog, EmptyState, LoadError, Menu, PropChip, Skeleton, StatusBadge, Tabs, useToast, type TabItem } from '@/ui';
+import { Alert, Button, ConfirmDialog, EmptyState, LoadError, Menu, PropChip, Skeleton, StatusBadge, Tabs, useToast, type TabItem } from '@/ui';
 import TenantOverview from '@/pages/tenant/TenantOverview';
 import WebauthnConfigTab from '@/pages/tenant/WebauthnConfigTab';
 import AaguidPolicyTab from '@/pages/tenant/AaguidPolicyTab';
@@ -20,7 +20,8 @@ import ApiKeysTab from '@/pages/tenant/ApiKeysTab';
 import CredentialsTab from '@/pages/tenant/CredentialsTab';
 import AuditTab from '@/pages/tenant/AuditTab';
 import FunnelTab from '@/pages/tenant/FunnelTab';
-import { countExpiringKeys, hasUnverifiedAaguid } from '@/pages/tenant/tenantSignals';
+import { countExpiringKeys, unverifiedAaguidCount } from '@/pages/tenant/tenantSignals';
+import { eulReul } from '@/lib/josa';
 
 // ── util ─────────────────────────────────────────────────────────────────────
 
@@ -52,88 +53,66 @@ type TenantDetailPageProps = {
   notice?: ReactNode;
 };
 
-// ── SuspendDialog — 영향 범위 + slug 타이핑 확인 ─────────────────────────────
+// ── SuspendDialog — L3 slug 입력 확인 (V3 Dialogs-Tenant) ─────────────────────
 
 function SuspendDialog({ tenant, open, onClose, onConfirmed }: {
   tenant: Tenant; open: boolean; onClose: () => void; onConfirmed: () => void;
 }) {
-  const [match, setMatch] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const cancelRef = useRef<HTMLButtonElement>(null);
   const toast = useToast();
-
-  function close() {
-    setMatch(false);
-    onClose();
-  }
-  async function go() {
-    if (!match) return;
-    setBusy(true);
-    try {
-      await tenantsApi.suspend(tenant.id);
-      toast({ kind: 'warn', title: '테넌트가 정지되었습니다.', message: `${tenant.slug} · 모든 API 키 revoke됨` });
-      onConfirmed();
-      close();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '정지 실패', message: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
-    <Dialog open={open} onClose={close} role="alertdialog" title="테넌트 정지" sub={`${tenant.name} 을(를) 정지합니다.`} initialFocusRef={cancelRef}
-      footer={<>
-        <button ref={cancelRef} type="button" className="btn" onClick={close}>취소</button>
-        <Button variant="danger-solid" disabled={busy || !match} onClick={() => void go()}>정지</Button>
-      </>}>
+    <ConfirmDialog
+      open={open}
+      onClose={onClose}
+      level="L3"
+      verb="정지"
+      title={`${tenant.name}${eulReul(tenant.name)} 정지할까요?`}
+      sub="정지하면 이 tenant의 모든 RP 서버 요청이 거부됩니다."
+      typeToConfirm={{
+        expected: tenant.slug,
+        label: <>확인을 위해 slug <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{tenant.slug}</span> 를 입력하세요</>,
+      }}
+      onConfirm={async () => {
+        await tenantsApi.suspend(tenant.id);
+        toast({ kind: 'warn', title: '테넌트가 정지되었습니다.', message: `${tenant.slug} · 모든 API 키 회수됨` });
+        onConfirmed();
+      }}
+    >
       <Alert tone="bad" title="영향 범위">
         <ul className="stack-1" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          <li>· 유효 API key {tenant.apiKeys}개 즉시 회수</li>
-          <li>· 이 tenant 의 모든 ceremony 거부</li>
+          <li>· 유효한 API 키 {tenant.apiKeys}개를 즉시 회수</li>
+          <li>· 이 tenant의 패스키 등록·인증 모두 거부</li>
           <li>· 정지를 해제해도 회수된 키는 복구되지 않음</li>
         </ul>
       </Alert>
-      <ConfirmByTyping
-        id="suspend-slug"
-        expected={tenant.slug}
-        actionLabel="정지"
-        onMatchChange={setMatch}
-        label={<>확인을 위해 slug <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{tenant.slug}</span> 를 입력하세요</>}
-      />
-    </Dialog>
+    </ConfirmDialog>
   );
 }
 
-// ── ResumeDialog — 기존 window.confirm 과 같은 의미의 확인 ───────────────────
+// ── ResumeDialog — L1 확인 ───────────────────────────────────────────────────
 
 function ResumeDialog({ tenant, open, onClose, onConfirmed }: {
   tenant: Tenant; open: boolean; onClose: () => void; onConfirmed: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
   const toast = useToast();
-  async function go() {
-    setBusy(true);
-    try {
-      await tenantsApi.activate(tenant.id);
-      toast({ kind: 'ok', title: '정지 해제됨' });
-      onConfirmed();
-      onClose();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '해제 실패', message: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
-    <Dialog open={open} onClose={onClose} title="정지 해제" sub={`${tenant.name} 의 정지를 해제합니다.`}
-      footer={<>
-        <Button onClick={onClose}>취소</Button>
-        <Button variant="primary" disabled={busy} onClick={() => void go()}>정지 해제</Button>
-      </>}>
+    <ConfirmDialog
+      open={open}
+      onClose={onClose}
+      level="L1"
+      verb="정지 해제"
+      danger={false}
+      title="정지 해제"
+      sub={`${tenant.name} 의 정지를 해제합니다.`}
+      onConfirm={async () => {
+        await tenantsApi.activate(tenant.id);
+        toast({ kind: 'ok', title: '정지 해제됨' });
+        onConfirmed();
+      }}
+    >
       <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
-        이 테넌트의 정지를 해제하시겠습니까? 등록·인증 ceremony 가 다시 허용됩니다. 정지 때 회수된 API 키는 복구되지 않으므로 필요하면 새로 발급하세요.
+        이 테넌트의 정지를 해제하시겠습니까? 패스키 등록·인증이 다시 허용됩니다. 정지 때 회수된 API 키는 복구되지 않으므로 필요하면 새로 발급하세요.
       </p>
-    </Dialog>
+    </ConfirmDialog>
   );
 }
 
@@ -180,7 +159,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
   const [apiKeys, setApiKeys] = useState<ApiKey[] | null>(null);
   const platform = isPlatform(me);
 
-  // 탭 점 배지 신호. tenant 가 바뀌거나(onReload 포함) 처음 열릴 때 1회 조회.
+  // 탭 '확인 필요 N' 배지 신호. tenant 가 바뀌거나(onReload 포함) 처음 열릴 때 1회 조회.
   useEffect(() => {
     let cancelled = false;
     setAaguidPolicy(null);
@@ -191,9 +170,10 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
   }, [tenant]);
 
   const expiringKeyCount = apiKeys ? countExpiringKeys(apiKeys, Date.now()) : undefined;
+  const unverified = unverifiedAaguidCount(aaguidPolicy);
   const tabs: TabItem[] = TENANT_TABS.map((t) => {
-    if (t.id === 'aaguid') return hasUnverifiedAaguid(aaguidPolicy) ? { ...t, badge: { text: '확인 필요', reason: 'MDS 미확인 AAGUID' } } : t;
-    if (t.id === 'apikeys') return (expiringKeyCount ?? 0) > 0 ? { ...t, badge: { text: '확인 필요', reason: '30일 안에 만료되는 키' } } : t;
+    if (t.id === 'aaguid' && unverified > 0) return { ...t, badge: { text: `확인 필요 ${unverified}`, reason: `MDS 미확인 AAGUID ${unverified}건` } };
+    if (t.id === 'apikeys' && (expiringKeyCount ?? 0) > 0) return { ...t, badge: { text: `확인 필요 ${expiringKeyCount}`, reason: `30일 안에 만료되는 키 ${expiringKeyCount}개` } };
     return t;
   });
 

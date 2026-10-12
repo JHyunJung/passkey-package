@@ -37,7 +37,7 @@ type Issued = { key: ApiKey; plaintext: string; oldKeyExpiresAt?: string; expiry
 
 // ── ApiKeysTab ────────────────────────────────────────────────────────────────
 
-/** onChanged: 발급·회전·회수 성공 뒤 호출 — tenant 셸(키 수 KPI·탭 점 배지)을 갱신한다. */
+/** onChanged: 발급·회전·회수 성공 뒤 호출 — tenant 셸(키 수 KPI·탭 "확인 필요 N" 배지)을 갱신한다. */
 export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onChanged?: () => void }) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);

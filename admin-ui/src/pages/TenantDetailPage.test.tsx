@@ -89,27 +89,28 @@ describe('TenantDetailPage 헤더', () => {
   });
 });
 
-describe('탭 점 배지', () => {
-  it('AAGUID: mode≠ANY 이고 mdsName==null 항목이 있으면 점', async () => {
+describe('탭 "확인 필요 N" 배지', () => {
+  it('AAGUID: mode≠ANY 이고 mdsName==null 항목 수를 라벨로, 사유는 툴팁', async () => {
     (aaguidPolicyApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-      mode: 'ALLOWLIST', mdsStrict: false, entries: [{ aaguid: 'a', note: null, mdsName: null }],
+      mode: 'ALLOWLIST', mdsStrict: false, entries: [{ aaguid: 'a', note: null, mdsName: null }, { aaguid: 'b', note: null, mdsName: null }],
     });
     renderPage();
     const tab = screen.getByRole('tab', { name: /AAGUID 정책/ });
-    expect(await within(tab).findByText(/확인 필요/)).toBeInTheDocument();
+    const badge = await within(tab).findByText('확인 필요 2');
+    expect(badge).toHaveAttribute('title', 'MDS 미확인 AAGUID 2건');
     expect(within(screen.getByRole('tab', { name: /API 키/ })).queryByText(/확인 필요/)).toBeNull();
   });
-  it('API 키: 30일 이내 만료 ACTIVE 키가 있으면 점, 개요에 개수 전달', async () => {
+  it('API 키: 30일 이내 만료 ACTIVE 키 수를 라벨로, 개요에 개수 전달', async () => {
     (apiKeysApi.list as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: 'k1', prefix: 'pk_a', name: 'prod', status: 'ACTIVE', createdAt: '2026-01-01T00:00:00Z', lastUsedAt: null, scopes: [], expiresAt: new Date(Date.now() + 10 * DAY).toISOString() },
       { id: 'k2', prefix: 'pk_b', name: 'old', status: 'REVOKED', createdAt: '2026-01-01T00:00:00Z', lastUsedAt: null, scopes: [], expiresAt: new Date(Date.now() + 5 * DAY).toISOString() },
     ]);
     renderPage();
     const tab = screen.getByRole('tab', { name: /API 키/ });
-    expect(await within(tab).findByText(/확인 필요/)).toBeInTheDocument();
+    expect(await within(tab).findByText('확인 필요 1')).toHaveAttribute('title', '30일 안에 만료되는 키 1개');
     expect(screen.getByText('OVERVIEW expiring=1 platform=true')).toBeInTheDocument();
   });
-  it('조건이 없으면 점이 없다', async () => {
+  it('조건이 없으면 배지가 없다', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('OVERVIEW expiring=0 platform=true')).toBeInTheDocument());
     expect(screen.queryByText(/확인 필요/)).toBeNull();
@@ -122,13 +123,13 @@ describe('탭 점 배지', () => {
     expect(screen.queryByText(/확인 필요/)).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
   });
-  it('AAGUID 저장 후 onSaved 로 점이 갱신된다', async () => {
+  it('AAGUID 저장 후 onSaved 로 배지가 갱신된다', async () => {
     (aaguidPolicyApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
       mode: 'ALLOWLIST', mdsStrict: false, entries: [{ aaguid: 'a', note: null, mdsName: null }],
     });
     renderPage({ tab: 'aaguid' });
     const tab = screen.getByRole('tab', { name: /AAGUID 정책/ });
-    expect(await within(tab).findByText(/확인 필요/)).toBeInTheDocument();
+    expect(await within(tab).findByText('확인 필요 1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'AAGUID 저장 시뮬레이션' }));
     expect(within(tab).queryByText(/확인 필요/)).toBeNull();
   });
@@ -143,14 +144,16 @@ describe('테넌트 정지 / 정지 해제', () => {
     renderPage({ me: RP });
     expect(screen.queryByRole('button', { name: '더보기' })).toBeNull();
   });
-  it('정지: alertdialog, 영향 범위, 취소 기본 포커스, slug 일치 전 정지 비활성', async () => {
+  it('정지: L3 — 제목 동사, 영향 범위, 취소 기본 포커스, slug 일치 전 정지 비활성, 토스트 "회수됨"', async () => {
     const { onReload } = renderPage();
     fireEvent.click(screen.getByRole('button', { name: '더보기' }));
     fireEvent.click(screen.getByRole('menuitem', { name: '테넌트 정지' }));
-    const dlg = screen.getByRole('alertdialog', { name: '테넌트 정지' });
-    expect(within(dlg).getByText('Acme 을(를) 정지합니다.')).toBeInTheDocument();
+    const dlg = screen.getByRole('alertdialog', { name: 'Acme을 정지할까요?' });
+    expect(within(dlg).getByText('정지하면 이 tenant의 모든 RP 서버 요청이 거부됩니다.')).toBeInTheDocument();
     expect(within(dlg).getByRole('alert')).toHaveTextContent('영향 범위');
-    expect(within(dlg).getByText('· 유효 API key 3개 즉시 회수')).toBeInTheDocument();
+    expect(within(dlg).getByText('· 유효한 API 키 3개를 즉시 회수')).toBeInTheDocument();
+    expect(within(dlg).getByText('· 이 tenant의 패스키 등록·인증 모두 거부')).toBeInTheDocument();
+    expect(dlg).not.toHaveTextContent('ceremony');
     expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
     expect(within(dlg).getByText('일치해야 정지 버튼이 활성화됩니다.')).toBeInTheDocument();
     const go = within(dlg).getByRole('button', { name: '정지' });
@@ -167,6 +170,21 @@ describe('테넌트 정지 / 정지 해제', () => {
     expect(onReload).toHaveBeenCalled();
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByText('테넌트가 정지되었습니다.')).toBeInTheDocument();
+    expect(screen.getByText('acme · 모든 API 키 회수됨')).toBeInTheDocument();
+    expect(screen.queryByText(/revoke/)).toBeNull();
+  });
+  it('정지 실패는 다이얼로그 안 인라인 오류, 닫히지 않고 토스트도 없다', async () => {
+    (tenantsApi.suspend as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
+    const { onReload } = renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '테넌트 정지' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'Acme을 정지할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /확인을 위해 slug/ }), { target: { value: 'acme' } });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '정지' })); });
+    expect(within(dlg).getByText('정지하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog', { name: 'Acme을 정지할까요?' })).toBeInTheDocument();
+    expect(onReload).not.toHaveBeenCalled();
+    expect(screen.queryByText('정지 실패')).toBeNull();
   });
   it('취소하면 다시 열 때 입력이 초기화된다', () => {
     renderPage();
@@ -186,12 +204,13 @@ describe('테넌트 정지 / 정지 해제', () => {
     fireEvent.click(screen.getByRole('button', { name: '더보기' }));
     expect(screen.queryByRole('menuitem', { name: '테넌트 정지' })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: '정지 해제' }));
-    const dlg = screen.getByRole('dialog', { name: '정지 해제' });
+    const dlg = screen.getByRole('alertdialog', { name: '정지 해제' });
     expect(within(dlg).getByText(/이 테넌트의 정지를 해제하시겠습니까\?/)).toBeInTheDocument();
+    expect(within(dlg).getByText(/패스키 등록·인증이 다시 허용됩니다/)).toBeInTheDocument();
     await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '정지 해제' })); });
     expect(tenantsApi.activate).toHaveBeenCalledWith('t-1');
     expect(onReload).toHaveBeenCalled();
-    expect(screen.queryByRole('dialog', { name: '정지 해제' })).toBeNull();
+    expect(screen.queryByRole('alertdialog', { name: '정지 해제' })).toBeNull();
   });
   it('정지 해제 취소는 호출하지 않는다', () => {
     renderPage({ over: { status: 'SUSPENDED' } });
@@ -208,7 +227,7 @@ describe('편집 후 tenant 셸 갱신 (M5)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'WEBAUTHN 저장 시뮬레이션' }));
     expect(onReload).toHaveBeenCalledTimes(1);
   });
-  it('API 키 발급·회전·회수 후 onReload — 탭 점과 키 수가 갱신된다', () => {
+  it('API 키 발급·회전·회수 후 onReload — 탭 배지와 키 수가 갱신된다', () => {
     const { onReload } = renderPage({ tab: 'apikeys' });
     fireEvent.click(screen.getByRole('button', { name: 'APIKEYS 발급 시뮬레이션' }));
     expect(onReload).toHaveBeenCalledTimes(1);

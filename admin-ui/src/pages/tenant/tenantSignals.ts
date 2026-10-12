@@ -1,5 +1,5 @@
 // admin-ui/src/pages/tenant/tenantSignals.ts
-// Tenant 상세 헤더의 탭 점 배지·개요 KPI 가 쓰는 순수 계산 함수.
+// Tenant 상세 헤더의 탭 "확인 필요 N" 배지·개요 KPI 가 쓰는 순수 계산 함수.
 import type { AaguidPolicy, ApiKey } from '@/api/designTypes';
 import type { ChainOverview } from '@/api/auditChainMonitor';
 import { EXPIRY_WARN_DAYS } from '@/lib/apiKeyExpiry'; // Task 16 에서 생성
