@@ -1,17 +1,27 @@
 // admin-ui/src/pages/settings/AccountTab.tsx
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { mfaApi, type EnrollResponse } from '@/api/mfa';
 import { getMe } from '@/api/client';
 import { ApiError, type Me } from '@/api/types';
 import { QrCode } from '@/shell/QrCode';
 import { kstDate } from '@/lib/kst';
+import { describeError } from '@/lib/describeError';
 import { illustrations } from '@/assets/illustrations';
-import { Badge, Button, Dialog, OtpInput, SecretBox, Stepper, useToast, useUnsavedGuard, type StepState } from '@/ui';
+import { Alert, Badge, Button, Dialog, OtpInput, SecretBox, Stepper, useToast, useUnsavedGuard, type StepState } from '@/ui';
 import { KvList, type KvItem } from '@/pages/tenant/KvList';
 import { RecoveryCodesModal } from './RecoveryCodesModal';
 
 function sanitizeCode(v: string): string {
   return v.replace(/\D/g, '').slice(0, 6);
+}
+
+const CODE_MISMATCH = '코드가 맞지 않습니다. 앱에 표시된 새 코드(30초마다 바뀜)를 입력하세요.';
+
+/** OTP 확인 실패 문구. 4xx 는 코드 불일치, 그 밖(5xx·네트워크)은 쉬운 오류 문구. 토스트 없이 입력칸 아래에만 보인다. */
+function codeErrorText(e: unknown): string {
+  if (e instanceof ApiError && e.httpStatus < 500) return CODE_MISMATCH;
+  const info = describeError(e);
+  return `${info.title}. ${info.detail}`;
 }
 
 /** 켜기 다이얼로그(1·2단계)의 진행 표시. 3단계(복구 코드)는 별도 alertdialog 로 넘어간다. */
@@ -30,6 +40,8 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
   // enroll flow state
   const [enroll, setEnroll] = useState<EnrollResponse | null>(null);
   const [enrollCode, setEnrollCode] = useState('');
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [enrollFocusKey, setEnrollFocusKey] = useState(0);
   const [enrolling, setEnrolling] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
@@ -42,7 +54,9 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
   // disable flow state
   const [disableOpen, setDisableOpen] = useState(false);
   const [disableCode, setDisableCode] = useState('');
+  const [disableError, setDisableError] = useState<string | null>(null);
   const [disabling, setDisabling] = useState(false);
+  const disableInputRef = useRef<HTMLInputElement>(null);
 
   async function startEnroll() {
     setEnrolling(true);
@@ -50,9 +64,10 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
       const res = await mfaApi.enroll();
       setEnroll(res);
       setEnrollCode('');
+      setEnrollError(null);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ kind: 'err', title: '2단계 인증 시작 실패', message: msg });
+      const info = describeError(e);
+      toast({ kind: 'err', title: '2단계 인증을 시작하지 못했습니다', message: `${info.title}. ${info.detail}` });
     } finally {
       setEnrolling(false);
     }
@@ -61,6 +76,12 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
   function cancelEnroll() {
     setEnroll(null);
     setEnrollCode('');
+    setEnrollError(null);
+  }
+
+  function changeEnrollCode(v: string) {
+    setEnrollCode(v);
+    if (enrollError) setEnrollError(null);
   }
 
   async function confirmEnroll() {
@@ -69,6 +90,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
       const res = await mfaApi.confirm(enrollCode);
       setEnroll(null);
       setEnrollCode('');
+      setEnrollError(null);
       // 복구 코드는 1회만 표시 — me 갱신 실패와 무관하게 먼저 보여 준다.
       if (res.recoveryCodes && res.recoveryCodes.length > 0) {
         setRecoveryCodes(res.recoveryCodes);
@@ -80,13 +102,10 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
         toast({ kind: 'warn', title: '계정 정보를 새로고침하지 못했습니다.', message: '페이지를 새로고침해 주세요.' });
       }
     } catch (e: unknown) {
+      // 오류는 입력칸 아래에만(토스트와 중복하지 않음). 코드를 비우고 첫 칸으로 포커스를 돌려 바로 다시 입력하게 한다.
       setEnrollCode('');
-      if (e instanceof ApiError) {
-        toast({ kind: 'err', title: '코드가 올바르지 않습니다.' });
-      } else {
-        const msg = e instanceof Error ? e.message : String(e);
-        toast({ kind: 'err', title: '2단계 인증 확인 실패', message: msg });
-      }
+      setEnrollError(codeErrorText(e));
+      setEnrollFocusKey((k) => k + 1);
     } finally {
       setConfirming(false);
     }
@@ -94,6 +113,7 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
 
   function openDisable() {
     setDisableCode('');
+    setDisableError(null);
     setDisableOpen(true);
   }
 
@@ -101,31 +121,29 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
     setDisabling(true);
     try {
       await mfaApi.disable(disableCode);
-      setDisableOpen(false);
-      setDisableCode('');
-      onMeChange(await getMe());
-      toast({ kind: 'warn', title: '2단계 인증이 꺼졌습니다.' });
     } catch (e: unknown) {
-      setDisableCode('');
-      if (e instanceof ApiError) {
-        toast({ kind: 'err', title: '코드가 올바르지 않습니다.' });
-      } else {
-        const msg = e instanceof Error ? e.message : String(e);
-        toast({ kind: 'err', title: '2단계 인증 끄기 실패', message: msg });
-      }
-    } finally {
+      // 입력값은 남기고 전체 선택 — 새 코드를 치면 바로 덮어쓴다. 토스트로 따로 알리지 않는다.
+      // 요청 중에는 입력이 읽기 전용이라 늦은 실패가 다시 친 값을 덮을 일이 없다.
+      setDisableError(codeErrorText(e));
       setDisabling(false);
+      disableInputRef.current?.focus();
+      disableInputRef.current?.select();
+      return;
+    }
+    setDisabling(false);
+    setDisableOpen(false);
+    setDisableCode('');
+    toast({ kind: 'warn', title: '2단계 인증이 꺼졌습니다.' });
+    try {
+      onMeChange(await getMe());
+    } catch {
+      toast({ kind: 'warn', title: '계정 정보를 새로고침하지 못했습니다.', message: '페이지를 새로고침해 주세요.' });
     }
   }
 
   // §6 ④ — 서버가 내려줄 때만 표시(null/undefined 면 줄 자체를 렌더하지 않음)
   const enrolledAt = me.mfaEnrolledAt != null ? kstDate(me.mfaEnrolledAt) : null;
-  const remaining = me.recoveryCodesRemaining != null ? me.recoveryCodesRemaining : null;
-  const infoRows: KvItem[] = [
-    ...(enrolledAt !== null ? [{ k: '등록일', v: enrolledAt }] : []),
-    ...(remaining !== null ? [{ k: '남은 복구 코드', v: `${remaining} / 10` }] : []),
-  ];
-  const hasInfoRows = infoRows.length > 0;
+  const infoRows: KvItem[] = enrolledAt !== null ? [{ k: '등록일', v: enrolledAt }] : [];
 
   return (
     <div className="stack-4">
@@ -161,8 +179,12 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
 
           {me.mfaEnabled && (
             <div className="stack-3" style={{ gap: 14 }}>
-              {hasInfoRows && <KvList items={infoRows} keyWidth={140} />}
-              <div style={hasInfoRows ? { borderTop: '1px solid var(--line-soft)', paddingTop: 14 } : undefined}>
+              {infoRows.length > 0 && <KvList items={infoRows} keyWidth={140} />}
+              {/* 남은 개수·재발급은 서버 지원 후(스펙 §8). 지금은 보관 안내만. */}
+              <Alert tone="info" title="복구 코드 보관">
+                복구 코드는 2단계 인증을 켤 때 한 번만 표시됩니다. 휴대폰을 잃어버렸을 때 로그인할 수 있는 유일한 방법이니 비밀번호 관리자 등 안전한 곳에 보관하세요. 코드를 모두 잃어버렸다면 운영자에게 MFA 초기화를 요청하세요.
+              </Alert>
+              <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 14 }}>
                 <span className="t-over" style={{ color: 'var(--bad)' }}>위험 영역</span>
                 <div className="row" style={{ gap: 12, marginTop: 6 }}>
                   <span className="card__sub" style={{ flex: '1 1 220px' }}>
@@ -205,8 +227,9 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
                 <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 16 }}>
                   <span className="label">앱에 표시된 인증 코드</span>
                   <div style={{ display: 'inline-flex' }}>
-                    <OtpInput value={enrollCode} onChange={setEnrollCode} ariaLabel="인증 코드" disabled={confirming} />
+                    <OtpInput value={enrollCode} onChange={changeEnrollCode} ariaLabel="인증 코드" disabled={confirming} focusKey={enrollFocusKey} />
                   </div>
+                  {enrollError && <p className="field__error" role="alert">{enrollError}</p>}
                 </div>
               </div>
               <div className="dialog__foot">
@@ -237,15 +260,20 @@ export default function AccountTab({ me, onMeChange }: { me: Me; onMeChange: (m:
         <div>
           <label className="label" htmlFor="mfa-disable-code">인증 코드</label>
           <input
+            ref={disableInputRef}
             id="mfa-disable-code"
             className="input mono"
             inputMode="numeric"
             autoComplete="one-time-code"
             placeholder="000000"
             value={disableCode}
-            onChange={(e) => setDisableCode(sanitizeCode(e.target.value))}
+            aria-invalid={disableError ? true : undefined}
+            aria-describedby={disableError ? 'mfa-disable-err' : undefined}
+            readOnly={disabling}
+            onChange={(e) => { if (disabling) return; setDisableCode(sanitizeCode(e.target.value)); if (disableError) setDisableError(null); }}
             style={{ maxWidth: 200, letterSpacing: '0.2em' }}
           />
+          {disableError && <p id="mfa-disable-err" className="field__error" role="alert">{disableError}</p>}
         </div>
       </Dialog>
 

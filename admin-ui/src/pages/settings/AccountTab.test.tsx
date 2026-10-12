@@ -20,6 +20,8 @@ const off: Me = { email: 'a@x.com', role: 'RP_ADMIN', tenantIds: ['t1'], mfaEnab
 const on: Me = { ...off, mfaEnabled: true };
 const CODES = ['AAAA-BBBB', 'CCCC-DDDD', 'EEEE-FFFF', 'GGGG-HHHH', 'JJJJ-KKKK', 'LLLL-MMMM', 'NNNN-PPPP', 'QQQQ-RRRR', 'SSSS-TTTT', 'UUUU-VVVV'];
 
+const CODE_MISMATCH = '코드가 맞지 않습니다. 앱에 표시된 새 코드(30초마다 바뀜)를 입력하세요.';
+
 const renderHost = (ui: ReactElement) => renderWithDataRouter(ui, { initialPath: '/settings?tab=account' });
 const m = <T,>(fn: T) => fn as unknown as ReturnType<typeof vi.fn>;
 
@@ -90,7 +92,7 @@ describe('AccountTab — MFA 꺼짐', () => {
     expect(screen.queryByText('2단계 인증 확인 실패')).toBeNull();
   });
 
-  it('잘못된 코드면 코드가 지워지고 다이얼로그는 유지', async () => {
+  it('잘못된 코드면 다이얼로그 안 인라인 오류 + 코드 지움 + 첫 칸 포커스, 토스트 없음', async () => {
     const { ApiError } = await import('@/api/types');
     m(mfaApi.confirm).mockRejectedValue(new ApiError(401, 'invalid_code', 'invalid_code'));
     renderHost(<Host initial={off} />);
@@ -98,9 +100,26 @@ describe('AccountTab — MFA 꺼짐', () => {
     const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
     fireEvent.paste(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' }), { clipboardData: { getData: () => '000000' } });
     fireEvent.click(within(dlg).getByRole('button', { name: '확인 → 복구 코드' }));
-    expect(await screen.findByText('코드가 올바르지 않습니다.')).toBeInTheDocument();
-    expect(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' })).toHaveValue('');
+    expect(await within(dlg).findByText(CODE_MISMATCH)).toBeInTheDocument();
+    const first = within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' });
+    expect(first).toHaveValue('');
+    await waitFor(() => expect(document.activeElement).toBe(first));
     expect(screen.getByRole('dialog', { name: '2단계 인증 켜기' })).toBeInTheDocument();
+    expect(document.querySelector('.toast')).toBeNull();
+    // 다시 입력하면 오류가 사라진다
+    fireEvent.change(first, { target: { value: '1' } });
+    expect(within(dlg).queryByText(CODE_MISMATCH)).toBeNull();
+  });
+
+  it('네트워크 오류는 코드 불일치가 아니라 쉬운 오류 문구로 인라인 표시', async () => {
+    m(mfaApi.confirm).mockRejectedValue(new TypeError('Failed to fetch'));
+    renderHost(<Host initial={off} />);
+    fireEvent.click(screen.getByRole('button', { name: '2단계 인증 켜기' }));
+    const dlg = await screen.findByRole('dialog', { name: '2단계 인증 켜기' });
+    fireEvent.paste(within(dlg).getByRole('textbox', { name: '인증 코드 1번째 자리' }), { clipboardData: { getData: () => '123456' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '확인 → 복구 코드' }));
+    expect(await within(dlg).findByText(/네트워크에 연결할 수 없습니다/)).toBeInTheDocument();
+    expect(within(dlg).queryByText(CODE_MISMATCH)).toBeNull();
   });
 
   it('취소하면 다이얼로그가 닫히고 confirm 을 부르지 않는다', async () => {
@@ -122,12 +141,14 @@ describe('AccountTab — MFA 켜짐', () => {
     expect(screen.getByText('위험 영역')).toBeInTheDocument();
   });
 
-  it('optional rows shown when defined', () => {
+  it('등록일은 서버 값이 있을 때만, 복구 코드는 개수 대신 보관 안내', () => {
     renderHost(<Host initial={{ ...on, mfaEnrolledAt: '2026-08-31T20:00:00Z', recoveryCodesRemaining: 7 }} />);
     expect(screen.getByText('등록일')).toBeInTheDocument();
     expect(screen.getByText('2026-09-01')).toBeInTheDocument(); // UTC 08-31 20:00 = KST 09-01 05:00
-    expect(screen.getByText('남은 복구 코드')).toBeInTheDocument();
-    expect(screen.getByText('7 / 10')).toBeInTheDocument();
+    expect(screen.queryByText('남은 복구 코드')).toBeNull();
+    expect(screen.queryByText('7 / 10')).toBeNull();
+    expect(screen.getByText('복구 코드 보관')).toBeInTheDocument();
+    expect(screen.getByText(/한 번만 표시됩니다/)).toBeInTheDocument();
   });
 
   it('2단계 인증 끄기: alertdialog, 6자리 입력 후 disable(code)', async () => {
@@ -143,6 +164,48 @@ describe('AccountTab — MFA 켜짐', () => {
     await waitFor(() => expect(mfaApi.disable).toHaveBeenCalledWith('123456'));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(await screen.findByText('꺼짐')).toBeInTheDocument();
+  });
+
+  it('끄기 코드가 틀리면 다이얼로그 안 인라인 오류, 입력값 유지 + 전체 선택 + 포커스, 토스트 없음', async () => {
+    const { ApiError } = await import('@/api/types');
+    m(mfaApi.disable).mockRejectedValue(new ApiError(401, 'invalid_code', 'invalid_code'));
+    renderHost(<Host initial={on} />);
+    fireEvent.click(screen.getByRole('button', { name: '2단계 인증 끄기' }));
+    const dlg = screen.getByRole('alertdialog', { name: '2단계 인증 끄기' });
+    const input = within(dlg).getByLabelText('인증 코드') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '123456' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '끄기' }));
+    expect(await within(dlg).findByText(CODE_MISMATCH)).toBeInTheDocument();
+    expect(input).toHaveValue('123456');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(6);
+    expect(document.querySelector('.toast')).toBeNull();
+    expect(screen.getByRole('alertdialog', { name: '2단계 인증 끄기' })).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '65432' } });
+    expect(within(dlg).queryByText(CODE_MISMATCH)).toBeNull();
+  });
+
+  it('끄기 요청 중에는 코드 입력이 잠기고(읽기 전용), 늦은 실패가 다시 친 값을 덮지 않는다', async () => {
+    const { ApiError } = await import('@/api/types');
+    let rejectDisable!: (e: unknown) => void;
+    m(mfaApi.disable).mockReturnValue(new Promise((_, rej) => { rejectDisable = rej; }));
+    renderHost(<Host initial={on} />);
+    fireEvent.click(screen.getByRole('button', { name: '2단계 인증 끄기' }));
+    const dlg = screen.getByRole('alertdialog', { name: '2단계 인증 끄기' });
+    const input = within(dlg).getByLabelText('인증 코드') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '123456' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '끄기' }));
+    await waitFor(() => expect(mfaApi.disable).toHaveBeenCalledTimes(1));
+    expect(input).toHaveAttribute('readonly');
+    expect(within(dlg).getByRole('button', { name: '취소' })).toBeDisabled();
+    fireEvent.change(input, { target: { value: '999999' } }); // 잠겨 있어도 이벤트가 오면 무시
+    expect(input).toHaveValue('123456');
+    await act(async () => { rejectDisable(new ApiError(401, 'invalid_code', 'invalid_code')); await new Promise((r) => setTimeout(r, 0)); });
+    expect(within(dlg).getByText(CODE_MISMATCH)).toBeInTheDocument();
+    expect(input).not.toHaveAttribute('readonly');
+    expect(input).toHaveValue('123456');
   });
 });
 
