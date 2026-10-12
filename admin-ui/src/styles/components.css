@@ -60,6 +60,9 @@ a:hover { color: var(--brand-900); }
 .chain-card--pending .chain-card__dot { background: var(--faint); }
 .chain-card--pending .chain-card__title { color: var(--mute); }
 .chain-card--pending { border-color: var(--line); background: var(--canvas); }
+.chain-card--warn { border-color: var(--warn-line); background: var(--warn-soft); cursor: default; }
+.chain-card--warn .chain-card__dot { background: var(--warn-dot); }
+.chain-card--warn .chain-card__title { color: var(--warn); }
 .sidebar__copy { font-size: 11px; color: var(--mute); padding: 0 8px; }
 
 /* ── topbar ─────────────────────────── */
