@@ -62,7 +62,7 @@ export default function SettingsPage({ me, onMeChange }: { me: Me; onMeChange: (
       </div>
 
       {tab === 'account' && <AccountTab me={me} onMeChange={onMeChange} />}
-      {platform && tab === 'admins' && <AdminUsersTab onPendingCountChange={setPending} />}
+      {platform && tab === 'admins' && <AdminUsersTab me={me} onPendingCountChange={setPending} />}
       {platform && tab === 'mds' && <MdsStatusTab />}
       {platform && tab === 'system' && <SystemInfoTab />}
       {platform && tab === 'security' && <SecurityPolicyTab />}

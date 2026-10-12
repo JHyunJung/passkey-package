@@ -5,8 +5,9 @@ import { adminUsersApi, type AdminUserView } from '@/api/adminUsers';
 import { signupRequestsApi, type SignupRequestView } from '@/api/signupRequests';
 import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
-import { ApiError } from '@/api/types';
+import { ApiError, type Me } from '@/api/types';
 import { illustrations } from '@/assets/illustrations';
+import { eulReul } from '@/lib/josa';
 import { describeError } from '@/lib/describeError';
 import { useLoad } from '@/lib/useLoad';
 import {
@@ -74,13 +75,17 @@ export function TenantCell({ u, names }: { u: AdminUserView; names: Record<strin
 
 // ── AdminUsersTab ─────────────────────────────────────────────────────────────
 
-export default function AdminUsersTab({ onPendingCountChange }: { onPendingCountChange?: (n: number) => void } = {}) {
+export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<Me, 'email'>; onPendingCountChange?: (n: number) => void }) {
   const users = useLoad(() => adminUsersApi.list(), []);
   const requests = useLoad(() => signupRequestsApi.list(), []);
   // 이름 조인용 — 실패해도 id 꼬리로 보이므로 오류 화면을 띄우지 않는다.
   const tenants = useLoad(() => tenantsApi.list(), []);
   const [approving, setApproving] = useState<SignupRequestView | null>(null);
   const [rejecting, setRejecting] = useState<SignupRequestView | null>(null);
+  const [suspending, setSuspending] = useState<AdminUserView | null>(null);
+  // 정지·활성화·되돌리기 처리 중인 운영자 id — 행 버튼을 "… 중…"으로 비활성. ref 는 같은 틱의 중복 호출(되돌리기 토스트 연타)을 막는다.
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const inflight = useRef(new Set<string>());
   const [filter, setFilter] = useState<OperatorFilter>('all');
   const [query, setQuery] = useState('');
   const toast = useToast();
@@ -123,24 +128,53 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
     void requests.reload();
   }
 
-  async function handleSuspend(u: AdminUserView) {
+  /** 사용자별 중복 실행 방지. 이미 처리 중이면 아무것도 하지 않는다. */
+  async function guarded(id: string, run: () => Promise<void>) {
+    if (inflight.current.has(id)) return;
+    inflight.current.add(id);
+    setBusyId(id);
     try {
-      await adminUsersApi.suspend(u.id);
-      toast({ kind: 'warn', title: '운영자가 정지되었습니다.', message: u.email });
-      void users.reload();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '정지 실패', message: describeError(e).title });
+      await run();
+    } finally {
+      inflight.current.delete(id);
+      setBusyId(null);
     }
   }
 
-  async function handleActivate(u: AdminUserView) {
-    try {
-      await adminUsersApi.activate(u.id);
-      toast({ kind: 'ok', title: '운영자가 재활성화되었습니다.', message: u.email });
+  /** L1 확인 후 실행. 실패는 throw 해 다이얼로그 안에 보이고, 성공하면 되돌리기(= 활성화) 토스트. */
+  async function confirmSuspend(u: AdminUserView) {
+    await guarded(u.id, () => adminUsersApi.suspend(u.id));
+    toast({
+      kind: 'ok',
+      title: `${u.email} 운영자를 정지했습니다.`,
+      message: '다음 요청부터 콘솔에 접근할 수 없습니다.',
+      action: { label: '되돌리기', onClick: () => void undoSuspend(u) },
+    });
+    void users.reload();
+  }
+
+  async function undoSuspend(u: AdminUserView) {
+    await guarded(u.id, async () => {
+      try {
+        await adminUsersApi.activate(u.id);
+        toast({ kind: 'ok', title: `${u.email} 운영자의 정지를 되돌렸습니다.` });
+      } catch (e: unknown) {
+        toast({ kind: 'err', title: '정지를 되돌리지 못했습니다', message: `${describeError(e).title}. 목록에서 “활성화”를 눌러 다시 시도하세요.` });
+      }
       void users.reload();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '활성화 실패', message: describeError(e).title });
-    }
+    });
+  }
+
+  async function handleActivate(u: AdminUserView) {
+    await guarded(u.id, async () => {
+      try {
+        await adminUsersApi.activate(u.id);
+        toast({ kind: 'ok', title: '운영자를 다시 활성화했습니다.', message: u.email });
+        void users.reload();
+      } catch (e: unknown) {
+        toast({ kind: 'err', title: '활성화하지 못했습니다', message: describeError(e).title });
+      }
+    });
   }
 
   const names: Record<string, string> = {};
@@ -149,6 +183,14 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
   const activeCount = list.filter((u) => u.status === 'ACTIVE').length;
   const q = query.trim().toLowerCase();
   const visible = list.filter((u) => matchesOperator(u, filter, q));
+
+  // 서버는 본인·마지막 PLATFORM 정지를 409 로 막지 않는다(스펙 §8) — 프론트에서 미리 비활성화하고 이유를 보인다.
+  const activePlatform = list.filter((u) => u.role === 'PLATFORM_OPERATOR' && u.status === 'ACTIVE').length;
+  function suspendBlock(u: AdminUserView): string | null {
+    if (u.email.toLowerCase() === me.email.toLowerCase()) return '본인 계정은 정지할 수 없음';
+    if (u.role === 'PLATFORM_OPERATOR' && u.status === 'ACTIVE' && activePlatform <= 1) return '마지막 활성 PLATFORM 운영자';
+    return null;
+  }
 
   // 다시 읽기에 실패해 낡은 목록이 남아 있으면 행 단위 처리는 막는다(이미 처리된 항목을 다시 처리하지 않도록).
   const usersStale = users.status === 'failed' && !!users.data;
@@ -184,10 +226,27 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
     { key: 'status', header: '상태', render: (u) => <StatusBadge status={u.status} /> },
     {
       key: 'act', header: '액션',
-      render: (u) =>
-        u.status === 'ACTIVE' ? <Button size="sm" variant="danger" onClick={() => void handleSuspend(u)} disabled={usersStale} title={usersStale ? STALE_REASON : undefined}>정지</Button>
-        : u.status === 'SUSPENDED' ? <Button size="sm" onClick={() => void handleActivate(u)} disabled={usersStale} title={usersStale ? STALE_REASON : undefined}>활성화</Button>
-        : null,
+      render: (u) => {
+        if (busyId === u.id) {
+          return <Button size="sm" disabled>{u.status === 'ACTIVE' ? '정지 중…' : '활성화 중…'}</Button>;
+        }
+        const staleTitle = usersStale ? STALE_REASON : undefined;
+        if (u.status === 'SUSPENDED') {
+          return <Button size="sm" onClick={() => void handleActivate(u)} disabled={usersStale} title={staleTitle}>활성화</Button>;
+        }
+        if (u.status !== 'ACTIVE') return null;
+        const why = suspendBlock(u);
+        if (why) {
+          const id = `suspend-why-${u.id}`;
+          return (
+            <div className="col" style={{ gap: 2, alignItems: 'flex-start' }}>
+              <Button size="sm" disabled aria-describedby={id}>정지…</Button>
+              <span id={id} className="hint" style={CAPTION}>{why}</span>
+            </div>
+          );
+        }
+        return <Button size="sm" variant="danger" onClick={() => setSuspending(u)} disabled={usersStale} title={staleTitle}>정지…</Button>;
+      },
     },
   ];
 
@@ -299,6 +358,30 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
       >
         {rejecting && (
           <p className="card__sub" style={{ margin: 0 }}>{rejecting.email}의 요청을 거절합니다. 요청자는 다시 가입 요청을 보낼 수 있습니다.</p>
+        )}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={suspending !== null}
+        onClose={() => setSuspending(null)}
+        level="L1"
+        title={suspending ? `${suspending.email}${eulReul(suspending.email)} 정지할까요?` : ''}
+        verb="정지"
+        onConfirm={() => confirmSuspend(suspending!)}
+      >
+        {suspending && (
+          <>
+            <dl className="kv" style={{ gridTemplateColumns: '80px minmax(0, 1fr)' }}>
+              <dt>이메일</dt>
+              <dd>{suspending.email}</dd>
+              <dt>역할</dt>
+              <dd className="row" style={{ gap: 6 }}>
+                {suspending.role === 'PLATFORM_OPERATOR' ? 'PLATFORM' : 'RP_ADMIN'} · <TenantCell u={suspending} names={names} />
+              </dd>
+            </dl>
+            <p className="card__sub" style={{ margin: 0 }}>다음 요청부터 콘솔에 접근할 수 없고, 다시 로그인할 수도 없습니다.</p>
+            <p className="hint" style={{ margin: 0 }}>계정과 기록은 남습니다. 목록의 “활성화”로 언제든 되돌릴 수 있습니다.</p>
+          </>
         )}
       </ConfirmDialog>
     </div>

@@ -1,6 +1,6 @@
 // admin-ui/src/pages/settings/AdminUsersTab.test.tsx
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within, act } from '@testing-library/react';
 import { ToastHost } from '@/ui';
 
 vi.mock('@/api/adminUsers', () => ({
@@ -53,8 +53,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function renderTab(props: { onPendingCountChange?: (n: number) => void } = {}) {
-  return render(<ToastHost><AdminUsersTab {...props} /></ToastHost>);
+function renderTab(props: { me?: { email: string }; onPendingCountChange?: (n: number) => void } = {}) {
+  return render(<ToastHost><AdminUsersTab me={{ email: 'me@crosscert.com' }} {...props} /></ToastHost>);
 }
 const approveDialog = () => screen.getByRole('dialog', { name: '가입 요청 승인' });
 
@@ -317,7 +317,8 @@ describe('AdminUsersTab operators', () => {
     renderTab();
     await waitFor(() => screen.getByText('rp@acme.com'));
     const rpRow = within(table()).getByText('rp@acme.com').closest('tr')!;
-    fireEvent.click(within(rpRow).getByRole('button', { name: '정지' }));
+    fireEvent.click(within(rpRow).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
     await waitFor(() => expect(adminUsersApi.suspend).toHaveBeenCalledWith('u-rp-000000002'));
     const goneRow = within(table()).getByText('gone@globex.com').closest('tr')!;
     fireEvent.click(within(goneRow).getByRole('button', { name: '활성화' }));
@@ -383,7 +384,8 @@ describe('AdminUsersTab V3 — 로드 상태 · Tenant 이름', () => {
     await screen.findByText('rp@acme.com');
     mock(adminUsersApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
     const rpRow = rowOf('rp@acme.com');
-    fireEvent.click(within(rpRow).getByRole('button', { name: '정지' }));
+    fireEvent.click(within(rpRow).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
     expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
     expect(rowOf('rp@acme.com')).toBeInTheDocument();
     expect(screen.queryByText('운영자 목록을 불러오지 못했습니다')).toBeNull();
@@ -393,16 +395,17 @@ describe('AdminUsersTab V3 — 로드 상태 · Tenant 이름', () => {
     renderTab();
     await screen.findByText('rp@acme.com');
     mock(adminUsersApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
-    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' }));
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
     expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
-    const stop = within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' });
+    const stop = within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' });
     expect(stop).toBeDisabled();
     expect(stop).toHaveAttribute('title', '목록을 새로 고친 뒤 다시 시도하세요');
     expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' })).toBeDisabled();
     expect(screen.getByRole('textbox', { name: '운영자 검색' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await waitFor(() => expect(screen.queryByText('다시 확인하지 못했습니다')).toBeNull());
-    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' })).toBeEnabled();
+    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' })).toBeEnabled();
     expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' })).toBeEnabled();
   });
 
@@ -419,10 +422,115 @@ describe('AdminUsersTab V3 — 로드 상태 · Tenant 이름', () => {
     const rej = screen.getByRole('button', { name: '거절…' });
     expect(rej).toBeDisabled();
     expect(rej).toHaveAttribute('title', '목록을 새로 고친 뒤 다시 시도하세요');
-    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' })).toBeEnabled();
+    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await waitFor(() => expect(screen.queryByText('다시 확인하지 못했습니다')).toBeNull());
     expect(screen.getByRole('button', { name: '승인…' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '거절…' })).toBeEnabled();
+  });
+});
+
+describe('AdminUsersTab V3 — 운영자 정지', () => {
+  beforeEach(() => { mock(adminUsersApi.list).mockResolvedValue(USERS); });
+  const rowOf = (email: string) => within(screen.getByRole('table')).getByText(email).closest('tr')!;
+
+  it('정지… → L1 확인(기본 포커스 취소) → 정지 → 되돌리기 토스트 → 기존 활성화 API', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    expect(adminUsersApi.suspend).not.toHaveBeenCalled();
+    const dlg = screen.getByRole('alertdialog', { name: 'rp@acme.com을 정지할까요?' });
+    expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
+    expect(within(dlg).getByText('Acme')).toBeInTheDocument();
+    expect(within(dlg).getByText(/언제든 되돌릴 수 있습니다/)).toBeInTheDocument();
+    fireEvent.click(within(dlg).getByRole('button', { name: '정지' }));
+    await waitFor(() => expect(adminUsersApi.suspend).toHaveBeenCalledWith('u-rp-000000002'));
+    expect(await screen.findByText('rp@acme.com 운영자를 정지했습니다.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
+    await waitFor(() => expect(adminUsersApi.activate).toHaveBeenCalledWith('u-rp-000000002'));
+    expect(await screen.findByText('rp@acme.com 운영자의 정지를 되돌렸습니다.')).toBeInTheDocument();
+  });
+
+  it('정지 실패는 다이얼로그 안 인라인 오류, 다이얼로그 유지, 되돌리기 토스트 없음', async () => {
+    mock(adminUsersApi.suspend).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'rp@acme.com을 정지할까요?' });
+    fireEvent.click(within(dlg).getByRole('button', { name: '정지' }));
+    expect(await within(dlg).findByText('정지하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '되돌리기' })).toBeNull();
+  });
+
+  it('본인 계정과 마지막 활성 PLATFORM 운영자는 정지 버튼 비활성 + 사유', async () => {
+    renderTab({ me: { email: 'rp@acme.com' } });
+    await screen.findByText('rp@acme.com');
+    const self = within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' });
+    expect(self).toBeDisabled();
+    expect(self).toHaveAccessibleDescription('본인 계정은 정지할 수 없음');
+    const last = within(rowOf('ops@crosscert.com')).getByRole('button', { name: '정지…' });
+    expect(last).toBeDisabled();
+    expect(last).toHaveAccessibleDescription('마지막 활성 PLATFORM 운영자');
+  });
+
+  it('활성 PLATFORM 운영자가 둘 이상이면 PLATFORM 도 정지할 수 있다', async () => {
+    mock(adminUsersApi.list).mockResolvedValue([...USERS, { ...USERS[0], id: 'u-platform-0002', email: 'ops2@crosscert.com' }]);
+    renderTab();
+    await screen.findByText('ops2@crosscert.com');
+    expect(within(rowOf('ops@crosscert.com')).getByRole('button', { name: '정지…' })).toBeEnabled();
+  });
+
+  it('활성화 처리 중에는 버튼이 "활성화 중…"으로 비활성이고 연타해도 한 번만 호출', async () => {
+    let resolve!: () => void;
+    mock(adminUsersApi.activate).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+    renderTab();
+    await screen.findByText('gone@globex.com');
+    const btn = within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화 중…' })).toBeDisabled();
+    expect(adminUsersApi.activate).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(); });
+    await waitFor(() => expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' })).toBeEnabled());
+  });
+
+  it('되돌리기 연타는 활성화를 한 번만 호출', async () => {
+    let resolve!: () => void;
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
+    const undo = await screen.findByRole('button', { name: '되돌리기' });
+    mock(adminUsersApi.activate).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+    fireEvent.click(undo);
+    fireEvent.click(undo);
+    expect(adminUsersApi.activate).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(); });
+    expect(await screen.findByText('rp@acme.com 운영자의 정지를 되돌렸습니다.')).toBeInTheDocument();
+  });
+
+  it('되돌리기 실패는 서버 원문 없이 describeError 문구로 알린다', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
+    const undo = await screen.findByRole('button', { name: '되돌리기' });
+    mock(adminUsersApi.activate).mockRejectedValue(new ApiError(500, 'C999', 'SECRET-RAW'));
+    fireEvent.click(undo);
+    expect(await screen.findByText('정지를 되돌리지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText(/서버가 잠시 응답하지 않습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/SECRET-RAW/)).toBeNull();
+  });
+
+  it('활성화 실패 토스트도 describeError 문구', async () => {
+    mock(adminUsersApi.activate).mockRejectedValue(new ApiError(500, 'C999', 'SECRET-RAW'));
+    renderTab();
+    await screen.findByText('gone@globex.com');
+    fireEvent.click(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' }));
+    expect(await screen.findByText('활성화하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('서버가 잠시 응답하지 않습니다')).toBeInTheDocument();
+    expect(screen.queryByText(/SECRET-RAW/)).toBeNull();
   });
 });
