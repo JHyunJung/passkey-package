@@ -30,3 +30,4 @@ export * from './SaveBar';
 export * from './useUnsavedGuard';
 export * from './LoadError';
 export * from './Skeleton';
+export * from './ConfirmDialog';
