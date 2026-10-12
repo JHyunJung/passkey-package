@@ -170,8 +170,9 @@ describe('CredentialsTab V2', () => {
     expect(api.list).toHaveBeenCalledTimes(1);
   });
 
-  it('회수 성공 뒤 목록 새로고침이 실패해도 회수 오류로 보이지 않고 목록 오류가 뜬다', async () => {
-    api.list.mockResolvedValueOnce(pageOf([cred('aaaa-11111111')])).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+  it('회수 성공 직후 다이얼로그는 닫히고, 목록 새로고침이 끝나길 기다리지 않는다', async () => {
+    let finishRefresh!: (v: ReturnType<typeof pageOf>) => void;
+    api.list.mockResolvedValueOnce(pageOf([cred('aaaa-11111111')])).mockReturnValueOnce(new Promise((r) => { finishRefresh = r; }));
     api.revoke.mockResolvedValue(undefined);
     renderTab();
     fireEvent.click(await screen.findByRole('button', { name: '회수 · …11111111' }));
@@ -179,8 +180,30 @@ describe('CredentialsTab V2', () => {
     fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '11111111' } });
     fireEvent.click(within(dlg).getByRole('button', { name: '회수' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(api.list).toHaveBeenCalledTimes(2);
     expect(await screen.findByText('Credential을 회수했습니다.')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Credential 목록을 불러오지 못했습니다');
+    await act(async () => { finishRefresh(pageOf([])); });
+  });
+
+  it('회수 성공 뒤 새로고침이 실패하면 기존 목록은 남기고 경고 + 다시 시도', async () => {
+    api.list.mockResolvedValueOnce(pageOf([cred('aaaa-11111111'), cred('bbbb-22222222')]))
+      .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'))
+      .mockResolvedValueOnce(pageOf([cred('bbbb-22222222')]));
+    api.revoke.mockResolvedValue(undefined);
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '회수 · …11111111' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '11111111' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '회수' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(await screen.findByText('Credential 목록을 새로 고치지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('user-aaaa-11111111')).toBeInTheDocument();
+    expect(screen.getByText('2건')).toBeInTheDocument();
+    expect(screen.queryByText('Credential 목록을 불러오지 못했습니다')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Credential 검색' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.queryByText('user-aaaa-11111111')).toBeNull());
+    expect(screen.queryByText('Credential 목록을 새로 고치지 못했습니다')).toBeNull();
   });
 
   it('표의 휴지통 버튼은 ACTIVE 행에만', async () => {

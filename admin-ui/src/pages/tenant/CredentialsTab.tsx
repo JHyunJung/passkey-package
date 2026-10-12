@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
 import {
-  Button, Card, ConfirmDialog, CopyBtn, DataTable, EmptyState, FilterChip, IconButton, LoadError, Pagination, RemovableChip,
+  Alert, Button, Card, ConfirmDialog, CopyBtn, DataTable, EmptyState, FilterChip, IconButton, LoadError, Pagination, RemovableChip,
   Segmented, Skeleton, StatusBadge, useToast, type Column,
 } from '@/ui';
 import { illustrations } from '@/assets/illustrations';
@@ -10,6 +10,7 @@ import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';
 import { kstToday } from '@/lib/kst';
 import { useLoad } from '@/lib/useLoad';
+import { describeError } from '@/lib/describeError';
 import type { Tenant, Credential } from '@/api/designTypes';
 import CredentialDetailDialog from './CredentialDetailDialog';
 import { KvList } from './KvList';
@@ -51,7 +52,9 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   const load = useLoad(() => credentialsApi.list(tenant.id, page, size, appliedQ || undefined), [tenant.id, page, size, appliedQ]);
   const items = useMemo(() => load.data?.items ?? [], [load.data]);
   const total = load.data?.total ?? 0;
-  const failed = load.status === 'failed';
+  // 이미 받은 목록이 있으면(새로고침 실패) 그대로 보이고 경고만 띄운다. 받은 게 없을 때만 전체 오류.
+  const failed = load.status === 'failed' && load.data === undefined;
+  const staleFailed = load.status === 'failed' && load.data !== undefined;
   const busy = load.status === 'loading' || load.reloading;
 
   // 경계를 넘은 이전/다음: 새 페이지가 도착하면 첫/마지막 항목을 고른다. 실패하면 대기만 지운다.
@@ -97,8 +100,8 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   async function handleRevoke(c: Credential) {
     await credentialsApi.revoke(tenant.id, c.credentialId);
     toast({ kind: 'ok', title: 'Credential을 회수했습니다.', message: `${tail(c.credentialId, 12)} · ${c.externalUserId}` });
-    // 회수는 이미 성공했다. 목록 새로고침 실패는 useLoad 가 목록 오류로 보이므로 여기서 다시 던지지 않는다.
-    await load.reload();
+    // 회수는 이미 성공했다. 다이얼로그는 바로 닫고, 목록 새로고침의 로딩·실패는 목록이 다룬다.
+    void load.reload();
   }
 
   function exportCsv() {
@@ -194,6 +197,15 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
             <span className="hint" style={{ margin: 0 }}>현재 페이지 안에서 거릅니다.</span>
           </div>
         )}
+        {staleFailed && (() => {
+          const info = describeError(load.error);
+          return (
+            <Alert tone="warn" title="Credential 목록을 새로 고치지 못했습니다"
+              actions={<Button size="sm" onClick={() => void load.reload()} disabled={load.reloading}>다시 시도</Button>}>
+              {info.title}. {info.detail} 아래 목록은 이전에 불러온 내용입니다.
+            </Alert>
+          );
+        })()}
         {failed
           ? <LoadError what="Credential 목록" error={load.error} onRetry={load.reload} retrying={load.reloading} />
           : load.status === 'loading'
