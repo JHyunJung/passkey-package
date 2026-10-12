@@ -10,7 +10,7 @@ import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';
 import { kstToday } from '@/lib/kst';
 import { useLoad } from '@/lib/useLoad';
-import { describeError } from '@/lib/describeError';
+import { ActionBlockedError, describeError } from '@/lib/describeError';
 import type { Tenant, Credential } from '@/api/designTypes';
 import CredentialDetailDialog from './CredentialDetailDialog';
 import { KvList } from './KvList';
@@ -20,6 +20,8 @@ import { applyClientFilter, authenticatorLabel, hasClientFilter, type StatusFilt
 const PAGE_SIZES = [50, 100, 200];
 const SEARCH_DEBOUNCE_MS = 300;
 const tail = (s: string, n: number) => s.slice(-n);
+/** 새로고침 실패로 목록이 이전 내용일 때 행 단위 변경을 막는 사유. */
+const STALE_REASON = '목록을 새로 고친 뒤 다시 시도하세요.';
 
 const TRANSPORT_LABELS: Record<string, string> = {
   internal: '내장', usb: 'USB', nfc: 'NFC', ble: '블루투스', hybrid: '휴대폰 연동', 'smart-card': '스마트카드',
@@ -106,6 +108,8 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
 
   /** ConfirmDialog 의 onConfirm — 실패하면 throw 해서 다이얼로그 안에 오류를 보인다. */
   async function handleRevoke(c: Credential) {
+    // 다이얼로그를 연 뒤 새로고침이 실패해 목록이 이전 내용이 됐다면 실행하지 않는다.
+    if (staleFailed) throw new ActionBlockedError(STALE_REASON);
     await credentialsApi.revoke(tenant.id, c.credentialId);
     toast({ kind: 'ok', title: 'Credential을 회수했습니다.', message: `${tail(c.credentialId, 12)} · ${c.externalUserId}` });
     // 회수는 이미 성공했다. 다이얼로그는 바로 닫고, 목록 새로고침의 로딩·실패는 목록이 다룬다.
@@ -163,6 +167,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
       key: 'revoke', header: '회수', srOnlyHeader: true, width: 48,
       render: (c) => c.status === 'ACTIVE' ? (
         <IconButton label={`회수 · …${tail(c.credentialId, 8)}`} tone="danger" icon={<Icons.Trash size={15} />}
+          disabled={staleFailed} {...(staleFailed ? { title: STALE_REASON } : {})}
           onClick={(e) => { e.stopPropagation(); setRevoking(c); }} />
       ) : null,
     },
@@ -238,6 +243,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           onPrev={!busy && canPrev ? goPrev : undefined}
           onNext={!busy && canNext ? goNext : undefined}
           onRevoke={(c) => { setSelected(null); setRevoking(c); }}
+          revokeDisabledReason={staleFailed ? STALE_REASON : undefined}
         />
       )}
     </div>

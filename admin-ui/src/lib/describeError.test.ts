@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeError } from './describeError';
+import { describeError, ActionBlockedError } from './describeError';
 import { eulReul, iGa } from './josa';
 import { ApiError } from '@/api/types';
 
@@ -21,6 +21,12 @@ describe('describeError', () => {
     expect(i.title).toBe('요청을 처리하지 못했습니다');
     expect(i.detail).toBe('slug 형식이 올바르지 않습니다');
     expect(i.code).toBe('V001');
+  });
+});
+
+describe('ActionBlockedError', () => {
+  it('지금 실행하지 않은 이유를 쉬운 문구 그대로 옮긴다(알 수 없는 오류가 아니다)', () => {
+    expect(describeError(new ActionBlockedError('목록을 새로 고친 뒤 다시 시도하세요.'))).toEqual({ title: '지금은 실행할 수 없습니다', detail: '목록을 새로 고친 뒤 다시 시도하세요.' });
   });
 });
 

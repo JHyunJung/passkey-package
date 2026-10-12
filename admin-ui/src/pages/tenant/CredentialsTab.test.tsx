@@ -207,6 +207,54 @@ describe('CredentialsTab V2', () => {
     expect(screen.queryByText('Credential 목록을 새로 고치지 못했습니다')).toBeNull();
   });
 
+  it('새로고침이 실패해 목록이 이전 내용이면 회수(표·상세)는 비활성 + 사유, 새로고침에 성공하면 다시 활성', async () => {
+    api.list.mockResolvedValueOnce(pageOf([cred('aaaa-11111111'), cred('bbbb-22222222')]))
+      .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'))
+      .mockResolvedValueOnce(pageOf([cred('bbbb-22222222')]));
+    api.revoke.mockResolvedValue(undefined);
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '회수 · …11111111' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '11111111' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '회수' }));
+    expect(await screen.findByText('Credential 목록을 새로 고치지 못했습니다')).toBeInTheDocument();
+    const rowBtn = screen.getByRole('button', { name: '회수 · …22222222' });
+    expect(rowBtn).toBeDisabled();
+    expect(rowBtn).toHaveAttribute('title', '목록을 새로 고친 뒤 다시 시도하세요.');
+    fireEvent.click(screen.getByText('user-bbbb-22222222'));
+    const detailRevoke = within(screen.getByRole('dialog', { name: /Credential 상세/ })).getByRole('button', { name: 'Credential 회수…' });
+    expect(detailRevoke).toBeDisabled();
+    expect(detailRevoke).toHaveAttribute('title', '목록을 새로 고친 뒤 다시 시도하세요.');
+    fireEvent.click(within(screen.getByRole('dialog', { name: /Credential 상세/ })).getByRole('button', { name: '닫기' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.queryByText('Credential 목록을 새로 고치지 못했습니다')).toBeNull());
+    expect(screen.getByRole('button', { name: '회수 · …22222222' })).toBeEnabled();
+  });
+
+  it('회수 다이얼로그를 연 뒤 목록 새로고침이 실패하면 확인해도 회수하지 않고 다이얼로그 안에 이유를 보인다', async () => {
+    let failRefresh!: (e: unknown) => void;
+    api.list.mockResolvedValueOnce(pageOf([cred('aaaa-11111111'), cred('bbbb-22222222')]))
+      .mockReturnValueOnce(new Promise((_, rej) => { failRefresh = rej; }));
+    api.revoke.mockResolvedValue(undefined);
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '회수 · …11111111' }));
+    let dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '11111111' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '회수' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    // 새로고침이 진행 중일 때 다음 행의 회수 다이얼로그를 연다.
+    fireEvent.click(screen.getByRole('button', { name: '회수 · …22222222' }));
+    dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '22222222' } });
+    await act(async () => { failRefresh(new ApiError(503, 'C999', 'HTTP 503')); });
+    fireEvent.click(within(dlg).getByRole('button', { name: '회수' }));
+    const inline = await within(dlg).findByRole('alert');
+    expect(inline).toHaveTextContent('회수하지 못했습니다');
+    expect(inline).toHaveTextContent('목록을 새로 고친 뒤 다시 시도하세요.');
+    expect(inline).not.toHaveTextContent('알 수 없는 오류');
+    expect(api.revoke).toHaveBeenCalledTimes(1);
+  });
+
   it('다른 페이지 요청이 실패하면 이전 페이지 행을 남기지 않고 전체 오류 + 다시 시도', async () => {
     api.list.mockImplementation((_t: string, page: number) => (page === 0
       ? Promise.resolve(pageOf([cred('c1')], 120, 0))

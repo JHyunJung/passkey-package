@@ -17,9 +17,11 @@ type Props = {
   onPrev?: () => void;
   onNext?: () => void;
   onRevoke?: (c: Credential) => void;
+  /** 있으면 회수 버튼을 비활성으로 두고 이 사유를 툴팁으로 보인다(예: 목록이 이전 내용일 때). */
+  revokeDisabledReason?: string;
 };
 
-export default function CredentialDetailDialog({ c, tenantId, onClose, position, onPrev, onNext, onRevoke }: Props) {
+export default function CredentialDetailDialog({ c, tenantId, onClose, position, onPrev, onNext, onRevoke, revokeDisabledReason }: Props) {
   const [events, setEvents] = useState<AuthEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -68,7 +70,7 @@ export default function CredentialDetailDialog({ c, tenantId, onClose, position,
         </span>
       }
       footerStart={onRevoke && c.status === 'ACTIVE'
-        ? <Button variant="danger" onClick={() => onRevoke(c)}>Credential 회수…</Button>
+        ? <Button variant="danger" onClick={() => onRevoke(c)} disabled={!!revokeDisabledReason} title={revokeDisabledReason}>Credential 회수…</Button>
         : undefined}
       footer={<Button onClick={onClose}>닫기</Button>}>
 

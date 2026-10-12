@@ -7,7 +7,7 @@ import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import { apiKeysApi } from '@/api/apiKeys';
 import type { Tenant, AaguidPolicy, ApiKey } from '@/api/designTypes';
 import type { Me } from '@/api/types';
-import { describeError } from '@/lib/describeError';
+import { ActionBlockedError, describeError } from '@/lib/describeError';
 import { ApiError } from '@/api/types';
 import { useLoad } from '@/lib/useLoad';
 import { illustrations } from '@/assets/illustrations';
@@ -51,12 +51,17 @@ type TenantDetailPageProps = {
   onReload: () => void;
   /** 재조회 실패 안내 등, 상세 위에 띄울 알림. */
   notice?: ReactNode;
+  /** 재조회가 실패해 화면의 tenant 정보가 이전 내용임 — 정지·정지 해제를 막는다. */
+  stale?: boolean;
 };
+
+/** 재조회 실패로 정보가 이전 내용일 때 정지·정지 해제를 막는 사유. */
+const STALE_REASON = '정보를 새로 고친 뒤 다시 시도하세요.';
 
 // ── SuspendDialog — L3 slug 입력 확인 (V3 Dialogs-Tenant) ─────────────────────
 
-function SuspendDialog({ tenant, open, onClose, onConfirmed }: {
-  tenant: Tenant; open: boolean; onClose: () => void; onConfirmed: () => void;
+function SuspendDialog({ tenant, open, stale, onClose, onConfirmed }: {
+  tenant: Tenant; open: boolean; stale: boolean; onClose: () => void; onConfirmed: () => void;
 }) {
   const toast = useToast();
   return (
@@ -72,6 +77,8 @@ function SuspendDialog({ tenant, open, onClose, onConfirmed }: {
         label: <>확인을 위해 slug <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{tenant.slug}</span> 를 입력하세요</>,
       }}
       onConfirm={async () => {
+        // 다이얼로그를 연 뒤 재조회가 실패했다면 이전 정보로 실행하지 않는다.
+        if (stale) throw new ActionBlockedError(STALE_REASON);
         await tenantsApi.suspend(tenant.id);
         toast({ kind: 'warn', title: '테넌트가 정지되었습니다.', message: `${tenant.slug} · 모든 API 키 회수됨` });
         onConfirmed();
@@ -90,8 +97,8 @@ function SuspendDialog({ tenant, open, onClose, onConfirmed }: {
 
 // ── ResumeDialog — L1 확인 ───────────────────────────────────────────────────
 
-function ResumeDialog({ tenant, open, onClose, onConfirmed }: {
-  tenant: Tenant; open: boolean; onClose: () => void; onConfirmed: () => void;
+function ResumeDialog({ tenant, open, stale, onClose, onConfirmed }: {
+  tenant: Tenant; open: boolean; stale: boolean; onClose: () => void; onConfirmed: () => void;
 }) {
   const toast = useToast();
   return (
@@ -104,6 +111,7 @@ function ResumeDialog({ tenant, open, onClose, onConfirmed }: {
       title="정지 해제"
       sub={`${tenant.name} 의 정지를 해제합니다.`}
       onConfirm={async () => {
+        if (stale) throw new ActionBlockedError(STALE_REASON);
         await tenantsApi.activate(tenant.id);
         toast({ kind: 'ok', title: '정지 해제됨' });
         onConfirmed();
@@ -118,9 +126,10 @@ function ResumeDialog({ tenant, open, onClose, onConfirmed }: {
 
 // ── TenantHeader — V2 2행 헤더 ──────────────────────────────────────────────
 
-function TenantHeader({ tenant, canManage, onSuspend, onActivate }: {
-  tenant: Tenant; canManage: boolean; onSuspend: () => void; onActivate: () => void;
+function TenantHeader({ tenant, canManage, stale, onSuspend, onActivate }: {
+  tenant: Tenant; canManage: boolean; stale: boolean; onSuspend: () => void; onActivate: () => void;
 }) {
+  const blocked = stale ? { disabled: true, disabledReason: STALE_REASON } : {};
   return (
     <>
       <div className="row" style={{ gap: 14 }}>
@@ -136,8 +145,8 @@ function TenantHeader({ tenant, canManage, onSuspend, onActivate }: {
             </a>
           )}
           {canManage && (tenant.status === 'ACTIVE'
-            ? <Menu label="더보기" trigger="button" items={[]} dangerItems={[{ label: '테넌트 정지', danger: true, onSelect: onSuspend }]} />
-            : <Menu label="더보기" trigger="button" items={[{ label: '정지 해제', onSelect: onActivate }]} />)}
+            ? <Menu label="더보기" trigger="button" items={[]} dangerItems={[{ label: '테넌트 정지', danger: true, onSelect: onSuspend, ...blocked }]} />
+            : <Menu label="더보기" trigger="button" items={[{ label: '정지 해제', onSelect: onActivate, ...blocked }]} />)}
         </div>
       </div>
       <div className="propchips">
@@ -152,7 +161,7 @@ function TenantHeader({ tenant, canManage, onSuspend, onActivate }: {
 
 // ── TenantDetailPage ─────────────────────────────────────────────────────────
 
-export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload, notice }: TenantDetailPageProps) {
+export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload, notice, stale = false }: TenantDetailPageProps) {
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [aaguidPolicy, setAaguidPolicy] = useState<AaguidPolicy | null>(null);
@@ -181,7 +190,7 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
     <div className="page">
       {notice}
       <div className="stack-3" style={{ gap: 14 }}>
-        <TenantHeader tenant={tenant} canManage={platform} onSuspend={() => setSuspendOpen(true)} onActivate={() => setResumeOpen(true)} />
+        <TenantHeader tenant={tenant} canManage={platform} stale={stale} onSuspend={() => setSuspendOpen(true)} onActivate={() => setResumeOpen(true)} />
         <Tabs ariaLabel="Tenant 탭" items={tabs} active={currentTab} onChange={onTabChange} />
       </div>
       {currentTab === 'overview' && <TenantOverview tenant={tenant} isPlatformOperator={platform} expiringKeyCount={expiringKeyCount} />}
@@ -191,8 +200,8 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
       {currentTab === 'credentials' && <CredentialsTab tenant={tenant} />}
       {currentTab === 'audit' && <AuditTab tenant={tenant} isPlatformOperator={platform} />}
       {currentTab === 'funnel' && <FunnelTab tenant={tenant} />}
-      <SuspendDialog tenant={tenant} open={suspendOpen} onClose={() => setSuspendOpen(false)} onConfirmed={onReload} />
-      <ResumeDialog tenant={tenant} open={resumeOpen} onClose={() => setResumeOpen(false)} onConfirmed={onReload} />
+      <SuspendDialog tenant={tenant} open={suspendOpen} stale={stale} onClose={() => setSuspendOpen(false)} onConfirmed={onReload} />
+      <ResumeDialog tenant={tenant} open={resumeOpen} stale={stale} onClose={() => setResumeOpen(false)} onConfirmed={onReload} />
     </div>
   );
 }
@@ -264,6 +273,7 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
       me={me}
       onReload={load.reload}
       notice={load.status === 'failed' ? <RefreshFailed error={load.error} onRetry={load.reload} retrying={load.reloading} /> : undefined}
+      stale={load.status === 'failed'}
     />
   );
 }

@@ -333,4 +333,48 @@ describe('TenantDetailRoute (M14)', () => {
     expect(await screen.findByText('Tenant를 찾을 수 없습니다')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Acme' })).toBeNull();
   });
+
+  it('재조회가 실패해 정보가 이전 내용이면 정지 메뉴는 비활성 + 사유, 다시 시도에 성공하면 다시 활성', async () => {
+    (tenantsApi.get as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(T)
+      .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'))
+      .mockResolvedValueOnce(T);
+    renderRoute('/tenants/t-1?tab=webauthn');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'WEBAUTHN 저장 시뮬레이션' })); });
+    await screen.findByText('Tenant 정보를 새로 고치지 못했습니다');
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    const item = screen.getByRole('menuitem', { name: /테넌트 정지/ });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveTextContent('정보를 새로 고친 뒤 다시 시도하세요.');
+    fireEvent.click(item);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.keyDown(item, { key: 'Escape' });
+    expect(screen.queryByRole('menuitem')).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '다시 시도' })); });
+    await waitFor(() => expect(screen.queryByText('Tenant 정보를 새로 고치지 못했습니다')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    expect(screen.getByRole('menuitem', { name: '테넌트 정지' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('정지 다이얼로그를 연 뒤 재조회가 실패하면 확인해도 정지하지 않고 다이얼로그 안에 이유를 보인다', async () => {
+    let failRefresh!: (e: unknown) => void;
+    (tenantsApi.get as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(T)
+      .mockReturnValueOnce(new Promise((_, rej) => { failRefresh = rej; }));
+    renderRoute('/tenants/t-1?tab=webauthn');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '테넌트 정지' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'Acme을 정지할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /확인을 위해 slug/ }), { target: { value: 'acme' } });
+    // 다이얼로그가 열린 채로 재조회가 시작돼 실패한다.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'WEBAUTHN 저장 시뮬레이션' })); });
+    await act(async () => { failRefresh(new ApiError(503, 'C999', 'HTTP 503')); });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '정지' })); });
+    const inline = within(dlg).getAllByRole('alert').find((a) => a.textContent?.includes('정지하지 못했습니다'));
+    expect(inline).toBeDefined();
+    expect(inline).toHaveTextContent('정보를 새로 고친 뒤 다시 시도하세요.');
+    expect(tenantsApi.suspend).not.toHaveBeenCalled();
+  });
 });
