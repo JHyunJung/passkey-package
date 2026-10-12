@@ -220,12 +220,21 @@ describe('AuditChainPage V2', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Globex');
   });
 
-  it('다시 검증이 실패해도 이전 결과를 유지하고 경고를 보인다', async () => {
+  it('다시 검증이 실패해도 이전 결과(위변조 배너·KPI)를 유지하고 경고를 보인다', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)]));
     renderPage();
-    await screen.findByText('Acme');
-    vi.mocked(auditChainMonitorApi.overview).mockRejectedValueOnce(new Error('down'));
+    const banner = await screen.findByText(/위변조 의심 — 1개 tenant/);
+    expect(screen.getByText('정상 / 전체').parentElement).toHaveTextContent('1 / 2');
+    let reject!: (e: Error) => void;
+    vi.mocked(auditChainMonitorApi.overview).mockImplementationOnce(() => new Promise((_, rj) => { reject = rj; }));
     fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+    expect(banner).toBeInTheDocument();
+    expect(screen.getByText(/위변조 의심 — 1개 tenant/)).toBeInTheDocument();
+    expect(screen.getByText('정상 / 전체').parentElement).toHaveTextContent('1 / 2');
+    await act(async () => { reject(new Error('down')); });
     expect(await screen.findByText('다시 검증하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText(/위변조 의심 — 1개 tenant/)).toBeInTheDocument();
+    expect(screen.getByText('정상 / 전체').parentElement).toHaveTextContent('1 / 2');
     expect(screen.getByText('Acme')).toBeInTheDocument();
   });
 
@@ -273,5 +282,47 @@ describe('AuditChainPage V2', () => {
     expect(await screen.findByRole('status', { name: '불러오는 중' })).toBeInTheDocument();
     expect(screen.queryByText('불러오는 중…')).toBeNull();
     await act(async () => { resolve(overview([row('t1', 'Acme', true)])); });
+  });
+
+  it('incident 목록이 오기 전에는 빈 상태·활성 생성 버튼을 보이지 않고, 도착하면 "Incident 처리 중"', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)]));
+    let resolve!: (l: IncidentView[]) => void;
+    vi.mocked(auditChainMonitorApi.listIncidents).mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    expect(screen.queryByText('등록된 incident가 없습니다')).toBeNull();
+    expect(within(alert).getByRole('button', { name: 'Incident 생성' })).toBeDisabled();
+    expect(within(alert).queryByText('Incident 처리 중')).toBeNull();
+    await act(async () => { resolve([incident()]); });
+    expect(within(alert).getByText('Incident 처리 중')).toBeInTheDocument();
+    expect(within(alert).queryByRole('button', { name: 'Incident 생성' })).toBeNull();
+  });
+
+  it('Incident 생성 더블 클릭은 한 번만 요청한다', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t2', 'Globex', false)]));
+    let resolve!: (i: IncidentView) => void;
+    vi.mocked(auditChainMonitorApi.createIncident).mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    await waitFor(() => expect(within(alert).getByRole('button', { name: 'Incident 생성' })).toBeEnabled());
+    fireEvent.click(within(alert).getByRole('button', { name: 'Incident 생성' }));
+    const go = within(screen.getByRole('dialog', { name: 'Incident 생성' })).getByRole('button', { name: 'Incident 생성' });
+    fireEvent.click(go);
+    fireEvent.click(go);
+    expect(auditChainMonitorApi.createIncident).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(incident()); });
+  });
+
+  it('Incident 생성 실패는 알리고 버튼을 다시 쓸 수 있다', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t2', 'Globex', false)]));
+    vi.mocked(auditChainMonitorApi.createIncident).mockRejectedValue(new Error('boom'));
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    await waitFor(() => expect(within(alert).getByRole('button', { name: 'Incident 생성' })).toBeEnabled());
+    fireEvent.click(within(alert).getByRole('button', { name: 'Incident 생성' }));
+    const dialog = screen.getByRole('dialog', { name: 'Incident 생성' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Incident 생성' }));
+    expect(await screen.findByText('Incident 생성 실패')).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: 'Incident 생성' })).getByRole('button', { name: 'Incident 생성' })).toBeEnabled();
   });
 });

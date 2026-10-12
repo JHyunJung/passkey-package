@@ -141,7 +141,7 @@ export default function AuditChainPage() {
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const backfillCancelRef = useRef<HTMLButtonElement>(null);
-  const [incidents, setIncidents] = useState<IncidentView[]>([]);
+  const [incidents, setIncidents] = useState<IncidentView[] | null>(null); // null = 아직 모름(로딩 중이거나 실패);
   const [incidentError, setIncidentError] = useState(false);
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
@@ -296,10 +296,12 @@ export default function AuditChainPage() {
   const tamperedRows = tenants.filter((c) => !c.intact);
   const tampered = totals.tenantsTampered > 0 || tamperedRows.length > 0;
   const verifying = chain.reloading;
-  const openIncidentTenants = new Set(incidents.filter((i) => i.status === 'OPEN').map((i) => i.tenantId));
+  const incidentList = incidents ?? [];
+  const incidentsKnown = incidents !== null;
+  const openIncidentTenants = new Set(incidentList.filter((i) => i.status === 'OPEN').map((i) => i.tenantId));
   const showStrip = tenants.some((c) => c.recentRuns !== undefined);
   const rows = view === 'tampered' ? tamperedRows : tenants;
-  const openCount = incidents.filter((i) => i.status === 'OPEN').length;
+  const openCount = incidentList.filter((i) => i.status === 'OPEN').length;
   const headline = tampered
     ? `${totals.tenantsTampered}개 tenant 위변조 의심 · ${totals.tenantsIntact} / ${totals.tenantsTotal} 정상`
     : `모든 tenant 정상 · ${totals.tenantsIntact} / ${totals.tenantsTotal}`;
@@ -415,8 +417,8 @@ export default function AuditChainPage() {
                       size="sm"
                       variant="danger-solid"
                       onClick={() => setCreateTarget(c)}
-                      disabled={!c.tenantId}
-                      title={c.tenantId ? undefined : '플랫폼 체인은 incident 대상이 아닙니다'}
+                      disabled={!c.tenantId || !incidentsKnown}
+                      title={!c.tenantId ? '플랫폼 체인은 incident 대상이 아닙니다' : !incidentsKnown ? 'Incident 목록을 확인한 뒤 생성할 수 있습니다' : undefined}
                     >
                       Incident 생성
                     </Button>
@@ -477,19 +479,21 @@ export default function AuditChainPage() {
               title="Incident 목록을 불러오지 못했습니다."
               actions={<Button size="sm" icon={<Icons.Refresh size={14} />} onClick={() => void refreshIncidents()}>다시 시도</Button>}
             >
-              {incidents.length > 0 ? '아래는 마지막으로 조회된 목록입니다.' : undefined}
+              {incidentList.length > 0 ? '아래는 마지막으로 조회된 목록입니다.' : undefined}
             </Alert>
           </div>
         )}
-        {!incidentError && incidents.length === 0 ? (
+        {!incidentsKnown && !incidentError ? (
+          <div className="card__body"><Skeleton rows={2} /></div>
+        ) : !incidentError && incidentList.length === 0 ? (
           <EmptyState
             compact
             illustration={illustrations.allClear}
             title="등록된 incident가 없습니다"
             description={tampered ? '위변조 의심 tenant 는 위 배너에서 Incident 를 생성하세요.' : '모든 chain 이 정상입니다.'}
           />
-        ) : incidents.length > 0 ? (
-          <DataTable columns={incidentColumns} rows={incidents} rowKey={(i) => i.id} />
+        ) : incidentList.length > 0 ? (
+          <DataTable columns={incidentColumns} rows={incidentList} rowKey={(i) => i.id} />
         ) : null}
       </Card>
 
