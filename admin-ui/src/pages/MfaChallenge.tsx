@@ -95,7 +95,7 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
                 {submitting ? '확인 중…' : '확인'}
               </Button>
               <div className="col" style={{ gap: 6, alignItems: 'center', paddingTop: 4, borderTop: '1px solid var(--line-soft)' }}>
-                <Button variant="ghost" size="sm" onClick={() => switchMode('recovery')}>복구 코드로 로그인</Button>
+                <Button variant="ghost" size="sm" disabled={submitting} onClick={() => switchMode('recovery')}>복구 코드로 로그인</Button>
                 <p className="hint" style={{ margin: 0, textAlign: 'center' }}>기기를 잃어버렸나요? 운영자에게 MFA 초기화를 요청하세요.</p>
                 {wrongTotp && (
                   <p className="hint" style={{ margin: 0, textAlign: 'center' }}>시계가 맞지 않으면 코드가 계속 틀릴 수 있습니다. 휴대폰 시간 자동 설정을 확인하세요.</p>
@@ -126,7 +126,7 @@ export default function MfaChallenge({ onVerified, onLogout }: { onVerified: () 
               <Button type="submit" variant="primary" size="lg" disabled={submitting || !ready}>
                 {submitting ? '확인 중…' : '확인'}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => switchMode('totp')}>← authenticator 코드로 돌아가기</Button>
+              <Button variant="ghost" size="sm" disabled={submitting} onClick={() => switchMode('totp')}>← authenticator 코드로 돌아가기</Button>
             </>
           )}
         </form>

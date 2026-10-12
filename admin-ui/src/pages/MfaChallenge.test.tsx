@@ -183,4 +183,30 @@ describe('MfaChallenge V3', () => {
     resolve({ verified: true });
     await waitFor(() => expect(onVerified).toHaveBeenCalled());
   });
+
+  it('검증 중에는 모드 전환 버튼이 비활성이고, 늦은 실패는 복구 코드 칸으로 포커스를 되돌린다', async () => {
+    let reject!: (e: unknown) => void;
+    vi.mocked(mfaApi.verify).mockReturnValue(new Promise((_, r) => { reject = r; }));
+    renderChallenge();
+    toRecovery();
+    const rec = screen.getByLabelText('복구 코드') as HTMLInputElement;
+    fireEvent.change(rec, { target: { value: 'ab3f2k7m' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(screen.getByRole('button', { name: /authenticator 코드로 돌아가기/ })).toBeDisabled();
+    (document.activeElement as HTMLElement).blur();
+    expect(document.activeElement).not.toBe(rec);
+    reject(wrongCode());
+    expect(await screen.findByRole('alert')).toHaveTextContent('복구 코드가 맞지 않습니다.');
+    await waitFor(() => expect(document.activeElement).toBe(rec));
+  });
+
+  it('TOTP 검증 중에는 "복구 코드로 로그인" 버튼이 비활성이다', async () => {
+    let resolve!: (v: { verified: boolean }) => void;
+    vi.mocked(mfaApi.verify).mockReturnValue(new Promise((r) => { resolve = r; }));
+    const { onVerified } = renderChallenge();
+    fireEvent.paste(cell(0), { clipboardData: { getData: () => '123456' } });
+    expect(screen.getByRole('button', { name: /복구 코드로 로그인/ })).toBeDisabled();
+    resolve({ verified: true });
+    await waitFor(() => expect(onVerified).toHaveBeenCalled());
+  });
 });
