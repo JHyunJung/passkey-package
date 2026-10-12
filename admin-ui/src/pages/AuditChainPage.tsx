@@ -8,7 +8,7 @@ import { ApiError } from '@/api/types';
 import { statusLabel } from '@/i18n/labels';
 import { kstDateTime, kstPrevMonthRange } from '@/lib/kst';
 import { useLoad } from '@/lib/useLoad';
-import { describeError, type ErrorInfo } from '@/lib/describeError';
+import { describeError } from '@/lib/describeError';
 import { errorToast } from '@/lib/errorToast';
 import { illustrations } from '@/assets/illustrations';
 import {
@@ -17,6 +17,12 @@ import {
 } from '@/ui';
 
 type ChainRow = ChainOverview['tenants'][number];
+/** Incident 다이얼로그 안에 보일 결과 안내(실패·처리 불가). */
+type DialogIssue = { tone: 'bad' | 'warn'; title: string; text: string };
+const failureIssue = (title: string, e: unknown): DialogIssue => {
+  const info = describeError(e);
+  return { tone: 'bad', title, text: `${info.title}. ${info.detail}` };
+};
 const STRIP_RUNS = 14;
 
 // ── Utilities ────────────────────────────────────────────────────────────────
@@ -147,13 +153,15 @@ export default function AuditChainPage() {
   const [incidents, setIncidents] = useState<IncidentView[] | null>(null); // null = 아직 모름(로딩 중이거나 실패);
   const [incidentError, setIncidentError] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<ErrorInfo | null>(null);
+  const [createIssue, setCreateIssue] = useState<DialogIssue | null>(null);
   const creatingRef = useRef(false);
   const [createTarget, setCreateTarget] = useState<ChainRow | null>(null);
   const [resolving, setResolving] = useState<IncidentView | null>(null);
   const [resolveNote, setResolveNote] = useState('');
   const [resolveBusy, setResolveBusy] = useState(false);
-  const [resolveError, setResolveError] = useState<ErrorInfo | null>(null);
+  const [resolveIssue, setResolveIssue] = useState<DialogIssue | null>(null);
+  // 해결하려던 incident 가 서버에 없음(404) — 다시 시도할 수 없으니 해결 버튼을 막고 닫기만 남긴다.
+  const [resolveGone, setResolveGone] = useState(false);
   const [view, setView] = useState<'all' | 'tampered'>('all');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -223,7 +231,7 @@ export default function AuditChainPage() {
     if (creatingRef.current) return; // 더블 클릭으로 같은 요청이 두 번 나가지 않게
     creatingRef.current = true;
     setCreating(true);
-    setCreateError(null);
+    setCreateIssue(null);
     try {
       await auditChainMonitorApi.createIncident(tenantId);
       setCreateTarget(null);
@@ -235,10 +243,11 @@ export default function AuditChainPage() {
         setCreateTarget(null);
         toast({ kind: 'warn', title: '이미 진행 중', message: '해당 tenant 에 OPEN 상태 incident 가 이미 있습니다.' });
       } else if (e instanceof ApiError && e.status === 422) {
-        toast({ kind: 'warn', title: '위변조 미확인', message: '재검증 결과 위변조가 확인되지 않아 incident 를 생성하지 않았습니다.' });
+        // 다이얼로그를 연 채 안에서 설명한다(토스트로 따로 알리지 않는다).
+        setCreateIssue({ tone: 'warn', title: '위변조가 확인되지 않았습니다', text: '재검증 결과 위변조가 확인되지 않아 incident 를 생성하지 않았습니다.' });
       } else {
         // 다이얼로그를 연 채 안에 보여 준다(같은 오류를 토스트로 또 띄우지 않는다).
-        setCreateError(describeError(e));
+        setCreateIssue(failureIssue('Incident를 생성하지 못했습니다', e));
       }
       // 어느 실패 경로든 서버 상태와 목록을 동기화(409 의 stale OPEN incident 노출).
       await refreshIncidents();
@@ -251,7 +260,7 @@ export default function AuditChainPage() {
   async function handleResolveIncident() {
     if (!resolving || !resolveNote.trim()) return;
     setResolveBusy(true);
-    setResolveError(null);
+    setResolveIssue(null);
     try {
       await auditChainMonitorApi.resolveIncident(resolving.id, resolveNote.trim());
       setResolving(null);
@@ -265,11 +274,11 @@ export default function AuditChainPage() {
         setResolveNote('');
         toast({ kind: 'warn', title: '이미 해결됨', message: '해당 incident 는 이미 RESOLVED 상태입니다.' });
       } else if (e instanceof ApiError && e.status === 404) {
-        setResolving(null);
-        setResolveNote('');
-        toast({ kind: 'warn', title: '대상 없음', message: 'incident 를 찾을 수 없습니다.' });
+        // 메모는 남기고 다이얼로그 안에서 알린다. 목록은 아래에서 새로 고친다.
+        setResolveGone(true);
+        setResolveIssue({ tone: 'warn', title: '이미 처리되었거나 없는 incident입니다', text: '목록을 새로 고쳤습니다. 다이얼로그를 닫고 목록에서 확인하세요.' });
       } else {
-        setResolveError(describeError(e));
+        setResolveIssue(failureIssue('해결로 표시하지 못했습니다', e));
       }
       await refreshIncidents();
     } finally {
@@ -365,7 +374,7 @@ export default function AuditChainPage() {
     {
       key: 'actions', header: '액션',
       render: (i) => i.status === 'OPEN'
-        ? <Button size="sm" icon={<Icons.Check size={14} />} onClick={() => { setResolving(i); setResolveNote(''); setResolveError(null); }}>해결</Button>
+        ? <Button size="sm" icon={<Icons.Check size={14} />} onClick={() => { setResolving(i); setResolveNote(''); setResolveIssue(null); setResolveGone(false); }}>해결</Button>
         : null,
     },
   ];
@@ -437,7 +446,7 @@ export default function AuditChainPage() {
                     <Button
                       size="sm"
                       variant="danger-solid"
-                      onClick={() => { setCreateError(null); setCreateTarget(c); }}
+                      onClick={() => { setCreateIssue(null); setCreateTarget(c); }}
                       disabled={!c.tenantId || !incidentsKnown}
                       title={!c.tenantId ? '플랫폼 체인은 incident 대상이 아닙니다' : !incidentsKnown ? 'Incident 목록을 확인한 뒤 생성할 수 있습니다' : undefined}
                     >
@@ -534,7 +543,7 @@ export default function AuditChainPage() {
           </Button>
         </>}
       >
-        {createError && <Alert tone="bad" title="Incident를 생성하지 못했습니다">{`${createError.title}. ${createError.detail}`}</Alert>}
+        {createIssue && <Alert tone={createIssue.tone} title={createIssue.title}>{createIssue.text}</Alert>}
         <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
           {`${createTarget?.tenantName ?? '—'} 의 위변조 의심을 보안 incident 로 등록하고 대응 이력을 남깁니다.`}
         </p>
@@ -549,17 +558,17 @@ export default function AuditChainPage() {
         title="Incident 해결"
         sub={resolving ? `${resolving.tenantName} · ${resolving.type}` : undefined}
         footer={<>
-          <Button onClick={() => { setResolving(null); setResolveNote(''); }} disabled={resolveBusy}>취소</Button>
+          <Button onClick={() => { setResolving(null); setResolveNote(''); }} disabled={resolveBusy}>{resolveGone ? '닫기' : '취소'}</Button>
           <Button
             variant="primary"
             onClick={() => void handleResolveIncident()}
-            disabled={resolveBusy || resolveNote.trim().length === 0}
+            disabled={resolveBusy || resolveGone || resolveNote.trim().length === 0}
           >
             {resolveBusy ? '처리 중…' : '해결로 표시'}
           </Button>
         </>}
       >
-        {resolveError && <Alert tone="bad" title="해결로 표시하지 못했습니다">{`${resolveError.title}. ${resolveError.detail}`}</Alert>}
+        {resolveIssue && <Alert tone={resolveIssue.tone} title={resolveIssue.title}>{resolveIssue.text}</Alert>}
         <Field label="해결 메모" htmlFor="resolve-note" required help="필수 · 감사 로그에 함께 기록됩니다.">
           <textarea
             id="resolve-note"

@@ -488,6 +488,41 @@ describe('AuditChainPage V2', () => {
       expect(inline).not.toHaveTextContent('[C999]');
     });
 
+    it('Incident 생성 422(재검증 결과 위변조 아님)는 열린 다이얼로그 안에 설명하고 다이얼로그를 유지한다(토스트 없음)', async () => {
+      vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t2', 'Globex', false)]));
+      vi.mocked(auditChainMonitorApi.createIncident).mockRejectedValue(new ApiError(422, 'C422', 'not tampered'));
+      renderPage();
+      const alert = await screen.findByRole('alert');
+      await waitFor(() => expect(within(alert).getByRole('button', { name: 'Incident 생성' })).toBeEnabled());
+      fireEvent.click(within(alert).getByRole('button', { name: 'Incident 생성' }));
+      const dialog = screen.getByRole('dialog', { name: 'Incident 생성' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Incident 생성' }));
+      const inline = await within(dialog).findByRole('status'); // 경고(warn) 안내 — 실패가 아니다
+      expect(inline).toHaveTextContent('위변조가 확인되지 않았습니다');
+      expect(inline).toHaveTextContent('재검증 결과 위변조가 확인되지 않아 incident 를 생성하지 않았습니다.');
+      expect(screen.getByRole('dialog', { name: 'Incident 생성' })).toBeInTheDocument();
+      expect(document.querySelector('.toast')).toBeNull();
+      expect(auditChainMonitorApi.listIncidents).toHaveBeenCalledTimes(2);
+    });
+
+    it('Incident 해결 404 는 다이얼로그 안에 "이미 처리되었거나 없는 incident입니다", 메모 유지, 해결 버튼 비활성·닫기, 목록 새로고침', async () => {
+      vi.mocked(auditChainMonitorApi.listIncidents).mockResolvedValue([incident()]);
+      vi.mocked(auditChainMonitorApi.resolveIncident).mockRejectedValue(new ApiError(404, 'C404', 'not found'));
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: '해결' }));
+      const dialog = screen.getByRole('dialog', { name: 'Incident 해결' });
+      fireEvent.change(within(dialog).getByLabelText(/해결 메모/), { target: { value: 'DBA 확인' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: '해결로 표시' }));
+      const inline = await within(dialog).findByRole('status'); // 경고(warn) 안내 — 실패가 아니다
+      expect(inline).toHaveTextContent('이미 처리되었거나 없는 incident입니다');
+      expect(within(dialog).getByLabelText(/해결 메모/)).toHaveValue('DBA 확인');
+      expect(within(dialog).getByRole('button', { name: '해결로 표시' })).toBeDisabled();
+      expect(document.querySelector('.toast')).toBeNull();
+      await waitFor(() => expect(auditChainMonitorApi.listIncidents).toHaveBeenCalledTimes(2));
+      fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+      expect(screen.queryByRole('dialog', { name: 'Incident 해결' })).toBeNull();
+    });
+
     it('tenant 검증 실패 토스트는 쉬운 문구, 원문은 "자세히"에만', async () => {
       vi.mocked(auditChainApi.verifyTenant).mockRejectedValue(new ApiError(400, 'C001', 'tenantId invalid'));
       renderPage();
