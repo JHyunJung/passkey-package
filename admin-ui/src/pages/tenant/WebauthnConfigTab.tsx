@@ -118,7 +118,6 @@ export function validateOrigin(input: string, rpId: string): { ok: true; value: 
 const UV_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> = {
   REQUIRED: { tone: 'info', text: 'PIN·지문·얼굴 등 사용자 확인(UV)을 반드시 요구합니다. UV를 못 하는 인증기는 패스키 등록·인증이 실패합니다. 2FA 수준의 보안이 필요할 때 권장.' },
   PREFERRED: { tone: 'info', text: '가능하면 UV를 수행하되, 지원하지 않는 인증기는 UV 없이도 허용합니다. 보안과 호환성의 균형 — 대부분의 서비스 기본값.' },
-  DISCOURAGED: { tone: 'info', text: 'UV를 요구하지 않습니다(사용자 존재 확인만). 마찰은 가장 적지만 단일 인증 요소가 되므로, 비밀번호 등 다른 요소와 함께 쓸 때만 권장.' },
 };
 
 const AT_GUIDE: Record<string, { tone: 'info' | 'ok' | 'warn'; text: string }> = {
@@ -149,7 +148,8 @@ function timeoutGuide(ms: number): { tone: 'info' | 'ok' | 'warn'; text: string 
 }
 
 const WARN_BORDER: CSSProperties = { borderColor: 'var(--warn-dot)' };
-const UV_OPTIONS = (['REQUIRED', 'PREFERRED', 'DISCOURAGED'] as const).map((v) => ({ value: v, label: <span title={v}>{UV_LABELS[v]}</span> }));
+// '요구 안 함'(DISCOURAGED)은 서버가 boolean(requireUserVerification)만 저장해 되돌아오지 않으므로 1단계에서 숨긴다(스펙 §8).
+const UV_OPTIONS = (['REQUIRED', 'PREFERRED'] as const).map((v) => ({ value: v, label: <span title={v}>{UV_LABELS[v]}</span> }));
 const AT_OPTIONS = (['NONE', 'INDIRECT', 'DIRECT', 'ENTERPRISE'] as const).map((v) => ({ value: v, label: <span title={v}>{AT_LABELS[v]}</span> }));
 
 /** "자세히" 문서 링크. 주소가 비면 그리지 않는다(스펙 §2 도움말). */
@@ -172,6 +172,10 @@ export default function WebauthnConfigTab({ tenant, onSaved }: WebauthnConfigTab
   const [showDiff, setShowDiff] = useState(false);
   const [diffChanges, setDiffChanges] = useState<Change[]>([]);
   const [saving, setSaving] = useState(false);
+  // 변경 비교 요청 중. 비교가 시작되면 다이얼로그가 닫힐 때까지 입력을 잠근다.
+  const [previewing, setPreviewing] = useState(false);
+  // 확인 다이얼로그에 보인 비교의 대상 — 저장은 정확히 이 값을 보낸다.
+  const [compared, setCompared] = useState<ConfigWithMds | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -229,27 +233,38 @@ export default function WebauthnConfigTab({ tenant, onSaved }: WebauthnConfigTab
   }
 
   async function handlePreview() {
-    if (!draft || saving) return;
+    if (!draft || !cfg || saving || previewing || showDiff) return;
+    const snapshot = draft;
+    const local = diffObjects(cfg, snapshot);
+    setPreviewing(true);
     try {
-      const server = await webauthnApi.diff(tenant.id, draft, draft._mdsRequired);
-      const r = mergeChanges(server, localChanges);
+      const server = await webauthnApi.diff(tenant.id, snapshot, snapshot._mdsRequired);
+      const r = mergeChanges(server, local);
       if (r.length === 0) {
         toast({ kind: 'warn', title: '변경 사항이 없습니다.' });
         return;
       }
       setDiffChanges(r);
+      setCompared(snapshot);
       setShowDiff(true);
     } catch (e: unknown) {
       toast(errorToast(e, '변경 사항을 비교하지 못했습니다'));
+    } finally {
+      setPreviewing(false);
     }
+  }
+
+  function closeDiff() {
+    setShowDiff(false);
+    setCompared(null);
   }
 
   /** ConfirmDialog 의 onConfirm — 실패하면 throw 해서 다이얼로그 안에 오류를 보인다(입력 유지). 저장 중에는 입력을 잠근다. */
   async function handleSave() {
-    if (!draft || saving) return;
+    if (!compared || saving) return;
     setSaving(true);
     try {
-      const updated = await webauthnApi.update(tenant.id, tenant.name, draft, draft._mdsRequired);
+      const updated = await webauthnApi.update(tenant.id, tenant.name, compared, compared._mdsRequired);
       setCfg(updated);
       setDraft({ ...updated });
       toast({ kind: 'ok', title: 'WebAuthn 설정을 저장했습니다', message: `${diffChanges.length}개 항목이 바뀌었습니다.` });
@@ -281,7 +296,7 @@ export default function WebauthnConfigTab({ tenant, onSaved }: WebauthnConfigTab
             <a className="btn btn--ghost btn--sm" href={HELP_LINKS.rpGuide} target="_blank" rel="noopener noreferrer">RP 연동 가이드 <Icons.ExternalLink size={13} /></a>
           ) : undefined}
         />
-        <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+        <fieldset disabled={saving || previewing || showDiff} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
 
         <SetRow label={<FieldName k="rpId" />} htmlFor="wa-rpid" desc="생성 시 고정. 기존 credential 이 이 값에 묶여 있습니다.">
           <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}>
@@ -345,11 +360,11 @@ export default function WebauthnConfigTab({ tenant, onSaved }: WebauthnConfigTab
         summary={changedFieldNames(localChanges).map((k) => FIELD_LABELS[k] ?? k).join(' · ')}
         onRevert={handleRevert}
         onSave={() => void handlePreview()}
-        saving={saving}
+        saving={saving || previewing}
         saveLabel="저장…"
       />
 
-      <DiffDialog open={showDiff} onClose={() => setShowDiff(false)} changes={diffChanges} onConfirm={handleSave} />
+      <DiffDialog open={showDiff} onClose={closeDiff} changes={diffChanges} onConfirm={handleSave} />
       {guard}
     </div>
   );

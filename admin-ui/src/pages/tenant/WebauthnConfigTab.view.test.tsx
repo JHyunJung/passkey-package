@@ -216,6 +216,51 @@ describe('WebauthnConfigTab V2', () => {
     expect(screen.getByLabelText('대기 시간')).not.toBeDisabled();
   });
 
+  it('변경 비교 요청 중과 확인 다이얼로그가 열린 동안 입력을 잠그고, 저장은 비교한 그 값으로 보낸다', async () => {
+    let resolveDiff!: (v: unknown) => void;
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => { resolveDiff = r; }));
+    (webauthnApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({ ...CFG, timeoutMs: 120000 });
+    renderTab();
+    fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
+    await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
+    // 비교 요청이 끝나기 전: 입력 잠김, 저장… 다시 눌러도 비교가 한 번만.
+    expect(screen.getByLabelText('대기 시간')).toBeDisabled();
+    expect(screen.getByLabelText('RP 표시 이름')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('대기 시간'), { target: { value: '90000' } });
+    await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: /저장/ })); });
+    expect(webauthnApi.diff).toHaveBeenCalledTimes(1);
+    await act(async () => { resolveDiff([]); });
+    const dlg = screen.getByRole('alertdialog', { name: '변경 사항 1개를 저장할까요?' });
+    expect(within(dlg).getByText('120초')).toBeInTheDocument();
+    // 다이얼로그가 열린 동안에도 잠겨 있다.
+    expect(screen.getByLabelText('대기 시간')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('대기 시간'), { target: { value: '90000' } });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '저장' })); });
+    expect(webauthnApi.update).toHaveBeenCalledWith('t-1', 'Acme', { ...CFG, timeoutMs: 120000 }, true);
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByLabelText('대기 시간')).not.toBeDisabled();
+  });
+
+  it('다이얼로그를 취소하면 입력 잠금이 풀린다', async () => {
+    (webauthnApi.diff as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    renderTab();
+    fireEvent.change(await screen.findByLabelText('대기 시간'), { target: { value: '120000' } });
+    await act(async () => { fireEvent.click(within(bar()!).getByRole('button', { name: '저장…' })); });
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '취소' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByLabelText('대기 시간')).not.toBeDisabled();
+    expect(screen.getByLabelText('대기 시간')).toHaveValue(120000);
+  });
+
+  it('사용자 검증은 필수·권장만 고를 수 있다("요구 안 함"은 1단계에서 숨김 — 서버가 저장하지 못함)', async () => {
+    renderTab();
+    const group = await screen.findByRole('group', { name: '사용자 검증' });
+    expect(within(group).getByRole('button', { name: '필수' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: '권장' })).toBeInTheDocument();
+    expect(within(group).queryByRole('button', { name: '요구 안 함' })).toBeNull();
+    expect(within(group).getAllByRole('button')).toHaveLength(2);
+  });
+
   it('로드 실패: "Loading…"에 멈추지 않고 LoadError, 다시 시도로 복구', async () => {
     (webauthnApi.get as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'))
