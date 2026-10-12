@@ -3,7 +3,7 @@
 /* ── base ───────────────────────────── */
 a { color: var(--brand-700); }
 a:hover { color: var(--brand-900); }
-:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+:focus-visible { outline: var(--focus-outline); outline-offset: var(--focus-offset); }
 .mono { font-family: var(--mono); }
 .muted { color: var(--mute); }
 .faint { color: var(--faint); }
@@ -142,7 +142,7 @@ a:hover { color: var(--brand-900); }
 .input { width: 100%; min-height: 38px; border: 1px solid var(--input-line); border-radius: var(--r-sm); padding: 0 12px; box-sizing: border-box; font: inherit; font-size: 13px; background: var(--surface); color: var(--ink); }
 textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .input::placeholder { color: #6E7A8A; }
-.input:focus { outline: none; border-color: var(--brand-500); box-shadow: var(--focus-ring); }
+.input:focus { outline: var(--focus-outline); outline-offset: 1px; border-color: var(--brand-500); }
 .input[aria-invalid="true"] { border-color: var(--bad); }
 .input[readonly] { background: var(--sunk); color: var(--ink-2); }
 .input--lg { min-height: 44px; font-size: 14px; }
@@ -157,7 +157,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .switch__track::after { content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .12s; }
 .switch input:checked + .switch__track { background: var(--brand-700); }
 .switch input:checked + .switch__track::after { left: 18px; }
-.switch input:focus-visible + .switch__track { box-shadow: var(--focus-ring); }
+.switch input:focus-visible + .switch__track { outline: var(--focus-outline); outline-offset: var(--focus-offset); }
 .choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .choices--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 900px) { .choices, .choices--2 { grid-template-columns: minmax(0, 1fr); } }
@@ -197,7 +197,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 /* ── otp ────────────────────────────── */
 .otp { display: flex; gap: 8px; justify-content: center; }
 .otp__cell { width: 46px; height: 54px; padding: 0; text-align: center; font-family: var(--mono); font-size: 20px; border: 1px solid var(--input-line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
-.otp__cell:focus { outline: none; border-color: var(--brand-500); box-shadow: var(--focus-ring); }
+.otp__cell:focus { outline: var(--focus-outline); outline-offset: 1px; border-color: var(--brand-500); }
 
 /* ── table ──────────────────────────── */
 .tw { position: relative; overflow-x: auto; } /* relative: 안쪽 .sr-only(absolute) 도 스크롤 영역에 가둬 페이지 가로 스크롤을 막는다 */

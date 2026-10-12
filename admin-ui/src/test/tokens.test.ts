@@ -38,4 +38,12 @@ describe('V2 tokens', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('포커스 링은 2px 실선 outline 이고 흐린 box-shadow 링을 쓰지 않는다', () => {
+    const css = tokens() + readFileSync(join(S, 'components.css'), 'utf8');
+    expect(tokens()).toMatch(/--focus-outline:\s*2px solid var\(--brand-500\)/);
+    expect(tokens()).toMatch(/--focus-offset:\s*2px/);
+    expect(css).not.toMatch(/--focus-ring/);
+    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*var\(--focus-outline\)/);
+  });
 });
