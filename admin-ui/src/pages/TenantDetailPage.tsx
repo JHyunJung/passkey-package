@@ -1,14 +1,17 @@
 // admin-ui/src/pages/TenantDetailPage.tsx
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { tenantsApi } from '@/api/tenants';
 import { aaguidPolicyApi } from '@/api/aaguidPolicy';
 import { apiKeysApi } from '@/api/apiKeys';
 import type { Tenant, AaguidPolicy, ApiKey } from '@/api/designTypes';
 import type { Me } from '@/api/types';
+import { ApiError } from '@/api/types';
+import { useLoad } from '@/lib/useLoad';
+import { illustrations } from '@/assets/illustrations';
 import { isPlatform } from '@/me/roles';
-import { Alert, Button, ConfirmByTyping, Dialog, Menu, PropChip, StatusBadge, Tabs, useToast, type TabItem } from '@/ui';
+import { Alert, Button, ConfirmByTyping, Dialog, EmptyState, LoadError, Menu, PropChip, Skeleton, StatusBadge, Tabs, useToast, type TabItem } from '@/ui';
 import TenantOverview from '@/pages/tenant/TenantOverview';
 import WebauthnConfigTab from '@/pages/tenant/WebauthnConfigTab';
 import AaguidPolicyTab from '@/pages/tenant/AaguidPolicyTab';
@@ -210,44 +213,48 @@ export function TenantDetailPage({ tenant, currentTab, onTabChange, me, onReload
   );
 }
 
+// ── TenantNotFound — 404 일 때만 ─────────────────────────────────────────────
+
+function TenantNotFound() {
+  return (
+    <div className="page">
+      <div role="alert">
+        <EmptyState
+          illustration={illustrations.noResults}
+          title="Tenant를 찾을 수 없습니다"
+          description="삭제됐거나 주소가 잘못된 tenant입니다."
+          action={<Link className="btn btn--primary" to="/tenants">Tenants로 돌아가기</Link>}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── TenantDetailRoute — 라우터 wrapper (App.tsx 에서 사용) ───────────────────
 
 export default function TenantDetailRoute({ me }: { me: Me }) {
-  const { id } = useParams<{ id: string }>();
+  const { id = '' } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'overview';
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(true);
-  const toast = useToast();
+  // useLoad 는 늦게 온 이전 id 응답을 버리고(M14), 재조회(onReload) 중에는 이전 tenant 를 유지한다.
+  const load = useLoad(() => tenantsApi.get(id), [id]);
+  // 주소가 막 바뀐 경우 이전 tenant 를 새 주소에 그리지 않는다.
+  const tenant = load.data && load.data.id === id ? load.data : undefined;
 
-  // 현재 주소의 id. A → B 로 빠르게 이동했을 때 늦게 온 A 응답을 버린다.
-  const currentId = useRef(id);
-  currentId.current = id;
-
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    setLoading(true);
-    tenantsApi.get(id)
-      .then((t) => { if (!cancelled) setTenant(t); })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        const msg = e instanceof Error ? e.message : String(e);
-        toast({ kind: 'err', title: 'Tenant 로드 실패', message: msg });
-        setTenant(null);
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [id]);
-
-  const reload = () => {
-    if (!id) return;
-    const requested = id;
-    tenantsApi.get(requested).then((t) => { if (currentId.current === requested) setTenant(t); }).catch(() => {});
-  };
-
-  if (loading) return <div className="page"><p className="muted" style={{ margin: 0 }}>Loading…</p></div>;
-  if (!tenant) return <div className="page"><p className="muted" style={{ margin: 0 }}>Tenant 를 찾을 수 없습니다.</p></div>;
+  if (!tenant && load.status !== 'failed') {
+    return <div className="page"><Skeleton rows={6} label="Tenant 정보 불러오는 중" /></div>;
+  }
+  if (!tenant) {
+    if (load.error instanceof ApiError && load.error.httpStatus === 404) return <TenantNotFound />;
+    return (
+      <div className="page">
+        <LoadError what="Tenant 정보" error={load.error} onRetry={load.reload} retrying={load.reloading} />
+        <div className="row" style={{ justifyContent: 'center' }}>
+          <Link className="btn btn--ghost" to="/tenants">‹ Tenant 목록으로</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <TenantDetailPage
@@ -255,7 +262,7 @@ export default function TenantDetailRoute({ me }: { me: Me }) {
       currentTab={tab}
       onTabChange={(t) => setSearchParams({ tab: t })}
       me={me}
-      onReload={reload}
+      onReload={load.reload}
     />
   );
 }

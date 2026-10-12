@@ -4,6 +4,7 @@ import { render, screen, fireEvent, within, cleanup, act, waitFor } from '@testi
 import { ToastHost } from '@/ui';
 import type { Tenant } from '@/api/designTypes';
 import type { Me } from '@/api/types';
+import { ApiError } from '@/api/types';
 
 vi.mock('@/api/tenants', () => ({ tenantsApi: { get: vi.fn(), suspend: vi.fn(), activate: vi.fn() } }));
 vi.mock('@/api/aaguidPolicy', () => ({ aaguidPolicyApi: { get: vi.fn(), update: vi.fn() } }));
@@ -229,5 +230,61 @@ describe('TenantDetailRoute (M14)', () => {
     await act(async () => { resolveA({ ...T, id: 'a', name: 'Alpha' }); });
     expect(screen.queryByRole('heading', { name: 'Alpha' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Beta' })).toBeInTheDocument();
+  });
+
+  function renderRoute(path = '/tenants/t-1') {
+    const router = createMemoryRouter(
+      [
+        { path: '/tenants/:id', element: <ToastHost><TenantDetailRoute me={PLATFORM} /></ToastHost> },
+        { path: '/tenants', element: <div>TENANTS LIST</div> },
+      ],
+      { initialEntries: [path] },
+    );
+    render(<RouterProvider router={router} />);
+    return router;
+  }
+
+  it('로딩 중에는 Skeleton, "Loading…" 텍스트 없음', async () => {
+    let settle: (t: Tenant) => void = () => {};
+    (tenantsApi.get as ReturnType<typeof vi.fn>).mockReturnValue(new Promise<Tenant>((r) => { settle = r; }));
+    renderRoute();
+    expect(screen.getByRole('status', { name: 'Tenant 정보 불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).toBeNull();
+    await act(async () => { settle(T); });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument();
+  });
+
+  it('404 면 "찾을 수 없습니다" + Tenants로 돌아가기(다시 시도 없음)', async () => {
+    (tenantsApi.get as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(404, 'C404', 'not found'));
+    const router = renderRoute();
+    expect(await screen.findByText('Tenant를 찾을 수 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('삭제됐거나 주소가 잘못된 tenant입니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다시 시도' })).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('link', { name: 'Tenants로 돌아가기' })); });
+    expect(router.state.location.pathname).toBe('/tenants');
+  });
+
+  it('5xx 면 LoadError(다시 시도) — 다시 시도 성공 시 상세를 그린다', async () => {
+    (tenantsApi.get as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503', undefined, 'tr-9'))
+      .mockResolvedValueOnce(T);
+    renderRoute();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Tenant 정보를 불러오지 못했습니다');
+    expect(alert).toHaveTextContent('서버가 잠시 응답하지 않습니다');
+    expect(alert).toHaveTextContent('tr-9');
+    expect(screen.getByRole('link', { name: '‹ Tenant 목록으로' })).toHaveAttribute('href', '/tenants');
+    expect(screen.queryByText('Tenant를 찾을 수 없습니다')).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '다시 시도' })); });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme' })).toBeInTheDocument();
+    expect(tenantsApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('로드 실패를 토스트로 띄우지 않는다(인라인 하나만)', async () => {
+    (tenantsApi.get as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderRoute();
+    await screen.findByText('Tenant 정보를 불러오지 못했습니다');
+    expect(screen.queryByText('Tenant 로드 실패')).toBeNull();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 });
