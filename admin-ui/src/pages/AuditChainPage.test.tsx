@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, within, waitFor, act } from '@testing-library/react';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
+import { ApiError } from '@/api/types';
 import type { ChainOverview, IncidentView } from '@/api/auditChainMonitor';
 
 vi.mock('@/api/auditChainMonitor', () => ({
@@ -43,6 +44,7 @@ function renderPage() {
 beforeEach(() => {
   vi.mocked(auditChainMonitorApi.overview).mockReset().mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', true)]));
   vi.mocked(auditChainMonitorApi.listIncidents).mockReset().mockResolvedValue([]);
+  vi.mocked(auditChainMonitorApi.backfill).mockReset();
   vi.mocked(auditChainMonitorApi.createIncident).mockReset();
   vi.mocked(auditChainMonitorApi.resolveIncident).mockReset();
 });
@@ -178,23 +180,90 @@ describe('AuditChainPage V2', () => {
     expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
   });
 
-  it('체인 백필은 별도 동작 — 위험을 설명하는 확인 다이얼로그(취소 기본 포커스) 후에만 실행', async () => {
-    vi.mocked(auditChainMonitorApi.backfill).mockReset().mockResolvedValue({ tenantsProcessed: 2, rowsUpdated: 5 } as never);
+  const ACK = '위변조 흔적이 사라질 수 있고 되돌릴 수 없다는 것을 이해했습니다';
+
+  it('체인 백필은 더 보기 메뉴 안 L3 확인(취소 기본 포커스, 이해 체크) 후에만 실행', async () => {
+    vi.mocked(auditChainMonitorApi.backfill).mockResolvedValue({ tenantsProcessed: 2, rowsUpdated: 5, rowsSkipped: 0 } as never);
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: '체인 백필(마이그레이션)…' }));
-    const dlg = screen.getByRole('alertdialog', { name: '체인 백필을 실행하시겠습니까?' });
+    await screen.findByText('Acme');
+    expect(screen.queryByRole('button', { name: '체인 백필(마이그레이션)…' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '체인 백필…' }));
+    const dlg = screen.getByRole('alertdialog', { name: '체인 백필을 실행할까요?' });
     expect(dlg).toHaveTextContent(/hash 를 다시 계산해 덮어씁니다/);
     expect(dlg).toHaveTextContent(/삭제/);
     expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
-    expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
+    expect(within(dlg).getByRole('button', { name: '백필 실행' })).toBeDisabled();
     fireEvent.click(within(dlg).getByRole('button', { name: '취소' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: '체인 백필(마이그레이션)…' }));
-    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '백필 실행' }));
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '체인 백필…' }));
+    const dlg2 = screen.getByRole('alertdialog', { name: '체인 백필을 실행할까요?' });
+    fireEvent.click(within(dlg2).getByLabelText(ACK));
+    fireEvent.click(within(dlg2).getByRole('button', { name: '백필 실행' }));
     await waitFor(() => expect(auditChainMonitorApi.backfill).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('백필 완료')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(auditChainMonitorApi.overview).toHaveBeenCalledTimes(2));
+  });
+
+  it('백필 실패는 다이얼로그 안 인라인 오류, 다이얼로그는 열린 채', async () => {
+    vi.mocked(auditChainMonitorApi.backfill).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderPage();
+    await screen.findByText('Acme');
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '체인 백필…' }));
+    const dlg = screen.getByRole('alertdialog', { name: '체인 백필을 실행할까요?' });
+    fireEvent.click(within(dlg).getByLabelText(ACK));
+    fireEvent.click(within(dlg).getByRole('button', { name: '백필 실행' }));
+    expect(await within(dlg).findByText('백필 실행하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('위변조가 있으면 체인 백필 메뉴는 비활성 + 사유, 눌러도 다이얼로그가 열리지 않는다', async () => {
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)]));
+    renderPage();
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    const item = screen.getByRole('menuitem', { name: /체인 백필…/ });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveTextContent('위변조 의심 tenant가 있으면 쓸 수 없습니다. 먼저 조사·해결하세요.');
+    fireEvent.click(item);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(auditChainMonitorApi.backfill).not.toHaveBeenCalled();
+  });
+
+  it('백필 다이얼로그가 열린 사이 재검증에서 위변조가 나타나면 다이얼로그가 닫힌다', async () => {
+    renderPage();
+    await screen.findByText('Acme');
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '체인 백필…' }));
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)]));
+    fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('월간 보고서: 시작일이 종료일보다 늦으면 인라인 오류 + 생성 비활성, 고치면 해제', async () => {
+    renderPage();
+    await screen.findByText('Acme');
+    fireEvent.click(screen.getByRole('button', { name: '월간 보고서' }));
+    const dialog = screen.getByRole('dialog', { name: '월간 무결성 보고서 발급' });
+    const from = within(dialog).getByLabelText('시작일');
+    const to = within(dialog).getByLabelText('종료일');
+    fireEvent.change(from, { target: { value: '2026-10-01' } });
+    fireEvent.change(to, { target: { value: '2026-09-01' } });
+    expect(within(dialog).getByText('시작일이 종료일보다 늦습니다. 날짜는 KST 기준입니다.')).toBeInTheDocument();
+    expect(to).toHaveAttribute('aria-invalid', 'true');
+    expect(to).toHaveAttribute('aria-describedby', 'report-to-error');
+    expect(within(dialog).getByRole('button', { name: 'PDF 생성 → 다운로드' })).toBeDisabled();
+    fireEvent.change(to, { target: { value: '2026-10-01' } }); // 같은 날은 허용
+    expect(within(dialog).queryByText(/시작일이 종료일보다 늦습니다/)).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'PDF 생성 → 다운로드' })).toBeEnabled();
   });
 
   it('검증 버튼은 "지금 검증" 하나뿐(새로 검증·전체 즉시 검증 통합)', async () => {

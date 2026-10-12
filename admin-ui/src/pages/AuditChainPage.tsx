@@ -11,8 +11,8 @@ import { useLoad } from '@/lib/useLoad';
 import { describeError } from '@/lib/describeError';
 import { illustrations } from '@/assets/illustrations';
 import {
-  Alert, Badge, Button, Card, CardHeader, DataTable, Dialog, EmptyState, Field, KpiCard, LoadError, PageHeader,
-  Segmented, Skeleton, StatusStrip, useToast, type Column,
+  Alert, Badge, Button, Card, CardHeader, ConfirmDialog, DataTable, Dialog, EmptyState, Field, KpiCard, LoadError, Menu,
+  PageHeader, Segmented, Skeleton, StatusStrip, useToast, type Column,
 } from '@/ui';
 
 type ChainRow = ChainOverview['tenants'][number];
@@ -63,6 +63,8 @@ function MonthlyReportDialog({ open, onClose, overview }: {
   const [to, setTo] = useState(initial.to);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  // YYYY-MM-DD 문자열은 사전순 = 날짜순. 같은 날은 허용한다.
+  const rangeError = from && to && from > to ? '시작일이 종료일보다 늦습니다. 날짜는 KST 기준입니다.' : undefined;
 
   async function handleGenerate() {
     setBusy(true);
@@ -90,17 +92,20 @@ function MonthlyReportDialog({ open, onClose, overview }: {
       sub="기간 내 전체 tenant 의 chain 검증 결과를 PDF 로 묶습니다."
       footer={<>
         <Button onClick={onClose} disabled={busy}>취소</Button>
-        <Button variant="primary" onClick={() => void handleGenerate()} disabled={busy || !from || !to}>
+        <Button variant="primary" onClick={() => void handleGenerate()} disabled={busy || !from || !to || !!rangeError}>
           {busy ? '생성 중…' : 'PDF 생성 → 다운로드'}
         </Button>
       </>}
     >
       <div className="grid-2" style={{ gap: 12 }}>
         <Field label="시작일" htmlFor="report-from">
-          <input id="report-from" className="input mono" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input id="report-from" className="input mono" type="date" value={from} aria-invalid={!!rangeError}
+                 onChange={(e) => setFrom(e.target.value)} />
         </Field>
-        <Field label="종료일" htmlFor="report-to">
-          <input id="report-to" className="input mono" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <Field label="종료일" htmlFor="report-to" error={rangeError}>
+          <input id="report-to" className="input mono" type="date" value={to} aria-invalid={!!rangeError}
+                 aria-describedby={rangeError ? 'report-to-error' : undefined}
+                 onChange={(e) => setTo(e.target.value)} />
         </Field>
       </div>
       <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden' }}>
@@ -139,8 +144,6 @@ export default function AuditChainPage() {
   const overview = chain.data;
   const [showReport, setShowReport] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
-  const [backfilling, setBackfilling] = useState(false);
-  const backfillCancelRef = useRef<HTMLButtonElement>(null);
   const [incidents, setIncidents] = useState<IncidentView[] | null>(null); // null = 아직 모름(로딩 중이거나 실패);
   const [incidentError, setIncidentError] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -181,20 +184,12 @@ export default function AuditChainPage() {
   }
 
   // 체인 백필은 검증이 아니다: 링크가 맞지 않는 행의 hash 를 다시 계산해 덮어쓰고 이후를 다시 잇는다.
-  // 행이 삭제된 체인에 실행하면 공백이 다시 이어져 위변조 흔적이 사라진다 — 확인 다이얼로그 뒤에서만 실행한다.
-  async function handleBackfill() {
-    setBackfilling(true);
-    try {
-      const r = await auditChainMonitorApi.backfill();
-      setBackfillOpen(false);
-      toast({ kind: 'ok', title: '백필 완료', message: `tenant ${fmt(r.tenantsProcessed)}개 처리 · 행 ${fmt(r.rowsUpdated)}개 갱신` });
-      reverify();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '백필 실패';
-      toast({ kind: 'err', title: '백필 실패', message: msg });
-    } finally {
-      setBackfilling(false);
-    }
+  // 행이 삭제된 체인에 실행하면 공백이 다시 이어져 위변조 흔적이 사라진다 — 위변조가 있으면 메뉴에서 막고,
+  // L3 확인 뒤에만 실행한다. 실패(throw)는 ConfirmDialog 가 다이얼로그 안에 보여 준다.
+  async function runBackfill() {
+    const r = await auditChainMonitorApi.backfill();
+    toast({ kind: 'ok', title: '백필 완료', message: `tenant ${fmt(r.tenantsProcessed)}개 처리 · 행 ${fmt(r.rowsUpdated)}개 갱신` });
+    reverify();
   }
 
   function openTenant(tenantId: string | null) {
@@ -365,12 +360,22 @@ export default function AuditChainPage() {
         title={PAGE_TITLE}
         sub={PAGE_SUB}
         actions={<>
-          <Button onClick={() => setBackfillOpen(true)}>체인 백필(마이그레이션)…</Button>
           <Button icon={<Icons.Download size={14} />} onClick={() => setShowReport(true)}>월간 보고서</Button>
           {/* 읽기 전용: overview 호출 시 서버가 전 tenant chain 을 검증한다. 진행률은 서버가 주지 않으므로 표시하지 않는다. */}
           <Button variant="primary" icon={<Icons.Hash size={14} />} onClick={reverify} disabled={verifying}>
             {verifying ? '검증 중…' : '지금 검증'}
           </Button>
+          <Menu
+            label="더 보기"
+            trigger="button"
+            items={[{
+              label: '체인 백필…',
+              danger: true,
+              disabled: tampered,
+              disabledReason: '위변조 의심 tenant가 있으면 쓸 수 없습니다. 먼저 조사·해결하세요.',
+              onSelect: () => setBackfillOpen(true),
+            }]}
+          />
         </>}
       />
 
@@ -551,27 +556,23 @@ export default function AuditChainPage() {
         </Field>
       </Dialog>
 
-      <Dialog
-        open={backfillOpen}
-        onClose={() => { if (!backfilling) setBackfillOpen(false); }}
-        role="alertdialog"
-        title="체인 백필을 실행하시겠습니까?"
-        initialFocusRef={backfillCancelRef}
-        footer={<>
-          <button ref={backfillCancelRef} type="button" className="btn" onClick={() => setBackfillOpen(false)} disabled={backfilling}>취소</button>
-          <Button variant="danger-solid" onClick={() => void handleBackfill()} disabled={backfilling}>
-            {backfilling ? '백필 중…' : '백필 실행'}
-          </Button>
-        </>}
+      <ConfirmDialog
+        open={backfillOpen && !tampered}
+        onClose={() => setBackfillOpen(false)}
+        level="L3"
+        title="체인 백필을 실행할까요?"
+        verb="백필 실행"
+        acknowledge="위변조 흔적이 사라질 수 있고 되돌릴 수 없다는 것을 이해했습니다"
+        onConfirm={runBackfill}
       >
         <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
           백필은 검증이 아닙니다. 이전 행과 링크가 맞지 않는 모든 행의 hash 를 다시 계산해 덮어씁니다. 그 뒤의 체인도 모두 다시 연결합니다.
         </p>
-        <Alert tone="bad">
-          행이 삭제된 체인에 실행하면 빈자리가 다시 이어져, 삭제 흔적(위변조 증거)이 사라집니다. 위변조가 감지된 상태라면 먼저 Incident 를 생성해 조사하세요.
+        <Alert tone="warn">
+          행이 삭제된 체인에 실행하면 빈자리가 다시 이어져, 삭제 흔적(위변조 증거)이 사라집니다. 되돌릴 수 없습니다.
         </Alert>
         <p className="hint" style={{ margin: 0 }}>hash 가 비어 있는 기존 데이터를 체인에 편입하는 마이그레이션 용도로만 사용하세요.</p>
-      </Dialog>
+      </ConfirmDialog>
 
       <MonthlyReportDialog open={showReport} onClose={() => setShowReport(false)} overview={overview} />
     </div>
