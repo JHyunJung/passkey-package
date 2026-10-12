@@ -153,11 +153,24 @@ describe('ActivityPage V2', () => {
     expect(screen.queryByText(/^카테고리:/)).toBeNull();
   });
 
-  it('첫 로드 실패 시 불러오기 실패 상태', async () => {
+  it('첫 로드 실패 시 불러오기 실패 상태(LoadError, KPI "—", 내보내기 비활성)', async () => {
     vi.mocked(activityApi.fetch).mockRejectedValue(new Error('down'));
     renderPage();
-    expect(await screen.findByText('Activity 데이터를 불러오지 못했습니다')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '재시도' })).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('활동을 불러오지 못했습니다');
+    expect(within(alert).getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+    expect(screen.getAllByText('—')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: '내보내기' })).toBeDisabled();
+    expect(screen.queryByText(/^실시간/)).toBeNull();
+  });
+
+  it('첫 로드 실패 → 다시 시도 성공하면 목록을 보인다', async () => {
+    vi.mocked(activityApi.fetch).mockRejectedValueOnce(new Error('down'));
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    fireEvent.click(within(alert).getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByRole('group', { name: '오늘' })).toBeInTheDocument();
+    expect(screen.getByText(/^실시간 · \d+초 전 갱신$/)).toBeInTheDocument();
   });
 
   it('상세: A 를 연 뒤 B 를 열면 늦게 온 A 응답은 무시한다', async () => {
@@ -231,5 +244,86 @@ describe('ActivityPage V2', () => {
     await screen.findByRole('group', { name: '오늘' });
     expect(screen.getByText('평균 응답')).toBeInTheDocument();
     expect(container.querySelector('.kpis')).not.toHaveClass('kpis--3');
+  });
+
+  it('불러오는 동안 Skeleton, "로딩 중…" 텍스트 없음', async () => {
+    let resolve: (v: ActivityView) => void = () => {};
+    vi.mocked(activityApi.fetch).mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderPage();
+    expect(await screen.findByRole('status', { name: '불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText(/로딩 중…/)).toBeNull();
+    await act(async () => { resolve(view(FEED)); });
+  });
+
+  it('폴링이 실패하면 "연결 끊김 · N초 전 갱신" + 목록 유지, 다시 연결되면 "실시간"', async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(NOW);
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    expect(screen.getByText(/^실시간 · \d+초 전 갱신$/)).toBeInTheDocument();
+
+    vi.mocked(activityApi.fetch).mockRejectedValue(new Error('down'));
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    await waitFor(() => expect(screen.getByText(/^연결 끊김 · \d+초 전 갱신$/)).toBeInTheDocument());
+    expect(screen.getByText('새 이벤트를 받지 못하고 있습니다')).toBeInTheDocument();
+    expect(screen.getByText(/아래 목록은 12:00:00 기준입니다/)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '오늘' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull(); // 오류 토스트·LoadError 로 바꾸지 않는다
+
+    vi.mocked(activityApi.fetch).mockResolvedValue(view(FEED));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '지금 다시 연결' })); });
+    await waitFor(() => expect(screen.getByText(/^실시간 · \d+초 전 갱신$/)).toBeInTheDocument());
+    expect(screen.queryByText('새 이벤트를 받지 못하고 있습니다')).toBeNull();
+  });
+
+  it('이전 폴링이 아직 진행 중이면 다음 폴링을 시작하지 않는다', async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(NOW);
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    const callsBefore = vi.mocked(activityApi.fetch).mock.calls.length;
+    let resolve: (v: ActivityView) => void = () => {};
+    vi.mocked(activityApi.fetch).mockImplementation(() => new Promise((r) => { resolve = r; }));
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    expect(vi.mocked(activityApi.fetch).mock.calls.length).toBe(callsBefore + 1);
+    await act(async () => { resolve(view(FEED)); });
+  });
+
+  it('더 늦게 시작한 요청이 먼저 끝나면 먼저 시작한 요청의 늦은 응답은 버린다', async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(NOW);
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    let resolvePoll: (v: ActivityView) => void = () => {};
+    vi.mocked(activityApi.fetch).mockImplementationOnce(() => new Promise((r) => { resolvePoll = r; }));
+    await act(async () => { vi.advanceTimersByTime(5000); }); // 폴링 시작(보류)
+    vi.mocked(activityApi.fetch).mockResolvedValueOnce(view([ev('n1', '2026-10-11T02:59:00Z')]));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '새로고침' })); });
+    await waitFor(() => expect(screen.getByText('11:59')).toBeInTheDocument());
+    // 먼저 시작한 폴링의 응답(실패 포함 어떤 것이든)이 상태를 덮어쓰지 못한다.
+    await act(async () => { resolvePoll(view([ev('z9', '2026-10-11T01:30:00Z')])); });
+    expect(screen.queryByText('10:30')).toBeNull();
+  });
+
+  it('"N초 전 갱신" 카운터는 aria-live 영역 밖에 있다', async () => {
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    const counter = screen.getByText(/^실시간 · \d+초 전 갱신$/);
+    expect(counter.closest('[aria-live], [role="status"], [role="alert"]')).toBeNull();
+  });
+
+  it('상세 로드 실패는 패널 안 LoadError, 다시 시도로 재요청', async () => {
+    vi.mocked(activityApi.fetchDetail).mockRejectedValueOnce(new Error('x'));
+    renderPage();
+    const panel = await openFirstDetail();
+    expect(await within(panel).findByRole('alert')).toHaveTextContent('이벤트 상세를 불러오지 못했습니다');
+    fireEvent.click(within(panel).getByRole('button', { name: '다시 시도' }));
+    expect(await within(panel).findByRole('group', { name: '언제' })).toBeInTheDocument();
+    expect(activityApi.fetchDetail).toHaveBeenCalledTimes(2);
   });
 });

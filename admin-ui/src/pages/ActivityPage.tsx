@@ -5,6 +5,7 @@ import { Icons } from '@/icons/Icons';
 import { activityApi } from '@/api/activity';
 import { downloadCsv } from '@/lib/csvExport';
 import { kstDateTime, kstTime, kstToday, utcIso, groupByDay } from '@/lib/kst';
+import { describeError } from '@/lib/describeError';
 import type { ActivityView, ActivityCategory, ActivityDetailView } from '@/api/types';
 import { adaptFeedItems, type RecentActivityEvent } from './tenant/recentActivityAdapter';
 import { actionLabel, eventSentence } from './activityLabels';
@@ -13,7 +14,7 @@ import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import { illustrations } from '@/assets/illustrations';
 import {
-  Button, CopyBtn, EmptyState, IconButton, KpiCard, PageHeader, RemovableChip, Segmented, useToast,
+  Alert, Button, CopyBtn, EmptyState, IconButton, KpiCard, LoadError, PageHeader, RemovableChip, Segmented, Skeleton, useToast,
 } from '@/ui';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -146,8 +147,8 @@ function DiffLine({ row }: { row: DiffRow }) {
 }
 
 function DetailPanel({
-  detail, loading, onClose, onOpenTenant,
-}: { detail: ActivityDetailView | null; loading: boolean; onClose: () => void; onOpenTenant: (id: string | null) => void }) {
+  detail, loading, error, onRetry, onClose, onOpenTenant,
+}: { detail: ActivityDetailView | null; loading: boolean; error: unknown; onRetry: () => void; onClose: () => void; onOpenTenant: (id: string | null) => void }) {
   const payload = detail ? parsePayload(detail.payload) : null;
   const json = payload ? JSON.stringify(payload, null, 2) : (detail?.payload ?? '');
   const rows = detail ? buildDiffRows(detail) : [];
@@ -160,7 +161,8 @@ function DetailPanel({
         <IconButton label="닫기" icon={<Icons.X size={16} />} onClick={onClose} />
       </div>
       <div className="card__body stack-4" style={{ gap: 18 }}>
-        {loading && <p className="muted" style={{ margin: 0, fontSize: 13 }}>불러오는 중…</p>}
+        {loading && <Skeleton rows={4} label="상세 불러오는 중" />}
+        {!loading && error != null && <LoadError compact what="이벤트 상세" error={error} onRetry={onRetry} />}
         {!loading && detail && (
           <>
             <Section title="언제">
@@ -238,7 +240,26 @@ function FeedRow({ e, selected, onSelect, onOpenTenant }: {
   );
 }
 
+// ── Live 연결 상태 ────────────────────────────────────────────────────────────
+
+/** 폴링 상태. 실패하면 초록 "실시간" 대신 회색 점 + 경고색 "연결 끊김" 과 마지막 갱신 경과 시간을 보인다. */
+function LiveStatus({ disconnected, lastOkAt, now }: { disconnected: boolean; lastOkAt: number | null; now: number }) {
+  const ago = lastOkAt === null ? '' : ` · ${Math.max(0, Math.floor((now - lastOkAt) / 1000))}초 전 갱신`;
+  return (
+    <>
+      <span className="row" style={{ gap: 6, fontSize: 12, color: disconnected ? 'var(--warn)' : 'var(--mute)', fontWeight: disconnected ? 600 : undefined }}>
+        <span className="dot" aria-hidden="true" style={{ background: disconnected ? 'var(--faint)' : 'var(--ok)' }} />
+        {disconnected ? `연결 끊김${ago}` : `실시간${ago}`}
+      </span>
+      {/* 초 단위 카운터는 live 영역 밖. 연결이 복구될 때만 알린다(끊김은 아래 경고 배너가 알린다). */}
+      <span className="sr-only" role="status">{disconnected ? '' : '실시간 연결됨'}</span>
+    </>
+  );
+}
+
 // ── ActivityPage ──────────────────────────────────────────────────────────────
+
+const POLL_MS = 5000;
 
 export default function ActivityPage() {
   const navigate = useNavigate();
@@ -250,6 +271,27 @@ export default function ActivityPage() {
   const categoryFilter: ActivityCategory = rawCategory === 'ops' || rawCategory === 'security' ? rawCategory : 'all';
   const selectedTenant = searchParams.get('tenantId') || undefined;
 
+  // null = 아직 서버 응답 없음
+  const [events, setEvents] = useState<DisplayEvent[] | null>(null);
+  const [kpi, setKpi] = useState(EMPTY_KPI);
+  const [topTenants, setTopTenants] = useState<{ tenantId: string; tenantName: string; tenantSlug: string; count: number }[]>([]);
+  // 데이터를 한 번도 받지 못한 실패 → loadError(LoadError). 받은 뒤의 실패 → disconnected(목록 유지).
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [disconnected, setDisconnected] = useState(false);
+  const [lastOkAt, setLastOkAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [retrying, setRetrying] = useState(false);
+
+  const [detail, setDetail] = useState<ActivityDetailView | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<unknown>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const [visibleCount, setVisibleCount] = useState(24);
+
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [actionQuery, setActionQuery] = useState('');
+
   function setFilterParam(key: 'category' | 'tenantId', value: string | null) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -260,35 +302,37 @@ export default function ActivityPage() {
   function setCategoryFilter(c: ActivityCategory) { setFilterParam('category', c === 'all' ? null : c); }
   function setSelectedTenant(id: string | undefined) { setFilterParam('tenantId', id ?? null); }
 
-  // null = not yet loaded from server; undefined = server error (show empty state)
-  const [events, setEvents] = useState<DisplayEvent[] | null>(null);
-  const [kpi, setKpi] = useState(EMPTY_KPI);
-  const [topTenants, setTopTenants] = useState<{ tenantId: string; tenantName: string; tenantSlug: string; count: number }[]>([]);
-  const [serverError, setServerError] = useState(false);
-
-  const [detail, setDetail] = useState<ActivityDetailView | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const [visibleCount, setVisibleCount] = useState(24);
-
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [actionQuery, setActionQuery] = useState('');
-
   // Load tenant list once for the filter dropdown
   useEffect(() => {
     tenantsApi.list().then(setTenants).catch(() => setTenants([]));
   }, []);
 
+  // "N초 전 갱신" 을 1초마다 다시 그린다.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // 5-second polling. 필터(category/tenant)가 바뀔 때마다 세대를 올리고, 이전 세대의 늦은 응답은 버린다.
   const queryGenRef = useRef(0);
+  // 가장 나중에 시작한 요청만 상태를 바꾼다(폴링·수동 새로고침 공통). 폴링은 진행 중이면 겹쳐 시작하지 않는다.
+  const reqSeqRef = useRef(0);
+  const pollInFlightRef = useRef(false);
+  // 필터가 바뀐 뒤 첫 응답은 이전 필터의 목록을 병합하지 않고 통째로 교체한다.
+  const replaceNextRef = useRef(true);
   // Track whether we've had at least one successful server response
   const hasServerDataRef = useRef(false);
 
-  function applyView(view: ActivityView, mode: 'replace' | 'merge') {
+  function applyView(view: ActivityView) {
+    const mode = replaceNextRef.current ? 'replace' : 'merge';
+    replaceNextRef.current = false;
     const adapted = adaptServerView(view);
     hasServerDataRef.current = true;
-    setServerError(false);
+    const t = Date.now();
+    setLoadError(null);
+    setDisconnected(false);
+    setLastOkAt(t);
+    setNow(t);
     // merge: 폴링은 최신 한 페이지만 받으므로, 아직 없는 행만 앞에 붙여 '더 보기'로 불러온 행을 유지한다.
     setEvents((prev) => {
       if (mode === 'replace' || prev === null) return adapted.events;
@@ -305,24 +349,30 @@ export default function ActivityPage() {
     setTopTenants(adapted.topTenants);
   }
 
+  function onFetchFailed(e: unknown) {
+    if (hasServerDataRef.current) setDisconnected(true); // 이미 보이는 목록은 지우지 않는다
+    else setLoadError(e);
+  }
+
   useEffect(() => {
     let cancelled = false;
     const gen = ++queryGenRef.current;
-    let first = true;
+    replaceNextRef.current = true;
+    pollInFlightRef.current = false;
 
     async function fetchOnce() {
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
+      const seq = ++reqSeqRef.current;
       try {
         const view = await activityApi.fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant);
-        if (cancelled || gen !== queryGenRef.current) return;
-        applyView(view, first ? 'replace' : 'merge');
-        first = false;
-      } catch {
-        if (cancelled) return;
-        if (!hasServerDataRef.current) {
-          // Never had server data: show error state rather than fixture
-          setServerError(true);
-        }
-        // If we already had server data, keep it (transient network blip)
+        if (cancelled || gen !== queryGenRef.current || seq !== reqSeqRef.current) return;
+        applyView(view);
+      } catch (e) {
+        if (cancelled || gen !== queryGenRef.current || seq !== reqSeqRef.current) return;
+        onFetchFailed(e);
+      } finally {
+        if (gen === queryGenRef.current) pollInFlightRef.current = false;
       }
     }
 
@@ -331,7 +381,7 @@ export default function ActivityPage() {
     setVisibleCount(24);
 
     void fetchOnce();
-    const id = setInterval(() => void fetchOnce(), 5000);
+    const id = setInterval(() => void fetchOnce(), POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -357,16 +407,18 @@ export default function ActivityPage() {
     setSelectedId(id);
     setDetailLoading(true);
     setDetail(null);
+    setDetailError(null);
     activityApi
       .fetchDetail(id)
       .then((d) => { if (req === detailReqRef.current) setDetail(d); })
-      .catch(() => { if (req === detailReqRef.current) toast({ kind: 'err', title: '상세 로드 실패' }); })
+      .catch((e: unknown) => { if (req === detailReqRef.current) setDetailError(e); })
       .finally(() => { if (req === detailReqRef.current) setDetailLoading(false); });
   }
 
   function closeDetail() {
     detailReqRef.current++;
     setDetail(null);
+    setDetailError(null);
     setDetailLoading(false);
     setSelectedId(null);
   }
@@ -376,16 +428,17 @@ export default function ActivityPage() {
     navigate(`/tenants/${tenantId}`);
   }
 
+  // 새로고침 · "지금 다시 연결" · LoadError "다시 시도" 공통. 결과는 상태 표시로 알린다(토스트 중복 없음).
   function handleRefresh() {
     const gen = queryGenRef.current;
+    const seq = ++reqSeqRef.current;
+    const latest = () => gen === queryGenRef.current && seq === reqSeqRef.current;
+    setRetrying(true);
     activityApi
       .fetch(null, categoryFilter === 'all' ? undefined : categoryFilter, undefined, selectedTenant)
-      .then((view) => {
-        if (gen !== queryGenRef.current) return;
-        applyView(view, 'merge');
-        toast({ kind: 'ok', title: '새로고침 완료' });
-      })
-      .catch(() => toast({ kind: 'warn', title: '새로고침 실패', message: '서버 응답 없음' }));
+      .then((view) => { if (latest()) applyView(view); })
+      .catch((e: unknown) => { if (latest()) onFetchFailed(e); })
+      .finally(() => { if (latest()) setRetrying(false); });
   }
 
   function handleExport() {
@@ -426,8 +479,8 @@ export default function ActivityPage() {
       // Expand the visible window so newly-loaded rows actually appear in the feed
       setVisibleCount((n) => n + Math.max(adapted.events.length, 24));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast({ kind: 'err', title: '추가 로드 실패', message: msg });
+      const info = describeError(err);
+      toast({ kind: 'err', title: '이전 기록을 불러오지 못했습니다', message: `${info.title}. ${info.detail}` });
     }
   }
 
@@ -444,42 +497,40 @@ export default function ActivityPage() {
   const header = (
     <PageHeader
       title="Activity"
-      sub="전체 tenant의 ceremony · 운영 액션 · 보안 이벤트가 실시간으로 모입니다."
-      actions={serverError ? (
-        <Button icon={<Icons.Refresh size={14} />} onClick={handleRefresh}>재시도</Button>
-      ) : (
-        <>
-          <span className="row muted" style={{ gap: 6, fontSize: 12 }}>
-            <span className="dot" aria-hidden="true" style={{ background: 'var(--ok)' }} />Live
-          </span>
-          <Button icon={<Icons.Refresh size={14} />} onClick={handleRefresh}>새로고침</Button>
-          <Button icon={<Icons.Download size={14} />} onClick={handleExport}>내보내기</Button>
-        </>
-      )}
+      sub="전체 tenant의 패스키 등록·인증 · 운영 변경 · 보안 이벤트를 모아 봅니다."
+      actions={<>
+        {events !== null && <LiveStatus disconnected={disconnected} lastOkAt={lastOkAt} now={now} />}
+        <Button icon={<Icons.Refresh size={14} />} onClick={handleRefresh} disabled={events === null || retrying}>새로고침</Button>
+        <Button icon={<Icons.Download size={14} />} onClick={handleExport} disabled={events === null}>내보내기</Button>
+      </>}
     />
   );
 
-  // Loading state: waiting for first server response
-  if (events === null && !serverError) {
-    return (
-      <div className="page">
-        {header}
-        <div className="card"><div className="empty"><p className="empty__sub">Activity 데이터 로딩 중…</p></div></div>
-      </div>
-    );
-  }
+  // 응답 전·실패 시 KPI 는 0 이 아니라 "—".
+  const kpiValue = (n: number) => (events === null ? '—' : fmt(n));
+  const kpis = (
+    <div className={kpi.p95Ms != null ? 'kpis' : 'kpis kpis--3'}>
+      <KpiCard label="활동 (24h)" value={kpiValue(kpi.events24h)} />
+      <KpiCard label="운영 액션 (24h)" value={kpiValue(kpi.ops24h)} />
+      <KpiCard
+        label="보안 이벤트 (24h)"
+        value={<span style={{ color: events !== null && kpi.security24h > 0 ? 'var(--bad)' : undefined }}>{kpiValue(kpi.security24h)}</span>}
+      />
+      {/* §6: 서버가 p95Ms 를 주지 않으면(현재 항상 null) KPI 를 그리지 않는다. */}
+      {kpi.p95Ms != null && <KpiCard label="평균 응답" value={`${kpi.p95Ms}ms`} hint={`p95 ${kpi.p95Ms}ms`} />}
+    </div>
+  );
 
-  // Error state: first fetch failed — do not show fixture data as live data
-  if (serverError) {
+  // 첫 응답 전: 로딩(Skeleton) 또는 첫 로드 실패(LoadError). 픽스처를 실데이터처럼 보이지 않는다.
+  if (events === null) {
     return (
       <div className="page">
         {header}
+        {kpis}
         <div className="card">
-          <EmptyState
-            illustration={illustrations.loadError}
-            title="Activity 데이터를 불러오지 못했습니다"
-            description="서버에 연결할 수 없거나 접근 권한이 없습니다."
-          />
+          {loadError != null
+            ? <LoadError what="활동" error={loadError} onRetry={handleRefresh} retrying={retrying} />
+            : <Skeleton rows={6} />}
         </div>
       </div>
     );
@@ -496,16 +547,17 @@ export default function ActivityPage() {
     <div className="page">
       {header}
 
-      <div className={kpi.p95Ms != null ? 'kpis' : 'kpis kpis--3'}>
-        <KpiCard label="활동 (24h)" value={fmt(kpi.events24h)} />
-        <KpiCard label="운영 액션 (24h)" value={fmt(kpi.ops24h)} />
-        <KpiCard
-          label="보안 이벤트 (24h)"
-          value={<span style={{ color: kpi.security24h > 0 ? 'var(--bad)' : undefined }}>{fmt(kpi.security24h)}</span>}
-        />
-        {/* §6: 서버가 p95Ms 를 주지 않으면(현재 항상 null) KPI 를 그리지 않는다. */}
-        {kpi.p95Ms != null && <KpiCard label="평균 응답" value={`${kpi.p95Ms}ms`} hint={`p95 ${kpi.p95Ms}ms`} />}
-      </div>
+      {disconnected && lastOkAt !== null && (
+        <Alert
+          tone="warn"
+          title="새 이벤트를 받지 못하고 있습니다"
+          actions={<Button size="sm" icon={<Icons.Refresh size={14} />} onClick={handleRefresh} disabled={retrying}>지금 다시 연결</Button>}
+        >
+          {`아래 목록은 ${kstDateTime(new Date(lastOkAt).toISOString()).slice(11)} 기준입니다. ${POLL_MS / 1000}초마다 자동으로 다시 연결합니다.`}
+        </Alert>
+      )}
+
+      {kpis}
 
       <div className="card" style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="row" style={{ gap: 12 }}>
@@ -585,8 +637,15 @@ export default function ActivityPage() {
         </section>
 
         <aside style={{ flex: '1 1 320px', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {(detail || detailLoading) && (
-            <DetailPanel detail={detail} loading={detailLoading} onClose={closeDetail} onOpenTenant={handleOpenTenant} />
+          {(detail || detailLoading || detailError != null) && (
+            <DetailPanel
+              detail={detail}
+              loading={detailLoading}
+              error={detailError}
+              onRetry={() => { if (selectedId) openDetail(selectedId); }}
+              onClose={closeDetail}
+              onOpenTenant={handleOpenTenant}
+            />
           )}
           <section className="card">
             <div className="card__head">
