@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
 import { ToastHost } from '@/ui';
+import { ApiError } from '@/api/types';
 import type { MdsHistoryRow, MdsStatus } from '@/api/mdsStatus';
 
 vi.mock('@/api/mdsStatus', () => ({
@@ -60,7 +61,7 @@ describe('MdsStatusTab V2', () => {
     expect(screen.getByText('2시간 전')).toBeInTheDocument();
     expect(screen.getByText('https://mds3.fidoalliance.org/')).toBeInTheDocument();
     expect(screen.getByText('97%')).toBeInTheDocument();
-    expect(screen.getByText('MDS_STRICT_OPTIONAL')).toHaveClass('badge--info');
+    expect(screen.getByText('MDS 확인 권장')).toHaveClass('badge--info');
   });
 
   it('이력 표는 최근 6행, 상태 라벨 한국어', async () => {
@@ -101,7 +102,7 @@ describe('MdsStatusTab V2', () => {
     expect(screen.queryByText(/일 전/)).toBeNull();
     expect(screen.queryByText(/1970/)).toBeNull();
     expect(screen.getByText('마지막 동기화').closest('.kpi')).toHaveTextContent('—');
-    expect(screen.getByText('알 수 없음')).toBeInTheDocument();
+    expect(screen.getByText('다음 갱신 예정').nextElementSibling).toHaveTextContent('—');
   });
 
   it('fetchedAt 이 2000년 이전이면 version 이 있어도 동기화 이력 없음', async () => {
@@ -138,5 +139,105 @@ describe('MdsStatusTab V2', () => {
     renderTab();
     const table = await screen.findByRole('table');
     expect(within(table).getByText('2026-10-11 01:30')).toBeInTheDocument();
+  });
+});
+
+describe('MdsStatusTab V3', () => {
+  it('신뢰 모드는 사람이 읽는 라벨 + 설명, 원문 enum 은 툴팁에만', async () => {
+    renderTab();
+    const badge = await screen.findByText('MDS 확인 권장');
+    expect(badge.closest('[title]')).toHaveAttribute('title', 'MDS_STRICT_OPTIONAL');
+    expect(screen.getByText('MDS 에 없는 인증기도 등록은 허용하고, 폐기·취약 판정된 인증기는 거부합니다.')).toBeInTheDocument();
+    expect(screen.queryByText('MDS_STRICT_OPTIONAL')).toBeNull();
+  });
+
+  it('모르는 신뢰 모드는 원문 그대로(설명 없음), 툴팁에도 원문', async () => {
+    mock(mdsStatusApi.get).mockResolvedValue({ ...status, trustMode: 'CUSTOM_MODE' });
+    renderTab();
+    const badge = await screen.findByText('CUSTOM_MODE');
+    expect(badge).toHaveClass('badge--info');
+    expect(badge.closest('[title]')).toHaveAttribute('title', 'CUSTOM_MODE');
+  });
+
+  it('서버가 값을 주지 않으면 "—" — 기본값을 지어내지 않는다', async () => {
+    mock(mdsStatusApi.get).mockResolvedValue({ ...status, trustMode: null, nextUpdate: null, successRate30d: null, trustAnchorCount: null } as unknown as MdsStatus);
+    renderTab();
+    expect(await screen.findByText('설정되지 않음')).toBeInTheDocument();
+    expect(screen.queryByText('MDS_STRICT_OPTIONAL')).toBeNull();
+    expect(screen.getByText('다음 갱신 예정').nextElementSibling).toHaveTextContent('—');
+    expect(screen.getByText('동기화 성공률 (30일)').nextElementSibling).toHaveTextContent('—');
+    expect(screen.getByText('신뢰 앵커 (Trust anchors)').closest('.kpi')).toHaveTextContent('—');
+    expect(screen.queryByText('0%')).toBeNull();
+  });
+
+  it('영어 잔재 "next 갱신 예정" 대신 "다음 갱신 예정 … KST"', async () => {
+    renderTab();
+    expect(await screen.findByText('다음 갱신 예정')).toBeInTheDocument();
+    expect(screen.queryByText(/next/)).toBeNull();
+    expect(screen.getByText('다음 갱신 예정').nextElementSibling).toHaveTextContent('2026-10-12 03:00 KST');
+  });
+
+  it('로드 실패는 LoadError(다시 시도 + 오류 정보 복사), 토스트 없음', async () => {
+    mock(mdsStatusApi.get).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('MDS 상태를 불러오지 못했습니다');
+    expect(within(alert).getByRole('button', { name: '오류 정보 복사' })).toBeInTheDocument();
+    expect(document.querySelector('.toast')).toBeNull();
+  });
+
+  it('로딩 중에는 Skeleton', async () => {
+    let resolveGet: (v: MdsStatus) => void = () => {};
+    mock(mdsStatusApi.get).mockReturnValue(new Promise<MdsStatus>((r) => { resolveGet = r; }));
+    renderTab();
+    expect(screen.getByRole('status', { name: 'MDS 상태 불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('MDS 상태 로딩 중…')).toBeNull();
+    resolveGet(status);
+    expect(await screen.findByText('정상 · BLOB #87')).toBeInTheDocument();
+  });
+
+  it('즉시 갱신 후 재조회가 실패하면 데이터를 유지하고 경고 + 다시 시도', async () => {
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: /즉시 갱신/ }));
+    mock(mdsStatusApi.get).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    // 위 mock 은 클릭 직후 재조회에 적용되도록 sync 완료 전에 교체했다
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('정상 · BLOB #87')).toBeInTheDocument();
+    mock(mdsStatusApi.get).mockResolvedValue(status);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.queryByText('다시 확인하지 못했습니다')).toBeNull());
+    expect(screen.getByText('정상 · BLOB #87')).toBeInTheDocument();
+  });
+
+  it('즉시 갱신은 진행 중 재클릭해도 한 번만 호출하고, 끝나면 다시 눌 수 있다', async () => {
+    let resolveSync: (v: { status: 'SYNCED'; version: number; error: null }) => void = () => {};
+    mock(mdsStatusApi.sync).mockReturnValue(new Promise((r) => { resolveSync = r; }));
+    renderTab();
+    const btn = await screen.findByRole('button', { name: /즉시 갱신/ });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await waitFor(() => expect(screen.getByRole('button', { name: /갱신 중/ })).toBeDisabled());
+    expect(mdsStatusApi.sync).toHaveBeenCalledTimes(1);
+    resolveSync({ status: 'SYNCED', version: 88, error: null });
+    await waitFor(() => expect(screen.getByRole('button', { name: /즉시 갱신/ })).toBeEnabled());
+  });
+
+  it('즉시 갱신 예외는 describeError 문구로 알리고(원문 노출 없음) 버튼을 되돌린다', async () => {
+    mock(mdsStatusApi.sync).mockRejectedValue(new ApiError(500, 'C999', 'java.lang.NullPointerException at X'));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: /즉시 갱신/ }));
+    expect(await screen.findByText('MDS 갱신 실패')).toBeInTheDocument();
+    expect(screen.getByText('서버가 잠시 응답하지 않습니다')).toBeInTheDocument();
+    expect(screen.queryByText(/NullPointerException/)).toBeNull();
+    expect(screen.getByRole('button', { name: /즉시 갱신/ })).toBeEnabled();
+  });
+
+  it('즉시 갱신 결과가 FAILED 여도 서버 원문 error 를 토스트에 싣지 않는다', async () => {
+    mock(mdsStatusApi.sync).mockResolvedValue({ status: 'FAILED', version: null, error: 'SSLHandshakeException: boom' });
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: /즉시 갱신/ }));
+    expect(await screen.findByText('MDS 갱신 실패')).toBeInTheDocument();
+    expect(screen.queryByText(/SSLHandshake/)).toBeNull();
+    expect(screen.getByRole('button', { name: /즉시 갱신/ })).toBeEnabled();
   });
 });

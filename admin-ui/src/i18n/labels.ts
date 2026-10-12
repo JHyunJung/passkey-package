@@ -27,3 +27,11 @@ export const AAGUID_MODE_LABELS: Record<string, string> = {
   ALLOWLIST: '허용 목록',
   DENYLIST: '차단 목록',
 };
+
+/** MDS 신뢰 모드 enum → 사람이 읽는 라벨 + 설명. 원문 enum 은 화면에서 title 툴팁으로만 보인다. 모르는 값은 원문 그대로. */
+export const MDS_TRUST_MODES: Record<string, { label: string; description: string }> = {
+  MDS_STRICT_OPTIONAL: {
+    label: 'MDS 확인 권장',
+    description: 'MDS 에 없는 인증기도 등록은 허용하고, 폐기·취약 판정된 인증기는 거부합니다.',
+  },
+};
