@@ -192,4 +192,52 @@ describe('SecurityPolicyTab V3', () => {
     expect(await screen.findByText('보안 정책을 저장하지 못했습니다')).toBeInTheDocument();
     expect(screen.getByLabelText('세션 idle timeout (분)')).toHaveValue(45);
   });
+
+  it('삭제 되돌리기는 목록이 가득 차 있으면(64개) 거부하고 안내한다', async () => {
+    const origin = window.location.origin;
+    const others = Array.from({ length: 63 }, (_, i) => `https://h${i}.example.com`);
+    mock(securityPolicyApi.get).mockResolvedValue({ ...view, corsAllowlist: [origin, ...others] });
+    await setup();
+    fireEvent.click(screen.getByRole('button', { name: `${origin} 삭제` }));
+    const input = screen.getByRole('textbox', { name: 'origin 추가' });
+    fireEvent.change(input, { target: { value: 'https://replacement.example.com' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: '삭제 되돌리기' }));
+    expect(screen.getByText('목록이 가득 찼습니다(최대 64개). 다른 origin 을 지운 뒤 되돌리세요.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `${origin} 삭제` })).toBeNull();
+  });
+
+  it('저장 전에 목록 전체를 검증한다(64개 초과면 확인 창·API 없이 인라인 오류)', async () => {
+    const many = Array.from({ length: 65 }, (_, i) => `https://h${i}.example.com`);
+    mock(securityPolicyApi.get).mockResolvedValue({ ...view, corsAllowlist: many });
+    await setup();
+    fireEvent.change(screen.getByLabelText('세션 idle timeout (분)'), { target: { value: '45' } });
+    fireEvent.click(within(bar()!).getByRole('button', { name: '저장' }));
+    expect(screen.getByText('origin 은 최대 64개까지 등록할 수 있습니다.')).toBeInTheDocument();
+    expect(securityPolicyApi.update).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('콘솔 origin 이 대문자로 저장돼 있어도 지우면 경고한다', async () => {
+    const upper = window.location.origin.toUpperCase().replace('HTTP', 'http');
+    mock(securityPolicyApi.get).mockResolvedValue({ ...view, corsAllowlist: [upper, 'https://admin.example.com'] });
+    await setup();
+    fireEvent.click(screen.getByRole('button', { name: `${upper} 삭제` }));
+    expect(screen.getByText(/지금 쓰고 있는 콘솔 주소입니다/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '삭제 되돌리기' }));
+    expect(screen.queryByText(/지금 쓰고 있는 콘솔 주소입니다/)).toBeNull();
+  });
+
+  it('서버에 1440 초과 값이 저장돼 있어도 손대지 않으면 오류로 막지 않는다', async () => {
+    mock(securityPolicyApi.get).mockResolvedValue({ ...view, sessionIdleTimeoutMinutes: 2000 });
+    mock(securityPolicyApi.update).mockResolvedValue({ ...view, sessionIdleTimeoutMinutes: 2000, mfaRequired: false });
+    renderWithDataRouter(<ToastHost><SecurityPolicyTab /></ToastHost>, { initialPath: '/settings?tab=security' });
+    const input = await screen.findByLabelText('세션 idle timeout (분)');
+    expect(input).not.toHaveAttribute('aria-invalid');
+    fireEvent.click(screen.getByRole('switch', { name: '모든 운영자에게 MFA 필수' }));
+    fireEvent.click(within(bar()!).getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(securityPolicyApi.update).toHaveBeenCalled());
+    fireEvent.change(input, { target: { value: '2001' } });
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+  });
 });

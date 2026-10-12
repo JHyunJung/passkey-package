@@ -2,10 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { securityPolicyApi, type SecurityPolicyView } from '@/api/securityPolicy';
 import { useLoad } from '@/lib/useLoad';
 import { describeError } from '@/lib/describeError';
-import { normalizeOrigin, timeoutError, validateOrigin } from '@/lib/policyValidation';
+import {
+  MAX_ORIGINS, MAX_ORIGIN_LENGTH, ORIGIN_COUNT_ERROR, ORIGIN_LENGTH_ERROR, normalizeOrigin, timeoutError, validateOrigin,
+} from '@/lib/policyValidation';
 import {
   Alert, Button, CardHeader, ChipInput, ConfirmDialog, LoadError, SaveBar, Skeleton, Switch, useToast, useUnsavedGuard,
 } from '@/ui';
+
+const RESTORE_FULL_ERROR = '목록이 가득 찼습니다(최대 64개). 다른 origin 을 지운 뒤 되돌리세요.';
 
 function sameList(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
@@ -19,6 +23,7 @@ export default function SecurityPolicyTab() {
   const [saved, setSaved] = useState<SecurityPolicyView | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmLockout, setConfirmLockout] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const timeoutRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const consoleOrigin = window.location.origin;
@@ -34,9 +39,12 @@ export default function SecurityPolicyTab() {
     if (policy.data) applyView(policy.data);
   }, [policy.data]);
 
-  const timeoutErr = timeoutError(sessionDraft);
+  // 서버에 이미 저장된 값(백엔드는 상한이 없다)을 손대지 않았다면 오류로 막지 않는다. 고칠 때만 1–1440 을 요구한다.
+  const timeoutUntouched = saved !== null && sessionDraft.trim() === String(saved.sessionIdleTimeoutMinutes);
+  const timeoutErr = timeoutUntouched ? null : timeoutError(sessionDraft);
+  const hasConsole = (list: string[]) => list.some((o) => o.toLowerCase() === consoleOrigin.toLowerCase());
   // 지금 쓰고 있는 콘솔 주소를 허용 목록에서 빼면 저장 즉시 이 콘솔이 잠긴다.
-  const removesConsole = saved !== null && saved.corsAllowlist.includes(consoleOrigin) && !corsAllowlist.includes(consoleOrigin);
+  const removesConsole = saved !== null && hasConsole(saved.corsAllowlist) && !hasConsole(corsAllowlist);
 
   /** 저장 본체. 실패는 throw — SaveBar 경로는 토스트로, 확인 다이얼로그 경로는 다이얼로그 안에서 보인다. */
   async function save(): Promise<void> {
@@ -57,6 +65,8 @@ export default function SecurityPolicyTab() {
   async function handleSave() {
     if (saving) return;
     if (timeoutErr) { timeoutRef.current?.focus(); return; }
+    if (corsAllowlist.length > MAX_ORIGINS) { setListError(ORIGIN_COUNT_ERROR); return; }
+    if (corsAllowlist.some((o) => o.length > MAX_ORIGIN_LENGTH)) { setListError(ORIGIN_LENGTH_ERROR); return; }
     if (removesConsole) { setConfirmLockout(true); return; }
     try {
       await save();
@@ -79,7 +89,8 @@ export default function SecurityPolicyTab() {
   /** 삭제한 콘솔 origin 을 원래 자리(서버 순서)로 되돌린다 — 되돌린 뒤 변경 0건이 되게. */
   function restoreConsoleOrigin() {
     if (!saved) return;
-    const kept = saved.corsAllowlist.filter((o) => o === consoleOrigin || corsAllowlist.includes(o));
+    if (corsAllowlist.length >= MAX_ORIGINS) { setListError(RESTORE_FULL_ERROR); return; }
+    const kept = saved.corsAllowlist.filter((o) => o.toLowerCase() === consoleOrigin.toLowerCase() || corsAllowlist.includes(o));
     const added = corsAllowlist.filter((o) => !saved.corsAllowlist.includes(o));
     setCorsAllowlist([...kept, ...added]);
   }
@@ -159,7 +170,7 @@ export default function SecurityPolicyTab() {
           <div className="stack-2">
             <ChipInput
               values={corsAllowlist}
-              onChange={setCorsAllowlist}
+              onChange={(next) => { setListError(null); setCorsAllowlist(next); }}
               placeholder="https://… 추가 후 Enter"
               ariaLabel="origin 추가"
               mono
@@ -168,6 +179,7 @@ export default function SecurityPolicyTab() {
               addedValues={addedOrigins}
               validate={(v) => validateOrigin(v, corsAllowlist)}
             />
+            {listError && <p className="field__error" role="alert" style={{ margin: 0 }}>{listError}</p>}
             <p className="hint" style={{ margin: 0 }}>https://호스트[:포트] 형식. 경로 · 와일드카드(*) 불가.</p>
             {removesConsole && (
               <Alert tone="warn" actions={<Button size="sm" onClick={restoreConsoleOrigin} disabled={saving}>삭제 되돌리기</Button>}>
