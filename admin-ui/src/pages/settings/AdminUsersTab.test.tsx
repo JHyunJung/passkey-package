@@ -449,6 +449,7 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     await waitFor(() => expect(adminUsersApi.suspend).toHaveBeenCalledWith('u-rp-000000002'));
     expect(await screen.findByText('rp@acme.com 운영자를 정지했습니다.')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    await waitFor(() => expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
     await waitFor(() => expect(adminUsersApi.activate).toHaveBeenCalledWith('u-rp-000000002'));
     expect(await screen.findByText('rp@acme.com 운영자의 정지를 되돌렸습니다.')).toBeInTheDocument();
@@ -506,6 +507,7 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     mock(adminUsersApi.list).mockResolvedValueOnce(RP_SUSPENDED);
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
     const undo = await screen.findByRole('button', { name: '되돌리기' });
+    await waitFor(() => expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' })).toBeInTheDocument());
     mock(adminUsersApi.activate).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
     fireEvent.click(undo);
     fireEvent.click(undo);
@@ -521,6 +523,7 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     mock(adminUsersApi.list).mockResolvedValueOnce(RP_SUSPENDED);
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
     const undo = await screen.findByRole('button', { name: '되돌리기' });
+    await waitFor(() => expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' })).toBeInTheDocument());
     mock(adminUsersApi.activate).mockRejectedValue(new ApiError(500, 'C999', 'SECRET-RAW'));
     fireEvent.click(undo);
     expect(await screen.findByText('정지를 되돌리지 못했습니다')).toBeInTheDocument();
@@ -566,7 +569,9 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     fireEvent.click(activateGone);
     expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
     fireEvent.click(within(dlg).getByRole('button', { name: '정지' }));
-    expect(await within(dlg).findByText(/목록을 새로 고친 뒤 다시 시도하세요/)).toBeInTheDocument();
+    expect(await within(dlg).findByText('정지하지 못했습니다')).toBeInTheDocument();
+    expect(within(dlg).getByText('요청을 처리하지 못했습니다. 목록을 새로 고친 뒤 다시 시도하세요')).toBeInTheDocument();
+    expect(within(dlg).queryByText(/알 수 없는 오류/)).toBeNull();
     expect(adminUsersApi.suspend).not.toHaveBeenCalled();
   });
 
@@ -586,7 +591,9 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     mock(adminUsersApi.activate).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
     fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' }));
     fireEvent.click(within(dlg).getByRole('button', { name: '정지' }));
-    expect(await within(dlg).findByText(/처리 중/)).toBeInTheDocument();
+    expect(await within(dlg).findByText('정지하지 못했습니다')).toBeInTheDocument();
+    expect(within(dlg).getByText('요청을 처리하지 못했습니다. 이미 처리 중입니다. 잠시 후 다시 시도하세요.')).toBeInTheDocument();
+    expect(within(dlg).queryByText(/알 수 없는 오류/)).toBeNull();
     expect(adminUsersApi.suspend).not.toHaveBeenCalled();
     expect(screen.queryByText('rp@acme.com 운영자를 정지했습니다.')).toBeNull();
     await act(async () => { resolve(); });
@@ -598,7 +605,10 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     // 정지 후 갱신된 목록에서 rp 가 ACTIVE 로 보이면(다른 관리자가 이미 되돌림) 되돌리지 않는다.
     fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
-    fireEvent.click(await screen.findByRole('button', { name: '되돌리기' }));
+    const undoBtn = await screen.findByRole('button', { name: '되돌리기' });
+    await waitFor(() => expect(adminUsersApi.list).toHaveBeenCalledTimes(2));
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    fireEvent.click(undoBtn);
     expect(await screen.findByText('되돌릴 수 없습니다')).toBeInTheDocument();
     expect(adminUsersApi.activate).not.toHaveBeenCalled();
   });
@@ -617,5 +627,21 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     fireEvent.click(undo);
     expect(await screen.findByText('되돌릴 수 없습니다')).toBeInTheDocument();
     expect(adminUsersApi.activate).not.toHaveBeenCalled();
+  });
+
+  it('목록 다시 읽기가 끝나지 않아도 정지 다이얼로그는 바로 닫히고, 그 사이 되돌리기는 거절된다', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    let resolveList!: (v: unknown) => void;
+    mock(adminUsersApi.list).mockReturnValueOnce(new Promise((r) => { resolveList = r; }));
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
+    const undo = await screen.findByRole('button', { name: '되돌리기' });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    fireEvent.click(undo);
+    expect(await screen.findByText('되돌릴 수 없습니다')).toBeInTheDocument();
+    expect(adminUsersApi.activate).not.toHaveBeenCalled();
+    await act(async () => { resolveList(RP_SUSPENDED); });
+    await waitFor(() => expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' })).toBeEnabled());
   });
 });

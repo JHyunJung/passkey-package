@@ -54,6 +54,9 @@ function matchesOperator(u: AdminUserView, filter: OperatorFilter, q: string): b
 }
 
 const WARN_AVATAR = { width: 34, height: 34, background: 'var(--warn-soft)', color: 'var(--warn)' } as const;
+const BUSY_REASON = '이미 처리 중입니다. 잠시 후 다시 시도하세요.';
+/** 화면에서 미리 막은 동작. describeError 가 "요청을 처리하지 못했습니다. <사유>" 로 풀어 보이도록 ApiError 로 만든다. */
+const blocked = (reason: string) => new ApiError(409, 'CLIENT_BLOCKED', reason);
 const STALE_REASON = '목록을 새로 고친 뒤 다시 시도하세요';
 const CAPTION = { margin: 0 } as const;
 
@@ -154,7 +157,7 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
   /** 지금 화면의 목록 기준으로 해당 운영자를 처리해도 되는지. 아니면 사용자에게 보일 이유를 돌려준다. */
   function staleReason(id: string, need: 'ACTIVE' | 'SUSPENDED'): string | null {
     const cur = usersRef.current;
-    if (cur.status === 'failed' && cur.data) return STALE_REASON;
+    if ((cur.status === 'failed' || cur.reloading) && cur.data) return STALE_REASON;
     const row = cur.data?.find((x) => x.id === id);
     if (!row || row.status !== need) return `운영자 상태가 바뀌었습니다. ${STALE_REASON}`;
     return null;
@@ -163,19 +166,19 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
   /** L1 확인 후 실행. 실패는 throw 해 다이얼로그 안에 보이고, 성공하면 되돌리기(= 활성화) 토스트. */
   async function confirmSuspend(u: AdminUserView) {
     // 다이얼로그를 연 뒤 목록이 낡아졌거나 다른 처리가 진행 중일 수 있다.
-    if (inflight.current.has(u.id)) throw new Error('이미 처리 중입니다. 잠시 후 다시 시도하세요.');
+    if (inflight.current.has(u.id)) throw blocked(BUSY_REASON);
     const why = staleReason(u.id, 'ACTIVE');
-    if (why) throw new Error(why);
+    if (why) throw blocked(why);
     const ran = await guarded(u.id, () => adminUsersApi.suspend(u.id));
-    if (!ran) throw new Error('이미 처리 중입니다. 잠시 후 다시 시도하세요.');
-    // 되돌리기 가능 여부는 갱신된 목록을 기준으로 판단하므로 먼저 다시 읽는다.
-    await users.reload();
+    if (!ran) throw blocked(BUSY_REASON);
     toast({
       kind: 'ok',
       title: `${u.email} 운영자를 정지했습니다.`,
       message: '다음 요청부터 콘솔에 접근할 수 없습니다.',
       action: { label: '되돌리기', onClick: () => void undoSuspend(u) },
     });
+    // 기다리지 않는다(클라이언트 시간 제한이 없어 다이얼로그가 멈출 수 있음). 되돌리기는 누르는 시점에 목록 상태를 확인한다.
+    void users.reload();
   }
 
   async function undoSuspend(u: AdminUserView) {
