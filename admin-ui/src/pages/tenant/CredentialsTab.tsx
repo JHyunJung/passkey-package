@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
 import {
-  Button, Card, ConfirmByTyping, CopyBtn, DataTable, Dialog, EmptyState, FilterChip, IconButton, LoadError, Pagination, RemovableChip,
+  Button, Card, ConfirmDialog, CopyBtn, DataTable, EmptyState, FilterChip, IconButton, LoadError, Pagination, RemovableChip,
   Segmented, Skeleton, StatusBadge, useToast, type Column,
 } from '@/ui';
 import { illustrations } from '@/assets/illustrations';
@@ -93,16 +93,12 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
     ? (clientFiltered ? { index: selIdx + 1, total: visible.length } : { index: page * size + selIdx + 1, total })
     : undefined;
 
-  async function handleRevoke() {
-    if (!revoking) return;
-    try {
-      await credentialsApi.revoke(tenant.id, revoking.credentialId);
-      toast({ kind: 'warn', title: 'Credential이 회수되었습니다.', message: `${tail(revoking.credentialId, 12)} · ${revoking.externalUserId}` });
-      setRevoking(null);
-      load.reload();
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: '회수 실패', message: e instanceof Error ? e.message : String(e) });
-    }
+  /** ConfirmDialog 의 onConfirm — 실패하면 throw 해서 다이얼로그 안에 오류를 보인다. */
+  async function handleRevoke(c: Credential) {
+    await credentialsApi.revoke(tenant.id, c.credentialId);
+    toast({ kind: 'ok', title: 'Credential을 회수했습니다.', message: `${tail(c.credentialId, 12)} · ${c.externalUserId}` });
+    // 회수는 이미 성공했다. 목록 새로고침 실패는 useLoad 가 목록 오류로 보이므로 여기서 다시 던지지 않는다.
+    await load.reload();
   }
 
   function exportCsv() {
@@ -176,9 +172,9 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
               title="Credential ID 또는 사용자 ID 의 일부로 찾습니다. 별칭·인증기 이름은 검색되지 않습니다."
               value={q} disabled={failed} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <FilterChip active={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}><Icons.Plus size={13} />필터 · aaguid · status</FilterChip>
+          <FilterChip active={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}><Icons.Plus size={13} />필터 · aaguid · 상태</FilterChip>
           {aaguid.trim() !== '' && <RemovableChip mono removeLabel="aaguid 필터 제거" onRemove={() => setAaguid('')}>aaguid: {aaguid.trim()}</RemovableChip>}
-          {status !== 'ALL' && <RemovableChip removeLabel="status 필터 제거" onRemove={() => setStatus('ALL')}><span title={status}>상태: {STATUS_FILTER_LABELS[status]}</span></RemovableChip>}
+          {status !== 'ALL' && <RemovableChip removeLabel="상태 필터 제거" onRemove={() => setStatus('ALL')}><span title={status}>상태: {STATUS_FILTER_LABELS[status]}</span></RemovableChip>}
           <div className="spacer" />
           <span className="hint" style={{ margin: 0 }}>
             {failed ? '—' : clientFiltered ? `이 페이지 ${fmtNum(items.length)}건 중 ${fmtNum(visible.length)}건` : `${fmtNum(total)}건`}
@@ -193,8 +189,8 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
               aaguid
               <input className="input mono" style={{ width: 280, minHeight: 30 }} placeholder="예: ea9b8d66" value={aaguid} onChange={(e) => setAaguid(e.target.value)} />
             </label>
-            <Segmented ariaLabel="status 필터" value={status} onChange={setStatus}
-              options={[{ value: 'ALL', label: '전체' }, { value: 'ACTIVE', label: '활성' }, { value: 'REVOKED', label: '회수됨' }]} />
+            <Segmented ariaLabel="상태 필터" value={status} onChange={setStatus}
+              options={[{ value: 'ALL', label: '전체' }, { value: 'ACTIVE', label: '활성', title: 'ACTIVE' }, { value: 'REVOKED', label: '회수됨', title: 'REVOKED' }]} />
             <span className="hint" style={{ margin: 0 }}>현재 페이지 안에서 거릅니다.</span>
           </div>
         )}
@@ -210,7 +206,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
       </Card>
 
       {revoking && (
-        <RevokeCredentialDialog key={revoking.credentialId} c={revoking} onClose={() => setRevoking(null)} onConfirm={handleRevoke} />
+        <RevokeCredentialDialog key={revoking.credentialId} c={revoking} onClose={() => setRevoking(null)} onConfirm={() => handleRevoke(revoking)} />
       )}
 
       {selected && (
@@ -228,28 +224,23 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   );
 }
 
-// ── Credential 회수 — 마지막 8자 확인 ────────────────────────────────────────
+// ── Credential 회수 — L3 마지막 8자 입력 확인 ────────────────────────────────
 
-function RevokeCredentialDialog({ c, onClose, onConfirm }: { c: Credential; onClose: () => void; onConfirm: () => void }) {
-  const [ok, setOk] = useState(false);
+function RevokeCredentialDialog({ c, onClose, onConfirm }: { c: Credential; onClose: () => void; onConfirm: () => Promise<void> }) {
   const required = tail(c.credentialId, 8);
   return (
-    <Dialog open onClose={onClose} role="alertdialog" title="Credential 회수" sub="이 사용자는 해당 패스키로 더 이상 로그인할 수 없습니다."
-      footer={<>
-        <Button onClick={onClose}>취소</Button>
-        <Button variant="danger-solid" disabled={!ok} onClick={onConfirm}>확인 — 회수</Button>
-      </>}>
+    <ConfirmDialog open onClose={onClose} level="L3" verb="회수" title="Credential을 회수할까요?"
+      sub="이 사용자는 해당 패스키로 더 이상 로그인할 수 없습니다. 되돌릴 수 없습니다."
+      typeToConfirm={{
+        expected: required,
+        label: <>확인을 위해 마지막 8자 <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{required}</span> 를 입력하세요</>,
+      }}
+      onConfirm={onConfirm}>
       <KvList keyWidth={100} items={[
         { k: 'credentialId', v: `…${required}`, mono: true },
         { k: '사용자', v: c.externalUserId, mono: true },
         { k: '인증기', v: authenticatorLabel(c) },
       ]} />
-      <ConfirmByTyping
-        id="credential-revoke-confirm"
-        expected={required}
-        onMatchChange={setOk}
-        label={<>확인을 위해 마지막 8자 <span className="mono" style={{ background: 'var(--sunk)', padding: '0 4px', borderRadius: 'var(--r-xs)' }}>{required}</span> 를 입력하세요</>}
-      />
-    </Dialog>
+    </ConfirmDialog>
   );
 }

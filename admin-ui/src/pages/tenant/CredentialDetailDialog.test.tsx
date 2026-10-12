@@ -59,8 +59,8 @@ describe('CredentialDetailDialog', () => {
   it('shows error state with retry when load fails', async () => {
     vi.spyOn(credentialsApi, 'authEvents').mockRejectedValue(new Error('boom'));
     render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} />);
-    await waitFor(() => expect(screen.getByText(/불러오지 못했습니다/)).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /재시도/ })).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('인증 기록을 불러오지 못했습니다');
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
   });
 
   it('refetches and renders events when retry is clicked after a failure', async () => {
@@ -72,7 +72,7 @@ describe('CredentialDetailDialog', () => {
       ]);
     render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} />);
 
-    const retry = await screen.findByRole('button', { name: /재시도/ });
+    const retry = await screen.findByRole('button', { name: '다시 시도' });
     expect(spy).toHaveBeenCalledTimes(1);
 
     fireEvent.click(retry);
@@ -119,6 +119,16 @@ describe('CredentialDetailDialog', () => {
     for (const s of ['식별 정보', '인증기', '인증 기록 (최근 20건)']) expect(screen.getByText(s, { selector: '.t-over' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Credential 회수…' }));
     expect(onRevoke).toHaveBeenCalledWith(cred);
+    await screen.findByText(/아직 인증 이력이 없습니다/);
+  });
+
+  it('인증 기록 로딩은 Skeleton("불러오는 중…" 텍스트 없음)', async () => {
+    let resolve: (v: never[]) => void = () => {};
+    vi.spyOn(credentialsApi, 'authEvents').mockReturnValue(new Promise((r) => { resolve = r; }));
+    render(<CredentialDetailDialog c={cred} tenantId="t1" onClose={() => {}} />);
+    expect(screen.getByRole('status', { name: '인증 기록 불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중…')).toBeNull();
+    resolve([]);
     await screen.findByText(/아직 인증 이력이 없습니다/);
   });
 });

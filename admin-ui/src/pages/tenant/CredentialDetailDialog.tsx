@@ -1,7 +1,7 @@
 // admin-ui/src/pages/tenant/CredentialDetailDialog.tsx
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icons } from '@/icons/Icons';
-import { Badge, Button, CopyBtn, Dialog, IconButton, StatusBadge } from '@/ui';
+import { Badge, Button, CopyBtn, Dialog, IconButton, LoadError, Skeleton, StatusBadge } from '@/ui';
 import { credentialsApi } from '@/api/credentials';
 import type { Credential, AuthEvent } from '@/api/designTypes';
 import { statusLabel } from '@/i18n/labels';
@@ -22,7 +22,7 @@ type Props = {
 export default function CredentialDetailDialog({ c, tenantId, onClose, position, onPrev, onNext, onRevoke }: Props) {
   const [events, setEvents] = useState<AuthEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<unknown>(null);
 
   // 마운트 동안만 setState 허용하는 단일 취소 신호 (effect·retry 가 공유)
   const aliveRef = useRef(true);
@@ -36,10 +36,10 @@ export default function CredentialDetailDialog({ c, tenantId, onClose, position,
   const load = useCallback(() => {
     const req = ++reqRef.current;
     setLoading(true);
-    setError(false);
+    setError(null);
     credentialsApi.authEvents(tenantId, c.credentialId, 20)
       .then((res) => { if (aliveRef.current && req === reqRef.current) setEvents(res); })
-      .catch(() => { if (aliveRef.current && req === reqRef.current) setError(true); })
+      .catch((e: unknown) => { if (aliveRef.current && req === reqRef.current) setError(e ?? new Error('unknown')); })
       .finally(() => { if (aliveRef.current && req === reqRef.current) setLoading(false); });
   }, [tenantId, c.credentialId]);
 
@@ -97,15 +97,9 @@ export default function CredentialDetailDialog({ c, tenantId, onClose, position,
       <section className="dlg-sec">
         <span className="t-over">인증 기록 (최근 20건)</span>
         {loading ? (
-          <div className="stack-2" aria-busy="true" style={{ padding: '8px 0' }}>
-            <span className="sr-only">불러오는 중…</span>
-            {[0, 1, 2].map((i) => <span key={i} className="skeleton" style={{ width: '100%' }} />)}
-          </div>
+          <Skeleton rows={3} label="인증 기록 불러오는 중" />
         ) : error ? (
-          <div className="stack-2" style={{ alignItems: 'center', padding: '16px 0' }}>
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>기록을 불러오지 못했습니다.</p>
-            <Button size="sm" onClick={() => load()}>재시도</Button>
-          </div>
+          <LoadError compact what="인증 기록" error={error} onRetry={() => load()} />
         ) : events.length === 0 ? (
           <p className="muted" style={{ margin: 0, padding: '20px 0', textAlign: 'center', fontSize: 13 }}>아직 인증 이력이 없습니다.</p>
         ) : (

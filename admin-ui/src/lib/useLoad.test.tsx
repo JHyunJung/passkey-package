@@ -29,7 +29,7 @@ describe('useLoad', () => {
     const fetcher = vi.fn(() => (n++ === 0 ? Promise.resolve(1) : d.promise));
     const { result } = renderHook(() => useLoad(fetcher, []));
     await waitFor(() => expect(result.current.data).toBe(1));
-    act(() => result.current.reload());
+    act(() => { void result.current.reload(); });
     expect(result.current.status).toBe('ok');
     expect(result.current.data).toBe(1);
     expect(result.current.reloading).toBe(true);
@@ -43,7 +43,7 @@ describe('useLoad', () => {
     const fetcher = () => (n++ === 0 ? Promise.resolve(1) : Promise.reject(new Error('x')));
     const { result } = renderHook(() => useLoad(fetcher, []));
     await waitFor(() => expect(result.current.data).toBe(1));
-    act(() => result.current.reload());
+    act(() => { void result.current.reload(); });
     await waitFor(() => expect(result.current.status).toBe('failed'));
     expect(result.current.data).toBe(1);
   });
@@ -65,7 +65,7 @@ describe('useLoad', () => {
     };
     const { result } = renderHook(() => useLoad(fetcher, []));
     await waitFor(() => expect(result.current.data).toBe(1));
-    act(() => result.current.reload());
+    act(() => { void result.current.reload(); });
     await waitFor(() => expect(result.current.status).toBe('failed'));
     expect(result.current.error).toBe(err);
     expect(result.current.data).toBe(1);

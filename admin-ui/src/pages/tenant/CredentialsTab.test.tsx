@@ -69,17 +69,23 @@ describe('CredentialsTab V2', () => {
     api.list.mockResolvedValue(pageOf([cred('c1'), cred('c2', { status: 'REVOKED' })]));
     renderTab();
     await screen.findByText('user-c1');
-    const toggle = screen.getByRole('button', { name: /필터 · aaguid · status/ });
+    const toggle = screen.getByRole('button', { name: /필터 · aaguid · 상태/ });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(screen.getByRole('group', { name: 'status 필터' })).getByRole('button', { name: '회수됨' }));
+    const seg = within(screen.getByRole('group', { name: '상태 필터' }));
+    expect(seg.getByRole('button', { name: '활성' })).toHaveAttribute('title', 'ACTIVE');
+    expect(seg.getByRole('button', { name: '회수됨' })).toHaveAttribute('title', 'REVOKED');
+    expect(seg.getByRole('button', { name: '전체' })).not.toHaveAttribute('title');
+    fireEvent.click(seg.getByRole('button', { name: '회수됨' }));
     expect(screen.getByText('상태: 회수됨')).toBeInTheDocument();
     expect(screen.queryByText('user-c1')).toBeNull();
     expect(screen.getByText('user-c2')).toBeInTheDocument();
     expect(screen.getByText('이 페이지 2건 중 1건')).toBeInTheDocument();
+    // 표의 상태 배지는 한국어 라벨 + 원문 title
+    expect(screen.getAllByText('회수').some((el) => el.closest('.badge')?.getAttribute('title') === 'REVOKED')).toBe(true);
     expect(screen.getByRole('button', { name: 'CSV 내보내기 (현재 페이지 1건)' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'status 필터 제거' }));
+    fireEvent.click(screen.getByRole('button', { name: '상태 필터 제거' }));
     expect(screen.getByText('user-c1')).toBeInTheDocument();
     expect(api.list).toHaveBeenCalledTimes(1); // 클라이언트 필터는 서버를 다시 부르지 않는다
   });
@@ -111,7 +117,7 @@ describe('CredentialsTab V2', () => {
     expect(within(dlg).getByText('user-c2')).toBeInTheDocument();
   });
 
-  it('회수: 마지막 8자를 정확히 입력해야 실행, 상세 푸터에서도 진입', async () => {
+  it('회수: L3 — 마지막 8자를 정확히 입력해야 "회수", 상세 푸터에서도 진입', async () => {
     api.list.mockResolvedValue(pageOf([cred('cred-0000-abcdefgh')]));
     api.revoke.mockResolvedValue(undefined);
     renderTab();
@@ -119,14 +125,62 @@ describe('CredentialsTab V2', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Credential 회수…' }));
     expect(screen.queryByRole('dialog', { name: /Credential 상세/ })).toBeNull();
 
-    const dlg = screen.getByRole('alertdialog', { name: 'Credential 회수' });
-    const confirm = within(dlg).getByRole('button', { name: '확인 — 회수' });
+    const dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    expect(within(dlg).getByText(/더 이상 로그인할 수 없습니다/)).toBeInTheDocument();
+    expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
+    const confirm = within(dlg).getByRole('button', { name: '회수' });
     expect(confirm).toBeDisabled();
     fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: 'abcdefgh' } });
     expect(confirm).toBeEnabled();
     fireEvent.click(confirm);
     await waitFor(() => expect(api.revoke).toHaveBeenCalledWith('t1', 'cred-0000-abcdefgh'));
     await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(await screen.findByText('Credential을 회수했습니다.')).toBeInTheDocument();
+  });
+
+  it('회수 처리 중에는 "회수 중…" 비활성, 연타해도 한 번만', async () => {
+    api.list.mockResolvedValue(pageOf([cred('aaaa-11111111')]));
+    let finish!: () => void;
+    api.revoke.mockReturnValue(new Promise<void>((r) => { finish = r; }));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '회수 · …11111111' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '11111111' } });
+    const btn = within(dlg).getByRole('button', { name: '회수' });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(api.revoke).toHaveBeenCalledTimes(1);
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveTextContent('회수 중…');
+    finish();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  });
+
+  it('회수 실패는 다이얼로그 안 인라인 오류, 닫히지 않고 토스트 없음', async () => {
+    api.list.mockResolvedValue(pageOf([cred('aaaa-11111111')]));
+    api.revoke.mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '회수 · …11111111' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '11111111' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '회수' }));
+    expect(await within(dlg).findByText('회수하지 못했습니다')).toBeInTheDocument();
+    expect(screen.queryByText('회수 실패')).toBeNull();
+    expect(api.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('회수 성공 뒤 목록 새로고침이 실패해도 회수 오류로 보이지 않고 목록 오류가 뜬다', async () => {
+    api.list.mockResolvedValueOnce(pageOf([cred('aaaa-11111111')])).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    api.revoke.mockResolvedValue(undefined);
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '회수 · …11111111' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'Credential을 회수할까요?' });
+    fireEvent.change(within(dlg).getByRole('textbox', { name: /마지막 8자/ }), { target: { value: '11111111' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '회수' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(await screen.findByText('Credential을 회수했습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Credential 목록을 불러오지 못했습니다');
   });
 
   it('표의 휴지통 버튼은 ACTIVE 행에만', async () => {
