@@ -81,4 +81,49 @@ describe('useLoad', () => {
     await act(async () => { first.resolve('A'); });
     expect(result.current.data).toBe('B');
   });
+
+  it('deps 가 바뀐 직후의 첫 렌더는 이전 deps 의 data·error 가 아니라 loading 이다', async () => {
+    const renders: { id: string; status: string; data: unknown }[] = [];
+    const b = deferred<string>();
+    const { result, rerender } = renderHook(({ id }) => {
+      const s = useLoad(() => (id === 'a' ? Promise.resolve('A') : b.promise), [id]);
+      renders.push({ id, status: s.status, data: s.data });
+      return s;
+    }, { initialProps: { id: 'a' } });
+    await waitFor(() => expect(result.current.data).toBe('A'));
+    renders.length = 0;
+    rerender({ id: 'b' });
+    expect(renders[0]).toEqual({ id: 'b', status: 'loading', data: undefined });
+    await act(async () => { await Promise.resolve(); });
+    expect(renders.every((r) => r.status === 'loading' && r.data === undefined)).toBe(true);
+    await act(async () => { b.resolve('B'); });
+    expect(result.current).toMatchObject({ status: 'ok', data: 'B' });
+  });
+
+  it('deps 가 바뀐 직후 첫 렌더는 이전 deps 의 실패도 보이지 않는다', async () => {
+    const renders: { status: string; error: unknown }[] = [];
+    const { result, rerender } = renderHook(({ id }) => {
+      const s = useLoad(() => (id === 'a' ? Promise.reject(new Error('A 실패')) : Promise.resolve('B')), [id]);
+      renders.push({ status: s.status, error: s.error });
+      return s;
+    }, { initialProps: { id: 'a' } });
+    await waitFor(() => expect(result.current.status).toBe('failed'));
+    renders.length = 0;
+    rerender({ id: 'b' });
+    expect(renders[0]).toEqual({ status: 'loading', error: undefined });
+    await waitFor(() => expect(result.current.data).toBe('B'));
+  });
+
+  it('같은 deps 의 reload 는 계속 이전 data 를 보여 준다(deps 비교가 reload 를 loading 으로 바꾸지 않는다)', async () => {
+    let n = 0;
+    const d = deferred<number>();
+    const { result, rerender } = renderHook(({ id }) => useLoad(() => (n++ === 0 ? Promise.resolve(1) : d.promise), [id]), { initialProps: { id: 'a' } });
+    await waitFor(() => expect(result.current.data).toBe(1));
+    act(() => { void result.current.reload(); });
+    rerender({ id: 'a' });
+    expect(result.current.status).toBe('ok');
+    expect(result.current.data).toBe(1);
+    await act(async () => { d.resolve(2); });
+    expect(result.current.data).toBe(2);
+  });
 });
