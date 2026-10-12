@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
-import { systemInfoApi, type SystemInfoData, type SystemInfoComponent } from '@/api/systemInfo';
+import { systemInfoApi, type SystemInfoComponent } from '@/api/systemInfo';
 import { Icons } from '@/icons/Icons';
-import { illustrations } from '@/assets/illustrations';
-import { kstDate, kstTime } from '@/lib/kst';
-import { Badge, Button, CardBody, CardHeader, EmptyState, KpiCard, type BadgeTone } from '@/ui';
+import { kstDateTimeMin } from '@/lib/kst';
+import { useLoad } from '@/lib/useLoad';
+import { Badge, CardBody, CardHeader, KpiCard, LoadError, Skeleton, type BadgeTone } from '@/ui';
 
 type ComponentStatus = SystemInfoComponent['status'];
 
@@ -20,55 +19,33 @@ function overallStatus(components: SystemInfoComponent[]): ComponentStatus {
   return 'OK';
 }
 
+/** 해석 가능한 시각만 KST 로 표시한다. 없거나 깨진 값은 null. */
+function deployedKst(iso: string | null): string | null {
+  if (!iso || Number.isNaN(new Date(iso).getTime())) return null;
+  return `${kstDateTimeMin(iso)} KST`;
+}
+
 const CAPTION = { margin: 0 } as const;
 
 export default function SystemInfoTab() {
-  const [info, setInfo] = useState<SystemInfoData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const load = useLoad(() => systemInfoApi.get(), []);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    systemInfoApi.get()
-      .then((d) => { if (!cancelled) setInfo(d); })
-      .catch(() => { if (!cancelled) setError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [attempt]);
-
-  if (loading) {
-    return (
-      <div className="kpis kpis--3" aria-busy="true">
-        <span className="sr-only">System Info 로딩 중…</span>
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="kpi">
-            <span className="skeleton" style={{ width: 80 }} />
-            <span className="skeleton" style={{ width: 120, height: 22, marginTop: 8 }} />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (error || !info) {
+  if (load.status === 'failed') {
     return (
       <section className="card">
-        <EmptyState
-          illustration={illustrations.loadError}
-          title="System Info 를 불러오지 못했습니다."
-          description="네트워크 상태를 확인한 뒤 다시 시도하세요."
-          action={<Button onClick={() => setAttempt((a) => a + 1)}>다시 시도</Button>}
-        />
+        <LoadError what="시스템 정보" error={load.error} onRetry={load.reload} retrying={load.reloading} />
       </section>
     );
+  }
+  const info = load.data;
+  if (!info) {
+    return <section className="card"><Skeleton rows={6} label="시스템 정보 불러오는 중" /></section>;
   }
 
   const overall = overallStatus(info.components);
   const okCount = info.components.filter((c) => c.status === 'OK').length;
   const profiles = info.host.environment.split(',').map((p) => p.trim()).filter(Boolean);
+  const deployed = deployedKst(info.deployedAt);
 
   return (
     <div className="stack-6">
@@ -79,11 +56,12 @@ export default function SystemInfoTab() {
           hint={`컴포넌트 ${okCount} / ${info.components.length}`}
         />
         <KpiCard
-          label="Server 버전"
+          label="서버 버전"
           value={<span className="mono" style={{ fontSize: 22 }}>{info.serverVersion}</span>}
-          hint={info.deployedAt ? `${kstDate(info.deployedAt)} 배포` : '배포 시각 정보 없음'}
+          hint={deployed ? `${deployed} 배포` : '배포 시각 정보 없음'}
         />
-        <KpiCard label="Uptime" value={`${info.uptimeDays}d`} />
+        {/* 시간 단위 세분화는 서버 지원 후(스펙 §8). */}
+        <KpiCard label="가동 시간" value={info.uptimeDays != null && Number.isFinite(info.uptimeDays) ? `${info.uptimeDays}일` : '—'} />
       </div>
 
       <div className="grid-2">
@@ -123,7 +101,7 @@ export default function SystemInfoTab() {
                 <span className="chips">{profiles.map((p) => <span key={p} className="tag">{p}</span>)}</span>
               </dd>
               <dt>배포 시각</dt>
-              <dd className="mono" style={{ fontSize: 12 }}>{info.deployedAt ? `${kstDate(info.deployedAt)} ${kstTime(info.deployedAt)} KST` : '—'}</dd>
+              <dd className="mono" style={{ fontSize: 12 }}>{deployed ?? '—'}</dd>
             </dl>
           </CardBody>
         </section>

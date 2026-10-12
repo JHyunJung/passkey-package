@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, waitFor, cleanup, within, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, within, fireEvent, act } from '@testing-library/react';
 
 vi.mock('@/api/systemInfo', () => ({
   systemInfoApi: { get: vi.fn() },
@@ -36,10 +36,10 @@ describe('SystemInfoTab', () => {
     // 버전은 메트릭 카드와 컴포넌트 행 양쪽에 나온다.
     await waitFor(() => expect(screen.getAllByText('1.2.3').length).toBeGreaterThan(0));
     // KST 문자열이어도 앞 10자가 날짜다.
-    expect(screen.getByText('2026-05-31 배포')).toBeInTheDocument();
+    expect(screen.getByText('2026-05-31 09:00 KST 배포')).toBeInTheDocument();
     expect(screen.getByText('prod,oracle')).toBeInTheDocument();
     expect(screen.getByText('매 6시간')).toBeInTheDocument();
-    expect(screen.getByText('4d')).toBeInTheDocument();
+    expect(screen.getByText('4일')).toBeInTheDocument();
   });
 
   it('긴 버전 문자열은 말줄임(title) — 컴포넌트 이름 열을 밀어내지 않는다, 배포 시각은 KST', async () => {
@@ -66,9 +66,8 @@ describe('SystemInfoTab', () => {
     render(<SystemInfoTab />);
 
     await waitFor(() =>
-      expect(screen.getByText('System Info 를 불러오지 못했습니다.')).toBeInTheDocument());
-    expect(screen.queryByText('System Info 로딩 중…')).not.toBeInTheDocument();
-  });
+      expect(screen.getByText('시스템 정보를 불러오지 못했습니다')).toBeInTheDocument());
+      });
 
   it('maps each component status to its badge class', async () => {
     mockGet().mockResolvedValue({
@@ -120,10 +119,51 @@ describe('SystemInfoTab', () => {
   it('불러오기 실패 → 일러스트 빈 상태, 다시 시도로 재요청', async () => {
     mockGet().mockRejectedValueOnce(new Error('boom'));
     const { container } = render(<SystemInfoTab />);
-    await waitFor(() => expect(screen.getByText('System Info 를 불러오지 못했습니다.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('시스템 정보를 불러오지 못했습니다')).toBeInTheDocument());
     expect(container.querySelector('img')).toHaveAttribute('alt', '');
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
-    await waitFor(() => expect(screen.getByText('2026-05-31 배포')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('2026-05-31 09:00 KST 배포')).toBeInTheDocument());
     expect(systemInfoApi.get).toHaveBeenCalledTimes(2);
+  });
+  it('KPI 라벨은 한국어, 영어 단위 "d" 를 쓰지 않는다', async () => {
+    render(<SystemInfoTab />);
+    await waitFor(() => expect(list()).toBeInTheDocument());
+    expect(screen.getByText('서버 버전')).toBeInTheDocument();
+    expect(screen.getByText('가동 시간')).toBeInTheDocument();
+    expect(screen.queryByText('Uptime')).toBeNull();
+    expect(screen.queryByText('4d')).toBeNull();
+  });
+
+  it('로드 실패는 LoadError(role=alert, 오류 정보 복사)', async () => {
+    mockGet().mockRejectedValue(new Error('boom'));
+    render(<SystemInfoTab />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('시스템 정보를 불러오지 못했습니다');
+    expect(within(alert).getByRole('button', { name: '오류 정보 복사' })).toBeInTheDocument();
+  });
+
+  it('로딩 중에는 Skeleton', async () => {
+    let resolve!: (v: SystemInfoData) => void;
+    mockGet().mockReturnValue(new Promise<SystemInfoData>((r) => { resolve = r; }));
+    render(<SystemInfoTab />);
+    expect(screen.getByRole('status', { name: '시스템 정보 불러오는 중' })).toHaveAttribute('aria-busy', 'true');
+    await act(async () => { resolve(sample); await new Promise((r) => setTimeout(r, 0)); });
+  });
+
+  it('가동 일수가 없으면 NaN일 대신 —', async () => {
+    mockGet().mockResolvedValue({ ...sample, uptimeDays: null });
+    render(<SystemInfoTab />);
+    await waitFor(() => expect(list()).toBeInTheDocument());
+    expect(screen.getByText('가동 시간').closest('.kpi')).toHaveTextContent('—');
+    expect(document.body.textContent).not.toMatch(/NaN|undefined/);
+  });
+
+  it('해석할 수 없는 배포 시각은 Invalid Date 대신 —, 부제는 정보 없음', async () => {
+    mockGet().mockResolvedValue({ ...sample, deployedAt: 'not-a-date' });
+    render(<SystemInfoTab />);
+    await waitFor(() => expect(list()).toBeInTheDocument());
+    expect(screen.getByText('배포 시각 정보 없음')).toBeInTheDocument();
+    expect(screen.getByText('배포 시각').nextElementSibling).toHaveTextContent('—');
+    expect(document.body.textContent).not.toMatch(/Invalid Date|not-a-date/);
   });
 });

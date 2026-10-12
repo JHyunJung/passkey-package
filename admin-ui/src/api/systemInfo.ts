@@ -18,7 +18,7 @@ export type SystemInfoData = {
   serverVersion: string;
   /** 빌드 시각(KST) — build-info 가 없으면 null. */
   deployedAt: string | null;
-  uptimeDays: number;
+  uptimeDays: number | null;
   host: SystemInfoHost;
   components: SystemInfoComponent[];
 };
