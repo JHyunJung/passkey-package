@@ -388,4 +388,41 @@ describe('AdminUsersTab V3 — 로드 상태 · Tenant 이름', () => {
     expect(rowOf('rp@acme.com')).toBeInTheDocument();
     expect(screen.queryByText('운영자 목록을 불러오지 못했습니다')).toBeNull();
   });
+
+  it('운영자 목록이 낡았으면 다시 시도 버튼, 행 액션 비활성 → 성공하면 경고 해제·활성화', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    mock(adminUsersApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' }));
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    const stop = within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' });
+    expect(stop).toBeDisabled();
+    expect(stop).toHaveAttribute('title', '목록을 새로 고친 뒤 다시 시도하세요');
+    expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: '운영자 검색' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.queryByText('다시 확인하지 못했습니다')).toBeNull());
+    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' })).toBeEnabled();
+    expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' })).toBeEnabled();
+  });
+
+  it('가입 요청이 낡았으면 다시 시도 버튼, 승인·거절 비활성 → 성공하면 활성화', async () => {
+    renderTab();
+    await screen.findByText('new@x.com');
+    mock(signupRequestsApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    fireEvent.click(screen.getByRole('button', { name: '거절…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '거절' }));
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    // 거절 성공 → requests 만 낡음(users 는 정상).
+    expect(screen.getByRole('button', { name: '승인…' })).toBeDisabled();
+    const rej = screen.getByRole('button', { name: '거절…' });
+    expect(rej).toBeDisabled();
+    expect(rej).toHaveAttribute('title', '목록을 새로 고친 뒤 다시 시도하세요');
+    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.queryByText('다시 확인하지 못했습니다')).toBeNull());
+    expect(screen.getByRole('button', { name: '승인…' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '거절…' })).toBeEnabled();
+  });
 });

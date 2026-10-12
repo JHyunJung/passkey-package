@@ -53,6 +53,7 @@ function matchesOperator(u: AdminUserView, filter: OperatorFilter, q: string): b
 }
 
 const WARN_AVATAR = { width: 34, height: 34, background: 'var(--warn-soft)', color: 'var(--warn)' } as const;
+const STALE_REASON = '목록을 새로 고친 뒤 다시 시도하세요';
 const CAPTION = { margin: 0 } as const;
 
 /** Tenant 열. 운영자 응답에는 tenant 이름이 없어(스펙 §8) tenants 목록과 조인한다. 목록을 못 읽으면 id 꼬리로. */
@@ -149,6 +150,10 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
   const q = query.trim().toLowerCase();
   const visible = list.filter((u) => matchesOperator(u, filter, q));
 
+  // 다시 읽기에 실패해 낡은 목록이 남아 있으면 행 단위 처리는 막는다(이미 처리된 항목을 다시 처리하지 않도록).
+  const usersStale = users.status === 'failed' && !!users.data;
+  const requestsStale = requests.status === 'failed' && !!requests.data;
+
   const columns: Column<AdminUserView>[] = [
     {
       key: 'who', header: '운영자',
@@ -180,8 +185,8 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
     {
       key: 'act', header: '액션',
       render: (u) =>
-        u.status === 'ACTIVE' ? <Button size="sm" variant="danger" onClick={() => void handleSuspend(u)}>정지</Button>
-        : u.status === 'SUSPENDED' ? <Button size="sm" onClick={() => void handleActivate(u)}>활성화</Button>
+        u.status === 'ACTIVE' ? <Button size="sm" variant="danger" onClick={() => void handleSuspend(u)} disabled={usersStale} title={usersStale ? STALE_REASON : undefined}>정지</Button>
+        : u.status === 'SUSPENDED' ? <Button size="sm" onClick={() => void handleActivate(u)} disabled={usersStale} title={usersStale ? STALE_REASON : undefined}>활성화</Button>
         : null,
     },
   ];
@@ -212,7 +217,7 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
             <div className="spacer" />
             <span className="hint" style={CAPTION}>대기 중인 요청이 없습니다</span>
           </div>
-          {requests.status === 'failed' && <StaleWarning error={requests.error} what="가입 요청" />}
+          {requests.status === 'failed' && <StaleWarning error={requests.error} what="가입 요청" onRetry={requests.reload} retrying={requests.reloading} />}
         </section>
       ) : (
         <section className="card" aria-label="가입 요청" style={{ borderColor: 'var(--warn-line)' }}>
@@ -225,7 +230,7 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
               <p className="card__sub">로그인 화면에서 들어온 관리자 계정 요청. 승인 시 역할과 tenant 를 지정합니다.</p>
             </div>
           </div>
-          {requests.status === 'failed' && <StaleWarning error={requests.error} what="가입 요청" />}
+          {requests.status === 'failed' && <StaleWarning error={requests.error} what="가입 요청" onRetry={requests.reload} retrying={requests.reloading} />}
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {pending.map((r, i) => (
               <li key={r.id} className="row" style={{ gap: 14, padding: '14px 20px', borderBottom: i < pending.length - 1 ? '1px solid var(--line-soft)' : 0 }}>
@@ -238,8 +243,8 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
                 </div>
                 <span className="hint" style={CAPTION}>{timeAgo(r.requestedAt)}</span>
                 <div className="row" style={{ gap: 6 }}>
-                  <Button onClick={() => setRejecting(r)}>거절…</Button>
-                  <Button variant="primary" onClick={() => setApproving(r)}>승인…</Button>
+                  <Button onClick={() => setRejecting(r)} disabled={requestsStale} title={requestsStale ? STALE_REASON : undefined}>거절…</Button>
+                  <Button variant="primary" onClick={() => setApproving(r)} disabled={requestsStale} title={requestsStale ? STALE_REASON : undefined}>승인…</Button>
                 </div>
               </li>
             ))}
@@ -261,7 +266,7 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
             <input className="input" placeholder="이메일 · ID" aria-label="운영자 검색" value={query} disabled={!users.data} onChange={(e) => setQuery(e.target.value)} />
           </div>
         </div>
-        {users.status === 'failed' && users.data && <StaleWarning error={users.error} what="운영자 목록" />}
+        {users.status === 'failed' && users.data && <StaleWarning error={users.error} what="운영자 목록" onRetry={users.reload} retrying={users.reloading} />}
         {!users.data && users.status === 'failed' ? (
           <LoadError what="운영자 목록" error={users.error} onRetry={users.reload} retrying={users.reloading} />
         ) : !users.data ? (
@@ -301,12 +306,13 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
 }
 
 /** 같은 화면에서 다시 읽기가 실패했을 때 — 데이터는 그대로 두고 마지막 확인 결과임을 알린다. */
-function StaleWarning({ error, what }: { error: unknown; what: string }) {
+function StaleWarning({ error, what, onRetry, retrying }: { error: unknown; what: string; onRetry: () => Promise<void>; retrying: boolean }) {
   return (
-    <div style={{ padding: '10px 20px' }}>
+    <div className="stack-3" style={{ padding: '10px 20px' }}>
       <Alert tone="warn" title="다시 확인하지 못했습니다">
-        {`${describeError(error).title}. 아래는 마지막으로 읽은 ${what}입니다.`}
+        {`${describeError(error).title}. 아래는 마지막으로 읽은 ${what}입니다. 목록을 새로 고치기 전에는 처리할 수 없습니다.`}
       </Alert>
+      <div><Button onClick={() => void onRetry()} disabled={retrying}>{retrying ? '다시 시도 중…' : '다시 시도'}</Button></div>
     </div>
   );
 }
