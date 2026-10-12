@@ -17,6 +17,7 @@ export * from './Chips';
 export * from './ChipInput';
 export * from './OtpInput';
 export * from './Dialog';
+export * from './useFocusTrap';
 export * from './ToastHost';
 export * from './Menu';
 export * from './SecretBox';
