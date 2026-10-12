@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
 import {
-  Alert, Badge, Button, Card, CardHeader, DataTable, Dialog, EmptyState, FilterChip, KpiCard, LoadError, Menu, SecretBox, Skeleton, StatusBadge, useToast,
+  Alert, Badge, Button, Card, CardHeader, ConfirmDialog, DataTable, Dialog, EmptyState, FilterChip, KpiCard, LoadError, Menu, SecretBox, Skeleton, StatusBadge, useToast,
   useUnsavedGuard,
   type Column,
 } from '@/ui';
@@ -10,6 +10,7 @@ import { illustrations } from '@/assets/illustrations';
 import { apiKeysApi } from '@/api/apiKeys';
 import { copyToClipboard } from '@/lib/clipboard';
 import { describeError } from '@/lib/describeError';
+import { eulReul } from '@/lib/josa';
 import { useLoad } from '@/lib/useLoad';
 import { HELP_LINKS } from '@/config/links';
 import type { Tenant, ApiKey } from '@/api/designTypes';
@@ -52,8 +53,7 @@ export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onCh
   const [issued, setIssued] = useState<Issued | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const [rotating, setRotating] = useState<ApiKey | null>(null);
-  // 발급·회전·회수 진행 중 표시. ref 는 같은 틱의 연타(두 번째 클릭)까지 막는다.
-  const [busy, setBusy] = useState(false);
+  // 발급·회전·회수가 동시에 돌지 않게 하는 공용 가드. ref 라서 같은 틱의 연타까지 막는다.
   const busyRef = useRef(false);
   const toast = useToast();
   // 평문 키는 이 다이얼로그에서 한 번만 보인다 — 닫기 전 이동·새로고침을 막는다.
@@ -69,56 +69,48 @@ export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onCh
     if (fresh) setIssued((prev) => (prev && prev.key.id === fresh.id ? { ...prev, key: fresh, expiryUnknown: false } : prev));
   }, [load.data, issued]);
 
-  async function guarded(run: () => Promise<void>) {
-    if (busyRef.current) return;
+  /** 발급·회전·회수 공용 가드 — 다른 작업이 진행 중이면 throw 해서 다이얼로그 안에 오류를 보인다(입력은 유지). */
+  async function guarded<T>(run: () => Promise<T>): Promise<T> {
+    if (busyRef.current) throw new Error('다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.');
     busyRef.current = true;
-    setBusy(true);
     try {
-      await run();
+      return await run();
     } finally {
       busyRef.current = false;
-      setBusy(false);
     }
   }
 
   /** NewKeyDialog 의 onIssue — 실패하면 throw 해서 다이얼로그 안에 경고를 띄우고 입력을 유지한다. */
-  async function handleIssue(name: string, scopes: string[], expiresInMonths: number | null) {
-    const result = await apiKeysApi.create(tenant.id, name, scopes, expiresInMonths);
-    setShowNew(false);
-    setIssued(result);
-    onChanged?.();
-    load.reload();
+  function handleIssue(name: string, scopes: string[], expiresInMonths: number | null) {
+    return guarded(async () => {
+      const result = await apiKeysApi.create(tenant.id, name, scopes, expiresInMonths);
+      setShowNew(false);
+      setIssued(result);
+      onChanged?.();
+      load.reload();
+    });
   }
 
+  /** ConfirmDialog 의 onConfirm — 실패하면 throw 해서 다이얼로그 안에 오류를 보인다. */
   function handleRevoke(k: ApiKey) {
     return guarded(async () => {
-      try {
-        await apiKeysApi.revoke(k.id);
-        toast({ kind: 'warn', title: 'API key가 회수되었습니다.', message: `${k.prefix} · ${k.name}` });
-        setRevoking(null);
-        onChanged?.();
-        load.reload();
-      } catch (e: unknown) {
-        toast({ kind: 'err', title: '회수 실패', message: e instanceof Error ? e.message : String(e) });
-      }
+      await apiKeysApi.revoke(k.id);
+      toast({ kind: 'ok', title: `API 키 “${k.name}”${eulReul(k.name)} 회수했습니다.`, message: k.prefix });
+      onChanged?.();
+      load.reload();
     });
   }
 
   function handleRotate(k: ApiKey) {
     return guarded(async () => {
-      try {
-        const res = await apiKeysApi.rotate(k.id);
-        setRotating(null);
-        // 회전 응답의 id 는 새 키다. 만료는 응답에 없으므로 목록에서 새 키를 찾을 때까지 숨긴다(이전 키 만료를 보이지 않음).
-        setIssued({
-          key: { ...k, id: res.id, prefix: res.prefix, scopes: res.scopes, createdAt: new Date().toISOString(), lastUsedAt: null },
-          plaintext: res.plaintextKey, oldKeyExpiresAt: res.oldKeyExpiresAt, expiryUnknown: true,
-        });
-        onChanged?.();
-        load.reload(); // 새 키 만료는 위 useEffect 가 목록에서 찾아 채운다
-      } catch (e: unknown) {
-        toast({ kind: 'err', title: '회전 실패', message: e instanceof Error ? e.message : String(e) });
-      }
+      const res = await apiKeysApi.rotate(k.id);
+      // 회전 응답의 id 는 새 키다. 만료는 응답에 없으므로 목록에서 새 키를 찾을 때까지 숨긴다(이전 키 만료를 보이지 않음).
+      setIssued({
+        key: { ...k, id: res.id, prefix: res.prefix, scopes: res.scopes, createdAt: new Date().toISOString(), lastUsedAt: null },
+        plaintext: res.plaintextKey, oldKeyExpiresAt: res.oldKeyExpiresAt, expiryUnknown: true,
+      });
+      onChanged?.();
+      load.reload(); // 새 키 만료는 위 useEffect 가 목록에서 찾아 채운다
     });
   }
 
@@ -210,8 +202,8 @@ export default function ApiKeysTab({ tenant, onChanged }: { tenant: Tenant; onCh
 
       <NewKeyDialog open={showNew} onClose={() => setShowNew(false)} onIssue={handleIssue} />
       <IssuedKeyDialog issued={issued} onClose={() => setIssued(null)} />
-      <RotateKeyDialog k={rotating} busy={busy} onClose={() => setRotating(null)} onConfirm={(k) => void handleRotate(k)} />
-      <RevokeKeyDialog k={revoking} busy={busy} onClose={() => setRevoking(null)} onConfirm={(k) => void handleRevoke(k)} />
+      <RotateKeyDialog k={rotating} onClose={() => setRotating(null)} onConfirm={handleRotate} />
+      <RevokeKeyDialog k={revoking} onClose={() => setRevoking(null)} onConfirm={handleRevoke} />
       {leaveGuard}
     </div>
   );
@@ -276,7 +268,7 @@ function NewKeyDialog({ open, onClose, onIssue }: {
       </>}>
       {info && (
         <Alert tone="bad" title="API 키를 발급하지 못했습니다.">
-          {info.title}. {info.detail} 입력한 내용은 그대로 있습니다.
+          {`${info.title}. ${info.detail.replace(/[.。]$/, '')}. 입력한 내용은 그대로 있습니다.`}
         </Alert>
       )}
       <div>
@@ -311,7 +303,7 @@ function NewKeyDialog({ open, onClose, onIssue }: {
             <FilterChip key={o.label} active={expiresInMonths === o.months} disabled={busy} onClick={() => setExpiresInMonths(o.months)}>{o.label}</FilterChip>
           ))}
         </div>
-        <p className="hint">{preview ? `만료일 ${preview} (KST)` : '만료 없음 — 키가 무기한으로 유효합니다.'} · 권장 rotation {ROTATION_DAYS}일</p>
+        <p className="hint">{preview ? `만료일 ${preview} (KST)` : '만료 없음 — 키가 무기한으로 유효합니다.'} · 권장 회전 주기 {ROTATION_DAYS}일</p>
       </div>
     </Dialog>
   );
@@ -361,48 +353,40 @@ function IssuedKeyDialog({ issued, onClose }: { issued: Issued | null; onClose: 
   );
 }
 
-// ── 회수 (위험) — 취소 기본 포커스 ───────────────────────────────────────────
+// ── 회수 — L2 영향 요약, 기본 포커스 취소 ─────────────────────────────────────
 
-function RevokeKeyDialog({ k, busy = false, onClose, onConfirm }: { k: ApiKey | null; busy?: boolean; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
+function RevokeKeyDialog({ k, onClose, onConfirm }: { k: ApiKey | null; onClose: () => void; onConfirm: (k: ApiKey) => Promise<void> }) {
   if (!k) return null;
   return (
-    <Dialog open onClose={onClose} role="alertdialog" title="API key를 회수하시겠습니까?" initialFocusRef={cancelRef}
-      footer={<>
-        <button ref={cancelRef} type="button" className="btn" onClick={onClose}>취소</button>
-        <Button variant="danger-solid" disabled={busy} onClick={() => onConfirm(k)}>회수</Button>
-      </>}>
+    <ConfirmDialog open onClose={onClose} level="L2" verb="회수" title="API 키를 회수할까요?" onConfirm={() => onConfirm(k)}>
       <KvList keyWidth={80} items={[
-        { k: 'prefix', v: k.prefix, mono: true },
         { k: '이름', v: k.name },
-        { k: '생성', v: ymd(k.createdAt) },
+        { k: 'prefix', v: k.prefix, mono: true },
+        { k: '마지막 사용', v: k.lastUsedAt ? timeAgo(k.lastUsedAt) : '사용 안 함' },
       ]} />
-      <Alert tone="bad">회수는 되돌릴 수 없습니다. 이 키를 쓰는 RP 서버의 요청이 즉시 401 로 거부됩니다.</Alert>
-    </Dialog>
+      <Alert tone="bad" title="영향">이 키를 쓰는 RP 서버의 요청이 즉시 거부됩니다(401). 회수는 되돌릴 수 없습니다.</Alert>
+    </ConfirmDialog>
   );
 }
 
-// ── 회전 — 기존 키 24시간 겹침 타임라인 ───────────────────────────────────────
+// ── 회전 — L2 영향 요약: 기존 키 24시간 겹침 ─────────────────────────────────
 
-function RotateKeyDialog({ k, busy = false, onClose, onConfirm }: { k: ApiKey | null; busy?: boolean; onClose: () => void; onConfirm: (k: ApiKey) => void }) {
+function RotateKeyDialog({ k, onClose, onConfirm }: { k: ApiKey | null; onClose: () => void; onConfirm: (k: ApiKey) => Promise<void> }) {
   if (!k) return null;
   return (
-    <Dialog open onClose={onClose} title="API key를 회전하시겠습니까?"
-      footer={<>
-        <Button onClick={onClose}>취소</Button>
-        <Button variant="primary" disabled={busy} onClick={() => onConfirm(k)}>회전 실행</Button>
-      </>}>
+    <ConfirmDialog open onClose={onClose} level="L2" danger={false} verb="회전" title="API 키를 회전할까요?" onConfirm={() => onConfirm(k)}>
       <KvList keyWidth={80} items={[
-        { k: 'prefix', v: k.prefix, mono: true },
         { k: '이름', v: k.name },
+        { k: 'prefix', v: k.prefix, mono: true },
       ]} />
       <div className="row" style={{ gap: 10, flexWrap: 'nowrap', fontSize: 13, padding: '12px 14px', background: 'var(--canvas)', borderRadius: 'var(--r)' }}>
-        <span className="tag">기존 키</span>
+        <span className="tag">기존 {k.prefix}</span>
         <span style={{ color: 'var(--ink-2)' }}>24시간 함께 유효</span>
         <Icons.ChevronRight size={14} />
         <span className="tag" style={{ background: 'var(--brand-100)', color: 'var(--brand-700)' }}>새 키</span>
-        <span style={{ color: 'var(--ink-2)' }}>즉시 발급</span>
+        <span style={{ color: 'var(--ink-2)' }}>즉시 발급 · 1회 표시</span>
       </div>
-    </Dialog>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>유예 기간 안에 RP 서버 설정을 새 키로 바꾸세요. 유예가 끝나면 기존 키 요청은 거부됩니다.</p>
+    </ConfirmDialog>
   );
 }

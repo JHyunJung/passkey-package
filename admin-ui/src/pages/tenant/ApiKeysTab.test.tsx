@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, within, act } from '@testing-library/react';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
@@ -26,6 +26,7 @@ const renderTab = (onChanged?: () => void) => renderWithDataRouter(<ToastHost><A
 
 describe('ApiKeysTab V2', () => {
   beforeEach(() => { vi.clearAllMocks(); links.rpGuide = 'https://docs.example/rp'; });
+  afterEach(() => { links.rpGuide = 'https://docs.example/rp'; });
 
   it('⋯ 메뉴는 ACTIVE 키에만 있고, 회수는 위험 구획에서 열리며 취소에 기본 포커스', async () => {
     api.list.mockResolvedValue([
@@ -45,7 +46,7 @@ describe('ApiKeysTab V2', () => {
     expect(screen.getByText('위험')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('menuitem', { name: '회수' }));
 
-    const dlg = screen.getByRole('alertdialog', { name: 'API key를 회수하시겠습니까?' });
+    const dlg = screen.getByRole('alertdialog', { name: 'API 키를 회수할까요?' });
     expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
     expect(within(dlg).getByRole('button', { name: '회수' })).toHaveClass('btn--danger-solid');
   });
@@ -103,9 +104,10 @@ describe('ApiKeysTab V2', () => {
     renderTab();
     fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
     fireEvent.click(screen.getByRole('menuitem', { name: '회전' }));
-    const rot = screen.getByRole('dialog', { name: 'API key를 회전하시겠습니까?' });
+    const rot = screen.getByRole('alertdialog', { name: 'API 키를 회전할까요?' });
     expect(within(rot).getByText('24시간 함께 유효')).toBeInTheDocument();
-    fireEvent.click(within(rot).getByRole('button', { name: '회전 실행' }));
+    expect(document.activeElement).toBe(within(rot).getByRole('button', { name: '취소' }));
+    await act(async () => { fireEvent.click(within(rot).getByRole('button', { name: '회전' })); });
     const issued = await screen.findByRole('alertdialog', { name: /새 API key가 발급되었습니다/ });
     expect(api.rotate).toHaveBeenCalledWith('a');
     expect(within(issued).getByText(/이전 키는 24시간 후/)).toBeInTheDocument();
@@ -140,7 +142,7 @@ describe('ApiKeysTab V2', () => {
     renderTab(onChanged);
     fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
     fireEvent.click(screen.getByRole('menuitem', { name: '회전' }));
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'API key를 회전하시겠습니까?' })).getByRole('button', { name: '회전 실행' }));
+    await act(async () => { fireEvent.click(within(screen.getByRole('alertdialog', { name: 'API 키를 회전할까요?' })).getByRole('button', { name: '회전' })); });
     const issued = await screen.findByRole('alertdialog', { name: /새 API key가 발급되었습니다/ });
     expect(within(issued).getByText('a2')).toBeInTheDocument();
     expect(within(issued).queryByText(/^a$/)).toBeNull();
@@ -172,11 +174,12 @@ describe('ApiKeysTab V2', () => {
     renderTab();
     fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
     fireEvent.click(screen.getByRole('menuitem', { name: '회수' }));
-    const revokeBtn = within(screen.getByRole('alertdialog')).getByRole('button', { name: '회수' });
+    const revokeBtn = within(screen.getByRole('alertdialog', { name: 'API 키를 회수할까요?' })).getByRole('button', { name: '회수' });
     fireEvent.click(revokeBtn);
     fireEvent.click(revokeBtn);
     expect(api.revoke).toHaveBeenCalledTimes(1);
     expect(revokeBtn).toBeDisabled();
+    expect(revokeBtn).toHaveTextContent('회수 중…');
   });
   it('로드 실패: "키 없음"이 아니라 LoadError, 다시 시도', async () => {
     api.list.mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503')).mockResolvedValueOnce([key({ id: 'a', name: 'prod' })]);
@@ -277,5 +280,78 @@ describe('ApiKeysTab V2', () => {
     expect(await screen.findByText('아직 발급한 API 키가 없습니다')).toBeInTheDocument();
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     expect(screen.queryByRole('link', { name: /RP 연동 가이드/ })).toBeNull();
+  });
+
+  it('회수: L2 영향 요약(입력 확인 없음), 성공 토스트 "회수했습니다"', async () => {
+    api.list.mockResolvedValue([key({ id: 'a', name: 'prod', lastUsedAt: null })]);
+    api.revoke.mockResolvedValue(undefined);
+    const onChanged = vi.fn();
+    renderTab(onChanged);
+    fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '회수' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'API 키를 회수할까요?' });
+    expect(within(dlg).getByText(/즉시 거부됩니다\(401\)/)).toBeInTheDocument();
+    expect(within(dlg).getByText('사용 안 함')).toBeInTheDocument();
+    expect(within(dlg).queryByRole('textbox')).toBeNull();
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '회수' })); });
+    expect(api.revoke).toHaveBeenCalledWith('a');
+    expect(screen.queryByRole('alertdialog', { name: 'API 키를 회수할까요?' })).toBeNull();
+    expect(await screen.findByText('API 키 “prod”을 회수했습니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '되돌리기' })).toBeNull();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('회수 실패는 다이얼로그 안 인라인 오류, 닫히지 않는다', async () => {
+    api.list.mockResolvedValue([key({ id: 'a', name: 'prod' })]);
+    api.revoke.mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '회수' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'API 키를 회수할까요?' });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '회수' })); });
+    expect(within(dlg).getByText('회수하지 못했습니다')).toBeInTheDocument();
+    expect(screen.queryByText('회수 실패')).toBeNull();
+  });
+
+  it('회전: L2 — 유예 기간 안내, 실패는 인라인', async () => {
+    api.list.mockResolvedValue([key({ id: 'a', name: 'prod' })]);
+    api.rotate.mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '회전' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'API 키를 회전할까요?' });
+    expect(within(dlg).getByText(/유예 기간 안에 RP 서버 설정을 새 키로 바꾸세요/)).toBeInTheDocument();
+    expect(within(dlg).getByRole('button', { name: '회전' })).toHaveClass('btn--primary');
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '회전' })); });
+    expect(within(dlg).getByText('회전하지 못했습니다')).toBeInTheDocument();
+  });
+
+  it('발급 실패 경고는 마침표가 겹치지 않고, 상세 뒤에 문장이 끝난다', async () => {
+    api.list.mockResolvedValue([]);
+    api.create.mockRejectedValue(new ApiError(409, 'K409', '키 개수 한도 초과.'));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '새 키 발급' }));
+    fireEvent.change(screen.getByLabelText('용도 (이름)'), { target: { value: 'x' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '발급' })); });
+    const alert = within(screen.getByRole('dialog', { name: '새 API 키 발급' })).getByRole('alert');
+    expect(alert.textContent).toContain('키 개수 한도 초과. 입력한 내용은');
+    expect(alert.textContent).not.toMatch(/\.\./);
+  });
+
+  it('발급이 진행 중이면 회수·회전은 동시에 실행되지 않는다(공용 가드)', async () => {
+    api.list.mockResolvedValue([key({ id: 'a', name: 'prod' })]);
+    api.create.mockReturnValue(new Promise(() => {}));
+    api.revoke.mockResolvedValue(undefined);
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: 'prod 키 액션' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '회수' }));
+    // 발급을 먼저 시작해 가드를 점유한다.
+    fireEvent.click(screen.getByRole('button', { name: '새 키 발급' }));
+    fireEvent.change(screen.getByLabelText('용도 (이름)'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: '발급' }));
+    const dlg = screen.getByRole('alertdialog', { name: 'API 키를 회수할까요?' });
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '회수' })); });
+    expect(api.revoke).not.toHaveBeenCalled();
+    expect(within(dlg).getByText(/다른 작업이 진행 중/)).toBeInTheDocument();
   });
 });
