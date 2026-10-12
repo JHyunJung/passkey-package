@@ -4,7 +4,7 @@ import { Icons } from '@/icons/Icons';
 import { api, getMe } from '@/api/client';
 import type { Me } from '@/api/types';
 import { illustrations } from '@/assets/illustrations';
-import { Alert, Button, useToast } from '@/ui';
+import { Alert, Button } from '@/ui';
 
 type LoginPageProps = {
   onLogin: (me: Me) => void;
@@ -28,7 +28,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [demoRole, setDemoRole] = useState<'PLATFORM_OPERATOR' | 'RP_ADMIN' | null>(null);
   const [devProfile, setDevProfile] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
-  const toast = useToast();
 
   // dev/local profile 감지 — 데모 prefill + 데모 카드 노출 게이팅
   useEffect(() => {
@@ -60,7 +59,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       if (!ok) {
         const msg = '이메일 또는 비밀번호가 올바르지 않습니다.';
         setError({ code: 'A001', message: msg });
-        toast({ kind: 'err', title: '로그인 실패', message: msg });
         return;
       }
       const me = await getMe();
@@ -70,7 +68,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       const code = e?.code ?? 'C999';
       const message = e?.serverMessage || e?.message || '로그인 실패';
       setError({ code, message });
-      toast({ kind: 'err', title: '로그인 실패', message });
     } finally {
       setSubmitting(false);
     }
