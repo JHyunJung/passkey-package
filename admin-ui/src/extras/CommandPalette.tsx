@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, type ComponentType } from 'react';
+import { useState, useEffect, useRef, useMemo, useId, type ComponentType } from 'react';
 import { Icons } from '@/icons/Icons';
 import { searchAll, type SearchResult } from '@/lib/search';
 import type { AppRoute } from '@/appRoute';
@@ -47,6 +47,7 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
   const [activeTenant, setActiveTenant] = useState<{ id: string; name?: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
   // Dialog 와 같은 포커스 규칙: 열리면 검색칸, Tab 은 안에서 순환, 닫히면 원래 위치로.
   const trap = useFocusTrap(open, boxRef, inputRef);
   const isPlatform = me?.role === 'PLATFORM_OPERATOR';
@@ -59,13 +60,14 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
   useEffect(() => {
     if (!open || isPlatform) return;
     let cancelled = false;
+    setActiveTenant(null); // 이전에 열었을 때의 tenant 를 남기지 않는다(조회 실패 시 첫 tenant 기준)
     activeTenantApi.get()
       .then((v) => {
         if (cancelled || !v.activeTenantId) return;
         const name = v.allowedTenants.find((t) => t.id === v.activeTenantId)?.name;
         setActiveTenant({ id: v.activeTenantId, name });
       })
-      .catch(() => { /* 실패 시 me.tenantIds[0] 기준 + 라벨 "현재 Tenant" */ });
+      .catch(() => { if (!cancelled) setActiveTenant(null); /* 실패 시 me.tenantIds[0] 기준 + 라벨 "현재 Tenant" */ });
     return () => { cancelled = true; };
   }, [open, isPlatform]);
 
@@ -148,6 +150,8 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
       if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx((i) => stepEnabled(filtered, i, 1)); }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx((i) => stepEnabled(filtered, i, -1)); }
       if (e.key === 'Enter') {
+        // 항목 버튼에 포커스가 있으면 그 버튼의 기본 동작(클릭)에 맡긴다 — 선택 인덱스의 다른 명령을 실행하지 않는다.
+        if (e.target instanceof HTMLElement && e.target.closest('button')) return;
         e.preventDefault();
         const it = filtered[selIdx];
         if (it && !it.disabled) { it.action(); onClose(); }
@@ -177,6 +181,11 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
           <span className="sr-only">검색</span>
           <input
             ref={inputRef}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={filtered.length > 0 ? `${listId}-opt-${selIdx}` : undefined}
             aria-label="검색"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -185,7 +194,7 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
           />
           <kbd>esc</kbd>
         </label>
-        <div style={{ flex: 1, overflow: 'auto', padding: '0 0 6px' }}>
+        <div id={listId} role="listbox" aria-label="검색 결과" style={{ flex: 1, overflow: 'auto', padding: '0 0 6px' }}>
           {Object.keys(groups).length === 0 && (
             <EmptyState
               compact
@@ -195,8 +204,8 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
             />
           )}
           {Object.entries(groups).map(([g, items]) => (
-            <div key={g}>
-              <span className="t-over" style={{ display: 'block', padding: '10px 16px 4px' }}>{g}</span>
+            <div key={g} role="group" aria-label={g}>
+              <span className="t-over" aria-hidden="true" style={{ display: 'block', padding: '10px 16px 4px' }}>{g}</span>
               {items.map((it) => {
                 const active = it._i === selIdx;
                 const Ic = (Icons as Record<string, ComponentType<{ size?: number }>>)[it.icon] || Icons.ChevronRight;
@@ -204,9 +213,13 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
                 return (
                   <button
                     key={it._i}
+                    id={`${listId}-opt-${it._i}`}
+                    role="option"
                     type="button"
+                    tabIndex={-1}
+                    aria-selected={active}
+                    aria-disabled={it.disabled || undefined}
                     className={`menu__item${it.label === '로그아웃' ? ' menu__item--danger' : ''}`}
-                    aria-current={active || undefined}
                     disabled={it.disabled}
                     onClick={() => { it.action(); onClose(); }}
                     onMouseEnter={() => { if (!it.disabled) setSelIdx(it._i); }}

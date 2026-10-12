@@ -27,6 +27,9 @@ export function useFocusTrap(open: boolean, boxRef: RefObject<HTMLElement>, init
     const els = tabbables(boxRef.current);
     if (els.length === 0) { e.preventDefault(); return; } // 갈 곳이 없으면 컨테이너에 머문다
     const first = els[0], last = els[els.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    // 포커스가 Tab 대상이 아닌 요소(마우스로 누른 tabindex=-1 항목 등)에 있으면 밖으로 새지 않게 경계로 되돌린다.
+    if (!active || !els.includes(active)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
     if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
   };
