@@ -187,6 +187,7 @@ export default function AuditChainPage() {
   // 행이 삭제된 체인에 실행하면 공백이 다시 이어져 위변조 흔적이 사라진다 — 위변조가 있으면 메뉴에서 막고,
   // L3 확인 뒤에만 실행한다. 실패(throw)는 ConfirmDialog 가 다이얼로그 안에 보여 준다.
   async function runBackfill() {
+    if (hasTampering) return; // 위변조가 처음 나타난 렌더(리셋 effect 전)에도 실행되지 않게 한다
     const r = await auditChainMonitorApi.backfill();
     toast({ kind: 'ok', title: '백필 완료', message: `tenant ${fmt(r.tenantsProcessed)}개 처리 · 행 ${fmt(r.rowsUpdated)}개 갱신` });
     reverify();
@@ -562,7 +563,7 @@ export default function AuditChainPage() {
       </Dialog>
 
       <ConfirmDialog
-        open={backfillOpen}
+        open={backfillOpen && !hasTampering}
         onClose={() => setBackfillOpen(false)}
         level="L3"
         title="체인 백필을 실행할까요?"
