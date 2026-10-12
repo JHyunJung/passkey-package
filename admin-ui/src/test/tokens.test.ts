@@ -45,5 +45,10 @@ describe('V2 tokens', () => {
     expect(tokens()).toMatch(/--focus-offset:\s*2px/);
     expect(css).not.toMatch(/--focus-ring/);
     expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*var\(--focus-outline\)/);
+    const cssText = readFileSync(join(S, 'components.css'), 'utf8');
+    expect(cssText).toMatch(/\.menu__item:focus-visible\s*\{[^}]*outline:\s*var\(--focus-outline\)/);
+    expect(cssText).not.toMatch(/\.menu__item:focus(?![-\w])[^{]*\{[^}]*outline:\s*none/);
+    const palette = readFileSync(join(__dirname, '..', 'extras', 'CommandPalette.tsx'), 'utf8');
+    expect(palette).not.toMatch(/outline:\s*['"]none['"]/);
   });
 });

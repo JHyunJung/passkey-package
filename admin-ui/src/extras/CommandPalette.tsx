@@ -153,7 +153,7 @@ export function CommandPalette({ open, onClose, me, onNavigate, onAction }: Comm
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="tenant, credential, audit ID 검색…"
-            style={{ flex: 1, border: 0, outline: "none", font: "inherit", fontSize: 15, background: "transparent" }}
+            style={{ flex: 1, border: 0, font: "inherit", fontSize: 15, background: "transparent" }}
           />
           <kbd>esc</kbd>
         </label>
