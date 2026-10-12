@@ -1,5 +1,5 @@
 // admin-ui/src/pages/TenantsListPage.tsx
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/icons/Icons';
 import { tenantsApi } from '@/api/tenants';
@@ -10,10 +10,11 @@ import { downloadCsv } from '@/lib/csvExport';
 import { kstDate, kstToday } from '@/lib/kst';
 import { isExpiringSoon } from '@/lib/apiKeyExpiry';
 import { useLoad } from '@/lib/useLoad';
+import { describeError } from '@/lib/describeError';
 import { statusLabel } from '@/i18n/labels';
 import { illustrations } from '@/assets/illustrations';
 import {
-  Button, Card, DataTable, Dialog, EmptyState, Field, KpiCard, LoadError, PageHeader, Pagination,
+  Alert, Button, Card, DataTable, Dialog, EmptyState, Field, KpiCard, LoadError, PageHeader, Pagination,
   RemovableChip, Segmented, Skeleton, StatusBadge, useToast, type Column,
 } from '@/ui';
 
@@ -292,12 +293,16 @@ const NEXT_STEPS = [
 export function NewTenantDialog({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (i: { name: string; slug: string; rpId: string }) => void;
+  /** 거부(throw)하면 다이얼로그 안에 인라인 경고를 보이고 입력값을 유지한다. 성공 시 닫기는 호출자가 한다. */
+  onCreate: (i: { name: string; slug: string; rpId: string }) => Promise<void> | void;
 }) {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [rpId, setRpId] = useState('');
   const [touched, setTouched] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [error, setError] = useState<unknown>(null);
   const slugRe = /^[a-z0-9][a-z0-9-]{1,62}$/;
   const slugOk = slugRe.test(slug);
   // rpId 는 WebAuthn RP ID — registrable domain(hostname). 스킴/포트/경로 없이
@@ -305,19 +310,27 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
   const rpIdRe = /^(?!.*\.example\.com$)([a-z0-9-]+\.)+[a-z]{2,}$/;
   const rpIdOk = rpIdRe.test(rpId.trim());
 
-  // Reset form when dialog is closed (open: true → false) so stale input
-  // doesn't bleed into the next open. This also runs when a create fails and
-  // the parent leaves the dialog open — state is preserved until actual close.
+  // 닫힐 때(open: true → false)만 폼을 비운다. 생성 실패로 열린 채 남으면 입력값은 유지된다.
   useEffect(() => {
-    if (!open) { setName(''); setSlug(''); setRpId(''); setTouched(false); }
+    if (!open) { setName(''); setSlug(''); setRpId(''); setTouched(false); setError(null); }
   }, [open]);
 
-  function submit() {
+  async function submit() {
+    if (busyRef.current) return; // 연타 방지 — state 반영 전 두 번째 클릭도 막는다.
     setTouched(true);
     if (!name || !slugOk || !rpIdOk) return;
-    onCreate({ name, slug, rpId: rpId.trim() });
-    // Do NOT clear here — let the parent's handleCreate success path call
-    // setShowNew(false), which triggers the useEffect above to reset state.
+    busyRef.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      await onCreate({ name, slug, rpId: rpId.trim() });
+      // 성공 시 닫기는 부모(handleCreate → setShowNew(false))가 한다.
+    } catch (e) {
+      setError(e);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   const slugError = touched && slug && !slugOk
@@ -327,22 +340,32 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
     ? '스킴·포트·경로 없이 실제 도메인 hostname을 입력하세요(예: passkey.acme.com). example.com은 placeholder라 사용할 수 없습니다.'
     : undefined;
 
+  const info = error ? describeError(error) : null;
+  const meta = info ? [info.httpStatus ? `HTTP ${info.httpStatus}` : null, info.traceId ? `trace ${info.traceId}` : null].filter(Boolean).join(' · ') : '';
+
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={busy ? () => {} : onClose}
+      dismissible={!busy}
       title="신규 Tenant 생성"
       sub="RP 회사 하나에 대한 격리된 Passkey 환경을 만듭니다."
       footer={<>
-        <Button onClick={onClose}>취소</Button>
-        <Button variant="primary" onClick={submit}>생성하고 설정으로 이동</Button>
+        <Button onClick={onClose} disabled={busy}>취소</Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={busy}>{busy ? '생성 중…' : '생성하고 설정으로 이동'}</Button>
       </>}
     >
+      {info && (
+        <Alert tone="bad" title="Tenant를 만들지 못했습니다">
+          {`${info.title}. ${info.detail} 입력한 내용은 그대로 있습니다.`}
+          {meta && <span className="mono" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>{meta}</span>}
+        </Alert>
+      )}
       <Field label="표시 이름" htmlFor="nt-name">
-        <input id="nt-name" className="input" placeholder="예: Acme Corp" value={name} onChange={(e) => setName(e.target.value)} />
+        <input id="nt-name" className="input" placeholder="예: Acme Corp" value={name} readOnly={busy} onChange={(e) => setName(e.target.value)} />
       </Field>
       <Field label="Slug (영문 식별자)" htmlFor="nt-slug" help="소문자·숫자·하이픈. URL 과 로그에서 tenant 를 식별합니다." error={slugError}>
-        <input id="nt-slug" className="input mono" placeholder="acme-corp" value={slug}
+        <input id="nt-slug" className="input mono" placeholder="acme-corp" value={slug} readOnly={busy}
                aria-invalid={!!slugError} aria-describedby={slugError ? 'nt-slug-error' : undefined}
                onChange={(e) => setSlug(e.target.value.toLowerCase())} />
       </Field>
@@ -357,7 +380,7 @@ export function NewTenantDialog({ open, onClose, onCreate }: {
           </span>
         }
       >
-        <input id="nt-rpid" className="input mono" placeholder="예: passkey.acme.com" value={rpId}
+        <input id="nt-rpid" className="input mono" placeholder="예: passkey.acme.com" value={rpId} readOnly={busy}
                aria-invalid={!!rpIdError} aria-describedby={rpIdError ? 'nt-rpid-error' : undefined}
                onChange={(e) => setRpId(e.target.value.toLowerCase().trim())} />
       </Field>

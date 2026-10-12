@@ -1,6 +1,6 @@
 // admin-ui/src/pages/TenantsListPage.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, within } from '@testing-library/react';
+import { screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
 import type { Tenant } from '@/api/designTypes';
@@ -33,6 +33,7 @@ function renderPage() {
 
 beforeEach(() => {
   vi.mocked(tenantsApi.list).mockReset();
+  vi.mocked(tenantsApi.create).mockReset();
   vi.mocked(apiKeysApi.listAll).mockReset().mockResolvedValue([]);
 });
 
@@ -189,5 +190,46 @@ describe('TenantsListPage V2', () => {
     expect(await screen.findByText('Tenant a1')).toBeInTheDocument();
     expect(tenantsApi.list).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: /활성 Tenant/ })).toHaveTextContent('2');
+  });
+
+  function fillAndSubmit() {
+    const dlg = screen.getByRole('dialog', { name: '신규 Tenant 생성' });
+    fireEvent.change(within(dlg).getByPlaceholderText('예: Acme Corp'), { target: { value: 'Acme' } });
+    fireEvent.change(within(dlg).getByPlaceholderText('acme-corp'), { target: { value: 'acme' } });
+    fireEvent.change(within(dlg).getByPlaceholderText('예: passkey.acme.com'), { target: { value: 'passkey.acme.com' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: '생성하고 설정으로 이동' }));
+    return dlg;
+  }
+
+  it('V3: 생성 실패는 다이얼로그 안에만 보이고 오류 토스트로 중복하지 않는다', async () => {
+    vi.mocked(tenantsApi.list).mockResolvedValue(three);
+    vi.mocked(tenantsApi.create).mockRejectedValue(new ApiError(503, 'C999', 'HTTP 503'));
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      renderPage();
+      await screen.findByText('Tenant a1');
+      fireEvent.click(screen.getByRole('button', { name: '신규 tenant' }));
+      const dlg = fillAndSubmit();
+      expect(await within(dlg).findByRole('alert')).toHaveTextContent('Tenant를 만들지 못했습니다');
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+      expect(screen.getByRole('dialog', { name: '신규 Tenant 생성' })).toBeInTheDocument();
+      expect(within(dlg).getByPlaceholderText('예: Acme Corp')).toHaveValue('Acme');
+      await new Promise((r) => setTimeout(r, 0));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
+  it('V3: 생성 성공 → 새 tenant 의 WebAuthn 탭으로 이동', async () => {
+    vi.mocked(tenantsApi.list).mockResolvedValue(three);
+    vi.mocked(tenantsApi.create).mockResolvedValue(tenant('new1', { name: 'Acme' }));
+    const { router } = renderPage();
+    await screen.findByText('Tenant a1');
+    fireEvent.click(screen.getByRole('button', { name: '신규 tenant' }));
+    fillAndSubmit();
+    await waitFor(() => expect(router.state.location.pathname).toBe('/tenants/new1'));
+    expect(router.state.location.search).toBe('?tab=webauthn');
   });
 });
