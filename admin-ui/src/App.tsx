@@ -198,13 +198,18 @@ function App() {
     api.post<void>('/admin/logout', {}).catch(() => { /* 세션은 서버에서도 곧 만료된다 */ });
   }
 
-  async function reloadMe() {
-    const apply = setMeForEpoch(authEpoch.current);
+  /** epoch: 이 갱신을 요청한 화면이 그려진 세대. 호출 시점이 아니라 렌더 시점에 묶어야 한다 —
+   *  MFA 확인 요청 중 로그아웃한 뒤 확인이 끝나 onVerified 가 불려도 새 세대로 /me 를 반영하지 않게. */
+  async function reloadMe(epoch: number) {
+    const apply = setMeForEpoch(epoch);
+    if (epoch !== authEpoch.current) return;
     try { apply(await api.get<Me>('/admin/api/me')); }
     catch { apply(null); }
   }
-  // 하위 화면에 넘기는 setMe 도 렌더 시점의 세대에 묶는다(로그인·계정 화면의 비동기 갱신).
-  const setMeCurrent = setMeForEpoch(authEpoch.current);
+  // 하위 화면에 넘기는 콜백은 모두 렌더 시점의 세대에 묶는다(로그인·MFA 확인·계정 화면의 비동기 갱신).
+  const renderEpoch = authEpoch.current;
+  const setMeCurrent = setMeForEpoch(renderEpoch);
+  const reloadMeCurrent = () => { void reloadMe(renderEpoch); };
 
   if (loading) {
     return <div style={{ padding: 40 }}><Skeleton /></div>;
@@ -221,7 +226,7 @@ function App() {
   if (me.mfaRequired) {
     return (
       <ToastHost>
-        <MfaChallenge onVerified={reloadMe} onLogout={handleLogout} />
+        <MfaChallenge onVerified={reloadMeCurrent} onLogout={handleLogout} />
       </ToastHost>
     );
   }
