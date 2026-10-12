@@ -9,11 +9,12 @@ import type { ApiKeyView } from '@/api/types';
 import { downloadCsv } from '@/lib/csvExport';
 import { kstDate, kstToday } from '@/lib/kst';
 import { isExpiringSoon } from '@/lib/apiKeyExpiry';
+import { useLoad } from '@/lib/useLoad';
 import { statusLabel } from '@/i18n/labels';
 import { illustrations } from '@/assets/illustrations';
 import {
-  Button, Card, DataTable, Dialog, EmptyState, Field, KpiCard, PageHeader, Pagination,
-  RemovableChip, Segmented, StatusBadge, useToast, type Column,
+  Button, Card, DataTable, Dialog, EmptyState, Field, KpiCard, LoadError, PageHeader, Pagination,
+  RemovableChip, Segmented, Skeleton, StatusBadge, useToast, type Column,
 } from '@/ui';
 
 // ── local utilities ──────────────────────────────────────────────────────────
@@ -50,9 +51,10 @@ const PAGE_SIZES = [50, 100];
 // ── TenantsListPage ───────────────────────────────────────────────────────────
 
 export default function TenantsListPage() {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 로드 상태는 useLoad 하나로: loading → Skeleton, failed(데이터 없음) → LoadError, 재시도 중에는 이전 데이터 유지.
+  const list = useLoad(() => tenantsApi.list(), []);
+  const loaded = list.data !== undefined;
+  const tenants = useMemo<Tenant[]>(() => list.data ?? [], [list.data]);
   const [keys, setKeys] = useState<ApiKeyView[] | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [q, setQ] = useState('');
@@ -61,23 +63,6 @@ export default function TenantsListPage() {
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
   const navigate = useNavigate();
   const toast = useToast();
-
-  async function reload() {
-    setLoading(true);
-    try {
-      const list = await tenantsApi.list();
-      setTenants(list);
-      setLoadFailed(false);
-    } catch (e: unknown) {
-      const err = e as { message?: string };
-      setLoadFailed(true);
-      toast({ kind: 'err', title: 'tenant 목록 로드 실패', message: err?.message });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { void reload(); }, []);
 
   // 만료 임박 키 계산용 전체 키 목록. 실패해도 목록 화면은 그대로 — KPI 보조 줄만 숨긴다.
   useEffect(() => {
@@ -88,18 +73,14 @@ export default function TenantsListPage() {
     navigate(`/tenants/${id}?tab=overview`);
   }
 
+  // 실패하면 throw 한다 — NewTenantDialog 가 다이얼로그 안에 인라인으로 보여 준다(토스트 중복 없음).
   async function handleCreate(input: { name: string; slug: string; rpId: string }) {
-    try {
-      const t = await tenantsApi.create(input);
-      toast({ kind: 'ok', title: 'Tenant 생성 완료', message: `${t.name} · WebAuthn 설정으로 이동합니다` });
-      setShowNew(false);
-      // 안내문("다음 단계: WebAuthn config …")과 버튼 라벨("생성하고 설정으로 이동")대로,
-      // 생성 직후 새 테넌트의 WebAuthn config 탭으로 이동시켜 온보딩 흐름을 잇는다.
-      navigate(`/tenants/${t.id}?tab=webauthn`);
-    } catch (e: unknown) {
-      const err = e as { message?: string };
-      toast({ kind: 'err', title: '생성 실패', message: err?.message || '오류' });
-    }
+    const t = await tenantsApi.create(input);
+    toast({ kind: 'ok', title: 'Tenant 생성 완료', message: `${t.name} · WebAuthn 설정으로 이동합니다` });
+    setShowNew(false);
+    // 안내문("다음 단계: WebAuthn config …")과 버튼 라벨("생성하고 설정으로 이동")대로,
+    // 생성 직후 새 테넌트의 WebAuthn config 탭으로 이동시켜 온보딩 흐름을 잇는다.
+    navigate(`/tenants/${t.id}?tab=webauthn`);
   }
 
   function applyStatus(s: StatusFilter) { setStatusFilter(s); setPage(1); }
@@ -180,36 +161,32 @@ export default function TenantsListPage() {
         actions={<Button variant="primary" icon={<Icons.Plus size={14} />} onClick={() => setShowNew(true)}>신규 tenant</Button>}
       />
 
+      {/* 로드 전·실패 시 빈 배열로 계산한 0 을 보이지 않는다 — 실제 값이 없으면 "—". */}
       <div className="kpis kpis--3">
         <KpiCard
           label="활성 Tenant"
-          value={fmt(counts.ACTIVE)}
-          hint={`전체 ${fmt(counts.ALL)}건 · 클릭하면 활성만 보기`}
+          value={loaded ? fmt(counts.ACTIVE) : '—'}
+          hint={loaded ? `전체 ${fmt(counts.ALL)}건 · 클릭하면 활성만 보기` : undefined}
           selected={statusFilter === 'ACTIVE'}
-          onClick={() => applyStatus(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')}
+          onClick={loaded ? () => applyStatus(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE') : undefined}
         />
         <KpiCard
           label="등록 Credential"
-          value={fmt(totalCredentials)}
-          hint={`모든 tenant 합산${credDelta !== undefined ? ` · 7일 ${signed(credDelta)}` : ''}`}
+          value={loaded ? fmt(totalCredentials) : '—'}
+          hint={loaded ? `모든 tenant 합산${credDelta !== undefined ? ` · 7일 ${signed(credDelta)}` : ''}` : undefined}
         />
         <KpiCard
           label="유효 API Key"
-          value={fmt(totalKeys)}
-          hint={<>ACTIVE 만{expiringKeys !== null && <> · <span style={{ color: 'var(--warn)', fontWeight: 600 }}>{`만료 임박 ${expiringKeys}`}</span></>}</>}
+          value={loaded ? fmt(totalKeys) : '—'}
+          hint={loaded ? <>ACTIVE 만{expiringKeys !== null && <> · <span style={{ color: 'var(--warn)', fontWeight: 600 }}>{`만료 임박 ${expiringKeys}`}</span></>}</> : undefined}
         />
       </div>
 
-      {loading ? (
-        <Card><div className="empty"><p className="empty__sub">불러오는 중…</p></div></Card>
-      ) : loadFailed && tenants.length === 0 ? (
+      {!loaded ? (
         <Card>
-          <EmptyState
-            illustration={illustrations.loadError}
-            title="tenant 목록을 불러오지 못했습니다"
-            description="서버에 연결할 수 없거나 접근 권한이 없습니다."
-            action={<Button icon={<Icons.Refresh size={14} />} onClick={() => void reload()}>다시 시도</Button>}
-          />
+          {list.status === 'failed'
+            ? <LoadError what="tenant 목록" error={list.error} onRetry={list.reload} retrying={list.reloading} />
+            : <Skeleton rows={6} />}
         </Card>
       ) : tenants.length === 0 ? (
         <Card>

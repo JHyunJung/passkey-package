@@ -5,6 +5,7 @@ import { renderWithDataRouter } from '@/test/renderWithDataRouter';
 import { ToastHost } from '@/ui';
 import type { Tenant } from '@/api/designTypes';
 import type { ApiKeyView } from '@/api/types';
+import { ApiError } from '@/api/types';
 
 vi.mock('@/api/tenants', () => ({ tenantsApi: { list: vi.fn(), create: vi.fn() } }));
 vi.mock('@/api/apiKeys', () => ({ apiKeysApi: { listAll: vi.fn() } }));
@@ -101,11 +102,15 @@ describe('TenantsListPage V2', () => {
     expect(screen.queryByText('아직 tenant 가 없습니다')).toBeNull();
   });
 
-  it('로드 실패: 빈 목록 안내 대신 불러오기 실패 상태', async () => {
+  it('로드 실패: 빈 목록 안내 대신 불러오기 실패 상태(KPI 는 "—", 오류 토스트 중복 없음)', async () => {
     vi.mocked(tenantsApi.list).mockRejectedValue(new Error('boom'));
     renderPage();
     expect(await screen.findByText('tenant 목록을 불러오지 못했습니다')).toBeInTheDocument();
     expect(screen.queryByText('아직 tenant 가 없습니다')).toBeNull();
+    expect(screen.getAllByText('—')).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: /활성 Tenant/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'CSV' })).toBeNull();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 
   it('만료 임박 N = ACTIVE 키 중 30일 이내 만료', async () => {
@@ -161,5 +166,28 @@ describe('TenantsListPage V2', () => {
     expect(screen.getByText('Tenant n55')).toBeInTheDocument();
     const table = screen.getByRole('table');
     expect(within(table).queryByText('Tenant n1')).toBeNull();
+  });
+
+  it('V3: 불러오는 동안 Skeleton, KPI 는 0 이 아니라 "—"', async () => {
+    vi.mocked(tenantsApi.list).mockReturnValue(new Promise(() => {}));
+    renderPage();
+    expect(await screen.findByRole('status', { name: '불러오는 중' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText('불러오는 중…')).toBeNull();
+    expect(screen.getAllByText('—')).toHaveLength(3);
+    expect(screen.queryByText('0')).toBeNull();
+  });
+
+  it('V3: 로드 실패 → 다시 시도하면 목록을 다시 불러온다', async () => {
+    vi.mocked(tenantsApi.list)
+      .mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'))
+      .mockResolvedValueOnce(three);
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('서버가 잠시 응답하지 않습니다');
+    expect(alert).toHaveTextContent('HTTP 503');
+    fireEvent.click(within(alert).getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('Tenant a1')).toBeInTheDocument();
+    expect(tenantsApi.list).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: /활성 Tenant/ })).toHaveTextContent('2');
   });
 });
