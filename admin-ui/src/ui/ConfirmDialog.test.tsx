@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ApiError } from '@/api/types';
 
@@ -25,13 +25,34 @@ describe('ConfirmDialog', () => {
   it('처리 중에는 버튼이 "정지 중…"으로 비활성, 연타해도 한 번만 호출', async () => {
     let resolve!: () => void;
     const onConfirm = vi.fn(() => new Promise<void>((r) => { resolve = r; }));
-    render(<ConfirmDialog {...base} level="L1" onConfirm={onConfirm} />);
+    const onClose = vi.fn();
+    render(<ConfirmDialog {...base} onClose={onClose} level="L1" onConfirm={onConfirm} />);
     fireEvent.click(screen.getByRole('button', { name: '정지' }));
     const busy = screen.getByRole('button', { name: '정지 중…' });
     expect(busy).toBeDisabled();
     fireEvent.click(busy);
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    resolve();
+    await act(async () => { resolve(); });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('falsy 거부(reject(undefined))도 다이얼로그 안 인라인 오류로 보여 준다', async () => {
+    const onClose = vi.fn();
+    render(<ConfirmDialog {...base} onClose={onClose} level="L1" onConfirm={vi.fn().mockRejectedValue(undefined)} />);
+    fireEvent.click(screen.getByRole('button', { name: '정지' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('정지하지 못했습니다');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('확인 문자열이 바뀌면 이전 일치 상태를 버리고 버튼을 다시 잠근다', () => {
+    const props = { ...base, level: 'L3' as const, onConfirm: vi.fn().mockResolvedValue(undefined) };
+    const { rerender } = render(<ConfirmDialog {...props} typeToConfirm={{ expected: 'acme', label: 'slug 입력' }} />);
+    fireEvent.change(screen.getByLabelText('slug 입력'), { target: { value: 'acme' } });
+    expect(screen.getByRole('button', { name: '정지' })).toBeEnabled();
+    rerender(<ConfirmDialog {...props} typeToConfirm={{ expected: 'globex', label: 'slug 입력' }} />);
+    expect(screen.getByRole('button', { name: '정지' })).toBeDisabled();
+    expect(screen.getByLabelText('slug 입력')).toHaveValue('');
   });
 
   it('실패하면 다이얼로그 안 인라인 오류, 닫히지 않음', async () => {
