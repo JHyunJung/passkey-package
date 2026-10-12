@@ -581,21 +581,15 @@ export default function ActivityPage() {
     </div>
   );
 
-  // 첫 응답 전: 로딩(Skeleton) 또는 첫 로드 실패(LoadError). 픽스처를 실데이터처럼 보이지 않는다.
-  if (events === null) {
-    return (
-      <div className="page">
-        {header}
-        {kpis}
-        {filters}
-        <div className="card">
-          {loadError != null
-            ? <LoadError what="활동" error={loadError} onRetry={handleRefresh} retrying={retrying} />
-            : <Skeleton rows={6} />}
-        </div>
-      </div>
-    );
-  }
+  // 첫 응답 전·조건 변경 뒤 조회 중: 로딩(Skeleton) 또는 실패(LoadError). 픽스처를 실데이터처럼 보이지 않는다.
+  // 머리글·KPI·필터는 같은 자리에 둔다 — 조건을 바꿔도 필터가 다시 마운트되지 않아 키보드 포커스가 남는다.
+  const pendingBody = (
+    <div className="card">
+      {loadError != null
+        ? <LoadError what="활동" error={loadError} onRetry={handleRefresh} retrying={retrying} />
+        : <Skeleton rows={6} />}
+    </div>
+  );
 
   const groups = groupByDay(filtered.slice(0, visibleCount), (e) => e.ts, new Date());
   const maxTop = Math.max(1, ...topTenants.map((t) => t.count));
@@ -603,7 +597,7 @@ export default function ActivityPage() {
     <div className="page">
       {header}
 
-      {disconnected && lastOkAt !== null && (
+      {events !== null && disconnected && lastOkAt !== null && (
         <Alert
           tone="warn"
           title="새 이벤트를 받지 못하고 있습니다"
@@ -617,6 +611,7 @@ export default function ActivityPage() {
 
       {filters}
 
+      {events === null ? pendingBody : (
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
         <section className="card" style={{ flex: '999 1 460px', minWidth: 0 }}>
           <div className="card__head">
@@ -693,6 +688,7 @@ export default function ActivityPage() {
           </section>
         </aside>
       </div>
+      )}
     </div>
   );
 }

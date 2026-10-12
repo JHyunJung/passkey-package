@@ -383,4 +383,33 @@ describe('ActivityPage V2', () => {
     expect(screen.queryByRole('group', { name: '오늘' })).toBeNull();
     expect(screen.getByRole('button', { name: '내보내기' })).toBeDisabled();
   });
+
+  it('카테고리를 바꿔도 필터 컨트롤이 다시 마운트되지 않아 키보드 포커스가 그 버튼에 남는다', async () => {
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    let resolveSec!: (v: ActivityView) => void;
+    vi.mocked(activityApi.fetch).mockImplementationOnce(() => new Promise((r) => { resolveSec = r; }));
+    const sec = screen.getByRole('button', { name: '보안' });
+    sec.focus();
+    fireEvent.click(sec);
+    // 로딩 중에도, 응답 뒤에도 같은 요소에 포커스가 있다.
+    expect(document.activeElement).toBe(sec);
+    await act(async () => { resolveSec(view(FEED)); });
+    await screen.findByRole('group', { name: '오늘' });
+    expect(screen.getByRole('button', { name: '보안' })).toBe(sec);
+    expect(document.activeElement).toBe(sec);
+  });
+
+  it('tenant 를 바꿔도 tenant 선택 상자가 다시 마운트되지 않아 포커스가 남는다', async () => {
+    vi.mocked(tenantsApi.list).mockResolvedValue([{ id: 't2', name: 'Globex', slug: 'globex' } as never]);
+    renderPage();
+    await screen.findByRole('group', { name: '오늘' });
+    await screen.findByRole('option', { name: 'Globex (globex)' });
+    const select = screen.getByRole('combobox', { name: '테넌트' });
+    select.focus();
+    fireEvent.change(select, { target: { value: 't2' } });
+    expect(await screen.findByRole('group', { name: '오늘' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '테넌트' })).toBe(select);
+    expect(document.activeElement).toBe(select);
+  });
 });
