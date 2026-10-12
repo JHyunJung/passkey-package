@@ -171,4 +171,30 @@ describe('Menu 열림 방향 — 렌더된 높이로 보정', () => {
       restore();
     }
   });
+
+  it('어느 쪽에도 다 안 들어가면 아래 공간이 더 크면 아래로 열고, 남은 높이만큼 max-height 로 자르며 스크롤한다', () => {
+    // 뷰포트 300, 트리거 70~100, 메뉴 240: 아래 194px, 위 64px. 위로 뒤집으면 화면 밖(-176px)으로 나간다.
+    const { menu, restore } = renderAndOpen(300, { top: 70, bottom: 100, right: 500 }, 240);
+    try {
+      expect(menu.style.top).toBe('106px');
+      expect(menu.style.bottom).toBe('');
+      expect(menu.style.maxHeight).toBe('194px');
+      expect(menu.style.overflowY).toBe('auto');
+    } finally {
+      restore();
+    }
+  });
+
+  it('어느 쪽에도 다 안 들어가고 위 공간이 더 크면 위로 열고, 남은 높이만큼 max-height 로 자른다', () => {
+    // 뷰포트 300, 트리거 200~230, 메뉴 240: 아래 64px, 위 194px.
+    const { menu, restore } = renderAndOpen(300, { top: 200, bottom: 230, right: 500 }, 240);
+    try {
+      expect(menu.style.top).toBe('auto');
+      expect(menu.style.bottom).toBe('106px');
+      expect(menu.style.maxHeight).toBe('194px');
+      expect(menu.style.overflowY).toBe('auto');
+    } finally {
+      restore();
+    }
+  });
 });

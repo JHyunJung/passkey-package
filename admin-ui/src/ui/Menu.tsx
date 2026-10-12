@@ -15,12 +15,16 @@ function estimateHeight(items: MenuItem[], hasDanger: boolean) {
   const body = items.reduce((h, it) => h + (it.disabled && it.disabledReason ? REASON_ITEM_H : ITEM_H), 0);
   return 12 + body + (hasDanger ? 35 : 0);
 }
-// 메뉴 높이 h 로 트리거 아래에 들어가면 아래, 아니면 위. 열기 직전 추정과 열린 뒤 실측에 같이 쓴다.
+// 메뉴 높이 h 가 아래에 들어가면 아래, 위에 들어가면 위. 어디에도 다 안 들어가면 공간이 더 큰 쪽으로 열고
+// 남은 높이만큼 max-height 로 자른 뒤 스크롤한다(화면 밖으로 나가는 항목이 없게). 열기 직전 추정과 실측에 같이 쓴다.
 function placeMenu(t: Pick<DOMRect, 'top' | 'bottom' | 'right'>, h: number): CSSProperties {
   const right = window.innerWidth - t.right;
-  return t.bottom + GAP + h <= window.innerHeight
-    ? { position: 'fixed', top: t.bottom + GAP, right }
-    : { position: 'fixed', top: 'auto', bottom: window.innerHeight - t.top + GAP, right };
+  const below = window.innerHeight - t.bottom - GAP;
+  const above = t.top - GAP;
+  if (h <= below) return { position: 'fixed', top: t.bottom + GAP, right };
+  if (h <= above) return { position: 'fixed', top: 'auto', bottom: window.innerHeight - t.top + GAP, right };
+  if (below >= above) return { position: 'fixed', top: t.bottom + GAP, right, maxHeight: below, overflowY: 'auto' };
+  return { position: 'fixed', top: 'auto', bottom: window.innerHeight - t.top + GAP, right, maxHeight: above, overflowY: 'auto' };
 }
 
 /**
@@ -39,8 +43,11 @@ export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', t
   // 추정으로 먼저 연 뒤, 렌더된 메뉴 높이로 방향을 다시 정한다(사유가 여러 줄로 감기면 추정이 틀린다).
   useLayoutEffect(() => {
     if (!open) return;
+    const menu = menuRef.current;
     const t = triggerRef.current?.getBoundingClientRect();
-    const m = menuRef.current?.getBoundingClientRect();
+    // 이전 max-height 로 잘린 높이가 아니라 자연 높이를 재야 한다.
+    if (menu) menu.style.maxHeight = '';
+    const m = menu?.getBoundingClientRect();
     // 높이 0 은 측정 불가(레이아웃 없는 환경)로 보고 추정을 그대로 둔다.
     if (t && m && m.height > 0) setPos(placeMenu(t, m.height));
   }, [open]);
