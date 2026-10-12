@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { LicenseView } from '@/api/license';
 
@@ -15,6 +15,11 @@ const base: LicenseView = {
 
 function renderBanner(props: { showLink?: boolean } = {}, path = '/tenants') {
   return render(<MemoryRouter initialEntries={[path]}><LicenseBanner {...props} /></MemoryRouter>);
+}
+
+// 호출 관측만으로는 fetch 가 settle 되고 React 가 커밋되기 전이다 — 비어 있음을 단언하기 전에 반드시 flush.
+async function settle() {
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
 beforeEach(() => { vi.mocked(licenseApi.get).mockReset(); });
@@ -60,6 +65,7 @@ describe('LicenseBanner', () => {
     vi.mocked(licenseApi.get).mockResolvedValue({ ...base, state: 'VALID' });
     const { container } = renderBanner({ showLink: true });
     await vi.waitFor(() => expect(licenseApi.get).toHaveBeenCalled());
+    await settle();
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -69,6 +75,7 @@ describe('LicenseBanner', () => {
       vi.mocked(licenseApi.get).mockResolvedValue({ ...base, deploymentMode: 'saas', state });
       const { container, unmount } = renderBanner({ showLink: true });
       await vi.waitFor(() => expect(licenseApi.get).toHaveBeenCalled());
+      await settle();
       expect(container).toBeEmptyDOMElement();
       unmount();
     }
@@ -78,6 +85,7 @@ describe('LicenseBanner', () => {
     vi.mocked(licenseApi.get).mockRejectedValue(new Error('boom'));
     const { container } = renderBanner({ showLink: true });
     await vi.waitFor(() => expect(licenseApi.get).toHaveBeenCalled());
+    await settle();
     expect(container).toBeEmptyDOMElement();
   });
 
