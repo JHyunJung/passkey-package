@@ -103,6 +103,8 @@ describe('IdleSessionModal', () => {
     fireEvent.click(btn);
     fireEvent.click(btn);
     expect(onExtend).toHaveBeenCalledTimes(1);
+    act(() => { screen.getByRole('button', { name: '로그아웃' }).focus(); }); // 포커스가 이미 다른 곳에 있음
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '로그아웃' }));
     await act(async () => { rejectExtend(new TypeError('x')); });
     expect(screen.getByRole('alert')).toHaveTextContent('네트워크에 연결할 수 없습니다');
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
@@ -157,6 +159,16 @@ describe('IdleSessionModal', () => {
       act(() => { vi.advanceTimersByTime(1); });
       expect(onLogout).toHaveBeenCalledTimes(1);
       await act(async () => { resolve(); });
+      expect(onLogout).toHaveBeenCalledTimes(1);
+    });
+
+    it('유예 중 수동 로그아웃하면 onLogout 은 한 번만 — 유예 만료·연장 실패에도 중복 호출 없음', async () => {
+      const { onLogout, reject } = setup();
+      act(() => { vi.advanceTimersByTime(1000); }); // 만료, 유예 시작
+      fireEvent.click(screen.getByRole('button', { name: '로그아웃' }));
+      expect(onLogout).toHaveBeenCalledTimes(1);
+      act(() => { vi.advanceTimersByTime(11_000); }); // 유예 경과
+      await act(async () => { reject(new TypeError('x')); });
       expect(onLogout).toHaveBeenCalledTimes(1);
     });
   });

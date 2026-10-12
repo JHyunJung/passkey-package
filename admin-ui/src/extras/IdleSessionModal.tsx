@@ -145,7 +145,7 @@ export function IdleSessionModal({ idleTimeoutMinutes, onExtend, onLogout }: Idl
       title="세션이 곧 만료됩니다"
       sub={`${secondsLeft}초 후 자동으로 로그아웃됩니다.`}
       footer={<>
-        <Button onClick={() => { setOpen(false); onLogout(); }}>로그아웃</Button>
+        <Button onClick={expireLogout}>로그아웃</Button>
         <Button ref={extendRef} variant="primary" onClick={extend} disabled={extending}>세션 연장</Button>
       </>}
     >
