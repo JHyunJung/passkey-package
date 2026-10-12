@@ -273,6 +273,11 @@ export default function AuditChainPage() {
     }
   }
 
+  // 다이얼로그가 열린 사이 위변조가 나타나면 백필 요청 자체를 접는다. 단순히 숨기기만 하면
+  // 위변조가 해소됐을 때 L3 다이얼로그가 조용히 다시 열린다.
+  const hasTampering = !!overview && (overview.totals.tenantsTampered > 0 || overview.tenants.some((c) => !c.intact));
+  useEffect(() => { if (hasTampering) setBackfillOpen(false); }, [hasTampering]);
+
   // 결과가 한 번도 없을 때만 로딩/실패 화면. 재검증 중·재검증 실패에는 이전 결과를 유지한다.
   if (!overview) {
     return (
@@ -557,7 +562,7 @@ export default function AuditChainPage() {
       </Dialog>
 
       <ConfirmDialog
-        open={backfillOpen && !tampered}
+        open={backfillOpen}
         onClose={() => setBackfillOpen(false)}
         level="L3"
         title="체인 백필을 실행할까요?"

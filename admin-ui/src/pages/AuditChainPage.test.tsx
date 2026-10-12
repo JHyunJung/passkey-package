@@ -248,6 +248,23 @@ describe('AuditChainPage V2', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 
+  it('위변조로 닫힌 백필 다이얼로그는 위변조가 해소돼도 다시 열리지 않는다', async () => {
+    renderPage();
+    await screen.findByText('Acme');
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '체인 백필…' }));
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', false)]));
+    fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    await screen.findByRole('alert');
+    vi.mocked(auditChainMonitorApi.overview).mockResolvedValue(overview([row('t1', 'Acme', true), row('t2', 'Globex', true)]));
+    fireEvent.click(screen.getByRole('button', { name: '지금 검증' }));
+    await waitFor(() => expect(auditChainMonitorApi.overview).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
   it('월간 보고서: 시작일이 종료일보다 늦으면 인라인 오류 + 생성 비활성, 고치면 해제', async () => {
     renderPage();
     await screen.findByText('Acme');
