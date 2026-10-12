@@ -28,6 +28,7 @@ vi.mock('@/api/tenants', () => ({
 }));
 
 import { adminUsersApi } from '@/api/adminUsers';
+import { tenantsApi } from '@/api/tenants';
 import { signupRequestsApi } from '@/api/signupRequests';
 import { ApiError } from '@/api/types';
 import AdminUsersTab from './AdminUsersTab';
@@ -63,7 +64,7 @@ describe('AdminUsersTab signup requests', () => {
     await waitFor(() => expect(screen.getByText('new@x.com')).toBeInTheDocument());
     expect(screen.getByText('RP 담당')).toBeInTheDocument();
     expect(screen.getByText('대기 1건')).toHaveClass('badge--warning');
-    expect(screen.getByRole('button', { name: '거절' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '거절…' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '승인…' })).toBeInTheDocument();
   });
 
@@ -142,17 +143,21 @@ describe('AdminUsersTab signup requests', () => {
     );
   });
 
-  it('reject asks for in-app confirmation (alertdialog) before calling the API', async () => {
+  it('거절은 L1 확인(기본 포커스 취소) 후 API 호출, 확인 버튼 라벨은 "거절"', async () => {
     renderTab();
     await waitFor(() => screen.getByText('new@x.com'));
-    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.click(screen.getByRole('button', { name: '거절…' }));
     expect(signupRequestsApi.reject).not.toHaveBeenCalled();
-    const dlg = screen.getByRole('alertdialog', { name: '가입 요청 거절' });
-    expect(within(dlg).getByText(/new@x.com 의 요청을 거절합니다/)).toBeInTheDocument();
-    const confirm = within(dlg).getByRole('button', { name: '거절 확정' });
+    const dlg = screen.getByRole('alertdialog', { name: '가입 요청을 거절할까요?' });
+    expect(within(dlg).getByText('new@x.com의 요청을 거절합니다. 요청자는 다시 가입 요청을 보낼 수 있습니다.')).toBeInTheDocument();
+    expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
+    expect(within(dlg).queryByRole('button', { name: '거절 확정' })).toBeNull();
+    const confirm = within(dlg).getByRole('button', { name: '거절' });
     expect(confirm).toHaveClass('btn--danger-solid');
     fireEvent.click(confirm);
     await waitFor(() => expect(signupRequestsApi.reject).toHaveBeenCalledWith('r1'));
+    expect(await screen.findByText('가입 요청을 거절했습니다.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
   });
 
   it('no invite button remains', async () => {
@@ -188,15 +193,57 @@ describe('AdminUsersTab signup requests', () => {
     expect(signupRequestsApi.list).toHaveBeenCalledTimes(2);
   });
 
-  it('reject failure other than 409 keeps the confirm dialog open', async () => {
+  it('reject failure other than 409 keeps the confirm dialog open with an inline error', async () => {
     mock(signupRequestsApi.reject).mockRejectedValue(new ApiError(500, 'C999', 'boom'));
     renderTab();
     await waitFor(() => screen.getByText('new@x.com'));
-    fireEvent.click(screen.getByRole('button', { name: '거절' }));
-    fireEvent.click(screen.getByRole('button', { name: '거절 확정' }));
+    fireEvent.click(screen.getByRole('button', { name: '거절…' }));
+    const dlg = screen.getByRole('alertdialog', { name: '가입 요청을 거절할까요?' });
+    fireEvent.click(within(dlg).getByRole('button', { name: '거절' }));
     await waitFor(() => expect(signupRequestsApi.reject).toHaveBeenCalledWith('r1'));
-    expect(screen.getByRole('button', { name: '거절 확정' })).toBeInTheDocument();
+    expect(await within(dlg).findByText('거절하지 못했습니다')).toBeInTheDocument();
+    expect(within(dlg).getByRole('button', { name: '거절' })).toBeEnabled();
     expect(signupRequestsApi.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('reject 409 는 안내 후 다이얼로그를 닫고 가입 요청을 다시 읽는다', async () => {
+    mock(signupRequestsApi.reject).mockRejectedValue(new ApiError(409, 'C409', 'conflict'));
+    renderTab();
+    await waitFor(() => screen.getByText('new@x.com'));
+    fireEvent.click(screen.getByRole('button', { name: '거절…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '거절' }));
+    expect(await screen.findByText('이미 처리된 요청입니다.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    await waitFor(() => expect(signupRequestsApi.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('승인 버튼은 연타해도 API 를 한 번만 부른다', async () => {
+    let resolve!: () => void;
+    mock(signupRequestsApi.approve).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+    renderTab();
+    await waitFor(() => screen.getByText('new@x.com'));
+    fireEvent.click(screen.getByRole('button', { name: '승인…' }));
+    await waitFor(() => within(approveDialog()).getByText('Acme'));
+    fireEvent.click(within(approveDialog()).getByRole('checkbox', { name: /Acme/ }));
+    const btn = within(approveDialog()).getByRole('button', { name: '승인하고 계정 생성' });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(signupRequestsApi.approve).toHaveBeenCalledTimes(1);
+    resolve();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '가입 요청 승인' })).toBeNull());
+  });
+
+  it('승인 실패 토스트는 서버 원문 대신 describeError 문구', async () => {
+    mock(signupRequestsApi.approve).mockRejectedValue(new ApiError(500, 'C999', 'SECRET-RAW'));
+    renderTab();
+    await waitFor(() => screen.getByText('new@x.com'));
+    fireEvent.click(screen.getByRole('button', { name: '승인…' }));
+    await waitFor(() => within(approveDialog()).getByText('Acme'));
+    fireEvent.click(within(approveDialog()).getByRole('checkbox', { name: /Acme/ }));
+    fireEvent.click(within(approveDialog()).getByRole('button', { name: '승인하고 계정 생성' }));
+    expect(await screen.findByText('승인 실패')).toBeInTheDocument();
+    expect(screen.getByText('서버가 잠시 응답하지 않습니다')).toBeInTheDocument();
+    expect(screen.queryByText(/SECRET-RAW/)).toBeNull();
   });
 });
 
@@ -218,7 +265,8 @@ describe('AdminUsersTab operators', () => {
     expect(within(rpRow).getByText('OFF')).toHaveClass('badge--warning');
     expect(within(rpRow).getByText('미접속')).toBeInTheDocument();
     const goneRow = within(table()).getByText('gone@globex.com').closest('tr')!;
-    expect(within(goneRow).getByText('2개 RP')).toBeInTheDocument();
+    expect(within(goneRow).getByText('Globex')).toBeInTheDocument();
+    expect(within(goneRow).getByText('외 1개')).toBeInTheDocument();
   });
 
   it('세그먼트 PLATFORM / RP_ADMIN / 정지 / 전체 필터', async () => {
@@ -275,5 +323,69 @@ describe('AdminUsersTab operators', () => {
     fireEvent.click(within(goneRow).getByRole('button', { name: '활성화' }));
     await waitFor(() => expect(adminUsersApi.activate).toHaveBeenCalledWith('u-rp-000000003'));
     await waitFor(() => expect(adminUsersApi.list).toHaveBeenCalledTimes(3));
+  });
+});
+
+describe('AdminUsersTab V3 — 로드 상태 · Tenant 이름', () => {
+  beforeEach(() => { mock(adminUsersApi.list).mockResolvedValue(USERS); });
+  const rowOf = (email: string) => within(screen.getByRole('table')).getByText(email).closest('tr')!;
+
+  it('로딩 중에는 Skeleton(“Loading…” 텍스트 없음)', async () => {
+    let resolve!: (v: unknown[]) => void;
+    mock(adminUsersApi.list).mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderTab();
+    expect(screen.getByRole('status', { name: '운영자 목록 불러오는 중' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText('Loading…')).toBeNull();
+    resolve([]);
+    await waitFor(() => expect(screen.queryByRole('status', { name: '운영자 목록 불러오는 중' })).toBeNull());
+  });
+
+  it('운영자 목록 실패 → LoadError, 건수 "—", 검색 비활성, 다시 시도로 복구', async () => {
+    mock(adminUsersApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    expect(await screen.findByText('운영자 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByText('콘솔 운영자').parentElement).toHaveTextContent('—');
+    expect(screen.getByRole('textbox', { name: '운영자 검색' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('ops@crosscert.com')).toBeInTheDocument();
+    expect(screen.getByText('3명 · 활성 2명')).toBeInTheDocument();
+  });
+
+  it('가입 요청 실패 → LoadError, 대기 "—" (“없음”으로 보이지 않음)', async () => {
+    mock(signupRequestsApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    renderTab();
+    expect(await screen.findByText('가입 요청을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('대기 —')).toBeInTheDocument();
+    expect(screen.queryByText('대기 중인 요청이 없습니다')).toBeNull();
+  });
+
+  it('Tenant 열: tenants 목록과 조인한 이름, 여러 개면 "외 N개", PLATFORM 은 "전체 tenant"', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    expect(within(rowOf('rp@acme.com')).getByText('Acme')).toBeInTheDocument();
+    expect(within(rowOf('gone@globex.com')).getByText('Globex')).toBeInTheDocument();
+    expect(within(rowOf('gone@globex.com')).getByText('외 1개')).toBeInTheDocument();
+    expect(within(rowOf('ops@crosscert.com')).getByText('전체 tenant')).toBeInTheDocument();
+  });
+
+  it('tenants 목록을 못 읽으면 오류 없이 id 꼬리로 표시(전체 id 는 title)', async () => {
+    mock(tenantsApi.list).mockRejectedValueOnce(new Error('x'));
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    const cell = within(rowOf('rp@acme.com')).getByText('…t1');
+    expect(cell).toHaveAttribute('title', 't1');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('같은 화면에서 다시 읽기가 실패하면 데이터를 유지하고 경고를 보인다', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    mock(adminUsersApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    const rpRow = rowOf('rp@acme.com');
+    fireEvent.click(within(rpRow).getByRole('button', { name: '정지' }));
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    expect(rowOf('rp@acme.com')).toBeInTheDocument();
+    expect(screen.queryByText('운영자 목록을 불러오지 못했습니다')).toBeNull();
   });
 });

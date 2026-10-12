@@ -1,5 +1,5 @@
 // admin-ui/src/pages/settings/AdminUsersTab.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icons } from '@/icons/Icons';
 import { adminUsersApi, type AdminUserView } from '@/api/adminUsers';
 import { signupRequestsApi, type SignupRequestView } from '@/api/signupRequests';
@@ -7,8 +7,10 @@ import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import { ApiError } from '@/api/types';
 import { illustrations } from '@/assets/illustrations';
+import { describeError } from '@/lib/describeError';
+import { useLoad } from '@/lib/useLoad';
 import {
-  Badge, Button, ChoiceCard, DataTable, Dialog, EmptyState, Segmented, StatusBadge, useToast, type Column,
+  Alert, Badge, Button, ChoiceCard, ConfirmDialog, DataTable, Dialog, EmptyState, LoadError, Segmented, Skeleton, StatusBadge, useToast, type Column,
 } from '@/ui';
 
 // ── Local utilities ───────────────────────────────────────────────────────────
@@ -29,10 +31,6 @@ function timeAgo(iso: string | null | undefined): string {
 
 function tail(s: string, n: number): string {
   return s.slice(-n);
-}
-
-function errMsg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 function initial(email: string): string {
@@ -57,75 +55,80 @@ function matchesOperator(u: AdminUserView, filter: OperatorFilter, q: string): b
 const WARN_AVATAR = { width: 34, height: 34, background: 'var(--warn-soft)', color: 'var(--warn)' } as const;
 const CAPTION = { margin: 0 } as const;
 
+/** Tenant 열. 운영자 응답에는 tenant 이름이 없어(스펙 §8) tenants 목록과 조인한다. 목록을 못 읽으면 id 꼬리로. */
+export function TenantCell({ u, names }: { u: AdminUserView; names: Record<string, string> }) {
+  if (u.role === 'PLATFORM_OPERATOR') return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>전체 tenant</span>;
+  const ids = u.tenantIds ?? [];
+  if (ids.length === 0) return <span className="faint">—</span>;
+  const first = names[ids[0]];
+  return (
+    <div className="col" style={{ minWidth: 0 }}>
+      {first
+        ? <span className="truncate" style={{ fontSize: 13 }} title={ids[0]}>{first}</span>
+        : <span className="mono" style={{ fontSize: 12 }} title={ids[0]}>…{tail(ids[0], 10)}</span>}
+      {ids.length > 1 && <span className="hint" style={CAPTION}>외 {ids.length - 1}개</span>}
+    </div>
+  );
+}
+
 // ── AdminUsersTab ─────────────────────────────────────────────────────────────
 
 export default function AdminUsersTab({ onPendingCountChange }: { onPendingCountChange?: (n: number) => void } = {}) {
-  const [users, setUsers] = useState<AdminUserView[]>([]);
-  const [requests, setRequests] = useState<SignupRequestView[]>([]);
-  const [loading, setLoading] = useState(true);
+  const users = useLoad(() => adminUsersApi.list(), []);
+  const requests = useLoad(() => signupRequestsApi.list(), []);
+  // 이름 조인용 — 실패해도 id 꼬리로 보이므로 오류 화면을 띄우지 않는다.
+  const tenants = useLoad(() => tenantsApi.list(), []);
   const [approving, setApproving] = useState<SignupRequestView | null>(null);
   const [rejecting, setRejecting] = useState<SignupRequestView | null>(null);
   const [filter, setFilter] = useState<OperatorFilter>('all');
   const [query, setQuery] = useState('');
   const toast = useToast();
 
-  async function reload() {
-    setLoading(true);
-    try {
-      const [list, pending] = await Promise.all([adminUsersApi.list(), signupRequestsApi.list()]);
-      setUsers(list);
-      setRequests(pending);
-      onPendingCountChange?.(pending.length);
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: 'Admin 사용자 로드 실패', message: errMsg(e) });
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    if (requests.data) onPendingCountChange?.(requests.data.length);
+  }, [requests.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { void reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  function reloadAll() {
+    void users.reload();
+    void requests.reload();
+  }
 
   async function handleApprove(req: SignupRequestView, body: { role: string; tenantIds: string[] }) {
     try {
       await signupRequestsApi.approve(req.id, body);
       setApproving(null);
       toast({ kind: 'ok', title: '가입 요청을 승인했습니다.', message: `${req.email} · 즉시 로그인 가능` });
-      await reload();
+      reloadAll();
     } catch (e: unknown) {
       if (e instanceof ApiError && e.status === 409) {
         toast({ kind: 'warn', title: '이미 처리된 요청입니다.', message: '다른 관리자가 먼저 처리했습니다.' });
         setApproving(null);
-        await reload();
+        reloadAll();
       } else {
-        toast({ kind: 'err', title: '승인 실패', message: errMsg(e) });
+        toast({ kind: 'err', title: '승인 실패', message: describeError(e).title });
       }
     }
   }
 
-  async function handleReject(req: SignupRequestView) {
+  /** L1 확인 후 실행. 409(다른 관리자가 먼저 처리)는 안내 후 닫고, 그 밖의 실패는 throw 해 다이얼로그 안에 보인다. */
+  async function confirmReject(req: SignupRequestView) {
     try {
       await signupRequestsApi.reject(req.id);
-      toast({ kind: 'warn', title: '가입 요청을 거절했습니다.', message: req.email });
-      setRejecting(null);
-      await reload();
+      toast({ kind: 'ok', title: '가입 요청을 거절했습니다.', message: req.email });
     } catch (e: unknown) {
-      if (e instanceof ApiError && e.status === 409) {
-        toast({ kind: 'warn', title: '이미 처리된 요청입니다.', message: '다른 관리자가 먼저 처리했습니다.' });
-        setRejecting(null);
-        await reload();
-      } else {
-        toast({ kind: 'err', title: '거절 실패', message: errMsg(e) });
-      }
+      if (!(e instanceof ApiError && e.status === 409)) throw e;
+      toast({ kind: 'warn', title: '이미 처리된 요청입니다.', message: '다른 관리자가 먼저 처리했습니다.' });
     }
+    void requests.reload();
   }
 
   async function handleSuspend(u: AdminUserView) {
     try {
       await adminUsersApi.suspend(u.id);
       toast({ kind: 'warn', title: '운영자가 정지되었습니다.', message: u.email });
-      await reload();
+      void users.reload();
     } catch (e: unknown) {
-      toast({ kind: 'err', title: '정지 실패', message: errMsg(e) });
+      toast({ kind: 'err', title: '정지 실패', message: describeError(e).title });
     }
   }
 
@@ -133,23 +136,18 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
     try {
       await adminUsersApi.activate(u.id);
       toast({ kind: 'ok', title: '운영자가 재활성화되었습니다.', message: u.email });
-      await reload();
+      void users.reload();
     } catch (e: unknown) {
-      toast({ kind: 'err', title: '활성화 실패', message: errMsg(e) });
+      toast({ kind: 'err', title: '활성화 실패', message: describeError(e).title });
     }
   }
 
-  if (loading && users.length === 0 && requests.length === 0) {
-    return (
-      <section className="card">
-        <div className="card__body muted" style={{ fontSize: 13 }}>Loading…</div>
-      </section>
-    );
-  }
-
-  const activeCount = users.filter((u) => u.status === 'ACTIVE').length;
+  const names: Record<string, string> = {};
+  for (const t of tenants.data ?? []) names[t.id] = t.name;
+  const list = users.data ?? [];
+  const activeCount = list.filter((u) => u.status === 'ACTIVE').length;
   const q = query.trim().toLowerCase();
-  const visible = users.filter((u) => matchesOperator(u, filter, q));
+  const visible = list.filter((u) => matchesOperator(u, filter, q));
 
   const columns: Column<AdminUserView>[] = [
     {
@@ -172,15 +170,7 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
         </Badge>
       ),
     },
-    {
-      key: 'tenant', header: 'Tenant',
-      render: (u) => {
-        const ids = u.tenantIds ?? [];
-        if (ids.length === 0) return <span className="faint">—</span>;
-        if (ids.length === 1) return <span className="mono" style={{ fontSize: 12 }} title={ids[0]}>…{tail(ids[0], 10)}</span>;
-        return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{ids.length}개 RP</span>;
-      },
-    },
+    { key: 'tenant', header: 'Tenant', render: (u) => <TenantCell u={u} names={names} /> },
     { key: 'mfa', header: 'MFA', render: (u) => <Badge tone={u.mfaEnabled ? 'ok' : 'warn'}>{u.mfaEnabled ? 'ON' : 'OFF'}</Badge> },
     {
       key: 'last', header: '마지막 로그인',
@@ -196,10 +186,25 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
     },
   ];
 
+  const pending = requests.data;
+
   return (
     <div className="stack-6">
       {/* ── 가입 요청 ── */}
-      {requests.length === 0 ? (
+      {!pending && requests.status === 'failed' ? (
+        <section className="card" aria-label="가입 요청">
+          <div className="card__head">
+            <h2 className="card__title">가입 요청</h2>
+            <Badge>대기 —</Badge>
+          </div>
+          <LoadError compact what="가입 요청" error={requests.error} onRetry={requests.reload} retrying={requests.reloading} />
+        </section>
+      ) : !pending ? (
+        <section className="card" aria-label="가입 요청">
+          <div className="card__head"><h2 className="card__title">가입 요청</h2></div>
+          <Skeleton rows={2} label="가입 요청 불러오는 중" />
+        </section>
+      ) : pending.length === 0 ? (
         <section className="card" aria-label="가입 요청">
           <div className="card__head" style={{ borderBottom: 0 }}>
             <h2 className="card__title">가입 요청</h2>
@@ -207,6 +212,7 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
             <div className="spacer" />
             <span className="hint" style={CAPTION}>대기 중인 요청이 없습니다</span>
           </div>
+          {requests.status === 'failed' && <StaleWarning error={requests.error} what="가입 요청" />}
         </section>
       ) : (
         <section className="card" aria-label="가입 요청" style={{ borderColor: 'var(--warn-line)' }}>
@@ -214,14 +220,15 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
             <div className="col" style={{ gap: 2 }}>
               <div className="row" style={{ gap: 8 }}>
                 <h2 className="card__title">가입 요청</h2>
-                <Badge tone="warn">대기 {requests.length}건</Badge>
+                <Badge tone="warn">대기 {pending.length}건</Badge>
               </div>
               <p className="card__sub">로그인 화면에서 들어온 관리자 계정 요청. 승인 시 역할과 tenant 를 지정합니다.</p>
             </div>
           </div>
+          {requests.status === 'failed' && <StaleWarning error={requests.error} what="가입 요청" />}
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {requests.map((r, i) => (
-              <li key={r.id} className="row" style={{ gap: 14, padding: '14px 20px', borderBottom: i < requests.length - 1 ? '1px solid var(--line-soft)' : 0 }}>
+            {pending.map((r, i) => (
+              <li key={r.id} className="row" style={{ gap: 14, padding: '14px 20px', borderBottom: i < pending.length - 1 ? '1px solid var(--line-soft)' : 0 }}>
                 <span className="avatar" style={WARN_AVATAR} aria-hidden="true">{initial(r.email)}</span>
                 <div className="col" style={{ flex: '1 1 260px', minWidth: 0 }}>
                   <strong style={{ fontSize: 13 }}>{r.email}</strong>
@@ -231,7 +238,7 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
                 </div>
                 <span className="hint" style={CAPTION}>{timeAgo(r.requestedAt)}</span>
                 <div className="row" style={{ gap: 6 }}>
-                  <Button onClick={() => setRejecting(r)}>거절</Button>
+                  <Button onClick={() => setRejecting(r)}>거절…</Button>
                   <Button variant="primary" onClick={() => setApproving(r)}>승인…</Button>
                 </div>
               </li>
@@ -245,21 +252,28 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
         <div className="card__head">
           <div className="col" style={{ gap: 2 }}>
             <h2 className="card__title">콘솔 운영자</h2>
-            <span className="hint" style={CAPTION}>{users.length}명 · 활성 {activeCount}명</span>
+            <span className="hint" style={CAPTION}>{users.data ? `${list.length}명 · 활성 ${activeCount}명` : '—'}</span>
           </div>
           <div className="spacer" />
           <Segmented ariaLabel="역할" options={FILTERS} value={filter} onChange={setFilter} />
           <div className="search" style={{ flex: '0 1 220px' }}>
             <Icons.Search size={15} />
-            <input className="input" placeholder="이메일 · ID" aria-label="운영자 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="input" placeholder="이메일 · ID" aria-label="운영자 검색" value={query} disabled={!users.data} onChange={(e) => setQuery(e.target.value)} />
           </div>
         </div>
-        <DataTable
-          columns={columns}
-          rows={visible}
-          rowKey={(u) => u.id}
-          empty={<EmptyState compact illustration={illustrations.noResults} title="조건에 맞는 운영자가 없습니다." />}
-        />
+        {users.status === 'failed' && users.data && <StaleWarning error={users.error} what="운영자 목록" />}
+        {!users.data && users.status === 'failed' ? (
+          <LoadError what="운영자 목록" error={users.error} onRetry={users.reload} retrying={users.reloading} />
+        ) : !users.data ? (
+          <Skeleton rows={5} label="운영자 목록 불러오는 중" />
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={visible}
+            rowKey={(u) => u.id}
+            empty={<EmptyState compact illustration={illustrations.noResults} title="조건에 맞는 운영자가 없습니다." />}
+          />
+        )}
       </section>
 
       {approving && (
@@ -270,22 +284,29 @@ export default function AdminUsersTab({ onPendingCountChange }: { onPendingCount
         />
       )}
 
-      {rejecting && (
-        <Dialog
-          open
-          onClose={() => setRejecting(null)}
-          role="alertdialog"
-          title="가입 요청 거절"
-          footer={
-            <>
-              <Button onClick={() => setRejecting(null)}>취소</Button>
-              <Button variant="danger-solid" onClick={() => void handleReject(rejecting)}>거절 확정</Button>
-            </>
-          }
-        >
-          <p className="card__sub">{rejecting.email} 의 요청을 거절합니다. 요청자는 다시 가입 요청을 보낼 수 있습니다.</p>
-        </Dialog>
-      )}
+      <ConfirmDialog
+        open={rejecting !== null}
+        onClose={() => setRejecting(null)}
+        level="L1"
+        title="가입 요청을 거절할까요?"
+        verb="거절"
+        onConfirm={() => confirmReject(rejecting!)}
+      >
+        {rejecting && (
+          <p className="card__sub" style={{ margin: 0 }}>{rejecting.email}의 요청을 거절합니다. 요청자는 다시 가입 요청을 보낼 수 있습니다.</p>
+        )}
+      </ConfirmDialog>
+    </div>
+  );
+}
+
+/** 같은 화면에서 다시 읽기가 실패했을 때 — 데이터는 그대로 두고 마지막 확인 결과임을 알린다. */
+function StaleWarning({ error, what }: { error: unknown; what: string }) {
+  return (
+    <div style={{ padding: '10px 20px' }}>
+      <Alert tone="warn" title="다시 확인하지 못했습니다">
+        {`${describeError(error).title}. 아래는 마지막으로 읽은 ${what}입니다.`}
+      </Alert>
     </div>
   );
 }
@@ -307,6 +328,7 @@ function ApproveDialog({
   const [tenantQuery, setTenantQuery] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     tenantsApi
@@ -330,11 +352,13 @@ function ApproveDialog({
 
   async function submit() {
     setTouched(true);
-    if (!formValid) return;
+    if (!formValid || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await onApprove({ role, tenantIds: role === 'RP_ADMIN' ? tenantIds : [] });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }

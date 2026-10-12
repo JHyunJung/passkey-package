@@ -112,6 +112,7 @@ V3 캔버스는 V2 화면에 닐슨 10원칙 휴리스틱 평가 결과를 적�
 | 운영자 목록 tenant 이름 | tenant 참조(name/slug) 포함 | 프론트 조인 |
 | p95 지표 | Micrometer 계측 | KPI 숨김 |
 | 문서·도움말 주소 | 설정값(`/admin/api/profile` 등) | `config/links.ts` 상수, 비면 숨김 |
+| 가입 거절 되돌리기 | 거절 취소 API 필요 | 1단계: L1 확인만 |
 
 ## 9. 진행 방식과 테스트
 
