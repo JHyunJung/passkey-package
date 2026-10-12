@@ -29,7 +29,7 @@ function placeMenu(t: Pick<DOMRect, 'top' | 'bottom' | 'right'>, h: number): CSS
 
 /**
  * ⋯ 메뉴. 열린 목록은 position:fixed 로 트리거 기준에 붙인다 — 표의 가로 스크롤 컨테이너(.tw)
- * 안 마지막 행에서도 잘리지 않게. 아래 공간이 모자라면 위로 연다. 스크롤·리사이즈 시 닫는다.
+ * 안 마지막 행에서도 잘리지 않게. 아래 공간이 모자라면 위로 연다. 바깥 스크롤·리사이즈 시 닫는다(메뉴 안 스크롤은 제외).
  * trigger="button" 은 테두리 있는 버튼(테넌트 헤더), 기본은 테두리 없는 아이콘 버튼(표 행).
  */
 export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', trigger = 'icon' }: { label: string; items: MenuItem[]; dangerItems?: MenuItem[]; dangerTitle?: string; trigger?: 'icon' | 'button' }) {
@@ -45,25 +45,28 @@ export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', t
     if (!open) return;
     const menu = menuRef.current;
     const t = triggerRef.current?.getBoundingClientRect();
-    // 이전 max-height 로 잘린 높이가 아니라 자연 높이를 재야 한다.
-    if (menu) menu.style.maxHeight = '';
-    const m = menu?.getBoundingClientRect();
+    if (!menu || !t) return;
+    // 추정 배치의 max-height 로 잘려 있어도 자연 높이를 잰다: scrollHeight 는 잘린 내용까지 포함하고,
+    // offsetHeight - clientHeight 로 테두리를 더한다. 인라인 style 은 React 소유라 건드리지 않는다.
+    const h = menu.scrollHeight + menu.offsetHeight - menu.clientHeight;
     // 높이 0 은 측정 불가(레이아웃 없는 환경)로 보고 추정을 그대로 둔다.
-    if (t && m && m.height > 0) setPos(placeMenu(t, m.height));
+    if (h > 0) setPos(placeMenu(t, h));
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     wrapRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
     const outside = (e: MouseEvent) => { if (!wrapRef.current?.contains(e.target as Node)) setOpen(false); };
-    const dismiss = () => setOpen(false);
+    // 잘린 메뉴 자신의 스크롤(휠·포커스 이동)은 무시하고, 페이지·다른 컨테이너 스크롤에만 닫는다.
+    const dismiss = (e: Event) => { if (!(e.target instanceof Node && menuRef.current?.contains(e.target))) setOpen(false); };
+    const onResize = () => setOpen(false);
     document.addEventListener('mousedown', outside);
     window.addEventListener('scroll', dismiss, true);
-    window.addEventListener('resize', dismiss);
+    window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('mousedown', outside);
       window.removeEventListener('scroll', dismiss, true);
-      window.removeEventListener('resize', dismiss);
+      window.removeEventListener('resize', onResize);
     };
   }, [open]);
 

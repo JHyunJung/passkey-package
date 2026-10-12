@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Menu } from './Menu';
+import { Menu, type MenuItem } from './Menu';
 
 const REASON = '위변조 의심 tenant가 있으면 쓸 수 없습니다.';
 
@@ -122,33 +122,36 @@ describe('Menu 비활성 항목 — 키보드·사유 없음·열림 방향', ()
 
 describe('Menu 열림 방향 — 렌더된 높이로 보정', () => {
   // 트리거(.btn)와 메뉴(.menu)의 rect 만 흉내 낸다. 메뉴 높이는 실제 렌더 결과를 대신한다.
+  // 메뉴의 자연 높이는 rect 와 scrollHeight(잘려 있어도 내용 전체 높이) 둘 다로 흉내 낸다.
   function mockRects(trigger: { top: number; bottom: number; right: number }, menuHeight: number) {
-    return vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
       const isMenu = this.classList.contains('menu');
       const top = isMenu ? 0 : trigger.top;
       const bottom = isMenu ? menuHeight : trigger.bottom;
       const right = isMenu ? 0 : trigger.right;
       return { top, bottom, left: 0, right, width: 0, height: bottom - top, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
     });
+    const scroll = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(function (this: Element) {
+      return this.classList.contains('menu') ? menuHeight : 0;
+    });
+    return { mockRestore: () => { rect.mockRestore(); scroll.mockRestore(); } };
   }
 
-  function renderAndOpen(viewportH: number, trigger: { top: number; bottom: number; right: number }, menuHeight: number) {
+  const TWO_ITEMS: MenuItem[] = [
+    { label: '내보내기', onSelect: vi.fn() },
+    { label: '체인 백필…', onSelect: vi.fn(), disabled: true, disabledReason: REASON },
+  ];
+
+  function renderAndOpen(viewportH: number, trigger: { top: number; bottom: number; right: number }, menuHeight: number, items: MenuItem[] = TWO_ITEMS) {
     const originalH = window.innerHeight;
     window.innerHeight = viewportH;
     const spy = mockRects(trigger, menuHeight);
-    render(
-      <Menu
-        label="더 보기"
-        trigger="button"
-        items={[
-          { label: '내보내기', onSelect: vi.fn() },
-          { label: '체인 백필…', onSelect: vi.fn(), disabled: true, disabledReason: REASON },
-        ]}
-      />,
-    );
+    render(<Menu label="더 보기" trigger="button" items={items} />);
     fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
     return { menu: screen.getByRole('menu'), restore: () => { window.innerHeight = originalH; spy.mockRestore(); } };
   }
+
+  const SIX_ITEMS: MenuItem[] = Array.from({ length: 6 }, (_, i) => ({ label: `항목 ${i + 1}`, onSelect: vi.fn() }));
 
   it('추정으로는 아래에 들어가지만 렌더된 메뉴가 넘치면 위로 연다', () => {
     // 추정 100px: 300+6+100=406 ≤ 520 → 아래. 실제 240px: 300+6+240=546 > 520 → 넘침. 위는 270-6-240=24 ≥ 0 → 위로.
@@ -196,5 +199,53 @@ describe('Menu 열림 방향 — 렌더된 높이로 보정', () => {
     } finally {
       restore();
     }
+  });
+
+  it('추정부터 이미 잘리는 경우, 실측 배치가 같은 max-height 여도 잘림이 유지된다', () => {
+    // 뷰포트 300, 트리거 70~100: 아래 194, 위 64. 항목 6개 추정 228, 실측 240 → 둘 다 아래·194px.
+    const { menu, restore } = renderAndOpen(300, { top: 70, bottom: 100, right: 500 }, 240, SIX_ITEMS);
+    try {
+      expect(menu.style.top).toBe('106px');
+      expect(menu.style.maxHeight).toBe('194px');
+      expect(menu.style.overflowY).toBe('auto');
+    } finally {
+      restore();
+    }
+  });
+
+  it('렌더된 높이를 잴 수 없으면(0) 추정 배치의 max-height 를 그대로 둔다', () => {
+    const { menu, restore } = renderAndOpen(300, { top: 70, bottom: 100, right: 500 }, 0, SIX_ITEMS);
+    try {
+      expect(menu.style.maxHeight).toBe('194px');
+      expect(menu.style.overflowY).toBe('auto');
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('Menu 스크롤 닫힘', () => {
+  function open() {
+    render(<Menu label="더 보기" trigger="button" items={[{ label: '내보내기', onSelect: vi.fn() }]} />);
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    return screen.getByRole('menu');
+  }
+
+  it('잘린 메뉴 안을 스크롤해도 닫히지 않는다', () => {
+    const menu = open();
+    fireEvent.scroll(menu);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('페이지(문서)를 스크롤하면 닫힌다', () => {
+    open();
+    fireEvent.scroll(document);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('창을 스크롤해도 닫힌다', () => {
+    open();
+    fireEvent.scroll(window);
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });
