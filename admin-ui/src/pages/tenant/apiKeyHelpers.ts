@@ -1,6 +1,9 @@
 // admin-ui/src/pages/tenant/apiKeyHelpers.ts
 import type { ApiKey } from '@/api/designTypes';
+import type { BadgeTone } from '@/ui';
 import { EXPIRY_WARN_DAYS } from '@/lib/apiKeyExpiry'; // Task 16 에서 생성
+
+import { ymd } from './tabFormat';
 
 export { EXPIRY_WARN_DAYS };
 const DAY = 86_400_000;
@@ -52,4 +55,15 @@ export function previewExpiry(months: number | null, now = new Date()): string |
   const day = Math.min(now.getDate(), lastDayOfTargetMonth);
   const target = new Date(now.getFullYear(), now.getMonth() + months, day, now.getHours(), now.getMinutes(), now.getSeconds());
   return target.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+}
+
+/** 만료 열 배지 — 색만이 아니라 글로 상태를 말한다(정상 · 만료 임박 N일 · 만료됨 · 무기한). */
+export function expiryBadge(k: Pick<ApiKey, 'status' | 'expiresAt'>, now = Date.now()): { tone: BadgeTone; label: string; sub: string } {
+  if (!k.expiresAt) return { tone: 'neutral', label: '무기한', sub: '만료일 없음' };
+  const sub = ymd(k.expiresAt);
+  if (k.status === 'REVOKED') return { tone: 'neutral', label: '해당 없음', sub };
+  const st = k.status === 'EXPIRED' ? 'expired' : expiryState(k.expiresAt, now);
+  if (st === 'expired') return { tone: 'bad', label: '만료됨', sub };
+  if (st === 'soon') return { tone: 'warn', label: `만료 임박 · ${daysLeft(k.expiresAt, now)}일 남음`, sub };
+  return { tone: 'ok', label: '정상', sub };
 }

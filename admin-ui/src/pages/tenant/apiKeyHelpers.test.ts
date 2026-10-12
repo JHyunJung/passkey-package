@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rotationOverdueCount, expiryState, daysLeft, latestCreatedAt, keyStatusCounts, previewExpiry, ROTATION_DAYS } from './apiKeyHelpers';
+import { rotationOverdueCount, expiryState, daysLeft, latestCreatedAt, keyStatusCounts, previewExpiry, expiryBadge, ROTATION_DAYS } from './apiKeyHelpers';
 
 const NOW = Date.parse('2026-10-11T00:00:00Z');
 const DAY = 86_400_000;
@@ -52,5 +52,17 @@ describe('기타 집계', () => {
     const feb28 = new Date(2026, 1, 28, 12).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
     expect(previewExpiry(1, new Date(2026, 0, 31, 12))).toBe(feb28);
     expect(previewExpiry(null)).toBeNull();
+  });
+});
+
+describe('expiryBadge', () => {
+  const k = (status: 'ACTIVE' | 'EXPIRED' | 'REVOKED', expiresAt: string | null) => ({ status, expiresAt });
+  it('무기한 · 정상 · 만료 임박 · 만료됨 · 회수', () => {
+    expect(expiryBadge(k('ACTIVE', null), NOW)).toEqual({ tone: 'neutral', label: '무기한', sub: '만료일 없음' });
+    expect(expiryBadge(k('ACTIVE', at(100)), NOW)).toMatchObject({ tone: 'ok', label: '정상' });
+    expect(expiryBadge(k('ACTIVE', at(10)), NOW)).toMatchObject({ tone: 'warn', label: '만료 임박 · 10일 남음' });
+    expect(expiryBadge(k('EXPIRED', at(-1)), NOW)).toMatchObject({ tone: 'bad', label: '만료됨' });
+    expect(expiryBadge(k('ACTIVE', at(-1)), NOW)).toMatchObject({ tone: 'bad', label: '만료됨' });
+    expect(expiryBadge(k('REVOKED', at(10)), NOW)).toMatchObject({ tone: 'neutral', label: '해당 없음' });
   });
 });

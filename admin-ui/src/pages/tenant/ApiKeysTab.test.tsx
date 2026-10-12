@@ -7,6 +7,9 @@ import type { ApiKey, Tenant } from '@/api/designTypes';
 const api = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), rotate: vi.fn(), revoke: vi.fn() }));
 vi.mock('@/api/apiKeys', () => ({ apiKeysApi: api }));
 
+const links = vi.hoisted(() => ({ rpGuide: 'https://docs.example/rp', apiDocs: '', support: '' }));
+vi.mock('@/config/links', () => ({ HELP_LINKS: links }));
+import { ApiError } from '@/api/types';
 import ApiKeysTab from './ApiKeysTab';
 
 const tenant: Tenant = {
@@ -22,7 +25,7 @@ const key = (p: Partial<ApiKey>): ApiKey => ({
 const renderTab = (onChanged?: () => void) => renderWithDataRouter(<ToastHost><ApiKeysTab tenant={tenant} onChanged={onChanged} /></ToastHost>, { initialPath: '/tenants/t1?tab=apikeys' });
 
 describe('ApiKeysTab V2', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); links.rpGuide = 'https://docs.example/rp'; });
 
   it('⋯ 메뉴는 ACTIVE 키에만 있고, 회수는 위험 구획에서 열리며 취소에 기본 포커스', async () => {
     api.list.mockResolvedValue([
@@ -174,5 +177,105 @@ describe('ApiKeysTab V2', () => {
     fireEvent.click(revokeBtn);
     expect(api.revoke).toHaveBeenCalledTimes(1);
     expect(revokeBtn).toBeDisabled();
+  });
+  it('로드 실패: "키 없음"이 아니라 LoadError, 다시 시도', async () => {
+    api.list.mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503')).mockResolvedValueOnce([key({ id: 'a', name: 'prod' })]);
+    renderTab();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('API 키 목록을 불러오지 못했습니다');
+    expect(screen.queryByText('아직 발급한 API 키가 없습니다')).toBeNull();
+    expect(screen.queryByText('API key 로드 실패')).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '다시 시도' })); });
+    expect(await screen.findByText('prod')).toBeInTheDocument();
+  });
+
+  it('로딩 중에는 Skeleton', () => {
+    api.list.mockReturnValue(new Promise(() => {}));
+    renderTab();
+    expect(screen.getByRole('status', { name: 'API 키 불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중…')).toBeNull();
+  });
+
+  it('빈 상태: 첫 API 키 발급 + RP 연동 가이드', async () => {
+    api.list.mockResolvedValue([]);
+    renderTab();
+    expect(await screen.findByText('아직 발급한 API 키가 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('RP 서버가 패스키 등록·인증 API를 호출하려면 키가 필요합니다.')).toBeInTheDocument();
+    const guides = screen.getAllByRole('link', { name: /RP 연동 가이드/ });
+    expect(guides.length).toBeGreaterThanOrEqual(1);
+    for (const g of guides) expect(g).toHaveAttribute('href', 'https://docs.example/rp');
+    fireEvent.click(screen.getByRole('button', { name: '첫 API 키 발급' }));
+    expect(screen.getByRole('dialog', { name: '새 API 키 발급' })).toBeInTheDocument();
+  });
+
+  it('발급 실패: 다이얼로그 안 인라인 경고, 이름·권한·만료 입력 유지, 토스트 없음 → 다시 발급 성공', async () => {
+    api.list.mockResolvedValue([]);
+    api.create
+      .mockRejectedValueOnce(new ApiError(409, 'K409', '키 개수 한도 초과'))
+      .mockResolvedValueOnce({ key: key({ id: 'n1', name: 'staging' }), plaintext: 'pk_live_ab.secret' });
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '새 키 발급' }));
+    const dlg = screen.getByRole('dialog', { name: '새 API 키 발급' });
+    fireEvent.change(within(dlg).getByLabelText('용도 (이름)'), { target: { value: 'staging' } });
+    fireEvent.click(within(dlg).getByRole('checkbox', { name: /authentication/ }));
+    fireEvent.click(within(dlg).getByRole('button', { name: '12개월' }));
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '발급' })); });
+    const alert = within(dlg).getByRole('alert');
+    expect(alert).toHaveTextContent('API 키를 발급하지 못했습니다.');
+    expect(alert).toHaveTextContent('키 개수 한도 초과');
+    expect(alert).toHaveTextContent('입력한 내용은 그대로 있습니다.');
+    expect(within(dlg).getByLabelText('용도 (이름)')).toHaveValue('staging');
+    expect(within(dlg).getByRole('checkbox', { name: /authentication/ })).not.toBeChecked();
+    expect(within(dlg).getByRole('button', { name: '12개월' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('발급 실패')).toBeNull();
+
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '발급' })); });
+    expect(api.create).toHaveBeenLastCalledWith('t1', 'staging', ['registration'], 12);
+    expect(await screen.findByRole('alertdialog', { name: /새 API key가 발급되었습니다/ })).toBeInTheDocument();
+  });
+
+  it('발급 중에는 "발급 중…" 비활성이고 입력을 고칠 수 없다', async () => {
+    api.list.mockResolvedValue([]);
+    api.create.mockReturnValue(new Promise(() => {}));
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: '새 키 발급' }));
+    fireEvent.change(screen.getByLabelText('용도 (이름)'), { target: { value: 'staging' } });
+    fireEvent.click(screen.getByRole('button', { name: '발급' }));
+    expect(screen.getByRole('button', { name: '발급 중…' })).toBeDisabled();
+    expect(screen.getByLabelText('용도 (이름)')).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /authentication/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '12개월' })).toBeDisabled();
+  });
+
+  it('만료 열은 글로 된 배지: 정상 · 만료 임박 · 무기한 · 만료됨', async () => {
+    api.list.mockResolvedValue([
+      key({ id: 'a', name: 'ok', expiresAt: iso(100) }),
+      key({ id: 'b', name: 'soon', expiresAt: iso(10) }),
+      key({ id: 'c', name: 'forever', expiresAt: null }),
+      key({ id: 'd', name: 'gone', status: 'EXPIRED', expiresAt: iso(-1) }),
+    ]);
+    renderTab();
+    expect(await screen.findByText('정상')).toHaveClass('badge--success');
+    expect(screen.getByText('만료 임박 · 10일 남음')).toHaveClass('badge--warning');
+    expect(screen.getByText('무기한')).toHaveClass('badge');
+    expect(screen.getByText('만료일 없음')).toBeInTheDocument();
+    expect(screen.getByText('만료됨')).toHaveClass('badge--danger');
+  });
+
+  it('권한 범위는 한국어 라벨이고 원문은 title 툴팁', async () => {
+    api.list.mockResolvedValue([key({ id: 'a', name: 'prod', scopes: ['registration', 'authentication'] })]);
+    renderTab();
+    await screen.findByText('prod');
+    expect(screen.getByText('패스키 등록')).toHaveAttribute('title', 'registration');
+    expect(screen.getByText('패스키 인증')).toHaveAttribute('title', 'authentication');
+  });
+
+  it('RP 가이드 링크가 비어 있으면 다음 단계 링크를 렌더하지 않는다', async () => {
+    links.rpGuide = '';
+    api.list.mockResolvedValue([]);
+    renderTab();
+    expect(await screen.findByText('아직 발급한 API 키가 없습니다')).toBeInTheDocument();
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(screen.queryByRole('link', { name: /RP 연동 가이드/ })).toBeNull();
   });
 });
