@@ -18,7 +18,7 @@ const okOverview = (tampered = 0) => ({
 
 let release: (() => void) | null = null;
 beforeEach(() => overview.mockReset());
-afterEach(() => { vi.useRealTimers(); release?.(); release = null; });
+afterEach(async () => { vi.useRealTimers(); await act(async () => { release?.(); }); release = null; });
 
 describe('Sidebar V3', () => {
   it('PLATFORM: 플랫폼/관리 그룹과 4개 항목, 활성 aria-current, 첫 조회 중에는 "검증 중…" + 경과 초', async () => {
@@ -88,5 +88,22 @@ describe('Sidebar V3', () => {
     await act(async () => { vi.advanceTimersByTime(30_000); });
     expect(screen.getByText('검증 상태 확인 불가')).toBeInTheDocument();
     expect(screen.getByText('서버 응답이 없습니다 · 10:02 마지막 확인')).toBeInTheDocument();
+  });
+
+  it('겹친 조회가 순서를 바꿔 끝나도 나중에 시작한 조회의 결과(위변조)를 유지한다', async () => {
+    vi.useFakeTimers();
+    let resolveFirst: (v: ReturnType<typeof okOverview>) => void = () => {};
+    let resolveSecond: (v: ReturnType<typeof okOverview>) => void = () => {};
+    overview
+      .mockReturnValueOnce(new Promise((r) => { resolveFirst = r; }))
+      .mockReturnValueOnce(new Promise((r) => { resolveSecond = r; }));
+    render(<Sidebar me={platform} currentRoute={{ name: 'tenants' }} onNavigate={() => {}} />);
+    await act(async () => { vi.advanceTimersByTime(30_000); }); // 두 번째 조회 시작(첫 조회는 아직 진행 중)
+    expect(overview).toHaveBeenCalledTimes(2);
+    await act(async () => { resolveSecond(okOverview(1)); });
+    expect(screen.getByText('위변조 의심 · 1 tenant')).toBeInTheDocument();
+    await act(async () => { resolveFirst(okOverview(0)); }); // 오래된 응답이 늦게 도착
+    expect(screen.getByText('위변조 의심 · 1 tenant')).toBeInTheDocument();
+    expect(screen.queryByText('AUDIT CHAIN OK')).toBeNull();
   });
 });

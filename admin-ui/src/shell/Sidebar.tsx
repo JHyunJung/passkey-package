@@ -29,21 +29,23 @@ export function Sidebar({ me, currentRoute, onNavigate }: { me: Me; currentRoute
   const [now, setNow] = useState(() => Date.now());
   const [mode, setMode] = useState<'saas' | 'onprem' | null>(null);
   const alive = useRef(true);
+  const seq = useRef(0); // 가장 나중에 시작한 조회만 상태를 바꾼다(겹친 조회의 역순 완료 방지)
 
   useEffect(() => { licenseApi.get().then((v) => setMode(v.deploymentMode)).catch(() => setMode('saas')); }, []);
 
   // 실패를 "확인 중"으로 감추지 않는다(H1·H9): 실패하면 확인 불가 + 다시 시도.
   const loadChain = useCallback((showChecking: boolean) => {
     if (showChecking) { const t = Date.now(); setChainStatus('checking'); setCheckStart(t); setNow(t); }
+    const mine = ++seq.current;
     auditChainMonitorApi.overview(24)
       .then((o) => {
         if (!o?.totals) throw new Error('empty overview');
-        if (!alive.current) return;
+        if (!alive.current || mine !== seq.current) return;
         setChain(o);
         setLastCheckedAt(new Date().toISOString());
         setChainStatus('ok');
       })
-      .catch(() => { if (alive.current) setChainStatus('unknown'); });
+      .catch(() => { if (alive.current && mine === seq.current) setChainStatus('unknown'); });
   }, []);
 
   useEffect(() => {
@@ -56,10 +58,10 @@ export function Sidebar({ me, currentRoute, onNavigate }: { me: Me; currentRoute
 
   // 검증 중일 때만 경과 초를 갱신한다.
   useEffect(() => {
-    if (chainStatus !== 'checking') return;
+    if (!platform || chainStatus !== 'checking') return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [chainStatus]);
+  }, [platform, chainStatus]);
 
   const groups = useMemo(() => {
     const admin: Item[] = [{ id: 'settings', label: '설정', icon: 'Cog' }];
