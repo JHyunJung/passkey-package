@@ -66,6 +66,8 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   const failed = load.status === 'failed' && !sameView;
   const staleFailed = load.status === 'failed' && sameView;
   const busy = load.status === 'loading' || load.reloading;
+  // 페이지·검색어·tenant 를 바꿔 불러오는 중 — 건수·페이지 이동이 "0건"·"1 / 1"로 깜빡이지 않게 숨긴다.
+  const countUnknown = failed || load.status === 'loading';
 
   // 경계를 넘은 이전/다음: 새 페이지가 도착하면 첫/마지막 항목을 고른다. 실패하면 대기만 지운다.
   useEffect(() => {
@@ -193,7 +195,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           {status !== 'ALL' && <RemovableChip removeLabel="상태 필터 제거" onRemove={() => setStatus('ALL')}><span title={status}>상태: {STATUS_FILTER_LABELS[status]}</span></RemovableChip>}
           <div className="spacer" />
           <span className="hint" style={{ margin: 0 }}>
-            {failed ? '—' : clientFiltered ? `이 페이지 ${fmtNum(items.length)}건 중 ${fmtNum(visible.length)}건` : `${fmtNum(total)}건`}
+            {countUnknown ? '—' : clientFiltered ? `이 페이지 ${fmtNum(items.length)}건 중 ${fmtNum(visible.length)}건` : `${fmtNum(total)}건`}
           </span>
           <Button icon={<Icons.Download size={14} />} onClick={exportCsv} disabled={failed || visible.length === 0}>
             CSV 내보내기 (현재 페이지 {fmtNum(visible.length)}건)
@@ -224,7 +226,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           : load.status === 'loading'
             ? <Skeleton rows={6} label="Credential 목록 불러오는 중" />
             : <DataTable columns={columns} rows={visible} rowKey={(c) => c.credentialId} onRowClick={setSelected} empty={empty} />}
-        {!failed && (
+        {!countUnknown && (
           <Pagination page={page + 1} pageSize={size} total={total} onPage={(p) => setPage(p - 1)}
             pageSizeOptions={PAGE_SIZES} onPageSize={(n) => { setSize(n); setPage(0); }} />
         )}

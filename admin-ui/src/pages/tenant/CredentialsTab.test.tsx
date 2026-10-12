@@ -255,6 +255,26 @@ describe('CredentialsTab V2', () => {
     expect(api.revoke).toHaveBeenCalledTimes(1);
   });
 
+  it('다른 페이지를 불러오는 동안 건수는 "—", 페이지 이동 표시는 숨겨 "0건"·"1 / 1"로 깜빡이지 않는다', async () => {
+    let resolveP1!: (v: ReturnType<typeof pageOf>) => void;
+    api.list.mockImplementation((_t: string, page: number) => (page === 0
+      ? Promise.resolve(pageOf([cred('c1')], 120, 0))
+      : new Promise((r) => { resolveP1 = r; })));
+    renderTab();
+    await screen.findByText('user-c1');
+    expect(screen.getByText('120건')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다음 페이지' }));
+    expect(screen.getByRole('status', { name: 'Credential 목록 불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('0건')).toBeNull();
+    expect(screen.queryByText('1 / 1')).toBeNull();
+    expect(screen.queryByRole('button', { name: '다음 페이지' })).toBeNull();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    await act(async () => { resolveP1(pageOf([cred('c2')], 120, 1)); });
+    expect(await screen.findByText('user-c2')).toBeInTheDocument();
+    expect(screen.getByText('120건')).toBeInTheDocument();
+    expect(screen.getByText('2 / 3')).toBeInTheDocument();
+  });
+
   it('다른 페이지 요청이 실패하면 이전 페이지 행을 남기지 않고 전체 오류 + 다시 시도', async () => {
     api.list.mockImplementation((_t: string, page: number) => (page === 0
       ? Promise.resolve(pageOf([cred('c1')], 120, 0))
