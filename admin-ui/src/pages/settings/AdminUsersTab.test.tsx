@@ -431,6 +431,7 @@ describe('AdminUsersTab V3 — 로드 상태 · Tenant 이름', () => {
 });
 
 describe('AdminUsersTab V3 — 운영자 정지', () => {
+  const RP_SUSPENDED = USERS.map((u) => (u.id === 'u-rp-000000002' ? { ...u, status: 'SUSPENDED' } : u));
   beforeEach(() => { mock(adminUsersApi.list).mockResolvedValue(USERS); });
   const rowOf = (email: string) => within(screen.getByRole('table')).getByText(email).closest('tr')!;
 
@@ -443,6 +444,7 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     expect(document.activeElement).toBe(within(dlg).getByRole('button', { name: '취소' }));
     expect(within(dlg).getByText('Acme')).toBeInTheDocument();
     expect(within(dlg).getByText(/언제든 되돌릴 수 있습니다/)).toBeInTheDocument();
+    mock(adminUsersApi.list).mockResolvedValueOnce(RP_SUSPENDED);
     fireEvent.click(within(dlg).getByRole('button', { name: '정지' }));
     await waitFor(() => expect(adminUsersApi.suspend).toHaveBeenCalledWith('u-rp-000000002'));
     expect(await screen.findByText('rp@acme.com 운영자를 정지했습니다.')).toBeInTheDocument();
@@ -501,6 +503,7 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     renderTab();
     await screen.findByText('rp@acme.com');
     fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    mock(adminUsersApi.list).mockResolvedValueOnce(RP_SUSPENDED);
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
     const undo = await screen.findByRole('button', { name: '되돌리기' });
     mock(adminUsersApi.activate).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
@@ -515,6 +518,7 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     renderTab();
     await screen.findByText('rp@acme.com');
     fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    mock(adminUsersApi.list).mockResolvedValueOnce(RP_SUSPENDED);
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
     const undo = await screen.findByRole('button', { name: '되돌리기' });
     mock(adminUsersApi.activate).mockRejectedValue(new ApiError(500, 'C999', 'SECRET-RAW'));
@@ -532,5 +536,86 @@ describe('AdminUsersTab V3 — 운영자 정지', () => {
     expect(await screen.findByText('활성화하지 못했습니다')).toBeInTheDocument();
     expect(screen.getByText('서버가 잠시 응답하지 않습니다')).toBeInTheDocument();
     expect(screen.queryByText(/SECRET-RAW/)).toBeNull();
+  });
+
+  it('서로 다른 운영자의 처리가 겹쳐도 각 행의 처리 중 표시는 독립적이다', async () => {
+    const held: Record<string, () => void> = {};
+    mock(adminUsersApi.activate).mockImplementation((id: string) => new Promise<void>((r) => { held[id] = r; }));
+    const two = USERS.map((u) => (u.id === 'u-rp-000000002' ? { ...u, status: 'SUSPENDED' } : u));
+    mock(adminUsersApi.list).mockResolvedValue(two);
+    renderTab();
+    await screen.findByText('gone@globex.com');
+    fireEvent.click(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' }));
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' }));
+    expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화 중…' })).toBeDisabled();
+    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화 중…' })).toBeDisabled();
+    await act(async () => { held['u-rp-000000003'](); });
+    await waitFor(() => expect(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' })).toBeEnabled());
+    expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화 중…' })).toBeDisabled();
+    await act(async () => { held['u-rp-000000002'](); });
+    await waitFor(() => expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' })).toBeEnabled());
+  });
+
+  it('열려 있던 정지 다이얼로그는 목록이 낡아지면 정지하지 않고 안내를 보인다', async () => {
+    renderTab();
+    await screen.findByText('gone@globex.com');
+    const activateGone = within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' });
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    const dlg = screen.getByRole('alertdialog');
+    mock(adminUsersApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    fireEvent.click(activateGone);
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    fireEvent.click(within(dlg).getByRole('button', { name: '정지' }));
+    expect(await within(dlg).findByText(/목록을 새로 고친 뒤 다시 시도하세요/)).toBeInTheDocument();
+    expect(adminUsersApi.suspend).not.toHaveBeenCalled();
+  });
+
+  it('이미 처리 중인 운영자는 정지하지 않고, 성공 토스트도 없다', async () => {
+    let resolve!: () => void;
+    mock(adminUsersApi.activate).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+    renderTab();
+    await screen.findByText('gone@globex.com');
+    const activateGone = within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' });
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    const dlg = screen.getByRole('alertdialog');
+    // 다른 관리자가 rp 를 정지한 상태로 목록이 갱신되고, 그 행의 활성화가 진행 중이 된다.
+    mock(adminUsersApi.list).mockResolvedValueOnce(RP_SUSPENDED);
+    fireEvent.click(activateGone);
+    await act(async () => { resolve(); });
+    await waitFor(() => expect(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' })).toBeEnabled());
+    mock(adminUsersApi.activate).mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '활성화' }));
+    fireEvent.click(within(dlg).getByRole('button', { name: '정지' }));
+    expect(await within(dlg).findByText(/처리 중/)).toBeInTheDocument();
+    expect(adminUsersApi.suspend).not.toHaveBeenCalled();
+    expect(screen.queryByText('rp@acme.com 운영자를 정지했습니다.')).toBeNull();
+    await act(async () => { resolve(); });
+  });
+
+  it('되돌리기는 목록이 낡았거나 이미 정지 상태가 아니면 활성화를 부르지 않는다', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    // 정지 후 갱신된 목록에서 rp 가 ACTIVE 로 보이면(다른 관리자가 이미 되돌림) 되돌리지 않는다.
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
+    fireEvent.click(await screen.findByRole('button', { name: '되돌리기' }));
+    expect(await screen.findByText('되돌릴 수 없습니다')).toBeInTheDocument();
+    expect(adminUsersApi.activate).not.toHaveBeenCalled();
+  });
+
+  it('되돌리기는 목록이 낡았으면 활성화를 부르지 않는다', async () => {
+    renderTab();
+    await screen.findByText('rp@acme.com');
+    mock(adminUsersApi.list).mockResolvedValueOnce(RP_SUSPENDED);
+    fireEvent.click(within(rowOf('rp@acme.com')).getByRole('button', { name: '정지…' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '정지' }));
+    const undo = await screen.findByRole('button', { name: '되돌리기' });
+    mock(adminUsersApi.list).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    fireEvent.click(within(rowOf('gone@globex.com')).getByRole('button', { name: '활성화' }));
+    expect(await screen.findByText('다시 확인하지 못했습니다')).toBeInTheDocument();
+    mock(adminUsersApi.activate).mockClear();
+    fireEvent.click(undo);
+    expect(await screen.findByText('되돌릴 수 없습니다')).toBeInTheDocument();
+    expect(adminUsersApi.activate).not.toHaveBeenCalled();
   });
 });

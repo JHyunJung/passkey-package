@@ -83,8 +83,8 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
   const [approving, setApproving] = useState<SignupRequestView | null>(null);
   const [rejecting, setRejecting] = useState<SignupRequestView | null>(null);
   const [suspending, setSuspending] = useState<AdminUserView | null>(null);
-  // 정지·활성화·되돌리기 처리 중인 운영자 id — 행 버튼을 "… 중…"으로 비활성. ref 는 같은 틱의 중복 호출(되돌리기 토스트 연타)을 막는다.
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // 정지·활성화·되돌리기 처리 중인 운영자 id 집합 — 행 버튼을 "… 중…"으로 비활성(겹치는 요청도 각각 표시). ref 는 같은 틱의 중복 호출을 막는다.
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const inflight = useRef(new Set<string>());
   const [filter, setFilter] = useState<OperatorFilter>('all');
   const [query, setQuery] = useState('');
@@ -128,32 +128,62 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
     void requests.reload();
   }
 
-  /** 사용자별 중복 실행 방지. 이미 처리 중이면 아무것도 하지 않는다. */
-  async function guarded(id: string, run: () => Promise<void>) {
-    if (inflight.current.has(id)) return;
+  const usersRef = useRef(users);
+  usersRef.current = users;
+  const markPending = (id: string, on: boolean) =>
+    setPendingIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
+
+  /** 사용자별 중복 실행 방지. 실행했으면 true, 이미 처리 중이라 건너뛰었으면 false. 실패는 그대로 throw. */
+  async function guarded(id: string, run: () => Promise<void>): Promise<boolean> {
+    if (inflight.current.has(id)) return false;
     inflight.current.add(id);
-    setBusyId(id);
+    markPending(id, true);
     try {
       await run();
+      return true;
     } finally {
       inflight.current.delete(id);
-      setBusyId(null);
+      markPending(id, false);
     }
+  }
+
+  /** 지금 화면의 목록 기준으로 해당 운영자를 처리해도 되는지. 아니면 사용자에게 보일 이유를 돌려준다. */
+  function staleReason(id: string, need: 'ACTIVE' | 'SUSPENDED'): string | null {
+    const cur = usersRef.current;
+    if (cur.status === 'failed' && cur.data) return STALE_REASON;
+    const row = cur.data?.find((x) => x.id === id);
+    if (!row || row.status !== need) return `운영자 상태가 바뀌었습니다. ${STALE_REASON}`;
+    return null;
   }
 
   /** L1 확인 후 실행. 실패는 throw 해 다이얼로그 안에 보이고, 성공하면 되돌리기(= 활성화) 토스트. */
   async function confirmSuspend(u: AdminUserView) {
-    await guarded(u.id, () => adminUsersApi.suspend(u.id));
+    // 다이얼로그를 연 뒤 목록이 낡아졌거나 다른 처리가 진행 중일 수 있다.
+    if (inflight.current.has(u.id)) throw new Error('이미 처리 중입니다. 잠시 후 다시 시도하세요.');
+    const why = staleReason(u.id, 'ACTIVE');
+    if (why) throw new Error(why);
+    const ran = await guarded(u.id, () => adminUsersApi.suspend(u.id));
+    if (!ran) throw new Error('이미 처리 중입니다. 잠시 후 다시 시도하세요.');
+    // 되돌리기 가능 여부는 갱신된 목록을 기준으로 판단하므로 먼저 다시 읽는다.
+    await users.reload();
     toast({
       kind: 'ok',
       title: `${u.email} 운영자를 정지했습니다.`,
       message: '다음 요청부터 콘솔에 접근할 수 없습니다.',
       action: { label: '되돌리기', onClick: () => void undoSuspend(u) },
     });
-    void users.reload();
   }
 
   async function undoSuspend(u: AdminUserView) {
+    const why = staleReason(u.id, 'SUSPENDED');
+    if (why) {
+      toast({ kind: 'warn', title: '되돌릴 수 없습니다', message: why });
+      return;
+    }
     await guarded(u.id, async () => {
       try {
         await adminUsersApi.activate(u.id);
@@ -227,7 +257,7 @@ export default function AdminUsersTab({ me, onPendingCountChange }: { me: Pick<M
     {
       key: 'act', header: '액션',
       render: (u) => {
-        if (busyId === u.id) {
+        if (pendingIds.has(u.id)) {
           return <Button size="sm" disabled>{u.status === 'ACTIVE' ? '정지 중…' : '활성화 중…'}</Button>;
         }
         const staleTitle = usersStale ? STALE_REASON : undefined;
