@@ -7,9 +7,14 @@ import { IconButton } from './IconButton';
 export type MenuItem = { label: ReactNode; onSelect: () => void; icon?: ReactNode; danger?: boolean; disabled?: boolean; disabledReason?: string };
 
 // 메뉴 높이 추정(열기 전이라 측정 불가): 패딩 12 + 항목 36 + 위험 구획(구분선 13 + 제목 22).
+// 사유가 붙은 비활성 항목은 라벨 아래 줄(hint 16 + gap 2 + 패딩 12)이 더해져 한 줄보다 높다. 여유를 둬서 잡는다.
 const ITEM_H = 36;
+const REASON_ITEM_H = 52;
 const GAP = 6;
-function estimateHeight(n: number, hasDanger: boolean) { return 12 + n * ITEM_H + (hasDanger ? 35 : 0); }
+function estimateHeight(items: MenuItem[], hasDanger: boolean) {
+  const body = items.reduce((h, it) => h + (it.disabled && it.disabledReason ? REASON_ITEM_H : ITEM_H), 0);
+  return 12 + body + (hasDanger ? 35 : 0);
+}
 
 /**
  * ⋯ 메뉴. 열린 목록은 position:fixed 로 트리거 기준에 붙인다 — 표의 가로 스크롤 컨테이너(.tw)
@@ -43,7 +48,7 @@ export function Menu({ label, items, dangerItems = [], dangerTitle = '위험', t
     const r = triggerRef.current?.getBoundingClientRect();
     if (r) {
       const right = window.innerWidth - r.right;
-      const fitsBelow = r.bottom + GAP + estimateHeight(all.length, dangerItems.length > 0) <= window.innerHeight;
+      const fitsBelow = r.bottom + GAP + estimateHeight(all, dangerItems.length > 0) <= window.innerHeight;
       setPos(fitsBelow
         ? { position: 'fixed', top: r.bottom + GAP, right }
         : { position: 'fixed', top: 'auto', bottom: window.innerHeight - r.top + GAP, right });
