@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { ApiError } from '@/api/types';
 
 vi.mock('@/api/signupRequests', () => ({
   signupRequestsApi: { request: vi.fn().mockResolvedValue({ accepted: true }) },
@@ -37,7 +38,7 @@ describe('SignupRequestPage V2', () => {
   it('keeps submit disabled for a password shorter than 12', () => {
     render(<SignupRequestPage />);
     fill('a@x.com', 'short', 'short');
-    expect(screen.getByText('12자 이상')).toHaveClass('field__error');
+    expect(screen.getByText('5자 입력됨 · 12–128자로 입력하세요')).toHaveClass('field__error');
     expect(screen.getByLabelText('비밀번호')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('button', { name: '가입 요청 보내기' })).toBeDisabled();
   });
@@ -83,5 +84,82 @@ describe('SignupRequestPage V2', () => {
     expect(signupRequestsApi.request).toHaveBeenLastCalledWith({
       email: 'c@x.com', password: 'password-12chars', reason: '보안팀 · RP 운영',
     });
+  });
+
+  it('비밀번호는 최대 128자, 허용 범위 "12–128자"를 미리 보여 준다', () => {
+    render(<SignupRequestPage />);
+    expect(screen.getByLabelText('비밀번호')).toHaveAttribute('maxLength', '128');
+    expect(screen.getByText('12–128자')).toHaveClass('hint');
+  });
+
+  it('이메일 형식 오류는 칸을 벗어날 때 인라인으로', () => {
+    render(<SignupRequestPage />);
+    const email = screen.getByLabelText('이메일');
+    fireEvent.change(email, { target: { value: 'not-an-email' } });
+    expect(screen.queryByText(/이메일 형식이 올바르지 않습니다/)).toBeNull();
+    fireEvent.blur(email);
+    expect(screen.getByText('이메일 형식이 올바르지 않습니다. 예: you@company.com')).toHaveClass('field__error');
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAttribute('aria-describedby', 'signup-email-error');
+    fireEvent.change(email, { target: { value: 'a@x.com' } });
+    expect(screen.queryByText(/이메일 형식이 올바르지 않습니다/)).toBeNull();
+  });
+
+  it('4xx 는 성공과 같은 접수 안내(계정 존재 비노출)', async () => {
+    (signupRequestsApi.request as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new ApiError(409, 'C409', 'duplicate'));
+    render(<SignupRequestPage />);
+    fill('dup@x.com', 'password-12chars', 'password-12chars');
+    fireEvent.click(screen.getByRole('button', { name: '가입 요청 보내기' }));
+    expect(await screen.findByRole('heading', { name: '요청이 접수되었습니다' })).toBeInTheDocument();
+  });
+
+  it('5xx 면 보내지 못했다고 알리고 입력을 유지, "다시 시도"에 포커스, 다시 시도가 성공하면 접수', async () => {
+    (signupRequestsApi.request as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503'));
+    render(<SignupRequestPage />);
+    fill('d@x.com', 'password-12chars', 'password-12chars');
+    fireEvent.change(screen.getByLabelText(/요청 사유/), { target: { value: '보안팀' } });
+    fireEvent.click(screen.getByRole('button', { name: '가입 요청 보내기' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('요청을 보내지 못했습니다.');
+    expect(alert).toHaveTextContent('입력한 내용은 그대로 있습니다');
+    expect(alert).toHaveTextContent('HTTP 503');
+    expect(screen.queryByRole('heading', { name: '요청이 접수되었습니다' })).toBeNull();
+    expect(screen.getByLabelText('이메일')).toHaveValue('d@x.com');
+    expect(screen.getByLabelText('비밀번호')).toHaveValue('password-12chars');
+    expect(screen.getByLabelText(/요청 사유/)).toHaveValue('보안팀');
+    const retry = screen.getByRole('button', { name: '다시 시도' });
+    await waitFor(() => expect(document.activeElement).toBe(retry));
+    fireEvent.click(retry);
+    expect(await screen.findByRole('heading', { name: '요청이 접수되었습니다' })).toBeInTheDocument();
+  });
+
+  it('네트워크 오류(fetch TypeError)도 보내지 못했다고 알린다', async () => {
+    (signupRequestsApi.request as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    render(<SignupRequestPage />);
+    fill('e@x.com', 'password-12chars', 'password-12chars');
+    fireEvent.click(screen.getByRole('button', { name: '가입 요청 보내기' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('요청을 보내지 못했습니다.');
+  });
+
+  it('요청 중에는 입력이 읽기 전용이고 중복 제출되지 않아, 늦은 실패가 입력을 덮지 않는다', async () => {
+    const request = signupRequestsApi.request as ReturnType<typeof vi.fn>;
+    request.mockClear();
+    let rejectFirst!: (e: unknown) => void;
+    request.mockReturnValueOnce(new Promise((_, reject) => { rejectFirst = reject; }));
+    render(<SignupRequestPage />);
+    fill('f@x.com', 'password-12chars', 'password-12chars');
+    fireEvent.click(screen.getByRole('button', { name: '가입 요청 보내기' }));
+    const pending = await screen.findByRole('button', { name: '전송 중…' });
+    expect(pending).toBeDisabled();
+    for (const label of ['이메일', '비밀번호', '비밀번호 확인', /요청 사유/]) {
+      expect(screen.getByLabelText(label)).toHaveAttribute('readonly');
+    }
+    fireEvent.submit(pending.closest('form')!);
+    expect(request).toHaveBeenCalledTimes(1);
+    rejectFirst(new ApiError(503, 'C999', 'HTTP 503'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('요청을 보내지 못했습니다.');
+    expect(screen.getByLabelText('이메일')).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText('이메일')).toHaveValue('f@x.com');
+    expect(screen.getByLabelText('비밀번호')).toHaveValue('password-12chars');
   });
 });

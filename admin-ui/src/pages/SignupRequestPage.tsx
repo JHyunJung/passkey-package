@@ -1,47 +1,62 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { signupRequestsApi } from '@/api/signupRequests';
+import { ApiError } from '@/api/types';
 import { illustrations } from '@/assets/illustrations';
-import { Button, Field } from '@/ui';
+import { isTransientError } from '@/lib/transientError';
+import { Alert, Button, Field } from '@/ui';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PW_MIN = 12;
+const PW_MAX = 128;
 
 /**
  * 미인증 public 화면 — 관리자 계정 가입 요청. PLATFORM_OPERATOR 가 승인해야 로그인 가능.
- * enumeration 방지: 서버는 항상 202 를 주고, 실패해도 같은 안내를 보여준다.
- * 비밀번호 정책(12~128자)은 서버와 동일하게 클라이언트에서도 선검증.
- * 제출 후 같은 카드 안에서 접수 완료 상태로 전환한다.
+ * enumeration 방지: 서버는 항상 202 를 주고, 2xx·4xx 는 같은 접수 안내를 보여준다.
+ * 네트워크·5xx 는 접수되지 않았으므로 실패로 알리고 입력을 유지한다(H9).
+ * 비밀번호 정책(12~128자)은 서버와 동일하게 클라이언트에서도 선검증하고 범위를 미리 보여 준다(H5).
+ * 요청 중에는 입력을 읽기 전용으로 두어, 늦은 실패 응답이 다시 입력한 내용과 경합하지 않게 한다.
  */
 export default function SignupRequestPage() {
   const [email, setEmail] = useState('');
+  const [emailTouched, setEmailTouched] = useState(false);
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [failure, setFailure] = useState<{ error: unknown } | null>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
 
+  const emailInvalid = emailTouched && email.trim().length > 0 && !EMAIL_RE.test(email.trim());
   const mismatch = pw.length > 0 && pw2.length > 0 && pw !== pw2;
-  const pwTooShort = pw.length > 0 && pw.length < 12;
+  const pwTooShort = pw.length > 0 && pw.length < PW_MIN;
   const canSubmit =
-    EMAIL_RE.test(email.trim()) && pw.length >= 12 && pw.length <= 128 && pw === pw2
+    EMAIL_RE.test(email.trim()) && pw.length >= PW_MIN && pw.length <= PW_MAX && pw === pw2
     && reason.length <= 500 && !submitting;
+
+  useEffect(() => { if (failure) submitRef.current?.focus(); }, [failure]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
+    setFailure(null);
     try {
       await signupRequestsApi.request({
         email: email.trim().toLowerCase(),
         password: pw,
         reason: reason.trim() ? reason.trim() : undefined,
       });
-    } catch {
-      /* enumeration 방지: 실패해도 동일 안내. */
+      setDone(true);
+    } catch (err) {
+      if (isTransientError(err)) setFailure({ error: err });
+      else setDone(true); /* enumeration 방지: 4xx 는 성공과 같은 안내. */
     } finally {
       setSubmitting(false);
-      setDone(true);
     }
   }
+
+  const status = failure?.error instanceof ApiError ? failure.error.httpStatus : undefined;
 
   return (
     <main className="auth">
@@ -61,27 +76,37 @@ export default function SignupRequestPage() {
                 <h1 className="page__title">관리자 계정 가입 요청</h1>
                 <p className="card__sub">플랫폼 운영자가 승인하면 계정이 활성화됩니다. 역할과 담당 tenant 는 승인 시 지정됩니다.</p>
               </div>
-              <Field label="이메일" htmlFor="signup-email">
-                <input id="signup-email" className="input" type="email" autoFocus value={email}
-                  onChange={(e) => setEmail(e.target.value)} autoComplete="username" placeholder="you@company.com" />
+              {failure && (
+                <Alert tone="bad" title="요청을 보내지 못했습니다.">
+                  네트워크 또는 서버 문제로 접수되지 않았습니다. 입력한 내용은 그대로 있습니다.
+                  {status !== undefined && <span className="mono" style={{ display: 'block', fontSize: 11 }}>HTTP {status}</span>}
+                </Alert>
+              )}
+              <Field label="이메일" htmlFor="signup-email" error={emailInvalid ? '이메일 형식이 올바르지 않습니다. 예: you@company.com' : undefined}>
+                {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+                <input id="signup-email" className="input" type="email" autoFocus value={email} readOnly={submitting}
+                  onChange={(e) => setEmail(e.target.value)} onBlur={() => setEmailTouched(true)}
+                  autoComplete="username" placeholder="you@company.com"
+                  aria-invalid={emailInvalid} aria-describedby={emailInvalid ? 'signup-email-error' : undefined} />
               </Field>
-              <Field label="비밀번호" htmlFor="signup-pw" error={pwTooShort ? '12자 이상' : undefined}>
-                <input id="signup-pw" className="input" type="password" value={pw}
+              <Field label="비밀번호" htmlFor="signup-pw" help="12–128자"
+                error={pwTooShort ? `${pw.length}자 입력됨 · 12–128자로 입력하세요` : undefined}>
+                <input id="signup-pw" className="input" type="password" value={pw} maxLength={PW_MAX} readOnly={submitting}
                   onChange={(e) => setPw(e.target.value)} autoComplete="new-password"
                   aria-invalid={pwTooShort} aria-describedby={pwTooShort ? 'signup-pw-error' : undefined} />
               </Field>
               <Field label="비밀번호 확인" htmlFor="signup-pw2" error={mismatch ? '비밀번호가 일치하지 않습니다.' : undefined}>
-                <input id="signup-pw2" className="input" type="password" value={pw2}
+                <input id="signup-pw2" className="input" type="password" value={pw2} maxLength={PW_MAX} readOnly={submitting}
                   onChange={(e) => setPw2(e.target.value)} autoComplete="new-password"
                   aria-invalid={mismatch} aria-describedby={mismatch ? 'signup-pw2-error' : undefined} />
               </Field>
               <Field label={<>요청 사유 <span style={{ fontWeight: 400, color: 'var(--mute)' }}>(선택)</span></>} htmlFor="signup-reason">
-                <textarea id="signup-reason" className="input" value={reason} maxLength={500}
+                <textarea id="signup-reason" className="input" value={reason} maxLength={500} readOnly={submitting}
                   onChange={(e) => setReason(e.target.value)} rows={3}
                   placeholder="소속 · 담당 RP · 필요한 권한" />
               </Field>
-              <Button type="submit" variant="primary" size="lg" disabled={!canSubmit}>
-                {submitting ? '전송 중…' : '가입 요청 보내기'}
+              <Button ref={submitRef} type="submit" variant="primary" size="lg" disabled={!canSubmit}>
+                {submitting ? '전송 중…' : failure ? '다시 시도' : '가입 요청 보내기'}
               </Button>
             </form>
           )}
