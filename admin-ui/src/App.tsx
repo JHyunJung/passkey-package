@@ -124,6 +124,7 @@ function AuthenticatedApp({ me, onLogout, onMeChange }: { me: Me; onLogout: () =
             onLogout={onLogout}
             breadcrumb={breadcrumb}
             onOpenPalette={() => setPaletteOpen(true)}
+            onOpenShortcuts={openSheet}
           />
           <main>
             <ErrorBoundary>
