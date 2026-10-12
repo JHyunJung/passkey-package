@@ -2,13 +2,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '@/icons/Icons';
 import {
-  Button, Card, ConfirmByTyping, CopyBtn, DataTable, Dialog, EmptyState, FilterChip, IconButton, Pagination, RemovableChip,
-  Segmented, StatusBadge, useToast, type Column,
+  Button, Card, ConfirmByTyping, CopyBtn, DataTable, Dialog, EmptyState, FilterChip, IconButton, LoadError, Pagination, RemovableChip,
+  Segmented, Skeleton, StatusBadge, useToast, type Column,
 } from '@/ui';
 import { illustrations } from '@/assets/illustrations';
 import { credentialsApi } from '@/api/credentials';
 import { downloadCsv } from '@/lib/csvExport';
 import { kstToday } from '@/lib/kst';
+import { useLoad } from '@/lib/useLoad';
 import type { Tenant, Credential } from '@/api/designTypes';
 import CredentialDetailDialog from './CredentialDetailDialog';
 import { KvList } from './KvList';
@@ -19,9 +20,12 @@ const PAGE_SIZES = [50, 100, 200];
 const SEARCH_DEBOUNCE_MS = 300;
 const tail = (s: string, n: number) => s.slice(-n);
 
+const TRANSPORT_LABELS: Record<string, string> = {
+  internal: '내장', usb: 'USB', nfc: 'NFC', ble: '블루투스', hybrid: '휴대폰 연동', 'smart-card': '스마트카드',
+};
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = { ALL: '전체', ACTIVE: '활성', REVOKED: '회수됨' };
+
 export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
-  const [items, setItems] = useState<Credential[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);                 // 0-based (서버 page)
   const [size, setSize] = useState(50);                // 50/100/200
   const [q, setQ] = useState('');                      // 입력 중 검색어
@@ -29,7 +33,6 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [aaguid, setAaguid] = useState('');
   const [status, setStatus] = useState<StatusFilter>('ALL');
-  const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<Credential | null>(null);
   const [selected, setSelected] = useState<Credential | null>(null);
   // 상세 이전/다음이 페이지 경계를 넘을 때, 새 페이지 로드 후 선택할 위치
@@ -44,39 +47,21 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
     return () => clearTimeout(t);
   }, [q, appliedQ]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    credentialsApi.list(tenant.id, page, size, appliedQ || undefined)
-      .then((res) => {
-        if (cancelled) return;
-        setItems(res.items);
-        setTotal(res.total);
-        const pend = pendingSelect.current;
-        pendingSelect.current = null;
-        if (pend && res.items.length > 0) setSelected(pend === 'first' ? res.items[0] : res.items[res.items.length - 1]);
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        pendingSelect.current = null;
-        toast({ kind: 'err', title: 'credentials 로드 실패', message: e instanceof Error ? e.message : String(e) });
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [tenant.id, page, size, appliedQ]);
+  // useLoad 는 최신 요청만 반영한다(늦게 끝난 이전 검색·페이지 응답은 버림).
+  const load = useLoad(() => credentialsApi.list(tenant.id, page, size, appliedQ || undefined), [tenant.id, page, size, appliedQ]);
+  const items = useMemo(() => load.data?.items ?? [], [load.data]);
+  const total = load.data?.total ?? 0;
+  const failed = load.status === 'failed';
+  const busy = load.status === 'loading' || load.reloading;
 
-  async function reload() {
-    setLoading(true);
-    try {
-      const res = await credentialsApi.list(tenant.id, page, size, appliedQ || undefined);
-      setItems(res.items);
-      setTotal(res.total);
-    } catch (e: unknown) {
-      toast({ kind: 'err', title: 'credentials 로드 실패', message: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setLoading(false);
-    }
-  }
+  // 경계를 넘은 이전/다음: 새 페이지가 도착하면 첫/마지막 항목을 고른다. 실패하면 대기만 지운다.
+  useEffect(() => {
+    if (load.status === 'loading') return;
+    const pend = pendingSelect.current;
+    if (!pend) return;
+    pendingSelect.current = null;
+    if (load.status === 'ok' && items.length > 0) setSelected(pend === 'first' ? items[0] : items[items.length - 1]);
+  }, [load.status, items]);
 
   const clientFiltered = hasClientFilter({ aaguid, status });
   const visible = useMemo(() => applyClientFilter(items, { aaguid, status }), [items, aaguid, status]);
@@ -114,7 +99,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
       await credentialsApi.revoke(tenant.id, revoking.credentialId);
       toast({ kind: 'warn', title: 'Credential이 회수되었습니다.', message: `${tail(revoking.credentialId, 12)} · ${revoking.externalUserId}` });
       setRevoking(null);
-      await reload();
+      load.reload();
     } catch (e: unknown) {
       toast({ kind: 'err', title: '회수 실패', message: e instanceof Error ? e.message : String(e) });
     }
@@ -155,7 +140,7 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
         </span>
       ),
     },
-    { key: 'tr', header: '전송 방식', render: (c) => <span className="row" style={{ gap: 4 }}>{c.transports.map((t) => <span key={t} className="tag">{t}</span>)}</span> },
+    { key: 'tr', header: '전송 방식', render: (c) => <span className="row" style={{ gap: 4 }}>{c.transports.map((t) => <span key={t} className="tag" title={t}>{TRANSPORT_LABELS[t] ?? t}</span>)}</span> },
     {
       key: 'cnt', header: '서명 카운터', align: 'right',
       render: (c) => c.signatureCounter > 0
@@ -187,14 +172,20 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
         <div className="card__head">
           <div className="search" style={{ flex: '0 1 340px' }}>
             <Icons.Search size={15} />
-            <input className="input" aria-label="Credential 검색" placeholder="externalUserId · credentialId 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="input" aria-label="Credential 검색" placeholder="Credential ID · 사용자 ID 검색"
+              title="Credential ID 또는 사용자 ID 의 일부로 찾습니다. 별칭·인증기 이름은 검색되지 않습니다."
+              value={q} disabled={failed} onChange={(e) => setQ(e.target.value)} />
           </div>
           <FilterChip active={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}><Icons.Plus size={13} />필터 · aaguid · status</FilterChip>
           {aaguid.trim() !== '' && <RemovableChip mono removeLabel="aaguid 필터 제거" onRemove={() => setAaguid('')}>aaguid: {aaguid.trim()}</RemovableChip>}
-          {status !== 'ALL' && <RemovableChip removeLabel="status 필터 제거" onRemove={() => setStatus('ALL')}>status: {status}</RemovableChip>}
+          {status !== 'ALL' && <RemovableChip removeLabel="status 필터 제거" onRemove={() => setStatus('ALL')}><span title={status}>상태: {STATUS_FILTER_LABELS[status]}</span></RemovableChip>}
           <div className="spacer" />
-          <span className="hint" style={{ margin: 0 }}>{clientFiltered ? `${fmtNum(visible.length)}건 (현재 페이지)` : `${fmtNum(total)}건`}</span>
-          <Button icon={<Icons.Download size={14} />} onClick={exportCsv} disabled={visible.length === 0}>CSV</Button>
+          <span className="hint" style={{ margin: 0 }}>
+            {failed ? '—' : clientFiltered ? `이 페이지 ${fmtNum(items.length)}건 중 ${fmtNum(visible.length)}건` : `${fmtNum(total)}건`}
+          </span>
+          <Button icon={<Icons.Download size={14} />} onClick={exportCsv} disabled={failed || visible.length === 0}>
+            CSV 내보내기 (현재 페이지 {fmtNum(visible.length)}건)
+          </Button>
         </div>
         {filtersOpen && (
           <div className="row" style={{ gap: 16, padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', background: 'var(--canvas)' }}>
@@ -203,15 +194,19 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
               <input className="input mono" style={{ width: 280, minHeight: 30 }} placeholder="예: ea9b8d66" value={aaguid} onChange={(e) => setAaguid(e.target.value)} />
             </label>
             <Segmented ariaLabel="status 필터" value={status} onChange={setStatus}
-              options={[{ value: 'ALL', label: '전체' }, { value: 'ACTIVE', label: 'ACTIVE' }, { value: 'REVOKED', label: 'REVOKED' }]} />
+              options={[{ value: 'ALL', label: '전체' }, { value: 'ACTIVE', label: '활성' }, { value: 'REVOKED', label: '회수됨' }]} />
             <span className="hint" style={{ margin: 0 }}>현재 페이지 안에서 거릅니다.</span>
           </div>
         )}
-        {loading
-          ? <p className="muted" style={{ padding: '40px 20px', margin: 0, textAlign: 'center', fontSize: 13 }}>불러오는 중…</p>
-          : <DataTable columns={columns} rows={visible} rowKey={(c) => c.credentialId} onRowClick={setSelected} empty={empty} />}
-        <Pagination page={page + 1} pageSize={size} total={total} onPage={(p) => setPage(p - 1)}
-          pageSizeOptions={PAGE_SIZES} onPageSize={(n) => { setSize(n); setPage(0); }} />
+        {failed
+          ? <LoadError what="Credential 목록" error={load.error} onRetry={load.reload} retrying={load.reloading} />
+          : load.status === 'loading'
+            ? <Skeleton rows={6} label="Credential 목록 불러오는 중" />
+            : <DataTable columns={columns} rows={visible} rowKey={(c) => c.credentialId} onRowClick={setSelected} empty={empty} />}
+        {!failed && (
+          <Pagination page={page + 1} pageSize={size} total={total} onPage={(p) => setPage(p - 1)}
+            pageSizeOptions={PAGE_SIZES} onPageSize={(n) => { setSize(n); setPage(0); }} />
+        )}
       </Card>
 
       {revoking && (
@@ -224,8 +219,8 @@ export default function CredentialsTab({ tenant }: { tenant: Tenant }) {
           tenantId={tenant.id}
           onClose={() => setSelected(null)}
           position={position}
-          onPrev={!loading && canPrev ? goPrev : undefined}
-          onNext={!loading && canNext ? goNext : undefined}
+          onPrev={!busy && canPrev ? goPrev : undefined}
+          onNext={!busy && canNext ? goNext : undefined}
           onRevoke={(c) => { setSelected(null); setRevoking(c); }}
         />
       )}

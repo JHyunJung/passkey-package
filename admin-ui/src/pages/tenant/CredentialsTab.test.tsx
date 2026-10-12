@@ -1,8 +1,9 @@
 // admin-ui/src/pages/tenant/CredentialsTab.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { ToastHost } from '@/ui';
 import type { Credential, Tenant } from '@/api/designTypes';
+import { ApiError } from '@/api/types';
 
 const api = vi.hoisted(() => ({ list: vi.fn(), revoke: vi.fn(), authEvents: vi.fn() }));
 vi.mock('@/api/credentials', () => ({ credentialsApi: api }));
@@ -72,11 +73,12 @@ describe('CredentialsTab V2', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(screen.getByRole('group', { name: 'status 필터' })).getByRole('button', { name: 'REVOKED' }));
-    expect(screen.getByText('status: REVOKED')).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('group', { name: 'status 필터' })).getByRole('button', { name: '회수됨' }));
+    expect(screen.getByText('상태: 회수됨')).toBeInTheDocument();
     expect(screen.queryByText('user-c1')).toBeNull();
     expect(screen.getByText('user-c2')).toBeInTheDocument();
-    expect(screen.getByText('1건 (현재 페이지)')).toBeInTheDocument();
+    expect(screen.getByText('이 페이지 2건 중 1건')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'CSV 내보내기 (현재 페이지 1건)' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'status 필터 제거' }));
     expect(screen.getByText('user-c1')).toBeInTheDocument();
     expect(api.list).toHaveBeenCalledTimes(1); // 클라이언트 필터는 서버를 다시 부르지 않는다
@@ -133,5 +135,56 @@ describe('CredentialsTab V2', () => {
     await screen.findByText('user-aaaa-11111111');
     expect(screen.getByRole('button', { name: '회수 · …11111111' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '회수 · …22222222' })).toBeNull();
+  });
+  it('검색 placeholder 는 실제 검색 범위(Credential ID · 사용자 ID), 별칭은 안 된다고 알린다', async () => {
+    api.list.mockResolvedValue(pageOf([cred('c1')]));
+    renderTab();
+    await screen.findByText('user-c1');
+    const box = screen.getByRole('textbox', { name: 'Credential 검색' });
+    expect(box).toHaveAttribute('placeholder', 'Credential ID · 사용자 ID 검색');
+    expect(box).toHaveAttribute('title', expect.stringContaining('별칭'));
+  });
+
+  it('필터가 없으면 서버 총 건수, CSV 라벨에 현재 페이지 건수', async () => {
+    api.list.mockResolvedValue(pageOf([cred('c1'), cred('c2')], 120));
+    renderTab();
+    await screen.findByText('user-c1');
+    expect(screen.getByText('120건')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'CSV 내보내기 (현재 페이지 2건)' })).toBeEnabled();
+  });
+
+  it('로드 실패: LoadError, 건수 "—", CSV·검색 비활성, 페이지네이션 없음, 다시 시도로 복구', async () => {
+    api.list.mockRejectedValueOnce(new ApiError(503, 'C999', 'HTTP 503')).mockResolvedValueOnce(pageOf([cred('c1')]));
+    renderTab();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Credential 목록을 불러오지 못했습니다');
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(screen.queryByText('Credential이 없습니다')).toBeNull();
+    expect(screen.queryByText('0건')).toBeNull();
+    expect(screen.queryByRole('button', { name: '다음 페이지' })).toBeNull();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /CSV 내보내기/ })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'Credential 검색' })).toBeDisabled();
+    expect(screen.queryByText('credentials 로드 실패')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('user-c1')).toBeInTheDocument();
+  });
+
+  it('로딩 중에는 Skeleton', async () => {
+    let resolve!: (v: ReturnType<typeof pageOf>) => void;
+    api.list.mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderTab();
+    expect(screen.getByRole('status', { name: 'Credential 목록 불러오는 중' })).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중…')).toBeNull();
+    resolve(pageOf([cred('c1')]));
+    await screen.findByText('user-c1');
+  });
+
+  it('전송 방식은 한국어 라벨, 원문은 title', async () => {
+    api.list.mockResolvedValue(pageOf([cred('c1', { transports: ['internal', 'usb'] })]));
+    renderTab();
+    await screen.findByText('user-c1');
+    expect(screen.getByText('내장')).toHaveAttribute('title', 'internal');
+    expect(screen.getByText('USB')).toHaveAttribute('title', 'usb');
   });
 });
