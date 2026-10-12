@@ -114,17 +114,43 @@ describe('ActivityPage V2', () => {
     expect(within(diff).queryByText('webauthnTimeoutMs')).toBeNull();
   });
 
-  it('보안 실패만 스위치 = category=security, 카테고리 세그먼트와 같은 상태', async () => {
+  it('"보안 실패만" 스위치는 없고, 보안 세그먼트가 category=security 로 조회한다', async () => {
     renderPage();
     await screen.findByRole('group', { name: '오늘' });
-    fireEvent.click(screen.getByRole('switch', { name: '보안 실패만' }));
+    expect(screen.queryByRole('switch')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '보안' }));
     await waitFor(() =>
       expect(activityApi.fetch).toHaveBeenLastCalledWith(null, 'security', undefined, undefined),
     );
     expect(screen.getByRole('button', { name: '보안' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('카테고리: 보안')).toBeInTheDocument();
+  });
+
+  it('카테고리·tenant 필터는 URL(category·tenantId)에 남고, URL 로 열면 그대로 적용된다', async () => {
+    const { router } = renderWithDataRouter(<ToastHost><ActivityPage /></ToastHost>, { initialPath: '/activity?category=security&tenantId=t1' });
+    await screen.findByRole('group', { name: '오늘' });
+    expect(activityApi.fetch).toHaveBeenCalledWith(null, 'security', undefined, 't1');
+    expect(screen.getByRole('button', { name: '보안' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('테넌트: acme')).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: '운영' }));
-    expect(screen.getByRole('switch', { name: '보안 실패만' })).not.toBeChecked();
+    await waitFor(() => expect(router.state.location.search).toBe('?category=ops&tenantId=t1'));
+    await waitFor(() => expect(activityApi.fetch).toHaveBeenLastCalledWith(null, 'ops', undefined, 't1'));
+
+    fireEvent.click(screen.getByRole('button', { name: '테넌트 필터 제거' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?category=ops'));
+
+    fireEvent.click(screen.getByRole('button', { name: '모두 지우기' }));
+    await waitFor(() => expect(router.state.location.search).toBe(''));
+    expect(screen.getByRole('button', { name: '전체' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('알 수 없는 category 값은 전체로 처리한다', async () => {
+    renderWithDataRouter(<ToastHost><ActivityPage /></ToastHost>, { initialPath: '/activity?category=foo' });
+    await screen.findByRole('group', { name: '오늘' });
+    expect(activityApi.fetch).toHaveBeenCalledWith(null, undefined, undefined, undefined);
+    expect(screen.getByRole('button', { name: '전체' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText(/^카테고리:/)).toBeNull();
   });
 
   it('첫 로드 실패 시 불러오기 실패 상태', async () => {

@@ -13,7 +13,7 @@ import { tenantsApi } from '@/api/tenants';
 import type { Tenant } from '@/api/designTypes';
 import { illustrations } from '@/assets/illustrations';
 import {
-  Button, CopyBtn, EmptyState, IconButton, KpiCard, PageHeader, RemovableChip, Segmented, Switch, useToast,
+  Button, CopyBtn, EmptyState, IconButton, KpiCard, PageHeader, RemovableChip, Segmented, useToast,
 } from '@/ui';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -243,7 +243,22 @@ function FeedRow({ e, selected, onSelect, onOpenTenant }: {
 export default function ActivityPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // 카테고리·tenant 필터는 URL(category·tenantId)이 단일 출처 — 새로고침·링크 공유에도 유지된다.
+  const rawCategory = searchParams.get('category');
+  const categoryFilter: ActivityCategory = rawCategory === 'ops' || rawCategory === 'security' ? rawCategory : 'all';
+  const selectedTenant = searchParams.get('tenantId') || undefined;
+
+  function setFilterParam(key: 'category' | 'tenantId', value: string | null) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value); else next.delete(key);
+      return next;
+    }, { replace: true });
+  }
+  function setCategoryFilter(c: ActivityCategory) { setFilterParam('category', c === 'all' ? null : c); }
+  function setSelectedTenant(id: string | undefined) { setFilterParam('tenantId', id ?? null); }
 
   // null = not yet loaded from server; undefined = server error (show empty state)
   const [events, setEvents] = useState<DisplayEvent[] | null>(null);
@@ -255,14 +270,10 @@ export default function ActivityPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const [categoryFilter, setCategoryFilter] = useState<ActivityCategory>('all');
   const [visibleCount, setVisibleCount] = useState(24);
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [actionQuery, setActionQuery] = useState('');
-  const [selectedTenant, setSelectedTenant] = useState<string | undefined>(
-    searchParams.get('tenantId') ?? undefined,
-  );
 
   // Load tenant list once for the filter dropdown
   useEffect(() => {
@@ -421,8 +432,12 @@ export default function ActivityPage() {
   }
 
   function clearFilters() {
-    setCategoryFilter('all');
-    setSelectedTenant(undefined);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('category');
+      next.delete('tenantId');
+      return next;
+    }, { replace: true });
     setActionQuery('');
   }
 
@@ -516,12 +531,6 @@ export default function ActivityPage() {
             <Icons.Search size={15} />
             <input className="input" aria-label="액션 검색" placeholder="액션 검색…" value={actionQuery} onChange={(ev) => setActionQuery(ev.target.value)} />
           </div>
-          {/* "보안 실패만" = category=security 의 다른 보기. 서버 SECURITY_ACTIONS 가 실패 액션뿐이다. */}
-          <Switch
-            label="보안 실패만"
-            checked={categoryFilter === 'security'}
-            onChange={(on) => setCategoryFilter(on ? 'security' : 'all')}
-          />
         </div>
         {hasApplied && (
           <div className="row" style={{ gap: 8 }}>
