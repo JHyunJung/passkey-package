@@ -46,6 +46,10 @@ public class LicenseGuardFilter extends OncePerRequestFilter {
      * read /license to diagnose the outage, and keep /actuator/health
      * + login functional so the system surfaces clearly as dead rather
      * than silently dropping all traffic.
+     *
+     * <p>Matched by {@link #isExempt}: exact path or {@code path + "/"} prefix,
+     * against BOTH the raw request URI and the container-normalized
+     * {@code servletPath + pathInfo}. See {@link #isExempt} for why both.
      */
     private static final Set<String> DEAD_EXEMPT = Set.of(
             "/admin/api/license",
@@ -91,8 +95,43 @@ public class LicenseGuardFilter extends OncePerRequestFilter {
         chain.doFilter(req, res);
     }
 
+    /**
+     * A request is exempt only when all of these hold:
+     * <ol>
+     *   <li>the raw request URI contains neither {@code ".."} nor {@code ";"}
+     *       — path traversal / path parameters (e.g. {@code ;jsessionid}) are
+     *       never treated as exempt (a non-segment {@code ".."} such as
+     *       {@code a..b} is rejected too; no exempt route has such segments);</li>
+     *   <li>the raw request URI matches {@link #DEAD_EXEMPT} (the original rule —
+     *       so the exempt set can only shrink, never grow, e.g. under a
+     *       non-root context path or an {@code X-Forwarded-Prefix} it stays
+     *       non-exempt as before);</li>
+     *   <li>the container-normalized {@code servletPath + pathInfo} — the path
+     *       the request is actually dispatched to after Tomcat decodes
+     *       {@code %2e}, strips {@code ;params} and resolves {@code ..}, and
+     *       which {@code ForwardedHeaderFilter} does not rewrite — matches
+     *       {@link #DEAD_EXEMPT} too, so
+     *       {@code /actuator/health/%2e%2e/%2e%2e/api/v1/rp/...} or a forged
+     *       {@code X-Forwarded-Prefix: /actuator/health} cannot ride an exempt
+     *       prefix past the DEAD block.</li>
+     * </ol>
+     * For a plain request (no dot-segments, path params, escapes or forwarded
+     * prefix, root context) the raw URI equals {@code servletPath + pathInfo},
+     * so the decision is identical to the previous raw-URI-only rule.
+     */
     private boolean isExempt(HttpServletRequest req) {
-        String path = req.getRequestURI();
+        String raw = req.getRequestURI();
+        if (raw == null || raw.contains("..") || raw.contains(";")) {
+            return false;
+        }
+        String servletPath = req.getServletPath();
+        String pathInfo = req.getPathInfo();
+        String normalized = (servletPath == null ? "" : servletPath)
+                + (pathInfo == null ? "" : pathInfo);
+        return matchesExempt(raw) && matchesExempt(normalized);
+    }
+
+    private static boolean matchesExempt(String path) {
         for (String p : DEAD_EXEMPT) {
             if (path.equals(p) || path.startsWith(p + "/")) return true;
         }
