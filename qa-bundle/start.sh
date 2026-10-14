@@ -8,6 +8,10 @@
 #   ./start.sh --stop           # 앱 스택 중지(Redis 는 유지)
 #   ./start.sh --stop-all       # 앱 + Redis 모두 중지(볼륨은 보존)
 #
+# 로그는 deploy/logs/ 에 남는다.
+#   - 기동·중지 직전: 기존 컨테이너 로그를 <타임스탬프>/<컨테이너명>.log 로 보관
+#   - 기동 후: live-<타임스탬프>.log 에 실시간으로 계속 기록(중지 시 종료)
+#
 # 손으로 치면 틀리기 쉬운 것들을 대신 처리한다.
 #   - COMPOSE_PROFILES 누락 → nginx·rp-app 이 "에러 없이" 안 뜨는 사고 방지
 #   - Redis 스택이 요구하는 REDIS_BIND_ADDR / REDIS_PASSWORD export
@@ -185,6 +189,51 @@ start_redis() {
 }
 
 # ---------------------------------------------------------------------------
+# 로그 보관 — 앱 로그는 stdout(docker json-file)뿐이라 컨테이너가 삭제·재생성
+# (down, 설정 변경 후 up -d)되면 함께 사라진다. 그 직전에 파일로 떠 둔다.
+#   deploy/logs/<타임스탬프>/<컨테이너명>.log
+# ---------------------------------------------------------------------------
+archive_logs() {
+  local compose=("$@") dir id name ids
+  # 컨테이너 단위로 뜬다 — --scale 로 여러 개인 passkey-app 도 인스턴스별로 남는다.
+  ids=$(cd deploy && COMPOSE_PROFILES="$PROFILES" "${compose[@]}" ps -a -q 2>/dev/null) || true
+  [[ -n $ids ]] || return 0
+
+  dir=deploy/logs/$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$dir"
+  for id in $ids; do
+    name=$(docker inspect --format '{{.Name}}' "$id" 2>/dev/null) || continue
+    docker logs -t "$id" > "$dir/${name#/}.log" 2>&1 || true
+  done
+  ok "기존 로그 보관: $dir"
+}
+
+# ---------------------------------------------------------------------------
+# 실시간 로그 기록 — 기동 후 `compose logs -f` 를 백그라운드로 띄워
+# deploy/logs/live-<타임스탬프>.log 에 계속 쌓는다. 컨테이너 재시작·재생성도
+# 따라가며, start.sh 로 다시 기동하면 이전 기록기를 끄고 새 파일로 이어 쓴다.
+# --since 로 기동 시점 이후만 받아 archive_logs 가 뜬 내용과 겹치지 않게 한다.
+# ---------------------------------------------------------------------------
+FOLLOW_PID=deploy/logs/.follow.pid
+
+stop_log_follow() {
+  [[ -f $FOLLOW_PID ]] || return 0
+  kill "$(cat "$FOLLOW_PID")" 2>/dev/null || true
+  rm -f "$FOLLOW_PID"
+}
+
+start_log_follow() {
+  local since=$1 file
+  stop_log_follow
+  mkdir -p deploy/logs
+  file=deploy/logs/live-$(date +%Y%m%d-%H%M%S).log
+  COMPOSE_PROFILES="$PROFILES" nohup docker compose -f deploy/docker-compose.yml \
+    logs -f -t --no-color --since "$since" >> "$file" 2>&1 < /dev/null &
+  echo $! > "$FOLLOW_PID"
+  ok "실시간 로그 기록: $file"
+}
+
+# ---------------------------------------------------------------------------
 # 앱 스택
 # ---------------------------------------------------------------------------
 start_apps() {
@@ -201,7 +250,12 @@ start_apps() {
     svcs=(nginx passkey-app admin-app)
   fi
 
+  stop_log_follow
+  archive_logs "${COMPOSE_APP[@]}"
+  local since
+  since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   (cd deploy && COMPOSE_PROFILES="$PROFILES" "${COMPOSE_APP[@]}" up -d "${svcs[@]}")
+  start_log_follow "$since"
 }
 
 # ---------------------------------------------------------------------------
@@ -296,14 +350,18 @@ case "${1:-}" in
 
   --stop)
     load_env
+    archive_logs "${COMPOSE_APP[@]}"
     (cd deploy && COMPOSE_PROFILES="$PROFILES" "${COMPOSE_APP[@]}" down)
+    stop_log_follow
     ok "앱 스택 중지 (Redis 는 유지)"
     ;;
 
   --stop-all)
     load_env
     export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-${REDIS_HOST:-127.0.0.1}}
+    archive_logs "${COMPOSE_APP[@]}"
     (cd deploy && COMPOSE_PROFILES="$PROFILES" "${COMPOSE_APP[@]}" down)
+    stop_log_follow
     (cd deploy && "${COMPOSE_REDIS[@]}" down)
     ok "전체 중지 (볼륨은 보존)"
     ;;
