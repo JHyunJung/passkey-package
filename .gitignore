@@ -69,6 +69,8 @@ logs/
 !.env.example
 !**/.env.example
 application-secret*.yml
+# qa-bundle nginx TLS 인증서·개인키 — 환경마다 배치하며 커밋하지 않는다
+qa-bundle/deploy/cert/
 
 # Phase 2 admin-ui build outputs
 admin-ui/node_modules/

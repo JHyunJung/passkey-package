@@ -115,6 +115,15 @@ check_env() {
     err "ISSUER_BASE 가 https:// 로 시작하지 않습니다: $ISSUER_BASE"
   fi
 
+  # nginx 가 TLS 를 종료한다. 인증서가 없으면 nginx 가 기동에 실패한다.
+  if [[ ,$PROFILES, == *,proxy,* ]]; then
+    if [[ -s deploy/cert/fullchain.pem && -s deploy/cert/key.pem ]]; then
+      ok "TLS 인증서 deploy/cert/{fullchain,key}.pem"
+    else
+      err "deploy/cert/fullchain.pem, key.pem 이 없습니다 (README \"반드시 먼저 해결해야 하는 것 — HTTPS\")"
+    fi
+  fi
+
   # 컨테이너 안의 127.0.0.1 은 자기 자신이다. Redis 를 못 찾는 전형적 원인.
   if [[ ${REDIS_HOST:-} == 127.0.0.1 || ${REDIS_HOST:-} == localhost ]]; then
     err "REDIS_HOST 가 $REDIS_HOST 입니다. 컨테이너 안에서는 자기 자신을 가리킵니다."

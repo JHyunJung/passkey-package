@@ -165,7 +165,7 @@ PW_RUNTIME=$(ask_secret "PSK_APP_RUNTIME_USER 비밀번호 ")
 
 echo
 echo "${DIM}--- 2/3. 도메인 ---${RST}"
-echo "  ${DIM}WebAuthn 은 HTTPS 가 필수입니다. 앞단 LB 가 TLS 를 종료해야 합니다.${RST}"
+echo "  ${DIM}WebAuthn 은 HTTPS 가 필수입니다. 두 FQDN 을 포함한 인증서를 deploy/cert/ 에 둡니다.${RST}"
 PASSKEY_FQDN=$(ask "passkey 서버 FQDN" "passkey-qa.example.internal")
 RP_FQDN=$(ask      "RP 데모 FQDN     " "rp-qa.example.internal")
 

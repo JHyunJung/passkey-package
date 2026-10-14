@@ -263,15 +263,21 @@ API Keys 탭에서 `registration`, `authentication` scope 키를 발급한다.
 사양이라 우회할 수 없다. 평문 HTTP 로 접근하면 패스키 등록이 브라우저 단계에서
 거부된다. QA 라도 아래가 전부 필요하다.
 
-- 내부 DNS 서브도메인 2개 (`passkey-qa.…`, `rp-qa.…`)
-- 앞단에서 TLS 를 종료하는 LB 또는 호스트 nginx
-- 그 앞단이 **`X-Forwarded-Proto: https` 를 전달**할 것
+- 내부 DNS 서브도메인 2개 (`passkey-qa.…`, `rp-qa.…`) — 둘 다 이 호스트를 가리킨다
+- 두 FQDN 을 모두 포함하는 TLS 인증서(SAN 또는 와일드카드)를
+  `deploy/cert/fullchain.pem`, `deploy/cert/key.pem` 에 둔다
 - 사설 CA 라면 테스트 브라우저·OS 신뢰 저장소에 등록 (인증서 경고 화면을 거친
   상태에서는 WebAuthn 이 동작하지 않는다)
 
-번들의 `deploy/nginx/nginx.conf` 는 **TLS 를 다루지 않는다.** 앞단이 평문으로
-넘겨준다는 전제로 서브도메인 라우팅만 한다. `ISSUER_BASE` 도 반드시
+번들의 `deploy/nginx/nginx.conf` 가 **TLS 를 직접 종료한다.** 443 에서 서브도메인으로
+passkey-app / rp-app 을 나누고, 80 은 443 으로 리다이렉트만 한다. 인증서가 없으면
+nginx 가 뜨지 않으므로 `./start.sh` 가 선검증에서 막는다. `ISSUER_BASE` 도 반드시
 `https://` 로 시작해야 한다.
+
+RP 는 경로(`https://passkey-qa.…/rp/`)가 아니라 반드시 별도 서브도메인으로 둔다.
+rp-app 페이지는 `/css`·`/js`·`/passkey/**` 를 루트 절대경로로 호출하고, 네이티브 앱용
+`/.well-known/*` 은 도메인 루트에 있어야 하므로 경로 접두로 합치면
+`/passkey/register/begin` 이 passkey-app 으로 가서 404 가 난다.
 
 ---
 
@@ -281,6 +287,7 @@ API Keys 탭에서 `registration`, `authentication` scope 키를 발급한다.
 |---|---|
 | `exec format error` | 이미지 아키텍처 불일치 — `./load-images.sh` 로 확인 |
 | 브라우저가 등록 즉시 거부 | HTTPS 아님 / 인증서 미신뢰 |
+| `/passkey/register/begin` 404, rp-app 로그 없음 | RP 를 서브도메인이 아닌 경로(`/rp/`)로 붙였거나 Host 가 `RP_SERVER_NAME` 과 불일치 |
 | `origin mismatch` | 테넌트 `allowedOrigins` ≠ 실제 접속 origin |
 | `rpId` 오류 | `rpId` 에 스킴·포트가 들어감 |
 | 401 | `RP_API_KEY` 불일치 또는 scope 부족 |

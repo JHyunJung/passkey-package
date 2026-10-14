@@ -47,8 +47,8 @@
 ## F. HTTPS (README "반드시 먼저 해결해야 하는 것" — 가장 자주 막히는 지점)
 
 - [ ] 내부 DNS 서브도메인 2개 등록 (`passkey-qa.…`, `rp-qa.…`)
-- [ ] 앞단 LB/nginx 가 TLS 종료
-- [ ] 앞단이 `X-Forwarded-Proto: https` 전달
+- [ ] 두 FQDN 을 모두 포함한 인증서를 `deploy/cert/fullchain.pem`, `key.pem` 에 배치
+      (번들 nginx 가 TLS 종료)
 - [ ] 사설 CA 라면 테스트 브라우저·OS 신뢰 저장소에 등록
       (인증서 경고를 거친 상태로는 WebAuthn 이 동작하지 않음)
 
