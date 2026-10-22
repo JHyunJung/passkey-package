@@ -10,12 +10,13 @@ export type SignupRequestView = {
 
 /**
  * 가입 요청·승인 API.
- * - request: 공개(permitAll) — 항상 202 {accepted:true}. envelope 없음 → postRaw.
+ * - request: 공개(permitAll) — 항상 202 {accepted:true, activated}. envelope 없음 → postRaw.
+ *   activated 는 PLATFORM_OPERATOR 즉시 가입(QA 전용 서버 설정)으로 계정이 바로 만들어졌을 때만 true.
  * - list/approve/reject: PLATFORM_OPERATOR 전용, raw JSON → adminFetch.
  */
 export const signupRequestsApi = {
-  request: (body: { email: string; password: string; reason?: string }) =>
-    api.postRaw<{ accepted: boolean }>('/admin/api/signup-requests', body),
+  request: (body: { email: string; password: string; reason?: string; role?: 'PLATFORM_OPERATOR' }) =>
+    api.postRaw<{ accepted: boolean; activated?: boolean }>('/admin/api/signup-requests', body),
 
   list: (): Promise<SignupRequestView[]> =>
     adminFetch<SignupRequestView[]>('GET', '/admin/api/signup-requests'),

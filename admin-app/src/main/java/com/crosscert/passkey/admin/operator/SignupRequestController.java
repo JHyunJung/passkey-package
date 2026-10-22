@@ -39,10 +39,14 @@ public class SignupRequestController {
         return ((AdminUserDetails) auth.getPrincipal()).getId();
     }
 
+    /**
+     * activated 는 PLATFORM_OPERATOR 자동 승인(QA 전용 설정)으로 계정이 바로 만들어졌을 때만 true.
+     * 그 설정이 꺼져 있으면 항상 false 라 기존처럼 응답이 같다.
+     */
     @PostMapping
     public ResponseEntity<Map<String, Boolean>> request(@Valid @RequestBody SignupRequestDto.Create body) {
-        service.request(body);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("accepted", true));
+        boolean activated = service.request(body);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("accepted", true, "activated", activated));
     }
 
     @GetMapping

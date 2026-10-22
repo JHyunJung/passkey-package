@@ -54,6 +54,12 @@ management:
     tags:
       application: admin-app
 
+admin:
+  signup:
+    # QA 전용. true 면 가입 화면에서 PLATFORM_OPERATOR 를 고른 요청을 승인 없이 바로 활성화한다.
+    # admin 주소에 닿는 누구나 최고 관리자가 될 수 있으므로 운영에서는 켜지 않는다.
+    auto-approve-platform-operator: ${ADMIN_SIGNUP_AUTO_APPROVE_PLATFORM_OPERATOR:false}
+
 passkey:
   mds:
     fixed-delay: PT6H

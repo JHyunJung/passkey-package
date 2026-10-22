@@ -6,6 +6,11 @@ vi.mock('@/api/signupRequests', () => ({
   signupRequestsApi: { request: vi.fn().mockResolvedValue({ accepted: true }) },
 }));
 
+vi.mock('@/api/client', () => ({
+  api: { get: vi.fn().mockResolvedValue({ active: ['qa'], local: false, platformOperatorSelfSignup: false }) },
+}));
+
+import { api } from '@/api/client';
 import { signupRequestsApi } from '@/api/signupRequests';
 import SignupRequestPage from './SignupRequestPage';
 
@@ -161,5 +166,37 @@ describe('SignupRequestPage V2', () => {
     expect(screen.getByLabelText('이메일')).not.toHaveAttribute('readonly');
     expect(screen.getByLabelText('이메일')).toHaveValue('f@x.com');
     expect(screen.getByLabelText('비밀번호')).toHaveValue('password-12chars');
+  });
+
+  it('PLATFORM_OPERATOR 즉시 가입이 꺼져 있으면 역할 선택지를 보이지 않는다', async () => {
+    render(<SignupRequestPage />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/admin/api/profile'));
+    expect(screen.queryByRole('radiogroup', { name: '역할' })).toBeNull();
+  });
+
+  it('즉시 가입이 켜져 있으면 Platform Operator 를 골라 보내고, 활성화되면 바로 로그인 안내', async () => {
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ active: ['qa'], platformOperatorSelfSignup: true });
+    (signupRequestsApi.request as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ accepted: true, activated: true });
+    render(<SignupRequestPage />);
+    fireEvent.click(await screen.findByRole('radio', { name: /Platform Operator/ }));
+    fill('op@x.com', 'password-12chars', 'password-12chars');
+    fireEvent.click(screen.getByRole('button', { name: '가입 요청 보내기' }));
+    expect(await screen.findByRole('heading', { name: '계정이 만들어졌습니다' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '로그인하기' })).toHaveAttribute('href', '/admin');
+    expect(signupRequestsApi.request).toHaveBeenLastCalledWith({
+      email: 'op@x.com', password: 'password-12chars', reason: undefined, role: 'PLATFORM_OPERATOR',
+    });
+  });
+
+  it('즉시 가입이 켜져 있어도 기본 선택(승인 후 사용)은 역할 없이 보내고 승인 대기 안내', async () => {
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ active: ['qa'], platformOperatorSelfSignup: true });
+    render(<SignupRequestPage />);
+    expect(await screen.findByRole('radio', { name: /승인 후 사용/ })).toHaveAttribute('aria-checked', 'true');
+    fill('rp@x.com', 'password-12chars', 'password-12chars');
+    fireEvent.click(screen.getByRole('button', { name: '가입 요청 보내기' }));
+    expect(await screen.findByRole('heading', { name: '요청이 접수되었습니다' })).toBeInTheDocument();
+    expect(signupRequestsApi.request).toHaveBeenLastCalledWith({
+      email: 'rp@x.com', password: 'password-12chars', reason: undefined, role: undefined,
+    });
   });
 });

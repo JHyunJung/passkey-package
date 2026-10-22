@@ -60,6 +60,13 @@ public class SignupRequestService {
     @Value("${admin.invite.base-url:http://localhost:5173}")
     private String baseUrl;
 
+    /**
+     * QA 전용. true 면 PLATFORM_OPERATOR 로 가입을 요청한 경우 승인 없이 바로 계정을 만든다.
+     * admin 주소에 닿는 누구나 최고 관리자가 될 수 있으므로 운영에서는 켜지 않는다.
+     */
+    @Value("${admin.signup.auto-approve-platform-operator:false}")
+    private boolean autoApprovePlatformOperator;
+
     public SignupRequestService(AdminSignupRequestRepository requests,
                                 AdminUserRepository users,
                                 AdminUserTenantRepository mappings,
@@ -82,14 +89,19 @@ public class SignupRequestService {
     @PostConstruct
     void validateBaseUrlForProd() {
         BaseUrlValidation.assertNotLocalhostFallbackInProd(env, baseUrl, "admin.invite.base-url");
+        if (autoApprovePlatformOperator) {
+            log.warn("admin.signup.auto-approve-platform-operator=true — PLATFORM_OPERATOR 가입 요청을 승인 없이 활성화한다(QA 전용)");
+        }
     }
 
     /**
      * 의도적으로 @Transactional 을 붙이지 않는다 — save() 의 UNIQUE 위반(동시 요청)을
      * 여기서 잡아 삼키려면, 예외가 트랜잭션을 rollback-only 로 만들지 않아야 한다.
      * 각 리포지토리 호출은 자체 트랜잭션으로 돈다.
+     *
+     * @return 승인 없이 계정이 바로 만들어졌으면 true(자동 승인), 그 외(대기 등록·스킵)는 false
      */
-    public void request(SignupRequestDto.Create req) {
+    public boolean request(SignupRequestDto.Create req) {
         String email = normalize(req.email());
         String masked = CryptoUtils.maskEmail(email);
 
@@ -101,15 +113,18 @@ public class SignupRequestService {
 
         if (users.findByEmail(email).isPresent()) {
             log.warn("signup request skipped: email={} reason=already-admin", masked);
-            return;
+            return false;
+        }
+        if (autoApprovePlatformOperator && "PLATFORM_OPERATOR".equals(req.role())) {
+            return activatePlatformOperator(email, bcryptHash, masked);
         }
         if (requests.existsByEmail(email)) {
             log.warn("signup request skipped: email={} reason=already-pending", masked);
-            return;
+            return false;
         }
         if (requests.count() >= MAX_PENDING) {
             log.warn("signup request skipped: email={} reason=pending-cap max={}", masked, MAX_PENDING);
-            return;
+            return false;
         }
 
         String reason = req.reason() == null || req.reason().isBlank() ? null : req.reason().trim();
@@ -119,9 +134,32 @@ public class SignupRequestService {
         } catch (DataIntegrityViolationException e) {
             // 같은 이메일의 동시 요청 — 먼저 들어간 쪽이 남는다. 응답은 동일.
             log.warn("signup request skipped: email={} reason=concurrent-duplicate", masked);
-            return;
+            return false;
         }
         log.info("signup request accepted: email={}", masked);
+        return false;
+    }
+
+    /** 자동 승인 — approve() 의 계정 생성과 같은 상태(ACTIVE + enabled)로 만들고, 행위자는 본인이다. */
+    private boolean activatePlatformOperator(String email, String bcryptHash, String masked) {
+        AdminUser user = AdminUser.create();
+        user.setEmail(email);
+        user.setBcryptHash(bcryptHash);
+        user.setRole("PLATFORM_OPERATOR");
+        user.setStatus("ACTIVE");
+        user.setEnabled(true);
+        user.setCreatedBy("self-signup");
+        AdminUser saved;
+        try {
+            saved = users.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("signup auto-approve skipped: email={} reason=concurrent-duplicate", masked);
+            return false;
+        }
+        audit.append(new AuditAppendRequest(saved.getId(), email, "ADMIN_SIGNUP_SELF_APPROVE",
+                "ADMIN_USER", saved.getId().toString(), null, Map.of("role", "PLATFORM_OPERATOR")));
+        log.warn("signup auto-approved: email={} role=PLATFORM_OPERATOR", masked);
+        return true;
     }
 
     @Transactional(readOnly = true)

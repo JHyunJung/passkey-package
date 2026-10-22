@@ -17,6 +17,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
@@ -371,5 +372,98 @@ class SignupRequestServiceTest {
         assertThat(views.get(0).id()).isEqualTo(id);
         assertThat(views.get(0).email()).isEqualTo("l@x.com");
         assertThat(views.get(0).reason()).isEqualTo("reason");
+    }
+
+    // ── request: PLATFORM_OPERATOR 자동 승인(QA 전용 설정) ─────────────────
+
+    private void autoApprove(boolean on) {
+        ReflectionTestUtils.setField(service, "autoApprovePlatformOperator", on);
+    }
+
+    @Test
+    void request_platformOperator_autoApproveOn_createsActiveAccountWithoutPendingRow() {
+        autoApprove(true);
+        UUID newId = UUID.randomUUID();
+        when(users.findByEmail("op@x.com")).thenReturn(Optional.empty());
+        when(encoder.encode("password-12chars")).thenReturn("$2a$12$hashed");
+        AdminUser saved = savedUser(newId, "op@x.com", "PLATFORM_OPERATOR");
+        when(users.saveAndFlush(any(AdminUser.class))).thenReturn(saved);
+
+        boolean activated = service.request(
+                new SignupRequestDto.Create("Op@X.com", "password-12chars", null, "PLATFORM_OPERATOR"));
+
+        assertThat(activated).isTrue();
+        ArgumentCaptor<AdminUser> cap = ArgumentCaptor.forClass(AdminUser.class);
+        verify(users).saveAndFlush(cap.capture());
+        AdminUser created = cap.getValue();
+        assertThat(created.getEmail()).isEqualTo("op@x.com");
+        assertThat(created.getBcryptHash()).isEqualTo("$2a$12$hashed");
+        assertThat(created.getRole()).isEqualTo("PLATFORM_OPERATOR");
+        assertThat(created.getStatus()).isEqualTo("ACTIVE");
+        assertThat(created.isEnabled()).isTrue();
+        verify(requests, never()).save(any());
+        ArgumentCaptor<AuditAppendRequest> auditCap = ArgumentCaptor.forClass(AuditAppendRequest.class);
+        verify(audit).append(auditCap.capture());
+        assertThat(auditCap.getValue().action()).isEqualTo("ADMIN_SIGNUP_SELF_APPROVE");
+    }
+
+    @Test
+    void request_platformOperator_autoApproveOff_staysPending() {
+        autoApprove(false);
+        when(users.findByEmail("op@x.com")).thenReturn(Optional.empty());
+        when(requests.existsByEmail("op@x.com")).thenReturn(false);
+        when(requests.count()).thenReturn(0L);
+        when(encoder.encode("password-12chars")).thenReturn("$2a$12$hashed");
+
+        boolean activated = service.request(
+                new SignupRequestDto.Create("op@x.com", "password-12chars", null, "PLATFORM_OPERATOR"));
+
+        assertThat(activated).isFalse();
+        verify(requests).save(any(AdminSignupRequest.class));
+        verify(users, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void request_rpAdmin_autoApproveOn_staysPending() {
+        autoApprove(true);
+        when(users.findByEmail("rp@x.com")).thenReturn(Optional.empty());
+        when(requests.existsByEmail("rp@x.com")).thenReturn(false);
+        when(requests.count()).thenReturn(0L);
+        when(encoder.encode("password-12chars")).thenReturn("$2a$12$hashed");
+
+        boolean activated = service.request(
+                new SignupRequestDto.Create("rp@x.com", "password-12chars", null, "RP_ADMIN"));
+
+        assertThat(activated).isFalse();
+        verify(requests).save(any(AdminSignupRequest.class));
+        verify(users, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void request_platformOperator_autoApproveOn_existingAccount_skipsSilently() {
+        autoApprove(true);
+        when(users.findByEmail("op@x.com")).thenReturn(Optional.of(mock(AdminUser.class)));
+        when(encoder.encode("password-12chars")).thenReturn("$2a$12$hashed");
+
+        boolean activated = service.request(
+                new SignupRequestDto.Create("op@x.com", "password-12chars", null, "PLATFORM_OPERATOR"));
+
+        assertThat(activated).isFalse();
+        verify(users, never()).saveAndFlush(any());
+        verify(requests, never()).save(any());
+    }
+
+    @Test
+    void request_platformOperator_autoApproveOn_concurrentDuplicate_skipsSilently() {
+        autoApprove(true);
+        when(users.findByEmail("op@x.com")).thenReturn(Optional.empty());
+        when(encoder.encode("password-12chars")).thenReturn("$2a$12$hashed");
+        when(users.saveAndFlush(any(AdminUser.class))).thenThrow(new DataIntegrityViolationException("dup"));
+
+        boolean activated = service.request(
+                new SignupRequestDto.Create("op@x.com", "password-12chars", null, "PLATFORM_OPERATOR"));
+
+        assertThat(activated).isFalse();
+        verify(audit, never()).append(any());
     }
 }

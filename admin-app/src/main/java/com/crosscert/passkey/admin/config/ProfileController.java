@@ -29,8 +29,10 @@ public class ProfileController {
     public ApiResponse<ProfileView> profile() {
         List<String> profiles = List.of(env.getActiveProfiles());
         boolean isLocal = profiles.contains("local");
-        return ApiResponse.ok(new ProfileView(profiles, isLocal));
+        // 가입 화면이 PLATFORM_OPERATOR 즉시 가입 선택지를 보일지 정한다(SignupRequestService 와 같은 속성).
+        boolean selfSignup = env.getProperty("admin.signup.auto-approve-platform-operator", Boolean.class, false);
+        return ApiResponse.ok(new ProfileView(profiles, isLocal, selfSignup));
     }
 
-    public record ProfileView(List<String> active, boolean local) {}
+    public record ProfileView(List<String> active, boolean local, boolean platformOperatorSelfSignup) {}
 }

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { api } from '@/api/client';
 import { signupRequestsApi } from '@/api/signupRequests';
 import { ApiError } from '@/api/types';
 import { illustrations } from '@/assets/illustrations';
 import { isTransientError } from '@/lib/transientError';
-import { Alert, Button, Field } from '@/ui';
+import { Alert, Button, ChoiceCard, Field } from '@/ui';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PW_MIN = 12;
@@ -15,6 +16,8 @@ const PW_MAX = 128;
  * 네트워크·5xx 는 접수되지 않았으므로 실패로 알리고 입력을 유지한다(H9).
  * 비밀번호 정책(12~128자)은 서버와 동일하게 클라이언트에서도 선검증하고 범위를 미리 보여 준다(H5).
  * 요청 중에는 입력을 읽기 전용으로 두어, 늦은 실패 응답이 다시 입력한 내용과 경합하지 않게 한다.
+ * 서버가 PLATFORM_OPERATOR 즉시 가입(QA 전용 설정)을 켜 두었으면 역할 선택지를 보이고,
+ * 그 역할로 계정이 바로 만들어지면(activated) 승인 대기 대신 바로 로그인 안내를 보여 준다.
  */
 export default function SignupRequestPage() {
   const [email, setEmail] = useState('');
@@ -23,7 +26,9 @@ export default function SignupRequestPage() {
   const [pw2, setPw2] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<false | 'pending' | 'activated'>(false);
+  const [selfSignupAvailable, setSelfSignupAvailable] = useState(false);
+  const [role, setRole] = useState<'RP_ADMIN' | 'PLATFORM_OPERATOR'>('RP_ADMIN');
   const [failure, setFailure] = useState<{ error: unknown } | null>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
 
@@ -36,21 +41,28 @@ export default function SignupRequestPage() {
 
   useEffect(() => { if (failure) submitRef.current?.focus(); }, [failure]);
 
+  useEffect(() => {
+    api.get<{ platformOperatorSelfSignup?: boolean }>('/admin/api/profile')
+      .then((p) => setSelfSignupAvailable(Boolean(p?.platformOperatorSelfSignup)))
+      .catch(() => { /* 조회 실패 — 기본(승인 필요) 화면 그대로 */ });
+  }, []);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
     setFailure(null);
     try {
-      await signupRequestsApi.request({
+      const res = await signupRequestsApi.request({
         email: email.trim().toLowerCase(),
         password: pw,
         reason: reason.trim() ? reason.trim() : undefined,
+        role: selfSignupAvailable && role === 'PLATFORM_OPERATOR' ? 'PLATFORM_OPERATOR' : undefined,
       });
-      setDone(true);
+      setDone(res?.activated ? 'activated' : 'pending');
     } catch (err) {
       if (isTransientError(err)) setFailure({ error: err });
-      else setDone(true); /* enumeration 방지: 4xx 는 성공과 같은 안내. */
+      else setDone('pending'); /* enumeration 방지: 4xx 는 성공과 같은 안내. */
     } finally {
       setSubmitting(false);
     }
@@ -63,7 +75,14 @@ export default function SignupRequestPage() {
       <div className="auth__col auth__col--wide">
         <img className="auth__logo" src="/admin/crosscert-logo-transparent.png" alt="CROSSCERT" />
         <div className="auth-card" style={done ? { alignItems: 'center', textAlign: 'center' } : { gap: 18 }}>
-          {done ? (
+          {done === 'activated' ? (
+            <>
+              <img src={illustrations.signupSent} alt="" style={{ width: 132, height: 132, objectFit: 'contain' }} />
+              <h1 className="page__title">계정이 만들어졌습니다</h1>
+              <p className="card__sub">Platform Operator 계정이 활성화되었습니다. 바로 로그인할 수 있습니다.</p>
+              <a className="btn" href="/admin">로그인하기</a>
+            </>
+          ) : done ? (
             <>
               <img src={illustrations.signupSent} alt="" style={{ width: 132, height: 132, objectFit: 'contain' }} />
               <h1 className="page__title">요청이 접수되었습니다</h1>
@@ -81,6 +100,17 @@ export default function SignupRequestPage() {
                   네트워크 또는 서버 문제로 접수되지 않았습니다. 입력한 내용은 그대로 있습니다.
                   {status !== undefined && <span className="mono" style={{ display: 'block', fontSize: 11 }}>HTTP {status}</span>}
                 </Alert>
+              )}
+              {selfSignupAvailable && (
+                <div>
+                  <span className="label">역할</span>
+                  <div className="choices choices--2" role="radiogroup" aria-label="역할">
+                    <ChoiceCard checked={role === 'RP_ADMIN'} onSelect={() => setRole('RP_ADMIN')}
+                      title="승인 후 사용" description="운영자가 승인하며 역할·tenant 를 지정" />
+                    <ChoiceCard checked={role === 'PLATFORM_OPERATOR'} onSelect={() => setRole('PLATFORM_OPERATOR')}
+                      title="Platform Operator" description="승인 없이 바로 사용 (QA 전용)" />
+                  </div>
+                </div>
               )}
               <Field label="이메일" htmlFor="signup-email" error={emailInvalid ? '이메일 형식이 올바르지 않습니다. 예: you@company.com' : undefined}>
                 {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
