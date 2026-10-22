@@ -1,5 +1,13 @@
 server:
   port: 9090
+  # TLS 를 종료한 리버스 프록시(nginx)가 평문 http 로 넘기면, 이 설정이 없을 때 rp-app 은
+  # 요청을 http://<host>:80 으로 본다. 브라우저는 같은 origin 이어도 POST 에 Origin
+  # (https://<host>) 을 붙이므로 CorsFilter 가 cross-origin 으로 판정하고,
+  # RP_CORS_ALLOWED_ORIGINS 가 빈 기본 배포에서는 /passkey/** 가 전부 403 이 된다.
+  # framework 는 X-Forwarded-Proto/-Port 를 반영해 같은 origin 으로 판정하게 한다
+  # (passkey-app·admin-app 과 같은 방식). 프록시가 없으면 헤더도 없어 no-op 이다.
+  # ProxiedSameOriginPostTest 가 고정한다.
+  forward-headers-strategy: framework
 
 rp-app:
   # 재기동 후에도 확정 등록된 user↔handle↔credential 매핑을 유지하기 위한 JSON 파일.

@@ -179,7 +179,7 @@ compose 기본값으로 동작한다:
 Redis 에 접속할 때 쓰는 변수는 위 표의 `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD` 다.
 
 `SERVER_FORWARD_HEADERS_STRATEGY` 는 주입하지 않는다 — `forward-headers-strategy:
-framework` 가 passkey-app/admin-app 의 base `application.yml` 에 이미 있다.
+framework` 가 passkey-app/admin-app/rp-app 의 base `application.yml` 에 이미 있다.
 
 **서버 A** (admin-app 포함):
 ```bash

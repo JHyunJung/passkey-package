@@ -116,7 +116,7 @@ PASSKEY_ID_TOKEN_ISSUER_BASE='https://dev-passkey.crosscert.com' \
 | `PASSKEY_ID_TOKEN_ISSUER_BASE` | `https://dev-passkey.crosscert.com` | ID Token `iss`의 베이스. **Passkey 서버의 외부 도메인**(끝에 슬래시 없이). |
 | `PASSKEY_KEY_ENVELOPE_MASTER_KEY` | base64 32바이트 | at-rest 암호화 키. `openssl rand -base64 32`로 생성. |
 
-> ℹ️ **forward-headers 는 주입하지 않습니다**: `SERVER_FORWARD_HEADERS_STRATEGY` 를 따로 설정할 필요가 없습니다 — passkey-app/admin-app 의 base `application.yml` 에 `forward-headers-strategy: framework` 가 이미 있습니다. env 로 주입하면 오히려 그 값을 덮어씁니다. 필요한 것은 프록시가 `X-Forwarded-For` 와 `X-Forwarded-Proto` 를 보내는지(§5)뿐입니다 — 전자가 감사로그 클라이언트 IP·rate-limit IP 버킷의 근거(`request.getRemoteAddr()`)가 되고, 후자가 스킴(`request.isSecure()`) 판정으로 쿠키 Secure 를 결정합니다.
+> ℹ️ **forward-headers 는 주입하지 않습니다**: `SERVER_FORWARD_HEADERS_STRATEGY` 를 따로 설정할 필요가 없습니다 — passkey-app/admin-app/rp-app 의 base `application.yml` 에 `forward-headers-strategy: framework` 가 이미 있습니다. env 로 주입하면 오히려 그 값을 덮어씁니다. 필요한 것은 프록시가 `X-Forwarded-For` 와 `X-Forwarded-Proto` 를 보내는지(§5)뿐입니다 — 전자가 감사로그 클라이언트 IP·rate-limit IP 버킷의 근거(`request.getRemoteAddr()`)가 되고, 후자가 스킴(`request.isSecure()`) 판정으로 쿠키 Secure 를 결정합니다.
 
 ### 3.2 admin 콘솔 (admin-app, 내부 8081) — 테넌트/키 발급용
 
