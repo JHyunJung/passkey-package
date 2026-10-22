@@ -7,6 +7,11 @@
 #   ./start.sh --status         # 현재 상태만 출력
 #   ./start.sh --stop           # 앱 스택 중지(Redis 는 유지)
 #   ./start.sh --stop-all       # 앱 + Redis 모두 중지(볼륨은 보존)
+#   ./start.sh --nginx-conf     # 호스트 nginx 설정 출력(PROXY_MODE=host 전용)
+#
+# deploy/.env 의 PROXY_MODE 로 nginx 방식을 고른다(README "nginx — 두 가지 방식").
+#   host    : 서버에 이미 있는 nginx 가 TLS 종료 → 번들 nginx 를 빼고 앱 포트를 루프백에 연다
+#   bundled : 번들 nginx 컨테이너가 80/443 과 TLS 를 맡는다 (값이 없을 때의 기본)
 #
 # 로그는 deploy/logs/ 에 남는다.
 #   - 기동·중지 직전: 기존 컨테이너 로그를 <타임스탬프>/<컨테이너명>.log 로 보관
@@ -25,7 +30,8 @@ COMPOSE_APP=(docker compose -f docker-compose.yml)
 COMPOSE_REDIS=(docker compose -f docker-compose.redis.yml)
 
 # QA 단일 호스트 기준. 운영 서버 A/B 는 README 의 프로파일 조합을 따른다.
-PROFILES=${COMPOSE_PROFILES:-proxy,admin,qa}
+# PROXY_MODE 가 .env 에 있으므로 load_env 뒤 apply_mode 가 정한다.
+PROFILES=
 
 RED=$'\033[31m'; YEL=$'\033[33m'; GRN=$'\033[32m'; RST=$'\033[0m'
 [[ -t 1 ]] || { RED=; YEL=; GRN=; RST=; }
@@ -55,6 +61,28 @@ load_env() {
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
+  apply_mode
+}
+
+# PROXY_MODE 에 따라 프로파일과 compose 파일을 정한다.
+#   host    : 번들 nginx(proxy) 를 빼고, 덧씌움 파일로 passkey-app·rp-app 을 루프백 포트에 연다
+#   bundled : 번들 nginx 가 compose 내부망으로 앱에 닿으므로 앱 포트를 열지 않는다
+# 값이 없으면 bundled — PROXY_MODE 도입 전에 만든 .env 의 동작을 그대로 둔다.
+apply_mode() {
+  PROXY_MODE=${PROXY_MODE:-bundled}
+  case $PROXY_MODE in
+    host)
+      COMPOSE_APP+=(-f docker-compose.host-nginx.yml)
+      PROFILES=${COMPOSE_PROFILES:-admin,qa}
+      ;;
+    bundled)
+      PROFILES=${COMPOSE_PROFILES:-proxy,admin,qa}
+      ;;
+    *)
+      fail "PROXY_MODE 는 host 또는 bundled 여야 합니다: $PROXY_MODE ($ENV_FILE)"
+      exit 1
+      ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -73,7 +101,7 @@ check_env() {
   local missing=()
   local required=(
     DB_URL DB_RUNTIME_USER DB_RUNTIME_PASSWORD
-    DB_ADMIN_USER DB_ADMIN_PASSWORD DB_OWNER_USER DB_OWNER_PASSWORD
+    DB_ADMIN_USER DB_ADMIN_PASSWORD
     REDIS_HOST REDIS_PASSWORD MASTER_KEY
     PASSKEY_SERVER_NAME ISSUER_BASE ADMIN_INVITE_BASE_URL
   )
@@ -85,6 +113,47 @@ check_env() {
     err "값이 비어 있습니다: ${missing[*]}"
   else
     ok "필수 변수 ${#required[@]}개 채워짐"
+  fi
+
+  # nginx 방식별 필수값. 비어 있으면 호스트 nginx 설정이나 RP 주소를 만들 수 없다.
+  local mode_required=() mode_missing=()
+  if [[ $PROXY_MODE == host ]]; then
+    mode_required=(ADMIN_SERVER_NAME RP_PUBLIC_PORT PASSKEY_HOST_PORT RP_HOST_PORT TLS_CERT_FILE TLS_KEY_FILE)
+  else
+    mode_required=(RP_SERVER_NAME)
+  fi
+  for v in "${mode_required[@]}"; do
+    [[ -n ${!v:-} ]] || mode_missing+=("$v")
+  done
+  if ((${#mode_missing[@]})); then
+    err "PROXY_MODE=$PROXY_MODE 에 필요한 값이 비어 있습니다: ${mode_missing[*]}"
+  else
+    ok "PROXY_MODE=$PROXY_MODE (profiles: $PROFILES)"
+  fi
+
+  if [[ $PROXY_MODE == host ]]; then
+    # RP 는 passkey 와 같은 도메인의 다른 포트다. 443 이면 passkey-app 블록과 겹친다.
+    if [[ -n ${RP_PUBLIC_PORT:-} && ! $RP_PUBLIC_PORT =~ ^[0-9]+$ ]]; then
+      err "RP_PUBLIC_PORT 가 숫자가 아닙니다: $RP_PUBLIC_PORT"
+    elif [[ ${RP_PUBLIC_PORT:-} == 443 ]]; then
+      err "RP_PUBLIC_PORT 가 443 입니다. passkey 와 같은 도메인이므로 다른 포트여야 합니다(예: 8443)"
+    fi
+
+    # 메일 링크가 admin 도메인을 가리켜야 한다. 다른 주소를 일부러 쓸 수도 있어 경고만.
+    if [[ -n ${ADMIN_SERVER_NAME:-} && ${ADMIN_INVITE_BASE_URL:-} != "https://${ADMIN_SERVER_NAME}" ]]; then
+      warn "ADMIN_INVITE_BASE_URL($ADMIN_INVITE_BASE_URL) 이 https://$ADMIN_SERVER_NAME 과 다릅니다 — 메일 링크 주소 확인"
+    fi
+
+    # Enforcing 이면 nginx → 앱 포트 연결이 기본 차단돼 원인 모를 502 가 난다.
+    # 스택 기동 자체와는 무관하므로 경고만 한다.
+    if command -v getenforce >/dev/null 2>&1 && [[ $(getenforce 2>/dev/null) == Enforcing ]]; then
+      if getsebool httpd_can_network_connect 2>/dev/null | grep -q -- '--> on'; then
+        ok "SELinux httpd_can_network_connect = on"
+      else
+        warn "SELinux httpd_can_network_connect 가 off — 호스트 nginx 가 502 를 냅니다"
+        echo "       sudo setsebool -P httpd_can_network_connect 1"
+      fi
+    fi
   fi
 
   # 자리표시자 잔존. .env.qa-template 의 __XXX__ 를 안 바꾼 채 기동하는 사고가 잦다.
@@ -256,7 +325,9 @@ start_apps() {
     # rp-app 을 뺀 나머지만. 빈 RP_API_KEY 로 띄워봐야 401 만 난다.
     warn "RP_API_KEY / RP_TENANT_ID 가 비어 있어 rp-app 은 제외합니다."
     echo "     테넌트·API 키 발급(README \"8. 테넌트 생성\") 후: ./start.sh rp-app"
-    svcs=(nginx passkey-app admin-app)
+    svcs=(passkey-app admin-app)
+    # 번들 nginx 는 proxy profile 일 때만 있다(host 모드에는 서비스가 없다).
+    [[ ,$PROFILES, == *,proxy,* ]] && svcs=(nginx "${svcs[@]}")
   fi
 
   stop_log_follow
@@ -322,21 +393,105 @@ show_status() {
   (cd deploy && COMPOSE_PROFILES="$PROFILES" "${COMPOSE_APP[@]}" ps) || true
 }
 
+# 브라우저가 보는 RP origin. 테넌트 allowedOrigins 에 글자 그대로 들어가야 한다.
+rp_origin() {
+  if [[ $PROXY_MODE == host ]]; then
+    echo "https://${PASSKEY_SERVER_NAME}:${RP_PUBLIC_PORT}"
+  else
+    echo "https://${RP_SERVER_NAME}"
+  fi
+}
+
+# 테넌트 rpId — 포트를 뺀 RP 도메인. host 모드는 RP 가 passkey 도메인을 쓴다.
+rp_id() {
+  if [[ $PROXY_MODE == host ]]; then
+    echo "$PASSKEY_SERVER_NAME"
+  else
+    echo "$RP_SERVER_NAME"
+  fi
+}
+
+admin_url() {
+  if [[ $PROXY_MODE == host ]]; then
+    echo "https://${ADMIN_SERVER_NAME}/admin/"
+  else
+    echo "http://${ADMIN_BIND_ADDR:-127.0.0.1}:${ADMIN_HOST_PORT:-8081}/admin/"
+  fi
+}
+
 next_steps() {
   echo
   echo "== 다음 =="
+  if [[ $PROXY_MODE == host ]]; then
+    echo "  호스트 nginx 설정 (최초 1회, 도메인·포트를 바꿨을 때도 — README \"nginx — 두 가지 방식\")"
+    echo "     ./start.sh --nginx-conf | sudo tee /etc/nginx/conf.d/passkey-qa.conf > /dev/null"
+    echo "     sudo nginx -t && sudo systemctl reload nginx"
+    echo
+  fi
   if ! rp_ready; then
     echo "  1) admin 콘솔 로그인 → 테넌트 생성 → API 키 발급 (README \"8. 테넌트 생성\")"
-    echo "     http://${ADMIN_BIND_ADDR:-127.0.0.1}:${ADMIN_HOST_PORT:-8081}/admin/"
-    echo "  2) deploy/.env 의 RP_TENANT_ID, RP_API_KEY 를 채운다"
+    echo "     $(admin_url)"
+    echo "     rpId = $(rp_id)"
+    echo "     allowedOrigins = [\"$(rp_origin)\"]"
+    echo "  2) ./setup.sh --rp-keys 로 RP_TENANT_ID, RP_API_KEY 를 채운다"
     echo "  3) ./start.sh rp-app"
   else
-    echo "  브라우저에서 https://${RP_SERVER_NAME:-rp-qa} 접속 → 패스키 등록"
+    echo "  브라우저에서 $(rp_origin) 접속 → 패스키 등록"
     echo "  (HTTPS 가 아니면 브라우저가 등록을 거부합니다 — README \"반드시 먼저 해결해야 하는 것\")"
   fi
   echo
   echo "  로그:  cd deploy && docker compose logs -f admin-app"
   echo "  중지:  ./start.sh --stop"
+}
+
+# ---------------------------------------------------------------------------
+# 호스트 nginx 설정 출력 (PROXY_MODE=host) — 템플릿의 ${VAR} 를 .env 값으로 채운다.
+#   ./start.sh --nginx-conf | sudo tee /etc/nginx/conf.d/passkey-qa.conf > /dev/null
+#
+# envsubst(gettext)는 최소 설치 Rocky 에 없을 수 있어 셸 치환으로 한다. 치환할 이름을
+# 목록으로 고정하므로 nginx 변수($host 등)는 건드리지 않는다. stdout 이 그대로 파일이
+# 되므로 오류는 stderr 로만 낸다.
+# ---------------------------------------------------------------------------
+NGINX_TEMPLATE=deploy/host-nginx/passkey-qa.conf.template
+
+render_nginx_conf() {
+  if [[ $PROXY_MODE != host ]]; then
+    fail "PROXY_MODE=$PROXY_MODE 입니다. --nginx-conf 는 host 모드 전용입니다"
+    echo "     (bundled 모드는 번들 nginx 가 deploy/nginx/nginx.conf 를 씁니다)" >&2
+    exit 1
+  fi
+
+  # .env 에 없어도 되는 값은 compose 와 같은 기본값을 둔다. admin 인증서를 따로
+  # 지정하지 않으면 passkey 도메인과 같은 인증서를 쓴다.
+  : "${PASSKEY_BIND_ADDR:=127.0.0.1}" "${RP_BIND_ADDR:=127.0.0.1}" "${ADMIN_BIND_ADDR:=127.0.0.1}"
+  : "${PASSKEY_HOST_PORT:=8080}" "${RP_HOST_PORT:=19090}" "${ADMIN_HOST_PORT:=8081}"
+  : "${ADMIN_TLS_CERT_FILE:=${TLS_CERT_FILE:-}}" "${ADMIN_TLS_KEY_FILE:=${TLS_KEY_FILE:-}}"
+
+  local vars=(
+    PASSKEY_SERVER_NAME ADMIN_SERVER_NAME RP_PUBLIC_PORT
+    PASSKEY_BIND_ADDR PASSKEY_HOST_PORT RP_BIND_ADDR RP_HOST_PORT ADMIN_BIND_ADDR ADMIN_HOST_PORT
+    TLS_CERT_FILE TLS_KEY_FILE ADMIN_TLS_CERT_FILE ADMIN_TLS_KEY_FILE
+  )
+  local v bad=() out
+  for v in "${vars[@]}"; do
+    # 빈 값이나 템플릿 자리표시자(__…__)가 들어가면 nginx -t 를 통과하고도 엉뚱하게 동작한다.
+    [[ -n ${!v:-} && ${!v} != *__*__* ]] || bad+=("$v")
+  done
+  if ((${#bad[@]})); then
+    fail "비어 있거나 자리표시자가 남은 값: ${bad[*]} ($ENV_FILE)"
+    exit 1
+  fi
+
+  out=$(<"$NGINX_TEMPLATE")
+  for v in "${vars[@]}"; do
+    out=${out//"\${$v}"/"${!v}"}
+  done
+  # 목록 밖의 ${…} 가 남았다면 템플릿과 위 목록이 어긋난 것이다.
+  if [[ $out =~ \$\{[A-Z_]+\} ]]; then
+    fail "치환되지 않은 값이 템플릿에 남았습니다: ${BASH_REMATCH[0]}"
+    exit 1
+  fi
+  printf '%s\n' "$out"
 }
 
 # ---------------------------------------------------------------------------
@@ -373,6 +528,11 @@ case "${1:-}" in
     stop_log_follow
     (cd deploy && "${COMPOSE_REDIS[@]}" down)
     ok "전체 중지 (볼륨은 보존)"
+    ;;
+
+  --nginx-conf)
+    load_env
+    render_nginx_conf
     ;;
 
   -h|--help)

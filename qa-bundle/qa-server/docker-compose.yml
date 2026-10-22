@@ -1,0 +1,120 @@
+# QA 서버 전용 — /data/deploy/docker-compose.yml
+#   COMPOSE_PROFILES=proxy,admin,qa docker compose up -d
+#   (RP_API_KEY·RP_TENANT_ID 발급 전이면 proxy,admin)
+
+name: passkey-deploy
+
+services:
+  nginx:
+    profiles: ["proxy"]
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HOST_PORT:-80}:80"
+      - "443:443"
+      # 좌우 포트를 같게 둔다 — 다르면 rp-app 에 잘못된 X-Forwarded-Port 가 넘어가 403 이 난다.
+      - "${RP_PUBLIC_PORT:-8443}:${RP_PUBLIC_PORT:-8443}"
+    volumes:
+      # 오른쪽(컨테이너 경로)을 바꾸지 않는다 — nginx 는 templates/ 의 파일만 읽는다.
+      - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx/cert:/etc/nginx/cert:ro
+    environment:
+      PASSKEY_SERVER_NAME: ${PASSKEY_SERVER_NAME:?PASSKEY_SERVER_NAME 이 .env 에 없습니다}
+      RP_PUBLIC_PORT: ${RP_PUBLIC_PORT:-8443}
+      TLS_CERT_NAME: ${TLS_CERT_NAME:?TLS_CERT_NAME(nginx/cert 안 인증서 파일명)이 .env 에 없습니다}
+      TLS_KEY_NAME: ${TLS_KEY_NAME:?TLS_KEY_NAME(nginx/cert 안 개인키 파일명)이 .env 에 없습니다}
+    depends_on:
+      - passkey-app
+
+  passkey-app:
+    image: passkey-app:${IMAGE_TAG:-0.0.1-SNAPSHOT}
+    restart: unless-stopped
+    mem_limit: ${PASSKEY_MEM_LIMIT:-1g}
+    environment:
+      - SPRING_PROFILES_ACTIVE=qa
+      - SPRING_DATASOURCE_URL=${DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_RUNTIME_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_RUNTIME_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PASSKEY_KEY_ENVELOPE_MASTER_KEY=${MASTER_KEY}
+      - PASSKEY_ID_TOKEN_ISSUER_BASE=${ISSUER_BASE}
+      - JAVA_OPTS=${PASSKEY_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      # 값 없는 형태 유지 — .env 에 있을 때만 전달된다(`${VAR:-}` 로 바꾸면 빈 값이 전달된다).
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  admin-app:
+    profiles: ["admin"]
+    image: admin-app:${IMAGE_TAG:-0.0.1-SNAPSHOT}
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+    ports:
+      # 서버 안 직접 접속용. 외부 접속은 nginx(https://<passkey 도메인>/admin/)를 거친다.
+      - "${ADMIN_BIND_ADDR:-127.0.0.1}:${ADMIN_HOST_PORT:-8081}:8081"
+    mem_limit: ${ADMIN_MEM_LIMIT:-1g}
+    environment:
+      - SPRING_PROFILES_ACTIVE=qa
+      - SPRING_DATASOURCE_URL=${DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_ADMIN_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_ADMIN_PASSWORD}
+      # Flyway 미사용 — 스키마는 DBA 가 관리한다. 테이블·컬럼 존재는 JPA 가 기동 시 검사한다.
+      - SPRING_FLYWAY_ENABLED=false
+      # QA 전용 — 가입 화면에서 Platform Operator 를 고르면 승인 없이 바로 계정이 만들어진다.
+      - ADMIN_SIGNUP_AUTO_APPROVE_PLATFORM_OPERATOR=true
+      - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PASSKEY_KEY_ENVELOPE_MASTER_KEY=${MASTER_KEY}
+      - PASSKEY_MDS_LEASE_HOLDER=${MDS_LEASE_HOLDER:-admin-a}
+      - ADMIN_INVITE_BASE_URL=${ADMIN_INVITE_BASE_URL}
+      - PASSKEY_ID_TOKEN_ISSUER_BASE=${ISSUER_BASE}
+      - JAVA_OPTS=${ADMIN_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      # 값 없는 형태 유지 — .env 에 있을 때만 전달된다(`${VAR:-}` 로 바꾸면 메일 health 가 DOWN 이 된다).
+      - SPRING_MAIL_HOST
+      - SPRING_MAIL_PORT
+      - SPRING_MAIL_USERNAME
+      - SPRING_MAIL_PASSWORD
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
+      - PASSKEY_MAIL_FROM
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  rp-app:
+    profiles: ["qa"]
+    image: rp-app:${IMAGE_TAG:-0.0.1-SNAPSHOT}
+    restart: unless-stopped
+    mem_limit: ${RP_MEM_LIMIT:-1g}
+    environment:
+      SPRING_PROFILES_ACTIVE: ${RP_PROFILE:-qa}
+      PASSKEY_BASE_URL: ${RP_PASSKEY_BASE_URL}
+      PASSKEY_ISSUER_BASE: ${ISSUER_BASE}
+      PASSKEY_API_KEY: ${RP_API_KEY}
+      PASSKEY_TENANT_ID: ${RP_TENANT_ID}
+      RP_RELAY_SECRET: ${RP_RELAY_SECRET}
+      RP_CORS_ALLOWED_ORIGINS: ${RP_CORS_ALLOWED_ORIGINS:-}
+      RP_APP_USER_STORE_FILE: ${RP_APP_USER_STORE_FILE:-/app/data/rp-app-users.json}
+      WK_ANDROID_PACKAGE: ${WK_ANDROID_PACKAGE:-com.crosscert.sample.passkey}
+      WK_ANDROID_SHA256: ${WK_ANDROID_SHA256:-63:0C:F8:85:C6:9A:80:A0:87:B0:A2:72:83:61:00:29:F8:36:65:FF:EF:8E:FE:71:71:74:13:ED:34:9D:7C:54}
+      WK_IOS_APPID: ${WK_IOS_APPID:-LTPC88ZFE8.com.crosscert.sample.passkey}
+      JAVA_OPTS: ${RP_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      # 지우면 nginx 뒤에서 /passkey/** 요청이 403(Invalid CORS request)이 된다.
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+    volumes:
+      - rp-data:/app/data
+
+volumes:
+  rp-data:

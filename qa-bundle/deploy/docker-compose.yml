@@ -4,6 +4,9 @@
 #   서버 A: COMPOSE_PROFILES=proxy,admin docker compose up -d --scale passkey-app=3
 #   서버 B: COMPOSE_PROFILES=proxy       docker compose up -d --scale passkey-app=3
 #   QA    : COMPOSE_PROFILES=proxy,admin,qa docker compose up -d
+#   QA(호스트 nginx): COMPOSE_PROFILES=admin,qa docker compose \
+#                       -f docker-compose.yml -f docker-compose.host-nginx.yml up -d
+#           (서버에 이미 있는 nginx 가 TLS 를 종료하는 경우. start.sh 가 PROXY_MODE=host 로 자동 선택)
 #
 # DB(외부 Oracle)와 Redis(서버 C)는 이 스택 밖에 있다.
 # 루트 docker-compose.yml 은 로컬 개발용(Oracle+Redis)이며 이 파일과 무관하다.
@@ -80,10 +83,12 @@ services:
       - SPRING_DATASOURCE_URL=${DB_URL}
       - SPRING_DATASOURCE_USERNAME=${DB_ADMIN_USER}
       - SPRING_DATASOURCE_PASSWORD=${DB_ADMIN_PASSWORD}
-      # Flyway 는 admin-app 에만 주입한다. passkey-app 에 주면 --scale 로 늘어난
-      # 인스턴스들이 동시에 마이그레이션을 시도한다.
-      - SPRING_FLYWAY_USER=${DB_OWNER_USER}
-      - SPRING_FLYWAY_PASSWORD=${DB_OWNER_PASSWORD}
+      # QA 번들은 Flyway 를 쓰지 않는다 — 스키마는 DBA 가 미리 만든다. 기동 시 스키마
+      # 이력 검증·마이그레이션을 하지 않고, 테이블·컬럼 존재만 JPA(ddl-auto: validate)가 검사한다.
+      - SPRING_FLYWAY_ENABLED=false
+      # QA 전용 — 가입 화면에서 Platform Operator 를 고르면 승인 없이 바로 계정이 만들어진다.
+      # admin 주소에 닿는 누구나 최고 관리자가 될 수 있으므로 운영 compose 에는 넣지 않는다.
+      - ADMIN_SIGNUP_AUTO_APPROVE_PLATFORM_OPERATOR=true
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -149,6 +154,11 @@ services:
       # 기본값이 Dockerfile ENV JAVA_OPTS 와 두 곳에 중복 정의돼 있다 — 바꿀 때
       # 반드시 함께. compose 가 항상 주입하므로 이 경로에선 Dockerfile 값이 쓰이지 않는다.
       JAVA_OPTS: ${RP_JAVA_OPTS:--XX:MaxRAMPercentage=75}
+      # rp-app application.yml 의 forward-headers-strategy 와 같은 값이다. 그 설정이
+      # 들어가기 전에 빌드된 rp-app 이미지로도 nginx(TLS 종료) 뒤에서 /passkey/** 가
+      # 403(Invalid CORS request)이 되지 않게, 번들에서만 한 번 더 지정한다.
+      # 이미지를 새로 빌드해 반입했다면 지워도 동작은 같다.
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
     volumes:
       # user-store JSON 영속화. Dockerfile 이 /app/data 를 appuser 소유로 만들어 두므로
       # named volume 이 그 소유권을 이어받아 컨테이너가 쓸 수 있다.

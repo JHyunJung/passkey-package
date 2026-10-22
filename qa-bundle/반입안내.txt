@@ -46,8 +46,14 @@ Passkey QA 반입 안내
         ./preflight.sh <OracleIP> 1521      점검
         sudo ./docker-install/install-docker.sh
         ./load-images.sh                    이미지 적재
-        ./setup.sh                          환경 설정 (6가지 질문)
+        ./setup.sh                          환경 설정 (nginx 방식 포함 7가지 질문)
         ./start.sh                          기동
+
+    서버에 이미 있는 nginx 를 쓰는 경우(PROXY_MODE=host, 기본)는 nginx 설정도 넣는다:
+
+        ./start.sh --nginx-conf | sudo tee /etc/nginx/conf.d/passkey-qa.conf > /dev/null
+        sudo nginx -t && sudo systemctl reload nginx
+        sudo setsebool -P httpd_can_network_connect 1     (SELinux Enforcing 일 때)
 
     그다음 admin 콘솔에서 테넌트·API키를 만들고:
 
@@ -63,7 +69,11 @@ Passkey QA 반입 안내
                                  이 번들에 DDL 은 없다. 접속 정보만 준비한다.
                                  계정 비밀번호에 작은따옴표(') 는 쓸 수 없고 끝이 \ 여도
                                  안 된다(setup.sh 가 거부, README "5. 환경 설정" 의 입력 규칙).
-  - 내부 DNS 2개 + TLS 인증서     WebAuthn 은 HTTPS 가 필수다. 두 FQDN 을 포함한
-                                 인증서를 deploy/cert/ 에 둔다(번들 nginx 가 TLS 종료).
-                                 (README "반드시 먼저 해결해야 하는 것 — HTTPS").
+  - 내부 DNS 2개 + TLS 인증서     WebAuthn 은 HTTPS 가 필수다.
+                                 host 모드: passkey·admin 도메인, 인증서는 서버 nginx 가
+                                   이미 가진 것을 쓴다(RP 는 passkey 도메인의 8443).
+                                 bundled 모드: passkey·RP 서브도메인, 두 FQDN 인증서를
+                                   deploy/cert/ 에 둔다(번들 nginx 가 TLS 종료).
+                                 (README "반드시 먼저 해결해야 하는 것 — HTTPS",
+                                  "nginx — 두 가지 방식").
                                  평문 HTTP 로는 브라우저가 패스키 등록을 거부한다.

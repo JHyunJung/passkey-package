@@ -9,6 +9,7 @@
 - [ ] SELinux Enforcing 이면 `container-selinux` 설치됨
 - [ ] `/var` 여유 20GB 이상
 - [ ] Oracle 1521 도달 확인
+- [ ] (host 모드) `8. 호스트 nginx` — nginx 설치됨, `httpd_can_network_connect = on`, 포트 8080·19090·8081 비어 있음
 
 ## B. Docker 설치
 
@@ -27,10 +28,10 @@
 스키마·계정·초기 운영자 계정은 생성 완료 전제. 이 번들에 DDL 은 없다.
 
 - [ ] Oracle 1521 도달 확인 (`./preflight.sh <OracleIP> 1521`)
-- [ ] 계정 3개 비밀번호 확보
-      (`PSK_APP_OWNER` / `PSK_APP_ADMIN_USER` / `PSK_APP_RUNTIME_USER`)
+- [ ] 계정 2개 비밀번호 확보
+      (`PSK_APP_ADMIN_USER` / `PSK_APP_RUNTIME_USER`)
       **비밀번호에 작은따옴표(`'`) 불가, 백슬래시(`\`)로 끝나면 불가** — `setup.sh` 가 입력을 거부한다(README §5 입력 규칙). DBA 에게 발급 요청할 때 미리 알린다.
-- [ ] **DDL 로 스키마를 미리 만든 경우** `flyway baseline -baselineVersion=5` 처리
+- [ ] 스키마가 `V1`~`V5` 기준으로 생성돼 있음 — 번들은 Flyway 를 쓰지 않으므로 앱이 스키마를 만들지 않는다
       (정본은 `ls core/src/main/resources/db/migration` 의 최댓값 — README §4)
 - [ ] admin 콘솔 로그인용 운영자 계정이 `admin_user` 에 존재
 
@@ -38,42 +39,56 @@
 
 - [ ] `./setup.sh` 실행 → 마지막에 `[OK] 검증 통과`
 
-  6가지만 입력하면 된다. 나머지는 유도·자동생성된다.
+  아래만 입력하면 된다. 나머지는 유도·자동생성된다.
   - Oracle 호스트 / 포트 / 서비스명
-  - 계정 3개 비밀번호
-  - passkey · RP 두 FQDN
+  - 계정 2개 비밀번호
+  - nginx 방식 — 서버에 nginx 가 이미 있으면 `host`(기본), 번들 nginx 면 `bundled`
+  - passkey FQDN, 그리고
+    host: admin FQDN · RP 포트(기본 8443) · 서버 nginx 인증서/개인키 경로 /
+    bundled: RP FQDN
   - 호스트 내부 IP (`docker0` 자동 제시, 127.0.0.1 은 거부됨)
 
-## F. HTTPS (README "반드시 먼저 해결해야 하는 것" — 가장 자주 막히는 지점)
+## F. HTTPS · nginx (README "반드시 먼저 해결해야 하는 것", "nginx — 두 가지 방식" — 가장 자주 막히는 지점)
 
-- [ ] 내부 DNS 서브도메인 2개 등록 (`passkey-qa.…`, `rp-qa.…`)
-- [ ] 두 FQDN 을 모두 포함한 인증서를 `deploy/cert/fullchain.pem`, `key.pem` 에 배치
-      (번들 nginx 가 TLS 종료)
+- [ ] 내부 DNS 2개 등록 — host: `passkey-qa.…`, `admin-qa.…` / bundled: `passkey-qa.…`, `rp-qa.…`
+- [ ] 두 도메인을 포함한 인증서
+      — host: 서버 nginx 의 인증서 경로가 `.env` 의 `TLS_CERT_FILE`·`TLS_KEY_FILE` 과 일치
+      — bundled: `deploy/cert/fullchain.pem`, `key.pem` 에 배치 (번들 nginx 가 TLS 종료)
 - [ ] 사설 CA 라면 테스트 브라우저·OS 신뢰 저장소에 등록
       (인증서 경고를 거친 상태로는 WebAuthn 이 동작하지 않음)
+
+host 모드만:
+
+- [ ] `./start.sh --nginx-conf | sudo tee /etc/nginx/conf.d/passkey-qa.conf > /dev/null`
+- [ ] `sudo nginx -t` 통과 — "conflicting server name" 경고 없음 → `sudo systemctl reload nginx`
+- [ ] SELinux Enforcing 이면 `sudo setsebool -P httpd_can_network_connect 1` (안 하면 502)
+- [ ] firewalld 활성이면 RP 포트(기본 8443/tcp) 개방
 
 ## G. 기동
 
 - [ ] `./start.sh` 실행 → `[OK] 전부 정상`
       (Redis → 앱 순서, 프로파일 지정, healthy 대기를 모두 처리한다.
        `RP_API_KEY` 또는 `RP_TENANT_ID` 가 비어 있으면 rp-app 은 자동 제외되며 정상이다.)
-- [ ] `cd deploy && docker compose logs admin-app` 에 Flyway 성공 로그
-      (admin-app 은 `start_period` 90초까지 걸리는 것이 정상)
+- [ ] `./start.sh --status` 에서 admin-app 이 healthy
+      (admin-app 은 `start_period` 90초까지 걸리는 것이 정상. 안 뜨면 `cd deploy && docker compose logs admin-app`)
 
-> compose 를 직접 치는 경우 `COMPOSE_PROFILES=proxy,admin,qa` 를 반드시 지정한다.
+> compose 를 직접 치는 경우 프로파일을 반드시 지정한다 — host: `COMPOSE_PROFILES=admin,qa`
+> + `-f docker-compose.yml -f docker-compose.host-nginx.yml` / bundled: `COMPOSE_PROFILES=proxy,admin,qa`.
 > 빠뜨리면 `passkey-app` 하나만 뜨고 나머지가 **에러 없이** 누락된다.
 
 ## H. 테넌트 · 키
 
-- [ ] admin 콘솔 로그인 성공
+- [ ] admin 콘솔 로그인 성공 — host: `https://admin-qa.…/admin/` / bundled: 서버 안에서 `http://127.0.0.1:8081/admin/`
 - [ ] 테넌트 생성 — `rpId`=도메인만, `allowedOrigins`=`https://` 포함 전체 origin
+      (`./start.sh` 가 끝에 이 환경의 값을 출력한다. host 는 `rpId`=`passkey-qa.…`,
+      `allowedOrigins`=`["https://passkey-qa.…:8443"]` — 포트까지)
 - [ ] 첫 테스트는 `mdsRequired=false`
 - [ ] API 키 발급 (`registration`, `authentication` scope) — 평문 1회만 표시
 - [ ] `./setup.sh --rp-keys` 로 값 2개 입력 후 `./start.sh rp-app`
 
 ## I. 검증
 
-- [ ] `https://rp-qa.…` 접속 — 패스키 등록 시 OS 프롬프트 표시
+- [ ] RP 접속 — host: `https://passkey-qa.…:8443` / bundled: `https://rp-qa.…` — 패스키 등록 시 OS 프롬프트 표시
 - [ ] 로그아웃 → 패스키로 로그인 성공
 - [ ] admin 콘솔 Credentials 목록에 자격증명 표시
 - [ ] (MDS 검증 대상이면) `mds_blob_cache` 에 버전 채워진 뒤 `mdsRequired=true`

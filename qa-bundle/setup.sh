@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .env 대화형 작성 — 묻는 값은 6개뿐이고 나머지는 전부 유도한다.
+# .env 대화형 작성 — 묻는 값은 몇 가지뿐이고 나머지는 전부 유도한다(README "5. 환경 설정").
 #
 #   ./setup.sh              # 질문에 답하면 deploy/.env 가 완성된다
 #   ./setup.sh --rp-keys    # 테넌트 생성 후 RP_TENANT_ID / RP_API_KEY 만 채운다
@@ -148,7 +148,7 @@ chmod 600 "$ENV_FILE"
 cat <<'INTRO'
 
 ===========================================================================
- QA 환경 설정 — 6가지만 입력하면 .env 가 완성됩니다
+ QA 환경 설정 — 몇 가지만 입력하면 .env 가 완성됩니다
 ===========================================================================
 INTRO
 
@@ -158,16 +158,35 @@ ORA_HOST=$(ask "Oracle 호스트 또는 IP")
 ORA_PORT=$(ask "Oracle 포트" "1521")
 ORA_SVC=$(ask  "Oracle 서비스명 (SID 아님)")
 echo
-echo "  ${DIM}계정 3개의 비밀번호를 입력합니다(입력은 화면에 표시되지 않습니다).${RST}"
-PW_OWNER=$(ask_secret   "PSK_APP_OWNER 비밀번호        ")
+echo "  ${DIM}계정 2개의 비밀번호를 입력합니다(입력은 화면에 표시되지 않습니다).${RST}"
 PW_ADMIN=$(ask_secret   "PSK_APP_ADMIN_USER 비밀번호   ")
 PW_RUNTIME=$(ask_secret "PSK_APP_RUNTIME_USER 비밀번호 ")
 
 echo
-echo "${DIM}--- 2/3. 도메인 ---${RST}"
-echo "  ${DIM}WebAuthn 은 HTTPS 가 필수입니다. 두 FQDN 을 포함한 인증서를 deploy/cert/ 에 둡니다.${RST}"
+echo "${DIM}--- 2/3. nginx · 도메인 ---${RST}"
+echo "  ${DIM}WebAuthn 은 HTTPS 가 필수입니다. TLS 를 어느 nginx 가 맡을지 고릅니다.${RST}"
+echo "  ${DIM}  host    : 서버에 이미 설치된 nginx 가 인증서를 갖고 받는다(번들 nginx 미사용)${RST}"
+echo "  ${DIM}  bundled : 번들 nginx 가 TLS 를 맡는다 — 두 FQDN 인증서를 deploy/cert/ 에 둔다${RST}"
+while :; do
+  MODE=$(ask "nginx 방식 (host / bundled)" "host")
+  [[ $MODE == host || $MODE == bundled ]] && break
+  echo "     ${DIM}host 또는 bundled 를 입력하세요.${RST}" >&2
+done
 PASSKEY_FQDN=$(ask "passkey 서버 FQDN" "passkey-qa.example.internal")
-RP_FQDN=$(ask      "RP 데모 FQDN     " "rp-qa.example.internal")
+if [[ $MODE == host ]]; then
+  ADMIN_FQDN=$(ask "admin 콘솔 FQDN  " "admin-qa.example.internal")
+  echo "  ${DIM}RP 데모는 passkey FQDN 의 다른 포트로 노출합니다 — https://<passkey FQDN>:<포트>${RST}"
+  while :; do
+    RP_PORT=$(ask "RP 데모 포트     " "8443")
+    [[ $RP_PORT =~ ^[0-9]+$ && $RP_PORT != 443 ]] && break
+    echo "     ${DIM}443 이 아닌 숫자 포트를 입력하세요(passkey 와 같은 도메인이라 포트가 달라야 합니다).${RST}" >&2
+  done
+  echo "  ${DIM}호스트 nginx 가 쓰는 인증서 경로(passkey FQDN 포함). 기존 nginx 설정의 값을 씁니다.${RST}"
+  CERT_FILE=$(ask "인증서(fullchain) 경로" "/etc/pki/nginx/server.crt")
+  KEY_FILE=$(ask  "개인키 경로          " "/etc/pki/nginx/private/server.key")
+else
+  RP_FQDN=$(ask      "RP 데모 FQDN     " "rp-qa.example.internal")
+fi
 
 echo
 echo "${DIM}--- 3/3. Redis ---${RST}"
@@ -181,24 +200,37 @@ if [[ $REDIS_IP == 127.0.0.1 || $REDIS_IP == localhost ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 기록 — 입력 6종에서 13개 항목을 유도한다
+# 기록 — 입력값에서 .env 항목들을 유도한다
 # ---------------------------------------------------------------------------
 echo
 echo "${DIM}--- 기록 중 ---${RST}"
 
 put DB_URL "jdbc:oracle:thin:@//${ORA_HOST}:${ORA_PORT}/${ORA_SVC}"
-put DB_OWNER_PASSWORD   "$PW_OWNER"
 put DB_ADMIN_PASSWORD   "$PW_ADMIN"
 put DB_RUNTIME_PASSWORD "$PW_RUNTIME"
 
-# FQDN 입력 2개에서 4곳이 유도된다 — passkey FQDN 하나가 아래 3곳
-# (PASSKEY_SERVER_NAME / ISSUER_BASE / ADMIN_INVITE_BASE_URL)을 채우고,
-# RP FQDN 은 별도 입력이라 RP_SERVER_NAME 1곳만 채운다.
-# 손편집 시 한 곳만 고치는 사고를 막는다.
-put PASSKEY_SERVER_NAME   "$PASSKEY_FQDN"
-put ISSUER_BASE           "https://${PASSKEY_FQDN}"
-put ADMIN_INVITE_BASE_URL "https://${PASSKEY_FQDN}"
-put RP_SERVER_NAME        "$RP_FQDN"
+# FQDN 입력에서 여러 곳이 함께 유도된다. 손편집 시 한 곳만 고치는 사고를 막는다.
+#   passkey FQDN → PASSKEY_SERVER_NAME / ISSUER_BASE (+ bundled 는 ADMIN_INVITE_BASE_URL)
+#   admin FQDN   → ADMIN_SERVER_NAME / ADMIN_INVITE_BASE_URL          (host)
+#   RP FQDN      → RP_SERVER_NAME                                      (bundled)
+# 쓰지 않는 방식의 값은 비운다 — 템플릿 자리표시자가 남으면 start.sh --check 가 막는다.
+put PROXY_MODE          "$MODE"
+put PASSKEY_SERVER_NAME "$PASSKEY_FQDN"
+put ISSUER_BASE         "https://${PASSKEY_FQDN}"
+if [[ $MODE == host ]]; then
+  put ADMIN_SERVER_NAME     "$ADMIN_FQDN"
+  put ADMIN_INVITE_BASE_URL "https://${ADMIN_FQDN}"
+  put RP_PUBLIC_PORT        "$RP_PORT"
+  put TLS_CERT_FILE         "$CERT_FILE"
+  put TLS_KEY_FILE          "$KEY_FILE"
+  put RP_SERVER_NAME        ""
+else
+  # admin 은 nginx 뒤가 아니라 127.0.0.1:8081 이다. 메일을 쓰려면 .env 에서 콘솔 주소로 고친다
+  # (README "5. 환경 설정").
+  put ADMIN_SERVER_NAME     ""
+  put ADMIN_INVITE_BASE_URL "https://${PASSKEY_FQDN}"
+  put RP_SERVER_NAME        "$RP_FQDN"
+fi
 
 put REDIS_HOST      "$REDIS_IP"
 put REDIS_BIND_ADDR "$REDIS_IP"
@@ -221,9 +253,17 @@ ok "시크릿 3종 기록"
 echo
 echo "==========================================================================="
 if ./start.sh --check; then
-  cat <<EOF
+  echo
+  echo "다음:  ./start.sh"
+  if [[ $MODE == host ]]; then
+    cat <<'EOF'
 
-다음:  ./start.sh
+  호스트 nginx 에 설정을 넣는다 (README "nginx — 두 가지 방식")
+      ./start.sh --nginx-conf | sudo tee /etc/nginx/conf.d/passkey-qa.conf > /dev/null
+      sudo nginx -t && sudo systemctl reload nginx
+EOF
+  fi
+  cat <<'EOF'
 
   기동 후 admin 콘솔에서 테넌트와 API 키를 만든 뒤
       ./setup.sh --rp-keys      값 2개 입력
