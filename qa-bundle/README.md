@@ -109,6 +109,8 @@ sudo firewall-cmd --reload
 
 이미지를 재빌드하면 `images/` 의 `tar.gz` 와 `SHA256SUMS` 를 **함께** 갱신한다 —
 `load-images.sh` 가 `sha256sum -c` 로 검증하므로 해시가 어긋나면 적재가 실패한다.
+리포지토리의 `scripts/build-images.sh` 가 amd64 빌드부터 두 파일 갱신까지 한 번에
+한다(서버가 아니라 빌드하는 PC 에서 실행).
 
 ### 4. DB 확인
 

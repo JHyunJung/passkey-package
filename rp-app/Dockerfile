@@ -1,9 +1,10 @@
 # rp-app — 고객사 연동 샘플 앱. QA 환경에서만 기동한다(prod 스택 제외).
 # syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
 # 고객사는 이 앱을 참고해 자사 서비스에 맞게 변형하므로 배포용 이미지가 아니다.
-#   docker build -t rp-app:0.0.1-SNAPSHOT -f rp-app/Dockerfile .
+#   docker build --platform linux/amd64 -t rp-app:0.0.1-SNAPSHOT -f rp-app/Dockerfile .
 
-FROM eclipse-temurin:17-jdk AS build
+# 빌드 단계를 $BUILDPLATFORM 으로 돌리는 이유는 passkey-app/Dockerfile 주석 참고.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:17-jdk AS build
 WORKDIR /src
 
 COPY gradlew ./
