@@ -56,22 +56,39 @@ profile 로 서버 역할을 하나의 `docker-compose.yml` 에서 나눈다(`de
 ## 1. 이미지 빌드
 
 리포지토리 루트에서 실행한다 — 멀티모듈 빌드라 `core`/`webauthn` 소스가 빌드
-컨텍스트에 포함돼야 한다.
+컨텍스트에 포함돼야 한다. 서버는 x86_64 이므로 **반드시 `--platform linux/amd64`
+로 빌드한다.** ARM Mac(Apple Silicon)에서 이 옵션을 빼면 arm64 이미지가 만들어져
+서버에서 `exec format error` 로 기동하지 않는다.
 
 ```bash
-docker build -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
-docker build -t admin-app:0.0.1-SNAPSHOT   -f admin-app/Dockerfile .
-docker build -t rp-app:0.0.1-SNAPSHOT      -f rp-app/Dockerfile .    # QA 만
+scripts/build-images.sh              # 3개 빌드 + 아키텍처 확인 + qa-bundle/images 저장·SHA256SUMS 갱신
+scripts/build-images.sh passkey-app  # 특정 앱만
+NO_SAVE=1 scripts/build-images.sh    # 빌드와 확인만 (레지스트리로 push 할 때)
+```
+
+스크립트 없이 직접 빌드할 때:
+
+```bash
+docker build --platform linux/amd64 -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
+docker build --platform linux/amd64 -t admin-app:0.0.1-SNAPSHOT   -f admin-app/Dockerfile .
+docker build --platform linux/amd64 -t rp-app:0.0.1-SNAPSHOT      -f rp-app/Dockerfile .    # QA 만
+docker image inspect --format '{{.Os}}/{{.Architecture}}' passkey-app:0.0.1-SNAPSHOT     # linux/amd64 확인
 ```
 
 각 Dockerfile 은 `eclipse-temurin:17-jdk` 로 Gradle 빌드 → `eclipse-temurin:17-jre`
-런타임으로 넘기는 멀티스테이지 구성이다. bootJar 산출물은 `deploy/<module>.jar` 로
+런타임으로 넘기는 멀티스테이지 구성이다. 빌드 단계는 `FROM --platform=$BUILDPLATFORM`
+이라 빌드하는 머신의 아키텍처로 돈다 — jar 는 아키텍처와 무관하므로 결과는 같고,
+ARM Mac 에서도 Gradle 이 에뮬레이션 없이 돌아 빠르다. `--platform linux/amd64` 는
+런타임 단계에만 적용된다. bootJar 산출물은 `deploy/<module>.jar` 로
 떨어지도록 각 모듈 `build.gradle.kts` 에서 지정돼 있고, 런타임 이미지는 비루트
 사용자(uid 1001)로 실행한다.
 
 이미지 태그는 `<module>:0.0.1-SNAPSHOT` 처럼 버전을 명시한다. **`latest` 는 쓰지
 않는다** — 서버별로 어떤 버전이 도는지 추적할 수 없게 된다. 새 버전을 배포할 때는
-`.env` 의 `IMAGE_TAG` 를 올리고 태그를 그 값에 맞춰 빌드한다.
+`.env` 의 `IMAGE_TAG` 를 올리고 태그를 그 값에 맞춰 빌드한다
+(`IMAGE_TAG=<값> scripts/build-images.sh`). QA 반입 번들은
+`qa-bundle/load-images.sh` 의 `images_of` 와 `qa-bundle/deploy/.env.qa-template` 에도
+태그가 적혀 있어 함께 고쳐야 한다 — 스크립트가 어긋나면 경고한다.
 
 세 Dockerfile 모두 `# syntax=docker/dockerfile:1` 지시자를 **의도적으로 쓰지
 않는다.** 이 지시자를 넣으면 buildx 가 `docker.io` 에서 별도 프론트엔드 이미지를

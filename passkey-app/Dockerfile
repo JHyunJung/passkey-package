@@ -3,9 +3,14 @@
 # docker/dockerfile 프론트엔드 이미지를 받아올 이유가 없고, 이 환경에서는 그 pull 이
 # DeadlineExceeded 로 실패해 Dockerfile 파싱 전에 빌드를 막았다.
 # 빌드 컨텍스트는 리포지토리 루트다(멀티모듈: core/webauthn 소스가 필요).
-#   docker build -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
+# 서버가 x86_64 이므로 --platform linux/amd64 로 빌드한다. 앱 이미지 3개를 한 번에
+# 빌드·저장하려면 scripts/build-images.sh 를 쓴다.
+#   docker build --platform linux/amd64 -t passkey-app:0.0.1-SNAPSHOT -f passkey-app/Dockerfile .
 
-FROM eclipse-temurin:17-jdk AS build
+# 빌드 단계는 빌드하는 머신의 아키텍처($BUILDPLATFORM)로 돌린다. jar 는 아키텍처와
+# 무관하므로 결과는 같고, ARM Mac 에서 amd64 이미지를 만들 때 Gradle 이 에뮬레이션
+# 없이 돌아 훨씬 빠르다. --platform 으로 지정한 아키텍처는 아래 실행 단계(jre)에만 적용된다.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:17-jdk AS build
 WORKDIR /src
 
 # 의존성 레이어 캐싱: 빌드 스크립트만 먼저 복사해 의존성을 받아두면

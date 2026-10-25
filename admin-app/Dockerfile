@@ -2,9 +2,11 @@
 # syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
 # admin-ui(React)는 build.gradle.kts 의 buildUi 태스크가 Node 18 을 자동
 # 다운로드해 빌드하고 jar 의 static/admin 에 번들한다 — 별도 Node 설치 불필요.
-#   docker build -t admin-app:0.0.1-SNAPSHOT -f admin-app/Dockerfile .
+#   docker build --platform linux/amd64 -t admin-app:0.0.1-SNAPSHOT -f admin-app/Dockerfile .
 
-FROM eclipse-temurin:17-jdk AS build
+# 빌드 단계를 $BUILDPLATFORM 으로 돌리는 이유는 passkey-app/Dockerfile 주석 참고.
+# Node 도 빌드 머신 아키텍처용으로 받지만 결과물(정적 파일)은 아키텍처와 무관하다.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:17-jdk AS build
 WORKDIR /src
 
 COPY gradlew ./
