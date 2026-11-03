@@ -396,16 +396,19 @@ class TenantDetailPageControllerTest {
         when(tenants.get(OTHER.toString())).thenThrow(new BusinessException(ErrorCode.ACCESS_DENIED, "RP_ADMIN cannot access tenant " + OTHER));
         String secret = "Acme";
         for (String url : List.of("/admin/tenants/" + OTHER + "?tab=api-keys", "/admin/tenants/" + OTHER + "?tab=apikeys", "/admin/tenants/" + OTHER)) {
-            // 직접 접근: 오류 화면(403), 테넌트 내용 없음
+            // 직접 접근: 403 + 인라인 오류(TSX 의 LoadError), 테넌트 내용 없음
             MvcResult full = getPage(url, rp(T1));
             assertThat(full.getResponse().getStatus()).as(url).isEqualTo(403);
-            String body = full.getResponse().getContentAsString(StandardCharsets.UTF_8);
-            assertThat(body).doesNotContain(secret).doesNotContain("passkey.acme.com").doesNotContain("kpi");
-            // boost 이동(HX-Request): 403 + 오류 토스트, 본문 없음
+            Document fd = doc(full);
+            assertThat(fd.select("main [role=alert]").text()).contains("권한이 없습니다");
+            assertThat(fd.select("main").text()).doesNotContain(secret).doesNotContain("passkey.acme.com");
+            assertThat(fd.select("main .kpi, main [role=tab], main h1")).isEmpty();
+            // boost 이동(HX-Request): 4xx 는 스왑되지 않으므로 200 + 같은 인라인 오류, 데이터 없음
             MvcResult boosted = getFragment(url, rp(T1));
-            assertThat(boosted.getResponse().getStatus()).as(url).isEqualTo(403);
-            assertThat(boosted.getResponse().getContentAsString()).isEmpty();
-            assertThat(boosted.getResponse().getHeader("HX-Trigger")).contains("toast");
+            assertThat(boosted.getResponse().getStatus()).as(url).isEqualTo(200);
+            Document bd = doc(boosted);
+            assertThat(bd.select("main [role=alert]").text()).contains("권한이 없습니다");
+            assertThat(bd.select("main").text()).doesNotContain(secret).doesNotContain("passkey.acme.com");
         }
         for (String tab : List.of("overview", "apikeys", "api-keys")) {
             String url = "/admin/_/tenants/" + OTHER + "/tab/" + tab;
@@ -686,6 +689,63 @@ class TenantDetailPageControllerTest {
         MvcResult boosted = getFragment("/admin/tenants/nope", platform());
         assertThat(boosted.getResponse().getStatus()).isEqualTo(200);
         assertThat(doc(boosted).select(".empty__title").text()).isEqualTo("Tenant를 찾을 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("알 수 없는 서버 예외의 원문(SQL 등)은 어떤 화면에도 싣지 않는다(퍼널 카드·상세 LoadError·체인 카드)")
+    void unknownExceptionMessageNeverRendered() throws Exception {
+        when(funnel.get(eq(T1), anyInt())).thenThrow(new IllegalStateException("SELECT secret FROM x"));
+        MvcResult r = getPage("/admin/tenants/" + T1, platform());
+        assertThat(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("secret");
+        assertThat(doc(r).select("#tenant-tab [role=alert]").text()).contains("서버가 잠시 응답하지 않습니다").contains("HTTP 500");
+
+        when(tenants.get(T1.toString())).thenThrow(new IllegalStateException("SELECT secret FROM y"));
+        assertThat(getPage("/admin/tenants/" + T1, platform()).getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("secret");
+        org.mockito.Mockito.doReturn(ApiResponse.ok(view("ACTIVE"))).when(tenants).get(T1.toString());
+
+        when(chain.verifyTenant(T1.toString())).thenThrow(new IllegalStateException("SELECT secret FROM z"));
+        assertThat(getFragment("/admin/_/tenants/" + T1 + "/overview/chain", platform()).getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("secret");
+    }
+
+    @Test
+    @DisplayName("탭 영역을 바꾸는 모든 요청은 같은 hx-sync 그룹(#tenant-tab:replace): 탭 링크·퍼널 다시 시도·load 컨테이너, 탭 링크는 data-guard-dirty")
+    void everyTabRequesterSharesSyncGroup() throws Exception {
+        Document d = page("/admin/tenants/" + T1, platform());
+        for (Element t : d.select("[role=tab][data-tab]")) {
+            assertThat(t.attr("hx-sync")).isEqualTo("#tenant-tab:replace");
+            assertThat(t.hasAttr("data-guard-dirty")).isTrue();
+        }
+        when(funnel.get(eq(T1), anyInt())).thenThrow(new IllegalStateException("x"));
+        Element retry = page("/admin/tenants/" + T1, platform()).selectFirst("#tenant-tab [role=alert] button[hx-get]");
+        assertThat(retry.attr("hx-sync")).isEqualTo("#tenant-tab:replace");
+        assertThat(retry.attr("hx-target")).isEqualTo("#tenant-tab");
+        assertThat(page("/admin/tenants/" + T1 + "?tab=audit", platform()).selectFirst("#tenant-tab").attr("hx-sync")).isEqualTo("#tenant-tab:replace");
+    }
+
+    @Test
+    @DisplayName("조회 실패 화면의 다시 시도 주소는 idOrSlug 를 경로 조각으로 인코딩한다")
+    void retryUrlEncodesPathSegment() throws Exception {
+        when(tenants.get("a b?c")).thenThrow(new IllegalStateException("x"));
+        Element retry = doc(getPage(URI.create("/admin/tenants/a%20b%3Fc").toString(), platform())).selectFirst("main button[hx-get]");
+        assertThat(retry.attr("hx-get")).isEqualTo("/admin/tenants/a%20b%3Fc");
+    }
+
+    @Test
+    @DisplayName("확인 요청(X-Confirm)의 실패는 토스트 없이 HX-Trigger confirmError 로만, 일반 htmx 요청은 토스트. 확인 버튼은 X-Confirm 헤더를 싣는다")
+    void confirmFailureIsInlineOnly() throws Exception {
+        when(tenants.suspend(eq(T1.toString()), any())).thenThrow(new IllegalStateException("SELECT secret"));
+        MockHttpServletRequestBuilder b = post(URI.create("/admin/_/tenants/" + T1 + "/suspend")).with(authentication(platform())).with(csrf())
+                .header("HX-Request", "true").header("X-Confirm", "1");
+        MockHttpServletResponse res = mvc.perform(b).andReturn().getResponse();
+        assertThat(res.getStatus()).isEqualTo(500);
+        String h = res.getHeader("HX-Trigger");
+        assertThat(h).contains("confirmError").doesNotContain("\"toast\"").doesNotContain("secret");
+        assertThat(res.getContentAsString()).isEmpty();
+        MvcResult plain = doPost("/admin/_/tenants/" + T1 + "/suspend", platform(), true, null);
+        assertThat(plain.getResponse().getHeader("HX-Trigger")).contains("\"toast\"").doesNotContain("confirmError");
+
+        Element confirm = page("/admin/tenants/" + T1, platform()).selectFirst("main template button[data-confirm]");
+        assertThat(confirm.attr("hx-headers").replace(" ", "")).isEqualTo("{\"X-Confirm\":\"1\"}");
     }
 
     @Test

@@ -81,7 +81,9 @@ public class WebExceptionAdvice {
         if (Htmx.isHtmx(req)) {
             // 규칙 A: 실제 오류 상태를 유지한다. htmx 는 4xx/5xx 를 스왑하지 않고 afterRequest(successful=false)를 올리며,
             // HX-Trigger 헤더는 오류 응답에서도 처리된다(htmx 2.0.4 handleAjaxResponse).
-            Toasts.error(res, info.toastMessage(), rawDetail(e, status, info), MDC.get("traceId"));
+            // 확인 대화상자(X-Confirm)의 요청은 토스트 없이 대화상자 안 인라인 오류로만 알린다(confirmError).
+            if (Toasts.isConfirm(req)) Toasts.confirmError(res, info.toastMessage(), rawDetail(e, status, info), MDC.get("traceId"));
+            else Toasts.error(res, info.toastMessage(), rawDetail(e, status, info), MDC.get("traceId"));
             res.setStatus(status);
             return null; // null = 응답 처리 완료(본문 없음)
         }

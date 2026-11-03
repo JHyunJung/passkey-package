@@ -90,21 +90,27 @@
     if (d.passing()) { d.endPass(); return; } // 이동 확인에서 "이동"을 누른 일반 이동 한 번
     if (Alpine.store('dirty').needsUnloadPrompt()) { e.preventDefault(); e.returnValue = ''; }
   });
-  // hx-boost 이동(GET): dirty 면 요청을 취소하고 이동 확인(unsavedGuard)을 띄운다. 주소가 현재 화면(경로+쿼리)이면 건너뛴다(useUnsavedGuard 의 blocker 조건).
+  // hx-boost 이동(GET) + 본문 영역을 바꾸는 조각 GET(요소나 조상에 data-guard-dirty): dirty 면 요청을 취소하고 이동 확인(unsavedGuard)을 띄운다.
+  // 탭 링크처럼 명시적 hx-get 인 요소는 boost 가 아니고 클릭 preventDefault 로는 htmx 가 멈추지 않으므로 이 표시로 같은 길을 태운다.
+  // "이동"은 요소가 <a href> 면 그 href(화면 주소, 전체 페이지 이동), 아니면 요청 주소로 새 boost 이동(adminNavigate)을 한다 — 조각을 직접 다시 보내지 않는다.
+  // 주소가 현재 화면(경로+쿼리)이면 건너뛴다(useUnsavedGuard 의 blocker 조건).
   document.addEventListener('htmx:beforeRequest', function (e) {
     const d = e.detail || {};
     const cfg = d.requestConfig || {};
-    if (!window.Alpine || !(d.boosted || cfg.boosted)) return;
+    if (!window.Alpine) return;
+    const elt = d.elt || e.target;
+    const marked = elt && elt.closest ? elt.closest('[data-guard-dirty]') : null;
+    if (!(d.boosted || cfg.boosted || marked)) return;
     if (String(cfg.verb || '').toLowerCase() !== 'get') return;
     if (Alpine.store('dirty').passing()) { Alpine.store('dirty').endPass(); return; } // 확정된 이동 한 번만 통과(일회성)
     if (!Alpine.store('dirty').needsGuard()) return;
     const pi = d.pathInfo || {};
-    const u = new URL(pi.finalRequestPath || pi.requestPath || '', window.location.href);
+    const link = !d.boosted && !cfg.boosted && elt.closest ? elt.closest('a[href]') : null;
+    const u = new URL(link ? link.getAttribute('href') : (pi.finalRequestPath || pi.requestPath || ''), window.location.href);
     if (u.pathname === window.location.pathname && u.search === window.location.search) return;
     e.preventDefault();
     window.dispatchEvent(new CustomEvent('unsaved-ask', { detail: { href: u.href } }));
   });
-  // 저장 성공(서버 HX-Trigger: saved): 수동 표시(mark)를 지운다. saveBar 폼은 자기 요청 결과로 기준선을 갱신해 스스로 센다.
   document.addEventListener('saved', function () { if (window.Alpine) Alpine.store('dirty').clear(); });
   // 이동이 끝나 새 화면이 들어오면(boost 이동·뒤로 가기) 이전 화면의 dirty 표시를 버린다.
   document.addEventListener('htmx:afterSwap', function (e) { if (e.detail && e.detail.boosted && window.Alpine) Alpine.store('dirty').reset(); });

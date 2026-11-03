@@ -57,12 +57,15 @@ document.addEventListener('alpine:init', () => {
 
   function isConfirm(e) { return !!(e.target && e.target.hasAttribute && e.target.hasAttribute('data-confirm')); }
 
-  /** 오류 응답의 HX-Trigger 토스트 메시지(WebExceptionAdvice 가 정한 쉬운 문구). 없으면 기본 문구. */
+  /** 오류 응답의 쉬운 문구: HX-Trigger 의 confirmError(확인 요청, X-Confirm) → toast(호환) → 기본 문구. */
   function toastMessage(xhr) {
     try {
       const h = xhr && xhr.getResponseHeader && xhr.getResponseHeader('HX-Trigger');
-      const m = h && JSON.parse(h).toast && JSON.parse(h).toast.message;
-      if (m) return m;
+      if (h) {
+        const t = JSON.parse(h);
+        const m = (t.confirmError && t.confirmError.message) || (t.toast && t.toast.message);
+        if (m) return m;
+      }
     } catch (err) { /* 기본 문구 */ }
     return '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.';
   }

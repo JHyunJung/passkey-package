@@ -42,7 +42,17 @@ public final class ErrorMessages {
         return describe(status, serverMessage, null);
     }
 
+    /**
+     * 알려진 예외는 상태별 문구, 알 수 없는 예외(DataAccessException·NPE 등 서버 내부 예외)는 5xx 문구("서버가 잠시 응답하지 않습니다" + HTTP 500)다.
+     * 내부 예외의 원문 메시지(SQL·클래스 이름 등)는 어떤 화면(LoadError·카드·복사 텍스트)에도 싣지 않는다.
+     */
     public static Info describe(Throwable e) {
+        Info known = known(e);
+        return known != null ? known : describe(500, null, null);
+    }
+
+    /** 알려진 예외의 문구. 알 수 없는 예외는 null. */
+    private static Info known(Throwable e) {
         if (e instanceof BusinessException be) {
             return describe(be.getErrorCode().getStatus().value(), be.getMessage(), be.getErrorCode().getCode());
         }
@@ -58,7 +68,7 @@ public final class ErrorMessages {
         if (e instanceof IOException || e instanceof UncheckedIOException) {
             return friendly("네트워크에 연결할 수 없습니다", "연결 상태를 확인한 뒤 다시 시도하세요.", null, null);
         }
-        return new Info("알 수 없는 오류가 발생했습니다", e == null || e.getMessage() == null ? "" : e.getMessage(), null, null, true);
+        return null;
     }
 
     /**
@@ -78,7 +88,8 @@ public final class ErrorMessages {
     public static boolean isTransient(Throwable e) {
         if (e == null) return false;
         if (e instanceof IOException || e instanceof UncheckedIOException || e instanceof TimeoutException) return true;
-        Integer s = describe(e).httpStatus();
+        Info k = known(e);
+        Integer s = k == null ? null : k.httpStatus();
         return s != null && s >= 500;
     }
 

@@ -108,10 +108,14 @@ class ErrorMessagesTest {
     }
 
     @Test
-    @DisplayName("메시지 없는 알 수 없는 예외의 detail 은 빈 문자열(TS 의 e.message 가 빈 값일 때와 같다)")
-    void unknownWithNullMessageHasEmptyDetail() {
-        ErrorMessages.Info i = ErrorMessages.describe(new RuntimeException());
-        assertThat(i.title()).isEqualTo("알 수 없는 오류가 발생했습니다");
-        assertThat(i.detail()).isEmpty();
+    @DisplayName("알 수 없는 서버 예외는 5xx 문구(HTTP 500)이고 원문 메시지를 싣지 않는다")
+    void unknownExceptionNeverExposesMessage() {
+        for (Throwable t : new Throwable[] {new RuntimeException(), new IllegalStateException("SELECT secret FROM users"), new NullPointerException("x.y")}) {
+            ErrorMessages.Info i = ErrorMessages.describe(t);
+            assertThat(i.title()).isEqualTo("서버가 잠시 응답하지 않습니다");
+            assertThat(i.httpStatus()).isEqualTo(500);
+            assertThat(i.detail()).doesNotContain("secret").doesNotContain("x.y");
+            assertThat(i.detailIsRaw()).isFalse();
+        }
     }
 }

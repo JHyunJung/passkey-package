@@ -36,8 +36,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.time.Clock;
 import java.time.Instant;
@@ -74,7 +76,6 @@ public class TenantDetailPageController {
 
     static final String PAGE_BASE = "/admin/tenants/";
     static final String FRAG_BASE = "/admin/_/tenants/";
-    static final String TAB_TARGET = "tenant-tab";
 
     /** TenantDetailPage.tsx 의 TENANT_TABS (id, 라벨). 첫 항목이 기본이다. */
     static final List<String[]> TABS = List.of(
@@ -195,24 +196,15 @@ public class TenantDetailPageController {
         try {
             t = load(idOrSlug);
         } catch (BusinessException e) {
-            if (e.getErrorCode() != ErrorCode.TENANT_NOT_FOUND) throw e; // 403 등은 advice 가 처리
-            model.addAttribute("breadcrumbs", Crumbs.tenant(me.platform(), idOrSlug, null, active));
-            model.addAttribute("notFound", true);
-            res.setStatus(Htmx.isHtmx(req) ? HttpServletResponse.SC_OK : HttpServletResponse.SC_NOT_FOUND);
-            return PAGE_VIEW;
-        } catch (AccessDeniedException e) {
-            throw e;
+            if (e.getErrorCode() == ErrorCode.TENANT_NOT_FOUND) {
+                model.addAttribute("breadcrumbs", Crumbs.tenant(me.platform(), idOrSlug, null, active));
+                model.addAttribute("notFound", true);
+                res.setStatus(Htmx.isHtmx(req) ? HttpServletResponse.SC_OK : HttpServletResponse.SC_NOT_FOUND);
+                return PAGE_VIEW;
+            }
+            return loadFailed(e, idOrSlug, tab, active, me, req, res, model);
         } catch (RuntimeException e) {
-            log.warn("[tenant-detail] load failed: {}", e.toString());
-            model.addAttribute("breadcrumbs", Crumbs.tenant(me.platform(), idOrSlug, null, active));
-            model.addAttribute("loadError", e);
-            Map<String, Object> retry = new LinkedHashMap<>();
-            retry.put("hx-get", PAGE_BASE + idOrSlug + (tab == null ? "" : "?tab=" + active));
-            retry.put("hx-target", "body");
-            retry.put("hx-swap", "innerHTML");
-            retry.put("hx-push-url", "false");
-            model.addAttribute("retryAttrs", retry);
-            return PAGE_VIEW;
+            return loadFailed(e, idOrSlug, tab, active, me, req, res, model);
         }
 
         model.addAttribute("t", t);
@@ -222,7 +214,8 @@ public class TenantDetailPageController {
         model.addAttribute("tabAttrsLoad", Map.of(
                 "hx-get", FRAG_BASE + t.id() + "/tab/" + active,
                 "hx-trigger", "load",
-                "hx-swap", "innerHTML"));
+                "hx-swap", "innerHTML",
+                "hx-sync", TenantTabs.SYNC));
         model.addAttribute("tabLazy", !"overview".equals(active));
         UUID tid = UUID.fromString(t.id());
         Integer expiring = expiringKeys(tid);
@@ -236,6 +229,27 @@ public class TenantDetailPageController {
         }
         if (!"overview".equals(active)) return PAGE_VIEW; // 다른 탭의 내용은 탭 조각이 읽는다(개요 데이터를 미리 읽지 않는다)
         populateOverview(model, t, me, expiring);
+        return PAGE_VIEW;
+    }
+
+    /**
+     * 404 가 아닌 모든 조회 실패(403·5xx 포함)는 TSX 처럼 인라인 LoadError 로 그린다(데이터 없음, 다시 시도). 문구는 {@code ErrorMessages}
+     * (알 수 없는 예외의 원문은 싣지 않는다). 상태: 직접 접근의 403 은 403, 그 밖에는 200(boost 가 4xx/5xx 를 스왑하지 않으므로).
+     */
+    private String loadFailed(RuntimeException e, String idOrSlug, String tab, String active, CurrentAdmin me,
+                              HttpServletRequest req, HttpServletResponse res, Model model) {
+        log.warn("[tenant-detail] load failed: {}", e.toString());
+        Integer status = ErrorMessages.describe(e).httpStatus();
+        if (status != null && status == HttpServletResponse.SC_FORBIDDEN && !Htmx.isHtmx(req)) res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        model.addAttribute("breadcrumbs", Crumbs.tenant(me.platform(), idOrSlug, null, active));
+        model.addAttribute("loadError", e);
+        String url = PAGE_BASE + UriUtils.encodePathSegment(idOrSlug, StandardCharsets.UTF_8) + (tab == null ? "" : "?tab=" + active);
+        Map<String, Object> retry = new LinkedHashMap<>();
+        retry.put("hx-get", url);
+        retry.put("hx-target", "body");
+        retry.put("hx-swap", "innerHTML");
+        retry.put("hx-push-url", "false");
+        model.addAttribute("retryAttrs", retry);
         return PAGE_VIEW;
     }
 
@@ -341,11 +355,7 @@ public class TenantDetailPageController {
         model.addAttribute("funnelError", funnelError);
         model.addAttribute("regKpi", rateKpi(f, funnelError, true));
         model.addAttribute("authKpi", rateKpi(f, funnelError, false));
-        Map<String, Object> retry = new LinkedHashMap<>();
-        retry.put("hx-get", FRAG_BASE + t.id() + "/tab/overview");
-        retry.put("hx-target", "#" + TAB_TARGET);
-        retry.put("hx-swap", "innerHTML");
-        retry.put("hx-push-url", "false");
+        Map<String, Object> retry = TenantTabs.requesterAttrs(FRAG_BASE + t.id() + "/tab/overview");
         model.addAttribute("funnelRetry", retry);
 
         model.addAttribute("events", recentEvents(tid, me));
@@ -456,10 +466,11 @@ public class TenantDetailPageController {
             // 탭 클릭 = 조각 교체 + 주소 갱신. 활성 표시·마지막 브레드크럼은 ui.js(htmx:afterRequest)가 data-* 로 바꾼다.
             Map<String, Object> attrs = new LinkedHashMap<>();
             attrs.put("hx-get", FRAG_BASE + tenantId + "/tab/" + id);
-            attrs.put("hx-target", "#" + TAB_TARGET);
+            attrs.put("hx-target", "#" + TenantTabs.TARGET_ID);
             attrs.put("hx-swap", "innerHTML");
             attrs.put("hx-push-url", PAGE_BASE + tenantId + "?tab=" + id);
-            attrs.put("hx-sync", "#" + TAB_TARGET + ":replace");
+            attrs.put("hx-sync", TenantTabs.SYNC);
+            attrs.put("data-guard-dirty", "true"); // 저장 안 한 변경이 있으면 app.js 가 요청을 취소하고 이동 확인을 띄운다
             attrs.put("data-tab", id);
             attrs.put("data-label", def[1]);
             m.put("attrs", attrs);
@@ -488,7 +499,7 @@ public class TenantDetailPageController {
     // ── 도우미 ──────────────────────────────────────────────
 
     private TenantDetail load(String idOrSlug) {
-        return TenantDetail.from(tenants.get(idOrSlug).data());
+        return TenantDetail.from(TenantTabs.load(tenants, idOrSlug));
     }
 
     static boolean knownTab(String key) {

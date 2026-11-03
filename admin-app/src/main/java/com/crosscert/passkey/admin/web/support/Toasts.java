@@ -46,6 +46,30 @@ public final class Toasts {
         write(res, "error", message, detail, traceId);
     }
 
+    /** 확인 요청(confirmDialog 의 확인 버튼)임을 알리는 요청 헤더. 값은 "1". */
+    public static final String CONFIRM_HEADER = "X-Confirm";
+
+    /** 확인 요청의 요청 헤더가 있는지. */
+    public static boolean isConfirm(jakarta.servlet.http.HttpServletRequest req) {
+        return "1".equals(req.getHeader(CONFIRM_HEADER));
+    }
+
+    /**
+     * 확인 요청의 실패 안내. {@code HX-Trigger: {"confirmError":{"message","detail","traceId"}}} — 토스트가 아니라 열려 있는
+     * confirmDialog 안의 인라인 오류로만 보인다(토스트 중복 없음). message 는 쉬운 문구, detail·traceId 는 선택.
+     */
+    public static void confirmError(HttpServletResponse res, String message, String detail, String traceId) {
+        try {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("message", message == null ? "" : message);
+            if (detail != null && !detail.isEmpty()) m.put("detail", detail);
+            if (traceId != null && !traceId.isEmpty()) m.put("traceId", traceId);
+            res.setHeader(HX_TRIGGER, JSON.writeValueAsString(Map.of("confirmError", m)));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("confirmError header serialization failed", e);
+        }
+    }
+
     /**
      * 제목이 있는 오류 토스트(errorToast.ts: title=무엇이 실패했는지, message=쉬운 문구). 토스트는 제목을 크게, message 를 작게 보인다.
      */
