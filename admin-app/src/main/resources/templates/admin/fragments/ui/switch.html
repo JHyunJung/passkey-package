@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Switch (← ui/Switch.tsx)
+  th:replace="~{admin/fragments/ui/switch :: switch(label, checked, disabled, attrs)}"
+    label 문자열, checked true | false, disabled true | false | null
+    attrs input 에 붙는 속성 Map(name, value, hx-post, x-model 등) 또는 null
+  <input type=checkbox role=switch class=sr-only> — 접근 가능한 이름은 label.
+-->
+<label th:fragment="switch(label, checked, disabled, attrs)" class="switch">
+  <input type="checkbox" role="switch" class="sr-only" th:checked="${checked == true}" th:disabled="${disabled == true}" ui:attrs="${attrs}">
+  <span class="switch__track" aria-hidden="true"></span>
+  <span th:text="${label}">라벨</span>
+</label>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Alert (← ui/Alert.tsx)
+  th:replace="~{admin/fragments/ui/alert :: alert(tone, title, body, actions, icon)}"
+    tone    'ok' | 'warn' | 'bad' | 'info'
+    title   문자열 또는 null
+    body    조각(~{::x}) 또는 null          — 본문
+    actions 조각 또는 null                  — 오른쪽 액션
+    icon    조각 또는 null                  — null 이면 tone 별 기본 아이콘
+  제목과 본문이 둘 다 있으면 banner--top. tone=bad 는 role=alert, 나머지는 role=status.
+-->
+<div th:fragment="alert(tone, title, body, actions, icon)" class="banner"
+     th:classappend="${tone == 'ok' ? 'banner--success' : (tone == 'warn' ? 'banner--warning' : (tone == 'bad' ? 'banner--danger' : 'banner--info'))} + (${title != null and body != null} ? ' banner--top' : '')"
+     th:role="${tone == 'bad'} ? 'alert' : 'status'">
+  <span class="banner__icon">
+    <th:block th:if="${icon}"><th:block th:replace="${icon}"/></th:block>
+    <th:block th:unless="${icon}" th:switch="${tone}">
+      <th:block th:case="'ok'" th:replace="~{admin/fragments/icons :: check(18)}"/>
+      <th:block th:case="'info'" th:replace="~{admin/fragments/icons :: info(18)}"/>
+      <th:block th:case="*" th:replace="~{admin/fragments/icons :: alert(18)}"/>
+    </th:block>
+  </span>
+  <div class="banner__body">
+    <div class="banner__title" th:if="${title}" th:text="${title}">제목</div>
+    <div th:if="${body}"><th:block th:replace="${body}"/></div>
+  </div>
+  <div class="banner__actions" th:if="${actions}"><th:block th:replace="${actions}"/></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Segmented (← ui/Segmented.tsx)
+  th:replace="~{admin/fragments/ui/segmented :: segmented(options, value, ariaLabel)}"
+    options  [{'value': '24h', 'label': '24h', 'title': null, 'attrs': {'hx-get': '...'}}, ...]
+             attrs 는 버튼 속성 Map(선택 시 동작: hx-get·hx-target 등) 또는 null
+    value    선택된 option 의 value
+    ariaLabel 그룹 이름
+  선택 상태는 aria-pressed + seg__btn--on. 서버가 value 를 정해 다시 그린다.
+-->
+<div th:fragment="segmented(options, value, ariaLabel)" class="seg" role="group" th:aria-label="${ariaLabel}">
+  <button th:each="o : ${options}" type="button" class="seg__btn" th:classappend="${o['value'] == value} ? 'seg__btn--on'"
+          th:aria-pressed="${o['value'] == value}" th:title="${o['title']}" ui:attrs="${o['attrs']}" th:text="${o['label']}">옵션</button>
+</div>
+</body>
+</html>

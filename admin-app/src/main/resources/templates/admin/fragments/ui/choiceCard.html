@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  ChoiceCard (← ui/ChoiceCard.tsx) — 라디오 카드
+  th:replace="~{admin/fragments/ui/choiceCard :: choiceCard(checked, title, description, attrs)}"
+    checked true | false, title 문자열, description 문자열 또는 null
+    attrs   선택 시 동작 속성 Map(hx-post, x-on:click 등) 또는 null
+  부모에 role=radiogroup 과 aria-label 을 둔다.
+-->
+<button th:fragment="choiceCard(checked, title, description, attrs)" type="button" role="radio" class="choice"
+        th:classappend="${checked == true} ? 'choice--on'" th:aria-checked="${checked == true}" ui:attrs="${attrs}">
+  <span class="choice__radio" aria-hidden="true"></span>
+  <span class="choice__stack">
+    <span class="choice__title" th:text="${title}">제목</span>
+    <span class="choice__desc" th:if="${description}" th:text="${description}">설명</span>
+  </span>
+</button>
+</body>
+</html>

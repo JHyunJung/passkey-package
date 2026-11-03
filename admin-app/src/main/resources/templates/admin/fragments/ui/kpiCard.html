@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  KpiCard (← ui/KpiCard.tsx)
+  th:replace="~{admin/fragments/ui/kpiCard :: kpiCard(label, value, hint, hintTone, selected, attrs)}"
+    label, value  문자열, hint 문자열 또는 null, hintTone 'default' | 'warn'
+    selected      true | false | null (클릭형일 때 aria-pressed)
+    attrs         null 이면 단순 div. Map 이면 클릭형 button(kpi--clickable, aria-pressed)이고 attrs 가 속성(hx-get 등)이 된다.
+-->
+<th:block th:fragment="kpiCard(label, value, hint, hintTone, selected, attrs)">
+  <button th:if="${attrs != null}" type="button" class="kpi kpi--clickable" th:classappend="${selected == true} ? 'kpi--selected'"
+          th:aria-pressed="${selected == true}" ui:attrs="${attrs}">
+    <span class="kpi__label" th:text="${label}">라벨</span>
+    <span class="kpi__value" th:text="${value}">0</span>
+    <span class="kpi__hint" th:if="${hint != null}" th:classappend="${hintTone == 'warn'} ? 'kpi__hint--warn'" th:text="${hint}">힌트</span>
+  </button>
+  <div th:if="${attrs == null}" class="kpi">
+    <span class="kpi__label" th:text="${label}">라벨</span>
+    <span class="kpi__value" th:text="${value}">0</span>
+    <span class="kpi__hint" th:if="${hint != null}" th:classappend="${hintTone == 'warn'} ? 'kpi__hint--warn'" th:text="${hint}">힌트</span>
+  </div>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  useFocusTrap (← ui/useFocusTrap.ts) — 조각이 아니라 동작이다.
+  React 훅이 하던 일을 Alpine focus 플러그인(x-trap)이 대신한다. dialog / confirmDialog / unsavedGuard 조각이
+  안쪽 컨테이너에 x-trap.noscroll="open" 을 달아 쓴다.
+    - 열리면 안쪽 autofocus 요소(없으면 첫 포커스 가능 요소)로 포커스 이동
+    - Tab / Shift+Tab 은 안쪽에서 순환, tabindex=-1·disabled 는 건너뜀
+    - 닫으면 열기 전 요소로 포커스 복귀(dialog 컴포넌트가 한 번 더 보장), Escape 로 닫기
+  따로 호출하는 fragment 는 없다.
+-->
+</body>
+</html>

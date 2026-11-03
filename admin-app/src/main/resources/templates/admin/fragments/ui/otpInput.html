@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  OtpInput (← ui/OtpInput.tsx) — Alpine.data('otpInput')
+  th:replace="~{admin/fragments/ui/otpInput :: otpInput(name, length, ariaLabel, autofocus, submit)}"
+    name      form 필드 이름(숫자열이 hidden input 으로 제출된다)
+    length    칸 수(null 이면 6), ariaLabel 이름(null 이면 '인증 코드')
+    autofocus true 면 첫 칸에 포커스, submit true 면 다 채워지면 form 을 제출
+  한 자리씩 입력하면 다음 칸으로, 붙여넣기는 숫자만 남겨 앞에서부터 채움, 빈 칸 Backspace 는 이전 칸, 좌우 방향키.
+  다 채워지면 `otp-complete`(detail.value) 이벤트.
+-->
+<fieldset th:fragment="otpInput(name, length, ariaLabel, autofocus, submit)" class="otp-set"
+          ui:xdata="${@fmt.xdata('otpInput', 'length', length ?: 6, 'submit', submit)}">
+  <legend class="sr-only"><th:block th:text="${ariaLabel ?: '인증 코드'}">인증 코드</th:block> <th:block th:text="${length ?: 6}">6</th:block>자리</legend>
+  <input type="hidden" th:name="${name}" x-bind:value="value">
+  <div class="otp">
+    <input th:each="i : ${#numbers.sequence(1, length ?: 6)}" class="otp__cell" inputmode="numeric" maxlength="1"
+           th:autocomplete="${i == 1} ? 'one-time-code' : 'off'" th:aria-label="|${ariaLabel ?: '인증 코드'} ${i}번째 자리|"
+           th:autofocus="${autofocus == true and i == 1}"
+           x-on:focus="$event.target.select()" th:x-on:input="|onInput(${i - 1}, $event)|" x-on:paste="onPaste($event)"
+           th:x-on:keydown="|onKeydown(${i - 1}, $event)|">
+  </div>
+</fieldset>
+</body>
+</html>

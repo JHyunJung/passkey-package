@@ -329,3 +329,40 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 /* ── idle session countdown ────────── */
 .idle-progress { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
 .idle-progress__bar { display: block; height: 100%; transition: width 1s linear; }
+
+/* ===== port: thymeleaf ===== */
+/* React TSX 의 인라인 style 을 공통 조각(templates/admin/fragments/ui)이 쓰는 클래스로 옮긴 것. 위의 기존 규칙은 바꾸지 않는다. */
+[x-cloak] { display: none !important; }
+.hint--flush { margin: 0; }
+.page__head-main { min-width: 0; }
+.card__head-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.card__titlerow { gap: 4px 8px; }
+.choice__stack { display: flex; flex-direction: column; gap: 2px; }
+.dialog__head--icon { flex-direction: row; align-items: center; gap: 16px; }
+.dialog__icon { flex: none; }
+.dialog__head-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dialog__text { margin: 0; font-size: 13px; color: var(--ink-2); }
+.confirm__ack { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.input--ok { border-color: var(--ok); }
+.hint--ok { color: var(--ok); }
+.field__req { color: var(--bad); }
+.empty--compact { padding: 20px 16px; }
+.empty--compact .empty__art { width: 104px; height: 104px; }
+.empty--compact .empty__art--error { width: 96px; height: 96px; }
+.empty__actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.btn--dots { padding: 0 10px; }
+.menu__reason { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 6px 0; }
+.menu__reason .hint { margin: 0; white-space: normal; }
+.otp-set { border: 0; padding: 0; margin: 0; }
+.pager__size { gap: 6px; }
+.stepper { list-style: none; margin: 0; padding: 0; }
+.stepper__over { display: block; padding: 0 6px 8px; }
+.stepper__text { display: flex; flex-direction: column; gap: 0; }
+.toast__body { flex: 1; min-width: 0; }
+/* Skeleton 줄 너비: 100% 92% 96% 70% 88% 80% 순환(원본 WIDTHS) */
+.skeleton-block__line:nth-child(6n+1) { width: 100%; }
+.skeleton-block__line:nth-child(6n+2) { width: 92%; }
+.skeleton-block__line:nth-child(6n+3) { width: 96%; }
+.skeleton-block__line:nth-child(6n+4) { width: 70%; }
+.skeleton-block__line:nth-child(6n+5) { width: 88%; }
+.skeleton-block__line:nth-child(6n+6) { width: 80%; }

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  ToastHost (← ui/ToastHost.tsx) — Alpine.data('toastHost')
+  th:replace="~{admin/fragments/ui/toastHost :: toastHost}"     (레이아웃에 한 번)
+  서버가 HX-Trigger: {"toast": {"kind": "success|error|warn", "message": "…", "title": "…"(선택)}} 로 보낸 이벤트를 받는다.
+  (Toasts.success/error 가 이 헤더를 쓴다.) 오류는 role=alert 로 남고, 그 밖은 role=status 로 5초 뒤 닫힌다.
+  마우스·포커스가 토스트 안에 있으면 닫힘이 멈춘다. 자세히(detail·traceId)는 접힌 details 안에만 보인다.
+-->
+<div th:fragment="toastHost" class="toast-rack" x-data="toastHost" x-on:toast.window="push($event.detail)">
+  <template x-for="t in toasts" x-bind:key="t.id">
+    <div class="toast" x-bind:role="t.kind === 'err' ? 'alert' : 'status'"
+         x-on:mouseenter="pause(t, 'hover', true)" x-on:mouseleave="pause(t, 'hover', false)"
+         x-on:focusin="pause(t, 'focus', true)" x-on:focusout="if (!$event.currentTarget.contains($event.relatedTarget)) pause(t, 'focus', false)">
+      <div class="toast__icon" x-bind:class="'toast__icon--' + t.kind">
+        <span x-show="t.kind === 'err'"><th:block th:replace="~{admin/fragments/icons :: x(11)}"/></span>
+        <span x-show="t.kind === 'warn'" x-cloak><th:block th:replace="~{admin/fragments/icons :: alert(11)}"/></span>
+        <span x-show="t.kind === 'ok'" x-cloak><th:block th:replace="~{admin/fragments/icons :: check(11)}"/></span>
+      </div>
+      <div class="toast__body">
+        <div class="toast__title" x-text="t.title"></div>
+        <div class="toast__sub" x-show="t.message" x-text="t.message"></div>
+        <details class="toast__details" x-show="t.detail || t.traceId">
+          <summary>자세히</summary>
+          <div class="toast__trace" x-show="t.detail" x-text="t.detail"></div>
+          <div class="toast__trace" x-show="t.traceId" x-text="'traceId · ' + t.traceId"></div>
+        </details>
+      </div>
+      <button type="button" class="btn btn--sm toast__action" x-show="t.action" x-cloak x-on:click="run(t)" x-text="t.action ? t.action.label : ''"></button>
+      <button type="button" class="btn btn--ghost btn--xs" aria-label="닫기" x-on:click="close(t.id)"><th:block th:replace="~{admin/fragments/icons :: x(12)}"/></button>
+    </div>
+  </template>
+</div>
+</body>
+</html>

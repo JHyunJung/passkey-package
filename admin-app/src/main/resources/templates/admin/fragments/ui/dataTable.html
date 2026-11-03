@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  DataTable (← ui/DataTable.tsx) — 서버 렌더 표. 열 정의와 행 조각을 따로 받는다.
+  th:replace="~{admin/fragments/ui/dataTable :: dataTable(columns, body)}"
+    columns [{'key': 'name', 'header': '이름', 'align': 'right'(숫자 열), 'width': '120px'|null, 'srOnly': true|null}, ...]
+    body    <tbody> 안에 들어갈 <tr> 들을 담은 조각(th:each 로 직접 그린다). 없으면 tableEmptyRow 를 쓴다.
+  보조 조각(같은 파일):
+    tableGroupRow(span, label)        그룹 헤더 행(tr.table__group) — 라벨이 바뀔 때마다 넣는다
+    tableEmptyRow(span, body)         빈 목록 행(tr.table__empty), body 는 조각
+    tableExpandedRow(span, body)      펼침 행(tr.table__expanded), body 는 조각
+  클릭 가능한 행(원본 onRowClick): 행에 아래 속성을 준다. 행 자신에 포커스가 있을 때만 Enter/Space 로 동작하고,
+  셀 안 버튼에서 버블된 키 입력은 무시한다(.self).
+    <tr class="is-clickable" tabindex="0" th:attr="hx-get=...,hx-target=..." x-data
+        x-on:keydown.self.enter.prevent="$el.click()" x-on:keydown.self.space.prevent="$el.click()">
+  펼쳐진 행은 class 에 is-expanded 를 더한다.
+-->
+<div th:fragment="dataTable(columns, body)" class="tw">
+  <table class="table">
+    <thead>
+      <tr>
+        <th th:each="c : ${columns}" th:classappend="${c['align'] == 'right'} ? 'num'" th:style="${c['width'] != null} ? ${'width: ' + c['width']}">
+          <span class="sr-only" th:if="${c['srOnly'] == true}" th:text="${c['header']}">헤더</span>
+          <th:block th:unless="${c['srOnly'] == true}" th:text="${c['header']}">헤더</th:block>
+        </th>
+      </tr>
+    </thead>
+    <tbody><th:block th:replace="${body}"/></tbody>
+  </table>
+</div>
+
+<tr th:fragment="tableGroupRow(span, label)" class="table__group"><td th:colspan="${span}" th:text="${label}">그룹</td></tr>
+
+<tr th:fragment="tableEmptyRow(span, body)" class="table__empty"><td th:colspan="${span}"><th:block th:replace="${body}"/></td></tr>
+
+<tr th:fragment="tableExpandedRow(span, body)" class="table__expanded"><td th:colspan="${span}"><th:block th:replace="${body}"/></td></tr>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Button 확장형 (← ui/Button.tsx 의 size, icon)
+  th:replace="~{admin/fragments/ui/buttonX :: buttonX(label, variant, size, icon, attrs)}"
+    label   문자열
+    variant 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-solid' (null 이면 secondary)
+    size    'xs' | 'sm' | 'md' | 'lg' (null 이면 md)
+    icon    조각 또는 null (라벨 앞)
+    attrs   추가 속성 Map 또는 null
+-->
+<button th:fragment="buttonX(label, variant, size, icon, attrs)" type="button" class="btn"
+        th:classappend="(${variant != null and variant != 'secondary'} ? 'btn--' + ${variant} : '') + (${size != null and size != 'md'} ? ' btn--' + ${size} : '')"
+        ui:attrs="${attrs}"><th:block th:if="${icon}"><th:block th:replace="${icon}"/></th:block><th:block th:text="${label}">라벨</th:block></button>
+</body>
+</html>

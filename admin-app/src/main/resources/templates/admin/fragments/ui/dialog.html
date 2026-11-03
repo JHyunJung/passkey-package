@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Dialog (← ui/Dialog.tsx, ui/useFocusTrap.ts) — Alpine.data('dialog')
+  th:replace="~{admin/fragments/ui/dialog :: dialog(id, title, sub, body, footer, footerStart, headerIcon, opts)}"
+    id          필수. 열기: window 이벤트 dialog:open {id} (예: x-on:click="$dispatch('dialog:open', {id: 'x'})"),
+                닫기: dialog:close {id} 또는 안쪽에서 close()
+    title, sub  문자열 또는 null (title 이 aria-labelledby)
+    body        조각 또는 null
+    footer      조각 또는 null (오른쪽 버튼들), footerStart 조각 또는 null (왼쪽)
+    headerIcon  조각 또는 null
+    opts        Map 또는 null: wide(true | 'x'), dismissible(false 면 Escape·스크림 무시), closeOnScrim(false),
+                role('alertdialog'), ariaLabel(title 이 없을 때 이름), open(true 면 처음부터 열림)
+  열릴 때마다 안쪽을 새로 그린다(x-if). 포커스 트랩은 x-trap.noscroll, 처음 포커스는 안쪽 autofocus 요소(없으면 첫 요소),
+  닫으면 열기 전 요소로 포커스 복귀, Escape 로 닫힌다.
+-->
+<div th:fragment="dialog(id, title, sub, body, footer, footerStart, headerIcon, opts)"
+     th:with="dlgRole=${@fmt.opt(opts, 'role') ?: 'dialog'}, dlgWide=${@fmt.opt(opts, 'wide')}, dlgLabel=${@fmt.opt(opts, 'ariaLabel')}"
+     ui:xdata="${@fmt.xdata('dialog', 'id', id, 'open', @fmt.opt(opts, 'open'), 'dismissible', @fmt.opt(opts, 'dismissible'), 'closeOnScrim', @fmt.opt(opts, 'closeOnScrim'))}"
+     x-on:dialog:open.window="onOpen($event)" x-on:dialog:close.window="onClose($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown="onScrim($event)">
+      <div class="dialog" th:classappend="(${dlgWide == true} ? 'dialog--wide' : '') + (${dlgWide == 'x'} ? ' dialog--xwide' : '')"
+           th:role="${dlgRole}" aria-modal="true"
+           th:aria-labelledby="${title != null} ? ${id + '-title'}" th:aria-label="${title == null} ? ${dlgLabel}"
+           x-trap.noscroll="open">
+        <div class="dialog__head" th:if="${title != null or sub != null}" th:classappend="${headerIcon != null} ? 'dialog__head--icon'">
+          <span class="dialog__icon" th:if="${headerIcon}"><th:block th:replace="${headerIcon}"/></span>
+          <th:block th:if="${headerIcon == null}">
+            <h3 class="dialog__title" th:if="${title}" th:id="${id + '-title'}" th:text="${title}">제목</h3>
+            <div class="dialog__sub" th:if="${sub}" th:text="${sub}">설명</div>
+          </th:block>
+          <div class="dialog__head-text" th:if="${headerIcon}">
+            <h3 class="dialog__title" th:if="${title}" th:id="${id + '-title'}" th:text="${title}">제목</h3>
+            <div class="dialog__sub" th:if="${sub}" th:text="${sub}">설명</div>
+          </div>
+        </div>
+        <div class="dialog__body" th:if="${body}"><th:block th:replace="${body}"/></div>
+        <div class="dialog__foot" th:if="${footer != null or footerStart != null}">
+          <div class="dialog__foot-start" th:if="${footerStart}"><th:block th:replace="${footerStart}"/></div>
+          <th:block th:if="${footer}"><th:block th:replace="${footer}"/></th:block>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+</body>
+</html>

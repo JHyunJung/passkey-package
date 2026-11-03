@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  ChipInput (← ui/ChipInput.tsx) — Alpine.data('chipInput')
+  th:replace="~{admin/fragments/ui/chipInput :: chipInput(name, values, placeholder, ariaLabel, mono, added, validateUrl, disabled)}"
+    name        form 필드 이름. 값마다 hidden input(name) 이 하나씩 제출된다.
+    values      처음 값 목록(List<String>), added 새로 추가된 값 목록(chip--added 표시) 또는 null
+    placeholder, ariaLabel 문자열, mono true | null, disabled true | null
+    validateUrl 추가 전에 서버로 검증할 주소 또는 null. GET ?value=…&existing=… → 본문이 오류 문구, 비면 통과.
+  Enter 로 추가(앞뒤 공백 제거, 빈 값·중복 무시), 칩의 x 로 삭제(aria-label '<값> 삭제'). 오류는 입력 아래 role=alert.
+  값이 바뀌면 `chips-change` 이벤트(detail.values)가 올라간다(saveBar 가 이걸로 변경 개수를 센다).
+-->
+<div th:fragment="chipInput(name, values, placeholder, ariaLabel, mono, added, validateUrl, disabled)" class="stack-2"
+     ui:xdata="${@fmt.xdata('chipInput', 'name', name, 'values', values, 'added', added, 'mono', mono, 'validateUrl', validateUrl, 'disabled', disabled)}">
+  <template x-for="v in values" x-bind:key="v">
+    <input type="hidden" x-bind:name="name" x-bind:value="v">
+  </template>
+  <div class="chips" x-show="values.length > 0" x-cloak>
+    <template x-for="v in values" x-bind:key="v">
+      <span class="chip" x-bind:class="(added.includes(v) ? 'chip--added ' : '') + (mono ? 'mono' : '')">
+        <span class="truncate" x-text="v"></span>
+        <button type="button" class="chip__x" x-bind:aria-label="v + ' 삭제'" x-bind:disabled="disabled" x-on:click="remove(v)"><th:block th:replace="~{admin/fragments/icons :: x(12)}"/></button>
+      </span>
+    </template>
+  </div>
+  <input class="input" th:classappend="${mono == true} ? 'mono'" th:aria-label="${ariaLabel}" th:placeholder="${placeholder}" th:disabled="${disabled == true}"
+         x-bind:aria-invalid="!!error" x-model="draft" x-on:keydown.enter.prevent="onEnter()" x-on:input="onInput()">
+  <p class="field__error" role="alert" x-show="error" x-cloak x-text="error"></p>
+</div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  LoadError (← ui/LoadError.tsx) — Alpine.data('loadError')
+  th:replace="~{admin/fragments/ui/loadError :: loadError(what, error, retryAttrs, retrying, compact)}"
+    what       불러오지 못한 대상 문자열(예: '목록') — '<what>을/를 불러오지 못했습니다' (조사는 @fmt.josa)
+    error      Throwable 또는 null(@fmt.errorInfo 로 쉬운 문구)
+    retryAttrs '다시 시도' 버튼 속성 Map(hx-get 등) 또는 null, retrying true 면 '다시 시도 중…' + disabled
+    compact    true 면 작은 여백·일러스트
+  실패를 '없음'으로 보이지 않게 role=alert. '오류 정보 복사' 는 대상·제목·설명·HTTP 상태를 클립보드에 넣는다.
+-->
+<div th:fragment="loadError(what, error, retryAttrs, retrying, compact)" class="empty" role="alert" th:classappend="${compact == true} ? 'empty--compact'"
+     th:with="info=${@fmt.errorInfo(error)}, meta=${info.httpStatus != null} ? ${'HTTP ' + info.httpStatus} : ''"
+     ui:xdata="${@fmt.xdata('loadError', 'text', @fmt.errorText(what, error))}">
+  <img class="empty__art empty__art--error" th:src="@{/admin/img/load-error.webp}" alt="">
+  <p class="empty__title" th:text="${@fmt.withJosa(what, '을/를') + ' 불러오지 못했습니다'}">목록을 불러오지 못했습니다</p>
+  <p class="empty__sub" th:text="${info.detail == null or info.detail.isEmpty()} ? ${info.title} : ${info.title + '. ' + info.detail}">오류</p>
+  <div class="empty__actions">
+    <button type="button" class="btn btn--primary" th:disabled="${retrying == true}" ui:attrs="${retryAttrs}" th:text="${retrying == true} ? '다시 시도 중…' : '다시 시도'">다시 시도</button>
+    <button type="button" class="btn btn--ghost" x-on:click="copy()" x-text="labels[state]">오류 정보 복사</button>
+  </div>
+  <span class="hint hint--flush" aria-live="polite" x-text="state === 'idle' ? '' : labels[state]"></span>
+  <p class="hint hint--flush mono" th:if="${meta != ''}" th:text="${meta}">HTTP 500</p>
+</div>
+</body>
+</html>

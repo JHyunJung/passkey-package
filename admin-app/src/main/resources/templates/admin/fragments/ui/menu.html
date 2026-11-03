@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Menu (← ui/Menu.tsx) — Alpine.data('menu')   ⋯ 메뉴
+  th:replace="~{admin/fragments/ui/menu :: menu(label, items, dangerItems, dangerTitle, trigger)}"
+    label        트리거의 aria-label·title 이자 메뉴 이름
+    items        [{'label': '회전', 'attrs': {'hx-post': '...'}, 'icon': 'refresh', 'danger': false,
+                   'disabled': false, 'disabledReason': null}, ...]  (icon 은 icons 조각 이름 또는 생략)
+    dangerItems  위험 구획 항목(같은 모양) 또는 null, dangerTitle 구획 제목(null 이면 '위험')
+    trigger      'icon'(기본, 표 행) | 'button'(테두리 있는 버튼)
+  열린 목록은 position:fixed 로 트리거 아래·오른쪽 정렬, 모자라면 위로(더 큰 쪽, max-height+스크롤).
+  첫 항목 포커스, ArrowUp/Down 순환, Enter/Space 실행 후 닫힘, Escape 로 닫고 트리거로 포커스 복귀.
+  비활성 항목은 aria-disabled + 사유(title·라벨 아래)가 보이되 실행되지 않는다(attrs 는 붙지 않는다).
+  항목·트리거 클릭은 상위(행) 클릭으로 전파되지 않는다.
+-->
+<div th:fragment="menu(label, items, dangerItems, dangerTitle, trigger)" class="menu-wrap" x-data="menu"
+     x-on:keydown="onKeydown($event)" x-on:mousedown.window="outside($event)" x-on:scroll.window.capture="dismiss($event)" x-on:resize.window="open = false">
+  <button th:if="${trigger == 'button'}" x-ref="trigger" type="button" class="btn btn--dots" th:aria-label="${label}" th:title="${label}"
+          aria-haspopup="menu" x-bind:aria-expanded="open" x-on:click.stop="toggle()"><th:block th:replace="~{admin/fragments/icons :: dots(18)}"/></button>
+  <button th:unless="${trigger == 'button'}" x-ref="trigger" type="button" class="icon-btn" th:aria-label="${label}" th:title="${label}"
+          aria-haspopup="menu" x-bind:aria-expanded="open" x-on:click.stop="toggle()"><th:block th:replace="~{admin/fragments/icons :: dots(18)}"/></button>
+  <div x-ref="menu" class="menu" role="menu" tabindex="-1" th:aria-label="${label}" x-show="open" x-cloak x-bind:style="pos" x-on:click.stop>
+    <th:block th:each="it : ${items}"><th:block th:replace="~{admin/fragments/ui/menu :: menuItem(${it})}"/></th:block>
+    <th:block th:if="${dangerItems != null and !dangerItems.isEmpty()}">
+      <div class="menu__sep"></div>
+      <span class="menu__section" th:text="${dangerTitle ?: '위험'}">위험</span>
+      <th:block th:each="it : ${dangerItems}"><th:block th:replace="~{admin/fragments/ui/menu :: menuItem(${it})}"/></th:block>
+    </th:block>
+  </div>
+</div>
+
+<!-- menu 안에서 쓰는 항목 조각: menuItem(item) -->
+<button th:fragment="menuItem(it)" type="button" role="menuitem" tabindex="-1" class="menu__item"
+        th:classappend="${it['danger'] == true} ? 'menu__item--danger'"
+        th:aria-disabled="${it['disabled'] == true} ? 'true'" th:title="${it['disabled'] == true} ? ${it['disabledReason']}"
+        ui:attrs="${it['disabled'] == true ? null : it['attrs']}" x-on:click="onItemClick($event)">
+  <th:block th:if="${it['icon']}"><th:block th:replace="~{admin/fragments/icons :: __${it['icon']}__(14)}"/></th:block>
+  <span class="menu__reason" th:if="${it['disabled'] == true and it['disabledReason'] != null}">
+    <span th:text="${it['label']}">라벨</span>
+    <span class="hint" th:text="${it['disabledReason']}">사유</span>
+  </span>
+  <th:block th:unless="${it['disabled'] == true and it['disabledReason'] != null}" th:text="${it['label']}">라벨</th:block>
+</button>
+</body>
+</html>

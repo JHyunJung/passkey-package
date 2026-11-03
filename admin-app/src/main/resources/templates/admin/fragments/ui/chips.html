@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Chips (← ui/Chips.tsx)
+  filterChip(label, active, mono, disabled, title, attrs)
+      버튼 fchip(활성이면 fchip--on, mono 면 fchip--mono), aria-pressed. attrs: 클릭 동작 속성 Map 또는 null.
+  removableChip(label, removeLabel, tone, mono, disabled, attrs)
+      chip(tone 'added' 이면 chip--added) + 삭제 버튼 chip__x(aria-label=removeLabel). attrs: 삭제 버튼 속성 Map 또는 null.
+  (입력 중 추가/삭제하는 칩 목록은 chipInput 이 Alpine 으로 같은 마크업을 그린다.)
+-->
+<button th:fragment="filterChip(label, active, mono, disabled, title, attrs)" type="button" class="fchip"
+        th:classappend="(${active == true} ? 'fchip--on' : '') + (${mono == true} ? ' fchip--mono' : '')"
+        th:aria-pressed="${active == true}" th:disabled="${disabled == true}" th:title="${title}" ui:attrs="${attrs}" th:text="${label}">칩</button>
+
+<span th:fragment="removableChip(label, removeLabel, tone, mono, disabled, attrs)" class="chip"
+      th:classappend="(${tone == 'added'} ? 'chip--added' : '') + (${mono == true} ? ' mono' : '')">
+  <span class="truncate" th:text="${label}">값</span>
+  <button type="button" class="chip__x" th:aria-label="${removeLabel}" th:disabled="${disabled == true}" ui:attrs="${attrs}"><th:block th:replace="~{admin/fragments/icons :: x(12)}"/></button>
+</span>
+</body>
+</html>

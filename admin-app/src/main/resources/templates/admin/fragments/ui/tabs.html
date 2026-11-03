@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Tabs (← ui/Tabs.tsx) — Alpine.data('tabs')
+  th:replace="~{admin/fragments/ui/tabs :: tabs(items, active, ariaLabel)}"
+    items  [{'id': 'overview', 'label': '개요', 'href': '/admin/tenants/1?tab=overview',
+             'badgeText': '확인 필요 2', 'badgeReason': 'MDS 미확인 AAGUID 2건', 'count': 3}, ...]
+           (badge*, count 는 생략 가능). 탭은 role=tab 링크이며 서버가 active 를 정해 다시 그린다.
+    active 선택된 탭의 id(items 의 id 중 하나), ariaLabel tablist 이름
+  선택된 탭만 tabindex=0(로빙). ArrowLeft/Right 는 다음/이전(양 끝에서 되돌아감), Home/End 는 처음/마지막으로 이동·선택.
+  경고는 색 점 대신 '확인 필요 N' 라벨(badge--warning), 사유는 title.
+-->
+<div th:fragment="tabs(items, active, ariaLabel)" class="tabs" role="tablist" th:aria-label="${ariaLabel}" x-data="tabs" x-on:keydown="onKeydown($event)">
+  <a th:each="t : ${items}" role="tab" class="tabs__btn" th:href="${t['href']}"
+     th:classappend="${t['id'] == active} ? 'tabs__btn--active'" th:aria-selected="${t['id'] == active}"
+     th:tabindex="${t['id'] == active} ? 0 : -1" th:title="${t['badgeReason']}">
+    <th:block th:text="${t['label']}">탭</th:block>
+    <span class="badge badge--warning tabs__badge" th:if="${t['badgeText']}" th:title="${t['badgeReason']}" th:text="${t['badgeText']}">확인 필요</span>
+    <span class="tabs__count" th:if="${t['count'] != null and t['count'] > 0}" th:text="${t['count']}">0</span>
+  </a>
+</div>
+</body>
+</html>

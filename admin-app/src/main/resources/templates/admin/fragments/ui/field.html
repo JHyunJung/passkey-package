@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Field (← ui/Field.tsx)
+  th:replace="~{admin/fragments/ui/field :: field(label, htmlFor, help, error, required, control)}"
+    label 문자열, htmlFor 입력의 id 또는 null, help·error 문자열 또는 null(error 가 있으면 help 대신),
+    required true 면 * 표시, control 조각(입력 요소)
+  오류 문단 id 는 htmlFor + '-error'.
+-->
+<div th:fragment="field(label, htmlFor, help, error, required, control)">
+  <label class="label" th:for="${htmlFor}"><th:block th:text="${label}">라벨</th:block><span class="field__req" th:if="${required == true}"> *</span></label>
+  <th:block th:replace="${control}"/>
+  <p class="field__error" th:if="${error}" th:id="${htmlFor != null} ? ${htmlFor + '-error'}" th:text="${error}">오류</p>
+  <p class="hint" th:if="${error == null and help != null}" th:text="${help}">도움말</p>
+</div>
+</body>
+</html>

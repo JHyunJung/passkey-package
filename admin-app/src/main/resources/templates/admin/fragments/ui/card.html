@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Card (← ui/Card.tsx) — 네 조각
+  card(body, cls)                 <section class=card>. cls 는 추가 클래스 또는 null, body 는 조각. cardDiv(body, cls) 는 <div>.
+  cardHeader(title, sub, cap, actions)  title/sub/cap 은 문자열(없으면 null), actions 는 조각 또는 null.
+                                  cap 이 있으면 제목 옆 한 줄 캡션(card__cap), sub 는 제목 아래.
+  cardBody(body, cls)             body 는 조각
+  cardFooter(body)                body 는 조각
+  예: th:replace="~{admin/fragments/ui/card :: card(~{::div}, null)}"
+-->
+<section th:fragment="card(body, cls)" class="card" th:classappend="${cls}"><th:block th:replace="${body}"/></section>
+<div th:fragment="cardDiv(body, cls)" class="card" th:classappend="${cls}"><th:block th:replace="${body}"/></div>
+
+<div th:fragment="cardHeader(title, sub, cap, actions)" class="card__head">
+  <div class="card__head-main">
+    <div class="row card__titlerow" th:if="${cap}">
+      <h2 class="card__title" th:text="${title}">제목</h2>
+      <span class="card__cap" th:text="${cap}">캡션</span>
+    </div>
+    <h2 class="card__title" th:unless="${cap}" th:text="${title}">제목</h2>
+    <p class="card__sub" th:if="${sub}" th:text="${sub}">설명</p>
+  </div>
+  <th:block th:if="${actions}"><div class="spacer"></div><th:block th:replace="${actions}"/></th:block>
+</div>
+
+<div th:fragment="cardBody(body, cls)" class="card__body" th:classappend="${cls}"><th:block th:replace="${body}"/></div>
+
+<div th:fragment="cardFooter(body)" class="card__foot"><th:block th:replace="${body}"/></div>
+</body>
+</html>
