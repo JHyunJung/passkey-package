@@ -457,3 +457,21 @@ a.menu__item { text-decoration: none; }
 .fn-dist { height: 28px; border-radius: 6px; overflow: hidden; display: flex; flex-wrap: nowrap; background: var(--canvas); }
 .fn-dist > span { height: 100%; display: block; }
 .fn-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+
+/* ── 활동 화면 ── */
+.activity-layout { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.activity-main { flex: 999 1 460px; min-width: 0; }
+.activity-aside { flex: 1 1 320px; max-width: 100%; display: flex; flex-direction: column; gap: 20px; }
+.activity-main.htmx-request { opacity: .6; transition: opacity .15s; }
+.feed-day { padding: 8px 20px; background: var(--canvas); border-bottom: 1px solid var(--line-soft); }
+.feed-row { flex-wrap: nowrap; align-items: flex-start; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line-soft); background: var(--surface); }
+.feed-row--sel { background: var(--brand-50); box-shadow: inset 3px 0 0 var(--brand-700); }
+.feed-row__time { width: 44px; flex: none; padding-top: 2px; font-size: 12px; }
+.feed-row__dot { margin-top: 7px; }
+.feed-row__body { gap: 4px; flex: 1 1 0; min-width: 0; }
+.feed-row__sentence { font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+#activity-feed-card:has(.feed-row) #activity-empty { display: none; }
+.top-row { flex-wrap: nowrap; gap: 10px; padding: 10px 20px; width: 100%; border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; text-align: left; cursor: pointer; color: var(--ink); font: inherit; }
+.top-row--sel { background: var(--brand-50); }
+.top-row__bar { display: block; height: 6px; border-radius: 3px; background: var(--brand-500); }
+.activity-json { margin: 0; padding: 12px; border-radius: 8px; background: var(--canvas); border: 1px solid var(--line-soft); font-size: 11px; line-height: 17px; white-space: pre-wrap; word-break: break-all; color: var(--ink-2); max-height: 320px; overflow: auto; }

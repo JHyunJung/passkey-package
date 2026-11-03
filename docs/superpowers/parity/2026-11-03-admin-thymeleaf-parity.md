@@ -550,11 +550,47 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 발급의 네트워크 오류·권한 거부는 다이얼로그 안 인라인(전역 토스트 없음) | source ✅ (Fix 1: data-quiet + X-Confirm → confirmError, netErr) | AKC `issueNetworkAndDeniedErrorsAreInline` / 스텁 | 미확인 |
 | 키 이름 이스케이프(목록·확인창·발급 완료) | source ✅ | AKC `keyNameIsEscaped` | — |
 
-## §Activity
+## §Activity (Task 14, 소스 수준 점검)
 
-| 체크 항목 | 원본 테스트 | 결과 |
-|---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+약어: AP = `ActivityPage.test.tsx` 순번, AD = `activityDiff.test.ts`, AL = `activityLabels.test.ts`, APC = `ActivityPageControllerTest`, ADT = `ActivityDiffTest`, ALT = `ActivityLabelsTest`. 브라우저: 미확인 — 폴링 타이머·hx-sync 의 실제 중단/드롭·OOB afterbegin/beforeend 삽입·Alpine 상태 전환·포커스는 JS(Node 스텁으로 상태 전이만 확인, 커밋 안 함) — 브라우저 확인 필요.
+공통 차이: 목록 상태는 서버가 아니라 화면(DOM)이 가진다(가장 새 행 id·아래쪽 커서·날짜 머리글 라벨이 숨은 입력). 처음 24건 창(visibleCount)은 없다 — 서버가 준 한 쪽(50건)을 전부 그린다. 날짜 그룹은 `role=group` 래퍼 대신 평평한 목록(`role=heading` 머리글 + 행): 폴링·더 보기가 같은 날짜에 이어 붙을 수 있게. 액션 검색(q)은 읽어 온 행을 클라이언트에서 거르던 것을 서버가 같은 규칙(코드 대소문자 무시·한글 라벨 포함)으로 걸러 첫 쪽부터 다시 읽는다(검색어를 바꾸면 "더 보기"로 불러온 행은 사라진다).
+
+| 체크 항목 | 원본 테스트 | 결과 | 테스트 | 브라우저 |
+|---|---|---|---|---|
+| 피드를 KST 날짜(오늘/어제/YYYY-MM-DD)로 묶는다 | AP 1 | source ✅ / 차이: 그룹 래퍼 없는 평평한 목록(머리글 `role=heading`) | APC `groupsByKstDay` | 미확인 |
+| 상세 패널 5개 섹션 + TENANT_UPDATE before/after diff, 선택 행 강조 | AP 2 | source ✅ / 차이: 선택 강조는 Alpine `selectedId`(행 class·aria-current), 서버가 행을 다시 그려도 유지 | APC `diffRendersSameAsOriginal`,`detailButtonsAndSelection` | 미확인 |
+| actorIp 없으면 IP 줄 없음 / 있으면 표시 | AP 3, 4 | source ✅ / 차이: `ActivityDetailView` 에 actorIp 필드가 없어 줄은 항상 없다(원본도 서버가 안 줌) | — | — |
+| `diff` 필드가 있으면 payload before/after 대신 그것을 쓴다 | AP 5 | source ✅ / 차이: 서버 상세에 diff 필드가 없어 화면은 항상 payload 경로(`ActivityDiff.buildDiffRows(null, payload)`); diff 우선 규칙은 단위 테스트로 | ADT `serverDiffWins` | — |
+| "보안 실패만" 스위치 없음, 보안 세그먼트가 category=security 로 조회 | AP 6 | source ✅ | APC `categoryNormalizedAndForwarded`,`controlsCarryOtherFilters` | 미확인 |
+| 카테고리·tenant 필터는 URL 에 남고 URL 로 열면 적용 | AP 7 | source ✅ (rows 응답이 `HX-Replace-Url`, 검색어는 주소에 두지 않음 — 원본 동일) | APC `filtersFromUrl`,`rowsFragment` | 미확인 |
+| 알 수 없는 category 는 전체 | AP 8 | source ✅ | APC `categoryNormalizedAndForwarded` | — |
+| 첫 로드 실패: LoadError, KPI "—", 내보내기 비활성 | AP 9 | source ✅ (전체 페이지 200 + 오류 카드, CSV 는 Alpine `loaded` 로 막음) | APC `firstLoadFailure` | 미확인 |
+| 첫 로드 실패 → 다시 시도 성공하면 목록 | AP 10 | source ✅ (다시 시도 = rows 요청, 폴링이 먼저 성공하면 `loaded=0` 이라 목록 영역을 교체) | APC `firstLoadFailure`,`pollRecoversFromLoadError` | 미확인 |
+| 상세: A 를 연 뒤 B 를 열면 늦게 온 A 응답은 무시 | AP 11 | source ✅ (`hx-sync #activity-detail:replace`) / JS — 브라우저 확인 필요 | APC `detailButtonsAndSelection` | 미확인 |
+| 상세: 불러오는 중 닫으면 응답이 와도 다시 열리지 않음 | AP 12 | source ✅ (closeDetail 이 `htmx:abort`) / JS | 스텁(`closeDetail` abort) | 미확인 |
+| 필터를 바꾼 뒤 이전 필터의 늦은 응답은 버림 | AP 13 | source ✅ (필터 요청 `hx-sync #activity-root:replace` 가 폴링 중단, 폴링은 drop, 더 보기는 `htmx:abort`) | APC `pollingElementAttributes` | 미확인 |
+| 폴링은 새 행만 앞에 붙이고 더 보기 행을 지우지 않는다 | AP 14 | source ✅ (OOB afterbegin, `top` 앞의 행만) | APC `pollPrependsOnlyNewRows`,`pollNoNewRowsAndDayHeader`,`pollTopNotFoundAndEmptyList` | 미확인 |
+| p95 없으면 KPI 3개(kpis--3) / 있으면 4개 | AP 15, 16 | source ✅ / 차이: 폴링에서 p95 가 null 로 오면 이전 값을 유지하던 규칙은 없다(서버가 현재 항상 null) | APC `groupsByKstDay`,`p95Kpi` | — |
+| 불러오는 동안 Skeleton, "로딩 중…" 텍스트 없음 | AP 17 | source ✅ / 차이: 첫 화면은 서버가 완성해서 그린다 — 필터 교체 중에는 목록 영역이 반투명(`htmx-request`), 상세는 Skeleton | APC `detailButtonsAndSelection` | 미확인 |
+| 폴링 실패 → "연결 끊김 · N초 전 갱신" + 목록 유지 + 경고 배너, 다시 연결되면 "실시간" | AP 18 | source ✅ (Alpine 상태: responseError/sendError/timeout 로 disconnected, 성공 시 해제; 폴링 요소 `data-quiet` + 503 빈 본문 — 오류 토스트·LoadError 없음) | APC `pollFailureIsQuiet`,`liveStatusMarkup` + 스텁 | 미확인 |
+| 이전 폴링이 진행 중이면 다음 폴링을 시작하지 않는다 | AP 19 | source ✅ (`hx-sync #activity-root:drop`) | APC `pollingElementAttributes` | 미확인 |
+| 더 늦게 시작한 요청이 먼저 끝나면 먼저 시작한 요청의 늦은 응답은 버림 | AP 20 | source ✅ / 차이: 늦은 응답을 버리는 대신 hx-sync 로 앞선 요청을 중단(폴링=drop, 새로고침=queue last, 필터=replace) | APC `pollingElementAttributes` | 미확인 |
+| "N초 전 갱신" 카운터는 aria-live 영역 밖 | AP 21 | source ✅ (공유 1초 틱 하나 — 요소가 사라지면 destroy 가 구독 해제) | APC `liveStatusMarkup` + 스텁(틱 구독·해제) | 미확인 |
+| 상세 로드 실패는 패널 안 LoadError, 다시 시도로 재요청 | AP 22 | source ✅ (서버 오류 422 + 패널 안 오류, 네트워크 실패는 Alpine 패널 `netError`) | APC `detailFailureInline` + 스텁 | 미확인 |
+| 새로고침이 폴링에 추월당해도 새로고침 응답이 끝나면 버튼이 다시 활성화 | AP 23 | source ✅ / 차이: `hx-disabled-elt` + `queue last`(폴링이 새로고침을 중단하지 않는다) | APC `pollingElementAttributes` | 미확인 |
+| 새로고침 중 필터를 바꿔도 새로고침 응답이 끝나면 버튼이 활성화 | AP 24 | source ✅ / 차이: 새로고침은 진행 중인 필터 교체 뒤에 이어서 실행 | APC `pollingElementAttributes` | 미확인 |
+| 필터를 바꾼 조회가 실패하면 이전 필터의 이벤트·KPI 를 남기지 않고 LoadError(KPI "—") | AP 25 | source ✅ (rows 422 + 오류 카드 + OOB KPI "—", 필터는 그대로) | APC `rowsFailure` | 미확인 |
+| tenant 를 바꾼 조회가 실패해도 이전 tenant 이벤트를 보이지 않는다 | AP 26 | source ✅ (같은 경로) | APC `rowsFailure` | 미확인 |
+| 카테고리·tenant 를 바꿔도 컨트롤이 다시 마운트되지 않아 포커스가 남는다 | AP 27, 28 | source ✅ (세그먼트·선택 상자·검색 입력은 응답이 다시 그리지 않음 — `reset` 요청만 OOB) | APC `rowsFragment`,`rowsResetControls` | 미확인 |
+| 적용된 필터 칩 + 모두 지우기 + 검색어 칩 | (소스) | source ✅ | APC `rowsResetControls`,`rowsQueryFilters`,`controlsCarryOtherFilters` | 미확인 |
+| 더 보기: (시각, id) 튜플 커서로 이전 쪽을 아래에 붙임, 실패는 토스트 | (소스) | source ✅ | APC `loadMore`,`loadMoreNoopCases`,`loadMoreFailureToasts`,`moreButtonAttributes` | 미확인 |
+| CSV(activity-KST오늘.csv, 6열, 액션 검색 무시), 읽은 행이 없으면 경고 토스트 | (소스) | source ✅ / 차이: 원본은 화면에 읽은 행 전부 — 서버가 최신 쪽부터 가장 오래된 행의 커서까지 이어 읽는다(부분 파일 금지, 최대 40쪽) | APC `csvExport`,`csvFailure`,`csvLinkAttributes` + 스텁 | 미확인 |
+| 활발한 Tenant 클릭 = tenant 필터, 폴링은 목록이 바뀔 때만 이 카드를 다시 그림(포커스 보존) | (소스) | source ✅ (원본은 React 가 포커스 유지 → 서명 비교로 대체) | APC `tenantsCardOnlyWhenChanged`,`filtersFromUrl` | 미확인 |
+| PLATFORM 만: RP_ADMIN 은 홈, 조각·상세·CSV 는 403 | (App.tsx RequirePlatform) | source ✅ | APC `rpAdminRedirectedHome`,`fragmentsRejectRpAdmin`,`unauthenticated` | — |
+| 사용자 값(행위자·tenant 이름·diff 값)은 HTML 로 해석되지 않음 | 신규 | — | APC `userValuesAreEscaped`,`detailEscapes` | — |
+| 유휴 타이머: 폴링(`every`)은 합성 이벤트라 리셋하지 않음, 행 클릭·필터는 사용자 동작이라 리셋 | 신규 | source ✅ (Task 5 isTrusted 규칙, 폴링 요소 `data-quiet`) | APC `pollingElementAttributes` | 미확인 |
+| activityDiff: diff 우선 / changedFields 순서 / 값 다른 키만 / before·after 없거나 JSON 아님 → [] / arrayChange | AD 1–6 | source ✅ | ADT 전부 | — |
+| activityLabels: 라벨 매핑·fallback·문장·system | AL 1–4 | source ✅ | ALT 전부 | — |
 
 ## §Audit chain
 

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  활동 상세 패널(← ActivityPage.tsx DetailPanel). GET /admin/_/activity/{id} 가 #activity-detail 안쪽을 이 조각으로 바꾼다.
+  모델: d(DetailVm — 성공) 또는 loadError(+ detailUrl — 패널 안 오류, 다시 시도).
+  액션 코드·행위자·tenant 이름·payload·diff 값은 사용자가 정할 수 있는 값이라 전부 th:text. diff 는 문자열 칩(원본 HTML 없음).
+  닫기·선택 해제는 Alpine(activityLive.closeDetail)이 한다.
+-->
+<section th:fragment="panel" class="card" aria-label="이벤트 상세">
+  <div class="card__head">
+    <h2 class="card__title">상세</h2>
+    <span class="tag" th:if="${d != null}" th:title="${d.actionLabel}" th:text="${d.action}">TENANT_UPDATE</span>
+    <div class="spacer"></div>
+    <button type="button" class="icon-btn" aria-label="닫기" title="닫기" x-on:click="closeDetail()"><th:block th:replace="~{admin/fragments/icons :: x(16)}"></th:block></button>
+  </div>
+  <div class="card__body stack-4" style="gap: 18px">
+    <th:block th:if="${d == null}">
+      <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('이벤트 상세', ${loadError}, ${detailRetryAttrs}, false, true)}"></th:block>
+    </th:block>
+    <th:block th:if="${d != null}">
+      <div class="stack-1" style="gap: 6px" role="group" aria-label="언제">
+        <div class="row"><span class="t-over">언제</span></div>
+        <span style="font-size: 13px"><th:block th:text="${d.kst}">2026-10-11 11:48:00</th:block> <span class="muted" style="font-size: 12px">KST</span></span>
+        <span class="mono muted" style="font-size: 12px" th:text="${d.utc}">2026-10-11T02:48:00Z UTC</span>
+      </div>
+      <div class="stack-1" style="gap: 6px" role="group" aria-label="누가">
+        <div class="row"><span class="t-over">누가</span></div>
+        <span class="row" style="gap: 8px; font-size: 13px">
+          <span class="avatar avatar--sm" aria-hidden="true" th:text="${d.avatar}">O</span>
+          <span th:text="${d.actor}">op@x.com</span>
+        </span>
+      </div>
+      <div class="stack-1" style="gap: 6px" role="group" aria-label="테넌트 · 대상">
+        <div class="row"><span class="t-over">테넌트 · 대상</span></div>
+        <span class="row" style="gap: 4px; font-size: 13px">
+          <a th:if="${d.tenantUrl != null}" class="btn btn--ghost btn--xs" th:href="${d.tenantUrl}" th:text="${d.tenantLabel}">acme</a>
+          <span th:if="${d.tenantUrl == null}">플랫폼</span>
+          <span th:text="${'· ' + d.targetType}">· TENANT</span>
+          <span th:if="${d.targetTail != null}" class="mono muted" style="font-size: 12px" th:title="${d.targetFull}" th:text="${d.targetTail}">…11112222</span>
+        </span>
+      </div>
+      <div class="stack-1" style="gap: 6px" role="group" aria-label="어떻게 바뀜" th:if="${not #lists.isEmpty(d.diff)}">
+        <div class="row"><span class="t-over">어떻게 바뀜</span></div>
+        <div th:each="r : ${d.diff}" class="row" style="gap: 8px; font-size: 12px">
+          <span class="mono truncate" style="width: 84px; color: var(--mute)" th:title="${r.field}" th:text="${r.field}">field</span>
+          <th:block th:if="${r.array}">
+            <span th:each="x : ${r.removed}" class="tag" style="background: var(--bad-soft); color: var(--bad-ink)" th:text="${'− ' + x}">− a</span>
+            <span th:each="x : ${r.added}" class="tag" style="background: var(--ok-soft); color: var(--ok-ink)" th:text="${'+ ' + x}">+ c</span>
+          </th:block>
+          <th:block th:unless="${r.array}">
+            <span class="tag" style="background: var(--bad-soft); color: var(--bad-ink); text-decoration: line-through" th:text="${r.from}">from</span>
+            <span style="color: var(--mute); display: inline-flex"><th:block th:replace="~{admin/fragments/icons :: chevronRight(14)}"></th:block></span>
+            <span class="tag" style="background: var(--ok-soft); color: var(--ok-ink)" th:text="${r.to}">to</span>
+          </th:block>
+          <span class="sr-only" th:text="${r.sr}">field: a 에서 b 로 변경</span>
+        </div>
+      </div>
+      <div class="stack-1" style="gap: 6px" role="group" aria-label="원본 JSON">
+        <div class="row"><span class="t-over">원본 JSON</span><div class="spacer"></div>
+          <th:block th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(${d.json}, '복사', false)}"></th:block></div>
+        <pre class="mono activity-json" th:text="${d.json}">{}</pre>
+      </div>
+    </th:block>
+  </div>
+</section>
+</body>
+</html>

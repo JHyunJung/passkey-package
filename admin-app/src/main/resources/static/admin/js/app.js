@@ -633,6 +633,132 @@
       };
     });
 
+    // ── 활동 화면(ActivityPage.tsx) ───────────────────────────
+    // 공유 1초 틱: 구독자가 있을 때만 interval 하나가 돈다(행마다 interval 을 두지 않는다). 구독 해제는 컴포넌트 destroy(요소가 교체·이동으로 사라질 때).
+    const activityTicker = {
+      subs: new Set(),
+      id: null,
+      add(fn) {
+        this.subs.add(fn);
+        if (this.id === null) this.id = setInterval(() => { const t = Date.now(); this.subs.forEach((f) => f(t)); }, 1000);
+        return () => {
+          this.subs.delete(fn);
+          if (this.subs.size === 0 && this.id !== null) { clearInterval(this.id); this.id = null; }
+        };
+      },
+    };
+    const ACT = '/admin/_/activity/';
+    function actKind(e) {
+      const pi = e.detail && e.detail.pathInfo;
+      const p = pi ? String(pi.requestPath || pi.finalRequestPath || '') : '';
+      if (p.indexOf(ACT + 'rows') === 0) return 'rows';
+      if (p.indexOf(ACT + 'poll') === 0) return 'poll';
+      if (p.indexOf(ACT + 'more') === 0) return 'more';
+      if (p.indexOf(ACT + 'export') === 0) return 'export';
+      return p.indexOf(ACT) === 0 ? 'detail' : '';
+    }
+    // 폴링·새로고침·필터 교체의 결과를 상태 표시로 알린다(토스트 중복 없음). 목록 자체는 서버가 htmx 로 바꾼다.
+    // 성공 → 실시간, 받은 뒤의 폴링 실패 → "연결 끊김"(목록 유지), 필터 교체 서버 거절(422) → 목록 영역의 오류 카드(loaded=false).
+    // 중단된 요청(hx-sync replace)은 responseError/sendError/timeout 이 오지 않아 실패로 세지 않는다.
+    Alpine.data('activityLive', function () {
+      return {
+        loaded: false,
+        disconnected: false,
+        lastOkAt: null,
+        now: Date.now(),
+        pollSec: 5,
+        selectedId: null,
+        detailState: 'idle', // idle | loading | netError
+        detailUrl: null,
+        unsub: null,
+        init() {
+          this.loaded = this.$el.dataset.loaded === 'true';
+          this.pollSec = parseInt(this.$el.dataset.pollSec, 10) || 5;
+          if (this.loaded) this.lastOkAt = Date.now();
+          this.unsub = activityTicker.add((t) => { this.now = t; });
+        },
+        destroy() { if (this.unsub) this.unsub(); },
+        get liveText() {
+          const ago = this.lastOkAt === null ? '' : ' · ' + Math.max(0, Math.floor((this.now - this.lastOkAt) / 1000)) + '초 전 갱신';
+          return (this.disconnected ? '연결 끊김' : '실시간') + ago;
+        },
+        // 마지막으로 받은 시각(KST HH:mm:ss) — "아래 목록은 12:00:00 기준입니다"
+        get sinceText() {
+          return this.lastOkAt === null ? '' : new Date(this.lastOkAt + 9 * 3600 * 1000).toISOString().slice(11, 19);
+        },
+        beforeRequest(e) {
+          // 필터를 바꾸면 이전 조건의 "더 보기" 응답이 새 목록에 붙지 않게 중단한다.
+          if (actKind(e) === 'rows') {
+            const m = document.getElementById('activity-more');
+            if (m) htmx.trigger(m, 'htmx:abort');
+          }
+        },
+        afterRequest(e) {
+          const k = actKind(e);
+          const ok = e.detail.successful === true;
+          if ((k === 'rows' || k === 'poll') && ok) {
+            this.loaded = true;
+            this.disconnected = false;
+            this.lastOkAt = Date.now();
+            this.now = this.lastOkAt;
+          } else if (k === 'detail') {
+            const st = e.detail.xhr && e.detail.xhr.status;
+            if (ok || st === 422) this.detailState = 'idle'; // 422 = 패널 안 오류 조각이 보인다
+          }
+        },
+        failed(e) {
+          const k = actKind(e);
+          const st = e.detail && e.detail.xhr ? e.detail.xhr.status : 0;
+          if (k === 'rows' && st === 422) { this.loaded = false; this.disconnected = false; }
+          else if (k === 'poll' && this.loaded) this.disconnected = true;
+          else if (k === 'detail' && st !== 422) this.detailState = 'netError';
+        },
+        // 카테고리 세그먼트: 요청이 읽는 숨은 입력을 바로 맞춘다(응답이 오기 전에 tenant·검색 요청이 나가도 현재 선택을 싣게).
+        catChanged(e) {
+          const el = document.getElementById('activity-cat');
+          if (el && e.target && e.target.closest && e.target.closest('#activity-seg') && e.detail) el.value = e.detail.value;
+        },
+        openDetail(id) {
+          this.selectedId = id;
+          this.detailState = 'loading';
+          this.detailUrl = ACT + encodeURIComponent(id);
+          const d = document.getElementById('activity-detail');
+          if (d) d.replaceChildren();
+        },
+        closeDetail() {
+          htmx.trigger('#activity-detail', 'htmx:abort'); // 불러오는 중에 닫으면 응답이 와도 다시 열리지 않는다
+          this.selectedId = null;
+          this.detailState = 'idle';
+          const d = document.getElementById('activity-detail');
+          if (d) d.replaceChildren();
+        },
+        retryDetail() {
+          if (!this.detailUrl) return;
+          this.detailState = 'loading';
+          htmx.ajax('GET', this.detailUrl, { target: '#activity-detail', swap: 'innerHTML' });
+        },
+        // CSV: 화면에 읽어 온 행(가장 오래된 행의 커서까지)을 내보낸다. 읽은 행이 없으면 원본처럼 경고만.
+        exportClick(e) {
+          const el = e.currentTarget;
+          const newest = document.getElementById('activity-newest');
+          if (!this.loaded) { e.preventDefault(); return; }
+          if (!newest || !newest.value) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('toast', { detail: { kind: 'warn', title: '내보낼 데이터 없음' } }));
+            return;
+          }
+          const bid = document.getElementById('activity-before-id');
+          const cat = document.getElementById('activity-cat');
+          const ten = document.getElementById('activity-tenant');
+          const q = new URLSearchParams();
+          q.set('category', cat ? cat.value : 'all');
+          if (ten && ten.value) q.set('tenantId', ten.value);
+          if (bid && bid.value) q.set('beforeId', bid.value);
+          el.setAttribute('href', ACT + 'export?' + q.toString());
+        },
+      };
+    });
+
     // 사이드바 감사 체인 카드 상태(Sidebar.tsx). 성공 응답은 서버가 그린 조각(#chain-card-body)이 보이고,
     // 첫 응답 전이거나 "다시 시도" 직후엔 "검증 중… N초째 확인 중", 실패(비 2xx·네트워크·시간 초과)는 "검증 상태 확인 불가".
     // 경과 초는 검증 중일 때만 1초마다 갱신한다.

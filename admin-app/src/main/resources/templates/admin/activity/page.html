@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}" xmlns:th="http://www.thymeleaf.org">
+<head><title>Activity</title></head>
+<body>
+<!--
+  활동 화면(← pages/ActivityPage.tsx). 화면 템플릿 규약: layout 한 줄 + title / crumbs / main.
+  구조: #activity-root(Alpine activityLive — 상태 표시·상세 선택·폴링 이벤트) 아래
+    헤더(실시간 상태·새로고침·CSV) · 연결 끊김 배너 · KPI(#activity-kpis) · 필터 카드 · #activity-main(목록 영역, rows 조각)
+    · aside(#activity-detail, 활발한 Tenant) · 숨은 상태(#activity-state) · 폴링 자리(#activity-poll).
+  요청은 요소마다 hx-* 를 직접 가진다(컨테이너에 hx-target/hx-swap/hx-sync 를 두지 않는다). 동기화 기준은 #activity-root:
+  폴링 = drop(쌓이지 않음 · 필터 교체를 끊지 않음), 필터 변경 = replace(진행 중이던 폴링을 중단), 새로고침 = queue last.
+  모델: loaded/loadError, days, kpi*, top, 필터 값·칩 속성, state 값(rows.html 참고), pollAttrs/refreshAttrs
+-->
+<th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>
+<main>
+<div class="page" id="activity-root" x-data="activityLive"
+     th:attr="data-loaded=${loaded}, data-poll-sec=${pollSec}"
+     x-on:htmx:before-request="beforeRequest($event)" x-on:htmx:after-request="afterRequest($event)"
+     x-on:htmx:response-error="failed($event)" x-on:htmx:send-error="failed($event)" x-on:htmx:timeout="failed($event)"
+     x-on:segmented-change="catChanged($event)">
+  <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('Activity', '전체 tenant의 패스키 등록·인증 · 운영 변경 · 보안 이벤트를 모아 봅니다.', ~{:: headerActions})}"></th:block>
+
+  <!-- 연결 끊김(받은 뒤의 폴링 실패): 목록은 그대로 두고 알린다. 첫 조회 실패는 목록 영역의 오류 카드가 알린다. -->
+  <div class="banner banner--warning banner--top" role="status" x-cloak x-show="loaded && disconnected && lastOkAt !== null" hidden>
+    <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+    <div class="banner__body">
+      <div class="banner__title">새 이벤트를 받지 못하고 있습니다</div>
+      <div x-text="'아래 목록은 ' + sinceText + ' 기준입니다. ' + pollSec + '초마다 자동으로 다시 연결합니다.'">아래 목록은 12:00:00 기준입니다. 5초마다 자동으로 다시 연결합니다.</div>
+    </div>
+    <div class="banner__actions">
+      <button type="button" class="btn btn--sm" ui:attrs="${refreshAttrs}"><th:block th:replace="~{admin/fragments/icons :: refresh(14)}"></th:block>지금 다시 연결</button>
+    </div>
+  </div>
+
+  <th:block th:replace="~{admin/activity/rows :: kpis(false)}"></th:block>
+
+  <!-- 필터는 로딩·실패 화면에서도 보인다 — 바꾼 조건의 조회가 실패하면 되돌릴 수 있어야 한다. 컨트롤은 응답이 다시 그리지 않는다(포커스·입력 보존). -->
+  <div class="card" id="activity-filters" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 12px">
+    <div class="row" style="gap: 12px">
+      <th:block th:replace="~{admin/activity/rows :: seg(false)}"></th:block>
+      <th:block th:replace="~{admin/activity/rows :: tenantSelect(false)}"></th:block>
+      <div class="search" style="flex: 1 1 220px">
+        <th:block th:replace="~{admin/fragments/icons :: search(15)}"></th:block>
+        <th:block th:replace="~{admin/activity/rows :: qInput(false)}"></th:block>
+      </div>
+    </div>
+    <th:block th:replace="~{admin/activity/rows :: applied(false)}"></th:block>
+  </div>
+
+  <div class="activity-layout">
+    <div id="activity-main" class="activity-main">
+      <th:block th:replace="~{admin/activity/rows :: main}"></th:block>
+    </div>
+    <aside class="activity-aside">
+      <!-- 상세 패널: 열기 전·닫은 뒤에는 비어 있다. 불러오는 중·네트워크 실패는 아래 두 패널(Alpine)이, 성공·서버 오류는 detail 조각이 그린다. -->
+      <section class="card" aria-label="이벤트 상세" x-cloak x-show="detailState === 'loading'" hidden>
+        <div class="card__head"><h2 class="card__title">상세</h2><div class="spacer"></div>
+          <button type="button" class="icon-btn" aria-label="닫기" title="닫기" x-on:click="closeDetail()"><th:block th:replace="~{admin/fragments/icons :: x(16)}"></th:block></button></div>
+        <div class="card__body"><th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(4, '상세 불러오는 중')}"></th:block></div>
+      </section>
+      <section class="card" aria-label="이벤트 상세" x-cloak x-show="detailState === 'netError'" hidden>
+        <div class="card__head"><h2 class="card__title">상세</h2><div class="spacer"></div>
+          <button type="button" class="icon-btn" aria-label="닫기" title="닫기" x-on:click="closeDetail()"><th:block th:replace="~{admin/fragments/icons :: x(16)}"></th:block></button></div>
+        <div class="card__body">
+          <div class="empty empty--compact" role="alert">
+            <p class="empty__title">이벤트 상세를 불러오지 못했습니다</p>
+            <p class="empty__sub">서버에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요.</p>
+            <div class="empty__actions"><button type="button" class="btn btn--primary" x-on:click="retryDetail()">다시 시도</button></div>
+          </div>
+        </div>
+      </section>
+      <div id="activity-detail" data-quiet></div>
+      <th:block th:replace="~{admin/activity/rows :: tenantsCard(false)}"></th:block>
+    </aside>
+  </div>
+
+  <th:block th:replace="~{admin/activity/rows :: state(false)}"></th:block>
+  <!-- 폴링: 같은 주기(POLL_MS)·현재 필터를 싣는다. 페이지를 떠나 이 요소가 사라지면 htmx 가 멈춘다. 신뢰되지 않은(합성) 트리거라 유휴 타이머를 건드리지 않는다. -->
+  <div id="activity-poll" hidden ui:attrs="${pollAttrs}"></div>
+</div>
+</main>
+
+<th:block th:remove="all">
+  <th:block th:fragment="headerActions">
+    <!-- 실시간 상태: 초 단위 카운터는 live 영역 밖. 연결이 복구될 때만 알린다(끊김은 위 배너가 알린다). -->
+    <span class="row" style="gap: 6px; font-size: 12px" x-cloak x-show="loaded" hidden
+          x-bind:style="{ color: disconnected ? 'var(--warn)' : 'var(--mute)', fontWeight: disconnected ? '600' : '' }" x-bind:data-ts="lastOkAt">
+      <span class="dot" aria-hidden="true" x-bind:style="{ background: disconnected ? 'var(--faint)' : 'var(--ok)' }"></span>
+      <span x-text="liveText">실시간 · 0초 전 갱신</span>
+    </span>
+    <span class="sr-only" role="status" x-text="loaded &amp;&amp; !disconnected ? '실시간 연결됨' : ''"></span>
+    <button type="button" class="btn" ui:attrs="${refreshAttrs}" x-bind:disabled="!loaded"><th:block th:replace="~{admin/fragments/icons :: refresh(14)}"></th:block>새로고침</button>
+    <a class="btn" id="activity-export" th:href="${exportHref}" th:attr="data-base=${exportHref}" hx-boost="false" download data-csv-download
+       x-on:click="exportClick($event)" x-bind:aria-disabled="!loaded"><th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>내보내기</a>
+  </th:block>
+</th:block>
+</body>
+</html>
