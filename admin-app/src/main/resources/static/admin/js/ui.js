@@ -302,7 +302,9 @@ document.addEventListener('alpine:init', () => {
 
   // ── SaveBar / 저장하지 않은 변경 ───────────────────────
   // form 의 필드 값을 처음 상태와 비교해 바뀐 개수를 센다. 되돌리기=form.reset(), 저장=form.requestSubmit().
-  // dirty 동안 새로고침·탭 닫기를 막는다.
+  // 변경 개수와 저장 중 여부는 전역 Alpine.store('dirty')(app.js)에 보고한다. 새로고침·탭 닫기 경고(beforeunload)와 이동 확인은
+  // 그 스토어를 보는 app.js 의 리스너 하나·unsavedGuard 하나가 맡는다(이 컴포넌트는 따로 경고하지 않는다).
+  let saveBarSeq = 0;
   function formSnapshot(form) {
     const snap = {};
     new FormData(form).forEach((v, k) => { (snap[k] = snap[k] || []).push(String(v)); });
@@ -324,11 +326,9 @@ document.addEventListener('alpine:init', () => {
     count: 0,
     saveLabel: cfg.saveLabel || '저장',
     saving: false,
-    disarmed: false,
+    uid: 'savebar-' + (++saveBarSeq),
     inflight: new Map(),
     pending: new Map(), // after-request 리스너 → 그 리스너를 단 출발 요소
-    beforeUnload: null,
-    disarm: null,
     init() {
       this.form = cfg.form ? document.getElementById(cfg.form) : this.$root.closest('form');
       if (!this.form) return;
@@ -359,31 +359,29 @@ document.addEventListener('alpine:init', () => {
         };
         this.inflight.set(key, formSnapshot(f));
         this.saving = true;
+        this.report();
         src.addEventListener('htmx:after-request', done);
         this.pending.set(done, src);
         // 다른 리스너가 요청을 취소하면(beforeRequest preventDefault) afterRequest 가 오지 않으므로 바로 정리한다.
         queueMicrotask(() => { if (e.defaultPrevented) done({ detail: { requestConfig: key, successful: false } }); });
       });
       // 일반(비 htmx) 제출은 페이지 이동이므로 경고를 끈다.
-      f.addEventListener('submit', () => { if (!f.hasAttribute('hx-post') && !f.hasAttribute('hx-put') && !f.hasAttribute('hx-patch') && !f.hasAttribute('hx-delete')) this.disarmed = true; });
-      this.beforeUnload = (e) => { if (this.count > 0 && !this.saving && !this.disarmed) { e.preventDefault(); e.returnValue = ''; } };
-      this.disarm = () => { this.disarmed = true; };
-      window.addEventListener('beforeunload', this.beforeUnload);
-      window.addEventListener('unsaved-disarm', this.disarm); // unsavedGuard 가 '이동'을 확정했을 때
+      f.addEventListener('submit', () => { if (!f.hasAttribute('hx-post') && !f.hasAttribute('hx-put') && !f.hasAttribute('hx-patch') && !f.hasAttribute('hx-delete')) Alpine.store('dirty').disarm(); });
     },
     destroy() {
-      if (this.beforeUnload) window.removeEventListener('beforeunload', this.beforeUnload);
-      if (this.disarm) window.removeEventListener('unsaved-disarm', this.disarm);
       this.pending.forEach((src, fn) => src.removeEventListener('htmx:after-request', fn));
       this.pending.clear();
+      Alpine.store('dirty').report(this.uid, 0, false); // 이 화면이 사라지면 더는 변경으로 세지 않는다
     },
+    /** 전역 dirty 스토어에 이 폼의 변경 수·저장 중 여부를 알린다. */
+    report() { Alpine.store('dirty').report(this.uid, this.count, this.saving); },
     /** 추적 중인 저장 요청 하나를 끝낸다. 성공이면 그 요청의 제출 시점 스냅샷이 새 기준선. */
     finish(key, ok) {
       const snap = this.inflight.get(key);
       if (!snap) return;
       this.inflight.delete(key);
       this.saving = this.inflight.size > 0;
-      if (ok) { this.base = snap; this.recount(); }
+      if (ok) { this.base = snap; this.recount(); } else this.report();
     },
     recount() {
       const now = formSnapshot(this.form);
@@ -391,6 +389,7 @@ document.addEventListener('alpine:init', () => {
       let n = 0;
       keys.forEach((k) => { if (JSON.stringify(this.base[k] || []) !== JSON.stringify(now[k] || [])) n += 1; });
       this.count = n;
+      this.report();
       this.$dispatch('unsaved-change', { count: n });
     },
     revert() { if (this.form) this.form.reset(); },
@@ -471,32 +470,31 @@ document.addEventListener('alpine:init', () => {
   }));
 
   // ── 저장하지 않은 변경 경고(이동 확인) ─────────────────
-  // dirty 일 때 같은 출처 링크 클릭을 가로채 "머무르기/이동" 확인을 띄운다(useUnsavedGuard).
-  // dirty 는 `unsaved-change`({count}) 이벤트(saveBar 가 올림)로 받는다.
+  // 확인창은 하나뿐이다(useUnsavedGuard). dirty 판단은 전역 Alpine.store('dirty')(app.js)가 한다.
+  // 물음이 오는 길: (1) 같은 출처 링크 클릭(capture) (2) app.js 의 htmx:beforeRequest 가 hx-boost GET 이동을 취소하며 `unsaved-ask` 를 올림.
+  // "이동"을 확정하면 스토어에 한 번만 통과 허가(allow)를 주고 같은 주소로 다시 이동한다(boost 이동이면 boost 로) — 새로고침 경고도 이때는 건너뛴다.
   Alpine.data('unsavedGuard', () => ({
-    dirty: false,
     open: false,
     href: null,
-    onChange(e) { this.dirty = (e.detail && e.detail.count > 0) || false; },
+    ask(href) { this.href = href; this.open = true; },
+    onAsk(e) { if (e.detail && e.detail.href) this.ask(e.detail.href); },
     onClick(e) {
-      if (!this.dirty || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!Alpine.store('dirty').needsGuard() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
       const a = e.target.closest && e.target.closest('a[href]');
       if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
       const u = new URL(a.href, window.location.href);
       if (u.origin !== window.location.origin) return;
       if (u.pathname === window.location.pathname && u.search === window.location.search) return;
       e.preventDefault();
-      this.href = u.href;
-      this.open = true;
+      this.ask(u.href);
     },
     stay() { this.open = false; this.href = null; },
-    // 이동을 확정하면 SaveBar 의 beforeunload 도 끈다(경고가 두 번 뜨지 않게).
     leave() {
       const h = this.href;
-      this.dirty = false;
       this.open = false;
-      window.dispatchEvent(new CustomEvent('unsaved-disarm'));
-      if (h) window.location.assign(h);
+      this.href = null;
+      Alpine.store('dirty').allow();
+      if (h) window.adminNavigate(h);
     },
   }));
 

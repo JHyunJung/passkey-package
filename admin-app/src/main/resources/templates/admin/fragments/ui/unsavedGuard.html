@@ -5,12 +5,13 @@
   useUnsavedGuard (← ui/useUnsavedGuard.tsx) — Alpine.data('unsavedGuard')
   th:replace="~{admin/fragments/ui/unsavedGuard :: unsavedGuard(title, body)}"     (레이아웃에 한 번)
     title 문자열(null 이면 '저장하지 않은 변경이 있습니다'), body 문자열(null 이면 '이동하면 변경 사항이 사라집니다.')
-  saveBar 가 올리는 `unsaved-change`(detail.count) 이벤트로 dirty 를 알고, dirty 인 동안 같은 출처의 다른 주소로 가는
-  링크 클릭을 가로채 '머무르기 / 이동' 확인(role=alertdialog, 기본 포커스는 머무르기)을 띄운다.
-  새로고침·탭 닫기는 saveBar 의 beforeunload 가 막는다.
+  dirty 판단은 전역 Alpine.store('dirty')(app.js)가 한다(saveBar 가 변경 수를 보고, 화면 폼은 $store.dirty.mark() 로 알린다).
+  dirty 인 동안 같은 출처의 다른 주소로 가는 링크 클릭과 hx-boost GET 이동(app.js 가 취소하고 `unsaved-ask` 를 올림)을 가로채
+  '머무르기 / 이동' 확인(role=alertdialog, 기본 포커스는 머무르기)을 띄운다. '이동'은 같은 주소로 다시 이동한다.
+  새로고침·탭 닫기는 app.js 의 beforeunload 리스너 하나가 같은 스토어를 보고 막는다(브라우저 기본 확인창).
 -->
 <div th:fragment="unsavedGuard(title, body)" x-data="unsavedGuard"
-     x-on:unsaved-change.window="onChange($event)" x-on:click.capture.window="onClick($event)" x-on:keydown.escape.window="if (open) stay()">
+     x-on:unsaved-ask.window="onAsk($event)" x-on:click.capture.window="onClick($event)" x-on:keydown.escape.window="if (open) stay()">
   <template x-if="open">
     <div class="scrim" x-on:mousedown.self="stay()">
       <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="unsaved-guard-title" x-trap.noscroll="open">

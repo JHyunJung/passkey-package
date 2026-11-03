@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  명령 팔레트(← extras/CommandPalette.tsx, usePaletteShortcut.ts)
+  palette : 레이아웃에 한 번. Alpine.data('commandPalette')(app.js). ⌘K / Ctrl+K 는 app.js 가 `palette-toggle` 로, 상단 바 버튼은 `open-palette` 로 연다.
+            열릴 때마다 검색칸을 비우고 결과를 새로 받는다(GET /admin/_/palette, 입력 150ms 뒤 다시). 화살표·Enter·Esc 는 app.js 의 commandPalette.onKey.
+            열려 있을 때만 aria-modal="true" 가 붙는다(단축키가 모달을 구분하는 기준: useGoShortcuts 의 [aria-modal="true"]).
+  results : CommandPaletteController 가 그리는 결과 조각(그룹 · 항목 · 빈 상태). 모델: groups, total, emptyTitle.
+            항목 버튼은 data-href(이동) 또는 data-action(logout · shortcuts · recheck)과 data-keep-open 을 가진다. 선택·활성화는 팔레트 컴포넌트가 위임 처리한다.
+  nav-link: 프로그램 이동(adminNavigate)용 숨은 링크. hx-boost 가 처리해 이동 확인(unsavedGuard)과 같은 길을 탄다.
+-->
+<div th:fragment="palette" x-data="commandPalette" x-on:open-palette.window="show()" x-on:palette-toggle.window="toggle()" x-on:keydown.window="onKey($event)">
+  <a id="admin-nav-link" href="/admin/tenants" th:href="@{/admin/tenants}" hidden tabindex="-1" aria-hidden="true"></a>
+  <div class="scrim" x-show="open" x-cloak x-on:mousedown.self="close()">
+    <div class="dialog palette" role="dialog" aria-label="명령 팔레트" x-bind:aria-modal="open ? 'true' : null" x-trap.noscroll="open">
+      <label class="palette__search">
+        <th:block th:replace="~{admin/fragments/icons :: search(18)}"></th:block>
+        <span class="sr-only">검색</span>
+        <input id="palette-input" x-ref="input" type="text" name="q" class="palette__input" role="combobox" aria-expanded="true"
+               aria-controls="palette-results" aria-autocomplete="list" aria-label="검색" autocomplete="off" autofocus
+               placeholder="tenant 이름 · slug, 화면, 동작 검색…"
+               th:attr="hx-get=@{/admin/_/palette}" hx-trigger="input changed delay:150ms, palette-load" hx-target="#palette-results" hx-swap="innerHTML"
+               hx-sync="this:replace" x-on:htmx:after-request="loading = false">
+        <kbd>esc</kbd>
+      </label>
+      <p class="hint palette__loading" x-show="loading" x-cloak role="status">불러오는 중…</p>
+      <div id="palette-results" x-ref="list" class="palette__list" role="listbox" aria-label="검색 결과"
+           x-on:click="activate($event)" x-on:mouseover="hover($event)" x-on:htmx:after-swap="afterSwap($event)"></div>
+      <div class="palette__foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> 이동</span>
+        <span><kbd>↵</kbd> 실행</span>
+        <span><kbd>esc</kbd> 닫기</span>
+        <span class="palette__count" x-text="count + '개 결과'">0개 결과</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<th:block th:fragment="results">
+  <th:block th:if="${#lists.isEmpty(groups)}">
+    <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', ${emptyTitle}, 'credential · 감사 이벤트 ID는 해당 화면의 검색에서 찾으세요.', null, true)}"></th:block>
+  </th:block>
+  <div th:each="g : ${groups}" role="group" th:aria-label="${g.label}">
+    <span class="t-over palette__group" aria-hidden="true" th:text="${g.label}">이동</span>
+    <button th:each="it : ${g.items}" th:id="${'palette-opt-' + it.index}" role="option" type="button" tabindex="-1"
+            class="menu__item palette__item" th:classappend="${it.danger} ? 'menu__item--danger'"
+            th:attr="aria-selected='false',data-index=${it.index},data-href=${it.href},data-action=${it.action},data-keep-open=${it.keepOpen},aria-disabled=${it.disabled} ? 'true'"
+            th:disabled="${it.disabled}">
+      <th:block th:replace="~{admin/fragments/icons :: __${it.icon}__(16)}"></th:block>
+      <span th:text="${it.label}">라벨</span>
+      <span class="hint palette__hint" th:if="${it.shown != null}" th:text="${it.shown}">힌트</span>
+      <kbd th:if="${it.goKey != null}" th:text="${it.goKey}">G T</kbd>
+    </button>
+  </div>
+</th:block>
+</body>
+</html>

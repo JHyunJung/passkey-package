@@ -67,4 +67,80 @@ class AppJsContractTest {
         assertThat(header).contains("x-on:keydown.escape.window=\"close()\"");
         assertThat(switcher).contains("x-on:keydown.escape.window=\"close()\"");
     }
+
+    // ── Task 5: 저장 안 한 변경 · 단축키 · 팔레트 · 유휴 모달 (문자열 가드, 동작 검증 아님) ──
+
+    private static String uiJs() throws IOException {
+        return Files.readString(Path.of("src/main/resources/static/admin/js/ui.js"), StandardCharsets.UTF_8);
+    }
+
+    /** 첫 {@code marker} 부터 짝이 맞는 중괄호까지(리스너 본문). */
+    private static String block(String js, String marker) {
+        int i = js.indexOf(marker);
+        assertThat(i).as(marker).isGreaterThanOrEqualTo(0);
+        int open = js.indexOf('{', js.indexOf("function", i));
+        int depth = 0;
+        for (int k = open; k < js.length(); k++) {
+            char c = js.charAt(k);
+            if (c == '{') depth++;
+            else if (c == '}' && --depth == 0) return js.substring(i, k + 1);
+        }
+        throw new AssertionError("unbalanced: " + marker);
+    }
+
+    @Test
+    @DisplayName("dirty 스토어: count·mark·clear 가 있고, 저장 성공(HX-Trigger saved)이 clear() 를 부른다")
+    void dirtyStore() throws Exception {
+        String js = appJs();
+        assertThat(js).contains("Alpine.store('dirty'").contains("count: 0").contains("mark()").contains("clear()");
+        assertThat(block(js, "document.addEventListener('saved'")).contains("Alpine.store('dirty').clear()");
+    }
+
+    @Test
+    @DisplayName("htmx:beforeRequest 리스너와 beforeunload 리스너가 둘 다 Alpine.store('dirty') 를 참조한다")
+    void guardListenersReferenceDirtyStore() throws Exception {
+        String js = appJs();
+        String before = block(js, "document.addEventListener('htmx:beforeRequest'");
+        assertThat(before).contains("Alpine.store('dirty')").contains("e.preventDefault()").contains("unsaved-ask")
+                .contains("boosted").contains("'get'");
+        String unload = block(js, "window.addEventListener('beforeunload'");
+        assertThat(unload).contains("Alpine.store('dirty')").contains("e.preventDefault()");
+        // beforeunload 리스너는 한 곳뿐(R10: 이중 경고 방지) — saveBar 는 달지 않는다.
+        assertThat(js.split("addEventListener\\('beforeunload'", -1).length - 1).isEqualTo(1);
+        assertThat(uiJs()).doesNotContain("beforeunload'");
+    }
+
+    @Test
+    @DisplayName("saveBar 는 변경 수·저장 중을 dirty 스토어에 보고하고, unsavedGuard 는 스토어로 판단·이동을 다시 시도한다")
+    void saveBarAndGuardUseStore() throws Exception {
+        String ui = uiJs();
+        assertThat(ui).contains("Alpine.store('dirty').report(").contains("Alpine.store('dirty').disarm()");
+        String guard = ui.substring(ui.indexOf("Alpine.data('unsavedGuard'"));
+        assertThat(guard).contains("Alpine.store('dirty').needsGuard()").contains("Alpine.store('dirty').allow()").contains("window.adminNavigate(");
+        assertThat(guard).doesNotContain("onChange(");
+    }
+
+    @Test
+    @DisplayName("전역 단축키 키 매핑: ⌘/Ctrl+K, ?, g 다음 t/a/c/s (useGoShortcuts·usePaletteShortcut·useHelpShortcut 와 같은 규칙)")
+    void keyMap() throws Exception {
+        String js = appJs();
+        assertThat(js).contains("{ t: '/admin/tenants', a: '/admin/activity', c: '/admin/audit-chain', s: '/admin/settings' }");
+        assertThat(js).contains("String(e.key).toLowerCase() !== 'k'").contains("document.querySelector('[role=\"alertdialog\"][aria-modal=\"true\"]')")
+                .contains("e.key !== '?' || e.metaKey || e.ctrlKey || e.altKey || e.repeat")
+                .contains("document.querySelector('[aria-modal=\"true\"]')")
+                .contains("/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)").contains("[contenteditable]:not([contenteditable=\"false\"])")
+                .contains("setTimeout(function () { goArmed = false; }, 1000)")
+                .contains("data-go-shortcuts");
+    }
+
+    @Test
+    @DisplayName("유휴 세션 모달 상수: 경고 60초 전, 최소 10초, 연장 유예 10초, 활동 이벤트 4종, 연장은 GET /admin/api/me, 로그아웃은 POST 폼")
+    void idleConstants() throws Exception {
+        String js = appJs();
+        assertThat(js).contains("Alpine.data('idleSession'").contains("WARN_LEAD_SECONDS = 60").contains("EXTEND_GRACE_MS = 10000")
+                .contains("Math.max(this.total - WARN_LEAD_SECONDS, 10)").contains("Math.max(this.total - this.warnAfter, 1)")
+                .contains("['mousemove', 'keydown', 'click', 'scroll']").contains("fetch('/admin/api/me'")
+                .contains("idle-logout-form").contains("세션 만료까지 10초 남았습니다.").contains("세션 만료까지 30초 남았습니다.");
+        assertThat(js).contains("Alpine.data('commandPalette'");
+    }
 }
