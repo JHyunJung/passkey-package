@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  사이드바(← shell/Sidebar.tsx)
+  모델: me(CurrentAdmin), navActive('tenants'|'activity'|'audit-chain'|'settings'|'license'|null), deploymentMode('onprem'이면 라이선스 항목)
+  PLATFORM: [플랫폼] Tenants · 활동 · 감사 체인 · (온프렘) 라이선스, [관리] 설정.  RP_ADMIN: [관리] 설정만.
+  PLATFORM 에게만 하단에 감사 체인 카드(30초 폴링, 응답 없는 조회는 120초 뒤 중단)를 둔다. 카드 상태·경과 초는 app.js 의 chainCard.
+-->
+<aside th:fragment="sidebar" class="sidebar" aria-label="주 메뉴">
+  <div class="sidebar__brand">
+    <img th:src="@{/admin/img/crosscert-logo-transparent.png}" alt="CROSSCERT">
+    <div class="sidebar__env">Passkey Admin</div>
+  </div>
+  <div class="sidebar__group" th:if="${me != null and me.platform}">
+    <span class="sidebar__label">플랫폼</span>
+    <a class="nav-item" th:classappend="${navActive == 'tenants'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'tenants'} ? 'page'" th:href="@{/admin/tenants}">
+      <th:block th:replace="~{admin/fragments/icons :: building(18)}"></th:block><span>Tenants</span>
+    </a>
+    <a class="nav-item" th:classappend="${navActive == 'activity'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'activity'} ? 'page'" th:href="@{/admin/activity}">
+      <th:block th:replace="~{admin/fragments/icons :: activity(18)}"></th:block><span>활동</span>
+    </a>
+    <a class="nav-item" th:classappend="${navActive == 'audit-chain'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'audit-chain'} ? 'page'" th:href="@{/admin/audit-chain}">
+      <th:block th:replace="~{admin/fragments/icons :: link(18)}"></th:block><span>감사 체인</span><span id="nav-chain-count"></span>
+    </a>
+    <a th:if="${deploymentMode == 'onprem'}" class="nav-item" th:classappend="${navActive == 'license'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'license'} ? 'page'" th:href="@{/admin/license}">
+      <th:block th:replace="~{admin/fragments/icons :: key(18)}"></th:block><span>라이선스</span><span class="nav-item__tag">온프렘</span>
+    </a>
+  </div>
+  <div class="sidebar__group">
+    <span class="sidebar__label">관리</span>
+    <a class="nav-item" th:classappend="${navActive == 'settings'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'settings'} ? 'page'" th:href="@{/admin/settings}">
+      <th:block th:replace="~{admin/fragments/icons :: cog(18)}"></th:block><span>설정</span>
+    </a>
+  </div>
+  <div class="sidebar__foot">
+    <div th:if="${me != null and me.platform}" id="chain-card" data-quiet x-data="chainCard"
+         th:attr="hx-get=@{/admin/_/shell/chain-card}" hx-trigger="load, every 30s" hx-target="#chain-card-body" hx-swap="innerHTML"
+         hx-request='{"timeout": 120000}' x-on:htmx:after-request="done($event)">
+      <div id="chain-card-body" x-show="!checking &amp;&amp; !failed" x-cloak></div>
+      <div class="chain-card chain-card--pending" x-show="checking">
+        <span class="chain-card__dot"></span>
+        <span class="stack-1" style="gap: 2px">
+          <span class="chain-card__title">검증 중…</span>
+          <span class="chain-card__sub" aria-live="off" x-text="secs + '초째 확인 중'">0초째 확인 중</span>
+        </span>
+      </div>
+      <div class="chain-card chain-card--warn" x-show="failed &amp;&amp; !checking" x-cloak>
+        <span class="chain-card__dot"></span>
+        <span class="stack-1" style="gap: 4px">
+          <span class="chain-card__title" role="status">검증 상태 확인 불가</span>
+          <span class="chain-card__sub" x-text="lastText">서버 응답이 없습니다</span>
+          <button type="button" class="btn btn--sm" style="align-self: flex-start" th:attr="hx-get=@{/admin/_/shell/chain-card}" hx-target="#chain-card-body" hx-swap="innerHTML" x-on:click="start()">다시 시도</button>
+        </span>
+      </div>
+    </div>
+    <span class="sidebar__copy">© Crosscert</span>
+  </div>
+</aside>
+</body>
+</html>

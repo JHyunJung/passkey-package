@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  RP 전환(← Header.tsx RpSwitcher). 다중 테넌트 RP_ADMIN 에게만 보인다 — 컨트롤러가 허용 RP 가 2개 미만이면 빈 응답을 준다.
+  모델: switcher(label, items[id, name, active])
+  항목을 고르면 POST /admin/_/active-tenant(tenantId) → 성공은 HX-Redirect 로 그 RP 상세, 실패는 오류 토스트(화면은 그대로).
+  메뉴 동작(열기·바깥 클릭·Esc)은 app.js 의 shellMenu.
+-->
+<div th:fragment="switcher" class="menu-wrap" x-data="shellMenu(false)" x-on:keydown.escape="close()"
+     x-on:mousedown.window="outside($event)" x-on:htmx:after-request="switching = false; close()">
+  <button type="button" class="btn btn--ghost" aria-haspopup="menu" x-bind:aria-expanded="open" x-bind:disabled="switching" x-on:click="toggle()">
+    <th:block th:replace="~{admin/fragments/icons :: building(14)}"></th:block>
+    <span class="truncate" style="max-width: 140px" x-show="!switching" th:text="${switcher.label}">Acme</span>
+    <span class="truncate" style="max-width: 140px" x-show="switching" x-cloak>전환 중…</span>
+    <th:block th:replace="~{admin/fragments/icons :: chevronDown(12)}"></th:block>
+  </button>
+  <div class="menu" role="menu" aria-label="RP 전환" style="left: 0; right: auto; min-width: 220px" x-show="open" x-cloak>
+    <span class="t-over" style="display: block; padding: 4px 10px 6px">RP 전환</span>
+    <th:block th:each="it : ${switcher.items}">
+      <button th:if="${it.active}" type="button" role="menuitemradio" aria-checked="true" class="menu__item" x-on:click="close()">
+        <span style="width: 14px; display: inline-flex"><th:block th:replace="~{admin/fragments/icons :: check(14)}"></th:block></span>
+        <th:block th:text="${it.name}">Acme</th:block>
+      </button>
+      <button th:unless="${it.active}" type="button" role="menuitemradio" aria-checked="false" class="menu__item"
+              th:attr="hx-post=@{/admin/_/active-tenant},hx-vals=${'{&quot;tenantId&quot;: &quot;' + it.id + '&quot;}'}" hx-swap="none"
+              x-on:click="switching = true">
+        <span style="width: 14px; display: inline-flex"></span>
+        <th:block th:text="${it.name}">Beta</th:block>
+      </button>
+    </th:block>
+  </div>
+</div>
+</body>
+</html>

@@ -46,14 +46,26 @@ public final class Toasts {
         write(res, "error", message, detail, traceId);
     }
 
+    /**
+     * 제목이 있는 오류 토스트(errorToast.ts: title=무엇이 실패했는지, message=쉬운 문구). 토스트는 제목을 크게, message 를 작게 보인다.
+     */
+    public static void errorTitled(HttpServletResponse res, String title, String message, String detail, String traceId) {
+        write(res, "error", title, message, detail, traceId);
+    }
+
     private static void write(HttpServletResponse res, String kind, String message) {
         write(res, kind, message, null, null);
     }
 
     private static void write(HttpServletResponse res, String kind, String message, String detail, String traceId) {
+        write(res, kind, null, message, detail, traceId);
+    }
+
+    private static void write(HttpServletResponse res, String kind, String title, String message, String detail, String traceId) {
         try {
             Map<String, Object> toast = new java.util.LinkedHashMap<>();
             toast.put("kind", kind);
+            if (title != null && !title.isEmpty()) toast.put("title", title);
             toast.put("message", message == null ? "" : message);
             if (detail != null && !detail.isEmpty()) toast.put("detail", detail);
             if (traceId != null && !traceId.isEmpty()) toast.put("traceId", traceId);

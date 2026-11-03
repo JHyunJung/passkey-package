@@ -366,3 +366,8 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .skeleton-block__line:nth-child(6n+4) { width: 70%; }
 .skeleton-block__line:nth-child(6n+5) { width: 88%; }
 .skeleton-block__line:nth-child(6n+6) { width: 80%; }
+
+/* 공통 틀: 링크로 그린 브레드크럼·메뉴 항목, 메뉴 안 로그아웃 폼 */
+.crumbs__item { text-decoration: none; }
+a.menu__item { text-decoration: none; }
+.menu form { margin: 0; }

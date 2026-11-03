@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Breadcrumb (← shell/Breadcrumb.tsx)
+  th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${items})}"
+    items: List<Crumb>(label, href). 마지막 항목은 현재 위치(aria-current=page), 앞쪽은 href 가 있으면 링크, 없으면 글자만.
+    비어 있거나 null 이면 아무것도 그리지 않는다. 항목 목록은 web.shell.Crumbs 가 만든다(App.tsx buildBreadcrumb).
+-->
+<nav th:fragment="breadcrumb(items)" th:if="${items != null and !items.isEmpty()}" aria-label="현재 위치" class="crumbs">
+  <th:block th:each="it, st : ${items}">
+    <th:block th:if="${!st.first}"><th:block th:replace="~{admin/fragments/icons :: chevronRight(14)}"></th:block></th:block>
+    <span th:if="${st.last}" class="crumbs__current" aria-current="page" th:text="${it.label}">현재</span>
+    <a th:if="${!st.last and it.href != null}" class="crumbs__item" th:href="@{${it.href}}" th:text="${it.label}">상위</a>
+    <span th:if="${!st.last and it.href == null}" th:text="${it.label}">상위</span>
+  </th:block>
+</nav>
+</body>
+</html>

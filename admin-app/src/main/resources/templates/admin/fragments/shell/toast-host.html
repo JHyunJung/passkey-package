@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  토스트 호스트(← ui/ToastHost). 별도 구현 없이 Task 3 의 toastHost 조각(Alpine.data('toastHost'))을 그대로 쓴다.
+  서버의 HX-Trigger: {"toast": {...}} 는 htmx 가 window 로 올리는 `toast` 이벤트가 되고, 그 조각이 받는다.
+  app.js 는 같은 이벤트를 직접 올려(네트워크 오류·시간 초과) 같은 컴포넌트에 넣는다.
+-->
+<th:block th:fragment="toastHost"><th:block th:replace="~{admin/fragments/ui/toastHost :: toastHost}"></th:block></th:block>
+</body>
+</html>

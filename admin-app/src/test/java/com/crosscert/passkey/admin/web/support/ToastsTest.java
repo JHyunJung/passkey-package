@@ -51,6 +51,21 @@ class ToastsTest {
     }
 
     @Test
+    void titledErrorCarriesTitleMessageDetailAndTraceId() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        Toasts.errorTitled(res, "RP를 전환하지 못했습니다", "서버가 잠시 응답하지 않습니다.", "HTTP 503", "tr-1");
+        JsonNode toast = new ObjectMapper().readTree(res.getHeader("HX-Trigger")).get("toast");
+        assertThat(toast.get("kind").asText()).isEqualTo("error");
+        assertThat(toast.get("title").asText()).isEqualTo("RP를 전환하지 못했습니다");
+        assertThat(toast.get("message").asText()).isEqualTo("서버가 잠시 응답하지 않습니다.");
+        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 503");
+        assertThat(toast.get("traceId").asText()).isEqualTo("tr-1");
+        MockHttpServletResponse plain = new MockHttpServletResponse();
+        Toasts.error(plain, "실패");
+        assertThat(new ObjectMapper().readTree(plain.getHeader("HX-Trigger")).get("toast").has("title")).isFalse();
+    }
+
+    @Test
     void htmxRedirectVsPlainRedirect() throws Exception {
         MockHttpServletRequest htmx = new MockHttpServletRequest();
         htmx.addHeader("HX-Request", "true");
