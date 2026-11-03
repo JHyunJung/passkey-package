@@ -26,7 +26,7 @@
         <p class="card__sub">운영자 승인 후 이메일로 안내됩니다. 승인 전에는 로그인할 수 없습니다.</p>
         <a class="btn" href="/admin">로그인으로 돌아가기</a>
       </th:block>
-      <form th:if="${state == 'form'}" class="col" style="gap: 18px;" novalidate
+      <form th:if="${state == 'form'}" class="col" style="gap: 18px;" method="post" action="/admin/signup" novalidate
             hx-post="/admin/signup" hx-target="#auth-col" hx-swap="outerHTML" hx-sync="this:drop"
             x-data="signupForm" th:attr="data-email=${email}, data-reason=${reason}, data-role=${role}"
             x-on:htmx:before-request="onBefore($event)" x-on:htmx:after-request="onAfter($event)"
@@ -36,6 +36,16 @@
           <h1 class="page__title">관리자 계정 가입 요청</h1>
           <p class="card__sub">플랫폼 운영자가 승인하면 계정이 활성화됩니다. 역할과 담당 tenant 는 승인 시 지정됩니다.</p>
         </div>
+        <template x-if="rejected">
+          <div class="banner banner--danger banner--top" role="alert">
+            <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+            <div class="banner__body">
+              <div class="banner__title">요청이 거부되었습니다.</div>
+              <div>보안 토큰이 만료되었을 수 있습니다. 페이지를 새로 고친 뒤 다시 시도하세요. 입력한 비밀번호는 지워질 수 있습니다.<span class="mono" style="display: block; font-size: 11px;" x-text="'HTTP ' + status"></span></div>
+            </div>
+            <div class="banner__actions"><button type="button" class="btn btn--sm" x-on:click="window.location.reload()">새로 고침</button></div>
+          </div>
+        </template>
         <template x-if="failure">
           <div class="banner banner--danger banner--top" role="alert">
             <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
@@ -67,30 +77,36 @@
           <label class="label" for="signup-email">이메일</label>
           <input id="signup-email" name="email" class="input" type="email" autofocus autocomplete="username" placeholder="you@company.com"
                  x-model="email" x-on:blur="emailTouched = true" x-bind:readonly="submitting"
-                 x-bind:aria-invalid="emailInvalid() ? 'true' : 'false'" aria-invalid="false">
+                 th:attr="aria-describedby=${errors != null and errors['email'] != null} ? 'signup-email-error signup-email-server-error' : 'signup-email-error', data-server-error=${errors != null and errors['email'] != null} ? 'true' : null"
+                 x-bind:aria-invalid="(emailInvalid() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" aria-invalid="false">
           <p class="field__error" id="signup-email-error" x-show="emailInvalid()" x-cloak>이메일 형식이 올바르지 않습니다. 예: you@company.com</p>
-          <p class="field__error" th:if="${errors != null and errors['email'] != null}" th:text="${errors['email']}">오류</p>
+          <p class="field__error" id="signup-email-server-error" th:if="${errors != null and errors['email'] != null}" th:text="${errors['email']}">오류</p>
         </div>
         <div>
           <label class="label" for="signup-pw">비밀번호</label>
           <input id="signup-pw" name="password" class="input" type="password" maxlength="128" autocomplete="new-password"
-                 x-model="pw" x-bind:readonly="submitting" x-bind:aria-invalid="pwTooShort() ? 'true' : 'false'" aria-invalid="false">
+                 x-model="pw" x-bind:readonly="submitting"
+                 th:attr="aria-describedby=${errors != null and errors['password'] != null} ? 'signup-pw-error signup-pw-server-error' : 'signup-pw-error', data-server-error=${errors != null and errors['password'] != null} ? 'true' : null"
+                 x-bind:aria-invalid="(pwTooShort() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" aria-invalid="false">
           <p class="field__error" id="signup-pw-error" x-show="pwTooShort()" x-cloak x-text="pw.length + '자 입력됨 · 12–128자로 입력하세요'"></p>
-          <p class="field__error" th:if="${errors != null and errors['password'] != null}" th:text="${errors['password']}">오류</p>
+          <p class="field__error" id="signup-pw-server-error" th:if="${errors != null and errors['password'] != null}" th:text="${errors['password']}">오류</p>
           <p class="hint" x-show="!pwTooShort()">12–128자</p>
         </div>
         <div>
           <label class="label" for="signup-pw2">비밀번호 확인</label>
           <input id="signup-pw2" name="password2" class="input" type="password" maxlength="128" autocomplete="new-password"
-                 x-model="pw2" x-bind:readonly="submitting" x-bind:aria-invalid="mismatch() ? 'true' : 'false'" aria-invalid="false">
+                 x-model="pw2" x-bind:readonly="submitting"
+                 th:attr="aria-describedby=${errors != null and errors['password2'] != null} ? 'signup-pw2-error signup-pw2-server-error' : 'signup-pw2-error', data-server-error=${errors != null and errors['password2'] != null} ? 'true' : null"
+                 x-bind:aria-invalid="(mismatch() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" aria-invalid="false">
           <p class="field__error" id="signup-pw2-error" x-show="mismatch()" x-cloak>비밀번호가 일치하지 않습니다.</p>
-          <p class="field__error" th:if="${errors != null and errors['password2'] != null}" th:text="${errors['password2']}">오류</p>
+          <p class="field__error" id="signup-pw2-server-error" th:if="${errors != null and errors['password2'] != null}" th:text="${errors['password2']}">오류</p>
         </div>
         <div>
           <label class="label" for="signup-reason">요청 사유 <span style="font-weight: 400; color: var(--mute);">(선택)</span></label>
           <textarea id="signup-reason" name="reason" class="input" rows="3" maxlength="500" placeholder="소속 · 담당 RP · 필요한 권한"
-                    x-model="reason" x-bind:readonly="submitting"></textarea>
-          <p class="field__error" th:if="${errors != null and errors['reason'] != null}" th:text="${errors['reason']}">오류</p>
+                    x-model="reason" x-bind:readonly="submitting"
+                    th:attr="aria-describedby=${errors != null and errors['reason'] != null} ? 'signup-reason-server-error' : null, aria-invalid=${errors != null and errors['reason'] != null} ? 'true' : null"></textarea>
+          <p class="field__error" id="signup-reason-server-error" th:if="${errors != null and errors['reason'] != null}" th:text="${errors['reason']}">오류</p>
         </div>
         <button type="submit" class="btn btn--primary btn--lg" x-ref="submit" x-bind:disabled="!canSubmit()"
                 x-text="submitting ? '전송 중…' : (failure ? '다시 시도' : '가입 요청 보내기')">가입 요청 보내기</button>

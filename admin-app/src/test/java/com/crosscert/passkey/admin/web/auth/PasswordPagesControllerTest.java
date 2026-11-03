@@ -299,6 +299,36 @@ class PasswordPagesControllerTest {
         assertThat(frag).contains("id=\"auth-card\"").doesNotContain("<html");
     }
 
+    @Test
+    void formsPostNativelyWithoutHtmxAndNeverFallBackToGet() throws Exception {
+        var f = page("/admin/forgot-password").selectFirst("form");
+        assertThat(f.attr("method")).isEqualToIgnoringCase("post");
+        assertThat(f.attr("action")).isEqualTo("/admin/forgot-password");
+        var r = page("/admin/reset-password?token=" + TOKEN).selectFirst("form");
+        assertThat(r.attr("method")).isEqualToIgnoringCase("post");
+        assertThat(r.attr("action")).isEqualTo("/admin/reset-password");
+        assertThat(r.attr("action")).doesNotContain("token");
+    }
+
+    @Test
+    void forgotServerSideStatusErrorsAreTransientNotSent() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "x")).when(reset).request(any());
+        MvcResult r = postForgot("alice@example.com", true);
+        assertThat(r.getResponse().getStatus()).isEqualTo(503);
+        assertThat(r.getResponse().getContentAsString()).isEmpty();
+    }
+
+    @Test
+    void resetServerErrorsAreLinkedToInputs() throws Exception {
+        Document d = doc(postReset(TOKEN, "short", "short"));
+        var pw = d.selectFirst("input#reset-pw");
+        assertThat(pw.attr("aria-describedby")).contains("reset-pw-server-error");
+        assertThat(d.selectFirst("#reset-pw-server-error").text()).isNotBlank();
+        Document m = doc(postReset(TOKEN, GOOD_PW, GOOD_PW + "x"));
+        assertThat(m.selectFirst("input#reset-pw2").attr("aria-describedby")).contains("reset-pw2-server-error");
+        assertThat(m.selectFirst("#reset-pw2-server-error").text()).isNotBlank();
+    }
+
     // ── CSRF ──
 
     @Test

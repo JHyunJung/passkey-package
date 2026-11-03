@@ -239,6 +239,26 @@ class SignupPageControllerTest {
     }
 
     @Test
+    void formPostsNativelyWithoutHtmx() throws Exception {
+        var f = Jsoup.parse(mvc.perform(get("/admin/signup")).andReturn().getResponse().getContentAsString()).selectFirst("form");
+        assertThat(f.attr("method")).isEqualToIgnoringCase("post");
+        assertThat(f.attr("action")).isEqualTo("/admin/signup");
+    }
+
+    @Test
+    void serverFieldErrorsAreLinkedToInputs() throws Exception {
+        Document d = doc(send("bad", "short", "x", "x".repeat(501), null));
+        for (String[] p : new String[][] {{"signup-email", "signup-email-server-error"}, {"signup-pw", "signup-pw-server-error"},
+                {"signup-reason", "signup-reason-server-error"}}) {
+            assertThat(d.selectFirst("#" + p[0]).attr("aria-describedby")).contains(p[1]);
+            assertThat(d.selectFirst("#" + p[1]).text()).isNotBlank();
+        }
+        Document m = doc(send("a@b.co", PW, PW + "x", null, null));
+        assertThat(m.selectFirst("#signup-pw2").attr("aria-describedby")).contains("signup-pw2-server-error");
+        assertThat(m.selectFirst("#signup-pw2-server-error").text()).isNotBlank();
+    }
+
+    @Test
     void postsRequireCsrf() throws Exception {
         mvc.perform(post("/admin/signup").param("email", "a@b.co").param("password", PW).param("password2", PW))
                 .andExpect(status().isForbidden());

@@ -59,8 +59,14 @@ public class PasswordPagesController {
         }
         try {
             reset.request(new PasswordResetController.RequestBodyDto(value));
-        } catch (IllegalArgumentException | ResponseStatusException e) {
+        } catch (IllegalArgumentException e) {
             // ForgotPasswordPage.tsx: 4xx 는 성공과 같은 안내(enumeration 방지).
+        } catch (ResponseStatusException e) {
+            if (!e.getStatusCode().is4xxClientError()) {
+                log.error("admin password-reset request (screen) failed: status={}", e.getStatusCode().value());
+                res.setStatus(e.getStatusCode().value());
+                return null;
+            }
         } catch (RuntimeException e) {
             log.error("admin password-reset request (screen) failed unexpectedly: {}", e.getClass().getSimpleName());
             res.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());

@@ -258,6 +258,8 @@ JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`
 | 요청 중 읽기 전용·제출 한 번 | V3 9 | source ✅ / `hx-sync`, `onBefore` — JS, 브라우저 확인 필요 / 브라우저: 미확인 |
 | (추가) 토큰·비밀번호 비노출 | — | 토큰은 hidden 필드로만, 응답에 되풀이 안 함(done·expired), 로그는 예외 클래스만, no-store·no-referrer. JUnit `resetFormCarries…`, `resetSuccess…`, `resetServerFailure…` / 브라우저: 미확인 |
 | (추가) CSRF | — | 두 POST 모두 `_csrf` 필요(없으면 403). `/admin/api/**` 면제 범위 불변. JUnit `postsRequireCsrf` / 브라우저: 미확인 |
+| (추가) 422 스왑 시 비밀번호 칸 | — | 차이: 서버가 그린 422 카드는 비밀번호 칸을 비운다(TSX 는 입력 유지; 비밀번호를 응답에 되돌려 쓰지 않기 위해). 이메일·사유는 유지 / 브라우저: 미확인 |
+| (추가) 예상 밖 4xx(CSRF 403 등) | — | auth.js `rejected` 배너 "요청이 거부되었습니다" + 새로 고침(Node 스텁). 폼 `method=post action` 으로 htmx 없이도 본문 POST. JUnit `formsPostNativelyWithoutHtmx…` / JS — 브라우저 확인 필요 |
 
 ## §가입 요청 (Task 7, 소스 수준 점검)
 
@@ -282,6 +284,8 @@ JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`
 | 즉시 가입 켜짐: Platform Operator 선택 → 보냄, activated 면 바로 로그인 안내 | V2 15 | source ✅ / 차이: 선택지 노출은 서버가 `ProfileController.profile()` 로 판정(GET 때 한 번, TSX 는 마운트 뒤 fetch). JUnit `activatedCardWhenServerActivatedAccount` / 브라우저: 미확인 |
 | 즉시 가입 켜짐 + 기본 선택(승인 후 사용) → 역할 없이 보냄, 승인 대기 안내 | V2 16 | source ✅ / JUnit `defaultRoleChoiceSendsNoRoleAndShowsPending` / 브라우저: 미확인 |
 | (추가) CSRF·REST 호출 | — | POST `_csrf` 필요, 호출 인자는 `SignupRequestDto.Create`. JUnit `postsRequireCsrf`, `pendingCardOnAccepted` / 브라우저: 미확인 |
+| (추가) 422 스왑 시 비밀번호 칸 | — | 차이: 서버가 그린 422 카드는 비밀번호 칸을 비운다(TSX 는 입력 유지; 비밀번호를 응답에 되돌려 쓰지 않기 위해). 이메일·사유는 유지 / 브라우저: 미확인 |
+| (추가) 예상 밖 4xx(CSRF 403 등) | — | auth.js `rejected` 배너 "요청이 거부되었습니다" + 새로 고침(Node 스텁). 폼 `method=post action` 으로 htmx 없이도 본문 POST. JUnit `formsPostNativelyWithoutHtmx…` / JS — 브라우저 확인 필요 |
 
 ## §Tenant 목록
 

@@ -121,12 +121,14 @@
     function submitState() {
       return {
         submitting: false,
-        failure: false,
+        failure: false,      // 5xx·네트워크 — 입력을 둔 채 다시 시도
+        rejected: false,     // 예상 밖 4xx(CSRF 403 등, 422 제외) — 새로 고침 안내
         status: null,
         onBefore(e) {
           if (e.detail.elt !== this.$root) return;
           if (this.submitting) { e.preventDefault(); return; }
           this.failure = false;
+          this.rejected = false;
           this.status = null;
           this.submitting = true;
         },
@@ -135,6 +137,7 @@
           this.submitting = false;
           const st = e.detail.xhr ? e.detail.xhr.status : 0;
           if (st >= 500) { this.failure = true; this.status = st; this.focusSubmit(); }
+          else if (st >= 400 && st !== 422) { this.rejected = true; this.status = st; }
         },
         onNetworkError() { this.submitting = false; this.failure = true; this.status = null; this.focusSubmit(); },
         focusSubmit() { this.$nextTick(() => { const b = this.$refs.submit; if (b) b.focus(); }); },
