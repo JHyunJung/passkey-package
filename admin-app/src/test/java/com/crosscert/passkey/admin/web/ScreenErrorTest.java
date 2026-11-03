@@ -29,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>GET /admin/api/nope(미인증): 401 {"error":"unauthorized"}</li>
  *   <li>/admin/api/** 에서 난 ERROR 디스패치: 403(denyAll → 접근 거부 처리기)</li>
  *   <li>GET /error 직접 요청: 403, GET /admin/nope(규칙 밖 경로): 403</li>
+ *   <li>/admin 밖: GET /favicon.ico(없음) 404 JSON C003, /admin 밖에서 난 ERROR 디스패치 403</li>
  * </ul>
  * 바뀐 값(화면): 인증된 GET /admin/tenants/a/b/c 404 JSON → 404 admin/error, 화면 ERROR 디스패치 403 → 원래 상태(404/500),
  * 미인증 화면 ERROR 디스패치 302(/admin/login) → 원래 상태.
@@ -86,6 +87,24 @@ class ScreenErrorTest {
     void pathOutsideRulesStillDenied() throws Exception {
         // 보안 규칙(anyRequest().denyAll())은 바꾸지 않는다.
         mvc.perform(get("/admin/nope").with(authentication(PageSecurityTest.operator())))
+            .andExpect(status().isForbidden());
+    }
+
+    // ── /admin 밖: core 동작 그대로 ──
+
+    @Test
+    void nonAdminUnknownPathUnchanged() throws Exception {
+        // /favicon.ico 는 permitAll 이고 파일이 없다 → 이전과 같은 GlobalExceptionHandler 404 JSON
+        mvc.perform(get("/favicon.ico"))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith("application/json"))
+            .andExpect(jsonPath("$.code").value("C003"))
+            .andExpect(jsonPath("$.message").value("Entity not found"));
+    }
+
+    @Test
+    void nonAdminErrorDispatchUnchanged() throws Exception {
+        mvc.perform(errorDispatch("/actuator/x", 500, true))
             .andExpect(status().isForbidden());
     }
 

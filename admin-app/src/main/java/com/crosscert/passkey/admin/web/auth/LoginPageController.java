@@ -36,7 +36,10 @@ import java.util.Map;
 @Controller
 public class LoginPageController {
 
-    /** LoginPage.tsx DEMO_ACCOUNTS / selectDemo 의 데모 계정(local 프로필에서만 페이지에 들어간다). */
+    /**
+     * LoginPage.tsx DEMO_ACCOUNTS / selectDemo 의 데모 계정. TSX 와 같이 dev·local 프로필(또는 ProfileView.local)에서만
+     * DEV 카드와 이 값이 페이지에 들어가고, 입력란은 카드를 눌렀을 때 채운다(로드 시 미리 채우지 않음).
+     */
     static final String DEMO_EMAIL = "alice@crosscert.com";
     static final String DEMO_PASSWORD = "alice-temp-pw";
 
@@ -59,7 +62,7 @@ public class LoginPageController {
         ModelAndView mav = new ModelAndView("admin/auth/login");
         // 실패 핸들러가 /admin/login?error 로 보낸다(값 없는 파라미터).
         mav.addObject("loginError", hasFlag(req, "error"));
-        boolean demo = profiles.profile().data().local();
+        boolean demo = showDemoAccount(profiles.profile().data());
         mav.addObject("demoAccount", demo);
         if (demo) {
             mav.addObject("demoEmail", DEMO_EMAIL);
@@ -119,6 +122,13 @@ public class LoginPageController {
         mav.addObject("mode", MODE_RECOVERY.equals(mode) ? MODE_RECOVERY : MODE_TOTP);
         mav.setStatus(HttpStatus.UNPROCESSABLE_ENTITY);
         return mav;
+    }
+
+    /** LoginPage.tsx: {@code p.active?.includes('dev') || p.active?.includes('local') || p.local}. */
+    static boolean showDemoAccount(ProfileController.ProfileView p) {
+        if (p == null) return false;
+        java.util.List<String> active = p.active();
+        return p.local() || (active != null && (active.contains("dev") || active.contains("local")));
     }
 
     /** {@code ?error} 처럼 값 없는 쿼리 파라미터도 있는 것으로 본다(컨테이너에 따라 getParameter 가 null 일 수 있다). */

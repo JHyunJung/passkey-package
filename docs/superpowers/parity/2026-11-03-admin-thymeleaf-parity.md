@@ -180,7 +180,7 @@ JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`
 | 브랜드 패널: 워드마크·헤드라인·장식 일러스트, 가짜 지표 대신 콘솔이 하는 일 | V3 1 | source ✅ / 차이: 워드마크 경로가 `/admin/img/crosscert-logo-transparent.png`(React public 자산 → 정적 자산 폴더) | LPC `anonymousGetsLoginPage` | 미확인 |
 | 이메일 칸에 자동 포커스 | V3 2 | source ✅ / 차이: `autofocus` 속성(서버 렌더) | LPC `anonymousGetsLoginPage` | 미확인 |
 | 재설정 링크·가입 요청 링크·자동 로그아웃 안내, 로그인 버튼 btn--primary btn--lg | V3 3 | source ✅ / 차이: 없음 | LPC `anonymousGetsLoginPage` | 미확인 |
-| 로그인 실패: 폼 맨 위 경고 하나(토스트 없음), 이메일 유지·비밀번호만 비우고 포커스 | V3 4 | source ✅ / 차이: 실패 핸들러가 `/admin/login?error` 로 보내 페이지를 다시 그린다. 경고·비밀번호 칸 `autofocus`·빈 비밀번호는 서버가, 이메일 유지는 `auth.js` 가 제출 직전 sessionStorage 에 둔 이메일을 한 번 되살린다(비밀번호는 저장 안 함) | LPC `errorParamShowsLoginError` · 스텁(이메일 복원·키 삭제) / JS — 브라우저 확인 필요 | 미확인 |
+| 로그인 실패: 폼 맨 위 경고 하나(토스트 없음), 이메일 유지·비밀번호만 비우고 포커스 | V3 4 | source ✅ / 차이: 실패 핸들러가 `/admin/login?error` 로 보내 페이지를 다시 그린다. 경고·비밀번호 칸 `autofocus`·빈 비밀번호는 서버가, 이메일 유지는 `auth.js` 가 제출 직전 sessionStorage 에 둔 이메일을 한 번 되살린다(비밀번호는 저장 안 함, 로그인 성공 이동이면 바로 지움) | LPC `errorParamShowsLoginError` · 스텁(이메일 복원·키 삭제) / JS — 브라우저 확인 필요 | 미확인 |
 | 입력을 바꾸면 경고가 사라진다 | V3 5 | source ✅ / 차이: Alpine `x-show="error === 'credentials'"` + 입력 `clearError()` | LPC `errorParamShowsLoginError`(속성) · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
 | 5xx 는 일시 오류 + 다시 시도(입력 유지, HTTP 상태 표시, 같은 값으로 재요청) | V3 6 | source ✅ / 차이: `htmx:afterRequest` 의 xhr 상태로 판단, 다시 시도 = 폼 `requestSubmit()` | 스텁(503 → transient·status·retry) / JS — 브라우저 확인 필요 | 미확인 |
 | 네트워크 오류도 일시 오류 | V3 7 | source ✅ / 차이: `htmx:sendError`·`htmx:timeout` → 일시 오류(HTTP 줄 없음). 셸의 네트워크 토스트는 이 화면에 없다(app.js 미적재) | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
@@ -190,8 +190,8 @@ JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`
 | 요청 중 입력 읽기 전용, 응답 뒤 다시 편집 | V3 11 | source ✅ / 차이: `x-bind:readonly="submitting"`(`htmx:beforeRequest`~`afterRequest`). 리다이렉트 응답이면 이동 중이라 그대로 둔다. 중복 제출은 `hx-sync="this:drop"`+가드 | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
 | 비밀번호 표시 토글(aria-pressed, 라벨 표시/숨기기) | V3 12 | source ✅ / 차이: Alpine `showPw` | LPC `anonymousGetsLoginPage`(초기 속성) / JS — 브라우저 확인 필요 | 미확인 |
 | 문의 주소가 있을 때만 "도움말 · 운영자에게 문의" | V3 13 | source ✅ / 차이: 주소는 `passkey.admin.help.support`(ShellAdvice `helpLinks`, Task 4) | LPC `anonymousGetsLoginPage`(빈 값 → 없음), ShellHelpLinksTest(Task 4, 값 있음) | 미확인 |
-| dev/local 이 아니면 DEV 데모 카드 없음 | V3 14 | source ✅ / 차이: 카드와 데모 계정 값이 서버 렌더에서 아예 빠진다(TSX 는 번들에 항상 있음) | LPC `anonymousGetsLoginPage`, `nonLocalProfileHasNoDemoAccount` | 미확인 |
-| dev 프로필이면 DEV 데모 카드, 클릭 시 alice 계정 채움 | V3 15 | **차이**: `local` 프로필에서만(`ProfileController.profile().local`, 브리프·컨트롤러 판정). TSX 는 `dev` 도 보인다. 채우는 방식은 TSX 와 같이 카드 클릭 때(aria-pressed) | LPC `localProfilePrefill`, `nonLocalProfileHasNoDemoAccount` · 스텁(selectDemo) / JS — 브라우저 확인 필요 | 미확인 |
+| dev/local 이 아니면 DEV 데모 카드 없음 | V3 14 | source ✅ / 차이: 카드와 데모 계정 값이 서버 렌더에서 아예 빠진다(TSX 는 번들에 항상 있음) | LPC `anonymousGetsLoginPage`, `prodAndQaProfilesHaveNoDemoAccount` | 미확인 |
+| dev 프로필이면 DEV 데모 카드, 클릭 시 alice 계정 채움 | V3 15 | source ✅ / 차이: 노출 조건은 TSX 와 같음(`active` 에 dev·local 또는 `local=true`, `LoginPageController.showDemoAccount`). 로드 시 미리 채우지 않고 카드 클릭 때 채운다(aria-pressed) | LPC `devProfileShowsDemoCardFilledOnClick`, `localProfileShowsDemoCardFilledOnClick` · 스텁(selectDemo) / JS — 브라우저 확인 필요 | 미확인 |
 
 ### MfaChallenge.test.tsx (17)
 
@@ -218,7 +218,7 @@ JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`
 추가(원본 테스트 없음, 브리프·서버 규칙):
 | 체크 항목 | 근거 | 결과 | JUnit / 스텁 | 브라우저 |
 |---|---|---|---|---|
-| 복구 코드로 확인하면 "복구 코드를 사용했습니다." / "남은 복구 코드: N개" 경고 토스트 | MfaChallenge.tsx verify | source ✅ / 차이: `HX-Trigger`(warn) + `HX-Redirect`. 이동 직전 토스트를 `auth.js` 가 sessionStorage 로 넘기고 다음 화면 `toastHost.init()` 이 띄운다 | LPC `mfaRecoveryCodeShowsRemainingToast` · 스텁(ui.js toastHost) / JS — 브라우저 확인 필요 | 미확인 |
+| 복구 코드로 확인하면 "복구 코드를 사용했습니다." / "남은 복구 코드: N개" 경고 토스트 | MfaChallenge.tsx verify | source ✅ / 차이: `HX-Trigger`(warn) + `HX-Redirect`. 같은 응답에 HX-Redirect 가 있을 때만 `auth.js`(`htmx:beforeOnLoad`)가 토스트를 sessionStorage 로 넘기고 다음 화면 `toastHost.init()` 이 띄운다 | LPC `mfaRecoveryCodeShowsRemainingToast` · 스텁(ui.js toastHost) / JS — 브라우저 확인 필요 | 미확인 |
 | 실패로 잠금이 걸려 세션이 끝나면 로그인 화면으로 | 브리프 | 차이: TSX 는 같은 경고를 보이고 다음 요청이 401 로 끝난다. 여기서는 바로 `/admin/login` | LPC `mfaLockoutRedirectsToLogin`, `mfaLockoutWithoutHtmxIs302` | 미확인 |
 | MFA 대기가 아니면 verify 를 부르지 않고 `/admin`, CSRF 없으면 403, 미인증은 로그인으로 | 서버 규칙 | source ✅ | LPC `mfaSubmitWhenNotPendingSkipsVerify`, `mfaSubmitRequiresCsrf`, `mfaSubmitAnonymousGoesToLogin` | 미확인 |
 | 인증 코드는 로그에 남기지 않는다 | 보안 | source ✅ | LPC `mfaWrongCodeShowsError`, `mfaUnexpectedErrorIs500WithoutToast`(출력 캡처) | — |

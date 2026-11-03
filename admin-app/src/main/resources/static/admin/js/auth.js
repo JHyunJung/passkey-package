@@ -48,8 +48,16 @@
   });
 
   // HX-Redirect 와 함께 온 토스트(복구 코드 사용 경고)는 이 페이지를 곧 떠나므로 다음 화면으로 넘긴다.
-  window.addEventListener('toast', function (e) {
-    store(function (s) { s.setItem(PENDING_TOAST_KEY, JSON.stringify(e.detail || {})); });
+  // 같은 응답에 HX-Redirect 가 있을 때만 저장한다(beforeOnLoad 는 htmx 가 HX-Trigger·HX-Redirect 를 처리하기 전에 온다).
+  document.addEventListener('htmx:beforeOnLoad', function (e) {
+    const xhr = e.detail && e.detail.xhr;
+    if (!redirecting(xhr)) return;
+    const trigger = xhr.getResponseHeader('HX-Trigger');
+    if (!trigger) return;
+    let toast = null;
+    try { toast = JSON.parse(trigger).toast; } catch (err) { toast = null; }
+    if (!toast) return;
+    store(function (s) { s.setItem(PENDING_TOAST_KEY, JSON.stringify(toast)); });
   });
 
   function redirecting(xhr) { return !!(xhr && xhr.getResponseHeader && xhr.getResponseHeader('HX-Redirect')); }
@@ -89,7 +97,11 @@
         onAfter(e) {
           if (e.detail.elt !== this.$root) return;
           const xhr = e.detail.xhr;
-          if (redirecting(xhr)) return; // 성공(/admin, MFA 단계) 또는 실패(/admin/login?error) 이동 중 — 그대로 둔다
+          if (redirecting(xhr)) {
+            // 성공(/admin, MFA 단계) 또는 실패(/admin/login?error) 이동 중 — 그대로 둔다. 성공이면 임시 이메일을 지운다.
+            if (xhr.getResponseHeader('HX-Redirect') !== '/admin/login?error') store(function (s) { s.removeItem(EMAIL_KEY); });
+            return;
+          }
           this.submitting = false;
           const st = xhr ? xhr.status : 0;
           if (st >= 500) { this.error = 'transient'; this.status = st; return; }

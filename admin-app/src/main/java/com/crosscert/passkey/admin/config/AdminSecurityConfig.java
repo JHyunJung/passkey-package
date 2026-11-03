@@ -101,8 +101,8 @@ public class AdminSecurityConfig {
             // 있으면 corsSource 가 null 을 반환 → CORS 헤더 미발급(same-origin 만 허용).
             .cors(cors -> cors.configurationSource(corsSource))
             .authorizeHttpRequests(authz -> authz
-                // 화면 경로에서 난 컨테이너 오류 디스패치(/error)는 원래 상태의 오류 화면을 그리게 둔다(아래 denyAll 이
-                // 막으면 404·500 이 "권한이 없습니다" 403 이 된다). 원래 주소가 /admin/api/** 인 오류 디스패치는 그대로 둔다.
+                // 화면 경로(/admin 아래)에서 난 컨테이너 오류 디스패치(/error)는 원래 상태의 오류 화면을 그리게 둔다(아래 denyAll 이
+                // 막으면 404·500 이 "권한이 없습니다" 403 이 된다). 원래 주소가 /admin/api/** 이거나 /admin 밖이면 그대로 둔다.
                 // 클라이언트가 직접 부르는 GET /error 는 REQUEST 디스패치라 여기 해당하지 않는다(denyAll).
                 .requestMatchers(AdminSecurityConfig::isScreenErrorDispatch).permitAll()
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
@@ -250,12 +250,19 @@ public class AdminSecurityConfig {
         };
     }
 
-    /** 컨테이너 오류 디스패치이고, 오류가 난 원래 주소가 {@code /admin/api/**} 가 아닌지. */
+    /**
+     * 컨테이너 오류 디스패치이고, 오류가 난 원래 주소가 화면 경로({@code /admin} 아래, {@code /admin/api/**} 제외)인지.
+     * 원래 주소 속성({@code ERROR_REQUEST_URI})이 없으면 일부러 화면 경로로 본다 — 이때 닿는 것은 고정 문구의
+     * {@code admin/error} 화면뿐이라(데이터·서버 메시지 없음) 허용해도 드러나는 것이 없다.
+     */
     static boolean isScreenErrorDispatch(HttpServletRequest req) {
         if (req.getDispatcherType() != DispatcherType.ERROR) return false;
         Object uri = req.getAttribute(RequestDispatcher.ERROR_REQUEST_URI);
-        String u = uri == null ? null : uri.toString();
-        return u == null || !(u.equals("/admin/api") || u.startsWith("/admin/api/"));
+        if (uri == null) return true;
+        String u = uri.toString();
+        boolean admin = u.equals("/admin") || u.startsWith("/admin/");
+        boolean api = u.equals("/admin/api") || u.startsWith("/admin/api/");
+        return admin && !api;
     }
 
     /**

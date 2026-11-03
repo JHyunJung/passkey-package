@@ -7,7 +7,8 @@
   ?error 로 다시 그려지면 폼 위에 "로그인 실패" 경고 하나, 비밀번호 칸에 포커스, 이메일은 auth.js 가 sessionStorage 에서 되살린다.
   리다이렉트 없이 온 4xx(예: CSRF 거부)는 TSX 처럼 자격 오류로 보고 /admin/login?error 로 다시 그린다.
   5xx·네트워크 오류는 auth.js(loginForm)가 "지금은 로그인할 수 없습니다" 경고를 띄운다(입력 유지, 다시 시도).
-  데모 계정 카드는 local 프로필일 때만 그리고, 그때만 데모 계정 값이 페이지에 들어간다.
+  데모 계정 카드는 dev·local 프로필일 때만 그리고(LoginPage.tsx 와 같은 조건), 그때만 데모 계정 값이 페이지에 들어간다.
+  입력란은 카드를 눌렀을 때 채운다(auth.js loginForm.selectDemo).
 -->
 <head th:replace="~{admin/auth/head :: head('Crosscert Passkey Admin')}"></head>
 <body>
@@ -86,7 +87,7 @@
 
       <button type="submit" class="btn btn--primary btn--lg" style="width: 100%;" x-bind:disabled="submitting" x-text="submitting ? '확인 중…' : '로그인'">로그인</button>
 
-      <!-- 데모 계정 — local 프로필에서만(ProfileController.profile().local). -->
+      <!-- 데모 계정 — dev·local 프로필에서만(LoginPageController.showDemoAccount). 클릭하면 채운다. -->
       <button th:if="${demoAccount}" type="button" class="row" aria-pressed="false"
               th:attr="data-demo-email=${demoEmail},data-demo-password=${demoPassword}"
               x-bind:aria-pressed="demoOn ? 'true' : 'false'" x-on:click="selectDemo($el)"

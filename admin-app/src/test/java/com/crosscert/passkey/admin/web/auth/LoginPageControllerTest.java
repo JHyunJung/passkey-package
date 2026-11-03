@@ -136,7 +136,7 @@ class LoginPageControllerTest {
         // 오류 없음, 문의 링크는 주소가 설정됐을 때만(기본 빈 값)
         assertThat(renderedAlerts(d)).isEmpty();
         assertThat(d.select("a:containsOwn(도움말 · 운영자에게 문의)")).isEmpty();
-        // 데모 계정은 local 에서만
+        // 데모 계정은 dev·local 에서만(기본 prod)
         assertThat(d.text()).doesNotContain("데모 계정으로 로그인");
         assertThat(d.html()).doesNotContain("alice-temp-pw");
     }
@@ -163,27 +163,40 @@ class LoginPageControllerTest {
         assertThat(d.select(".toast, .toast-rack")).isEmpty();
     }
 
-    @Test
-    void localProfilePrefill() throws Exception {
-        profile(List.of("local"), true);
-        Document d = page("/admin/login");
+    private void assertDemoCard(Document d) {
         Element card = d.selectFirst("button:has(span.tag)");
         assertThat(card).isNotNull();
         assertThat(card.text()).contains("DEV").contains("데모 계정으로 로그인").contains("Platform Operator / alice@crosscert.com");
         assertThat(card.attr("type")).isEqualTo("button");
         assertThat(card.attr("aria-pressed")).isEqualTo("false");
-        // 클릭하면 alice 계정을 채운다(auth.js loginForm.selectDemo)
+        // 카드를 누르면 alice 계정을 채운다(auth.js loginForm.selectDemo) — 로드 시에는 채우지 않는다(TSX 와 같음)
         assertThat(card.attr("data-demo-email")).isEqualTo("alice@crosscert.com");
         assertThat(card.attr("data-demo-password")).isEqualTo("alice-temp-pw");
         assertThat(card.attr("x-on:click")).isEqualTo("selectDemo($el)");
+        assertThat(d.selectFirst("#login-email").attr("value")).isEmpty();
+        assertThat(d.selectFirst("#login-password").attr("value")).isEmpty();
     }
 
     @Test
-    void nonLocalProfileHasNoDemoAccount() throws Exception {
-        // ProfileController.local 만 본다(브리프·컨트롤러 판정: local 에서만). dev 는 데모 계정 없음.
+    void localProfileShowsDemoCardFilledOnClick() throws Exception {
+        profile(List.of("local"), true);
+        assertDemoCard(page("/admin/login"));
+    }
+
+    @Test
+    void devProfileShowsDemoCardFilledOnClick() throws Exception {
+        // LoginPage.tsx: active 에 dev 또는 local, 또는 local=true
         profile(List.of("dev"), false);
-        String html = mvc.perform(get("/admin/login")).andReturn().getResponse().getContentAsString();
-        assertThat(html).doesNotContain("데모 계정으로 로그인").doesNotContain("alice-temp-pw").doesNotContain("data-demo-");
+        assertDemoCard(page("/admin/login"));
+    }
+
+    @Test
+    void prodAndQaProfilesHaveNoDemoAccount() throws Exception {
+        for (String p : List.of("prod", "qa")) {
+            profile(List.of(p), false);
+            String html = mvc.perform(get("/admin/login")).andReturn().getResponse().getContentAsString();
+            assertThat(html).doesNotContain("데모 계정으로 로그인").doesNotContain("alice-temp-pw").doesNotContain("data-demo-");
+        }
     }
 
     @Test

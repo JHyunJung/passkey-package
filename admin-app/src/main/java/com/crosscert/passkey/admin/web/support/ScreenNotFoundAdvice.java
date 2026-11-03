@@ -23,7 +23,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * 받지 못하고, core 의 {@code GlobalExceptionHandler} 가 404 JSON 으로 답했다. 인증된 운영자가 화면 경로
  * (예: {@code /admin/tenants/x/y})에서 JSON 을 보게 되므로 화면 경로만 {@code admin/error} 404 로 바꾼다.
  * <ul>
- *   <li>{@code /admin/api/**}: {@code GlobalExceptionHandler.handleNoResource} 에 그대로 맡긴다(응답 동일).</li>
+ *   <li>{@code /admin/api/**} 와 {@code /admin} 밖의 경로(예: {@code /favicon.ico}): {@code GlobalExceptionHandler.handleNoResource}
+ *       에 그대로 맡긴다(응답 동일).</li>
  *   <li>htmx 요청: 404 + 오류 토스트, 본문 없음(규칙 A).</li>
  *   <li>그 밖: {@code admin/error} 404.</li>
  * </ul>
@@ -42,7 +43,7 @@ public class ScreenNotFoundAdvice {
     /** @return API 면 ResponseEntity(JSON), 화면이면 ModelAndView, htmx 면 null(응답 처리 완료). */
     @ExceptionHandler(NoResourceFoundException.class)
     public Object notFound(NoResourceFoundException e, HttpServletRequest req, HttpServletResponse res) {
-        if (isApi(req.getRequestURI())) {
+        if (!isScreen(req.getRequestURI())) {
             GlobalExceptionHandler h = apiHandler.getIfAvailable();
             if (h != null) return h.handleNoResource(e, req);
             return ResponseEntity.status(ErrorCode.ENTITY_NOT_FOUND.getStatus())
@@ -55,6 +56,11 @@ public class ScreenNotFoundAdvice {
             return null;
         }
         return ScreenErrorViewResolver.errorView(HttpStatus.NOT_FOUND.value());
+    }
+
+    /** 화면 경로: {@code /admin} 아래이고 {@code /admin/api} 가 아닌 주소. */
+    static boolean isScreen(String uri) {
+        return uri != null && (uri.equals("/admin") || uri.startsWith("/admin/")) && !isApi(uri);
     }
 
     static boolean isApi(String uri) {
