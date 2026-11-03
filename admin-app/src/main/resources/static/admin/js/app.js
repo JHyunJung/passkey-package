@@ -38,10 +38,11 @@
 
   // ── 네트워크 오류·시간 초과 토스트 ─────────────────────
   // 서버 오류 응답의 토스트는 서버가 HX-Trigger 로 보낸다. 서버에 닿지 못한 경우만 여기서 같은 토스트 컴포넌트에 넣는다.
-  // data-quiet 요소(주변 UI: 폴링 배너·카드)의 실패는 알리지 않는다.
+  // data-quiet 요소가 보낸 요청(주변 UI: 폴링 배너·체인 카드·스위처 목록·다시 시도)의 실패는 알리지 않는다.
   function networkToast(e, title, message) {
     const el = e.detail && e.detail.elt;
-    if (el && el.closest && el.closest('[data-quiet]')) return;
+    // 요청을 보낸 요소 자신이 data-quiet 일 때만 조용히(폴링 자리·다시 시도). 그 안의 링크·전환 버튼은 사용자 동작이라 알린다.
+    if (el && el.hasAttribute && el.hasAttribute('data-quiet')) return;
     window.dispatchEvent(new CustomEvent('toast', { detail: { kind: 'error', title: title, message: message } }));
   }
   document.addEventListener('htmx:sendError', function (e) {
@@ -51,8 +52,21 @@
     networkToast(e, '서버가 잠시 응답하지 않습니다', '응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요.');
   });
 
+  // ── 라이선스 배너 링크: 이미 /license 화면이면 숨긴다 ──
+  // 배너는 hx-preserve 로 이동 사이에 유지되므로 서버가 아니라 현재 주소로 판단한다(LicenseBanner.tsx: pathname !== '/license').
+  function syncHiddenLinks() {
+    document.querySelectorAll('[data-hide-on-path]').forEach(function (a) {
+      a.hidden = location.pathname === a.getAttribute('data-hide-on-path');
+    });
+  }
+  document.addEventListener('htmx:afterSettle', syncHiddenLinks);
+  window.addEventListener('popstate', syncHiddenLinks);
+
   // ── Alpine 컴포넌트 ───────────────────────────────────
   document.addEventListener('alpine:init', function () {
+    // 사이드바 "위변조 N" 배지가 읽는 값. chainCard 가 응답마다 갱신하고, 이동으로 사이드바가 다시 그려져도 남는다.
+    Alpine.store('chain', { tampered: 0 });
+
     // 단축키 표기(lib/platform.ts): Mac·iOS 는 ⌘K, 그 밖은 Ctrl K. 서버 렌더는 Ctrl K.
     Alpine.data('platformKey', function () {
       const nav = typeof navigator === 'undefined' ? null : navigator;
@@ -99,6 +113,7 @@
       return {
         checking: true,
         failed: false,
+        inflight: 0,
         lastOk: null,
         checkStart: Date.now(),
         now: Date.now(),
@@ -112,11 +127,29 @@
           return this.lastOk ? '서버 응답이 없습니다 · ' + hm.format(this.lastOk) + ' 마지막 확인' : '서버 응답이 없습니다';
         },
         start() { const t = Date.now(); this.checking = true; this.checkStart = t; this.now = t; },
+        // 이 카드의 조회 요청인지(카드 안 boost 링크 등 다른 요청의 이벤트는 무시).
+        mine(e) {
+          const pi = e.detail && e.detail.pathInfo;
+          return !!pi && String(pi.requestPath || pi.finalRequestPath || '').indexOf('/admin/_/shell/chain-card') >= 0;
+        },
+        before(e) { if (this.mine(e)) this.inflight++; },
         done(e) {
-          const ok = !!(e.detail && e.detail.successful);
-          this.checking = false;
-          this.failed = !ok;
-          if (ok) this.lastOk = new Date();
+          if (!this.mine(e)) return;
+          this.inflight = Math.max(0, this.inflight - 1);
+          if (e.detail.successful) {
+            this.checking = false;
+            this.failed = false;
+            this.lastOk = new Date();
+            const t = this.$root.querySelector('[data-chain-tampered]');
+            Alpine.store('chain').tampered = t ? parseInt(t.getAttribute('data-tampered'), 10) || 0 : 0;
+            return;
+          }
+          // hx-sync replace 로 중단된 앞 요청도 실패로 올라온다. 그 직후 새 요청이 시작되면 실패로 보지 않는다.
+          setTimeout(() => {
+            if (this.inflight > 0) return;
+            this.checking = false;
+            this.failed = true;
+          }, 0);
         },
       };
     });

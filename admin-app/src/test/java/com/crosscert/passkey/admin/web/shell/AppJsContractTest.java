@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * app.js 의 약속(htmx 응답 처리·CSRF 갱신·토스트 단일 구현)을 소스 수준에서 고정한다.
- * 실제 동작은 브라우저 확인 대상이다(parity 문서).
+ * 이 테스트는 등록·설정 문자열이 소스에 있는지만 지킨다(동작 검증 아님). 실제 동작은 브라우저 확인 대상이다(parity 문서).
  */
 class AppJsContractTest {
 
@@ -45,7 +45,7 @@ class AppJsContractTest {
     @DisplayName("토스트는 ui.js 의 toastHost 하나만: app.js 는 별도 스토어·컴포넌트를 만들지 않고 `toast` 이벤트만 올린다")
     void singleToastImplementation() throws Exception {
         String js = appJs();
-        assertThat(js).doesNotContain("Alpine.store").doesNotContain("Alpine.data('toastHost'");
+        assertThat(js).doesNotContain("Alpine.store('toasts')").doesNotContain("Alpine.data('toastHost'");
         assertThat(js).contains("new CustomEvent('toast'");
         assertThat(Files.readString(Path.of("src/main/resources/static/admin/js/ui.js"), StandardCharsets.UTF_8))
                 .contains("Alpine.data('toastHost'");
@@ -54,6 +54,17 @@ class AppJsContractTest {
     @Test
     @DisplayName("공통 틀 컴포넌트 등록: platformKey, shellMenu, chainCard")
     void components() throws Exception {
-        assertThat(appJs()).contains("Alpine.data('platformKey'").contains("Alpine.data('shellMenu'").contains("Alpine.data('chainCard'");
+        assertThat(appJs()).contains("Alpine.data('platformKey'").contains("Alpine.data('shellMenu'").contains("Alpine.data('chainCard'").contains("Alpine.store('chain'");
+    }
+
+    @Test
+    @DisplayName("소스 문자열 가드(동작 검증 아님): 라이선스 링크 숨김 표식, 조각 동기화 처리, Esc window 리스너")
+    void sourceGuards() throws Exception {
+        String js = appJs();
+        assertThat(js).contains("data-hide-on-path").contains("htmx:afterSettle").contains("setTimeout");
+        String header = Files.readString(Path.of("src/main/resources/templates/admin/fragments/shell/header.html"), StandardCharsets.UTF_8);
+        String switcher = Files.readString(Path.of("src/main/resources/templates/admin/fragments/shell/tenant-switcher.html"), StandardCharsets.UTF_8);
+        assertThat(header).contains("x-on:keydown.escape.window=\"close()\"");
+        assertThat(switcher).contains("x-on:keydown.escape.window=\"close()\"");
     }
 }

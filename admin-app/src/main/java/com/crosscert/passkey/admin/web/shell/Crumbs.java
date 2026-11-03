@@ -6,7 +6,7 @@ import java.util.Map;
 
 /**
  * 화면별 브레드크럼(← App.tsx buildBreadcrumb). 화면 컨트롤러가 모델에 담아
- * {@code breadcrumb :: breadcrumb(${crumbs})} 로 그린다.
+ * {@code breadcrumb :: breadcrumb(${breadcrumbs})} 로 그린다.
  */
 public final class Crumbs {
 

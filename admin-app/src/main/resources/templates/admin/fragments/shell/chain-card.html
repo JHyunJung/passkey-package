@@ -4,7 +4,7 @@
 <!--
   사이드바 감사 체인 카드의 서버 응답(← Sidebar.tsx 의 chain-card, 30초 폴링).
   card : 모델 overview(AuditChainOverview), ago("방금"·"N분 전"·"N시간 전" — Sidebar.tsx 의 timeAgo). 위변조가 있으면 빨간 카드 + 안내, 없으면 AUDIT CHAIN OK + 마지막 검증·행 수.
-         응답에 사이드바 "감사 체인" 항목의 "위변조 N" 배지를 OOB 로 함께 보낸다(위변조 0 이면 배지를 비운다).
+         응답에 숨은 `[data-chain-tampered]`(data-tampered=위변조 수)를 넣어 chainCard 가 Alpine.store('chain') 에 반영한다(사이드바 "위변조 N" 배지).
   실패(비 2xx)는 이 조각을 쓰지 않는다 — 사이드바의 chainCard 컴포넌트가 "검증 상태 확인 불가 + 다시 시도"를 보인다.
 -->
 <th:block th:fragment="card">
@@ -22,8 +22,7 @@
         </th:block>
       </span>
     </a>
-    <span th:if="${tampered > 0}" id="nav-chain-count" class="nav-item__count" hx-swap-oob="true" th:text="|위변조 ${tampered}|">위변조 1</span>
-    <span th:if="${tampered <= 0}" id="nav-chain-count" hx-swap-oob="true"></span>
+    <span hidden data-chain-tampered th:attr="data-tampered=${tampered}"></span>
   </th:block>
 </th:block>
 </body>

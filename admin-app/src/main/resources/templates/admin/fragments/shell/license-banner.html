@@ -3,29 +3,29 @@
 <body>
 <!--
   라이선스 배너(← components/LicenseBanner.tsx).
-  host   : 레이아웃 맨 위의 폴링 자리. load 직후와 5분(300초)마다 GET /admin/_/shell/license-banner 로 안쪽을 교체한다.
+  host   : hx-preserve 로 boost 이동에도 유지(폴링 계속). 레이아웃 맨 위의 폴링 자리. load 직후와 5분(300초)마다 GET /admin/_/shell/license-banner 로 안쪽을 교체한다.
            조회 실패(비 2xx)는 스왑되지 않아 마지막 상태가 남고, 처음부터 실패면 비어 있다(TSX 와 같다).
   banner : 컨트롤러가 SaaS·VALID·조회 실패를 걸러 내고, 온프렘의 WARNING / NETWORK_GRACE / DEAD 만 이 조각으로 그린다.
-           모델: license(LicenseView), showLink(PLATFORM 이고 /license 화면이 아니면 true)
+           모델: license(LicenseView), showLink(PLATFORM 이면 true; /license 화면에서는 app.js 가 data-hide-on-path 로 숨긴다)
 -->
-<div th:fragment="host" id="license-banner" data-quiet
+<div th:fragment="host" id="license-banner" hx-preserve data-quiet
      th:attr="hx-get=@{/admin/_/shell/license-banner}" hx-trigger="load, every 300s" hx-swap="innerHTML"></div>
 
 <th:block th:fragment="banner">
   <div th:if="${license.state == 'WARNING'}" class="topbanner topbanner--warning" role="status">
     <th:block th:replace="~{admin/fragments/icons :: alert(16)}"></th:block>
     <strong th:text="|라이선스가 ${license.daysUntilExpiry}일 후 만료됩니다. 영업 담당자에게 갱신을 요청하세요.|">라이선스가 30일 후 만료됩니다. 영업 담당자에게 갱신을 요청하세요.</strong>
-    <a th:if="${showLink}" class="btn btn--sm" style="margin-left: auto; flex: none" th:href="@{/admin/license}">라이선스 보기</a>
+    <a th:if="${showLink}" data-license-link data-hide-on-path="/admin/license" class="btn btn--sm" style="margin-left: auto; flex: none" th:href="@{/admin/license}">라이선스 보기</a>
   </div>
   <div th:if="${license.state == 'NETWORK_GRACE'}" class="topbanner topbanner--warning" role="status">
     <th:block th:replace="~{admin/fragments/icons :: alert(16)}"></th:block>
     <strong th:text="|라이선스 서버에 연결할 수 없습니다. ${license.graceRemainingHours != null ? license.graceRemainingHours + '시간 안에' : '곧'} 연결되지 않으면 서비스가 중단됩니다.|">라이선스 서버에 연결할 수 없습니다. 12시간 안에 연결되지 않으면 서비스가 중단됩니다.</strong>
-    <a th:if="${showLink}" class="btn btn--sm" style="margin-left: auto; flex: none" th:href="@{/admin/license}">조치 방법 보기</a>
+    <a th:if="${showLink}" data-license-link data-hide-on-path="/admin/license" class="btn btn--sm" style="margin-left: auto; flex: none" th:href="@{/admin/license}">조치 방법 보기</a>
   </div>
   <div th:if="${license.state != 'WARNING' and license.state != 'NETWORK_GRACE'}" class="topbanner topbanner--danger" role="alert">
     <th:block th:replace="~{admin/fragments/icons :: alert(16)}"></th:block>
     <strong>라이선스가 만료되어 패스키 등록·인증이 중단되었습니다. 관리 콘솔은 계속 쓸 수 있습니다.</strong>
-    <a th:if="${showLink}" class="btn btn--sm" style="margin-left: auto; flex: none" th:href="@{/admin/license}">갱신 방법 보기</a>
+    <a th:if="${showLink}" data-license-link data-hide-on-path="/admin/license" class="btn btn--sm" style="margin-left: auto; flex: none" th:href="@{/admin/license}">갱신 방법 보기</a>
   </div>
 </th:block>
 </body>

@@ -19,13 +19,13 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 public class ShellController {
 
     static final String NONE = "admin/fragments/shell/empty :: none";
-    private static final String LICENSE_PATH = "/admin/license";
 
     public record SwitcherItem(UUID id, String name, boolean active) {}
 
@@ -63,11 +62,10 @@ public class ShellController {
     /**
      * 라이선스 배너. 온프렘의 WARNING / NETWORK_GRACE / DEAD 만 그린다. SaaS·VALID 는 빈 응답.
      * 조회 실패는 비 2xx(503, 본문·토스트 없음)라 htmx 가 스왑하지 않는다 — 마지막 상태를 유지한다(주변 UI 는 실패를 알리지 않는다).
-     * 링크는 PLATFORM 에게만, 이미 /license 화면이면 숨긴다(HX-Current-URL).
+     * 링크는 PLATFORM 에게만. 배너는 hx-preserve 로 이동 사이에 유지되므로 "/license 화면이면 숨김"은 app.js 가 현재 주소로 처리한다.
      */
     @GetMapping("/admin/_/shell/license-banner")
-    public String licenseBanner(Model model, HttpServletResponse res,
-                                @RequestHeader(value = "HX-Current-URL", required = false) String currentUrl) {
+    public String licenseBanner(Model model, HttpServletResponse res) {
         LicenseView view;
         try {
             view = license.get().data();
@@ -81,18 +79,8 @@ public class ShellController {
         }
         CurrentAdmin me = (CurrentAdmin) model.getAttribute("me");
         model.addAttribute("license", view);
-        model.addAttribute("showLink", me != null && me.platform() && !onLicensePage(currentUrl));
+        model.addAttribute("showLink", me != null && me.platform());
         return "admin/fragments/shell/license-banner :: banner";
-    }
-
-    private static boolean onLicensePage(String currentUrl) {
-        if (currentUrl == null || currentUrl.isBlank()) return false;
-        try {
-            String path = URI.create(currentUrl).getPath();
-            return path != null && (path.equals(LICENSE_PATH) || path.equals(LICENSE_PATH + "/"));
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 
     /** 감사 체인 카드. 조회 실패·빈 응답은 503(본문 없음) — 사이드바가 "검증 상태 확인 불가"를 보인다. */
@@ -145,7 +133,8 @@ public class ShellController {
     }
 
     /**
-     * RP 전환. 성공이면 선택한 RP 의 상세로 이동(HX-Redirect). 실패는 실제 오류 상태 + 오류 토스트(본문 없음)이고,
+     * RP 전환. 성공이면 현재 화면을 새로 고친다(React 의 window.location.reload()): htmx 는 {@code HX-Refresh: true},
+     * 그 밖의 요청은 같은 출처 /admin 경로의 Referer 로, 없으면 선택한 RP 상세로 리다이렉트. 실패는 실제 오류 상태 + 오류 토스트(본문 없음)이고,
      * 활성 RP 는 바뀌지 않았으므로 화면도 그대로다.
      */
     @PostMapping("/admin/_/active-tenant")
@@ -156,7 +145,30 @@ public class ShellController {
             failSwitch(e, res);
             return;
         }
-        Htmx.redirect(req, res, "/admin/tenants/" + tenantId);
+        if (Htmx.isHtmx(req)) {
+            res.setStatus(HttpServletResponse.SC_OK);
+            res.setHeader("HX-Refresh", "true");
+        } else {
+            String back = sameOriginAdminReferer(req);
+            res.sendRedirect(back != null ? back : "/admin/tenants/" + tenantId);
+        }
+    }
+
+    /** Referer 가 이 서버의 /admin 경로면 그 경로(+쿼리), 아니면 null. 열린 리다이렉트를 막는다. */
+    static String sameOriginAdminReferer(HttpServletRequest req) {
+        String ref = req.getHeader("Referer");
+        if (ref == null || ref.isBlank()) return null;
+        try {
+            URI u = new URI(ref);
+            if (u.getHost() == null || !u.getHost().equalsIgnoreCase(req.getServerName())) return null;
+            int port = u.getPort() != -1 ? u.getPort() : ("https".equalsIgnoreCase(u.getScheme()) ? 443 : 80);
+            if (!req.getScheme().equalsIgnoreCase(u.getScheme()) || port != req.getServerPort()) return null;
+            String path = u.getRawPath();
+            if (path == null || !(path.equals("/admin") || path.startsWith("/admin/"))) return null;
+            return u.getRawQuery() == null ? path : path + "?" + u.getRawQuery();
+        } catch (URISyntaxException e) {
+            return null;
+        }
     }
 
     private void failSwitch(RuntimeException e, HttpServletResponse res) {

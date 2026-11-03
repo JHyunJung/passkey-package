@@ -185,6 +185,42 @@ class ShellControllerTest {
         assertThat(host.select("#nav-chain-count")).isEmpty();
     }
 
+    @Test
+    @DisplayName("체인 카드 자리: hx-preserve(+id), 카드 안 링크가 target/swap/sync 를 상속하지 않음, 폴링·다시 시도가 같은 hx-sync(replace)")
+    void chainCardHostPreserveDisinheritSync() throws Exception {
+        Element host = page("/admin/tenants", platform()).selectFirst("#chain-card");
+        assertThat(host.hasAttr("hx-preserve")).isTrue();
+        assertThat(host.attr("hx-disinherit").split("\\s+")).contains("hx-target", "hx-swap", "hx-sync");
+        assertThat(host.attr("hx-sync")).isEqualTo("#chain-card:replace");
+        Element retry = host.selectFirst("button[hx-get]");
+        assertThat(retry.attr("hx-sync")).as("다시 시도도 같은 동기화 대상").isEqualTo(host.attr("hx-sync"));
+        assertThat(retry.attr("hx-target")).isEqualTo("#chain-card-body");
+        assertThat(retry.attr("hx-swap")).isEqualTo("innerHTML");
+        assertThat(retry.hasAttr("data-quiet")).isTrue();
+        assertThat(host.attr("hx-target")).isEqualTo("#chain-card-body");
+        // 배지는 Alpine store 로 그린다(OOB 아님)
+        Element badge = page("/admin/tenants", platform()).selectFirst("a.nav-item[href=/admin/audit-chain] .nav-item__count");
+        assertThat(badge.attr("x-show")).contains("$store.chain.tampered");
+    }
+
+    @Test
+    @DisplayName("셸 조각 유지: 라이선스 배너 자리·RP 전환 자리에 hx-preserve + id")
+    void shellPartsPreserved() throws Exception {
+        assertThat(page("/admin/tenants", platform()).selectFirst("#license-banner").hasAttr("hx-preserve")).isTrue();
+        Element sw = page("/admin/settings", rp()).selectFirst("#tenant-switcher");
+        assertThat(sw.hasAttr("hx-preserve")).isTrue();
+        assertThat(sw.attr("hx-swap")).as("자리(id·preserve)는 남기고 안쪽만 교체").isEqualTo("innerHTML");
+    }
+
+    @Test
+    @DisplayName("조각 요청은 메뉴 강조·라이선스 조회를 하지 않는다")
+    void fragmentsSkipShellAdvice() throws Exception {
+        when(chain.overview(24)).thenReturn(overview(0, 1, Instant.parse("2026-10-11T00:00:00Z")));
+        org.mockito.Mockito.clearInvocations(license);
+        mvc.perform(get("/admin/_/shell/chain-card").with(authentication(platform()))).andReturn();
+        verify(license, never()).get();
+    }
+
     // ── 레이아웃 규약 ───────────────────────────────────────
 
     @Test
@@ -413,22 +449,32 @@ class ShellControllerTest {
     }
 
     @Test
-    @DisplayName("POST /admin/_/active-tenant: switchTenant 호출 후 선택한 RP 상세로 HX-Redirect")
+    @DisplayName("POST /admin/_/active-tenant: switchTenant 호출 후 현재 화면 새로고침(HX-Refresh, TSX reload)")
     void switchTenantRedirects() throws Exception {
         when(activeTenants.switchTenant(any())).thenReturn(twoTenants());
-        mvc.perform(post("/admin/_/active-tenant").param("tenantId", T2.toString())
+        MvcResult r = mvc.perform(post("/admin/_/active-tenant").param("tenantId", T2.toString())
                         .header("HX-Request", "true").with(authentication(rp())).with(csrf()))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("HX-Redirect", "/admin/tenants/" + T2));
+                .andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(r.getResponse().getHeader("HX-Refresh")).isEqualTo("true");
+        assertThat(r.getResponse().getHeader("HX-Redirect")).isNull();
         verify(activeTenants).switchTenant(new ActiveTenantController.SwitchRequest(T2));
     }
 
     @Test
-    @DisplayName("htmx 가 아닌 전환 POST 는 302 로 RP 상세")
+    @DisplayName("htmx 가 아닌 전환 POST: 같은 출처 /admin Referer 로(쿼리 유지), 아니면 선택한 RP 상세로 302")
     void switchTenantPlainRedirect() throws Exception {
-        mvc.perform(post("/admin/_/active-tenant").param("tenantId", T2.toString()).with(authentication(rp())).with(csrf()))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isFound())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/admin/tenants/" + T2));
+        String fallback = "/admin/tenants/" + T2;
+        org.springframework.test.web.servlet.ResultActions ok = mvc.perform(post("/admin/_/active-tenant").param("tenantId", T2.toString())
+                .header("Referer", "http://localhost/admin/settings?tab=security").with(authentication(rp())).with(csrf()));
+        assertThat(ok.andReturn().getResponse().getRedirectedUrl()).isEqualTo("/admin/settings?tab=security");
+        for (String ref : new String[] {null, "", "http://evil.example/admin/settings", "https://localhost/admin/settings", "http://localhost/other", "http://localhost:9999/admin/x", "::bad"}) {
+            var req = post("/admin/_/active-tenant").param("tenantId", T2.toString()).with(authentication(rp())).with(csrf());
+            if (ref != null) req.header("Referer", ref);
+            MvcResult r = mvc.perform(req).andReturn();
+            assertThat(r.getResponse().getStatus()).as("referer " + ref).isEqualTo(302);
+            assertThat(r.getResponse().getRedirectedUrl()).as("referer " + ref).isEqualTo(fallback);
+        }
     }
 
     @Test
@@ -511,14 +557,14 @@ class ShellControllerTest {
     }
 
     @Test
-    @DisplayName("링크 없음: RP 관리자, 이미 /license 화면")
+    @DisplayName("링크 없음: RP 관리자. PLATFORM 링크는 /license 에서 숨길 표식(data-hide-on-path)")
     void bannerLinkHidden() throws Exception {
         when(license.get()).thenReturn(ApiResponse.ok(view("onprem", "WARNING", 30, null)));
         assertThat(Jsoup.parseBodyFragment(banner(rp(), null)).select("a")).isEmpty();
         assertThat(Jsoup.parseBodyFragment(banner(rp(), null)).select("strong").text()).contains("30일 후 만료됩니다");
-        assertThat(Jsoup.parseBodyFragment(banner(platform(), "http://localhost:8080/admin/license")).select("a")).isEmpty();
-        assertThat(Jsoup.parseBodyFragment(banner(platform(), "http://localhost:8080/admin/license?x=1")).select("a")).isEmpty();
-        assertThat(Jsoup.parseBodyFragment(banner(platform(), "not a url ::")).select("a")).hasSize(1);
+        // /license 화면에서 숨기는 일은 app.js 가 현재 주소로 한다(배너가 이동 사이에 유지되므로) — 링크에 표식이 있다.
+        Element link = Jsoup.parseBodyFragment(banner(platform(), "http://localhost:8080/admin/license")).selectFirst("a[data-license-link]");
+        assertThat(link.attr("data-hide-on-path")).isEqualTo("/admin/license");
     }
 
     @Test
@@ -561,9 +607,8 @@ class ShellControllerTest {
         assertThat(card.attr("href")).isEqualTo("/admin/audit-chain");
         assertThat(card.selectFirst(".chain-card__title").text()).isEqualTo("AUDIT CHAIN OK");
         assertThat(card.selectFirst(".chain-card__sub").text()).isEqualTo("마지막 검증 · 방금 · 1,234 행");
-        Element badge = root.selectFirst("#nav-chain-count");
-        assertThat(badge.attr("hx-swap-oob")).isEqualTo("true");
-        assertThat(badge.text()).isEmpty();
+        assertThat(root.selectFirst("[data-chain-tampered]").attr("data-tampered")).isEqualTo("0");
+        assertThat(html).doesNotContain("hx-swap-oob");
     }
 
     @Test
@@ -577,10 +622,8 @@ class ShellControllerTest {
         assertThat(card.attr("href")).isEqualTo("/admin/audit-chain");
         assertThat(card.selectFirst(".chain-card__title").text()).isEqualTo("위변조 의심 · 1 tenant");
         assertThat(card.selectFirst(".chain-card__sub").text()).isEqualTo("즉시 확인이 필요합니다");
-        Element badge = root.selectFirst("#nav-chain-count");
-        assertThat(badge.text()).isEqualTo("위변조 1");
-        assertThat(badge.hasClass("nav-item__count")).isTrue();
-        assertThat(badge.attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(root.selectFirst("[data-chain-tampered]").attr("data-tampered")).isEqualTo("1");
+        assertThat(html).doesNotContain("hx-swap-oob");
     }
 
     @Test

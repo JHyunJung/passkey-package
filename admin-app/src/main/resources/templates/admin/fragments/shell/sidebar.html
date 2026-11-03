@@ -5,7 +5,10 @@
   사이드바(← shell/Sidebar.tsx)
   모델: me(CurrentAdmin), navActive('tenants'|'activity'|'audit-chain'|'settings'|'license'|null), deploymentMode('onprem'이면 라이선스 항목)
   PLATFORM: [플랫폼] Tenants · 활동 · 감사 체인 · (온프렘) 라이선스, [관리] 설정.  RP_ADMIN: [관리] 설정만.
-  PLATFORM 에게만 하단에 감사 체인 카드(30초 폴링, 응답 없는 조회는 120초 뒤 중단)를 둔다. 카드 상태·경과 초는 app.js 의 chainCard.
+  PLATFORM 에게만 하단에 감사 체인 카드(30초 폴링, 응답 없는 조회는 120초 뒤 중단)를 둔다.
+  카드(#chain-card)는 hx-preserve 라 boost 이동에도 같은 노드가 남고 폴링이 이어진다(React 셸은 한 번만 마운트). 카드 안 링크는
+  hx-disinherit 로 카드의 target/swap/sync 를 받지 않아 일반 boost 이동을 한다. 폴링과 다시 시도는 hx-sync="#chain-card:replace" 를
+  함께 써서 나중 요청이 앞 요청을 중단한다. "위변조 N" 배지는 Alpine.store('chain').tampered 로 그린다(OOB 는 hx-preserve 와 충돌). 카드 상태·경과 초는 app.js 의 chainCard.
 -->
 <aside th:fragment="sidebar" class="sidebar" aria-label="주 메뉴">
   <div class="sidebar__brand">
@@ -21,7 +24,7 @@
       <th:block th:replace="~{admin/fragments/icons :: activity(18)}"></th:block><span>활동</span>
     </a>
     <a class="nav-item" th:classappend="${navActive == 'audit-chain'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'audit-chain'} ? 'page'" th:href="@{/admin/audit-chain}">
-      <th:block th:replace="~{admin/fragments/icons :: link(18)}"></th:block><span>감사 체인</span><span id="nav-chain-count"></span>
+      <th:block th:replace="~{admin/fragments/icons :: link(18)}"></th:block><span>감사 체인</span><span class="nav-item__count" x-data x-show="$store.chain.tampered > 0" x-cloak x-text="'위변조 ' + $store.chain.tampered"></span>
     </a>
     <a th:if="${deploymentMode == 'onprem'}" class="nav-item" th:classappend="${navActive == 'license'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'license'} ? 'page'" th:href="@{/admin/license}">
       <th:block th:replace="~{admin/fragments/icons :: key(18)}"></th:block><span>라이선스</span><span class="nav-item__tag">온프렘</span>
@@ -34,9 +37,10 @@
     </a>
   </div>
   <div class="sidebar__foot">
-    <div th:if="${me != null and me.platform}" id="chain-card" data-quiet x-data="chainCard"
+    <div th:if="${me != null and me.platform}" id="chain-card" hx-preserve data-quiet x-data="chainCard"
          th:attr="hx-get=@{/admin/_/shell/chain-card}" hx-trigger="load, every 30s" hx-target="#chain-card-body" hx-swap="innerHTML"
-         hx-request='{"timeout": 120000}' x-on:htmx:after-request="done($event)">
+         hx-sync="#chain-card:replace" hx-disinherit="hx-target hx-swap hx-sync"
+         hx-request='{"timeout": 120000}' x-on:htmx:before-request="before($event)" x-on:htmx:after-request="done($event)">
       <div id="chain-card-body" x-show="!checking &amp;&amp; !failed" x-cloak></div>
       <div class="chain-card chain-card--pending" x-show="checking">
         <span class="chain-card__dot"></span>
@@ -50,7 +54,7 @@
         <span class="stack-1" style="gap: 4px">
           <span class="chain-card__title" role="status">검증 상태 확인 불가</span>
           <span class="chain-card__sub" x-text="lastText">서버 응답이 없습니다</span>
-          <button type="button" class="btn btn--sm" style="align-self: flex-start" th:attr="hx-get=@{/admin/_/shell/chain-card}" hx-target="#chain-card-body" hx-swap="innerHTML" x-on:click="start()">다시 시도</button>
+          <button type="button" class="btn btn--sm" style="align-self: flex-start" data-quiet th:attr="hx-get=@{/admin/_/shell/chain-card}" hx-target="#chain-card-body" hx-swap="innerHTML" hx-sync="#chain-card:replace" x-on:click="start()">다시 시도</button>
         </span>
       </div>
     </div>

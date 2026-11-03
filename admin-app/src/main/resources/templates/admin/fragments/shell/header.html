@@ -12,14 +12,14 @@
 <header th:fragment="topbar(crumbs)" class="topbar">
   <th:block th:if="${crumbs != null}"><th:block th:replace="${crumbs}"></th:block></th:block>
   <div class="spacer"></div>
-  <div th:if="${me != null and me.role == 'RP_ADMIN'}" data-quiet th:attr="hx-get=@{/admin/_/shell/tenant-switcher}" hx-trigger="load" hx-swap="outerHTML"></div>
+  <div th:if="${me != null and me.role == 'RP_ADMIN'}" id="tenant-switcher" hx-preserve data-quiet th:attr="hx-get=@{/admin/_/shell/tenant-switcher}" hx-trigger="load" hx-swap="innerHTML"></div>
   <!-- 문구는 실제 검색 범위(lib/search.ts: tenant 이름·slug)만 약속한다. -->
   <button type="button" class="topbar__search" x-data="platformKey" x-on:click="$dispatch('open-palette')"
           aria-label="tenant 이름 · slug 검색 (Ctrl K)" x-bind:aria-label="'tenant 이름 · slug 검색 (' + key + ')'">
     <th:block th:replace="~{admin/fragments/icons :: search(15)}"></th:block><span>tenant 이름 · slug 검색</span><kbd x-text="key">Ctrl K</kbd>
   </button>
   <!-- 도움말(H10). 주소가 빈 항목은 숨긴다. -->
-  <div class="menu-wrap" x-data="shellMenu(true)" x-on:keydown.escape="close()" x-on:mousedown.window="outside($event)">
+  <div class="menu-wrap" x-data="shellMenu(true)" x-on:keydown.escape.window="close()" x-on:mousedown.window="outside($event)">
     <button type="button" class="btn" aria-haspopup="menu" aria-expanded="false" x-bind:aria-expanded="open" x-on:click="toggle()">
       <th:block th:replace="~{admin/fragments/icons :: help(16)}"></th:block>도움말
     </button>
@@ -42,7 +42,7 @@
     </div>
   </div>
   <!-- 사용자 메뉴: 로그아웃만(동작하지 않는 역할 전환은 없다). -->
-  <div class="menu-wrap" th:if="${me != null}" x-data="shellMenu(false)" x-on:keydown.escape="close()" x-on:mousedown.window="outside($event)"
+  <div class="menu-wrap" th:if="${me != null}" x-data="shellMenu(false)" x-on:keydown.escape.window="close()" x-on:mousedown.window="outside($event)"
        th:with="roleLabel=${me.platform} ? 'PLATFORM' : 'RP_ADMIN', roleTone=${me.platform} ? 'plat' : 'info'">
     <button type="button" class="user-pill" aria-label="사용자 메뉴" aria-haspopup="menu" aria-expanded="false" x-bind:aria-expanded="open" x-on:click="toggle()">
       <span class="avatar" th:text="${#strings.toUpperCase(#strings.substring(me.email, 0, 1))}">A</span>

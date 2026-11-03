@@ -39,8 +39,11 @@ public class ShellAdvice {
 
     @ModelAttribute
     public void populate(Model model, HttpServletRequest req) {
-        model.addAttribute("navActive", navActive(PATHS.getPathWithinApplication(req)));
         model.addAttribute("helpLinks", helpLinks);
+        String path = PATHS.getPathWithinApplication(req);
+        // 조각(/admin/_/**)은 레이아웃을 안 쓴다 — 메뉴 강조·라이선스 조회를 하지 않는다.
+        if (path != null && path.startsWith("/admin/_/")) return;
+        model.addAttribute("navActive", navActive(path));
         model.addAttribute("deploymentMode", deploymentMode());
     }
 
