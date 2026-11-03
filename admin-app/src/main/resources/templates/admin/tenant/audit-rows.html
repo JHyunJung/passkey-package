@@ -21,7 +21,7 @@
     <div class="spacer"></div>
     <th:block th:replace="~{admin/fragments/ui/switch :: switch('실패만', 'failures', ${failures}, null, ${failuresAttrs})}"></th:block>
     <th:block th:replace="~{admin/fragments/ui/segmented :: segmented(null, ${windows}, ${win}, '기간')}"></th:block>
-    <a th:unless="${csvDisabled}" class="btn" th:href="${csvUrl}" hx-boost="false" download>
+    <a th:unless="${csvDisabled}" class="btn" th:href="${csvUrl}" hx-boost="false" download data-csv-download>
       <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block><th:block th:text="${csvLabel}">CSV 내보내기 (현재 페이지 0건)</th:block></a>
     <button th:if="${csvDisabled}" type="button" class="btn" disabled>
       <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block><th:block th:text="${csvLabel}">CSV 내보내기 (현재 페이지 0건)</th:block></button>

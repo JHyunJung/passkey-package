@@ -449,6 +449,12 @@ class CredentialsTabControllerTest {
         assertThat(tab("?aaguid=ea9b").selectFirst("#cred-controls a.btn").attr("href")).isEqualTo(BASE + "/credentials.csv?page=1&size=50&aaguid=ea9b");
     }
 
+    @Test
+    @DisplayName("CSV 링크는 공통 다운로드 표식(data-csv-download)")
+    void csvLinkCarriesMarker() throws Exception {
+        assertThat(tab("").selectFirst("#cred-controls a[download]").hasAttr("data-csv-download")).isTrue();
+    }
+
     // ── 상세 ────────────────────────────────────────────────
 
     @Test

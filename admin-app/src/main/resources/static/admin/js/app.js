@@ -274,6 +274,52 @@
     return { title: '알 수 없는 오류가 발생했습니다', detail: e instanceof Error ? e.message : String(e) };
   }
 
+  // ── CSV 다운로드 공통 처리(ruling L) ────────────────────
+  // `a[data-csv-download]` 클릭을 가로채 fetch → Blob → 임시 링크로 저장한다. 실패(HTTP 오류·네트워크)는 토스트로 알린다
+  // (원본은 CSV 를 클라이언트에서 만들고 로드 오류를 토스트했다). href 는 그대로라 JS 가 없으면 일반 다운로드. 파일명은 Content-Disposition.
+  function csvFilename(res, a) {
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = /filename="?([^";]+)"?/i.exec(cd);
+    return (m && m[1]) || a.getAttribute('download') || 'download.csv';
+  }
+  function csvToast(e) {
+    const d = describeFetchError(e);
+    window.dispatchEvent(new CustomEvent('toast', { detail: { kind: 'error', title: 'CSV 를 내려받지 못했습니다', message: d.title + (d.detail ? '. ' + d.detail : '') } }));
+  }
+  async function csvDownload(a) {
+    if (a.getAttribute('aria-busy') === 'true') return; // 연타 방지
+    a.setAttribute('aria-busy', 'true');
+    try {
+      const res = await fetch(a.href, { credentials: 'same-origin', redirect: 'follow' });
+      if (res.redirected || !res.ok) {
+        const err = new Error('HTTP ' + res.status);
+        err.httpStatus = res.redirected ? 401 : res.status;
+        throw err;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const t = document.createElement('a');
+      t.href = url;
+      t.download = csvFilename(res, a);
+      document.body.appendChild(t);
+      t.click();
+      t.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      csvToast(e);
+    } finally {
+      a.removeAttribute('aria-busy');
+    }
+  }
+  window.adminCsvDownload = csvDownload;
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest ? e.target.closest('a[data-csv-download]') : null;
+    if (!a) return;
+    e.preventDefault();
+    void csvDownload(a);
+  });
+
   // ── Alpine 컴포넌트 ───────────────────────────────────
   document.addEventListener('alpine:init', function () {
     // 사이드바 "위변조 N" 배지가 읽는 값. chainCard 가 응답마다 갱신하고, 이동으로 사이드바가 다시 그려져도 남는다.

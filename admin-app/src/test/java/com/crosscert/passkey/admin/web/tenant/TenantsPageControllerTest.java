@@ -792,6 +792,7 @@ class TenantsPageControllerTest {
         assertThat(csv.attr("href")).isEqualTo("/admin/_/tenants/export?q=a%26b&status=ACTIVE");
         assertThat(csv.attr("hx-boost")).isEqualTo("false");
         assertThat(csv.hasAttr("download")).isTrue();
+        assertThat(csv.hasAttr("data-csv-download")).isTrue();
     }
 
     // ── 리뷰 수정 1 ────────────────────────────────────────

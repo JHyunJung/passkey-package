@@ -544,7 +544,8 @@ class AuditTabControllerTest {
     @DisplayName("체인 카드 래퍼는 hx-target/swap/sync/request 를 자식에 상속시키지 않는다(월간 보고서 링크가 카드를 바꾸지 않게), begin/end 는 자기 요청만")
     void chainWrapperDisinheritsAndGuardsOwnRequest() throws Exception {
         Element wrap = tab("").selectFirst("#audit-chain");
-        assertThat(wrap.attr("hx-disinherit")).isEqualTo("hx-target hx-swap hx-sync hx-request");
+        // hx-request 는 htmx 2.0.4 가 disinherit 와 무관하게 읽으므로 목록에 없다
+        assertThat(wrap.attr("hx-disinherit")).isEqualTo("hx-target hx-swap hx-sync");
         assertThat(wrap.attr("x-on:htmx:before-request")).contains("$event.detail.elt === $el");
         assertThat(wrap.attr("x-on:htmx:after-request")).contains("$event.detail.elt === $el");
         when(chain.verifyTenant(T1.toString())).thenReturn(new AuditChainMonitorController.TenantVerifyResponse(T1, true, null, NOW));
@@ -575,6 +576,14 @@ class AuditTabControllerTest {
         assertThat(d.select("#audit-card .card__foot button")).isEmpty();
         assertThat(d.select("#audit-card .card__foot .hint").text()).contains("최근 2,000건").contains("더 불러올 수 없습니다");
         assertThat(d.select("#audit-card [hx-get*=pages=41]")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CSV 링크는 공통 다운로드 표식(data-csv-download)과 href 를 함께 가진다(JS 없이도 동작)")
+    void csvLinkCarriesMarker() throws Exception {
+        Element a = tab("").selectFirst("#audit-card a[download]");
+        assertThat(a.hasAttr("data-csv-download")).isTrue();
+        assertThat(a.attr("href")).contains("/audit.csv?");
     }
 
     // ── 경계 ────────────────────────────────────────────────

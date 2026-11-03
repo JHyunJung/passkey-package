@@ -274,12 +274,20 @@ class FunnelTabControllerTest {
     @DisplayName("기간 전환 중: 루트가 pending 을 들고 이전 결과를 숨기고 스켈레톤을, 내보내기·CSV 링크는 비활성(요청 실패 시 after-request 로 복구)")
     void pendingStateHidesResults() throws Exception {
         Element root = tab("").selectFirst("#funnel-root");
-        assertThat(root.attr("x-data")).isEqualTo("{ pending: false }");
-        assertThat(root.attr("x-on:htmx:before-request")).isEqualTo("pending = true");
-        assertThat(root.attr("x-on:htmx:after-request")).isEqualTo("pending = false");
+        assertThat(root.attr("x-data")).isEqualTo("{ n: 0, get pending() { return this.n > 0; } }");
+        assertThat(root.attr("x-on:htmx:before-request")).isEqualTo("n++");
+        assertThat(root.attr("x-on:htmx:after-request")).isEqualTo("n = Math.max(0, n - 1)");
         assertThat(root.select("[x-show=!pending]")).isNotEmpty();
         assertThat(root.select("[role=status][aria-busy=true]")).hasSize(1);
         for (Element a : root.select("a[download]")) assertThat(a.attr("x-on:click")).isEqualTo("if (pending) $event.preventDefault()");
+    }
+
+    @Test
+    @DisplayName("퍼널 CSV 링크 3개 모두 공통 다운로드 표식")
+    void csvLinksCarryMarker() throws Exception {
+        Document d = tab("");
+        assertThat(d.select("a[download]")).hasSize(3);
+        assertThat(d.select("a[download]").stream().allMatch(a -> a.hasAttr("data-csv-download"))).isTrue();
     }
 
     // ── CSV ─────────────────────────────────────────────────

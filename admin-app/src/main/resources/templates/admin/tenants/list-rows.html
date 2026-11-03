@@ -28,7 +28,7 @@
   <th:block th:replace="~{admin/fragments/ui/segmented :: segmented(null, ${statusOptions}, ${status}, '상태')}"></th:block>
   <div class="spacer"></div>
   <span class="muted" style="font-size: 12px" th:text="${total + ' / ' + countAll + '건'}">3 / 3건</span>
-  <a class="btn" th:href="${csvUrl}" hx-boost="false" download>
+  <a class="btn" th:href="${csvUrl}" hx-boost="false" download data-csv-download>
     <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>CSV
   </a>
 </div>
