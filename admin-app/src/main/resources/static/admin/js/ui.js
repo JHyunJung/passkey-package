@@ -326,6 +326,7 @@ document.addEventListener('alpine:init', () => {
     saving: false,
     disarmed: false,
     inflight: new Map(),
+    pending: new Map(), // after-request 리스너 → 그 리스너를 단 출발 요소
     beforeUnload: null,
     disarm: null,
     init() {
@@ -343,18 +344,25 @@ document.addEventListener('alpine:init', () => {
       // form 자신의 저장 요청(비-GET: form 자체 또는 form 안 submit 버튼이 보낸 것)만 본다. 폼 안의 GET(Segmented 의 hx-get 등)과
       // 그 밖의 요청은 saving·기준선에 영향이 없다. 기준선은 제출 시점의 값을 요청(requestConfig)에 묶어 두었다가,
       // 성공이 확인된 요청의 스냅샷으로만 갱신한다(저장 중에 더 고친 값은 계속 변경으로 남고, 동시 요청이 서로 덮지 않는다).
+      // 완료는 추적 중인 requestConfig 로만 판정한다(출처 재검사 없음). htmx 2.0.4 는 afterRequest 를 항상 원래 출발 요소에
+      // 먼저 보내고(성공 스왑으로 떨어져 나가도, 실패·abort·timeout·sendError 경로도 모두 afterRequest 를 먼저 보냄),
+      // 떨어져 나간 경우에만 살아남은 조상에 다시 보낸다. 그래서 출발 요소에 직접 리스너를 단다: 분리돼도 받는다.
       f.addEventListener('htmx:before-request', (e) => {
         if (!isOwnSave(e, f)) return;
-        this.inflight.set(e.detail.requestConfig, formSnapshot(f));
+        const key = e.detail.requestConfig;
+        const src = e.detail.elt;
+        const done = (ev) => {
+          if (!ev.detail || ev.detail.requestConfig !== key) return;
+          src.removeEventListener('htmx:after-request', done);
+          this.pending.delete(done);
+          this.finish(key, !!ev.detail.successful);
+        };
+        this.inflight.set(key, formSnapshot(f));
         this.saving = true;
-      });
-      f.addEventListener('htmx:after-request', (e) => {
-        if (!isOwnSave(e, f)) return;
-        const cfgKey = e.detail.requestConfig;
-        const snap = this.inflight.get(cfgKey);
-        this.inflight.delete(cfgKey);
-        this.saving = this.inflight.size > 0;
-        if (e.detail.successful && snap) { this.base = snap; this.recount(); }
+        src.addEventListener('htmx:after-request', done);
+        this.pending.set(done, src);
+        // 다른 리스너가 요청을 취소하면(beforeRequest preventDefault) afterRequest 가 오지 않으므로 바로 정리한다.
+        queueMicrotask(() => { if (e.defaultPrevented) done({ detail: { requestConfig: key, successful: false } }); });
       });
       // 일반(비 htmx) 제출은 페이지 이동이므로 경고를 끈다.
       f.addEventListener('submit', () => { if (!f.hasAttribute('hx-post') && !f.hasAttribute('hx-put') && !f.hasAttribute('hx-patch') && !f.hasAttribute('hx-delete')) this.disarmed = true; });
@@ -366,6 +374,16 @@ document.addEventListener('alpine:init', () => {
     destroy() {
       if (this.beforeUnload) window.removeEventListener('beforeunload', this.beforeUnload);
       if (this.disarm) window.removeEventListener('unsaved-disarm', this.disarm);
+      this.pending.forEach((src, fn) => src.removeEventListener('htmx:after-request', fn));
+      this.pending.clear();
+    },
+    /** 추적 중인 저장 요청 하나를 끝낸다. 성공이면 그 요청의 제출 시점 스냅샷이 새 기준선. */
+    finish(key, ok) {
+      const snap = this.inflight.get(key);
+      if (!snap) return;
+      this.inflight.delete(key);
+      this.saving = this.inflight.size > 0;
+      if (ok) { this.base = snap; this.recount(); }
     },
     recount() {
       const now = formSnapshot(this.form);
