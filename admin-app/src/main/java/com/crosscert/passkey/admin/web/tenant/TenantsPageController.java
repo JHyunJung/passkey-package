@@ -175,8 +175,8 @@ public class TenantsPageController {
     @GetMapping(PAGE_PATH)
     public String page(@RequestParam(name = "q", defaultValue = "") String q,
                        @RequestParam(name = "status", defaultValue = ALL) String status,
-                       @RequestParam(name = "page", defaultValue = "1") int page,
-                       @RequestParam(name = "size", defaultValue = "50") int size,
+                       @RequestParam(name = "page", defaultValue = "1") String pageParam,
+                       @RequestParam(name = "size", defaultValue = "50") String sizeParam,
                        @RequestParam(name = "new", required = false) String openNew,
                        Model model) {
         CurrentAdmin me = me(model);
@@ -189,7 +189,8 @@ public class TenantsPageController {
         }
         model.addAttribute("configError", false);
         String st = normStatus(status);
-        int sz = normSize(size);
+        int sz = normSize(parseInt(sizeParam, PAGE_SIZES.get(0)));
+        int page = parseInt(pageParam, 1);
 
         List<TenantRow> all = null;
         Exception loadError = null;
@@ -206,20 +207,21 @@ public class TenantsPageController {
         model.addAttribute("kpiDash", "—");
         // 목록 조회 실패 카드의 "다시 시도": 같은 전체 페이지를 다시 받아 본문을 교체한다(주소는 그대로).
         Map<String, Object> retry = new LinkedHashMap<>();
-        retry.put("hx-get", canonicalUrl(q, normStatus(status), page, normSize(size)));
+        retry.put("hx-get", canonicalUrl(q, st, page, sz));
         retry.put("hx-target", "body");
         retry.put("hx-swap", "innerHTML");
         retry.put("hx-push-url", "false");
         model.addAttribute("retryAttrs", retry);
         // 새로 고침·뒤로 가기에서 다시 열리지 않게 new 를 주소에서 지운다(원본 setParams replace). 다이얼로그를 처음부터 열어 둔다.
         boolean open = "1".equals(openNew);
+        model.addAttribute("cleanUrl", canonicalUrl(q, st, page, sz));
         model.addAttribute("openNew", open);
         model.addAttribute("ntOpts", open ? Map.of("open", true) : null);
         model.addAttribute("nt", NewTenantForm.empty());
         if (all != null) {
             populate(model, all, q, st, page, sz);
-            model.addAttribute("cleanUrl", canonicalUrl(q, st, (Integer) model.getAttribute("page"), sz));
             populateKpis(model, all);
+            if (all.isEmpty()) model.addAttribute("kpiActiveAttrs", null); // 빈 목록: 가리킬 영역이 없어 클릭형이 아니다
         }
         return PAGE_VIEW;
     }
@@ -232,12 +234,14 @@ public class TenantsPageController {
     @GetMapping(LIST_PATH)
     public String list(@RequestParam(name = "q", defaultValue = "") String q,
                        @RequestParam(name = "status", defaultValue = ALL) String status,
-                       @RequestParam(name = "page", defaultValue = "1") int page,
-                       @RequestParam(name = "size", defaultValue = "50") int size,
+                       @RequestParam(name = "page", defaultValue = "1") String pageParam,
+                       @RequestParam(name = "size", defaultValue = "50") String sizeParam,
+                       @RequestParam(name = "reset", required = false) String reset,
                        HttpServletRequest req, HttpServletResponse res, Model model) throws IOException {
         requirePlatform(model);
         String st = normStatus(status);
-        int sz = normSize(size);
+        int sz = normSize(parseInt(sizeParam, PAGE_SIZES.get(0)));
+        int page = parseInt(pageParam, 1);
         List<TenantRow> all = loadTenants();
         if (all.isEmpty()) {
             // 그 사이 tenant 가 모두 사라졌다 — 빈 상태 화면은 전체 페이지가 그린다.
@@ -245,9 +249,13 @@ public class TenantsPageController {
             return "admin/fragments/shell/empty :: none";
         }
         populate(model, all, q, st, page, sz);
-        res.setHeader("HX-Push-Url", canonicalUrl(q, st, (Integer) model.getAttribute("page"), sz));
-        // 사용자가 입력칸에서 타이핑 중이면 입력칸은 그대로 둔다(되돌려 쓰면 응답 사이에 친 글자가 사라진다).
-        model.addAttribute("oobQ", !SEARCH_INPUT_ID.equals(req.getHeader("HX-Trigger")));
+        String url = canonicalUrl(q, st, (Integer) model.getAttribute("page"), sz);
+        boolean typing = SEARCH_INPUT_ID.equals(req.getHeader("HX-Trigger"));
+        // 디바운스된 검색 요청은 멈출 때마다 이력을 쌓지 않고 현재 항목을 바꾼다.
+        res.setHeader(typing ? "HX-Replace-Url" : "HX-Push-Url", url);
+        // 검색 입력은 검색어를 지우는 요청(reset=q: 칩 제거·모두 지우기)에서만 OOB 로 되돌려 쓴다.
+        // 그 밖의 요청은 현재 입력값(hx-include)을 싣고 오므로 되돌려 쓰면 응답 사이에 친 글자만 지운다.
+        model.addAttribute("oobQ", "q".equals(reset) && !typing);
         return ROWS_VIEW;
     }
 
@@ -372,6 +380,15 @@ public class TenantsPageController {
         return ACTIVE.equals(s) || SUSPENDED.equals(s) ? s : ALL;
     }
 
+    /** 숫자가 아닌 page/size 는 400 이 아니라 기본값(원본은 select·버튼으로만 바뀌어 잘못된 값이 없다). */
+    static int parseInt(String v, int def) {
+        try {
+            return Integer.parseInt(v.trim());
+        } catch (RuntimeException e) {
+            return def;
+        }
+    }
+
     static int normSize(int size) {
         return PAGE_SIZES.contains(size) ? size : PAGE_SIZES.get(0);
     }
@@ -398,18 +415,18 @@ public class TenantsPageController {
         model.addAttribute("statusLabel", Labels.statusLabel(status));
         model.addAttribute("oobQ", false);
         model.addAttribute("csvUrl", EXPORT_PATH + "?q=" + enc(q) + "&status=" + status);
-        model.addAttribute("listBase", LIST_PATH + "?q=" + enc(q) + "&status=" + status + "&size=" + size);
+        model.addAttribute("listBase", LIST_PATH + "?status=" + status + "&size=" + size);
 
         // 상태 세그먼트 · 활성 KPI · 필터 칩의 htmx 속성. 값은 서버가 정한 주소뿐이다(사용자 입력은 인코딩해 주소 안에만).
         List<Map<String, Object>> options = new ArrayList<>();
-        options.add(option(ALL, "전체 " + all.size(), listUrl(q, ALL, 1, size)));
-        options.add(option(ACTIVE, "활성 " + active, listUrl(q, ACTIVE, 1, size)));
-        options.add(option(SUSPENDED, "정지 " + suspended, listUrl(q, SUSPENDED, 1, size)));
+        options.add(option(ALL, "전체 " + all.size(), listUrl(ALL, 1, size)));
+        options.add(option(ACTIVE, "활성 " + active, listUrl(ACTIVE, 1, size)));
+        options.add(option(SUSPENDED, "정지 " + suspended, listUrl(SUSPENDED, 1, size)));
         model.addAttribute("statusOptions", options);
 
         // 활성 KPI 클릭 = ACTIVE 토글(applyStatus(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')).
-        String kpiUrl = listUrl(q, ACTIVE.equals(status) ? ALL : ACTIVE, 1, size);
-        Map<String, Object> kpi = swap(kpiUrl);
+        String kpiUrl = listUrl(ACTIVE.equals(status) ? ALL : ACTIVE, 1, size);
+        Map<String, Object> kpi = swap(kpiUrl, true);
         kpi.put("id", "tenants-kpi-active");
         kpi.put("hx-sync", "#tenants-card:replace");
         model.addAttribute("kpiActiveAttrs", kpi);
@@ -419,9 +436,9 @@ public class TenantsPageController {
         model.addAttribute("kpiActiveValue", fmt(active));
         model.addAttribute("kpiActiveHint", "전체 " + fmt(all.size()) + "건 · 클릭하면 활성만 보기");
 
-        model.addAttribute("chipStatusAttrs", swap(listUrl(q, ALL, 1, size)));
-        model.addAttribute("chipQAttrs", swap(listUrl("", status, 1, size)));
-        model.addAttribute("clearAttrs", swap(listUrl("", ALL, 1, size)));
+        model.addAttribute("chipStatusAttrs", swap(listUrl(ALL, 1, size), true));
+        model.addAttribute("chipQAttrs", swap(listUrl(status, 1, size) + "&reset=q", false));
+        model.addAttribute("clearAttrs", swap(listUrl(ALL, 1, size) + "&reset=q", false));
     }
 
     private void populateKpis(Model model, List<TenantRow> all) {
@@ -457,21 +474,23 @@ public class TenantsPageController {
         o.put("value", value);
         o.put("label", label);
         o.put("title", null);
-        o.put("attrs", swap(url));
+        o.put("attrs", swap(url, true));
         return o;
     }
 
     /** 목록 영역을 바꾸는 요청의 공통 속성. 대상 {@code #tenants-results} 를 통째로 교체하고 응답의 OOB 가 컨트롤을 맞춘다. */
-    private static Map<String, Object> swap(String url) {
+    private static Map<String, Object> swap(String url, boolean withQuery) {
         Map<String, Object> m = new LinkedHashMap<>();
+        // 검색어는 주소에 굽지 않고 요청 시점의 입력값(#tenant-q)을 싣는다 — 입력 중 눌러도 옛 검색어로 되돌아가지 않는다.
+        if (withQuery) m.put("hx-include", "#" + SEARCH_INPUT_ID);
         m.put("hx-get", url);
         m.put("hx-target", "#tenants-results");
         m.put("hx-swap", "outerHTML");
         return m;
     }
 
-    private static String listUrl(String q, String status, int page, int size) {
-        return LIST_PATH + "?q=" + enc(q) + "&status=" + status + "&size=" + size + (page > 1 ? "&page=" + page : "");
+    private static String listUrl(String status, int page, int size) {
+        return LIST_PATH + "?status=" + status + "&size=" + size + (page > 1 ? "&page=" + page : "");
     }
 
     /** 주소창에 남길 화면 주소: 기본값(전체·1쪽·50건·빈 검색어)은 생략한다. */

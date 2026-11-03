@@ -14,13 +14,21 @@
 </th:block>
 
 <th:block th:fragment="formFields">
+  <!-- 네트워크 오류·시간 초과(응답 없음): 전역 토스트 대신 같은 경고를 인라인으로(form 의 netErr, 서버 거절 경고와 같은 제목) -->
+  <div class="banner banner--danger banner--top" x-bind:role="netErr ? 'alert' : null" x-show="netErr" x-cloak>
+    <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+    <div class="banner__body">
+      <div class="banner__title">Tenant를 만들지 못했습니다</div>
+      <div x-text="netErr"></div>
+    </div>
+  </div>
   <th:block th:if="${nt.failure != null}">
     <th:block th:replace="~{admin/fragments/ui/alert :: alert('bad', 'Tenant를 만들지 못했습니다', ~{:: failureBody}, null, null)}"></th:block>
   </th:block>
 
   <div>
     <label class="label" for="nt-name">표시 이름</label>
-    <input id="nt-name" name="name" class="input" placeholder="예: Acme Corp" autocomplete="off" autofocus
+    <input id="nt-name" name="name" class="input" placeholder="예: Acme Corp" autocomplete="off"
            th:value="${nt.name}" x-bind:readonly="busy"
            th:attr="aria-invalid=${nt.nameError != null} ? 'true' : null, aria-describedby=${nt.nameError != null} ? 'nt-name-error' : null">
     <p class="field__error" id="nt-name-error" th:if="${nt.nameError != null}" th:text="${nt.nameError}">오류</p>
@@ -61,9 +69,14 @@
 
 <!-- dialog 조각 인자 원본: 화면에는 dialog 안쪽에서만 그려진다. -->
 <th:block th:remove="all">
-  <form th:fragment="ntBody" id="nt-form" class="dialog__form" novalidate
+  <form th:fragment="ntBody" id="nt-form" class="dialog__form" novalidate data-quiet
         hx-post="/admin/_/tenants" hx-target="this" hx-swap="innerHTML" hx-sync="this:drop"
-        x-on:htmx:before-request="busy = true" x-on:htmx:after-request="busy = false">
+        x-data="{ netErr: null }"
+        x-on:htmx:before-request="busy = true; netErr = null"
+        x-on:htmx:after-request="if (!$event.detail.successful) busy = false"
+        x-on:htmx:send-error="netErr = '네트워크에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요. 입력한 내용은 그대로 있습니다.'"
+        x-on:htmx:timeout="netErr = '서버가 잠시 응답하지 않습니다. 응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요. 입력한 내용은 그대로 있습니다.'"
+        x-on:htmx:after-swap="$nextTick(() => { const f = $el.querySelector('[aria-invalid=true]'); if (f) f.focus() })">
     <th:block th:replace="~{:: formFields}"></th:block>
   </form>
 

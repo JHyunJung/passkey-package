@@ -3,7 +3,7 @@
 <!--
   MFA 단계(← pages/MfaChallenge.tsx). 비밀번호 인증을 마친 MFA 대기 세션이 GET /admin/login 에서 받는다.
   제출: hx-post /admin/login/mfa(code, mode, _csrf) → LoginPageController.verifyMfa → MfaController.verify(Java 호출).
-    성공 → HX-Redirect /admin(복구 코드를 썼으면 남은 개수 경고 토스트를 HX-Trigger 로 함께; auth.js 가 다음 화면까지 넘긴다)
+    성공 → HX-Redirect /admin(복구 코드를 썼으면 남은 개수 경고 토스트를 HX-Trigger 로 함께; ui.js 가 다음 화면까지 넘긴다)
     코드 틀림(401) → 아래 error 조각 + 422 → #mfa-error 에 스왑
     잠금으로 세션이 무효화됨 → HX-Redirect /admin/login
     5xx·네트워크 오류 → auth.js 가 "확인하지 못했습니다" 경고(코드가 틀렸다고 말하지 않는다)

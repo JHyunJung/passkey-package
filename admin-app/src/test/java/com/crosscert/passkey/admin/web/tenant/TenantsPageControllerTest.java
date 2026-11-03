@@ -153,7 +153,8 @@ class TenantsPageControllerTest {
         // OOB: 필터 컨트롤, 활성 KPI, 검색 입력
         assertThat(frag.select("#tenants-controls[hx-swap-oob=true]")).hasSize(1);
         assertThat(frag.select("#tenants-kpi-active[hx-swap-oob=true]")).hasSize(1);
-        assertThat(frag.select("#tenant-q[hx-swap-oob=true]")).hasSize(1);
+        // 검색 입력은 지우기(reset=q) 요청에서만 되돌려 쓴다
+        assertThat(frag.select("#tenant-q")).isEmpty();
         // 주소창은 화면 주소로(조각 경로가 아니라)
         assertThat(r.getResponse().getHeader("HX-Push-Url")).isEqualTo("/admin/tenants?status=ACTIVE");
     }
@@ -246,13 +247,13 @@ class TenantsPageControllerTest {
         tenants(tv(1), tv(2), tv(3, "Tenant s1", "slug-s1", "SUSPENDED"));
         Element kpi = page("/admin/tenants").select("button#tenants-kpi-active").first();
         assertThat(kpi.attr("aria-pressed")).isEqualTo("false");
-        assertThat(kpi.attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=&status=ACTIVE&size=50");
+        assertThat(kpi.attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ACTIVE&size=50");
         assertThat(kpi.attr("hx-target")).isEqualTo("#tenants-results");
 
         Element on = page("/admin/tenants?status=ACTIVE&q=Ten&page=1").select("button#tenants-kpi-active").first();
         assertThat(on.attr("aria-pressed")).isEqualTo("true");
         assertThat(on.hasClass("kpi--selected")).isTrue();
-        assertThat(on.attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=Ten&status=ALL&size=50");
+        assertThat(on.attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ALL&size=50");
     }
 
     @Test
@@ -304,7 +305,7 @@ class TenantsPageControllerTest {
         assertThat(susp.select("#tenants-controls .seg__btn").get(2).attr("aria-pressed")).isEqualTo("true");
         assertThat(susp.select("#tenants-controls .muted").text()).isEqualTo("1 / 3건");
         assertThat(susp.select(".applied .chip").text()).contains("상태: 정지");
-        assertThat(susp.select("#tenants-controls .seg__btn").get(1).attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=&status=ACTIVE&size=50");
+        assertThat(susp.select("#tenants-controls .seg__btn").get(1).attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ACTIVE&size=50");
     }
 
     @Test
@@ -314,9 +315,9 @@ class TenantsPageControllerTest {
         Document d = page("/admin/tenants?status=SUSPENDED&q=s1");
         Element applied = d.select(".applied").first();
         assertThat(applied.text()).contains("적용된 필터").contains("상태: 정지").contains("검색: s1");
-        assertThat(applied.select("button[aria-label=상태 필터 제거]").attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=s1&status=ALL&size=50");
-        assertThat(applied.select("button[aria-label=검색어 제거]").attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=&status=SUSPENDED&size=50");
-        assertThat(applied.select("button:contains(모두 지우기)").attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=&status=ALL&size=50");
+        assertThat(applied.select("button[aria-label=상태 필터 제거]").attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ALL&size=50");
+        assertThat(applied.select("button[aria-label=검색어 제거]").attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=SUSPENDED&size=50&reset=q");
+        assertThat(applied.select("button:contains(모두 지우기)").attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ALL&size=50&reset=q");
         // 필터가 없으면 영역 자체가 없다
         assertThat(page("/admin/tenants").select(".applied")).isEmpty();
     }
@@ -382,13 +383,13 @@ class TenantsPageControllerTest {
         assertThat(p1.select("button[aria-label=이전 페이지]").hasAttr("disabled")).isTrue();
         Element next = p1.select("button[aria-label=다음 페이지]").first();
         assertThat(next.hasAttr("disabled")).isFalse();
-        assertThat(next.attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=&status=ALL&size=50&page=2");
+        assertThat(next.attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ALL&size=50&page=2");
 
-        Document p2 = doc(fragment("/admin/_/tenants/list?q=&status=ALL&size=50&page=2"));
+        Document p2 = doc(fragment("/admin/_/tenants/list?status=ALL&size=50&page=2"));
         assertThat(p2.select("#tenants-results .pager > span").first().text()).isEqualTo("51–60 / 60건");
         assertThat(rowNames(p2)).hasSize(10).contains("Tenant n55").doesNotContain("Tenant n1");
         assertThat(p2.select("button[aria-label=다음 페이지]").hasAttr("disabled")).isTrue();
-        assertThat(p2.select("button[aria-label=이전 페이지]").attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=&status=ALL&size=50");
+        assertThat(p2.select("button[aria-label=이전 페이지]").attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ALL&size=50");
         assertThat(p2.select("#tenants-results .pager").text()).contains("2 / 2");
     }
 
@@ -447,7 +448,7 @@ class TenantsPageControllerTest {
         assertThat(d.text()).contains("검색 결과가 없습니다").doesNotContain("아직 tenant 가 없습니다");
         assertThat(d.select("#tenants-results img.empty__art").attr("src")).isEqualTo("/admin/img/no-results.webp");
         assertThat(d.select("#tenants-results .empty__sub").text()).isEqualTo("검색어나 상태 필터를 바꿔 보세요.");
-        assertThat(d.select("#tenants-results .empty button").attr("hx-get")).isEqualTo("/admin/_/tenants/list?q=&status=ALL&size=50");
+        assertThat(d.select("#tenants-results .empty button").attr("hx-get")).isEqualTo("/admin/_/tenants/list?status=ALL&size=50&reset=q");
         assertThat(d.select("#tenants-results .empty button").text()).isEqualTo("필터 모두 지우기");
         assertThat(d.select("#tenants-results .pager > span").first().text()).isEqualTo("0건");
         assertThat(d.select("#tenants-controls .muted").text()).isEqualTo("0 / 2건");
@@ -581,8 +582,8 @@ class TenantsPageControllerTest {
         assertThat(submit.select("span").eachText()).containsExactly("생성하고 설정으로 이동", "생성 중…");
         assertThat(inner.select(".dialog__foot button.btn").first().text()).isEqualTo("취소");
         // 폼 요청 중 busy 는 dialog 컴포넌트 상태: 닫기를 막는다
-        assertThat(form.attr("x-on:htmx:before-request")).isEqualTo("busy = true");
-        assertThat(form.attr("x-on:htmx:after-request")).isEqualTo("busy = false");
+        assertThat(form.attr("x-on:htmx:before-request")).startsWith("busy = true");
+        assertThat(form.attr("x-on:htmx:after-request")).contains("busy = false");
         // 평소에는 닫혀 있다
         assertThat(dlg.attr("x-data")).contains("\"id\":\"new-tenant\"").doesNotContain("\"open\":true");
     }
@@ -791,5 +792,97 @@ class TenantsPageControllerTest {
         assertThat(csv.attr("href")).isEqualTo("/admin/_/tenants/export?q=a%26b&status=ACTIVE");
         assertThat(csv.attr("hx-boost")).isEqualTo("false");
         assertThat(csv.hasAttr("download")).isTrue();
+    }
+
+    // ── 리뷰 수정 1 ────────────────────────────────────────
+
+    @Test
+    @DisplayName("상태·KPI·페이지 요청은 검색어를 주소에 굽지 않고 현재 입력값(#tenant-q)을 싣는다")
+    void statusRequestsCarryCurrentQuery() throws Exception {
+        manyTenants(60);
+        Document d = page("/admin/tenants?q=ten");
+        for (Element b : d.select("#tenants-controls .seg__btn")) {
+            assertThat(b.attr("hx-get")).doesNotContain("q=");
+            assertThat(b.attr("hx-include")).isEqualTo("#tenant-q");
+        }
+        assertThat(d.select("#tenants-kpi-active").attr("hx-include")).isEqualTo("#tenant-q");
+        assertThat(d.select("button[aria-label=다음 페이지]").attr("hx-include")).isEqualTo("#tenant-q");
+        assertThat(d.select("button[aria-label=상태 필터 제거]").size()).isEqualTo(0);
+        // 칩 제거(상태)도 입력값을 싣고, 검색어 지우기는 싣지 않는다
+        Document f = page("/admin/tenants?q=ten&status=ACTIVE");
+        assertThat(f.select("button[aria-label=상태 필터 제거]").attr("hx-include")).isEqualTo("#tenant-q");
+        assertThat(f.select("button[aria-label=검색어 제거]").hasAttr("hx-include")).isFalse();
+    }
+
+    @Test
+    @DisplayName("상태 요청이 현재 q 를 실어 오면 그 q 로 필터하고 검색 입력은 OOB 로 덮어쓰지 않는다. 지우기(reset=q)만 되돌려 쓴다")
+    void statusWithCurrentQueryDoesNotOverwriteInput() throws Exception {
+        tenants(tv(1, "Alpha", "alpha", "ACTIVE"), tv(2, "Alpine", "alpine", "SUSPENDED"), tv(3, "Beta", "beta", "ACTIVE"));
+        MvcResult r = fragment("/admin/_/tenants/list?status=ACTIVE&size=50&q=alp");
+        Document d = doc(r);
+        assertThat(rowNames(d)).containsExactly("Alpha");
+        assertThat(d.select("#tenant-q")).isEmpty();
+        assertThat(r.getResponse().getHeader("HX-Push-Url")).isEqualTo("/admin/tenants?q=alp&status=ACTIVE");
+        Document cleared = doc(fragment("/admin/_/tenants/list?status=ACTIVE&size=50&reset=q"));
+        assertThat(cleared.select("#tenant-q[hx-swap-oob=true]").val()).isEmpty();
+        assertThat(rowNames(cleared)).containsExactly("Alpha", "Beta");
+    }
+
+    @Test
+    @DisplayName("디바운스된 검색 요청은 HX-Replace-Url, 그 밖은 HX-Push-Url")
+    void searchReplacesHistory() throws Exception {
+        tenants(tv(1));
+        MvcResult r = mvc.perform(get(URI.create("/admin/_/tenants/list?q=te")).with(authentication(platform()))
+                .header("HX-Request", "true").header("HX-Trigger", "tenant-q")).andReturn();
+        assertThat(r.getResponse().getHeader("HX-Replace-Url")).isEqualTo("/admin/tenants?q=te");
+        assertThat(r.getResponse().getHeader("HX-Push-Url")).isNull();
+        assertThat(fragment("/admin/_/tenants/list?q=te").getResponse().getHeader("HX-Replace-Url")).isNull();
+    }
+
+    // ── 수정 2·3·4·7·8 ─────────────────────────────────────
+
+    @Test
+    @DisplayName("생성 폼은 네트워크 오류·시간 초과를 인라인 경고로(전역 토스트 data-quiet), 성공 이동 전에는 busy 를 풀지 않는다, 422 뒤 첫 오류 칸 포커스")
+    void dialogFormHandlesNetworkErrorsLocally() throws Exception {
+        tenants(tv(1));
+        Document d = page("/admin/tenants");
+        Document inner = Jsoup.parse(d.select("[x-data*=\"new-tenant\"] template").first().html());
+        Element form = inner.select("form#nt-form").first();
+        assertThat(form.hasAttr("data-quiet")).isTrue();
+        assertThat(form.attr("x-on:htmx:send-error")).contains("netErr").contains("네트워크에 연결할 수 없습니다").contains("입력한 내용은 그대로 있습니다");
+        assertThat(form.attr("x-on:htmx:timeout")).contains("서버가 잠시 응답하지 않습니다").contains("입력한 내용은 그대로 있습니다");
+        assertThat(form.attr("x-on:htmx:before-request")).contains("busy = true").contains("netErr = null");
+        assertThat(form.attr("x-on:htmx:after-request")).isEqualTo("if (!$event.detail.successful) busy = false");
+        assertThat(form.attr("x-on:htmx:after-swap")).contains("aria-invalid=true").contains("focus()");
+        Element alert = inner.select("[x-show=netErr]").first();
+        assertThat(alert.select(".banner__title").text()).isEqualTo("Tenant를 만들지 못했습니다");
+        assertThat(inner.select("[autofocus]")).isEmpty();
+        MvcResult bad = mvc.perform(createReq("Acme", "a_b", "passkey.acme.com")).andReturn();
+        assertThat(bad.getResponse().getContentAsString()).doesNotContain("autofocus");
+    }
+
+    @Test
+    @DisplayName("빈 목록의 활성 KPI 는 클릭형이 아니다(가리킬 영역 없음)")
+    void emptyListKpiNotClickable() throws Exception {
+        when(tenants.list()).thenReturn(ApiResponse.ok(List.of()));
+        Document d = page("/admin/tenants");
+        assertThat(d.select(".kpis button, #tenants-kpi-active, .kpis [hx-get]")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("숫자가 아닌 page·size 는 400 이 아니라 기본값")
+    void nonNumericParams() throws Exception {
+        manyTenants(60);
+        assertThat(rowNames(page("/admin/tenants?page=abc&size=x"))).hasSize(50).contains("Tenant n1");
+        assertThat(doc(fragment("/admin/_/tenants/list?page=&size=9999999999")).select("#tenants-results .pager > span").first().text()).isEqualTo("1–50 / 60건");
+    }
+
+    @Test
+    @DisplayName("목록 조회가 실패한 화면에서도 ?new=1 은 주소에서 지운다")
+    void newQueryCleanedOnLoadFailure() throws Exception {
+        when(tenants.list()).thenThrow(new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+        Document d = page("/admin/tenants?new=1&q=a");
+        assertThat(d.select("span[data-clean-url]").attr("data-clean-url")).isEqualTo("/admin/tenants?q=a");
+        assertThat(d.select("[x-data*=\"new-tenant\"]").attr("x-data")).contains("\"open\":true");
     }
 }
