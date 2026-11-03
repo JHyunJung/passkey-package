@@ -287,11 +287,57 @@ JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`
 | (추가) 422 스왑 시 비밀번호 칸 | — | 차이: 서버가 그린 422 카드는 비밀번호 칸을 비운다(TSX 는 입력 유지; 비밀번호를 응답에 되돌려 쓰지 않기 위해). 이메일·사유는 유지 / 브라우저: 미확인 |
 | (추가) 예상 밖 4xx(CSRF 403 등) | — | auth.js `rejected` 배너 "요청이 거부되었습니다" + 새로 고침(Node 스텁). 폼 `method=post action` 으로 htmx 없이도 본문 POST. JUnit `formsPostNativelyWithoutHtmx…` / JS — 브라우저 확인 필요 |
 
-## §Tenant 목록
+## §Tenant 목록 (Task 8, 소스 수준 점검)
 
-| 체크 항목 | 원본 테스트 | 결과 |
-|---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantsPageControllerTest` = TPC)를 맞춘 것이고 브라우저 칸은 모두 "미확인"이다. Alpine·htmx 의 실제 교체·포커스·history 는 JUnit 이 속성까지만 본다 → **"JS — 브라우저 확인 필요"**.
+공통 차이: 원본은 목록 전체를 한 번 받아 클라이언트에서 검색·필터·페이징했다. 이식은 `GET /admin/_/tenants/list`(조각)가 같은 규칙을 서버에서 적용하고, 응답의 `HX-Push-Url` 로 주소창을 `/admin/tenants?q=&status=&page=&size=` 로 바꾼다. 정렬은 원본에도 없어 `TenantAdminController.list()` 순서를 그대로 둔다(TPC `keepsServiceOrder`). 새 코드: 필터 규칙 `TenantsPageController.filter`(원본 `filtered` 와 같은 식: name 소문자 부분 일치 · `slug.includes(q.toLowerCase())` · q trim 안 함).
+
+### TenantsListPage.test.tsx (17)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 활성 Tenant KPI 클릭 = ACTIVE 필터 토글(aria-pressed, 칩 "상태: 활성", 세그먼트 "활성 2" 눌림) | V2 1 | source ✅ / 차이: 토글은 클라이언트 상태가 아니라 `hx-get` 주소(켜져 있으면 ALL, 꺼져 있으면 ACTIVE)로, 응답이 KPI·세그먼트·칩을 OOB·본문으로 다시 그린다. 검색어는 유지, 페이지는 1 | TPC `activeKpiToggle`, `segmentAndCounts`, `appliedChips` / JS — 브라우저 확인 필요(OOB 교체) | 미확인 |
+| 세그먼트 건수("전체 3 / 활성 2 / 정지 1"), 선택 상태만 남김, KPI 는 눌리지 않음, "1 / 3건" | V2 2 | source ✅ / 차이: 세그먼트 버튼마다 `hx-get`. 정지 선택 시 활성 KPI `aria-pressed=false` | TPC `segmentAndCounts`, `searchAndStatusCombined` | 미확인 |
+| 적용 필터 칩 제거(상태·검색)와 모두 지우기 | V2 3 | source ✅ / 차이: 칩 제거 주소가 나머지 필터를 유지. 검색어 칩 제거는 OOB 로 검색 입력 값을 비운다(타이핑 중이면 되돌려 쓰지 않음 — `HX-Trigger: tenant-q`) | TPC `appliedChips`, `typingDoesNotRewriteSearchInput` / JS — 브라우저 확인 필요 | 미확인 |
+| tenant 0개: emptyTenants 빈 상태(검색 결과 없음과 구분), 표 없음 | V2 4 | source ✅ / 차이: 없음. 신규 버튼 포함 | TPC `emptyTenants` | 미확인 |
+| 검색 결과 없음: noResults 빈 상태(아직 없음과 구분) | V2 5 | source ✅ / 차이: 없음. "필터 모두 지우기" 버튼 | TPC `noResults` | 미확인 |
+| 로드 실패: 빈 목록 대신 실패 상태, KPI "—", CSV·KPI 버튼 없음, 오류 토스트 중복 없음(alert 하나) | V2 6 | source ✅ / 차이: 전체 페이지는 200 으로 오류 카드를 그린다(boost 이동이 4xx/5xx 를 스왑하지 않으므로). 조각 요청의 실패는 5xx + 토스트 | TPC `loadFailure`, `fragmentFailureIsToast` | 미확인 |
+| 만료 임박 N = ACTIVE 키 30일 이내 | V2 7 | source ✅ / 차이: `ApiKeyAdminController.list(null)` + `ApiKeyExpiry`(Task 3) | TPC `expiringKeys` | 미확인 |
+| listAll 실패 시 만료 임박 숨김, 목록 유지 | V2 8 | source ✅ / 차이: 없음 | TPC `expiringHiddenOnKeyFailure` | 미확인 |
+| credentialsDelta7d 없으면 7일 증감 미표시, 있으면 합계 | V2 9 | 차이: 서버 `TenantView` 에 `credentialsDelta7d` 가 없어 원본도 항상 미표시. 있을 때의 "· 7일 +5" 는 구현하지 않음(값이 올 수 없음) | TPC `kpis`("7일" 없음) | 미확인 |
+| 행 클릭 → tenant 개요(`?tab=overview`) | V2 10 | source ✅ / 차이: 행 안 이름이 `<a href>`(hx-boost 이동)이고, 행의 다른 곳 클릭은 Alpine 이 그 링크를 누른다. 원본의 행 `tabindex` 대신 링크가 키보드 대상 | TPC `rowCells` / JS — 브라우저 확인 필요(행 클릭 위임) | 미확인 |
+| 페이지네이션 50건("1–50 / 60건" → 다음 → "51–60 / 60건") | V2 11 | source ✅ / 차이: 서버 페이징(`hx-get`). 페이지 크기 50/100 선택, 범위 밖 page 는 마지막 쪽으로 | TPC `pagination`, `pageSizeAndClamp` | 미확인 |
+| 불러오는 동안 Skeleton, KPI "—" | V3 12 | 차이: 해당 없음 — 서버가 완성된 페이지를 준다(로딩 상태 없음). 실패 시 KPI "—" 는 V2 6 | TPC `loadFailure` | 미확인 |
+| 로드 실패 → 다시 시도하면 다시 불러옴(서버 문구 "서버가 잠시 응답하지 않습니다", HTTP 503) | V3 13 | source ✅ / 차이: 다시 시도 = 같은 전체 페이지 `hx-get`(body 교체, 주소 유지). HTTP 상태 줄은 loadError 조각의 복사 텍스트에만 있고 본문 메타는 5xx 일 때만 | TPC `loadFailure` / JS — 브라우저 확인 필요 | 미확인 |
+| 생성 실패는 다이얼로그 안에만(오류 토스트 중복 없음), 열린 채, 입력값 유지 | V3 14 | source ✅ / 차이: 실패는 422 + 폼 조각(경고 + 입력값). 서버 5xx 도 422 로 돌려 htmx 가 스왑하게 한다(htmx 오류 규칙 A 의 예외 — 원본이 인라인 경고만 보이기 때문). HTTP 상태·trace 는 경고 메타에 | TPC `createServerFailureInline`, `createDuplicateSlug` / JS — 브라우저 확인 필요 | 미확인 |
+| 생성 성공 → 새 tenant 의 WebAuthn 탭 | V3 15 | source ✅ / 차이: `HX-Redirect: /admin/tenants/{id}?tab=webauthn`(브리프는 "상세", 원본은 webauthn 탭). 토스트 "Tenant 생성 완료 / <이름> · WebAuthn 설정으로 이동합니다"는 이동 직전 `ui.js` 가 sessionStorage 로 넘겨 다음 화면 toastHost 가 한 번 띄운다 | TPC `createSuccess`, `createNonHtmxRedirects` · 스텁(ui.js 이월) / JS — 브라우저 확인 필요 | 미확인 |
+| `?new=1`(팔레트)이면 다이얼로그를 바로 열고 주소에서 new 지움 | 추가 1 | source ✅ / 차이: 서버가 `open:true` 로 그리고 `x-init` 의 `history.replaceState` 가 `new` 만 뺀 주소(검색·필터 유지)로 바꾼다. 비어 있는 목록에서도 열림 | TPC `newQueryOpensDialog` / JS — 브라우저 확인 필요(replaceState·x-if 안 htmx.process) | 미확인 |
+| `new` 가 없으면 다이얼로그를 열지 않음 | 추가 2 | source ✅ / 차이: 없음 | TPC `newQueryOpensDialog` | 미확인 |
+| RequirePlatform: PLATFORM 은 내용, RP 는 자기 tenant 로, tenant 없는 RP 는 "계정 구성 오류"(Task 6 보류분) | RequirePlatform 1–3 | source ✅ / 차이: RP 리다이렉트는 `HomeRedirectController.homePath` 와 같은 규칙, 조각·CSV·생성은 403(원본은 화면째 막음) | TPC `rpAdminRedirects`, `rpAdminWithoutTenantSeesConfigError`, `rpAdminCannotUseFragments`, `anonymous` | 미확인 |
+
+### NewTenantDialog.test.tsx (9)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 한글+영문 표시 이름에서 slug·rpId 자동 채움 없음 | 1 | source ✅ / 차이: 이름 입력에 연결된 동작 자체가 없음 | TPC `dialogMarkup`(입력 속성) | 미확인 |
+| 영문 표시 이름에서도 자동 채움 없음 | 2 | source ✅ / 차이: 위와 같음 | TPC `dialogMarkup` | 미확인 |
+| 숫자로 시작하는 slug 허용(백엔드 규칙) | 3 | source ✅ / 차이: 서버가 같은 정규식으로 검사하고 REST 로 넘긴다 | TPC `createVerbatimAndNormalized` | 미확인 |
+| 직접 입력한 name·slug·rpId 를 그대로 제출 | 4 | source ✅ / 차이: REST 요청 본문은 원본 `tenantsApi.create` 와 같은 고정값(rpName=name, origins `https://<rpId>`, 형식 none·packed, UV true, MDS false, NONE, 60000). slug 는 소문자·rpId 는 소문자·trim 으로 정규화(원본 입력 핸들러와 같음 — 입력 칸에서도 Alpine 이 같은 정규화) | TPC `createSuccess`, `createVerbatimAndNormalized` | 미확인 |
+| slug 에 잘못된 문자가 있으면 생성하지 않음 | 5 | source ✅ / 차이: 422 + 폼 조각, 필드 오류 `#nt-slug-error`(aria-describedby). 원본은 빈 slug 에는 문구가 없지만 서버는 같은 문구를 보인다(빈 입력도 422 이므로) | TPC `createInvalidSlug` | 미확인 |
+| 다음 단계 3개 + RP ID 잠금 안내, RP ID placeholder | V2 | source ✅ / 차이: 없음 | TPC `dialogMarkup` | 미확인 |
+| placeholder 도메인 rpId 는 제출 시 오류, 생성하지 않음 | V2 | source ✅ / 차이: 같은 정규식·문구. 오류가 있으면 잠금 안내는 오류로 대체(Field 와 같은 규칙) | TPC `createInvalidRpId` | 미확인 |
+| 생성 중 "생성 중…"·비활성(취소 포함)·연타해도 한 번·입력 readonly | V3 | source ✅ / 차이: `busy` 는 dialog 컴포넌트 상태(`htmx:before/after-request`), `x-bind:disabled`·`x-bind:readonly`, 닫기(Esc·스크림)도 막힘, 폼 `hx-sync="this:drop"` | TPC `dialogMarkup`(속성) / JS — 브라우저 확인 필요 | 미확인 |
+| 생성 실패는 인라인 경고(제목·쉬운 설명·"입력한 내용은 그대로 있습니다"·HTTP · trace), 입력값 유지, 다시 누를 수 있음 | V3 | source ✅ / 차이: 서버가 같은 문구를 만든다(`ErrorMessages.describe`). 422 로 돌려 폼 안쪽만 교체하므로 다이얼로그는 열린 채 | TPC `createServerFailureInline` / JS — 브라우저 확인 필요 | 미확인 |
+
+### 추가 (원본 테스트 없음)
+
+| 체크 항목 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|
+| 서버 검색: name 대소문자 무시·slug·trim 안 함·한글·이스케이프 | source ✅ / 차이: 없음(원본 `filtered` 를 그대로 이식) | TPC `searchRules`, `filterUnit` | 미확인 |
+| 서버 순서 유지(정렬 없음), 행 셀(이니셜·id 끝 8자·천 단위·배지·"3분 전"·생성일·—) | source ✅ / 차이: 없음 | TPC `keepsServiceOrder`, `rowCells`, `rowDashes` | 미확인 |
+| 조각 응답의 `HX-Push-Url`(기본값 생략·UTF-8 인코딩·보정된 page) | 새 동작(주소창 갱신은 원본의 state 대신 URL) | TPC `pushUrlCanonical`, `pageSizeAndClamp` / JS — 브라우저 확인 필요 | 미확인 |
+| CSV: 필터 적용 전체 행(페이지 무시), 열·BOM·`tenants-<KST 오늘>.csv`·수식 주입 방지 | source ✅ / 차이: 클라이언트 Blob 이 아니라 `GET /admin/_/tenants/export`(attachment) | TPC `csvExport`, `csvLink` | 미확인 |
+| 생성 CSRF·권한·검증 순서(REST 호출 전 검증) | source ✅ | TPC `createRequiresCsrf`, `rpAdminCannotUseFragments`, `createInvalidName` | 미확인 |
 
 ## §Tenant 상세
 

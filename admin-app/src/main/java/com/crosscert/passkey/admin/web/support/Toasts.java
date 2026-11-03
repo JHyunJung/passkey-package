@@ -53,6 +53,11 @@ public final class Toasts {
         write(res, "error", title, message, detail, traceId);
     }
 
+    /** 제목이 있는 성공 토스트(예: NewTenant 의 "Tenant 생성 완료" / "<이름> · WebAuthn 설정으로 이동합니다"). */
+    public static void successTitled(HttpServletResponse res, String title, String message) {
+        write(res, "success", title, message, null, null);
+    }
+
     /** 제목이 있는 경고 토스트(예: MfaChallenge 의 "복구 코드를 사용했습니다." / "남은 복구 코드: N개"). */
     public static void warnTitled(HttpServletResponse res, String title, String message) {
         write(res, "warn", title, message, null, null);

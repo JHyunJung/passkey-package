@@ -5,7 +5,6 @@
   'use strict';
 
   const EMAIL_KEY = 'admin.login.email';
-  const PENDING_TOAST_KEY = 'admin.pendingToast'; // ui.js toastHost 가 다음 화면에서 꺼내 띄운다
   const TOTP_RE = /^\d{6}$/;
   const RECOVERY_RE = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
 
@@ -47,19 +46,7 @@
     if (token) e.detail.headers['X-XSRF-TOKEN'] = token;
   });
 
-  // HX-Redirect 와 함께 온 토스트(복구 코드 사용 경고)는 이 페이지를 곧 떠나므로 다음 화면으로 넘긴다.
-  // 같은 응답에 HX-Redirect 가 있을 때만 저장한다(beforeOnLoad 는 htmx 가 HX-Trigger·HX-Redirect 를 처리하기 전에 온다).
-  document.addEventListener('htmx:beforeOnLoad', function (e) {
-    const xhr = e.detail && e.detail.xhr;
-    if (!redirecting(xhr)) return;
-    const trigger = xhr.getResponseHeader('HX-Trigger');
-    if (!trigger) return;
-    let toast = null;
-    try { toast = JSON.parse(trigger).toast; } catch (err) { toast = null; }
-    if (!toast) return;
-    store(function (s) { s.setItem(PENDING_TOAST_KEY, JSON.stringify(toast)); });
-  });
-
+  // HX-Redirect 와 함께 온 토스트(복구 코드 사용 경고)를 다음 화면으로 넘기는 일은 ui.js 가 한다(공통 틀 화면과 같은 규칙).
   function redirecting(xhr) { return !!(xhr && xhr.getResponseHeader && xhr.getResponseHeader('HX-Redirect')); }
 
   document.addEventListener('alpine:init', function () {

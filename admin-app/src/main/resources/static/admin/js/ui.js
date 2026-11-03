@@ -1,5 +1,19 @@
 // 공통 UI 조각의 Alpine 컴포넌트 (← admin-ui/src/ui/*.tsx). 템플릿: templates/admin/fragments/ui/*.html
 // Alpine 보다 먼저 로드한다(alpine:init 에서 등록). 포커스 트랩은 @alpinejs/focus 의 x-trap 을 쓴다.
+
+// HX-Redirect 와 함께 온 토스트는 이 페이지를 곧 떠나므로 sessionStorage 로 다음 화면에 넘긴다(toastHost.init 이 한 번 꺼내 띄운다).
+// 같은 응답에 HX-Redirect 가 있을 때만 저장한다(beforeOnLoad 는 htmx 가 HX-Trigger·HX-Redirect 를 처리하기 전에 온다).
+// 로그인·MFA 화면(auth.js 는 이 파일도 싣는다)과 공통 틀 화면(Tenant 생성 등)이 같은 규칙을 쓴다.
+document.addEventListener('htmx:beforeOnLoad', function (e) {
+  const xhr = e.detail && e.detail.xhr;
+  if (!xhr || !xhr.getResponseHeader || !xhr.getResponseHeader('HX-Redirect')) return;
+  const trigger = xhr.getResponseHeader('HX-Trigger');
+  if (!trigger) return;
+  let toast = null;
+  try { toast = JSON.parse(trigger).toast; } catch (err) { toast = null; }
+  if (!toast) return;
+  try { window.sessionStorage.setItem('admin.pendingToast', JSON.stringify(toast)); } catch (err) { /* 저장소를 못 쓰면 토스트만 생략 */ }
+});
 document.addEventListener('alpine:init', () => {
   /** 클립보드 복사(lib/clipboard.ts). secure context 가 아니면 execCommand 폴백. */
   async function copyToClipboard(text) {
@@ -431,7 +445,7 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('toastHost', () => ({
     toasts: [],
     seq: 0,
-    // 앞 화면이 이동 직전에 받은 토스트(auth.js: MFA 확인 응답의 HX-Trigger + HX-Redirect)를 한 번 띄운다.
+    // 앞 화면이 이동 직전에 받은 토스트(위 htmx:beforeOnLoad: HX-Trigger + HX-Redirect 응답)를 한 번 띄운다.
     init() {
       let pending = null;
       try { pending = window.sessionStorage.getItem('admin.pendingToast'); window.sessionStorage.removeItem('admin.pendingToast'); } catch (e) { pending = null; }

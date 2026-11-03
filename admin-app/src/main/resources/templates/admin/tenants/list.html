@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}" xmlns:th="http://www.thymeleaf.org">
+<head><title>Tenants</title></head>
+<body>
+<!--
+  Tenant 목록(← pages/TenantsListPage.tsx). 화면 템플릿 본보기: layout 규약 한 줄 + title / crumbs / main.
+  목록 영역(#tenants-results)과 필터 컨트롤은 list-rows 조각이 그린다 — GET /admin/_/tenants/list 가 같은 조각을 돌려줘 부분 갱신한다.
+  모델: configError(RP_ADMIN 인데 테넌트 없음), loaded/loadError, KPI 값, q·status·page·size·rows … (TenantsPageController)
+-->
+<th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>
+<main>
+  <!-- RequirePlatform: RP_ADMIN 인데 테넌트가 없다(데이터 이상). 있으면 컨트롤러가 자기 테넌트로 리다이렉트한다. -->
+  <div class="page" th:if="${configError}" style="padding: 24px">
+    <h1 class="page__title">계정 구성 오류</h1>
+    <div class="page__sub">RP_ADMIN 계정에 테넌트가 지정돼 있지 않습니다. 플랫폼 운영자에게 문의하세요.</div>
+  </div>
+
+  <div class="page" th:unless="${configError}">
+    <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('Tenants', 'RP 회사별로 격리된 Passkey 환경 — 각 tenant 는 자체 rpId · credential · API 키를 가집니다.', ~{:: newButton})}"></th:block>
+
+    <!-- 로드 전·실패 시 빈 배열로 계산한 0 을 보이지 않는다 — 실제 값이 없으면 "—". -->
+    <div class="kpis kpis--3">
+      <th:block th:if="${loaded}">
+        <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('활성 Tenant', ${kpiActiveValue}, ${kpiActiveHint}, null, ${status == 'ACTIVE'}, ${kpiActiveAttrs})}"></th:block>
+        <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('등록 Credential', ${kpiCredValue}, ${kpiCredHint}, null, null, null)}"></th:block>
+        <div class="kpi">
+          <span class="kpi__label">유효 API Key</span>
+          <span class="kpi__value" th:text="${kpiKeysValue}">0</span>
+          <span class="kpi__hint">ACTIVE 만<th:block th:if="${expiring != null}"> · <span style="color: var(--warn); font-weight: 600" th:text="${'만료 임박 ' + expiring}">만료 임박 1</span></th:block></span>
+        </div>
+      </th:block>
+      <th:block th:unless="${loaded}">
+        <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('활성 Tenant', ${kpiDash}, null, null, null, null)}"></th:block>
+        <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('등록 Credential', ${kpiDash}, null, null, null, null)}"></th:block>
+        <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('유효 API Key', ${kpiDash}, null, null, null, null)}"></th:block>
+      </th:block>
+    </div>
+
+    <!-- 목록 조회 실패는 "tenant 가 없음"과 구분한다(role=alert 하나, 토스트 중복 없음). -->
+    <section class="card" th:unless="${loaded}">
+      <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('tenant 목록', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+    </section>
+
+    <th:block th:if="${loaded}">
+      <section class="card" th:if="${countAll == 0}">
+        <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/empty-tenants.webp', '아직 tenant 가 없습니다', 'RP 회사마다 tenant 를 만들면 rpId · credential · API 키가 격리됩니다. 생성 후 WebAuthn 설정 → AAGUID 정책 → API key 발급 순으로 진행하세요.', ~{:: newButton}, false)}"></th:block>
+      </section>
+
+      <section class="card" id="tenants-card" hx-sync="this:replace" th:if="${countAll > 0}">
+        <div class="card__head">
+          <div class="search" style="flex: 0 1 280px">
+            <th:block th:replace="~{admin/fragments/icons :: search(15)}"></th:block>
+            <th:block th:replace="~{admin/tenants/list-rows :: searchInput(false)}"></th:block>
+          </div>
+          <th:block th:replace="~{admin/tenants/list-rows :: controls(false)}"></th:block>
+        </div>
+        <th:block th:replace="~{admin/tenants/list-rows :: results}"></th:block>
+      </section>
+    </th:block>
+
+    <th:block th:replace="~{admin/tenants/new-dialog :: dialog}"></th:block>
+    <!-- 팔레트의 "신규 tenant 생성"(?new=1)은 다이얼로그를 처음부터 열어 둔다. 새로 고침·뒤로 가기에서 다시 열리지 않게 주소에서 new 를 지운다. -->
+    <span hidden th:if="${openNew and cleanUrl != null}" x-data th:attr="data-clean-url=${cleanUrl}"
+          x-init="history.replaceState(history.state, '', $el.dataset.cleanUrl)"></span>
+  </div>
+</main>
+
+<!-- 조각 인자 원본: 화면에는 인자로 쓰이는 자리에서만 그려진다. -->
+<th:block th:remove="all">
+  <button th:fragment="newButton" type="button" class="btn btn--primary" x-data x-on:click="$dispatch('dialog:open', { id: 'new-tenant' })"><th:block th:replace="~{admin/fragments/icons :: plus(14)}"></th:block>신규 tenant</button>
+</th:block>
+</body>
+</html>

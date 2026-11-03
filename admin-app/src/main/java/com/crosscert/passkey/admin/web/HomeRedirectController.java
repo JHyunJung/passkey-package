@@ -3,6 +3,7 @@ package com.crosscert.passkey.admin.web;
 import com.crosscert.passkey.admin.auth.AdminUserDetails;
 import com.crosscert.passkey.admin.config.MeController;
 import com.crosscert.passkey.admin.config.MeView;
+import com.crosscert.passkey.admin.web.support.CurrentAdmin;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -37,8 +38,16 @@ public class HomeRedirectController {
 
     /** rpTenantId(me) ? /admin/tenants/{id} : /admin/tenants */
     public static String homePath(MeView v) {
-        List<UUID> ids = v.tenantIds();
-        if ("RP_ADMIN".equals(v.role()) && ids != null && !ids.isEmpty()) {
+        return homePath(v.role(), v.tenantIds());
+    }
+
+    /** 화면 모델의 {@code me}(CurrentAdmin)용. 같은 규칙이다 — RequirePlatform 이 쓴다. */
+    public static String homePath(CurrentAdmin v) {
+        return homePath(v.role(), v.tenantIds());
+    }
+
+    private static String homePath(String role, List<UUID> ids) {
+        if ("RP_ADMIN".equals(role) && ids != null && !ids.isEmpty()) {
             return "/admin/tenants/" + ids.get(0);
         }
         return "/admin/tenants";

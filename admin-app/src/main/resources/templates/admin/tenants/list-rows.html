@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Tenant 목록의 부분 갱신 조각(← TenantsListPage.tsx 의 표·필터·페이지네이션).
+  전체 페이지(list.html)와 GET /admin/_/tenants/list 가 같은 조각을 그린다.
+    rows            조각 응답 한 벌: #tenants-results(htmx 의 교체 대상) + OOB 로 필터 컨트롤·활성 KPI·(선택) 검색 입력
+    results         #tenants-results — 적용된 필터 칩, 표, 페이지네이션, 다음 요청이 이어 받을 숨은 상태값
+    controls(oob)   #tenants-controls — 상태 세그먼트, "N / M건", CSV
+    searchInput(oob) 검색 입력. 타이핑 중에는 OOB 로 되돌려 쓰지 않는다(컨트롤러의 oobQ)
+  모델: q status page size pageSizes rows total countAll columns hasFilter statusLabel csvUrl listBase statusOptions
+        kpiActive* chip*Attrs clearAttrs oobQ
+-->
+
+<th:block th:fragment="rows">
+  <th:block th:replace="~{:: results}"></th:block>
+  <th:block th:replace="~{:: controls(true)}"></th:block>
+  <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('활성 Tenant', ${kpiActiveValue}, ${kpiActiveHint}, null, ${status == 'ACTIVE'}, ${kpiActiveAttrsOob})}"></th:block>
+  <th:block th:if="${oobQ}"><th:block th:replace="~{:: searchInput(true)}"></th:block></th:block>
+</th:block>
+
+<input th:fragment="searchInput(oob)" id="tenant-q" name="q" type="search" class="input" aria-label="tenant 검색" placeholder="name · slug 검색" autocomplete="off"
+       th:value="${q}" th:attr="hx-swap-oob=${oob} ? 'true' : null"
+       hx-get="/admin/_/tenants/list" hx-trigger="input changed delay:250ms, search"
+       hx-include="#tenants-state, #tenants-size" hx-target="#tenants-results" hx-swap="outerHTML">
+
+<div th:fragment="controls(oob)" id="tenants-controls" style="display: contents" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+  <th:block th:replace="~{admin/fragments/ui/segmented :: segmented(null, ${statusOptions}, ${status}, '상태')}"></th:block>
+  <div class="spacer"></div>
+  <span class="muted" style="font-size: 12px" th:text="${total + ' / ' + countAll + '건'}">3 / 3건</span>
+  <a class="btn" th:href="${csvUrl}" hx-boost="false" download>
+    <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>CSV
+  </a>
+</div>
+
+<div th:fragment="results" id="tenants-results" th:with="pg=${@fmt.pager(page, size, total)}">
+  <!-- 다음 요청(검색 입력·페이지 크기 선택)이 이어 받는 현재 필터 -->
+  <div id="tenants-state" hidden><input type="hidden" name="status" th:value="${status}"></div>
+  <input type="hidden" id="tenants-size" name="size" th:value="${size}">
+
+  <div class="applied" th:if="${hasFilter}">
+    <span class="muted" style="font-size: 12px">적용된 필터</span>
+    <th:block th:if="${status != 'ALL'}"><th:block
+              th:replace="~{admin/fragments/ui/chips :: removableChip(${'상태: ' + statusLabel}, '상태 필터 제거', null, false, false, ${chipStatusAttrs})}"></th:block></th:block>
+    <th:block th:if="${q != ''}"><th:block
+              th:replace="~{admin/fragments/ui/chips :: removableChip(${'검색: ' + q}, '검색어 제거', null, false, false, ${chipQAttrs})}"></th:block></th:block>
+    <button type="button" class="btn btn--ghost btn--sm" th:attr="hx-get=${clearAttrs['hx-get']}, hx-target='#tenants-results', hx-swap='outerHTML'">모두 지우기</button>
+  </div>
+
+  <th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${columns}, ~{:: tableBody})}"></th:block>
+
+  <div class="pager">
+    <span th:text="${total == 0} ? '0건' : ${pg.from + '–' + pg.to + ' / ' + total + '건'}">1–50 / 120건</span>
+    <div class="spacer"></div>
+    <label class="row pager__size">페이지당
+      <select class="input" name="size" hx-get="/admin/_/tenants/list" hx-trigger="change"
+              hx-include="#tenant-q, #tenants-state" hx-target="#tenants-results" hx-swap="outerHTML">
+        <option th:each="n : ${pageSizes}" th:value="${n}" th:selected="${n == size}" th:text="${n}">50</option>
+      </select>
+    </label>
+    <button th:if="${pg.page > 1}" type="button" class="btn btn--sm" aria-label="이전 페이지"
+            th:attr="hx-get=${listBase + (pg.page > 2 ? '&page=' + (pg.page - 1) : '')}, hx-target='#tenants-results', hx-swap='outerHTML'"><th:block th:replace="~{admin/fragments/icons :: chevronLeft(14)}"></th:block></button>
+    <button th:unless="${pg.page > 1}" type="button" class="btn btn--sm" aria-label="이전 페이지" disabled><th:block th:replace="~{admin/fragments/icons :: chevronLeft(14)}"></th:block></button>
+    <span th:text="${pg.page + ' / ' + pg.last}">1 / 3</span>
+    <button th:if="${pg.page < pg.last}" type="button" class="btn btn--sm" aria-label="다음 페이지"
+            th:attr="hx-get=${listBase + '&page=' + (pg.page + 1)}, hx-target='#tenants-results', hx-swap='outerHTML'"><th:block th:replace="~{admin/fragments/icons :: chevronRight(14)}"></th:block></button>
+    <button th:unless="${pg.page < pg.last}" type="button" class="btn btn--sm" aria-label="다음 페이지" disabled><th:block th:replace="~{admin/fragments/icons :: chevronRight(14)}"></th:block></button>
+  </div>
+</div>
+
+<!-- dataTable 의 body 조각: <tbody> 안에 들어가는 행들 -->
+<th:block th:fragment="tableBody">
+  <tr th:each="t : ${rows}" class="is-clickable" x-data
+      x-on:click="if (!$event.target.closest('a, button')) $el.querySelector('a.row-link').click()">
+    <td>
+      <div class="row" style="gap: 10px; flex-wrap: nowrap; min-width: 0">
+        <span class="avatar avatar--sq" style="width: 30px; height: 30px; font-size: 13px" aria-hidden="true" th:text="${t.initial}">A</span>
+        <div class="col" style="min-width: 0">
+          <a class="row-link" th:href="@{${t.detailUrl}}"><strong class="truncate" style="font-size: 13px; max-width: 260px" th:title="${t.name}" th:text="${t.name}">Acme</strong></a>
+          <span class="mono muted" style="font-size: 12px" th:text="${t.idTail}">…12345678</span>
+        </div>
+      </div>
+    </td>
+    <td><span class="mono" style="font-size: 12px" th:text="${t.slug}">acme</span></td>
+    <td><span class="mono truncate" style="font-size: 12px; display: inline-block; max-width: 240px; vertical-align: middle" th:title="${t.rpId}" th:text="${t.rpId}">passkey.acme.com</span></td>
+    <td class="num" th:text="${#numbers.formatInteger(t.credentials, 1, 'COMMA')}">10</td>
+    <td class="num" th:text="${#numbers.formatInteger(t.apiKeys, 1, 'COMMA')}">2</td>
+    <td><th:block th:replace="~{admin/fragments/ui/statusBadge :: statusBadge(${t.status})}"></th:block></td>
+    <td><span class="muted" th:text="${@fmt.timeAgo(t.lastEventAt)}">3분 전</span></td>
+    <td><span class="muted" th:text="${t.createdAt != null} ? ${@fmt.kstDate(t.createdAt)} : '—'">2026-10-01</span></td>
+    <td><span style="color: var(--faint); display: inline-flex"><th:block th:replace="~{admin/fragments/icons :: chevronRight(16)}"></th:block></span></td>
+  </tr>
+  <th:block th:if="${#lists.isEmpty(rows)}"><th:block
+            th:replace="~{admin/fragments/ui/dataTable :: tableEmptyRow(9, ~{:: noResults})}"></th:block></th:block>
+</th:block>
+
+<th:block th:fragment="noResults">
+  <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', '검색 결과가 없습니다', '검색어나 상태 필터를 바꿔 보세요.', ~{:: clearButton}, true)}"></th:block>
+</th:block>
+
+<button th:fragment="clearButton" type="button" class="btn btn--sm"
+        th:attr="hx-get=${clearAttrs['hx-get']}, hx-target='#tenants-results', hx-swap='outerHTML'">필터 모두 지우기</button>
+</body>
+</html>
