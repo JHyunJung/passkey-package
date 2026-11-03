@@ -233,17 +233,55 @@ JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`
 | rpTenantId: RP 인데 tenantIds 비면 null → `/tenants`(500 아님) | roles 4 | source ✅ | HRC `rpAdminWithoutTenantGoesToTenantsListNot500` | — |
 | RequirePlatform: PLATFORM 은 내용, RP 는 자기 tenant 로, tenant 없는 RP 는 "계정 구성 오류" | RequirePlatform 1–3 | 미확인 — PLATFORM 전용 화면(Tenant 목록·Activity·Audit chain·License) task 몫. 홈 리다이렉트는 tenant 없는 RP 를 `/admin/tenants` 로 보내므로 그 화면이 "계정 구성 오류"를 그려야 한다 | — | 미확인 |
 
-## §비밀번호 찾기·재설정
+## §비밀번호 찾기·재설정 (Task 7, 소스 수준 점검)
+
+판정: "source ✅" = 템플릿·컨트롤러 소스를 TSX 와 대조. 브라우저: 미확인(전 행).
 
 | 체크 항목 | 원본 테스트 | 결과 |
 |---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+| Forgot 공통 셸(워드마크·카드·카드 밖 로그인 링크, 좁은 열) | ForgotPasswordPage V2 1 | source ✅ / 차이: 로고 경로 `/admin/img/…`. JUnit `forgotPageUsesAuthShell` / 브라우저: 미확인 |
+| 빈 이메일이면 제출 불가 | V2 2 | source ✅ / 차이: 버튼 비활성은 Alpine `canSubmit()` — JS, 브라우저 확인 필요. 서버는 빈 값이면 422 + "이메일을 입력하세요."(TSX 에 없는 안전망, JUnit `forgotBlankEmailIsInlineErrorAndNotSent`) / 브라우저: 미확인 |
+| 제출 후 같은 카드에서 완료 상태 | V2 3 | source ✅ / 차이: htmx 가 `#auth-card` 를 조각으로 교체. JUnit `forgotAlwaysSameMessage`, `forgotHtmxReturnsFragmentOnlyAndPlainPostReturnsFullPage` / 브라우저: 미확인 |
+| 요청이 실패해도 완료 카드 내용 같음 | V2 4 | source ✅ / 차이: 서버가 4xx 성격 예외를 던져도 같은 응답(본문 바이트 동일 확인). JUnit `forgotAlwaysSameMessage` / 브라우저: 미확인 |
+| 4xx 도 성공과 같은 안내 | V2 5 | source ✅ / JUnit `forgotAlwaysSameMessage` / 브라우저: 미확인 |
+| 5xx 면 보내지 못했다고 알리고 입력 유지, "다시 시도" 포커스, 재시도 성공 시 안내 | V2 6 | source ✅ / 차이: 서버는 본문 없는 500, 경고·"다시 시도"·포커스는 auth.js `submitState`(Node 스텁으로 상태 전이 확인). JUnit `forgotServerFailureIsNotShownAsSent` / JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 네트워크 오류도 보내지 못했다고 알림 | V2 7 | source ✅ / JS(`onNetworkError`) — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 요청 중 이메일 읽기 전용·중복 제출 차단·늦은 실패에도 입력 유지 | V2 8 | source ✅ / 차이: `x-bind:readonly`, `hx-sync="this:drop"`, `onBefore` 가드. JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| Reset 토큰 없음 → 무효 링크(경고·다시 받기·로그인으로) | ResetPasswordPage V3 1 | source ✅ / JUnit `resetWithoutTokenShowsInvalid` / 브라우저: 미확인 |
+| 입력 상태에도 카드 밖 "← 로그인으로" | V3 2 | source ✅ / JUnit `resetFormCarriesTokenOnlyAsHiddenFieldAndIsNotCacheable` / 브라우저: 미확인 |
+| 12자 미만 제출 불가, 12자 이상이면 미터 충족 | V3 3 | source ✅ / 차이: 미터·버튼은 Alpine(`resetForm`, Node 스텁 확인), 서버 안전망 422. JUnit `resetShortOrMismatchedPasswordIsInlineErrorAndNotSent` / JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 불일치면 오류 + 제출 불가 | V3 4 | source ✅ / 같은 JUnit + Alpine `mismatch()` / JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 성공하면 같은 카드에서 변경 완료, 로그인 링크 | V3 5 | source ✅ / JUnit `resetSuccessShowsDoneCardAndCallsRestBean` / 브라우저: 미확인 |
+| 토큰 관련 400 → 만료 카드, 폼 사라짐 | V3 6 | source ✅ / 차이: 서버 상태는 422(htmx 스왑용). JUnit `resetTokenRejectionShowsExpiredCard` / 브라우저: 미확인 |
+| 토큰과 무관한 400 → 서버 메시지 배너, 폼 유지 | V3 7 | source ✅ / JUnit `resetNonTokenRejectionShowsServerMessageAndKeepsForm` / 브라우저: 미확인 |
+| 5xx → "비밀번호를 바꾸지 못했습니다" + 다시 시도, 입력 유지 | V3 8 | source ✅ / 서버 500 JUnit `resetServerFailureIsTransientAndDoesNotLogToken`, 경고·재시도 버튼은 JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 요청 중 읽기 전용·제출 한 번 | V3 9 | source ✅ / `hx-sync`, `onBefore` — JS, 브라우저 확인 필요 / 브라우저: 미확인 |
+| (추가) 토큰·비밀번호 비노출 | — | 토큰은 hidden 필드로만, 응답에 되풀이 안 함(done·expired), 로그는 예외 클래스만, no-store·no-referrer. JUnit `resetFormCarries…`, `resetSuccess…`, `resetServerFailure…` / 브라우저: 미확인 |
+| (추가) CSRF | — | 두 POST 모두 `_csrf` 필요(없으면 403). `/admin/api/**` 면제 범위 불변. JUnit `postsRequireCsrf` / 브라우저: 미확인 |
 
-## §가입 요청
+## §가입 요청 (Task 7, 소스 수준 점검)
+
+판정: "source ✅" = 템플릿·컨트롤러 소스를 TSX 와 대조. 브라우저: 미확인(전 행).
 
 | 체크 항목 | 원본 테스트 | 결과 |
 |---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+| 공통 셸(워드마크·카드·카드 밖 로그인 링크, 넓은 열) | SignupRequestPage V2 1 | source ✅ / JUnit `signupPageUsesWideAuthShell` / 브라우저: 미확인 |
+| 비밀번호가 다르면 제출 불가 | V2 2 | source ✅ / Alpine `canSubmit()`(Node 스텁 확인) + 서버 422 `signupValidationErrorsInline` / JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 12자 미만 제출 불가 | V2 3 | source ✅ / 같음 / 브라우저: 미확인 |
+| 이메일 형식 오류면 제출 불가 | V2 4 | source ✅ / 서버도 TSX EMAIL_RE 와 같은 규칙(점 없는 주소 거부). JUnit `emailWithoutDotIsRejectedLikeTheClientRegex` / 브라우저: 미확인 |
+| 제출 후 같은 카드에서 접수 완료(일러스트·제목·돌아가기) | V2 5 | source ✅ / JUnit `pendingCardOnAccepted` / 브라우저: 미확인 |
+| 요청이 실패해도 같은 접수 안내 | V2 6 | source ✅ / JUnit `clientErrorFromServiceStillShowsAcceptedNotice` / 브라우저: 미확인 |
+| 사유는 trim 해서 보냄 | V2 7 | source ✅ / 차이: 이메일 trim·소문자도 서버에서. JUnit `pendingCardOnAccepted`, `blankReasonIsSentAsNull` / 브라우저: 미확인 |
+| 비밀번호 최대 128자, "12–128자" 범위 표시 | V2 8 | source ✅ / `maxlength=128` + 서버 거부. JUnit `signupPageUsesWideAuthShell`, `passwordOver128IsRejected` / 브라우저: 미확인 |
+| 이메일 형식 오류는 칸을 벗어날 때 인라인 | V2 9 | source ✅ / Alpine `emailTouched`(blur) — JS, 브라우저 확인 필요 / 브라우저: 미확인 |
+| 4xx 는 성공과 같은 접수 안내 | V2 10 | source ✅ / 차이: 브리프대로 입력 검증 오류는 422 + 필드 옆 오류(TSX 는 클라이언트가 먼저 막아 서버 4xx 는 계정 존재 응답뿐). 서비스가 던지는 4xx 성격 예외는 접수 안내. JUnit `clientErrorFromService…`, `signupValidationErrorsInline` / 브라우저: 미확인 |
+| 5xx 면 보내지 못했다고 알리고 입력 유지, "다시 시도" 포커스 | V2 11 | source ✅ / 서버 500 JUnit `serverFailureIsNotShownAsAccepted`, 경고·포커스는 JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 네트워크 오류도 보내지 못했다고 알림 | V2 12 | source ✅ / JS — 브라우저 확인 필요 / 브라우저: 미확인 |
+| 요청 중 읽기 전용·중복 제출 차단 | V2 13 | source ✅ / `hx-sync`, `onBefore` — JS, 브라우저 확인 필요 / 브라우저: 미확인 |
+| 즉시 가입이 꺼져 있으면 역할 선택지 없음 | V2 14 | source ✅ / JUnit `roleChoicesOnlyWhenSelfSignupEnabled`, `platformOperatorRoleIgnoredWhenSelfSignupIsOff` / 브라우저: 미확인 |
+| 즉시 가입 켜짐: Platform Operator 선택 → 보냄, activated 면 바로 로그인 안내 | V2 15 | source ✅ / 차이: 선택지 노출은 서버가 `ProfileController.profile()` 로 판정(GET 때 한 번, TSX 는 마운트 뒤 fetch). JUnit `activatedCardWhenServerActivatedAccount` / 브라우저: 미확인 |
+| 즉시 가입 켜짐 + 기본 선택(승인 후 사용) → 역할 없이 보냄, 승인 대기 안내 | V2 16 | source ✅ / JUnit `defaultRoleChoiceSendsNoRoleAndShowsPending` / 브라우저: 미확인 |
+| (추가) CSRF·REST 호출 | — | POST `_csrf` 필요, 호출 인자는 `SignupRequestDto.Create`. JUnit `postsRequireCsrf`, `pendingCardOnAccepted` / 브라우저: 미확인 |
 
 ## §Tenant 목록
 

@@ -115,6 +115,83 @@
       };
     });
 
+    // ── 비밀번호 찾기·재설정, 가입 요청 공통 ─────────────────
+    // 요청 중 입력 읽기 전용·중복 제출 차단, 5xx·네트워크 오류는 입력을 둔 채 "보내지 못했습니다"(H9).
+    // 4xx(422 폼 오류·거부 카드)는 서버가 그린 카드로 스왑되므로 여기서 다루지 않는다.
+    function submitState() {
+      return {
+        submitting: false,
+        failure: false,
+        status: null,
+        onBefore(e) {
+          if (e.detail.elt !== this.$root) return;
+          if (this.submitting) { e.preventDefault(); return; }
+          this.failure = false;
+          this.status = null;
+          this.submitting = true;
+        },
+        onAfter(e) {
+          if (e.detail.elt !== this.$root) return;
+          this.submitting = false;
+          const st = e.detail.xhr ? e.detail.xhr.status : 0;
+          if (st >= 500) { this.failure = true; this.status = st; this.focusSubmit(); }
+        },
+        onNetworkError() { this.submitting = false; this.failure = true; this.status = null; this.focusSubmit(); },
+        focusSubmit() { this.$nextTick(() => { const b = this.$refs.submit; if (b) b.focus(); }); },
+      };
+    }
+    function withInitial(el, key) { return el.getAttribute('data-' + key) || ''; }
+
+    Alpine.data('forgotForm', function () {
+      return Object.assign(submitState(), {
+        email: '',
+        init() { this.email = withInitial(this.$root, 'email'); },
+        canSubmit() { return !this.submitting && this.email.trim().length > 0; },
+      });
+    });
+
+    // lengthMeter: 6자당 1칸, 12자 이상이면 ok 색(문구로도 알림).
+    Alpine.data('resetForm', function () {
+      return Object.assign(submitState(), {
+        pw: '',
+        pw2: '',
+        min: 12,
+        mismatch() { return this.pw.length > 0 && this.pw2.length > 0 && this.pw !== this.pw2; },
+        tooShort() { return this.pw.length > 0 && this.pw.length < this.min; },
+        filled() { return Math.min(3, Math.floor(this.pw.length / 6)); },
+        segColor(i) {
+          if (i >= this.filled()) return 'var(--line)';
+          return this.pw.length >= this.min ? 'var(--ok)' : 'var(--warn-dot)';
+        },
+        canSubmit() { return this.pw.length >= this.min && this.pw === this.pw2 && !this.submitting; },
+      });
+    });
+
+    Alpine.data('signupForm', function () {
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return Object.assign(submitState(), {
+        email: '',
+        emailTouched: false,
+        pw: '',
+        pw2: '',
+        reason: '',
+        role: 'RP_ADMIN',
+        init() {
+          this.email = withInitial(this.$root, 'email');
+          this.reason = withInitial(this.$root, 'reason');
+          const r = withInitial(this.$root, 'role');
+          if (r === 'PLATFORM_OPERATOR') this.role = r;
+        },
+        emailInvalid() { const v = this.email.trim(); return this.emailTouched && v.length > 0 && !EMAIL_RE.test(v); },
+        mismatch() { return this.pw.length > 0 && this.pw2.length > 0 && this.pw !== this.pw2; },
+        pwTooShort() { return this.pw.length > 0 && this.pw.length < 12; },
+        canSubmit() {
+          return EMAIL_RE.test(this.email.trim()) && this.pw.length >= 12 && this.pw.length <= 128
+            && this.pw === this.pw2 && this.reason.length <= 500 && !this.submitting;
+        },
+      });
+    });
+
     // ── MFA 단계 ───────────────────────────────────────────
     Alpine.data('mfaChallenge', function () {
       return {

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<!--
+  관리자 계정 가입 요청(← pages/SignupRequestPage.tsx). 로그인 전 단독 페이지.
+  card 조각의 상태(state): form | pending(접수됨) | activated(Platform Operator 즉시 가입으로 계정 생성).
+  제출: hx-post /admin/signup(email, password, password2, reason, role, _csrf) → #auth-card 교체.
+  계정 열거 방지: 서버는 이미 가입·대기 중이어도 같은 접수 안내를 준다. 보내지 못한 경우(5xx·네트워크)만 실패로 알리고 입력을 유지한다.
+  역할 선택(승인 후 사용 / Platform Operator)은 서버 설정(platformOperatorSelfSignup)이 켜졌을 때만 그린다. 비밀번호는 다시 그리지 않는다.
+-->
+<head th:replace="~{admin/auth/head :: head('관리자 계정 가입 요청')}"></head>
+<body>
+<main class="auth">
+  <div class="auth__col auth__col--wide" id="auth-col" th:fragment="card">
+    <img class="auth__logo" th:src="@{/admin/img/crosscert-logo-transparent.png}" alt="CROSSCERT">
+    <div class="auth-card" id="auth-card"
+         th:style="${state != 'form'} ? 'align-items: center; text-align: center;' : 'gap: 18px;'">
+      <th:block th:if="${state == 'activated'}">
+        <img th:src="@{/admin/img/signup-sent.webp}" alt="" style="width: 132px; height: 132px; object-fit: contain;">
+        <h1 class="page__title">계정이 만들어졌습니다</h1>
+        <p class="card__sub">Platform Operator 계정이 활성화되었습니다. 바로 로그인할 수 있습니다.</p>
+        <a class="btn" href="/admin">로그인하기</a>
+      </th:block>
+      <th:block th:if="${state == 'pending'}">
+        <img th:src="@{/admin/img/signup-sent.webp}" alt="" style="width: 132px; height: 132px; object-fit: contain;">
+        <h1 class="page__title">요청이 접수되었습니다</h1>
+        <p class="card__sub">운영자 승인 후 이메일로 안내됩니다. 승인 전에는 로그인할 수 없습니다.</p>
+        <a class="btn" href="/admin">로그인으로 돌아가기</a>
+      </th:block>
+      <form th:if="${state == 'form'}" class="col" style="gap: 18px;" novalidate
+            hx-post="/admin/signup" hx-target="#auth-col" hx-swap="outerHTML" hx-sync="this:drop"
+            x-data="signupForm" th:attr="data-email=${email}, data-reason=${reason}, data-role=${role}"
+            x-on:htmx:before-request="onBefore($event)" x-on:htmx:after-request="onAfter($event)"
+            x-on:htmx:send-error="onNetworkError()" x-on:htmx:timeout="onNetworkError()">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <div class="col" style="gap: 6px;">
+          <h1 class="page__title">관리자 계정 가입 요청</h1>
+          <p class="card__sub">플랫폼 운영자가 승인하면 계정이 활성화됩니다. 역할과 담당 tenant 는 승인 시 지정됩니다.</p>
+        </div>
+        <template x-if="failure">
+          <div class="banner banner--danger banner--top" role="alert">
+            <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+            <div class="banner__body">
+              <div class="banner__title">요청을 보내지 못했습니다.</div>
+              <div>네트워크 또는 서버 문제로 접수되지 않았습니다. 입력한 내용은 그대로 있습니다.<span class="mono" style="display: block; font-size: 11px;" x-show="status !== null" x-text="'HTTP ' + status"></span></div>
+            </div>
+          </div>
+        </template>
+        <div th:if="${selfSignup}">
+          <span class="label">역할</span>
+          <input type="hidden" name="role" value="RP_ADMIN" x-bind:value="role">
+          <div class="choices choices--2" role="radiogroup" aria-label="역할">
+            <button type="button" role="radio" class="choice" aria-checked="false"
+                    x-bind:class="{ 'choice--on': role === 'RP_ADMIN' }" x-bind:aria-checked="role === 'RP_ADMIN' ? 'true' : 'false'"
+                    x-on:click="role = 'RP_ADMIN'">
+              <span class="choice__radio" aria-hidden="true"></span>
+              <span class="choice__stack"><span class="choice__title">승인 후 사용</span><span class="choice__desc">운영자가 승인하며 역할·tenant 를 지정</span></span>
+            </button>
+            <button type="button" role="radio" class="choice" aria-checked="false"
+                    x-bind:class="{ 'choice--on': role === 'PLATFORM_OPERATOR' }" x-bind:aria-checked="role === 'PLATFORM_OPERATOR' ? 'true' : 'false'"
+                    x-on:click="role = 'PLATFORM_OPERATOR'">
+              <span class="choice__radio" aria-hidden="true"></span>
+              <span class="choice__stack"><span class="choice__title">Platform Operator</span><span class="choice__desc">승인 없이 바로 사용 (QA 전용)</span></span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label class="label" for="signup-email">이메일</label>
+          <input id="signup-email" name="email" class="input" type="email" autofocus autocomplete="username" placeholder="you@company.com"
+                 x-model="email" x-on:blur="emailTouched = true" x-bind:readonly="submitting"
+                 x-bind:aria-invalid="emailInvalid() ? 'true' : 'false'" aria-invalid="false">
+          <p class="field__error" id="signup-email-error" x-show="emailInvalid()" x-cloak>이메일 형식이 올바르지 않습니다. 예: you@company.com</p>
+          <p class="field__error" th:if="${errors != null and errors['email'] != null}" th:text="${errors['email']}">오류</p>
+        </div>
+        <div>
+          <label class="label" for="signup-pw">비밀번호</label>
+          <input id="signup-pw" name="password" class="input" type="password" maxlength="128" autocomplete="new-password"
+                 x-model="pw" x-bind:readonly="submitting" x-bind:aria-invalid="pwTooShort() ? 'true' : 'false'" aria-invalid="false">
+          <p class="field__error" id="signup-pw-error" x-show="pwTooShort()" x-cloak x-text="pw.length + '자 입력됨 · 12–128자로 입력하세요'"></p>
+          <p class="field__error" th:if="${errors != null and errors['password'] != null}" th:text="${errors['password']}">오류</p>
+          <p class="hint" x-show="!pwTooShort()">12–128자</p>
+        </div>
+        <div>
+          <label class="label" for="signup-pw2">비밀번호 확인</label>
+          <input id="signup-pw2" name="password2" class="input" type="password" maxlength="128" autocomplete="new-password"
+                 x-model="pw2" x-bind:readonly="submitting" x-bind:aria-invalid="mismatch() ? 'true' : 'false'" aria-invalid="false">
+          <p class="field__error" id="signup-pw2-error" x-show="mismatch()" x-cloak>비밀번호가 일치하지 않습니다.</p>
+          <p class="field__error" th:if="${errors != null and errors['password2'] != null}" th:text="${errors['password2']}">오류</p>
+        </div>
+        <div>
+          <label class="label" for="signup-reason">요청 사유 <span style="font-weight: 400; color: var(--mute);">(선택)</span></label>
+          <textarea id="signup-reason" name="reason" class="input" rows="3" maxlength="500" placeholder="소속 · 담당 RP · 필요한 권한"
+                    x-model="reason" x-bind:readonly="submitting"></textarea>
+          <p class="field__error" th:if="${errors != null and errors['reason'] != null}" th:text="${errors['reason']}">오류</p>
+        </div>
+        <button type="submit" class="btn btn--primary btn--lg" x-ref="submit" x-bind:disabled="!canSubmit()"
+                x-text="submitting ? '전송 중…' : (failure ? '다시 시도' : '가입 요청 보내기')">가입 요청 보내기</button>
+      </form>
+    </div>
+    <a th:if="${state == 'form'}" href="/admin" style="font-size: 13px; font-weight: 600;">← 로그인으로</a>
+  </div>
+</main>
+</body>
+</html>
