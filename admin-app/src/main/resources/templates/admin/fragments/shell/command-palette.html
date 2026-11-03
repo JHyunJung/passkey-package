@@ -38,6 +38,7 @@
 </div>
 
 <th:block th:fragment="results">
+  <span hidden data-results-marker th:attr="data-q=${q}"></span>
   <th:block th:if="${#lists.isEmpty(groups)}">
     <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', ${emptyTitle}, 'credential · 감사 이벤트 ID는 해당 화면의 검색에서 찾으세요.', null, true)}"></th:block>
   </th:block>

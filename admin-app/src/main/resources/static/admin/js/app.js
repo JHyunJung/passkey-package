@@ -109,21 +109,61 @@
   // 이동이 끝나 새 화면이 들어오면(boost 이동·뒤로 가기) 이전 화면의 dirty 표시를 버린다.
   document.addEventListener('htmx:afterSwap', function (e) { if (e.detail && e.detail.boosted && window.Alpine) Alpine.store('dirty').reset(); });
   document.addEventListener('htmx:historyRestore', function () { if (window.Alpine) Alpine.store('dirty').reset(); });
-  // 뒤로/앞으로 가기(useBlocker 는 POP 도 막는다): htmx 는 window.onpopstate 로 화면을 교체한다(historyCacheSize=0 이면 서버에서 다시 받음).
-  // dirty 면 capture 단계에서 htmx 의 처리를 막고(stopImmediatePropagation) 주소를 직전 화면으로 되돌린 뒤(pushState) 이동 확인을 띄운다.
-  // "이동"은 그 주소로 새 boost 이동(adminNavigate)을 한다 — 히스토리 이동이 아니라 push 이동이 된다. "머무르기"는 그대로.
+  // 뒤로/앞으로 가기(useBlocker 는 POP 도 막는다, 스택은 그대로 두고 POP 만 보류했다가 진행): htmx 는 window.onpopstate 로 화면을 교체한다.
+  // 이력 항목마다 단조 증가 번호(idx)를 history.state 에 병합해 둔다 — htmx 가 push/replace 때 상태를 {htmx:true} 로 덮어쓰므로
+  // (htmx 2.0.4: pushState({htmx:true}), replaceState({htmx:true}); 이벤트 htmx:pushedIntoHistory / replacedInHistory) 그 직후와 afterSettle 마다 다시 찍는다.
+  // dirty 상태의 뒤로/앞으로: capture 단계에서 htmx 복원을 막고(stopImmediatePropagation) delta = 새 idx − 현재 idx 를 계산해 history.go(−delta) 로
+  // 원래 위치로 되돌리고(그때 오는 popstate 는 무시, pushState 없음 → 앞으로 가기 기록이 잘리지 않는다), 되돌림이 끝난 뒤 이동 확인을 띄운다.
+  // "머무르기"는 그대로, "이동"은 일회성 통과 허가 + history.go(delta) 로 htmx 가 정상 복원한다(통과 허가는 그 popstate 가 소비).
+  // idx 가 없는 항목(번호가 찍히기 전의 이력)은 가장 안전한 쪽으로 — pushState 로 직전 주소를 되살리고(앞으로 가기 기록이 잘릴 수 있음) 이동 확인에서
+  // "이동"하면 그 주소로 새 boost 이동(push)을 한다.
+  const stateIdx = function (st) { return st && typeof st.idx === 'number' ? st.idx : null; };
+  let curIdx = stateIdx(window.history.state) === null ? 0 : stateIdx(window.history.state);
+  let ignorePops = 0; // 우리가 낸 history.go 가 일으킬 popstate 수(이 popstate 는 htmx 에 넘기지 않는다)
+  let pendingAsk = null; // 되돌림이 끝난 뒤 띄울 이동 확인
   let stableUrl = window.location.href;
-  function syncStable() { stableUrl = window.location.href; }
-  document.addEventListener('htmx:pushedIntoHistory', syncStable);
-  document.addEventListener('htmx:afterSettle', syncStable);
+  function stamp() {
+    try {
+      if (stateIdx(window.history.state) !== curIdx) {
+        window.history.replaceState(Object.assign({}, window.history.state, { idx: curIdx }), '');
+      }
+    } catch (err) { /* 상태를 못 쓰는 환경: idx 없음 → 위의 안전한 쪽 */ }
+  }
+  document.addEventListener('htmx:pushedIntoHistory', function () { curIdx += 1; stamp(); stableUrl = window.location.href; });
+  document.addEventListener('htmx:replacedInHistory', function () { stamp(); stableUrl = window.location.href; });
+  document.addEventListener('htmx:afterSettle', function () { stamp(); stableUrl = window.location.href; });
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(stamp, 0); });
+  stamp();
   window.addEventListener('popstate', function (e) {
     const target = window.location.href;
-    if (!window.Alpine) { stableUrl = target; return; }
+    if (ignorePops > 0) { // 우리가 되돌린 popstate: htmx 에 넘기지 않고, 대기 중인 이동 확인을 띄운다.
+      ignorePops -= 1;
+      e.stopImmediatePropagation();
+      if (ignorePops === 0 && pendingAsk) { const a = pendingAsk; pendingAsk = null; window.dispatchEvent(new CustomEvent('unsaved-ask', { detail: a })); }
+      return;
+    }
+    const newIdx = stateIdx(e.state === undefined ? window.history.state : e.state);
+    if (!window.Alpine) { if (newIdx !== null) curIdx = newIdx; stableUrl = target; return; }
     const s = Alpine.store('dirty');
     const t = new URL(target, window.location.href);
     const c = new URL(stableUrl, window.location.href);
-    if (!s.needsGuard() || (t.pathname === c.pathname && t.search === c.search)) { stableUrl = target; return; }
+    if (!s.needsGuard() || (t.pathname === c.pathname && t.search === c.search)) {
+      if (s.passing()) s.endPass(); // "이동" 으로 진행하는 POP: 통과 허가 소비
+      if (newIdx !== null) curIdx = newIdx;
+      stableUrl = target;
+      return;
+    }
     e.stopImmediatePropagation();
+    if (newIdx !== null) {
+      const delta = newIdx - curIdx;
+      if (delta !== 0) {
+        ignorePops += 1;
+        pendingAsk = { href: t.href, delta: delta };
+        window.history.go(-delta);
+        return;
+      }
+    }
+    // idx 를 모르는 항목: pushState 로 직전 주소를 되살리고 이동 확인(이동은 새 boost 이동).
     window.history.pushState(window.history.state, '', stableUrl);
     window.dispatchEvent(new CustomEvent('unsaved-ask', { detail: { href: t.href } }));
   }, true);
@@ -265,6 +305,13 @@
         // 입력하는 즉시 현재 결과를 오래된 것으로 본다: 선택 표시를 지우고, 결과의 data-q 가 입력값과 같아질 때까지 Enter·클릭으로 실행하지 못한다
         // (150ms 디바운스 동안 이전 결과의 항목을 실행하는 일을 막는다).
         onInput() {
+          // 입력이 현재 결과의 검색어로 돌아왔으면(150ms 안에 지우고 되돌림 → 요청 없음) 결과가 다시 유효하다.
+          const m = this.$refs.list.querySelector('[data-results-marker]');
+          if (m && (m.dataset.q || '') === this.$refs.input.value) {
+            this.$refs.list.removeAttribute('aria-busy');
+            this.apply();
+            return;
+          }
           this.options().forEach((o) => o.setAttribute('aria-selected', 'false'));
           this.$refs.input.removeAttribute('aria-activedescendant');
           this.$refs.list.setAttribute('aria-busy', 'true');

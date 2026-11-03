@@ -151,7 +151,11 @@ class CommandPaletteControllerTest {
     @DisplayName("모든 결과 항목이 자기 검색어를 data-q 로 가진다(입력값과 다르면 클라이언트가 실행을 막는다)")
     void itemsCarryQuery() throws Exception {
         assertThat(palette("로그", platform()).select("[role=option]").eachAttr("data-q")).isNotEmpty().containsOnly("로그");
-        assertThat(palette(" 설정 ", platform()).select("[role=option]").eachAttr("data-q")).as("trim 하지 않은 입력값 그대로").hasSize(0);
+        // 결과가 있는 패딩된 검색어("tenant " → "신규 tenant 생성")에서 data-q 는 trim 하지 않은 입력값 그대로.
+        Document padded = palette("tenant ", platform());
+        assertThat(labels(padded)).containsExactly("Activity", "감사 체인 모니터", "신규 tenant 생성"); // 힌트 "cross-tenant …"·"전 tenant …" 도 맞는다
+        assertThat(padded.select("[role=option]").eachAttr("data-q")).containsOnly("tenant ");
+        assertThat(padded.selectFirst("[data-results-marker]").attr("data-q")).isEqualTo("tenant ");
     }
 
     @Test

@@ -481,8 +481,9 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('unsavedGuard', () => ({
     open: false,
     href: null,
-    ask(href) { this.href = href; this.open = true; },
-    onAsk(e) { if (e.detail && e.detail.href) this.ask(e.detail.href); },
+    delta: null, // 뒤로/앞으로 가기에서 온 물음이면 이력 이동 폭(이동 확정 시 history.go(delta)), 아니면 null
+    ask(href, delta) { this.href = href; this.delta = typeof delta === 'number' ? delta : null; this.open = true; },
+    onAsk(e) { if (e.detail && e.detail.href) this.ask(e.detail.href, e.detail.delta); },
     onClick(e) {
       if (!Alpine.store('dirty').needsGuard() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
       const a = e.target.closest && e.target.closest('a[href]');
@@ -493,13 +494,16 @@ document.addEventListener('alpine:init', () => {
       e.preventDefault();
       this.ask(u.href);
     },
-    stay() { this.open = false; this.href = null; },
+    stay() { this.open = false; this.href = null; this.delta = null; },
     leave() {
       const h = this.href;
+      const d = this.delta;
       this.open = false;
       this.href = null;
+      this.delta = null;
       Alpine.store('dirty').allow();
-      if (h) window.adminNavigate(h);
+      if (d !== null) window.history.go(d); // 보류했던 POP 을 진행(app.js 의 popstate 가 통과 허가를 소비하고 htmx 가 복원)
+      else if (h) window.adminNavigate(h);
     },
   }));
 
