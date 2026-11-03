@@ -409,6 +409,93 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | tabFormat: KST 날짜·시각, 빈 값 —, timeAgo, 천 단위 | TF 1–4 | source ✅ / 차이: 기존 `KstFormat`(Task 3 `KstFormatTest`)을 재사용 | TDPT `platformRecentActivity`(상대 시간) | 미확인 |
 | 이벤트 점 색 eventColor | TO(코드) | source ✅ | TDPT `eventColor` | 미확인 |
 
+## §Tenant WebAuthn 설정·AAGUID 정책 탭 (Task 10, 소스 수준 점검)
+
+약어: WTC = `WebauthnTabControllerTest`, ATC = `AaguidTabControllerTest`, OVT = `OriginValidationTest`. 브라우저 확인 필요 항목(JS)은 Node 스텁(미커밋)으로 로직만 확인했다.
+
+### WebauthnConfigTab.test.ts — validateOrigin (15)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| rpId 자기 자신 허용·https 정규화 / 스킴 없으면 https 가정 / 서브도메인 / 여러 단계 | WT 1–4 | source ✅ / 차이: `OriginValidation`(Java 이식) | OVT `self`,`noScheme`,`sub`,`deepSub` | 미확인 |
+| port 보존 / 경로·쿼리 제거 / 대소문자 무시 | WT 5·6·12 | source ✅ / 차이: 기본 포트(443·80)는 정규화에서 뺀다(JS URL 과 같음) | OVT `port`,`stripsPathAndQuery`,`caseInsensitive`,`extras` | 미확인 |
+| 비슷한 host·상위 도메인·접미사 위장·다른 도메인의 서브 위장 거부 | WT 7–10 | source ✅ | OVT `similar`,`parent`,`suffixDisguise`,`attackerSuffix` | 미확인 |
+| 빈 입력 거부 | WT 11 | source ✅ | OVT `blank` | 미확인 |
+| android:apk-key-hash 통과 / 43자 아님 / base64url 아님 거부 | WT 13–15 | source ✅ | OVT `apk`,`apkShort`,`apkBadChar` | 미확인 |
+
+### WebauthnConfigTab.view.test.tsx (19)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
+|---|---|---|---|---|
+| changedFieldNames 화면 순서 | WV 1 | source ✅ | WTC `mergeAndOrder` | 미확인 |
+| 설명 좌/컨트롤 우 행, rpId 읽기 전용 + 변경 불가, 라벨 title(원시 키), 필수 aria-pressed, 변경 전 저장 바 없음 | WV 2 | source ✅ / 차이: 저장 바는 서버가 항상 그리고 변경이 없으면 Alpine(`x-show=dirty`)이 숨김. "변경됨" 배지는 행 라벨 옆(원본은 rpName·대기 시간은 입력 옆) | WTC `rendersRowsWithTsxStrings` / JS — 브라우저 확인 필요 | 미확인 |
+| dirty → 저장 바 건수·요약("대기 시간 · 허용 origin")·변경 필드 표시·실시간 timeout 안내·되돌리기 | WV 3 | source ✅ / 차이: 요약은 폼 `data-savebar-labels` 라벨표(화면 순서)로 saveBar 가 만든다. 변경 표시는 saveBar 가 `[data-field]` 에 `data-changed` 를 달아 CSS 가 켠다(행 단위). timeout 안내는 `timeoutHint` 컴포넌트(처음 값은 서버가 같은 문구로) | WTC `timeoutGuideRenderedByServer`,`formWiring` / 스텁(timeoutHint·chipInput reset) / JS — 브라우저 확인 필요 | 미확인 |
+| origin 검증: 범위 밖·정규화 후 중복은 추가하지 않고 오류 | WV 4 | source ✅ / 차이: 클라이언트 함수 대신 서버 검증(GET `…/webauthn/origin-check`, 본문=오류, `X-Normalized-Value`=정규화 값). 검증 실패·통신 실패는 통과로 보지 않음 | WTC `originCheck` / 스텁(chipInput 원격 검증 5경우) | 미확인 |
+| Android 앱 키: 64 hex → apk-key-hash origin, 잘못된 길이 오류 | WV 5 | source ✅ / 차이: 서버 변환(GET `…/webauthn/apk-key`) 후 `chip-add` 이벤트로 칩 입력에 넣는다(`chipAdder`) | WTC `apkKeyCheck` / 스텁(chipAdder) | 미확인 |
+| dirty 가 아니면 탭 이동이 바로 / dirty 면 이동이 막히고 확인 다이얼로그 | WV 6·7 | source ✅ / 차이: 탭 링크 `data-guard-dirty` + `$store.dirty`(Task 5·9). saveBar 가 form 변경 수를 store 에 보고 | Task 9 `TDPT tabLinksCarryGuard…` / JS — 브라우저 확인 필요 | 미확인 |
+| 저장… → L2 변경 비교(라벨·초 단위) → 같은 payload 로 update | WV 8 | source ✅ / 차이: 폼 제출 = 미리보기 POST(`data-preview`) → `#wa-confirm-slot` 에 확인 다이얼로그(비교한 값을 hidden 으로) → 확인 = PUT. 원본 `diff(tenantId, draft, mdsRequired)`·`update(…)` 인자와 같은 REST 본문 | WTC `diffShowsChangedFieldsOnly`,`diffRequestBody`,`dialogCarriesComparedValues`,`hiddenMdsRequiredPreservedOnSave` | 미확인 |
+| 서버 diff 가 비어도 로컬 변경이 있으면 저장을 막지 않고 확인 목록에 | WV 9 | source ✅ | WTC `diffShowsChangedFieldsOnly` | 미확인 |
+| 서버 diff(requireUserVerification 불리언)+로컬(증명) 병합, 한국어, raw 값 비노출 | WV 10 | source ✅ | WTC `mergedServerAndLocalChanges`,`mergeAndOrder` | 미확인 |
+| 저장 실패는 다이얼로그 안 인라인 오류, 입력·저장 바 유지 | WV 11 | source ✅ / 차이: 확인 요청(X-Confirm)의 실패는 `confirmError` 만(토스트 없음), 4xx/5xx 라 탭이 교체되지 않음 | WTC `saveFailureIsInlineOnly`,`saveValidationFailureIsInline` / JS — 브라우저 확인 필요 | 미확인 |
+| 저장 중 입력 잠금·두 번 나가지 않음 | WV 12 | **차이**: 저장 중 입력 잠금 없음. 연타는 `hx-sync=this:drop`(미리보기)·confirmDialog 의 busy(저장)로 막는다. 저장은 다이얼로그가 들고 있는 값이라 그 사이 편집이 보내지지 않으며, 성공하면 탭이 새 값으로 다시 그려진다 | JS — 브라우저 확인 필요 | 미확인 |
+| 변경 비교 중·다이얼로그가 열린 동안 입력 잠금, 저장은 비교한 값으로 | WV 13 | source ✅(저장 값) / **차이**(잠금): 입력 잠금 없음. 저장 값은 비교한 hidden 값 | WTC `dialogCarriesComparedValues` | 미확인 |
+| 다이얼로그 취소하면 입력 잠금이 풀린다 | WV 14 | **차이(해당 없음)**: 잠그지 않으므로 풀 것이 없다. 취소해도 입력·저장 바는 그대로 | — | 미확인 |
+| 사용자 검증은 필수·권장만("요구 안 함" 숨김) | WV 15 | source ✅ / 차이: 서버도 DISCOURAGED 를 422 로 거부 | WTC `rendersRowsWithTsxStrings`,`fieldErrors` | 미확인 |
+| 로드 실패: LoadError + 다시 시도 | WV 16 | source ✅ / 차이: 조회 실패는 인라인 LoadError(다시 시도 = `TenantTabs.requesterAttrs`). 403·404 는 Task 9 처럼 토스트 + 본문 없음 | WTC `loadFailureIsInlineLoadError`,`rpAdminOtherTenantDenied` | 미확인 |
+| 로딩 중 Skeleton | WV 17 | **차이(해당 없음)**: 탭 컨테이너의 스켈레톤(Task 9)이 대신한다 | Task 9 | 미확인 |
+| "자세히" 링크·RP 연동 가이드 — 주소가 비면 숨김 | WV 18 | source ✅ / 차이: `helpLinks.rpGuide`(Task 4 ShellAdvice) 사용 | WTC `helpLinksHiddenWhenEmpty`(빈 주소만; 주소가 있는 렌더는 템플릿 소스 확인) | 미확인 |
+| 문구에 ceremony 없음 | WV 19 | source ✅ | WTC `rendersRowsWithTsxStrings` | 미확인 |
+
+### 추가 (원본 테스트 없음, 브리프·계약)
+
+| 체크 항목 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|
+| 숨은 값(mdsRequired·acceptedFormats·rpId·displayName)은 서버에서 읽은 현재 값을 REST 에 되돌려 보낸다(요청에 실려 와도 무시) | source ✅ / 차이: 원본은 불러온 시점 값을 클라이언트가 들고 있다가 보냄(오래된 값·위조 가능) | WTC `hiddenMdsRequiredPreservedOnSave`,`mdsFalsePreservedAndUvMapping` | — |
+| 서버 `AllowedOriginFormat`·범위·길이 위반 → 422 + 필드 옆 오류(OOB), 입력·변경 상태 유지, REST 미호출 | 신규(ruling G) | WTC `invalidOriginInlineError`,`fieldErrors` | 미확인 |
+| 저장 성공 `HX-Trigger: saved`(+토스트) → `$store.dirty` 해제, 탭 새 값으로 | 신규 | WTC `saveTriggersSavedEvent` | 미확인 |
+| 접근 경계(`TenantTabs.load` 먼저, RP 다른 tenant 403) | 신규 | WTC `rpAdminOtherTenantDenied`,`rpAdminOwnTenantAllowed` | — |
+
+### AaguidPolicyTab.test.ts (17)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| formatAaguid 11케이스(32 hex 변환·8자까지 하이픈 없음·대문자·기존 하이픈·비 hex·절단·빈 값·하이픈만·공백·세그먼트 경계) | AT 1–11 | source ✅ / 차이: 서버 `entry-check` 가 같은 규칙으로 맞춘다(입력 중 자동 포맷은 없고 Enter 때 맞춤) | ATC `formatAaguid`,`entryCheck` | 미확인 |
+| saveConfirmKind 3 | AT 12–14 | source ✅ | ATC `saveConfirmKind` | 미확인 |
+| policyChanges 3 | AT 15–17 | source ✅ | ATC `policyChanges` | 미확인 |
+
+### AaguidPolicyTab.view.test.tsx (19)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
+|---|---|---|---|---|
+| aaguidChangedFields | AV 1 | source ✅ / 차이: 키는 폼 필드 이름(mode·aaguid·mdsStrict), 라벨은 `data-savebar-labels` | ATC `changedFields` | 미확인 |
+| MDS 엄격 설명: MDS 등록 여부만, REVOKED/폐기 없음 | AV 2 | source ✅ | ATC `strictHint` | 미확인 |
+| mode radiogroup·MDS 확인/미확인 배지·경고 제목·항목 보기·스위치 | AV 3 | source ✅ / 차이: 행 목록은 Alpine x-for(칩 입력 meta). 모드 라벨 title 은 원시 enum. 배지 클래스는 `badge--success/warning` | ATC `rendersTsxStrings`,`listWiring` / JS — 브라우저 확인 필요 | 미확인 |
+| 미확인 항목이 없으면 Alert 없음 | AV 4 | source ✅ | ATC `noAlertWhenAllVerified` | 미확인 |
+| 추가: 자동 포맷 → 추가 → 저장… → L2 변경 비교 → 같은 payload, onSaved(배지 갱신) | AV 5 | source ✅ / 차이: 입력 중 자동 포맷·추가 버튼 비활성 없음(Enter/추가 때 서버 검증 후 정규화). onSaved = 탭 줄 배지 OOB 갱신 | ATC `previewDiff`,`saveCallsRestAndTriggersSaved`,`badgeRefreshedAfterSave` / 스텁(chipInput) | 미확인 |
+| 중복 AAGUID 는 추가되지 않는다 | AV 6 | source ✅ / 차이: 입력칸은 비워진다(원본은 그대로) | 스텁(chipInput addValue 중복 무시) | 미확인 |
+| 삭제 버튼 → 목록 변경, 되돌리기로 복구 | AV 7 | source ✅ / JS — 브라우저 확인 필요(chipInput reset → chips-change) | 스텁(reset) | 미확인 |
+| 전체 허용 선택 시 목록 행이 숨고 요약은 mode | AV 8 | source ✅ / JS — 브라우저 확인 필요(`policyForm.mode`) | ATC `strictHint`(x-show/x-cloak) / 스텁 | 미확인 |
+| 빈 허용 목록: 빨간 경고 + 추가/되돌리기, 차단 목록은 안내만 | AV 9 | source ✅ / JS(개수·모드에 따라 x-show) | ATC `listWiring` / 스텁(policyForm) | 미확인 |
+| MDS strict 스위치 → 요약, 라벨 켜짐/꺼짐 | AV 10 | source ✅ / 차이: 스위치 마크업을 조각 대신 직접 그려 라벨이 상태를 따른다 | ATC `rendersTsxStrings` / JS | 미확인 |
+| dirty 면 탭 이동이 막힌다 | AV 11 | source ✅ (Task 9 가드) / JS | — | 미확인 |
+| 허용 목록 비우고 저장 → L3 이해 체크 전엔 저장 불가 | AV 12 | source ✅ | ATC `previewBlockAll` | 미확인 |
+| MDS 엄격을 켜는 저장 → L2 영향 요약 "켜고 저장" | AV 13 | source ✅ | ATC `previewMdsStrict` | 미확인 |
+| 저장 실패는 다이얼로그 안 인라인 오류, 입력 유지 | AV 14 | source ✅ | ATC `saveFailureInline` | 미확인 |
+| 로드 실패: LoadError + 다시 시도 | AV 15 | source ✅ | ATC `loadFailure` | 미확인 |
+| 저장 중 입력 잠금·저장은 한 번 | AV 16 | **차이**: 입력 잠금 없음(WebAuthn 탭 WV 12 와 같은 이유). 저장은 확인 다이얼로그 busy 로 한 번 | JS — 브라우저 확인 필요 | 미확인 |
+| 모드 원문은 title, 확인 목록은 실제로 바뀐 항목만 | AV 17 | source ✅ / 차이: 확인 목록의 모드는 라벨 텍스트(title 없음) | ATC `previewListsOnlyChanged`,`rendersTsxStrings` | 미확인 |
+| 삭제 후 같은 항목 재추가 = 변경 없음 | AV 18 | source ✅ / saveBar 는 폼 값 비교라 같은 목록이면 0건 | ATC `policyChanges`(순서·재추가) / JS | 미확인 |
+| MDS 엄격 영향은 목록과 무관하게 "MDS 미등록 모든 인증기 거부" | AV 19 | source ✅ | ATC `previewMdsStrict` | 미확인 |
+
+### 추가 (원본 테스트 없음, 브리프·계약)
+
+| 체크 항목 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|
+| 저장은 `AaguidPolicyController.update`, 항목 메모는 서버의 현재 값을 항목별로 되돌림(새 항목 null) | source ✅ / 차이: 원본은 불러온 항목의 note 를 그대로 보냄 | ATC `saveCallsRestAndTriggersSaved` | — |
+| 저장 뒤 탭 줄 AAGUID 배지 OOB 갱신(`#tenant-tab-aaguid-badge`) | 신규(Task 9 이월) | ATC `badgeRefreshedAfterSave` | 미확인 |
+| 검증 실패 422 + 필드 옆 오류, 변경 없음은 경고 토스트 | 신규(ruling G) | ATC `previewNoChangeAndInvalid` | 미확인 |
+| 접근 경계 | 신규 | ATC `rpAdminOtherTenantDenied`,`rpAdminOwnTenantAllowed` | — |
+
 ## §Activity
 
 | 체크 항목 | 원본 테스트 | 결과 |

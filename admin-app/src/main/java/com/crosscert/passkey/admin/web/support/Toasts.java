@@ -82,6 +82,25 @@ public final class Toasts {
         write(res, "success", title, message, null, null);
     }
 
+    /**
+     * 저장 성공: 제목 있는 성공 토스트와 함께 {@code saved} 이벤트를 보낸다({@code HX-Trigger: {"saved":true,"toast":{…}}}).
+     * app.js 가 {@code saved} 로 저장 안 한 변경 표시({@code $store.dirty})를 지운다.
+     */
+    public static void successSaved(HttpServletResponse res, String title, String message) {
+        try {
+            Map<String, Object> toast = new java.util.LinkedHashMap<>();
+            toast.put("kind", "success");
+            if (title != null && !title.isEmpty()) toast.put("title", title);
+            toast.put("message", message == null ? "" : message);
+            Map<String, Object> events = new java.util.LinkedHashMap<>();
+            events.put("saved", true);
+            events.put("toast", toast);
+            res.setHeader(HX_TRIGGER, JSON.writeValueAsString(events));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("saved toast header serialization failed", e);
+        }
+    }
+
     /** 제목이 있는 경고 토스트(예: MfaChallenge 의 "복구 코드를 사용했습니다." / "남은 복구 코드: N개"). */
     public static void warnTitled(HttpServletResponse res, String title, String message) {
         write(res, "warn", title, message, null, null);

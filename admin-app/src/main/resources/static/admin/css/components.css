@@ -394,3 +394,25 @@ a.menu__item { text-decoration: none; }
 .nt-step { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--brand-700); color: var(--brand-700); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .table a.row-link { color: inherit; text-decoration: none; min-width: 0; }
 .table a.row-link:focus-visible { outline: var(--focus-outline); outline-offset: 2px; border-radius: 4px; }
+
+/* Tenant WebAuthn·AAGUID 탭 */
+.tabs__badgeslot { display: contents; }
+.chg { display: none; }
+[data-field][data-changed] .chg { display: inline-flex; }
+[data-field][data-changed] .input--track { border-color: var(--warn-dot); }
+.fieldset--bare { border: 0; margin: 0; padding: 0; min-width: 0; }
+.chip__meta { font-size: 11px; color: var(--mute); }
+.diff { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.diff__row { gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+.diff__row:last-child { border-bottom: 0; }
+.diff__key { width: 110px; flex: none; color: var(--mute); }
+.tag--from { background: var(--bad-soft); color: var(--bad-ink); text-decoration: line-through; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tag--to { background: var(--ok-soft); color: var(--ok-ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.diff__arrow { display: inline-flex; color: var(--mute); }
+.changes { list-style: none; margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); font-size: 13px; }
+.policy-list { list-style: none; margin: 0; padding: 0; }
+.field__error:empty { display: none; }
+.policy-box { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.policy-row { flex-wrap: nowrap; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
+.policy-row:last-child { border-bottom: 0; }
+.policy-empty { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); }

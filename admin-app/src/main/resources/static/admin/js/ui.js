@@ -214,54 +214,99 @@ document.addEventListener('alpine:init', () => {
   // ── ChipInput ──────────────────────────────────────────
   // values 는 form 으로 함께 제출되도록 hidden input(name)으로 내보낸다.
   // 검증: cfg.validate(함수) 또는 cfg.validateUrl(GET ?value=…&existing=… → 응답 본문이 오류 문구, 비면 통과).
+  // 원격 검증이 통과하면서 응답 헤더 X-Normalized-Value 가 있으면 그 값(서버가 정규화한 값)을 추가한다.
+  // cfg.added 가 배열이면 그 값들이 chip--added, null 이면 처음 값에 없던 값을 chip--added 로 센다.
+  // cfg.meta(값 → 이름)·cfg.metaFallback 이 있으면 칩마다 메타(MDS 이름 등)를 보인다.
+  // window 이벤트 `chip-add` {name, value}: 같은 name 의 칩 입력에 값을 더한다(별도 입력칸이 검증한 값을 넣을 때).
+  /** 서버 검증 GET. 반환 {error, value}: error 가 있으면 추가하지 않는다(검증 못 함 = 통과 아님). */
+  async function remoteCheck(url, raw, existing) {
+    try {
+      const q = new URLSearchParams({ value: raw });
+      existing.forEach((v) => q.append('existing', v));
+      const res = await fetch(url + (url.includes('?') ? '&' : '?') + q, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin' });
+      if (!res.ok) return { error: '검증하지 못했습니다. 잠시 후 다시 시도하세요.', value: null };
+      const text = (await res.text()).trim();
+      return { error: text || null, value: res.headers.get('X-Normalized-Value') || null };
+    } catch (e) {
+      return { error: '검증하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요.', value: null };
+    }
+  }
   Alpine.data('chipInput', (cfg = {}) => ({
     name: cfg.name || '',
     mono: !!cfg.mono,
     values: Array.isArray(cfg.values) ? [...cfg.values] : [],
-    added: cfg.added || [],
+    added: Array.isArray(cfg.added) ? cfg.added : [],
+    meta: cfg.meta || {},
+    metaFallback: cfg.metaFallback == null ? null : String(cfg.metaFallback),
     draft: '',
     error: null,
     disabled: !!cfg.disabled,
     validating: false,
     gen: 0, // 되돌리기마다 올려, 이미 보낸 검증 응답이 늦게 와도 버려진 초안을 추가하지 못하게 한다
+    onExternal: null,
     init() {
       const initial = Array.isArray(cfg.values) ? [...cfg.values] : [];
-      onFormReset(this.$root, () => { this.gen += 1; this.validating = false; this.values = [...initial]; this.draft = ''; this.error = null; });
+      this.initial = initial;
+      onFormReset(this.$root, () => { this.gen += 1; this.validating = false; this.values = [...initial]; this.draft = ''; this.error = null; this.refreshAdded(); this.changed(); });
+      this.onExternal = (e) => { const d = e.detail || {}; if (d.name === this.name) this.addValue(d.value); };
+      window.addEventListener('chip-add', this.onExternal);
+    },
+    destroy() { if (this.onExternal) window.removeEventListener('chip-add', this.onExternal); },
+    refreshAdded() { if (cfg.added == null) this.added = this.values.filter((v) => !this.initial.includes(v)); },
+    metaText(v) { return this.meta[v] || this.metaFallback || ''; },
+    addValue(v) {
+      if (!v || this.values.includes(v)) return;
+      this.values.push(v);
+      this.refreshAdded();
+      this.changed();
     },
     async onEnter() {
       if (this.disabled || this.validating) return;
       const raw = this.draft.trim();
       if (!raw) return;
       let err = null;
+      let norm = null;
       if (typeof cfg.validate === 'function') err = cfg.validate(raw, this.values) || null;
       else if (cfg.validateUrl) {
         // 검증을 못 하면 통과로 보지 않는다: 초안을 남기고 재시도 가능한 오류만 보인다.
         this.validating = true;
         const gen = this.gen;
-        try {
-          const q = new URLSearchParams({ value: raw });
-          this.values.forEach((v) => q.append('existing', v));
-          const res = await fetch(cfg.validateUrl + (cfg.validateUrl.includes('?') ? '&' : '?') + q, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin' });
-          if (gen !== this.gen) return;
-          if (!res.ok) { this.error = '검증하지 못했습니다. 잠시 후 다시 시도하세요.'; return; }
-          const text = (await res.text()).trim();
-          if (gen !== this.gen) return;
-          err = text || null;
-        } catch (e) {
-          if (gen === this.gen) this.error = '검증하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요.';
-          return;
-        } finally {
-          if (gen === this.gen) this.validating = false;
-        }
+        const r = await remoteCheck(cfg.validateUrl, raw, this.values);
+        if (gen !== this.gen) return;
+        this.validating = false;
+        err = r.error;
+        norm = r.value;
       }
       if (err) { this.error = err; return; }
-      const v = typeof cfg.normalize === 'function' ? cfg.normalize(raw) : raw;
+      const v = norm || (typeof cfg.normalize === 'function' ? cfg.normalize(raw) : raw);
       this.error = null;
       this.draft = '';
-      if (!this.values.includes(v)) { this.values.push(v); this.changed(); }
+      this.addValue(v);
     },
-    remove(v) { this.values = this.values.filter((x) => x !== v); this.changed(); },
+    remove(v) { this.values = this.values.filter((x) => x !== v); this.refreshAdded(); this.changed(); },
     changed() { this.$dispatch('chips-change', { values: [...this.values] }); },
+    onInput() { if (this.error) this.error = null; },
+  }));
+
+  // 칩 입력과 별개의 입력칸(Android 앱 키 지문 등)이 서버에서 값을 만들어 같은 name 의 칩 입력에 넣는다.
+  // cfg.url: GET ?value=…&existing=… → 오류 문구 본문(비면 통과) + X-Normalized-Value, cfg.target: 칩 입력의 name, cfg.existing: 같은 칩 입력의 값을 알아낼 form 필드 이름.
+  Alpine.data('chipAdder', (cfg = {}) => ({
+    input: '',
+    error: null,
+    busy: false,
+    async add() {
+      if (this.busy) return;
+      const raw = this.input.trim();
+      this.busy = true;
+      this.error = null;
+      const form = this.$root.closest('form');
+      const existing = form ? new FormData(form).getAll(cfg.target).map(String) : [];
+      const r = await remoteCheck(cfg.url, raw, existing);
+      this.busy = false;
+      if (r.error) { this.error = r.error; return; }
+      this.input = '';
+      if (r.value) window.dispatchEvent(new CustomEvent('chip-add', { detail: { name: cfg.target, value: r.value } }));
+    },
     onInput() { if (this.error) this.error = null; },
   }));
 
@@ -356,6 +401,8 @@ document.addEventListener('alpine:init', () => {
     const elt = d.elt;
     const verb = d.requestConfig && d.requestConfig.verb;
     if (!elt || !verb || String(verb).toLowerCase() === 'get') return false;
+    // 저장 전 미리보기·확인 요청(data-preview)은 저장이 아니다: 성공해도 기준선을 바꾸지 않고 저장 중으로 세지 않는다.
+    if (elt.hasAttribute && elt.hasAttribute('data-preview')) return false;
     if (elt === f) return true;
     return f.contains(elt) && !!elt.matches && elt.matches('button[type="submit"], input[type="submit"]');
   }
@@ -364,6 +411,8 @@ document.addEventListener('alpine:init', () => {
     form: null,
     base: {},
     count: 0,
+    labels: null, // form 의 data-savebar-labels(JSON {필드이름: 라벨}, 화면 순서): 바뀐 필드 이름 요약
+    changedText: '',
     saveLabel: cfg.saveLabel || '저장',
     saving: false,
     uid: 'savebar-' + (++saveBarSeq),
@@ -373,6 +422,7 @@ document.addEventListener('alpine:init', () => {
       this.form = cfg.form ? document.getElementById(cfg.form) : this.$root.closest('form');
       if (!this.form) return;
       const f = this.form;
+      try { this.labels = f.dataset.savebarLabels ? JSON.parse(f.dataset.savebarLabels) : null; } catch (e) { this.labels = null; }
       this.base = formSnapshot(f);
       f.addEventListener('input', () => this.recount());
       f.addEventListener('change', () => this.recount());
@@ -427,8 +477,12 @@ document.addEventListener('alpine:init', () => {
       const now = formSnapshot(this.form);
       const keys = new Set([...Object.keys(this.base), ...Object.keys(now)]);
       let n = 0;
-      keys.forEach((k) => { if (JSON.stringify(this.base[k] || []) !== JSON.stringify(now[k] || [])) n += 1; });
+      const changed = new Set();
+      keys.forEach((k) => { if (JSON.stringify(this.base[k] || []) !== JSON.stringify(now[k] || [])) { n += 1; changed.add(k); } });
       this.count = n;
+      this.changedText = this.labels ? Object.keys(this.labels).filter((k) => changed.has(k)).map((k) => this.labels[k]).join(' · ') : '';
+      // [data-field] 행에 data-changed 를 달아 "변경됨" 표시를 CSS 가 켠다.
+      this.form.querySelectorAll('[data-field]').forEach((el) => { el.toggleAttribute('data-changed', changed.has(el.dataset.field)); });
       this.report();
       this.$dispatch('unsaved-change', { count: n });
     },
@@ -451,13 +505,71 @@ document.addEventListener('alpine:init', () => {
     value: cfg.value == null ? '' : String(cfg.value),
     init() {
       const initial = this.value;
-      onFormReset(this.$root, () => { this.value = initial; });
+      onFormReset(this.$root, () => { this.value = initial; this.$dispatch('segmented-change', { value: initial }); });
     },
     select(v) {
       if (v === this.value) return;
       this.value = v;
       this.$dispatch('segmented-change', { value: v });
     },
+  }));
+
+  // ── WebAuthn 설정 탭: 대기 시간 안내(WebauthnConfigTab.tsx timeoutGuide) ──
+  // 입력이 바뀔 때마다 환산·권장 범위 안내를 다시 계산한다(서버가 처음 값을 같은 문구로 그린다). form reset 이면 처음 값으로.
+  function timeoutGuide(raw) {
+    const ms = parseInt(raw || '0', 10);
+    if (!Number.isFinite(ms) || ms <= 0) return { tone: 'warn', text: '0보다 큰 값을 입력하세요. 권장 60000–120000ms(60–120초).' };
+    const totalSec = ms / 1000;
+    const secLabel = Number.isInteger(totalSec) ? totalSec + '초' : parseFloat(totalSec.toFixed(2)) + '초';
+    let human = '= ' + secLabel;
+    if (totalSec >= 60) {
+      const m = Math.floor(totalSec / 60);
+      const s = Math.round(totalSec - m * 60);
+      human = '= ' + secLabel + (s === 0 ? ' (' + m + '분)' : ' (' + m + '분 ' + s + '초)');
+    }
+    if (ms < 60000) return { tone: 'warn', text: human + ' — 권장(60초)보다 짧습니다. 너무 짧으면 사용자가 인증을 끝내기 전에 만료될 수 있습니다.' };
+    if (ms > 120000) return { tone: 'warn', text: human + ' — 권장(120초)보다 깁니다. 너무 길면 만료를 기다리는 동안 서버 자원이 오래 점유됩니다.' };
+    return { tone: 'ok', text: human + ' — 권장 범위(60–120초) 안입니다.' };
+  }
+  Alpine.data('timeoutHint', (cfg = {}) => ({
+    ms: cfg.value == null ? '' : String(cfg.value),
+    init() {
+      const initial = this.ms;
+      onFormReset(this.$root, () => { this.ms = initial; });
+    },
+    get guide() { return timeoutGuide(this.ms); },
+  }));
+
+  // 선택(Segmented)에 따라 설명 상자를 바꾼다: 안쪽 segmented 의 `segmented-change`(reset 포함)를 받아 v 를 따라간다.
+  Alpine.data('guideSwitch', (cfg = {}) => ({
+    v: cfg.value == null ? '' : String(cfg.value),
+    on(e) { this.v = e.detail && e.detail.value != null ? String(e.detail.value) : this.v; },
+  }));
+
+  // ── AAGUID 정책 탭: 방식·목록·MDS 엄격의 화면 상태 ──
+  // 방식 선택 카드(setMode)가 hidden input(name=mode)을 바꾸고 `change` 를 올려 saveBar 가 변경을 센다. 목록(chips-change)과
+  // MDS 엄격(switch-change)은 자식 컴포넌트가 올리는 이벤트로 따라간다(form reset 도 그 컴포넌트가 이벤트로 알린다).
+  // cfg: mode, strict, values(처음 목록), known(MDS 이름이 있는 AAGUID), impact·noteBefore·noteAfter(안내 문구 조각).
+  Alpine.data('policyForm', (cfg = {}) => ({
+    mode: cfg.mode || 'ANY',
+    strict: !!cfg.strict,
+    values: Array.isArray(cfg.values) ? [...cfg.values] : [],
+    init() {
+      const initial = this.mode;
+      onFormReset(this.$root, () => { this.mode = initial; });
+    },
+    setMode(v) {
+      if (!v || v === this.mode) return;
+      this.mode = v;
+      this.$nextTick(() => this.$dispatch('change'));
+    },
+    get count() { return this.values.length; },
+    get unknown() { const k = cfg.known || []; return this.values.filter((v) => !k.includes(v)).length; },
+    get strictHint() {
+      const n = this.mode === 'ALLOWLIST' ? this.unknown : 0;
+      return (this.strict ? '' : '켜면 ') + (cfg.impact || '') + (n > 0 ? (cfg.noteBefore || '') + n + (cfg.noteAfter || '') : '');
+    },
+    focusInput() { const el = document.getElementById(cfg.inputId || ''); if (el) el.focus(); },
   }));
 
   // ── ToastHost ──────────────────────────────────────────

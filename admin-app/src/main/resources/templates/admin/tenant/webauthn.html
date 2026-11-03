@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  WebAuthn 설정 탭(← pages/tenant/WebauthnConfigTab.tsx). 탭 조각 GET /admin/_/tenants/{id}/tab/webauthn 과 저장(PUT) 성공 응답이 같은 조각을 쓴다.
+  모델: tid, f(Form: rpId, rpName, timeoutMs, origins, uv, at), diffUrl, originCheckUrl, apkUrl, originPlaceholder, timeoutGuide, uvOptions/atOptions, uvGuides/atGuides, saveLabels(JSON), helpLinks
+  흐름: 폼 제출(저장 바의 저장…) = 미리보기 POST(data-preview, 저장으로 세지 않음) → #wa-confirm-slot 에 확인 다이얼로그. 확인 = PUT(탭 교체).
+  필드 오류 자리 #wa-err-<필드>: 미리보기 응답이 OOB 로 채우거나 비운다. 변경됨 표시(.chg)·경고 테두리는 saveBar 가 [data-field] 에 data-changed 를 달아 CSS 로 켠다.
+-->
+<th:block th:fragment="tab">
+  <th:block th:if="${loadError != null}">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('WebAuthn 설정', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+  </th:block>
+  <th:block th:if="${loadError == null}">
+  <form id="wa-form" class="stack-6" novalidate x-data x-on:keydown.enter="$event.target.tagName === 'INPUT' &amp;&amp; $event.preventDefault()"
+        th:attr="data-savebar-labels=${saveLabels}"
+        th:hx-post="${diffUrl}" data-preview="true" hx-target="#wa-confirm-slot" hx-swap="innerHTML" hx-sync="this:drop">
+    <section class="card">
+      <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('WebAuthn 설정', '변경 사항은 저장 후 다음 패스키 등록·인증부터 적용됩니다.', null, ~{:: guideLink})}"></th:block>
+
+      <div class="set" data-field="rpId">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px"><label class="set__label" for="wa-rpid"><span title="rpId">RP ID</span></label></div>
+          <p class="set__desc">생성 시 고정. 기존 credential 이 이 값에 묶여 있습니다.</p>
+        </div>
+        <div style="min-width: 0">
+          <div class="row" style="gap: 10px; flex-wrap: nowrap">
+            <input id="wa-rpid" class="input mono" th:value="${f.rpId}" readonly aria-readonly="true" title="rpId는 생성 후 변경할 수 없습니다">
+            <span class="badge"><th:block th:replace="~{admin/fragments/icons :: lock(11)}"></th:block>변경 불가</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="set" data-field="rpName">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <label class="set__label" for="wa-rpname"><span title="rpName">RP 표시 이름</span></label>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">사용자의 패스키 프롬프트에 보이는 이름</p>
+        </div>
+        <div style="min-width: 0">
+          <input id="wa-rpname" name="rpName" class="input input--track" th:value="${f.rpName}" aria-describedby="wa-err-rpName">
+          <p id="wa-err-rpName" class="field__error"></p>
+        </div>
+      </div>
+
+      <div class="set" data-field="timeoutMs">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <label class="set__label" for="wa-timeout"><span title="timeoutMs">대기 시간</span></label>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">사용자가 패스키 창에 응답할 때까지 기다리는 시간</p>
+        </div>
+        <div style="min-width: 0" ui:xdata="${@fmt.xdata('timeoutHint', 'value', f.timeoutMs)}">
+          <input id="wa-timeout" name="timeoutMs" class="input mono input--track" type="number" th:value="${f.timeoutMs}" x-model="ms"
+                 aria-describedby="wa-timeout-hint wa-err-timeoutMs" style="max-width: 180px">
+          <p id="wa-timeout-hint" class="hint" th:style="${timeoutGuide.tone == 'warn'} ? 'color: var(--warn)'"
+             x-bind:style="guide.tone === 'warn' ? 'color: var(--warn)' : ''" x-text="guide.text" th:text="${timeoutGuide.text}">안내</p>
+          <p id="wa-err-timeoutMs" class="field__error"></p>
+        </div>
+      </div>
+
+      <div class="set" data-field="origins">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <span class="set__label"><span title="origins">허용 origin</span></span>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">허용할 웹 origin 과 Android 앱 키 해시. Enter 로 추가합니다.
+            <a th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.rpGuide)}" th:href="${helpLinks.rpGuide + '#origins'}" target="_blank" rel="noopener noreferrer" aria-label="허용 origin 자세히">자세히</a></p>
+        </div>
+        <div style="min-width: 0">
+          <div class="stack-3" style="gap: 10px">
+            <th:block th:replace="~{admin/fragments/ui/chipInput :: chipInput('origins', ${f.origins}, ${originPlaceholder}, 'origin 추가', true, null, ${originCheckUrl}, null)}"></th:block>
+            <div class="stack-2" ui:xdata="${@fmt.xdata('chipAdder', 'url', apkUrl, 'target', 'origins')}">
+              <div class="row" style="gap: 8px; flex-wrap: nowrap">
+                <input class="input mono" aria-label="Android APK 키 해시" placeholder="Android APK signing key SHA-256" x-model="input"
+                       x-bind:aria-invalid="!!error" x-on:input="onInput()" x-on:keydown.enter.prevent="add()">
+                <button type="button" class="btn" x-bind:disabled="busy" x-on:click="add()">앱 키 추가</button>
+              </div>
+              <p class="field__error" role="alert" x-show="error" x-cloak x-text="error"></p>
+            </div>
+            <p id="wa-err-origins" class="field__error"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="set" data-field="userVerification">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <span class="set__label"><span title="requireUserVerification">사용자 검증</span></span>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">생체·PIN 검증 요구 수준.
+            <a th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.rpGuide)}" th:href="${helpLinks.rpGuide + '#user-verification'}" target="_blank" rel="noopener noreferrer" aria-label="사용자 검증 자세히">자세히</a></p>
+        </div>
+        <div style="min-width: 0">
+          <div class="stack-2" ui:xdata="${@fmt.xdata('guideSwitch', 'value', f.uv)}" x-on:segmented-change="on($event)">
+            <th:block th:replace="~{admin/fragments/ui/segmented :: segmented('userVerification', ${uvOptions}, ${f.uv}, '사용자 검증')}"></th:block>
+            <div th:each="g : ${uvGuides}" class="desc-box" th:data-for="${g.value}" th:attr="x-cloak=${g.value != f.uv} ? 'true' : null"
+                 x-show="v === $el.dataset.for"><span th:title="${g.value}" th:text="${g.label}">필수</span> — <th:block th:text="${g.text}">설명</th:block></div>
+          </div>
+          <p id="wa-err-userVerification" class="field__error"></p>
+        </div>
+      </div>
+
+      <div class="set" data-field="attestationConveyance">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <span class="set__label"><span title="attestationConveyance">인증기 증명</span></span>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">등록 시 인증기 증명 요청.
+            <a th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.rpGuide)}" th:href="${helpLinks.rpGuide + '#attestation'}" target="_blank" rel="noopener noreferrer" aria-label="인증기 증명 자세히">자세히</a></p>
+        </div>
+        <div style="min-width: 0">
+          <div class="stack-2" ui:xdata="${@fmt.xdata('guideSwitch', 'value', f.at)}" x-on:segmented-change="on($event)">
+            <th:block th:replace="~{admin/fragments/ui/segmented :: segmented('attestationConveyance', ${atOptions}, ${f.at}, '인증기 증명')}"></th:block>
+            <div th:each="g : ${atGuides}" class="desc-box" th:data-for="${g.value}" th:attr="x-cloak=${g.value != f.at} ? 'true' : null"
+                 x-show="v === $el.dataset.for"><span th:title="${g.value}" th:text="${g.label}">요청 안 함</span> — <th:block th:text="${g.text}">설명</th:block></div>
+          </div>
+          <p id="wa-err-attestationConveyance" class="field__error"></p>
+        </div>
+      </div>
+    </section>
+
+    <th:block th:replace="~{admin/fragments/ui/saveBar :: saveBar(null, null, '저장…', null)}"></th:block>
+  </form>
+  <div id="wa-confirm-slot"></div>
+  </th:block>
+</th:block>
+
+<!-- 카드 헤더 오른쪽 "RP 연동 가이드" 링크(주소가 비면 그리지 않는다) -->
+<th:block th:remove="all">
+  <th:block th:fragment="guideLink">
+    <a th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.rpGuide)}" class="btn btn--ghost btn--sm" th:href="${helpLinks.rpGuide}" target="_blank" rel="noopener noreferrer">RP 연동 가이드 <th:block th:replace="~{admin/fragments/icons :: externalLink(13)}"></th:block></a>
+  </th:block>
+</th:block>
+</body>
+</html>
