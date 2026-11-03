@@ -110,12 +110,6 @@ public class AdminSecurityConfig {
                 .requestMatchers("/admin/forgot-password", "/admin/reset-password", "/admin/signup").permitAll()
                 // 화면 정적 에셋(로그인 화면에서도 쓰므로 미인증 허용).
                 .requestMatchers("/admin/css/**", "/admin/js/**", "/admin/fonts/**", "/admin/img/**", "/favicon.ico").permitAll()
-                // React 빌드 산출물 — Task 17 에서 React 제거와 함께 지운다.
-                .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/favicon.ico", "/admin/favicon.png").permitAll()
-                // 브랜드 정적 에셋(Vite public/ → dist/ 루트로 복사되어 /admin/<name> 으로 서빙됨).
-                // 로그인 전 화면(LoginPage)에서 노출되므로 미인증 허용. *.png 전체가 아니라
-                // 파일명 명시 — 화이트리스트를 좁게 유지(favicon 선례와 동일).
-                .requestMatchers("/admin/crosscert-logo-transparent.png").permitAll()
                 // 서버가 그리는 화면은 인증 필수. /admin/_/** 는 htmx 조각 전용 경로 접두사.
                 // /admin/login/mfa 는 MFA 단계 제출(비밀번호 인증을 마친 세션) — MfaPendingFilter 가 대기 중 허용.
                 .requestMatchers("/", "/admin", "/admin/", "/admin/tenants/**", "/admin/activity",

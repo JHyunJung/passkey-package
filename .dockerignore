@@ -1,16 +1,11 @@
 # 빌드 컨텍스트 축소 — 리포지토리 루트가 컨텍스트라 필수
 .git/
 .gradle/
-# 모듈 하위 .gradle/ 도 반드시 제외한다. admin-app 의 buildUi 태스크가 Node 를
-# admin-app/.gradle/nodejs/ 에 받는데, 호스트가 macOS 면 darwin-arm64 바이너리가
-# 들어간다. 이게 컨텍스트에 실리면 리눅스 컨테이너 안에서 Gradle 이 그걸
-# 재사용하려다 깨진 심볼릭 링크로 빌드가 실패한다(실측):
-#   Couldn't follow symbolic link '.../node-v18.20.0-darwin-arm64/bin/npx'
+# 모듈 하위 .gradle/ 도 반드시 제외한다(호스트 빌드 캐시가 컨텍스트에 실리지 않게).
 **/.gradle/
 build/
 */build/
 **/node_modules/
-admin-ui/dist/
 # 배포용으로 deploy/ 에 복사해 둔 산출물 jar 만 제외한다. `*.jar` 나 `**/*.jar` 로
 # 넓히면 gradle/wrapper/gradle-wrapper.jar 까지 빠져 컨테이너 안에서 ./gradlew 가
 # 동작하지 않는다(빌드 실패). 경로를 반드시 deploy/ 로 한정할 것.
@@ -23,8 +18,6 @@ deploy/*.jar
 docs/
 scripts/
 *.md
-!admin-ui/package.json
-!admin-ui/package-lock.json
 
 # 시크릿 — .gitignore 는 git 만 막고 Docker 빌드 컨텍스트는 못 막는다.
 # deploy/.env(DB 비밀번호, PASSKEY_KEY_ENVELOPE_MASTER_KEY 등)가 그대로 있으면

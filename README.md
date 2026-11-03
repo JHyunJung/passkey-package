@@ -10,7 +10,7 @@ WebAuthn / FIDO2 패스키 인증 플랫폼. **Passkey 서버** 가 RP(Relying P
                                                      (RS256 JWT)      │
 ┌─────────────┐    JSESSIONID    ┌──────────────┐                     ▼
 │  Browser    │ ────────────────▶│   admin-app  │             ┌──────────────┐
-│  (Admin)    │                  │   + admin-ui │ ───────────▶│   Oracle XE  │
+│  (Admin)    │                  │  (Thymeleaf) │ ───────────▶│   Oracle XE  │
 └─────────────┘                  └──────────────┘             │   + Redis    │
                                                               └──────────────┘
 ```
@@ -26,8 +26,7 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 | **`core`** | — | 공통 entity (Oracle JPA), JWT (RS256), 테넌트 컨텍스트(Hibernate `@Filter` · `TenantFilterAspect`), audit chain, MDC 로깅 인프라 |
 | **`webauthn`** | — | WebAuthn 검증 코어 자체 구현 — attestation 7개 포맷 + MDS3 (외부 webauthn4j 런타임 의존 없음) |
 | **`passkey-app`** | 8080 | WebAuthn 등록·인증 ceremony, JWKS, X-API-Key 인증, ID Token 발급 |
-| **`admin-app`** | 8081 | 멀티 테넌트 관리 (tenant / API key / credential / audit / activity / funnel / MDS / 서명키 / 라이선스 / 운영자·가입요청 / security policy / 보존정책 / 스케줄러) |
-| **`admin-ui`** | (Vite dev: 5173) | React + TypeScript admin UI (Vite, 단일 페이지) |
+| **`admin-app`** | 8081 | 운영 콘솔 — 서버 렌더링 Thymeleaf 화면(htmx + Alpine.js, 번들·빌드 단계 없음). 멀티 테넌트 관리 (tenant / API key / credential / audit / activity / funnel / MDS / 서명키 / 라이선스 / 운영자·가입요청 / security policy / 보존정책 / 스케줄러) |
 | **`rp-app`** | 9090 | RP 데모 — `/passkey/{register,authenticate}/{begin,finish}` (무상태 릴레이 토큰) + ID Token 검증 |
 | **`sdk-java`** | — | RP 백엔드용 Java SDK (Spring `RestClient`(JDK HttpClient) 기반 + JWKS 검증 + redaction) |
 
@@ -40,7 +39,7 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
   - 클라이언트 ↔ RP: 무상태 릴레이 토큰 — `regRelayToken` 은 rp-app 이 HMAC(SHA-256) 서명한 등록 릴레이 토큰, `authenticationToken` 은 passkey-app 이 발급한 ceremony 토큰을 rp-app 이 그대로 중계 — 서버 세션 없음
   - RP ↔ Passkey 서버: `X-API-Key` (bcrypt 검증)
   - Passkey 서버 → RP: ID Token (RS256 JWT + JWKS)
-- **Frontend**: React 18 + TypeScript + Vite (admin-ui), Thymeleaf (rp-app)
+- **Frontend**: Thymeleaf (admin-app 은 htmx + Alpine.js, 외부 CDN 없음 / rp-app)
 - **Logging**: SLF4J + logback-classic, MDC (`traceId`/`tenantId`/`actorEmail`/`apiKeyPrefix`), SecretMaskingConverter
 - **Audit**: 해시 체인 (tenant-scoped chain + global chain), 테넌트별 무결성 검증
 
@@ -50,7 +49,6 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 
 - Java 17
 - Docker (Oracle + Redis 컨테이너 용)
-- Node.js 18+ (admin-ui 개발 시)
 
 > **운영 배포는 컨테이너로 합니다** — [`deploy/README.md`](deploy/README.md).
 > 아래는 로컬 개발 절차입니다(호스트 JDK + `gradlew bootRun`).
@@ -104,13 +102,9 @@ PASSKEY_ISSUER_BASE="http://localhost:8080" \
 ./gradlew :rp-app:bootRun
 ```
 
-### 3) Admin UI 개발 서버
+### 3) Admin 콘솔
 
-```bash
-cd admin-ui
-npm install
-npm run dev      # Vite :5173 — admin-app :8081 으로 proxy
-```
+별도 프런트 빌드는 없다. admin-app 을 띄우면 `http://localhost:8081/admin/` 에서 바로 열린다(Thymeleaf 서버 렌더링).
 
 ### 4) 시드 계정 (dev 프로필)
 
@@ -199,7 +193,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 
 - 모든 mutating action 이 `audit_log` 에 적재 (해시 체인 형식)
 - 두 개의 chain 동시 유지: **global chain** (이전 행 `hash` 기반) + **tenant chain** (tenant 별 독립 chain)
-- admin-ui `/audit-chain` 에서 무결성 검증 + 월간 PDF 보고서 생성 (`openhtmltopdf`)
+- 콘솔 `/admin/audit-chain` 에서 무결성 검증 + 월간 PDF 보고서 생성 (`openhtmltopdf`)
 
 ## 디렉토리 구조
 
@@ -211,7 +205,6 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ├── admin-app/           # 관리 API — 패키지: activity / apikey / audit / auth(로그인·MFA·테넌트 경계) /
 │                        #   config / credential / funnel / keymgmt / license / mds /
 │                        #   operator(가입요청·운영자·비번재설정) / policy / retention / scheduler / system / tenant
-├── admin-ui/            # React + TypeScript admin SPA (Vite)
 ├── rp-app/              # 데모 RP — Thymeleaf 페이지 + WebAuthnController
 ├── sdk-java/            # Java SDK (PasskeyClient + IdTokenVerifier + Redacting/TracePropagation interceptors)
 ├── scripts/             # DB 부트스트랩·초기화·리셋 (Docker 로컬 + 외부 Oracle) — 5) DB 스크립트 참고

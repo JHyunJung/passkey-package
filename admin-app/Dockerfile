@@ -1,11 +1,8 @@
 # admin-app — 운영 콘솔 + Flyway 마이그레이션 책임. 1개만 기동한다(스케줄러 리스).
 # syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
-# admin-ui(React)는 build.gradle.kts 의 buildUi 태스크가 Node 18 을 자동
-# 다운로드해 빌드하고 jar 의 static/admin 에 번들한다 — 별도 Node 설치 불필요.
 #   docker build --platform linux/amd64 -t admin-app:0.0.1-SNAPSHOT -f admin-app/Dockerfile .
 
 # 빌드 단계를 $BUILDPLATFORM 으로 돌리는 이유는 passkey-app/Dockerfile 주석 참고.
-# Node 도 빌드 머신 아키텍처용으로 받지만 결과물(정적 파일)은 아키텍처와 무관하다.
 FROM --platform=$BUILDPLATFORM eclipse-temurin:17-jdk AS build
 WORKDIR /src
 
@@ -18,8 +15,6 @@ COPY passkey-app/build.gradle.kts passkey-app/
 COPY admin-app/build.gradle.kts admin-app/
 COPY rp-app/build.gradle.kts rp-app/
 COPY sdk-java/build.gradle.kts sdk-java/
-# npm 의존성도 캐시 레이어에 포함 — 소스만 바뀔 때 npm install 재실행 방지
-COPY admin-ui/package.json admin-ui/package-lock.json admin-ui/
 # '|| true' 는 의도된 것이다: 이 시점엔 소스가 아직 복사되지 않아 Gradle 이
 # 프로젝트를 온전히 평가하지 못해 실패할 수 있다. 목적은 의존성 캐시 워밍뿐이고,
 # 받아둔 의존성은 캐시에 남는다. 진짜 검증은 아래 bootJar 이며 거기엔 || true 가
