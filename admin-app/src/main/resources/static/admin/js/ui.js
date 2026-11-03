@@ -502,7 +502,7 @@ document.addEventListener('alpine:init', () => {
       this.href = null;
       this.delta = null;
       Alpine.store('dirty').allow();
-      if (d !== null) window.history.go(d); // 보류했던 POP 을 진행(app.js 의 popstate 가 통과 허가를 소비하고 htmx 가 복원)
+      if (d !== null) window.adminHistoryGo(d); // 보류했던 POP 을 진행(app.js 의 popstate 가 통과 허가를 소비하고 htmx 가 복원)
       else if (h) window.adminNavigate(h);
     },
   }));
