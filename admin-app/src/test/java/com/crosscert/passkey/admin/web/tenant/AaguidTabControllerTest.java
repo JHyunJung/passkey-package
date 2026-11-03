@@ -304,7 +304,8 @@ class AaguidTabControllerTest {
         assertThat(f.attr("hx-target")).isEqualTo("#ag-confirm-slot");
         assertThat(d.select("#ag-confirm-slot")).hasSize(1);
         assertThat(f.select("#ag-confirm-slot")).isEmpty();
-        assertThat(d.select("p.field__error[id^=ag-err-]").eachAttr("id")).containsExactly("ag-err-mode", "ag-err-aaguid");
+        assertThat(d.select("p.field__error[id^=ag-err-]").eachAttr("id")).containsExactly("ag-err-mode", "ag-err-aaguid", "ag-err-form");
+        assertThat(f.attr("data-savebar-unordered")).isEqualTo("aaguid");
     }
 
     @Test

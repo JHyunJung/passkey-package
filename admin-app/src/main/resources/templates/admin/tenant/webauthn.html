@@ -14,7 +14,7 @@
   <th:block th:if="${loadError == null}">
   <form id="wa-form" class="stack-6" novalidate x-data x-on:keydown.enter="$event.target.tagName === 'INPUT' &amp;&amp; $event.preventDefault()"
         th:attr="data-savebar-labels=${saveLabels}"
-        th:hx-post="${diffUrl}" data-preview="true" hx-target="#wa-confirm-slot" hx-swap="innerHTML" hx-sync="this:drop">
+        th:hx-post="${diffUrl}" data-preview="true" data-savebar-numeric="timeoutMs" hx-target="#wa-confirm-slot" hx-swap="innerHTML" hx-sync="this:drop">
     <section class="card">
       <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('WebAuthn 설정', '변경 사항은 저장 후 다음 패스키 등록·인증부터 적용됩니다.', null, ~{:: guideLink})}"></th:block>
 
@@ -41,7 +41,7 @@
         </div>
         <div style="min-width: 0">
           <input id="wa-rpname" name="rpName" class="input input--track" th:value="${f.rpName}" aria-describedby="wa-err-rpName">
-          <p id="wa-err-rpName" class="field__error"></p>
+          <p id="wa-err-rpName" class="field__error" data-field-error></p>
         </div>
       </div>
 
@@ -58,7 +58,7 @@
                  aria-describedby="wa-timeout-hint wa-err-timeoutMs" style="max-width: 180px">
           <p id="wa-timeout-hint" class="hint" th:style="${timeoutGuide.tone == 'warn'} ? 'color: var(--warn)'"
              x-bind:style="guide.tone === 'warn' ? 'color: var(--warn)' : ''" x-text="guide.text" th:text="${timeoutGuide.text}">안내</p>
-          <p id="wa-err-timeoutMs" class="field__error"></p>
+          <p id="wa-err-timeoutMs" class="field__error" data-field-error></p>
         </div>
       </div>
 
@@ -82,7 +82,7 @@
               </div>
               <p class="field__error" role="alert" x-show="error" x-cloak x-text="error"></p>
             </div>
-            <p id="wa-err-origins" class="field__error"></p>
+            <p id="wa-err-origins" class="field__error" data-field-error></p>
           </div>
         </div>
       </div>
@@ -102,7 +102,7 @@
             <div th:each="g : ${uvGuides}" class="desc-box" th:data-for="${g.value}" th:attr="x-cloak=${g.value != f.uv} ? 'true' : null"
                  x-show="v === $el.dataset.for"><span th:title="${g.value}" th:text="${g.label}">필수</span> — <th:block th:text="${g.text}">설명</th:block></div>
           </div>
-          <p id="wa-err-userVerification" class="field__error"></p>
+          <p id="wa-err-userVerification" class="field__error" data-field-error></p>
         </div>
       </div>
 
@@ -121,11 +121,12 @@
             <div th:each="g : ${atGuides}" class="desc-box" th:data-for="${g.value}" th:attr="x-cloak=${g.value != f.at} ? 'true' : null"
                  x-show="v === $el.dataset.for"><span th:title="${g.value}" th:text="${g.label}">요청 안 함</span> — <th:block th:text="${g.text}">설명</th:block></div>
           </div>
-          <p id="wa-err-attestationConveyance" class="field__error"></p>
+          <p id="wa-err-attestationConveyance" class="field__error" data-field-error></p>
         </div>
       </div>
     </section>
 
+    <p id="wa-err-form" class="field__error" data-field-error></p>
     <th:block th:replace="~{admin/fragments/ui/saveBar :: saveBar(null, null, '저장…', null)}"></th:block>
   </form>
   <div id="wa-confirm-slot"></div>

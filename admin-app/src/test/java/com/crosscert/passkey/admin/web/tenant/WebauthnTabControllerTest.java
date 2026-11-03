@@ -228,7 +228,9 @@ class WebauthnTabControllerTest {
         assertThat(d.select("form#wa-form input[name=userVerification]").val()).isEqualTo("REQUIRED");
         assertThat(d.select("form#wa-form input[name=attestationConveyance]").val()).isEqualTo("NONE");
         // 필드 오류 자리
-        assertThat(d.select("p.field__error[id^=wa-err-]").eachAttr("id")).containsExactly("wa-err-rpName", "wa-err-timeoutMs", "wa-err-origins", "wa-err-userVerification", "wa-err-attestationConveyance");
+        assertThat(d.select("p.field__error[id^=wa-err-]").eachAttr("id")).containsExactly("wa-err-rpName", "wa-err-timeoutMs", "wa-err-origins", "wa-err-userVerification", "wa-err-attestationConveyance", "wa-err-form");
+        assertThat(d.select("p.field__error[data-field-error]")).hasSize(6);
+        assertThat(f.attr("data-savebar-numeric")).isEqualTo("timeoutMs");
     }
 
     @Test
@@ -481,6 +483,21 @@ class WebauthnTabControllerTest {
         assertThat(longName.getResponse().getStatus()).isEqualTo(422);
         assertThat(doc(longName).selectFirst("#wa-err-rpName").text()).isEqualTo("RP 표시 이름은 256자 이하로 입력하세요.");
         verify(tenants, never()).diff(any(), any());
+    }
+
+    @Test
+    @DisplayName("매핑되지 않은 Bean Validation 위반(예: 서버 displayName 이 너무 김)은 일반 인라인 오류로 422 — 조용히 넘기지 않고 REST 는 부르지 않는다")
+    void unmappedViolationIsGeneralError() throws Exception {
+        TenantAdminDto.TenantView v = new TenantAdminDto.TenantView(T1, "acme", "N".repeat(300), "ACTIVE", "passkey.acme.com", "Acme Passkey",
+                List.of("https://passkey.acme.com"), Set.of("none"), true, true, "NONE", 60000, 0, 0, null, OffsetDateTime.parse("2026-03-01T16:00:00Z"), OffsetDateTime.parse("2026-03-01T16:00:00Z"));
+        when(tenants.get(T1.toString())).thenReturn(ApiResponse.ok(v));
+        MvcResult r = mvc.perform(diffReq("120000")).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(422);
+        assertThat(doc(r).selectFirst("#wa-err-form").text()).startsWith("저장할 수 없는 값이 있습니다");
+        verify(tenants, never()).diff(any(), any());
+        MvcResult p = mvc.perform(saveReq("Acme Passkey", "120000", "REQUIRED", "NONE", "https://passkey.acme.com")).andReturn();
+        assertThat(p.getResponse().getStatus()).isEqualTo(400);
+        verify(tenants, never()).update(any(), any(), any());
     }
 
     // ── ChipInput 원격 검증 ─────────────────────────────────

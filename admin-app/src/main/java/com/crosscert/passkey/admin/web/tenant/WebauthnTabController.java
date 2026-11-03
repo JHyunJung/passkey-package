@@ -261,6 +261,7 @@ public class WebauthnTabController {
                 if (p.startsWith("rpName")) e.putIfAbsent("rpName", "RP 표시 이름은 256자 이하로 입력하세요.");
                 else if (p.startsWith("allowedOrigins")) e.putIfAbsent("origins", "허용 origin 은 512자 이하여야 합니다.");
                 else if (p.startsWith("webauthnTimeoutMs")) e.putIfAbsent("timeoutMs", "대기 시간은 1000–600000ms 범위의 숫자여야 합니다.");
+                else e.putIfAbsent("form", "저장할 수 없는 값이 있습니다. 입력을 확인한 뒤 다시 시도하세요.");
             }
         }
         return e;

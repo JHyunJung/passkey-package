@@ -9,7 +9,7 @@
   열기: form 의 x-init 이 다이얼로그 초기화 뒤에 dialog:open 을 올린다.
 -->
 <th:block th:fragment="result">
-  <p th:each="k : ${ {'rpName', 'timeoutMs', 'origins', 'userVerification', 'attestationConveyance'} }" th:id="${'wa-err-' + k}" class="field__error"
+  <p th:each="k : ${ {'rpName', 'timeoutMs', 'origins', 'userVerification', 'attestationConveyance', 'form'} }" th:id="${'wa-err-' + k}" class="field__error" data-field-error
      hx-swap-oob="true" th:attr="role=${errors.get(k) != null} ? 'alert' : null" th:text="${errors.get(k)}"></p>
 
   <form th:if="${dialog}" id="wa-confirm-form" class="fieldset--bare" novalidate x-data x-on:submit.prevent

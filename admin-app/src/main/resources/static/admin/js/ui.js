@@ -217,7 +217,7 @@ document.addEventListener('alpine:init', () => {
   // 원격 검증이 통과하면서 응답 헤더 X-Normalized-Value 가 있으면 그 값(서버가 정규화한 값)을 추가한다.
   // cfg.added 가 배열이면 그 값들이 chip--added, null 이면 처음 값에 없던 값을 chip--added 로 센다.
   // cfg.meta(값 → 이름)·cfg.metaFallback 이 있으면 칩마다 메타(MDS 이름 등)를 보인다.
-  // window 이벤트 `chip-add` {name, value}: 같은 name 의 칩 입력에 값을 더한다(별도 입력칸이 검증한 값을 넣을 때).
+  // 같은 form 위의 `chip-add` 이벤트 {name, value}: 같은 name 의 칩 입력에 값을 더한다(별도 입력칸이 검증한 값을 넣을 때). 다른 form·화면에는 닿지 않는다.
   /** 서버 검증 GET. 반환 {error, value}: error 가 있으면 추가하지 않는다(검증 못 함 = 통과 아님). */
   async function remoteCheck(url, raw, existing) {
     try {
@@ -244,14 +244,16 @@ document.addEventListener('alpine:init', () => {
     validating: false,
     gen: 0, // 되돌리기마다 올려, 이미 보낸 검증 응답이 늦게 와도 버려진 초안을 추가하지 못하게 한다
     onExternal: null,
+    extForm: null,
     init() {
       const initial = Array.isArray(cfg.values) ? [...cfg.values] : [];
       this.initial = initial;
       onFormReset(this.$root, () => { this.gen += 1; this.validating = false; this.values = [...initial]; this.draft = ''; this.error = null; this.refreshAdded(); this.changed(); });
+      this.extForm = this.$root.closest ? this.$root.closest('form') : null;
       this.onExternal = (e) => { const d = e.detail || {}; if (d.name === this.name) this.addValue(d.value); };
-      window.addEventListener('chip-add', this.onExternal);
+      if (this.extForm) this.extForm.addEventListener('chip-add', this.onExternal);
     },
-    destroy() { if (this.onExternal) window.removeEventListener('chip-add', this.onExternal); },
+    destroy() { if (this.onExternal && this.extForm) this.extForm.removeEventListener('chip-add', this.onExternal); },
     refreshAdded() { if (cfg.added == null) this.added = this.values.filter((v) => !this.initial.includes(v)); },
     metaText(v) { return this.meta[v] || this.metaFallback || ''; },
     addValue(v) {
@@ -294,18 +296,27 @@ document.addEventListener('alpine:init', () => {
     input: '',
     error: null,
     busy: false,
+    gen: 0, // 되돌리기·화면 이탈마다 올려, 늦게 온 검증 응답이 다른 상태/화면에 값을 넣지 못하게 한다
+    form: null,
+    init() {
+      this.form = this.$root.closest ? this.$root.closest('form') : null;
+      onFormReset(this.$root, () => { this.gen += 1; this.busy = false; this.input = ''; this.error = null; });
+    },
+    destroy() { this.gen += 1; },
     async add() {
       if (this.busy) return;
       const raw = this.input.trim();
       this.busy = true;
       this.error = null;
-      const form = this.$root.closest('form');
+      const gen = this.gen;
+      const form = this.form;
       const existing = form ? new FormData(form).getAll(cfg.target).map(String) : [];
       const r = await remoteCheck(cfg.url, raw, existing);
+      if (gen !== this.gen) return;
       this.busy = false;
       if (r.error) { this.error = r.error; return; }
       this.input = '';
-      if (r.value) window.dispatchEvent(new CustomEvent('chip-add', { detail: { name: cfg.target, value: r.value } }));
+      if (r.value && form) form.dispatchEvent(new CustomEvent('chip-add', { detail: { name: cfg.target, value: r.value } }));
     },
     onInput() { if (this.error) this.error = null; },
   }));
@@ -390,6 +401,15 @@ document.addEventListener('alpine:init', () => {
   // 변경 개수와 저장 중 여부는 전역 Alpine.store('dirty')(app.js)에 보고한다. 새로고침·탭 닫기 경고(beforeunload)와 이동 확인은
   // 그 스토어를 보는 app.js 의 리스너 하나·unsavedGuard 하나가 맡는다(이 컴포넌트는 따로 경고하지 않는다).
   let saveBarSeq = 0;
+  /** 비교용 값 목록: data-savebar-unordered 필드는 정렬한 집합으로(순서 무관), data-savebar-numeric 필드는 정수로(TSX parseInt). */
+  function normField(form, k, arr) {
+    const ds = form.dataset || {};
+    const list = (x) => (x || '').split(/\s+/).filter(Boolean);
+    let out = arr || [];
+    if (list(ds.savebarUnordered).includes(k)) out = [...out].sort();
+    if (list(ds.savebarNumeric).includes(k)) out = out.map((v) => { const n = parseInt(v || '0', 10); return String(Number.isFinite(n) ? n : 0); });
+    return out;
+  }
   function formSnapshot(form) {
     const snap = {};
     new FormData(form).forEach((v, k) => { (snap[k] = snap[k] || []).push(String(v)); });
@@ -415,6 +435,7 @@ document.addEventListener('alpine:init', () => {
     changedText: '',
     saveLabel: cfg.saveLabel || '저장',
     saving: false,
+    previewing: false, // 저장 전 비교(data-preview) 요청 중: 입력을 잠그고 '저장 중…'
     uid: 'savebar-' + (++saveBarSeq),
     inflight: new Map(),
     pending: new Map(), // after-request 리스너 → 그 리스너를 단 출발 요소
@@ -455,6 +476,23 @@ document.addEventListener('alpine:init', () => {
         // 다른 리스너가 요청을 취소하면(beforeRequest preventDefault) afterRequest 가 오지 않으므로 바로 정리한다.
         queueMicrotask(() => { if (e.defaultPrevented) done({ detail: { requestConfig: key, successful: false } }); });
       });
+      // 저장 전 미리보기(data-preview) 요청 동안 form 을 잠그고(inert) 이전 필드 오류를 지운다. 요청이 끝나면(성공·실패 모두) 푼다.
+      // 비교한 값과 다른 값이 이 사이에 입력돼 조용히 버려지는 일을 막는다(다이얼로그가 열리면 스크림이 막는다).
+      f.addEventListener('htmx:before-request', (e) => {
+        const elt = e.detail && e.detail.elt;
+        if (elt !== f || !f.hasAttribute('data-preview')) return;
+        f.querySelectorAll('[data-field-error]').forEach((p) => { p.textContent = ''; p.removeAttribute('role'); });
+        this.previewing = true;
+        f.setAttribute('inert', '');
+        const done = (ev) => {
+          if (!ev.detail || ev.detail.elt !== f) return;
+          f.removeEventListener('htmx:after-request', done);
+          this.previewing = false;
+          f.removeAttribute('inert');
+        };
+        f.addEventListener('htmx:after-request', done);
+        queueMicrotask(() => { if (e.defaultPrevented) done({ detail: { elt: f } }); });
+      });
       // 일반(비 htmx) 제출은 페이지 이동이므로 경고를 끈다.
       f.addEventListener('submit', () => { if (!f.hasAttribute('hx-post') && !f.hasAttribute('hx-put') && !f.hasAttribute('hx-patch') && !f.hasAttribute('hx-delete')) Alpine.store('dirty').disarm(); });
     },
@@ -478,7 +516,7 @@ document.addEventListener('alpine:init', () => {
       const keys = new Set([...Object.keys(this.base), ...Object.keys(now)]);
       let n = 0;
       const changed = new Set();
-      keys.forEach((k) => { if (JSON.stringify(this.base[k] || []) !== JSON.stringify(now[k] || [])) { n += 1; changed.add(k); } });
+      keys.forEach((k) => { if (JSON.stringify(normField(this.form, k, this.base[k])) !== JSON.stringify(normField(this.form, k, now[k]))) { n += 1; changed.add(k); } });
       this.count = n;
       this.changedText = this.labels ? Object.keys(this.labels).filter((k) => changed.has(k)).map((k) => this.labels[k]).join(' · ') : '';
       // [data-field] 행에 data-changed 를 달아 "변경됨" 표시를 CSS 가 켠다.

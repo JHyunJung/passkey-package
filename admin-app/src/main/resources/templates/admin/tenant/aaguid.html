@@ -15,7 +15,7 @@
   <th:block th:if="${loadError == null}">
   <form id="ag-form" class="stack-6" novalidate x-data x-on:keydown.enter="$event.target.tagName === 'INPUT' &amp;&amp; $event.preventDefault()"
         th:attr="data-savebar-labels=${saveLabels}"
-        th:hx-post="${previewUrl}" data-preview="true" hx-target="#ag-confirm-slot" hx-swap="innerHTML" hx-sync="this:drop">
+        th:hx-post="${previewUrl}" data-preview="true" data-savebar-unordered="aaguid" hx-target="#ag-confirm-slot" hx-swap="innerHTML" hx-sync="this:drop">
     <div class="stack-6" x-on:chips-change="values = $event.detail.values" x-on:switch-change="strict = $event.detail.checked"
          ui:xdata="${@fmt.xdata('policyForm', 'mode', p.mode, 'strict', p.mdsStrict, 'values', values, 'known', known, 'impact', impact, 'noteBefore', ' 허용 목록 중 MDS 미확인 ', 'noteAfter', '개도 차단됩니다.', 'inputId', 'aaguid-input')}">
 
@@ -47,7 +47,7 @@
                 </span>
               </button>
             </div>
-            <p id="ag-err-mode" class="field__error"></p>
+            <p id="ag-err-mode" class="field__error" data-field-error></p>
           </div>
         </div>
 
@@ -72,7 +72,7 @@
                   <button type="button" class="btn" x-bind:disabled="validating" x-on:click="onEnter()"><th:block th:replace="~{admin/fragments/icons :: plus(14)}"></th:block>추가</button>
                 </div>
                 <p class="field__error" role="alert" x-show="error" x-cloak x-text="error"></p>
-                <p id="ag-err-aaguid" class="field__error"></p>
+                <p id="ag-err-aaguid" class="field__error" data-field-error></p>
 
                 <div x-show="mode === 'ALLOWLIST' &amp;&amp; count === 0" th:attr="x-cloak=${!emptyAllow} ? 'true' : null">
                   <th:block th:replace="~{admin/fragments/ui/alert :: alert('bad', '허용 목록이 비어 있습니다', ~{:: emptyBody}, ~{:: emptyActions}, null)}"></th:block>
@@ -120,6 +120,7 @@
       </section>
     </div>
 
+    <p id="ag-err-form" class="field__error" data-field-error></p>
     <th:block th:replace="~{admin/fragments/ui/saveBar :: saveBar(null, null, '저장…', null)}"></th:block>
   </form>
   <div id="ag-confirm-slot"></div>
@@ -133,7 +134,7 @@
 
 <!-- 미리보기 응답(POST …/aaguid/preview): 필드 오류 OOB + 확인 다이얼로그. 모델: errors, dialog, kind, changes, draft, draftAaguids, strictNote, impact, saveAttrs -->
 <th:block th:fragment="result">
-  <p th:each="k : ${ {'mode', 'aaguid'} }" th:id="${'ag-err-' + k}" class="field__error"
+  <p th:each="k : ${ {'mode', 'aaguid', 'form'} }" th:id="${'ag-err-' + k}" class="field__error" data-field-error
      hx-swap-oob="true" th:attr="role=${errors.get(k) != null} ? 'alert' : null" th:text="${errors.get(k)}"></p>
 
   <form th:if="${dialog}" id="ag-confirm-form" class="fieldset--bare" novalidate x-data x-on:submit.prevent

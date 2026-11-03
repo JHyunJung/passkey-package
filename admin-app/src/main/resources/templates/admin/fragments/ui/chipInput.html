@@ -6,6 +6,7 @@
   th:replace="~{admin/fragments/ui/chipInput :: chipInput(name, values, placeholder, ariaLabel, mono, added, validateUrl, disabled)}"
     name        form 필드 이름. 값마다 hidden input(name) 이 하나씩 제출된다.
     values      처음 값 목록(List<String>), added 새로 추가된 값 목록(chip--added 표시) 또는 null
+    added 가 null 이면 처음 값에 없던 값을 chip--added 로 센다(추가·삭제·되돌리기에 따라 갱신), 목록이면 그 값들만 표시(고정).
     placeholder, ariaLabel 문자열, mono true | null, disabled true | null
     validateUrl 추가 전에 서버로 검증할 주소 또는 null. GET ?value=…&existing=… → 본문이 오류 문구, 비면 통과.
   Enter 로 추가(앞뒤 공백 제거, 빈 값·중복 무시), 칩의 x 로 삭제(aria-label '<값> 삭제'). 오류는 입력 아래 role=alert.

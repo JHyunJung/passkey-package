@@ -437,7 +437,7 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 서버 diff 가 비어도 로컬 변경이 있으면 저장을 막지 않고 확인 목록에 | WV 9 | source ✅ | WTC `diffShowsChangedFieldsOnly` | 미확인 |
 | 서버 diff(requireUserVerification 불리언)+로컬(증명) 병합, 한국어, raw 값 비노출 | WV 10 | source ✅ | WTC `mergedServerAndLocalChanges`,`mergeAndOrder` | 미확인 |
 | 저장 실패는 다이얼로그 안 인라인 오류, 입력·저장 바 유지 | WV 11 | source ✅ / 차이: 확인 요청(X-Confirm)의 실패는 `confirmError` 만(토스트 없음), 4xx/5xx 라 탭이 교체되지 않음 | WTC `saveFailureIsInlineOnly`,`saveValidationFailureIsInline` / JS — 브라우저 확인 필요 | 미확인 |
-| 저장 중 입력 잠금·두 번 나가지 않음 | WV 12 | **차이**: 저장 중 입력 잠금 없음. 연타는 `hx-sync=this:drop`(미리보기)·confirmDialog 의 busy(저장)로 막는다. 저장은 다이얼로그가 들고 있는 값이라 그 사이 편집이 보내지지 않으며, 성공하면 탭이 새 값으로 다시 그려진다 | JS — 브라우저 확인 필요 | 미확인 |
+| 저장 중 입력 잠금·두 번 나가지 않음 | WV 12 | **부분 차이**: 미리보기 요청 중에는 form 이 inert + 저장 바 '저장 중…'(saveBar `previewing`). 저장(PUT) 중에는 잠금 없음. 연타는 `hx-sync=this:drop`(미리보기)·confirmDialog 의 busy(저장)로 막는다. 저장은 다이얼로그가 들고 있는 값이라 그 사이 편집이 보내지지 않으며, 성공하면 탭이 새 값으로 다시 그려진다 | JS — 브라우저 확인 필요 | 미확인 |
 | 변경 비교 중·다이얼로그가 열린 동안 입력 잠금, 저장은 비교한 값으로 | WV 13 | source ✅(저장 값) / **차이**(잠금): 입력 잠금 없음. 저장 값은 비교한 hidden 값 | WTC `dialogCarriesComparedValues` | 미확인 |
 | 다이얼로그 취소하면 입력 잠금이 풀린다 | WV 14 | **차이(해당 없음)**: 잠그지 않으므로 풀 것이 없다. 취소해도 입력·저장 바는 그대로 | — | 미확인 |
 | 사용자 검증은 필수·권장만("요구 안 함" 숨김) | WV 15 | source ✅ / 차이: 서버도 DISCOURAGED 를 422 로 거부 | WTC `rendersRowsWithTsxStrings`,`fieldErrors` | 미확인 |
@@ -484,7 +484,7 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 로드 실패: LoadError + 다시 시도 | AV 15 | source ✅ | ATC `loadFailure` | 미확인 |
 | 저장 중 입력 잠금·저장은 한 번 | AV 16 | **차이**: 입력 잠금 없음(WebAuthn 탭 WV 12 와 같은 이유). 저장은 확인 다이얼로그 busy 로 한 번 | JS — 브라우저 확인 필요 | 미확인 |
 | 모드 원문은 title, 확인 목록은 실제로 바뀐 항목만 | AV 17 | source ✅ / 차이: 확인 목록의 모드는 라벨 텍스트(title 없음) | ATC `previewListsOnlyChanged`,`rendersTsxStrings` | 미확인 |
-| 삭제 후 같은 항목 재추가 = 변경 없음 | AV 18 | source ✅ / saveBar 는 폼 값 비교라 같은 목록이면 0건 | ATC `policyChanges`(순서·재추가) / JS | 미확인 |
+| 삭제 후 같은 항목 재추가 = 변경 없음 | AV 18 | source ✅ / 차이: 재추가하면 순서가 바뀌므로 폼 `data-savebar-unordered=aaguid` 로 saveBar 가 목록을 정렬한 집합으로 비교(서버 `policyChanges` 와 같은 기준) | ATC `policyChanges`, `formWiring` / 스텁(saveBar normField) / JS — 브라우저 확인 필요 | 미확인 |
 | MDS 엄격 영향은 목록과 무관하게 "MDS 미등록 모든 인증기 거부" | AV 19 | source ✅ | ATC `previewMdsStrict` | 미확인 |
 
 ### 추가 (원본 테스트 없음, 브리프·계약)
