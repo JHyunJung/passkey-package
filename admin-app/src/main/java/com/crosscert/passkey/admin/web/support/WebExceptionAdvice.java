@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.web.support;
 
+import com.crosscert.passkey.admin.web.format.ErrorMessages;
 import com.crosscert.passkey.core.api.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,15 +24,12 @@ import org.springframework.web.servlet.ModelAndView;
  * 우선순위를 가장 높게 두어 화면 컨트롤러에서는 이 advice 가 먼저 잡게 한다.
  * REST 컨트롤러({@code /admin/api/**})의 JSON 오류 응답은 그대로다.
  *
- * <p>문구는 Task 3 의 ErrorMessages 가 들어오기 전까지 고정 문구 하나를 쓴다.
+ * <p>문구는 {@link ErrorMessages}(describeError.ts 이전)가 상태별로 정한다.
  */
 @Slf4j
 @ControllerAdvice(basePackages = "com.crosscert.passkey.admin.web")
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class WebExceptionAdvice {
-
-    static final String DEFAULT_TITLE = "요청을 처리하지 못했습니다";
-    static final String DEFAULT_MESSAGE = "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
     @ExceptionHandler(BusinessException.class)
     public ModelAndView business(BusinessException e, HttpServletRequest req, HttpServletResponse res) {
@@ -68,16 +66,17 @@ public class WebExceptionAdvice {
             log.warn("[web] {} {} - status={} cause={} msg={}",
                     req.getMethod(), req.getRequestURI(), status, e.getClass().getSimpleName(), e.getMessage());
         }
+        ErrorMessages.Info info = ErrorMessages.describe(e, status);
         if (Htmx.isHtmx(req)) {
-            Toasts.error(res, DEFAULT_MESSAGE);
+            Toasts.error(res, info.toastMessage());
             res.setStatus(HttpStatus.NO_CONTENT.value());
             return null; // null = 응답 처리 완료(본문 없음)
         }
         ModelAndView mav = new ModelAndView(ErrorPage.VIEW);
         mav.setStatus(HttpStatusCode.valueOf(status)); // 499 같은 비표준 코드도 허용
         mav.addObject("status", status);
-        mav.addObject("title", DEFAULT_TITLE);
-        mav.addObject("message", DEFAULT_MESSAGE);
+        mav.addObject("title", info.title());
+        mav.addObject("message", info.detail() == null ? "" : info.detail());
         return mav;
     }
 }

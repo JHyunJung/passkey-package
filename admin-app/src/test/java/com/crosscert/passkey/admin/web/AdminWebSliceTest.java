@@ -48,6 +48,9 @@ import static org.mockito.Mockito.when;
         AdminSecurityConfig.class,
         MeController.class,
         ProfileController.class,
+        // 템플릿이 쓰는 표시 도우미(@fmt)와 ui:attrs 방언 — @Component 라 슬라이스에 자동으로 올라오지 않는다.
+        com.crosscert.passkey.admin.web.format.ViewHelpers.class,
+        com.crosscert.passkey.admin.web.support.UiDialect.class,
         AdminWebSliceTest.JpaStubs.class
 })
 @MockBean({

@@ -76,14 +76,16 @@ class WebExceptionAdviceTest {
         mvc.perform(get("/admin/_/test/business").with(authentication(operator())))
             .andExpect(status().isNotFound())
             .andExpect(view().name("admin/error"))
-            .andExpect(content().string(containsString("요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.")));
+            .andExpect(content().string(containsString("찾을 수 없습니다")))
+            .andExpect(content().string(containsString("삭제되었거나 주소가 바뀌었을 수 있습니다.")));
     }
 
     @Test
     void unexpectedErrorIs500Page() throws Exception {
         mvc.perform(get("/admin/_/test/boom").with(authentication(operator())))
             .andExpect(status().isInternalServerError())
-            .andExpect(view().name("admin/error"));
+            .andExpect(view().name("admin/error"))
+            .andExpect(content().string(containsString("서버가 잠시 응답하지 않습니다")));
     }
 
     @Test
