@@ -124,7 +124,7 @@
       <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', ${emptyTitle}, '필터를 바꾸거나 이전 24시간을 더 불러오세요.', null, true)}"></th:block>
     </div>
     <div class="card__foot" style="justify-content: center">
-      <button type="button" class="btn" id="activity-more" ui:attrs="${moreAttrs}" x-bind:disabled="rowsBusy">이전 24시간 더 보기</button>
+      <button type="button" class="btn" id="activity-more" ui:attrs="${moreAttrs}" x-bind:disabled="rowsBusy || stale">이전 24시간 더 보기</button>
     </div>
   </section>
 </th:block>

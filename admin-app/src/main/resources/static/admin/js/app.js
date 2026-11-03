@@ -673,6 +673,7 @@
         qv: '', // 액션 검색어(trim) — 칩·빈 결과 판단에 쓴다
         noMatch: false,
         rowsInflight: 0,
+        stale: false, // 필터 전환 실패 뒤 옛 목록 — 다음 성공한 요청이 교체할 때까지 "더 보기"를 막는다
         rowsBusy: false, // 필터 교체 중에는 "더 보기"를 막는다(새 필터에 옛 커서를 싣지 않게)
         unsub: null,
         init() {
@@ -707,6 +708,7 @@
             this.rowsBusy = this.rowsInflight > 0;
           }
           if ((k === 'rows' || k === 'poll') && ok) {
+            this.stale = false;
             this.loaded = true;
             this.disconnected = false;
             this.lastOkAt = Date.now();
@@ -723,6 +725,7 @@
             // 필터 전환이 실패했다 — 컨트롤은 새 필터인데 목록은 옛 것이다. 다음 성공한 요청(폴링 포함)이 병합이 아니라 교체하도록 stale 표시.
             const l = document.getElementById('activity-loaded');
             if (l) l.value = '0';
+            this.stale = true;
             if (st === 422) { this.loaded = false; this.disconnected = false; }
           }
           else if (k === 'poll' && this.loaded) this.disconnected = true;
@@ -735,15 +738,17 @@
         },
         // 액션 검색(원본 actionQuery): 이미 읽어 온 행을 클라이언트에서 거른다 — 코드(대소문자 무시) 또는 한글 라벨에 검색어(trim) 포함.
         // 행이 하나도 안 보이는 날짜 그룹은 머리글째 숨긴다. 폴링·더 보기·필터 교체가 행을 바꾼 뒤(after-settle)에도 다시 적용한다.
+        rowMatches(r, t) {
+          return !t || (r.dataset.type || '').indexOf(t.toUpperCase()) >= 0 || (r.dataset.label || '').indexOf(t) >= 0;
+        },
         applyFilter() {
           const inp = document.getElementById('activity-q');
           const t = (inp ? inp.value : '').trim();
           this.qv = t;
-          const up = t.toUpperCase();
           const rows = document.querySelectorAll('#activity-feed .feed-row');
           let visible = 0;
           rows.forEach((r) => {
-            const ok = !t || (r.dataset.type || '').indexOf(up) >= 0 || (r.dataset.label || '').indexOf(t) >= 0;
+            const ok = this.rowMatches(r, t);
             r.hidden = !ok;
             if (ok) visible++;
           });
@@ -764,6 +769,13 @@
             if (document.querySelector('#activity-feed .feed-row[data-id="' + id.replace(/"/g, '') + '"]')) r.remove();
           });
           f.querySelectorAll('.feed-group').forEach((g) => { if (!g.querySelector('.feed-row')) g.remove(); });
+          // 들어오는 행에 현재 검색을 바로 적용한다(삽입 뒤 after-settle 전까지 잠깐 보이는 깜박임 방지).
+          const inp = document.getElementById('activity-q');
+          const t = (inp ? inp.value : '').trim();
+          if (t) {
+            f.querySelectorAll('.feed-row').forEach((r) => { r.hidden = !this.rowMatches(r, t); });
+            f.querySelectorAll('.feed-group').forEach((g) => { g.hidden = !g.querySelector('.feed-row:not([hidden])'); });
+          }
         },
         openDetail(id) {
           this.selectedId = id;

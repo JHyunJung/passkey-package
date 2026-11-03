@@ -258,6 +258,26 @@ class ActivityPageControllerTest {
     }
 
     @Test
+    @DisplayName("모두 지우기: 서버 필터(카테고리·tenant)가 있을 때만 목록을 다시 읽고, 검색어만 있을 땐 클라이언트로만 지운다")
+    void clearAllVariants() throws Exception {
+        Element none = page("/admin/activity").select("#activity-applied button:contains(모두 지우기)").first();
+        assertThat(none.attr("x-on:click")).isEqualTo("clearQ()");
+        assertThat(none.hasAttr("hx-get")).isFalse(); // 더 보기 이력을 버리지 않는다
+        Element withFilter = page("/admin/activity?category=ops").select("#activity-applied button:contains(모두 지우기)").first();
+        assertThat(withFilter.attr("x-on:click")).isEqualTo("clearQ()");
+        assertThat(withFilter.attr("hx-get")).isEqualTo("/admin/_/activity/rows?category=all&tenantId=&reset=category,tenant");
+        // rows 응답이 만드는 OOB 칩 영역도 같은 규칙
+        Document d = Jsoup.parseBodyFragment(body(frag("/admin/_/activity/rows")));
+        assertThat(d.select("#activity-applied button:contains(모두 지우기)").hasAttr("hx-get")).isFalse();
+    }
+
+    @Test
+    @DisplayName("더 보기는 필터 교체 중이거나 필터 전환 실패(stale) 뒤에는 비활성")
+    void moreDisabledWhileBusyOrStale() throws Exception {
+        assertThat(page("/admin/activity").select("#activity-more").attr("x-bind:disabled")).isEqualTo("rowsBusy || stale");
+    }
+
+    @Test
     @DisplayName("행에는 클라이언트 검색 키(data-type 대문자·data-label 한글)가 있고, 검색 입력은 서버를 부르지 않는다")
     void clientSideSearchKeys() throws Exception {
         Document d = page("/admin/activity");
@@ -538,7 +558,7 @@ class ActivityPageControllerTest {
         assertThat(more.attr("hx-swap")).isEqualTo("none");
         assertThat(more.attr("hx-include")).contains("#activity-before", "#activity-before-id", "#activity-last-day", "#activity-cat");
         // 필터 교체가 진행 중이면 비활성(새 필터에 옛 커서를 싣지 않게)
-        assertThat(more.attr("x-bind:disabled")).isEqualTo("rowsBusy");
+        assertThat(more.attr("x-bind:disabled")).isEqualTo("rowsBusy || stale");
     }
 
     // ── 상세 ────────────────────────────────────────────────

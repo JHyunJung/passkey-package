@@ -412,12 +412,9 @@ public class ActivityPageController {
         model.addAttribute("tenantSlug", slug);
         model.addAttribute("chipCategoryAttrs", rowsReq(ROWS_PATH + "?category=all&reset=category", "#activity-tenant"));
         model.addAttribute("chipTenantAttrs", rowsReq(ROWS_PATH + "?tenantId=&reset=tenant", "#activity-cat"));
-        // 액션 검색은 원본처럼 이미 읽어 온 행을 클라이언트에서 거른다 — 칩 제거·모두 지우기의 검색어 부분은 Alpine(clearQ)이 한다.
-        Map<String, Object> chipQ = new LinkedHashMap<>();
-        chipQ.put("x-on:click", "clearQ()");
-        model.addAttribute("chipQAttrs", chipQ);
-        model.addAttribute("clearAttrs", rowsReq(ROWS_PATH + "?category=all&tenantId=&reset=category,tenant", null));
-        model.addAttribute("clearAttrsClient", "clearQ()");
+        // 액션 검색은 원본처럼 이미 읽어 온 행을 클라이언트에서 거른다 — 검색어 칩 제거·모두 지우기의 검색어 부분은 Alpine(clearQ)이 한다.
+        // 모두 지우기는 서버 필터(카테고리·tenant)가 있을 때만 목록을 다시 읽는다(원본 clearFilters 는 바뀌는 서버 필터가 없으면 다시 조회하지 않는다).
+        model.addAttribute("clearAttrs", f.hasServerApplied() ? rowsReq(ROWS_PATH + "?category=all&tenantId=&reset=category,tenant", null) : null);
         model.addAttribute("retryAttrs", rowsReq(ROWS_PATH, "#activity-cat, #activity-tenant"));
         model.addAttribute("pollAttrs", pollReq());
         model.addAttribute("refreshAttrs", refreshReq());
