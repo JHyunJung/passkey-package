@@ -17,11 +17,11 @@
      th:attr="data-loaded=${loaded}, data-poll-sec=${pollSec}"
      x-on:htmx:before-request="beforeRequest($event)" x-on:htmx:after-request="afterRequest($event)"
      x-on:htmx:response-error="failed($event)" x-on:htmx:send-error="failed($event)" x-on:htmx:timeout="failed($event)"
-     x-on:segmented-change="catChanged($event)">
+     x-on:segmented-change="catChanged($event)" x-on:htmx:after-settle="applyFilter()" x-on:htmx:oob-before-swap="dedupe($event)">
   <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('Activity', '전체 tenant의 패스키 등록·인증 · 운영 변경 · 보안 이벤트를 모아 봅니다.', ~{:: headerActions})}"></th:block>
 
   <!-- 연결 끊김(받은 뒤의 폴링 실패): 목록은 그대로 두고 알린다. 첫 조회 실패는 목록 영역의 오류 카드가 알린다. -->
-  <div class="banner banner--warning banner--top" role="status" x-cloak x-show="loaded && disconnected && lastOkAt !== null" hidden>
+  <div class="banner banner--warning banner--top" role="status" x-cloak x-show="loaded && disconnected && lastOkAt !== null">
     <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
     <div class="banner__body">
       <div class="banner__title">새 이벤트를 받지 못하고 있습니다</div>
@@ -53,12 +53,12 @@
     </div>
     <aside class="activity-aside">
       <!-- 상세 패널: 열기 전·닫은 뒤에는 비어 있다. 불러오는 중·네트워크 실패는 아래 두 패널(Alpine)이, 성공·서버 오류는 detail 조각이 그린다. -->
-      <section class="card" aria-label="이벤트 상세" x-cloak x-show="detailState === 'loading'" hidden>
+      <section class="card" aria-label="이벤트 상세" x-cloak x-show="detailState === 'loading'">
         <div class="card__head"><h2 class="card__title">상세</h2><div class="spacer"></div>
           <button type="button" class="icon-btn" aria-label="닫기" title="닫기" x-on:click="closeDetail()"><th:block th:replace="~{admin/fragments/icons :: x(16)}"></th:block></button></div>
         <div class="card__body"><th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(4, '상세 불러오는 중')}"></th:block></div>
       </section>
-      <section class="card" aria-label="이벤트 상세" x-cloak x-show="detailState === 'netError'" hidden>
+      <section class="card" aria-label="이벤트 상세" x-cloak x-show="detailState === 'netError'">
         <div class="card__head"><h2 class="card__title">상세</h2><div class="spacer"></div>
           <button type="button" class="icon-btn" aria-label="닫기" title="닫기" x-on:click="closeDetail()"><th:block th:replace="~{admin/fragments/icons :: x(16)}"></th:block></button></div>
         <div class="card__body">
@@ -69,7 +69,7 @@
           </div>
         </div>
       </section>
-      <div id="activity-detail" data-quiet></div>
+      <div id="activity-detail" data-quiet hx-sync="this:replace"></div>
       <th:block th:replace="~{admin/activity/rows :: tenantsCard(false)}"></th:block>
     </aside>
   </div>
@@ -83,7 +83,7 @@
 <th:block th:remove="all">
   <th:block th:fragment="headerActions">
     <!-- 실시간 상태: 초 단위 카운터는 live 영역 밖. 연결이 복구될 때만 알린다(끊김은 위 배너가 알린다). -->
-    <span class="row" style="gap: 6px; font-size: 12px" x-cloak x-show="loaded" hidden
+    <span class="row" style="gap: 6px; font-size: 12px" x-cloak x-show="loaded"
           x-bind:style="{ color: disconnected ? 'var(--warn)' : 'var(--mute)', fontWeight: disconnected ? '600' : '' }" x-bind:data-ts="lastOkAt">
       <span class="dot" aria-hidden="true" x-bind:style="{ background: disconnected ? 'var(--faint)' : 'var(--ok)' }"></span>
       <span x-text="liveText">실시간 · 0초 전 갱신</span>

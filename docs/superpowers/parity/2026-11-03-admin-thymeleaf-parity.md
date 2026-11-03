@@ -553,11 +553,11 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 ## §Activity (Task 14, 소스 수준 점검)
 
 약어: AP = `ActivityPage.test.tsx` 순번, AD = `activityDiff.test.ts`, AL = `activityLabels.test.ts`, APC = `ActivityPageControllerTest`, ADT = `ActivityDiffTest`, ALT = `ActivityLabelsTest`. 브라우저: 미확인 — 폴링 타이머·hx-sync 의 실제 중단/드롭·OOB afterbegin/beforeend 삽입·Alpine 상태 전환·포커스는 JS(Node 스텁으로 상태 전이만 확인, 커밋 안 함) — 브라우저 확인 필요.
-공통 차이: 목록 상태는 서버가 아니라 화면(DOM)이 가진다(가장 새 행 id·아래쪽 커서·날짜 머리글 라벨이 숨은 입력). 처음 24건 창(visibleCount)은 없다 — 서버가 준 한 쪽(50건)을 전부 그린다. 날짜 그룹은 `role=group` 래퍼 대신 평평한 목록(`role=heading` 머리글 + 행): 폴링·더 보기가 같은 날짜에 이어 붙을 수 있게. 액션 검색(q)은 읽어 온 행을 클라이언트에서 거르던 것을 서버가 같은 규칙(코드 대소문자 무시·한글 라벨 포함)으로 걸러 첫 쪽부터 다시 읽는다(검색어를 바꾸면 "더 보기"로 불러온 행은 사라진다).
+공통 차이: 목록 상태는 서버가 아니라 화면(DOM)이 가진다(가장 새 행 id·아래쪽 커서·맨 위/맨 아래 KST 날짜 키가 숨은 입력). 날짜 그룹은 원본처럼 `role=group aria-label=라벨`(키 = KST yyyy-MM-dd, `id=day-KEY` + `day-KEY-rows`)이고 폴링·더 보기는 날짜 키로 기존 그룹에 이어 붙는다(자정을 넘겨 라벨이 바뀌어도 이어짐; 이미 그려진 그룹의 라벨 글자("오늘")는 새로고침 전까지 그대로). 액션 검색(q)은 원본처럼 읽어 온 행을 클라이언트(Alpine `applyFilter`)에서 거른다(서버 왕복 없음, 더 보기 행 유지, 지우면 전부 복원, 보이는 행 없는 그룹은 머리글째 숨김). **초기 24건 창(visibleCount 24, 더 보기마다 max(n,24) 증가)은 구현하지 않았다** — 서버가 준 한 쪽(50건)을 전부 그린다(원본은 24건만 보이고 더 보기가 창을 넓힘). 필터 전환이 실패하면 목록을 stale 로 표시해(`#activity-loaded=0`) 다음 성공 요청이 병합 대신 교체한다.
 
 | 체크 항목 | 원본 테스트 | 결과 | 테스트 | 브라우저 |
 |---|---|---|---|---|
-| 피드를 KST 날짜(오늘/어제/YYYY-MM-DD)로 묶는다 | AP 1 | source ✅ / 차이: 그룹 래퍼 없는 평평한 목록(머리글 `role=heading`) | APC `groupsByKstDay` | 미확인 |
+| 피드를 KST 날짜(오늘/어제/YYYY-MM-DD)로 묶는다 | AP 1 | source ✅ (원본과 같은 role=group 날짜 그룹, KST 날짜 키) | APC `groupsByKstDay`,`pollPrependsIntoSameDayGroupAndNewGroups` | 미확인 |
 | 상세 패널 5개 섹션 + TENANT_UPDATE before/after diff, 선택 행 강조 | AP 2 | source ✅ / 차이: 선택 강조는 Alpine `selectedId`(행 class·aria-current), 서버가 행을 다시 그려도 유지 | APC `diffRendersSameAsOriginal`,`detailButtonsAndSelection` | 미확인 |
 | actorIp 없으면 IP 줄 없음 / 있으면 표시 | AP 3, 4 | source ✅ / 차이: `ActivityDetailView` 에 actorIp 필드가 없어 줄은 항상 없다(원본도 서버가 안 줌) | — | — |
 | `diff` 필드가 있으면 payload before/after 대신 그것을 쓴다 | AP 5 | source ✅ / 차이: 서버 상세에 diff 필드가 없어 화면은 항상 payload 경로(`ActivityDiff.buildDiffRows(null, payload)`); diff 우선 규칙은 단위 테스트로 | ADT `serverDiffWins` | — |

@@ -670,6 +670,10 @@
         selectedId: null,
         detailState: 'idle', // idle | loading | netError
         detailUrl: null,
+        qv: '', // 액션 검색어(trim) — 칩·빈 결과 판단에 쓴다
+        noMatch: false,
+        rowsInflight: 0,
+        rowsBusy: false, // 필터 교체 중에는 "더 보기"를 막는다(새 필터에 옛 커서를 싣지 않게)
         unsub: null,
         init() {
           this.loaded = this.$el.dataset.loaded === 'true';
@@ -689,6 +693,8 @@
         beforeRequest(e) {
           // 필터를 바꾸면 이전 조건의 "더 보기" 응답이 새 목록에 붙지 않게 중단한다.
           if (actKind(e) === 'rows') {
+            this.rowsInflight++;
+            this.rowsBusy = true;
             const m = document.getElementById('activity-more');
             if (m) htmx.trigger(m, 'htmx:abort');
           }
@@ -696,6 +702,10 @@
         afterRequest(e) {
           const k = actKind(e);
           const ok = e.detail.successful === true;
+          if (k === 'rows') {
+            this.rowsInflight = Math.max(0, this.rowsInflight - 1);
+            this.rowsBusy = this.rowsInflight > 0;
+          }
           if ((k === 'rows' || k === 'poll') && ok) {
             this.loaded = true;
             this.disconnected = false;
@@ -709,7 +719,12 @@
         failed(e) {
           const k = actKind(e);
           const st = e.detail && e.detail.xhr ? e.detail.xhr.status : 0;
-          if (k === 'rows' && st === 422) { this.loaded = false; this.disconnected = false; }
+          if (k === 'rows') {
+            // 필터 전환이 실패했다 — 컨트롤은 새 필터인데 목록은 옛 것이다. 다음 성공한 요청(폴링 포함)이 병합이 아니라 교체하도록 stale 표시.
+            const l = document.getElementById('activity-loaded');
+            if (l) l.value = '0';
+            if (st === 422) { this.loaded = false; this.disconnected = false; }
+          }
           else if (k === 'poll' && this.loaded) this.disconnected = true;
           else if (k === 'detail' && st !== 422) this.detailState = 'netError';
         },
@@ -717,6 +732,38 @@
         catChanged(e) {
           const el = document.getElementById('activity-cat');
           if (el && e.target && e.target.closest && e.target.closest('#activity-seg') && e.detail) el.value = e.detail.value;
+        },
+        // 액션 검색(원본 actionQuery): 이미 읽어 온 행을 클라이언트에서 거른다 — 코드(대소문자 무시) 또는 한글 라벨에 검색어(trim) 포함.
+        // 행이 하나도 안 보이는 날짜 그룹은 머리글째 숨긴다. 폴링·더 보기·필터 교체가 행을 바꾼 뒤(after-settle)에도 다시 적용한다.
+        applyFilter() {
+          const inp = document.getElementById('activity-q');
+          const t = (inp ? inp.value : '').trim();
+          this.qv = t;
+          const up = t.toUpperCase();
+          const rows = document.querySelectorAll('#activity-feed .feed-row');
+          let visible = 0;
+          rows.forEach((r) => {
+            const ok = !t || (r.dataset.type || '').indexOf(up) >= 0 || (r.dataset.label || '').indexOf(t) >= 0;
+            r.hidden = !ok;
+            if (ok) visible++;
+          });
+          document.querySelectorAll('#activity-feed .feed-group').forEach((g) => { g.hidden = !g.querySelector('.feed-row:not([hidden])'); });
+          this.noMatch = rows.length > 0 && visible === 0;
+        },
+        clearQ() {
+          const inp = document.getElementById('activity-q');
+          if (inp) inp.value = '';
+          this.applyFilter();
+        },
+        // 안전망: 이미 화면에 있는 행(data-id)은 OOB 로 들어오는 조각에서 뺀다(폴링·더 보기 경계에서 겹쳤을 때 중복 행 방지).
+        dedupe(e) {
+          const f = e.detail && e.detail.fragment;
+          if (!f || !f.querySelectorAll) return;
+          f.querySelectorAll('.feed-row[data-id]').forEach((r) => {
+            const id = r.getAttribute('data-id');
+            if (document.querySelector('#activity-feed .feed-row[data-id="' + id.replace(/"/g, '') + '"]')) r.remove();
+          });
+          f.querySelectorAll('.feed-group').forEach((g) => { if (!g.querySelector('.feed-row')) g.remove(); });
         },
         openDetail(id) {
           this.selectedId = id;
@@ -735,7 +782,7 @@
         retryDetail() {
           if (!this.detailUrl) return;
           this.detailState = 'loading';
-          htmx.ajax('GET', this.detailUrl, { target: '#activity-detail', swap: 'innerHTML' });
+          htmx.ajax('GET', this.detailUrl, { source: '#activity-detail', target: '#activity-detail', swap: 'innerHTML' }); // source: 요청 이벤트·hx-sync(this:replace)·data-quiet 가 이 요소 기준
         },
         // CSV: 화면에 읽어 온 행(가장 오래된 행의 커서까지)을 내보낸다. 읽은 행이 없으면 원본처럼 경고만.
         exportClick(e) {

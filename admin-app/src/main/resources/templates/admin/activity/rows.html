@@ -18,11 +18,13 @@
   <th:block th:replace="~{:: state(true)}"></th:block>
   <th:block th:if="${resetCategory}"><th:block th:replace="~{:: seg(true)}"></th:block></th:block>
   <th:block th:if="${resetTenant}"><th:block th:replace="~{:: tenantSelect(true)}"></th:block></th:block>
-  <th:block th:if="${resetQ}"><th:block th:replace="~{:: qInput(true)}"></th:block></th:block>
 </th:block>
 
 <th:block th:fragment="poll">
-  <div th:if="${hasFresh}" hx-swap-oob="afterbegin:#activity-feed"><th:block th:replace="~{:: dayRows(${freshDays})}"></th:block></div>
+  <!-- 같은 KST 날짜의 그룹이 이미 있으면 그 그룹의 행 목록 앞에, 새 날짜면 새 그룹을 목록 맨 위에 -->
+  <div th:if="${freshSame != null}" th:attr="hx-swap-oob=${'afterbegin:#day-' + freshSame.key + '-rows'}"><th:block th:replace="~{:: rowsOnly(${freshSame.events})}"></th:block></div>
+  <div th:if="${not #lists.isEmpty(freshNew)}" hx-swap-oob="afterbegin:#activity-feed"><th:block th:replace="~{:: groups(${freshNew})}"></th:block></div>
+  <div th:if="${clearEmpty}" id="activity-empty" hx-swap-oob="delete"></div>
   <input th:if="${topId != null}" type="hidden" id="activity-newest" name="top" th:value="${topId}" hx-swap-oob="true">
   <input th:if="${topDay != null}" type="hidden" id="activity-newest-day" name="day" th:value="${topDay}" hx-swap-oob="true">
   <th:block th:if="${bottomState}">
@@ -35,7 +37,8 @@
 </th:block>
 
 <th:block th:fragment="more">
-  <div th:if="${not #lists.isEmpty(moreDays)}" hx-swap-oob="beforeend:#activity-feed"><th:block th:replace="~{:: dayRows(${moreDays})}"></th:block></div>
+  <div th:if="${moreSame != null}" th:attr="hx-swap-oob=${'beforeend:#day-' + moreSame.key + '-rows'}"><th:block th:replace="~{:: rowsOnly(${moreSame.events})}"></th:block></div>
+  <div th:if="${not #lists.isEmpty(moreNew)}" hx-swap-oob="beforeend:#activity-feed"><th:block th:replace="~{:: groups(${moreNew})}"></th:block></div>
   <th:block th:if="${hasRaw}">
     <input type="hidden" id="activity-before" name="before" th:value="${beforeIso}" hx-swap-oob="true">
     <input type="hidden" id="activity-before-id" name="beforeId" th:value="${beforeId}" hx-swap-oob="true">
@@ -74,21 +77,25 @@
   </select>
 </div>
 
-<div th:fragment="qInput(oob)" id="activity-q-wrap" style="display: contents" th:attr="hx-swap-oob=${oob} ? 'true' : null">
-  <input id="activity-q" name="q" type="search" class="input" aria-label="액션 검색" placeholder="액션 검색…" autocomplete="off"
-         th:value="${q}" ui:attrs="${qAttrs}">
+<!-- 액션 검색: 원본처럼 읽어 온 행을 클라이언트에서 거른다(서버 왕복 없음, 더 보기로 불러온 행 유지). 응답이 다시 그리지 않는다. -->
+<div th:fragment="qInput(oob)" id="activity-q-wrap" style="display: contents">
+  <input id="activity-q" type="search" class="input" aria-label="액션 검색" placeholder="액션 검색…" autocomplete="off"
+         x-on:input="applyFilter()" x-on:search="applyFilter()">
 </div>
 
+<!-- 적용된 필터: 카테고리·tenant 칩은 서버(OOB), 검색어 칩은 Alpine(qv). 행 전체는 둘 중 하나라도 있을 때만 보인다. -->
 <div th:fragment="applied(oob)" id="activity-applied" th:attr="hx-swap-oob=${oob} ? 'true' : null">
-  <div class="row" style="gap: 8px" th:if="${hasApplied}">
+  <div class="row" style="gap: 8px" th:attr="data-server=${hasApplied}" x-cloak x-show="$el.dataset.server === 'true' || qv !== ''">
     <span class="muted" style="font-size: 12px">적용된 필터</span>
     <th:block th:if="${category != 'all'}"><th:block
               th:replace="~{admin/fragments/ui/chips :: removableChip(${'카테고리: ' + categoryLabel}, '카테고리 필터 제거', null, false, false, ${chipCategoryAttrs})}"></th:block></th:block>
     <th:block th:if="${tenantSlug != null}"><th:block
               th:replace="~{admin/fragments/ui/chips :: removableChip(${'테넌트: ' + tenantSlug}, '테넌트 필터 제거', null, false, false, ${chipTenantAttrs})}"></th:block></th:block>
-    <th:block th:if="${qLabel != ''}"><th:block
-              th:replace="~{admin/fragments/ui/chips :: removableChip(${'액션: ' + qLabel}, '액션 검색 제거', null, false, false, ${chipQAttrs})}"></th:block></th:block>
-    <button type="button" class="btn btn--ghost btn--sm" ui:attrs="${clearAttrs}">모두 지우기</button>
+    <span class="chip" x-cloak x-show="qv !== ''">
+      <span class="truncate" x-text="'액션: ' + qv"></span>
+      <button type="button" class="chip__x" aria-label="액션 검색 제거" x-on:click="clearQ()"><th:block th:replace="~{admin/fragments/icons :: x(12)}"></th:block></button>
+    </span>
+    <button type="button" class="btn btn--ghost btn--sm" ui:attrs="${clearAttrs}" x-on:click="clearQ()">모두 지우기</button>
   </div>
 </div>
 
@@ -108,36 +115,44 @@
         <span class="row" style="gap: 5px"><span class="dot" aria-hidden="true" style="background: var(--faint)"></span>시스템</span>
       </span>
     </div>
-    <div id="activity-feed"><th:block th:replace="~{:: dayRows(${days})}"></th:block></div>
+    <div id="activity-feed"><th:block th:replace="~{:: groups(${days})}"></th:block></div>
+    <!-- 읽어 온 행은 있는데 검색어에 맞는 행이 없을 때(클라이언트 판정) -->
+    <div id="activity-nomatch" x-cloak x-show="noMatch">
+      <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', ${emptyTitle}, '필터를 바꾸거나 이전 24시간을 더 불러오세요.', null, true)}"></th:block>
+    </div>
     <div id="activity-empty" th:if="${#lists.isEmpty(days)}">
       <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', ${emptyTitle}, '필터를 바꾸거나 이전 24시간을 더 불러오세요.', null, true)}"></th:block>
     </div>
     <div class="card__foot" style="justify-content: center">
-      <button type="button" class="btn" id="activity-more" ui:attrs="${moreAttrs}">이전 24시간 더 보기</button>
+      <button type="button" class="btn" id="activity-more" ui:attrs="${moreAttrs}" x-bind:disabled="rowsBusy">이전 24시간 더 보기</button>
     </div>
   </section>
 </th:block>
 
-<!-- 날짜 머리글 + 행(평평한 목록: 폴링·더 보기가 같은 날짜 그룹에 이어 붙을 수 있도록). header=false 면 이미 그려진 머리글에 이어진다. -->
-<th:block th:fragment="dayRows(days)">
-  <th:block th:each="g : ${days}">
-    <div class="t-over feed-day" role="heading" aria-level="3" th:if="${g.header}" th:text="${g.label}">오늘</div>
-    <div th:each="e : ${g.events}" class="row feed-row" th:attr="data-id=${e.id}"
-         x-bind:class="{ 'feed-row--sel': selectedId === $el.dataset.id }" x-bind:aria-current="selectedId === $el.dataset.id ? 'true' : null">
-      <span class="mono muted feed-row__time" th:text="${e.hm}">11:48</span>
-      <span class="dot feed-row__dot" aria-hidden="true" th:style="${'background: ' + e.toneVar}"></span>
-      <div class="col feed-row__body">
-        <div class="row" style="gap: 8px">
-          <span class="tag" th:title="${e.typeTitle}" th:text="${e.type}">TENANT_UPDATE</span>
-          <a th:if="${e.tenantUrl != null}" class="btn btn--ghost btn--xs" th:href="${e.tenantUrl}" th:text="${e.tenantName}">acme</a>
-          <span th:if="${e.tenantUrl == null}" class="muted" style="font-size: 13px">플랫폼</span>
-        </div>
-        <span class="feed-row__sentence" th:text="${e.sentence}">op@x.com 님이 acme 테넌트에 …</span>
+<!-- 날짜 그룹(원본 groupByDay: KST 날짜). role=group aria-label=라벨, 키는 KST yyyy-MM-dd 라 폴링·더 보기가 같은 날짜 그룹의 행 목록에 이어 붙는다. -->
+<th:block th:fragment="groups(days)">
+  <div th:each="g : ${days}" class="feed-group" role="group" th:attr="aria-label=${g.label}, data-day=${g.key}" th:id="${'day-' + g.key}">
+    <div class="t-over feed-day" th:text="${g.label}">오늘</div>
+    <div th:id="${'day-' + g.key + '-rows'}"><th:block th:replace="~{:: rowsOnly(${g.events})}"></th:block></div>
+  </div>
+</th:block>
+
+<th:block th:fragment="rowsOnly(events)">
+  <div th:each="e : ${events}" class="row feed-row" th:attr="data-id=${e.id}, data-type=${e.typeUpper}, data-label=${e.typeTitle}"
+       x-bind:class="{ 'feed-row--sel': selectedId === $el.dataset.id }" x-bind:aria-current="selectedId === $el.dataset.id ? 'true' : null">
+    <span class="mono muted feed-row__time" th:text="${e.hm}">11:48</span>
+    <span class="dot feed-row__dot" aria-hidden="true" th:style="${'background: ' + e.toneVar}"></span>
+    <div class="col feed-row__body">
+      <div class="row" style="gap: 8px">
+        <span class="tag" th:title="${e.typeTitle}" th:text="${e.type}">TENANT_UPDATE</span>
+        <a th:if="${e.tenantUrl != null}" class="btn btn--ghost btn--xs" th:href="${e.tenantUrl}" th:text="${e.tenantName}">acme</a>
+        <span th:if="${e.tenantUrl == null}" class="muted" style="font-size: 13px">플랫폼</span>
       </div>
-      <button type="button" class="icon-btn" aria-label="상세 열기" title="상세 열기" th:attr="data-id=${e.id}"
-              x-on:click="openDetail($el.dataset.id)" ui:attrs="${e.detailAttrs}"><th:block th:replace="~{admin/fragments/icons :: chevronRight(16)}"></th:block></button>
+      <span class="feed-row__sentence" th:text="${e.sentence}">op@x.com 님이 acme 테넌트에 …</span>
     </div>
-  </th:block>
+    <button type="button" class="icon-btn" aria-label="상세 열기" title="상세 열기" th:attr="data-id=${e.id}"
+            x-on:click="openDetail($el.dataset.id)" ui:attrs="${e.detailAttrs}"><th:block th:replace="~{admin/fragments/icons :: chevronRight(16)}"></th:block></button>
+  </div>
 </th:block>
 
 <!-- 활발한 Tenant(24h). 폴링은 목록이 바뀌었을 때만 이 카드를 다시 그린다(포커스·눌러 둔 버튼 보존). 서명 입력은 카드와 함께 교체된다. -->

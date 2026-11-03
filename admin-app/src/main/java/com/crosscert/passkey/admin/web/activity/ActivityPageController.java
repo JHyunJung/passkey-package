@@ -15,6 +15,8 @@ import com.crosscert.passkey.admin.web.shell.Crumbs;
 import com.crosscert.passkey.admin.web.support.CurrentAdmin;
 import com.crosscert.passkey.admin.web.support.Toasts;
 import com.crosscert.passkey.admin.web.tenant.AuditHelpers;
+import com.crosscert.passkey.core.api.BusinessException;
+import com.crosscert.passkey.core.api.ErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -54,8 +56,8 @@ import java.util.UUID;
  *
  * <ul>
  *   <li>폴링은 원본처럼 최신 한 쪽만 받아 "아직 없는 행만" 앞에 붙인다(OOB afterbegin). 더 보기로 불러온 행·펼친 상세·스크롤은 그대로다.</li>
- *   <li>필터(카테고리·tenant)가 바뀌면 목록을 통째로 교체한다. 액션 검색(q)은 원본처럼 주소에 두지 않고 입력값으로만 실으며,
- *       이미 읽어 온 행을 거르는 대신 서버가 같은 규칙으로 걸러 첫 쪽부터 다시 읽는다.</li>
+ *   <li>필터(카테고리·tenant)가 바뀌면 목록을 통째로 교체한다. 액션 검색(q)은 원본처럼 서버가 아니라 클라이언트(Alpine)가 읽어 온 행을 거른다.
+ *       날짜 그룹은 KST 날짜 키(id=day-KEY)로 이어 붙는다.</li>
  *   <li>사용자 입력(행위자·tenant 이름·payload 값)은 템플릿에서 th:text 로만 그린다. 상세의 diff 도 문자열이다.</li>
  * </ul>
  */
@@ -105,16 +107,17 @@ public class ActivityPageController {
     // ── 모델 ────────────────────────────────────────────────
 
     /** 조회 조건. category: all|ops|security, tenantId: 없으면 null, q: 입력 그대로(필터 때만 trim). */
-    record Filter(String category, UUID tenantId, String q) {
+    record Filter(String category, UUID tenantId) {
         String categoryParam() { return CAT_ALL.equals(category) ? null : category; }
-        boolean hasApplied() { return !CAT_ALL.equals(category) || tenantId != null || !q.strip().isEmpty(); }
+        boolean hasServerApplied() { return !CAT_ALL.equals(category) || tenantId != null; }
     }
 
     /** 피드 한 줄(원본 adaptFeedItems 의 DisplayEvent + 화면 값). */
-    public record Ev(String id, String type, String typeTitle, String toneVar, String hm, String iso, String tenantId, String tenantName,
+    public record Ev(String id, String type, String typeUpper, String typeTitle, String toneVar, String hm, String iso, String tenantId, String tenantName,
                      String tenantUrl, String sentence, Map<String, Object> detailAttrs) {}
 
-    public record Day(String label, boolean header, List<Ev> events) {}
+    /** 원본 groupByDay 의 그룹. key = KST 날짜(yyyy-MM-dd) — 폴링·더 보기가 이 키로 기존 그룹에 이어 붙는다. */
+    public record Day(String label, String key, List<Ev> events) {}
 
     public record TopRow(String tenantId, String name, String slug, String initial, String count, int pct, boolean selected, Map<String, Object> attrs) {}
 
@@ -132,7 +135,7 @@ public class ActivityPageController {
         CurrentAdmin me = me(model);
         model.addAttribute("breadcrumbs", Crumbs.activity());
         if (!me.platform()) return "redirect:" + HomeRedirectController.homePath(me);
-        Filter f = filter(category, tenantId, "");
+        Filter f = filter(category, tenantId);
         Instant now = clock.instant();
         ActivityView view = null;
         RuntimeException error = null;
@@ -158,11 +161,10 @@ public class ActivityPageController {
     @GetMapping(ROWS_PATH)
     public String rows(@RequestParam(name = "category", defaultValue = "") String category,
                        @RequestParam(name = "tenantId", defaultValue = "") String tenantId,
-                       @RequestParam(name = "q", defaultValue = "") String q,
                        @RequestParam(name = "reset", defaultValue = "") String reset,
                        HttpServletResponse res, Model model) {
         requirePlatform(model);
-        Filter f = filter(category, tenantId, q);
+        Filter f = filter(category, tenantId);
         Instant now = clock.instant();
         ActivityView view = null;
         RuntimeException error = null;
@@ -179,7 +181,6 @@ public class ActivityPageController {
         List<String> resets = List.of(reset.split(","));
         model.addAttribute("resetCategory", resets.contains("category"));
         model.addAttribute("resetTenant", resets.contains("tenant"));
-        model.addAttribute("resetQ", resets.contains("q"));
         populate(model, f, view, error, now, loadTenantOptions());
         return ROWS_VIEW;
     }
@@ -191,14 +192,13 @@ public class ActivityPageController {
     @GetMapping(POLL_PATH)
     public String poll(@RequestParam(name = "category", defaultValue = "") String category,
                        @RequestParam(name = "tenantId", defaultValue = "") String tenantId,
-                       @RequestParam(name = "q", defaultValue = "") String q,
                        @RequestParam(name = "top", defaultValue = "") String top,
                        @RequestParam(name = "day", defaultValue = "") String day,
                        @RequestParam(name = "topSig", defaultValue = "") String topSig,
                        @RequestParam(name = "loaded", defaultValue = "1") String loaded,
                        HttpServletResponse res, Model model) {
         requirePlatform(model);
-        Filter f = filter(category, tenantId, q);
+        Filter f = filter(category, tenantId);
         Instant now = clock.instant();
         ActivityView view;
         try {
@@ -215,7 +215,6 @@ public class ActivityPageController {
             res.setHeader("HX-Reswap", "innerHTML");
             model.addAttribute("resetCategory", false);
             model.addAttribute("resetTenant", false);
-            model.addAttribute("resetQ", false);
             populate(model, f, view, null, now, loadTenantOptions());
             return ROWS_VIEW;
         }
@@ -223,14 +222,16 @@ public class ActivityPageController {
         int k = top.isBlank() ? -1 : indexOfId(feed, top);
         List<ActivityView.Event> fresh = k < 0 ? feed : feed.subList(0, k);
         boolean wasEmpty = top.isBlank();
-        List<Day> days = days(fresh, f, now, day);
-        model.addAttribute("freshDays", days);
+        // 새 행은 KST 날짜 그룹으로 묶는다. 화면 맨 위 그룹과 같은 날짜면 그 그룹의 행 목록 앞에, 아니면 새 그룹을 목록 맨 위에 붙인다.
+        List<Day> days = days(fresh, now);
+        splitDays(model, days, day, "fresh");
         model.addAttribute("hasFresh", !fresh.isEmpty());
+        model.addAttribute("clearEmpty", wasEmpty && !fresh.isEmpty());
         model.addAttribute("topId", fresh.isEmpty() ? null : feed.get(0).id().toString());
-        model.addAttribute("topDay", days.isEmpty() ? null : days.get(0).label());
+        model.addAttribute("topDay", fresh.isEmpty() ? null : dayKey(feed.get(0)));
         // 비어 있던 목록이 처음 채워지면 더 보기·CSV 가 쓸 아래쪽 커서도 정한다.
         model.addAttribute("bottomState", wasEmpty && !feed.isEmpty());
-        fillBottomState(model, feed, days(feed, f, now, ""));
+        fillBottomState(model, feed);
         fillKpis(model, view, true);
         List<TopRow> topRows = topRows(view, f);
         String sig = topSig(topRows, f);
@@ -245,13 +246,12 @@ public class ActivityPageController {
     @GetMapping(MORE_PATH)
     public String more(@RequestParam(name = "category", defaultValue = "") String category,
                        @RequestParam(name = "tenantId", defaultValue = "") String tenantId,
-                       @RequestParam(name = "q", defaultValue = "") String q,
                        @RequestParam(name = "before", defaultValue = "") String before,
                        @RequestParam(name = "beforeId", defaultValue = "") String beforeId,
                        @RequestParam(name = "lastDay", defaultValue = "") String lastDay,
                        HttpServletResponse res, Model model) {
         requirePlatform(model);
-        Filter f = filter(category, tenantId, q);
+        Filter f = filter(category, tenantId);
         OffsetDateTime cursor = parseCursor(before);
         if (cursor == null) return EMPTY_VIEW; // 읽어 온 행이 없다 — 원본도 아무 것도 하지 않는다
         Instant now = clock.instant();
@@ -268,12 +268,9 @@ public class ActivityPageController {
             return EMPTY_VIEW;
         }
         List<ActivityView.Event> feed = feedOf(view);
-        List<Day> days = days(feed, f, now, lastDay);
-        model.addAttribute("moreDays", days);
+        splitDays(model, days(feed, now), lastDay, "more");
         model.addAttribute("hasRaw", !feed.isEmpty());
-        fillBottomState(model, feed, days(feed, f, now, ""));
-        // 걸러져 아무 것도 그려지지 않았으면 머리글 라벨은 이전 값을 유지한다.
-        model.addAttribute("lastDay", days.isEmpty() ? lastDay : days.get(days.size() - 1).label());
+        fillBottomState(model, feed);
         return MORE_VIEW;
     }
 
@@ -324,7 +321,7 @@ public class ActivityPageController {
                                          @RequestParam(name = "beforeId", defaultValue = "") String beforeId,
                                          Model model) {
         requirePlatform(model);
-        Filter f = filter(category, tenantId, "");
+        Filter f = filter(category, tenantId);
         UUID until = parseUuid(beforeId);
         List<ActivityView.Event> all = new ArrayList<>();
         OffsetDateTime cursor = null;
@@ -340,14 +337,17 @@ public class ActivityPageController {
         }
         int end = all.size();
         if (until != null) {
+            end = -1;
             for (int i = 0; i < all.size(); i++) {
                 if (until.equals(all.get(i).id())) { end = i + 1; break; }
             }
+            // 경계 행에 닿지 못했다(쪽 상한 초과·행이 사라짐) — 조용히 일부만 내보내지 않고 실패시킨다.
+            if (end < 0) throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
         List<List<String>> body = new ArrayList<>();
         for (ActivityView.Event e : all.subList(0, end)) {
             String tenant = e.tenantSlug() != null ? e.tenantSlug() : (e.tenantId() != null ? e.tenantId().toString() : "");
-            body.add(List.of(iso(e), tenant, nz(e.action()), nz(e.category()), nz(e.actorEmail()), e.targetId() != null ? e.targetId() : "—"));
+            body.add(List.of(rawTs(e), tenant, nz(e.action()), nz(e.category()), nz(e.actorEmail()), e.targetId() != null ? e.targetId() : "—"));
         }
         byte[] csv = CsvWriter.write(List.of("timestamp", "tenant", "type", "category", "actor", "subject"), body);
         String filename = "activity-" + KstFormat.kstToday(clock.instant()) + ".csv";
@@ -362,13 +362,12 @@ public class ActivityPageController {
     private void populate(Model model, Filter f, ActivityView view, RuntimeException error, Instant now, List<TenantAdminDto.TenantView> tenantList) {
         boolean loaded = view != null;
         List<ActivityView.Event> feed = loaded ? feedOf(view) : List.of();
-        List<Day> days = days(feed, f, now, "");
+        List<Day> days = days(feed, now);
         model.addAttribute("loaded", loaded);
         model.addAttribute("loadError", error);
         model.addAttribute("days", days);
         model.addAttribute("category", f.category());
         model.addAttribute("tenantIdValue", f.tenantId() == null ? "" : f.tenantId().toString());
-        model.addAttribute("q", f.q());
         fillKpis(model, view, false);
         List<TopRow> topRows = loaded ? topRows(view, f) : List.of();
         model.addAttribute("top", topRows);
@@ -378,9 +377,9 @@ public class ActivityPageController {
 
         // 숨은 상태: 가장 새 행·아래쪽 커서·날짜 머리글(이후 폴링·더 보기가 이어 받는다)
         model.addAttribute("topId", feed.isEmpty() ? "" : feed.get(0).id().toString());
-        model.addAttribute("topDay", days.isEmpty() ? "" : days.get(0).label());
+        model.addAttribute("topDay", feed.isEmpty() ? "" : dayKey(feed.get(0)));
         model.addAttribute("bottomState", true);
-        fillBottomState(model, feed, days);
+        fillBottomState(model, feed);
 
         // 컨트롤: 카테고리 세그먼트, tenant 선택(이름 (slug)), 적용된 필터 칩
         List<Map<String, Object>> segs = new ArrayList<>();
@@ -389,7 +388,7 @@ public class ActivityPageController {
             o.put("value", c[0]);
             o.put("label", c[1]);
             o.put("title", null);
-            o.put("attrs", rowsReq(ROWS_PATH + "?category=" + c[0], "#activity-tenant, #activity-q"));
+            o.put("attrs", rowsReq(ROWS_PATH + "?category=" + c[0], "#activity-tenant"));
             segs.add(o);
         }
         model.addAttribute("segOptions", segs);
@@ -399,11 +398,10 @@ public class ActivityPageController {
             tenantOpts.add(new Option(t.id().toString(), name + " (" + t.slug() + ")", t.id().equals(f.tenantId())));
         }
         model.addAttribute("tenantOptions", tenantOpts);
-        Map<String, Object> tenantAttrs = rowsReq(ROWS_PATH, "#activity-cat, #activity-q");
+        Map<String, Object> tenantAttrs = rowsReq(ROWS_PATH, "#activity-cat");
         tenantAttrs.put("hx-trigger", "change");
         model.addAttribute("tenantAttrs", tenantAttrs);
-        model.addAttribute("qAttrs", qReq());
-        model.addAttribute("hasApplied", f.hasApplied());
+        model.addAttribute("hasApplied", f.hasServerApplied());
         model.addAttribute("categoryLabel", switch (f.category()) { case "ops" -> "운영"; case "security" -> "보안"; default -> "전체"; });
         String slug = null;
         if (f.tenantId() != null) {
@@ -412,12 +410,15 @@ public class ActivityPageController {
             if (slug == null) slug = f.tenantId().toString();
         }
         model.addAttribute("tenantSlug", slug);
-        model.addAttribute("qLabel", f.q().strip());
-        model.addAttribute("chipCategoryAttrs", rowsReq(ROWS_PATH + "?category=all&reset=category", "#activity-tenant, #activity-q"));
-        model.addAttribute("chipTenantAttrs", rowsReq(ROWS_PATH + "?tenantId=&reset=tenant", "#activity-cat, #activity-q"));
-        model.addAttribute("chipQAttrs", rowsReq(ROWS_PATH + "?q=&reset=q", "#activity-cat, #activity-tenant"));
-        model.addAttribute("clearAttrs", rowsReq(ROWS_PATH + "?category=all&tenantId=&q=&reset=category,tenant,q", null));
-        model.addAttribute("retryAttrs", rowsReq(ROWS_PATH, "#activity-cat, #activity-tenant, #activity-q"));
+        model.addAttribute("chipCategoryAttrs", rowsReq(ROWS_PATH + "?category=all&reset=category", "#activity-tenant"));
+        model.addAttribute("chipTenantAttrs", rowsReq(ROWS_PATH + "?tenantId=&reset=tenant", "#activity-cat"));
+        // 액션 검색은 원본처럼 이미 읽어 온 행을 클라이언트에서 거른다 — 칩 제거·모두 지우기의 검색어 부분은 Alpine(clearQ)이 한다.
+        Map<String, Object> chipQ = new LinkedHashMap<>();
+        chipQ.put("x-on:click", "clearQ()");
+        model.addAttribute("chipQAttrs", chipQ);
+        model.addAttribute("clearAttrs", rowsReq(ROWS_PATH + "?category=all&tenantId=&reset=category,tenant", null));
+        model.addAttribute("clearAttrsClient", "clearQ()");
+        model.addAttribute("retryAttrs", rowsReq(ROWS_PATH, "#activity-cat, #activity-tenant"));
         model.addAttribute("pollAttrs", pollReq());
         model.addAttribute("refreshAttrs", refreshReq());
         model.addAttribute("moreAttrs", moreReq());
@@ -425,11 +426,11 @@ public class ActivityPageController {
         model.addAttribute("emptyTitle", "조건에 맞는 이벤트가 없습니다");
     }
 
-    private void fillBottomState(Model model, List<ActivityView.Event> rawFeed, List<Day> days) {
+    private void fillBottomState(Model model, List<ActivityView.Event> rawFeed) {
         ActivityView.Event last = rawFeed.isEmpty() ? null : rawFeed.get(rawFeed.size() - 1);
         model.addAttribute("beforeIso", last == null ? "" : iso(last));
         model.addAttribute("beforeId", last == null ? "" : last.id().toString());
-        model.addAttribute("lastDay", days.isEmpty() ? "" : days.get(days.size() - 1).label());
+        model.addAttribute("lastDay", last == null ? "" : dayKey(last));
     }
 
     private void fillKpis(Model model, ActivityView view, boolean oob) {
@@ -457,27 +458,33 @@ public class ActivityPageController {
         return -1;
     }
 
-    /** 액션 검색(q)으로 거르고 KST 날짜별로 묶는다. {@code skipLabel} 과 같은 첫 그룹은 머리글을 생략한다(이미 그려진 그룹에 이어 붙임). */
-    private List<Day> days(List<ActivityView.Event> feed, Filter f, Instant now, String skipLabel) {
+    /** KST 날짜(yyyy-MM-dd)별로 묶는다(원본 groupByDay). 입력은 최신순. */
+    private List<Day> days(List<ActivityView.Event> feed, Instant now) {
         List<Ev> evs = new ArrayList<>();
-        for (ActivityView.Event e : feed) {
-            if (matches(nz(e.action()), f.q())) evs.add(ev(e));
-        }
+        for (ActivityView.Event e : feed) evs.add(ev(e));
         List<Day> out = new ArrayList<>();
-        boolean first = true;
         for (KstFormat.DayGroup<Ev> g : KstFormat.groupByDay(evs, Ev::iso, now)) {
-            boolean header = !(first && !skipLabel.isEmpty() && skipLabel.equals(g.label()));
-            out.add(new Day(g.label(), header, g.items()));
-            first = false;
+            out.add(new Day(g.label(), KstFormat.kstDate(g.items().get(0).iso()), g.items()));
         }
         return out;
     }
 
-    /** 원본 filtered: 액션 코드(대소문자 무시) 또는 한글 라벨에 q(trim) 포함. */
-    static boolean matches(String type, String q) {
-        String t = q.strip();
-        if (t.isEmpty()) return true;
-        return type.toUpperCase(Locale.ROOT).contains(t.toUpperCase(Locale.ROOT)) || nz(ActivityLabels.actionLabel(type)).contains(t);
+    private static String dayKey(ActivityView.Event e) {
+        return KstFormat.kstDate(iso(e));
+    }
+
+    /**
+     * 이어 붙일 그룹을 둘로 나눈다: {@code existing} 키(화면의 맨 위/맨 아래 그룹의 KST 날짜)와 같은 날짜 그룹은 그 그룹의 행 목록에
+     * 행만 붙이고({@code <prefix>Same}), 나머지는 새 그룹으로({@code <prefix>New}).
+     */
+    private static void splitDays(Model model, List<Day> days, String existing, String prefix) {
+        Day same = null;
+        List<Day> fresh = new ArrayList<>();
+        for (Day d : days) {
+            if (!existing.isEmpty() && d.key().equals(existing)) same = d; else fresh.add(d);
+        }
+        model.addAttribute(prefix + "Same", same);
+        model.addAttribute(prefix + "New", fresh);
     }
 
     private Ev ev(ActivityView.Event e) {
@@ -493,7 +500,7 @@ public class ActivityPageController {
         // 마지막으로 연 상세만 반영(A→B 순서로 열고 A 가 늦게 와도 무시). 닫기·다시 열기가 같은 요소로 중단한다.
         attrs.put("hx-sync", "#activity-detail:replace");
         attrs.put("data-quiet", true); // 네트워크 실패는 패널 안에서 알린다(전역 토스트 없음)
-        return new Ev(e.id().toString(), type, ActivityLabels.actionLabel(type), TONE_VAR.get(eventTone(type, nz(e.category()))),
+        return new Ev(e.id().toString(), type, type.toUpperCase(Locale.ROOT), ActivityLabels.actionLabel(type), TONE_VAR.get(eventTone(type, nz(e.category()))),
                 KstFormat.kstTime(e.createdAt()), iso(e), e.tenantId() == null ? null : e.tenantId().toString(), tenantName,
                 e.tenantId() == null ? null : "/admin/tenants/" + e.tenantId(), sentence, attrs);
     }
@@ -513,7 +520,7 @@ public class ActivityPageController {
         List<TopRow> rows = new ArrayList<>();
         for (ActivityView.TopTenant t : top) {
             String slug = t.slug() == null ? "" : t.slug();
-            Map<String, Object> attrs = rowsReq(ROWS_PATH + "?tenantId=" + t.tenantId() + "&reset=tenant", "#activity-cat, #activity-q");
+            Map<String, Object> attrs = rowsReq(ROWS_PATH + "?tenantId=" + t.tenantId() + "&reset=tenant", "#activity-cat");
             rows.add(new TopRow(t.tenantId().toString(), slug, slug, slug.isEmpty() ? "" : slug.substring(0, 1).toUpperCase(Locale.ROOT),
                     fmt(t.count()), (int) Math.round(t.count() * 100.0 / max), t.tenantId().equals(f.tenantId()), attrs));
         }
@@ -583,13 +590,6 @@ public class ActivityPageController {
         return m;
     }
 
-    /** 검색 입력: 입력이 멈추면 첫 쪽부터 다시 읽는다(디바운스). */
-    private static Map<String, Object> qReq() {
-        Map<String, Object> m = rowsReq(ROWS_PATH, "#activity-cat, #activity-tenant");
-        m.put("hx-trigger", "input changed delay:250ms, search");
-        return m;
-    }
-
     /** 폴링: 같은 시각에 진행 중인 요청이 있으면 이번 것을 버린다(쌓이지 않음 · 필터 교체를 중단시키지 않음). 주변 UI 라 실패를 토스트하지 않는다. */
     private static Map<String, Object> pollReq() {
         Map<String, Object> m = new LinkedHashMap<>();
@@ -597,7 +597,7 @@ public class ActivityPageController {
         m.put("hx-trigger", "every " + (POLL_MS / 1000) + "s");
         m.put("hx-swap", "none");
         m.put("hx-sync", "#activity-root:drop");
-        m.put("hx-include", "#activity-cat, #activity-tenant, #activity-q, #activity-loaded, #activity-newest, #activity-newest-day, #activity-tenants-sig");
+        m.put("hx-include", "#activity-cat, #activity-tenant, #activity-loaded, #activity-newest, #activity-newest-day, #activity-tenants-sig");
         m.put("data-quiet", true);
         return m;
     }
@@ -609,7 +609,7 @@ public class ActivityPageController {
         m.put("hx-trigger", "click");
         m.put("hx-swap", "none");
         m.put("hx-sync", "#activity-root:queue last");
-        m.put("hx-include", "#activity-cat, #activity-tenant, #activity-q, #activity-loaded, #activity-newest, #activity-newest-day, #activity-tenants-sig");
+        m.put("hx-include", "#activity-cat, #activity-tenant, #activity-loaded, #activity-newest, #activity-newest-day, #activity-tenants-sig");
         m.put("hx-disabled-elt", "this");
         m.put("data-quiet", true);
         return m;
@@ -621,15 +621,15 @@ public class ActivityPageController {
         m.put("hx-trigger", "click");
         m.put("hx-swap", "none");
         m.put("hx-sync", "this:drop");
-        m.put("hx-include", "#activity-cat, #activity-tenant, #activity-q, #activity-before, #activity-before-id, #activity-last-day");
+        m.put("hx-include", "#activity-cat, #activity-tenant, #activity-before, #activity-before-id, #activity-last-day");
         return m;
     }
 
     // ── 파싱·형식 ───────────────────────────────────────────
 
-    static Filter filter(String category, String tenantId, String q) {
+    static Filter filter(String category, String tenantId) {
         String cat = "ops".equals(category) || "security".equals(category) ? category : CAT_ALL;
-        return new Filter(cat, parseUuid(tenantId), q == null ? "" : q);
+        return new Filter(cat, parseUuid(tenantId));
     }
 
     static String canonicalUrl(Filter f) {
@@ -654,6 +654,17 @@ public class ActivityPageController {
             return OffsetDateTime.parse(s.trim());
         } catch (RuntimeException e) {
             return null;
+        }
+    }
+
+    /** 원본 CSV 의 timestamp: 서버가 직렬화한 createdAt 문자열 그대로(앱 ObjectMapper). */
+    private String rawTs(ActivityView.Event e) {
+        if (e.createdAt() == null) return "";
+        try {
+            String v = json.convertValue(e.createdAt(), String.class);
+            return v == null ? e.createdAt().toString() : v;
+        } catch (RuntimeException ex) {
+            return e.createdAt().toString();
         }
     }
 
@@ -685,7 +696,7 @@ public class ActivityPageController {
 
     private static boolean denied(RuntimeException e) {
         return e instanceof AccessDeniedException
-                || (e instanceof com.crosscert.passkey.core.api.BusinessException be && be.getErrorCode() == com.crosscert.passkey.core.api.ErrorCode.ACCESS_DENIED);
+                || (e instanceof BusinessException be && be.getErrorCode() == ErrorCode.ACCESS_DENIED);
     }
 
     private static CurrentAdmin me(Model model) {

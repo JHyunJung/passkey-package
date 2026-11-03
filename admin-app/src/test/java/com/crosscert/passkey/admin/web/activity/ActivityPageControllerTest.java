@@ -168,7 +168,13 @@ class ActivityPageControllerTest {
     void groupsByKstDay() throws Exception {
         Document d = page("/admin/activity");
         assertThat(d.select("title").text()).contains("Activity");
-        assertThat(d.select("#activity-feed .feed-day").eachText()).containsExactly("오늘", "어제", "2026-10-08");
+        // 원본 groupByDay: KST 날짜 그룹(role=group, aria-label=라벨), 머리글 + 그 날짜의 행 목록
+        assertThat(d.select("#activity-feed > .feed-group").eachAttr("aria-label")).containsExactly("오늘", "어제", "2026-10-08");
+        assertThat(d.select("#activity-feed > .feed-group").eachAttr("data-day")).containsExactly("2026-10-11", "2026-10-10", "2026-10-08");
+        assertThat(d.select("#activity-feed > .feed-group[role=group]")).hasSize(3);
+        assertThat(d.select("#day-2026-10-11 > .feed-day").text()).isEqualTo("오늘");
+        assertThat(d.select("#day-2026-10-11-rows > .feed-row")).hasSize(1);
+        assertThat(d.select("#day-2026-10-10-rows .tag").text()).isEqualTo("ADMIN_LOGIN_FAILED");
         assertThat(d.select("#activity-feed .feed-row .feed-row__time").eachText()).containsExactly("11:48", "18:00", "10:00");
         assertThat(d.select("#activity-kpis .kpi__value").eachText()).containsExactly("3", "2", "1");
         assertThat(d.select("#activity-kpis").hasClass("kpis--3")).isTrue(); // p95 없음 → 카드 3개
@@ -218,7 +224,7 @@ class ActivityPageControllerTest {
         // 다시 시도: 현재 필터를 싣고 목록 영역을 바꾼다
         Element retry = d.select("#activity-main button:contains(다시 시도)").first();
         assertThat(retry.attr("hx-get")).isEqualTo("/admin/_/activity/rows");
-        assertThat(retry.attr("hx-include")).contains("#activity-cat", "#activity-tenant", "#activity-q");
+        assertThat(retry.attr("hx-include")).contains("#activity-cat", "#activity-tenant");
     }
 
     @Test
@@ -252,6 +258,24 @@ class ActivityPageControllerTest {
     }
 
     @Test
+    @DisplayName("행에는 클라이언트 검색 키(data-type 대문자·data-label 한글)가 있고, 검색 입력은 서버를 부르지 않는다")
+    void clientSideSearchKeys() throws Exception {
+        Document d = page("/admin/activity");
+        Element row = d.select("#day-2026-10-10-rows .feed-row").first();
+        assertThat(row.attr("data-type")).isEqualTo("ADMIN_LOGIN_FAILED");
+        assertThat(row.attr("data-label")).isEqualTo("로그인 실패");
+        Element q = d.select("#activity-q").first();
+        assertThat(q.attributes().asList().stream().anyMatch(a -> a.getKey().startsWith("hx-"))).isFalse();
+        assertThat(q.attr("x-on:input")).isEqualTo("applyFilter()");
+        // 검색어 칩·빈 결과·모두 지우기는 Alpine(qv/noMatch/clearQ)
+        assertThat(d.select("#activity-applied .chip[x-show=\"qv !== ''\"] button").attr("x-on:click")).isEqualTo("clearQ()");
+        assertThat(d.select("#activity-nomatch").attr("x-show")).isEqualTo("noMatch");
+        assertThat(d.select("#activity-applied button:contains(모두 지우기)").attr("x-on:click")).isEqualTo("clearQ()");
+        // 서버 요청에는 검색어를 싣지 않는다
+        for (Element e : d.select("[hx-include]")) assertThat(e.attr("hx-include")).as(e.outerHtml()).doesNotContain("activity-q");
+    }
+
+    @Test
     @DisplayName("행위자·tenant 이름·diff 값은 이스케이프된다(HTML 로 해석되지 않음)")
     void userValuesAreEscaped() throws Exception {
         String evil = "<img src=x onerror=alert(1)>";
@@ -276,10 +300,10 @@ class ActivityPageControllerTest {
         assertThat(poll.attr("hx-sync")).isEqualTo("#activity-root:drop");
         assertThat(poll.attr("hx-swap")).isEqualTo("none");
         assertThat(poll.hasAttr("data-quiet")).isTrue();
-        assertThat(poll.attr("hx-include")).contains("#activity-cat", "#activity-tenant", "#activity-q", "#activity-loaded", "#activity-newest",
+        assertThat(poll.attr("hx-include")).contains("#activity-cat", "#activity-tenant", "#activity-loaded", "#activity-newest",
                 "#activity-newest-day", "#activity-tenants-sig");
         // 폴링은 필터 교체를 끊지 않는다(drop), 필터 교체는 폴링을 끊는다(replace) — 둘 다 같은 #activity-root 로 동기화
-        for (String sel : List.of("#activity-seg .seg__btn", "#activity-tenant", "#activity-q", "#activity-tenants-card button.top-row")) {
+        for (String sel : List.of("#activity-seg .seg__btn", "#activity-tenant", "#activity-tenants-card button.top-row")) {
             assertThat(d.select(sel).first().attr("hx-sync")).as(sel).isEqualTo("#activity-root:replace");
         }
         assertThat(d.select("#activity-root").hasAttr("hx-target")).isFalse();
@@ -292,22 +316,30 @@ class ActivityPageControllerTest {
     }
 
     @Test
-    @DisplayName("폴링은 새 행만 앞에 붙이고(OOB afterbegin) 더 보기로 불러온 행·기존 행은 건드리지 않는다")
-    void pollPrependsOnlyNewRows() throws Exception {
+    @DisplayName("폴링: 같은 KST 날짜의 새 행은 그 날짜 그룹의 행 목록 앞에(afterbegin:#day-KEY-rows), 새 날짜는 새 그룹을 목록 맨 위에 붙인다")
+    void pollPrependsIntoSameDayGroupAndNewGroups() throws Exception {
         ActivityView.Event fresh1 = ev(id(201), "2026-10-11T02:59:00Z", "ADMIN_LOGIN", "system", null, null, "a@x.com");
         ActivityView.Event fresh2 = ev(id(202), "2026-10-11T02:58:00Z", "TENANT_CREATE", "ops", T1, "acme", "a@x.com");
-        List<ActivityView.Event> latest = new ArrayList<>(List.of(fresh1, fresh2));
+        // 어제(KST 10-10 18:00) 이전과 다른 새 날짜: KST 2026-10-12 00:10 (= UTC 10-11 15:10)
+        ActivityView.Event nextDay = ev(id(203), "2026-10-11T15:10:00Z", "TENANT_UPDATE", "ops", T1, "acme", "a@x.com");
+        List<ActivityView.Event> latest = new ArrayList<>(List.of(nextDay, fresh1, fresh2));
         latest.addAll(FEED);
         feed(view(latest));
-        MvcResult r = frag("/admin/_/activity/poll?top=" + E1 + "&day=" + "오늘" + "&topSig=zzz");
+        MvcResult r = frag("/admin/_/activity/poll?top=" + E1 + "&day=2026-10-11&topSig=zzz");
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         Document d = doc(r);
-        Element oob = d.select("[hx-swap-oob=afterbegin:#activity-feed]").first();
-        assertThat(oob).isNotNull();
-        assertThat(oob.select(".feed-row .tag").eachText()).containsExactly("ADMIN_LOGIN", "TENANT_CREATE");
-        // 머리글: 화면 맨 위가 이미 "오늘" 이라 같은 날 그룹은 머리글을 다시 그리지 않는다
-        assertThat(oob.select(".feed-day")).isEmpty();
-        assertThat(d.select("#activity-newest[hx-swap-oob]").val()).isEqualTo(id(201).toString());
+        // 같은 날짜(2026-10-11) → 기존 그룹의 행 목록 앞. 머리글을 다시 그리지 않는다(행만).
+        Element same = d.select("[hx-swap-oob=afterbegin:#day-2026-10-11-rows]").first();
+        assertThat(same).isNotNull();
+        assertThat(same.select(".feed-row .tag").eachText()).containsExactly("ADMIN_LOGIN", "TENANT_CREATE");
+        assertThat(same.select(".feed-day, .feed-group")).isEmpty();
+        // 새 날짜 → 새 그룹을 #activity-feed 맨 위에
+        Element fresh = d.select("[hx-swap-oob=afterbegin:#activity-feed]").first();
+        assertThat(fresh.select("> .feed-group").eachAttr("data-day")).containsExactly("2026-10-12");
+        assertThat(fresh.select(".feed-group .feed-day").text()).isEqualTo("2026-10-12");
+        assertThat(fresh.select("#day-2026-10-12-rows .tag").eachText()).containsExactly("TENANT_UPDATE");
+        assertThat(d.select("#activity-newest[hx-swap-oob]").val()).isEqualTo(id(203).toString());
+        assertThat(d.select("#activity-newest-day[hx-swap-oob]").val()).isEqualTo("2026-10-12");
         assertThat(d.select("#activity-kpis[hx-swap-oob]")).isNotEmpty();
         // 본문은 OOB 뿐(목록 전체를 교체하지 않는다)
         assertThat(d.select("#activity-feed-card, #activity-main")).isEmpty();
@@ -315,42 +347,43 @@ class ActivityPageControllerTest {
     }
 
     @Test
-    @DisplayName("폴링: 새 행이 없으면 목록 OOB 도 없다. 머리글 라벨이 다르면 새 머리글을 그린다")
-    void pollNoNewRowsAndDayHeader() throws Exception {
+    @DisplayName("폴링: 새 행이 없으면 목록 OOB 도 없다. 자정을 넘겨 라벨이 바뀌어도 날짜 키로 이어 붙는다")
+    void pollNoNewRowsAndMidnightContinuity() throws Exception {
         Document none = doc(frag("/admin/_/activity/poll?top=" + E1));
-        assertThat(none.select("[hx-swap-oob=afterbegin:#activity-feed]")).isEmpty();
+        assertThat(none.select("[hx-swap-oob^=afterbegin]")).isEmpty();
         assertThat(none.select("#activity-newest")).isEmpty();
 
+        // 시계가 다음 날로 넘어가 같은 날짜 그룹의 라벨이 "어제"가 돼도 키(KST 날짜)가 같으면 그 그룹에 붙는다
+        when(clock.instant()).thenReturn(NOW.plusSeconds(86400));
         feed(view(List.of(ev(id(201), "2026-10-11T02:59:00Z", "ADMIN_LOGIN", "system", null, null, "a@x.com"), FEED.get(0))));
-        Document hdr = doc(frag("/admin/_/activity/poll?top=" + E1 + "&day=2026-10-08"));
-        assertThat(hdr.select("[hx-swap-oob=afterbegin:#activity-feed] .feed-day").eachText()).containsExactly("오늘");
+        Document d = doc(frag("/admin/_/activity/poll?top=" + E1 + "&day=2026-10-11"));
+        assertThat(d.select("[hx-swap-oob=afterbegin:#day-2026-10-11-rows] .feed-row")).hasSize(1);
+        assertThat(d.select("[hx-swap-oob=afterbegin:#activity-feed]")).isEmpty();
     }
 
     @Test
-    @DisplayName("폴링: 화면의 가장 새 행이 최신 한 쪽에 없으면 쪽 전체가 새 행, 목록이 비어 있었으면 아래쪽 커서도 정한다")
+    @DisplayName("폴링: 화면의 가장 새 행이 최신 한 쪽에 없으면 쪽 전체가 새 행, 목록이 비어 있었으면 아래쪽 커서도 정하고 빈 상태를 지운다")
     void pollTopNotFoundAndEmptyList() throws Exception {
-        Document d = doc(frag("/admin/_/activity/poll?top=" + id(999)));
-        assertThat(d.select("[hx-swap-oob=afterbegin:#activity-feed] .feed-row")).hasSize(3);
+        Document d = doc(frag("/admin/_/activity/poll?top=" + id(999) + "&day=2026-10-11"));
+        assertThat(d.select("[hx-swap-oob=afterbegin:#day-2026-10-11-rows] .feed-row")).hasSize(1);
+        assertThat(d.select("[hx-swap-oob=afterbegin:#activity-feed] > .feed-group")).hasSize(2);
         assertThat(d.select("#activity-before")).isEmpty(); // 비어 있지 않았다 — 커서는 그대로
+        assertThat(d.select("#activity-empty[hx-swap-oob=delete]")).isEmpty();
 
         Document empty = doc(frag("/admin/_/activity/poll"));
-        assertThat(empty.select("[hx-swap-oob=afterbegin:#activity-feed] .feed-row")).hasSize(3);
+        assertThat(empty.select("[hx-swap-oob=afterbegin:#activity-feed] > .feed-group")).hasSize(3);
         assertThat(empty.select("#activity-before-id[hx-swap-oob]").val()).isEqualTo(E3.toString());
         assertThat(empty.select("#activity-before[hx-swap-oob]").val()).isEqualTo("2026-10-08T01:00:00Z");
+        assertThat(empty.select("#activity-last-day[hx-swap-oob]").val()).isEqualTo("2026-10-08");
+        // :has() 를 못 쓰는 브라우저를 위한 대체: 빈 상태 요소를 OOB 로 지운다
+        assertThat(empty.select("#activity-empty[hx-swap-oob=delete]")).isNotEmpty();
     }
 
     @Test
-    @DisplayName("폴링은 현재 필터(카테고리·tenant·검색어)를 REST 에 싣고, 검색어로 새 행을 거른다")
+    @DisplayName("폴링은 현재 필터(카테고리·tenant)를 REST 에 싣는다")
     void pollKeepsFilters() throws Exception {
-        List<ActivityView.Event> latest = List.of(
-                ev(id(201), "2026-10-11T02:59:00Z", "ADMIN_LOGIN", "system", null, null, "a@x.com"),
-                ev(id(202), "2026-10-11T02:58:00Z", "TENANT_CREATE", "ops", T1, "acme", "a@x.com"), FEED.get(0));
-        feed(view(latest));
-        Document d = doc(frag("/admin/_/activity/poll?category=ops&tenantId=" + T1 + "&q=" + enc("테넌트 생성") + "&top=" + E1));
+        frag("/admin/_/activity/poll?category=ops&tenantId=" + T1 + "&top=" + E1);
         verify(activity).activity(isNull(), eq("ops"), isNull(), isNull(), eq(T1));
-        assertThat(d.select("[hx-swap-oob=afterbegin:#activity-feed] .feed-row .tag").eachText()).containsExactly("TENANT_CREATE");
-        // 걸러진 행이 있어도 가장 새 행 id 는 원본 기준으로 갱신(같은 행이 다시 새 행으로 잡히지 않게)
-        assertThat(d.select("#activity-newest").val()).isEqualTo(id(201).toString());
     }
 
     @Test
@@ -388,7 +421,7 @@ class ActivityPageControllerTest {
     @Test
     @DisplayName("rows 조각: 레이아웃 없이 목록 영역 + OOB(KPI·칩·활발한 Tenant·상태), HX-Replace-Url 에 필터(검색어 제외)")
     void rowsFragment() throws Exception {
-        MvcResult r = frag("/admin/_/activity/rows?category=security&tenantId=" + T1 + "&q=abc");
+        MvcResult r = frag("/admin/_/activity/rows?category=security&tenantId=" + T1);
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         String html = body(r);
         assertThat(html).doesNotContain("<html").doesNotContain("class=\"app\"");
@@ -401,6 +434,7 @@ class ActivityPageControllerTest {
         assertThat(d.select("#activity-cat").val()).isEqualTo("security");
         // 되돌려 쓰기 요청이 아니면 사용자가 방금 고른 컨트롤을 다시 그리지 않는다(포커스·타이핑 보존)
         assertThat(d.select("#activity-seg, #activity-tenant-wrap, #activity-q-wrap")).isEmpty();
+        assertThat(d.select("#activity-feed > .feed-group")).hasSize(3);
         assertThat(r.getResponse().getHeader("HX-Replace-Url")).isEqualTo("/admin/activity?category=security&tenantId=" + T1);
         verify(activity).activity(isNull(), eq("security"), isNull(), isNull(), eq(T1));
     }
@@ -408,23 +442,13 @@ class ActivityPageControllerTest {
     @Test
     @DisplayName("rows: reset 한 컨트롤만 OOB 로 되돌려 쓴다(칩 제거·모두 지우기·활발한 Tenant 클릭)")
     void rowsResetControls() throws Exception {
-        Document d = Jsoup.parseBodyFragment(body(frag("/admin/_/activity/rows?category=all&tenantId=&q=&reset=category,tenant,q")));
+        Document d = Jsoup.parseBodyFragment(body(frag("/admin/_/activity/rows?category=all&tenantId=&reset=category,tenant")));
         assertThat(d.select("#activity-seg[hx-swap-oob]")).isNotEmpty();
         assertThat(d.select("#activity-tenant-wrap[hx-swap-oob]")).isNotEmpty();
-        assertThat(d.select("#activity-q-wrap[hx-swap-oob] input").val()).isEmpty();
+        assertThat(d.select("#activity-q-wrap")).isEmpty(); // 검색어는 클라이언트 상태 — 서버가 되돌려 쓰지 않는다
         Document one = Jsoup.parseBodyFragment(body(frag("/admin/_/activity/rows?tenantId=" + T1 + "&reset=tenant")));
         assertThat(one.select("#activity-tenant-wrap[hx-swap-oob]")).isNotEmpty();
         assertThat(one.select("#activity-seg, #activity-q-wrap")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("rows: 검색어는 액션 코드(대소문자 무시)·한글 라벨로 첫 쪽 행을 거른다")
-    void rowsQueryFilters() throws Exception {
-        assertThat(rowTypes(doc(frag("/admin/_/activity/rows?q=api_key")), "#activity-feed")).containsExactly("API_KEY_ISSUE");
-        assertThat(rowTypes(doc(frag("/admin/_/activity/rows?q=" + enc("로그인 실패"))), "#activity-feed")).containsExactly("ADMIN_LOGIN_FAILED");
-        assertThat(doc(frag("/admin/_/activity/rows?q=nothing")).select("#activity-empty").text()).contains("조건에 맞는 이벤트가 없습니다");
-        // 검색어 칩
-        assertThat(doc(frag("/admin/_/activity/rows?q=%20api_key%20")).select("#activity-applied .chip").text()).contains("액션: api_key");
     }
 
     @Test
@@ -448,17 +472,13 @@ class ActivityPageControllerTest {
         Document d = page("/admin/activity?category=ops&tenantId=" + T1 + "&q=ignored");
         Element ops = d.select("#activity-seg .seg__btn[data-value=security]").first();
         assertThat(ops.attr("hx-get")).isEqualTo("/admin/_/activity/rows?category=security");
-        assertThat(ops.attr("hx-include")).isEqualTo("#activity-tenant, #activity-q");
+        assertThat(ops.attr("hx-include")).isEqualTo("#activity-tenant");
         Element sel = d.select("#activity-tenant").first();
         assertThat(sel.attr("hx-trigger")).isEqualTo("change");
-        assertThat(sel.attr("hx-include")).isEqualTo("#activity-cat, #activity-q");
-        Element q = d.select("#activity-q").first();
-        assertThat(q.attr("hx-trigger")).contains("delay:250ms");
-        assertThat(q.attr("hx-include")).isEqualTo("#activity-cat, #activity-tenant");
-        assertThat(q.val()).isEmpty(); // 검색어는 주소로 열지 않는다(원본: 클라이언트 상태)
+        assertThat(sel.attr("hx-include")).isEqualTo("#activity-cat");
         assertThat(d.select("#activity-applied button:contains(모두 지우기)").attr("hx-get"))
-                .isEqualTo("/admin/_/activity/rows?category=all&tenantId=&q=&reset=category,tenant,q");
-        for (Element e : d.select("#activity-seg .seg__btn, #activity-tenant, #activity-q, #activity-applied button")) {
+                .isEqualTo("/admin/_/activity/rows?category=all&tenantId=&reset=category,tenant");
+        for (Element e : d.select("#activity-seg .seg__btn, #activity-tenant, #activity-applied button[hx-get]")) {
             assertThat(e.attr("hx-target")).as(e.outerHtml()).isEqualTo("#activity-main");
             assertThat(e.attr("hx-swap")).isEqualTo("innerHTML");
         }
@@ -469,21 +489,23 @@ class ActivityPageControllerTest {
     @Test
     @DisplayName("더 보기: 가장 오래된 행의 (시각, id) 커서로 조회하고 아래에 붙이며(OOB beforeend) 커서·머리글 라벨을 갱신한다")
     void loadMore() throws Exception {
-        ActivityView.Event older1 = ev(id(301), "2026-10-08T00:30:00Z", "TENANT_UPDATE", "ops", T1, "acme", "op@x.com");
-        ActivityView.Event older2 = ev(id(302), "2026-10-07T23:00:00Z", "TENANT_UPDATE", "ops", T1, "acme", "op@x.com");
+        ActivityView.Event older1 = ev(id(301), "2026-10-08T00:30:00Z", "TENANT_UPDATE", "ops", T1, "acme", "op@x.com"); // KST 10-08 09:30
+        ActivityView.Event older2 = ev(id(302), "2026-10-07T14:00:00Z", "TENANT_UPDATE", "ops", T1, "acme", "op@x.com"); // KST 10-07 23:00
         feed(view(List.of(older1, older2)));
         MvcResult r = frag("/admin/_/activity/more?category=ops&tenantId=" + T1 + "&before=2026-10-08T01:00:00Z&beforeId=" + E3 + "&lastDay=2026-10-08");
         Document d = doc(r);
         ArgumentCaptor<OffsetDateTime> before = ArgumentCaptor.forClass(OffsetDateTime.class);
         verify(activity).activity(isNull(), eq("ops"), before.capture(), eq(E3), eq(T1));
         assertThat(before.getValue().toInstant()).isEqualTo(Instant.parse("2026-10-08T01:00:00Z"));
-        Element oob = d.select("[hx-swap-oob=beforeend:#activity-feed]").first();
-        assertThat(oob.select(".feed-row")).hasSize(2);
-        // 같은 날 그룹은 머리글 없이 이어 붙고, 날짜가 바뀐 그룹(KST 10-08 → 10-08 09:30 / 10-08 08:00, 둘 다 같은 날)
-        assertThat(oob.select(".feed-day").eachText()).isEmpty();
+        // 같은 KST 날짜(10-08)의 행은 그 그룹의 행 목록 뒤에, 새 날짜(10-07)는 새 그룹을 목록 맨 아래에
+        assertThat(d.select("[hx-swap-oob=beforeend:#day-2026-10-08-rows] .feed-row")).hasSize(1);
+        assertThat(d.select("[hx-swap-oob=beforeend:#day-2026-10-08-rows] .feed-day")).isEmpty();
+        Element newGroups = d.select("[hx-swap-oob=beforeend:#activity-feed]").first();
+        assertThat(newGroups.select("> .feed-group").eachAttr("data-day")).containsExactly("2026-10-07");
+        assertThat(newGroups.select("#day-2026-10-07-rows .feed-row")).hasSize(1);
         assertThat(d.select("#activity-before-id[hx-swap-oob]").val()).isEqualTo(id(302).toString());
-        assertThat(d.select("#activity-before[hx-swap-oob]").val()).isEqualTo("2026-10-07T23:00:00Z");
-        assertThat(d.select("#activity-last-day[hx-swap-oob]").val()).isEqualTo("2026-10-08");
+        assertThat(d.select("#activity-before[hx-swap-oob]").val()).isEqualTo("2026-10-07T14:00:00Z");
+        assertThat(d.select("#activity-last-day[hx-swap-oob]").val()).isEqualTo("2026-10-07");
         assertThat(r.getResponse().getHeader("HX-Trigger")).isNull();
     }
 
@@ -515,6 +537,8 @@ class ActivityPageControllerTest {
         assertThat(more.attr("hx-sync")).isEqualTo("this:drop");
         assertThat(more.attr("hx-swap")).isEqualTo("none");
         assertThat(more.attr("hx-include")).contains("#activity-before", "#activity-before-id", "#activity-last-day", "#activity-cat");
+        // 필터 교체가 진행 중이면 비활성(새 필터에 옛 커서를 싣지 않게)
+        assertThat(more.attr("x-bind:disabled")).isEqualTo("rowsBusy");
     }
 
     // ── 상세 ────────────────────────────────────────────────
@@ -638,6 +662,14 @@ class ActivityPageControllerTest {
         assertThat(csv).contains("ADMIN_LOGIN_FAILED,security,,"); // 행위자 없음 → 빈 값, tenant 없음 → 빈 값
         assertThat(csv).doesNotContain("API_KEY_ISSUE"); // 커서(E2) 아래 행은 아직 읽어 오지 않았다
         verify(activity).activity(isNull(), eq("ops"), isNull(), isNull(), eq(T1));
+    }
+
+    @Test
+    @DisplayName("CSV: 경계 행(beforeId)에 닿지 못하면 조용히 일부만 내보내지 않고 5xx")
+    void csvBoundaryNotReachedFails() throws Exception {
+        MvcResult r = mvc.perform(get(URI.create("/admin/_/activity/export?beforeId=" + id(999))).with(authentication(platform()))).andReturn();
+        assertThat(r.getResponse().getStatus()).isGreaterThanOrEqualTo(500);
+        assertThat(r.getResponse().getContentAsString()).doesNotContain("timestamp,tenant");
     }
 
     @Test
