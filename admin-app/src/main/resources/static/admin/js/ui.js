@@ -308,6 +308,16 @@ document.addEventListener('alpine:init', () => {
     new FormData(form).forEach((v, k) => { (snap[k] = snap[k] || []).push(String(v)); });
     return snap;
   }
+  /** htmx 이벤트가 form 의 저장 요청인지: 출발 요소(detail.elt)가 form 자신이거나 form 안의 submit 버튼이고, verb 가 GET 이 아님. */
+  function isOwnSave(e, f) {
+    const d = e.detail || {};
+    const elt = d.elt;
+    const verb = d.requestConfig && d.requestConfig.verb;
+    if (!elt || !verb || String(verb).toLowerCase() === 'get') return false;
+    if (elt === f) return true;
+    return f.contains(elt) && !!elt.matches && elt.matches('button[type="submit"], input[type="submit"]');
+  }
+
   Alpine.data('saveBar', (cfg = {}) => ({
     form: null,
     base: {},
@@ -315,7 +325,7 @@ document.addEventListener('alpine:init', () => {
     saveLabel: cfg.saveLabel || '저장',
     saving: false,
     disarmed: false,
-    submitted: null,
+    inflight: new Map(),
     beforeUnload: null,
     disarm: null,
     init() {
@@ -330,17 +340,21 @@ document.addEventListener('alpine:init', () => {
       f.addEventListener('segmented-change', () => this.$nextTick(() => this.recount()));
       f.addEventListener('reset', () => this.$nextTick(() => this.recount()));
       // htmx 제출: 저장 중에만 막고, 실패하면 다시 켜서 재시도·경고가 가능하게 한다. 기준선은 성공이 확인된 뒤에만 갱신.
-      // 기준선은 제출 시점의 값으로 잡는다: 저장 중에 더 고친 값은 성공 뒤에도 변경으로 남는다.
+      // form 자신의 저장 요청(비-GET: form 자체 또는 form 안 submit 버튼이 보낸 것)만 본다. 폼 안의 GET(Segmented 의 hx-get 등)과
+      // 그 밖의 요청은 saving·기준선에 영향이 없다. 기준선은 제출 시점의 값을 요청(requestConfig)에 묶어 두었다가,
+      // 성공이 확인된 요청의 스냅샷으로만 갱신한다(저장 중에 더 고친 값은 계속 변경으로 남고, 동시 요청이 서로 덮지 않는다).
       f.addEventListener('htmx:before-request', (e) => {
-        if (!f.contains(e.target)) return;
+        if (!isOwnSave(e, f)) return;
+        this.inflight.set(e.detail.requestConfig, formSnapshot(f));
         this.saving = true;
-        this.submitted = formSnapshot(f);
       });
       f.addEventListener('htmx:after-request', (e) => {
-        if (!f.contains(e.target)) return;
-        this.saving = false;
-        if (e.detail && e.detail.successful && this.submitted) { this.base = this.submitted; this.recount(); }
-        this.submitted = null;
+        if (!isOwnSave(e, f)) return;
+        const cfgKey = e.detail.requestConfig;
+        const snap = this.inflight.get(cfgKey);
+        this.inflight.delete(cfgKey);
+        this.saving = this.inflight.size > 0;
+        if (e.detail.successful && snap) { this.base = snap; this.recount(); }
       });
       // 일반(비 htmx) 제출은 페이지 이동이므로 경고를 끈다.
       f.addEventListener('submit', () => { if (!f.hasAttribute('hx-post') && !f.hasAttribute('hx-put') && !f.hasAttribute('hx-patch') && !f.hasAttribute('hx-delete')) this.disarmed = true; });
