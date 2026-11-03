@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">요청을 처리하지 못했습니다</title>
+  <link rel="icon" th:href="@{/admin/img/favicon.png}">
+  <link rel="stylesheet" th:href="@{/admin/css/fonts.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/tokens.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/globals.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/components.css}">
+</head>
+<body>
+  <main role="alert" style="max-width: 480px; margin: 120px auto; padding: 0 16px;">
+    <p th:text="${status}">500</p>
+    <h1 th:text="${title}">요청을 처리하지 못했습니다</h1>
+    <p th:text="${message}">요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
+    <p><a th:href="@{/admin}">처음 화면으로</a></p>
+  </main>
+</body>
+</html>

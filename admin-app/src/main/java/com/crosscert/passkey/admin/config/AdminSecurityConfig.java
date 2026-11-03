@@ -8,6 +8,9 @@ import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.admin.auth.TenantContextAdminFilter;
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource;
 import com.crosscert.passkey.admin.policy.SecurityPolicyService;
+import com.crosscert.passkey.admin.web.support.ErrorPage;
+import com.crosscert.passkey.admin.web.support.Htmx;
+import com.crosscert.passkey.admin.web.support.Toasts;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
@@ -16,6 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -40,6 +45,7 @@ import org.springframework.security.web.authentication.logout.LogoutSuccessHandl
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.web.servlet.ViewResolver;
 
 import com.crosscert.passkey.core.license.LicenseGuardFilter;
 
@@ -94,14 +100,22 @@ public class AdminSecurityConfig {
             .cors(cors -> cors.configurationSource(corsSource))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
-                .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/", "/admin", "/admin/favicon.ico", "/admin/favicon.png", "/favicon.ico").permitAll()
+                // 미인증 화면(Thymeleaf): 비밀번호 찾기·재설정, 가입 요청. GET 화면과 POST 제출 모두.
+                .requestMatchers("/admin/forgot-password", "/admin/reset-password", "/admin/signup").permitAll()
+                // 화면 정적 에셋(로그인 화면에서도 쓰므로 미인증 허용).
+                .requestMatchers("/admin/css/**", "/admin/js/**", "/admin/fonts/**", "/admin/img/**", "/favicon.ico").permitAll()
+                // React 빌드 산출물 — Task 17 에서 React 제거와 함께 지운다.
+                .requestMatchers("/admin/assets/**", "/admin/static/**", "/admin/index.html", "/admin/favicon.ico", "/admin/favicon.png").permitAll()
                 // 브랜드 정적 에셋(Vite public/ → dist/ 루트로 복사되어 /admin/<name> 으로 서빙됨).
                 // 로그인 전 화면(LoginPage)에서 노출되므로 미인증 허용. *.png 전체가 아니라
                 // 파일명 명시 — 화이트리스트를 좁게 유지(favicon 선례와 동일).
                 .requestMatchers("/admin/crosscert-logo-transparent.png").permitAll()
-                .requestMatchers("/admin/tenants", "/admin/tenants/**", "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
-                                 "/admin/activity", "/admin/audit-chain", "/admin/settings", "/admin/license",
-                                 "/admin/forgot-password", "/admin/reset-password", "/admin/signup").permitAll()
+                // 서버가 그리는 화면은 인증 필수. /admin/_/** 는 htmx 조각 전용 경로 접두사.
+                // /admin/login/mfa 는 MFA 단계 제출(비밀번호 인증을 마친 세션) — MfaPendingFilter 가 대기 중 허용.
+                .requestMatchers("/", "/admin", "/admin/", "/admin/tenants/**", "/admin/activity",
+                                 "/admin/audit-chain/**", "/admin/settings/**", "/admin/license",
+                                 "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
+                                 "/admin/_/**", "/admin/login/mfa").authenticated()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 // /admin/api/profile 은 active profile 만 노출. Login.tsx 가 미인증 상태에서
                 // local 여부를 알아 테스트 계정 prefill 을 결정하는 데 쓴다.
@@ -206,9 +220,9 @@ public class AdminSecurityConfig {
      * 미인증 요청 처리:
      *   - /admin/api/** (XHR/fetch) → 401 JSON. SPA 가 이 401 을 받아 로그인 화면으로
      *     navigate 한다(클라이언트 측 처리).
-     *   - 그 외(페이지/루트/SPA 라우트 직접 접근) → /admin 으로 302 리다이렉트.
-     *     로그인 안 된 상태에서 / 든 /something 이든 무조건 로그인 화면(/admin)으로
-     *     보낸다. 페이지 요청에 401 JSON 을 주면 빈 화면이 되므로 리다이렉트가 맞다.
+     *   - htmx 요청 → 401 + {@code HX-Redirect: /admin/login}. htmx 가 전체 페이지를 로그인 화면으로 옮긴다.
+     *   - 그 외(화면 직접 접근) → /admin/login 으로 302 리다이렉트.
+     *     페이지 요청에 401 JSON 을 주면 빈 화면이 되므로 리다이렉트가 맞다.
      */
     private AuthenticationEntryPoint spaEntryPoint() {
         return (HttpServletRequest req, HttpServletResponse res, AuthenticationException ex) -> {
@@ -221,10 +235,22 @@ public class AdminSecurityConfig {
                 res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 res.setContentType("application/json");
                 res.getWriter().write("{\"error\":\"unauthorized\"}");
+            } else if (Htmx.isHtmx(req)) {
+                res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                res.setHeader(Htmx.HX_REDIRECT, "/admin/login");
             } else {
-                res.sendRedirect("/admin");
+                res.sendRedirect("/admin/login");
             }
         };
+    }
+
+    /**
+     * 로그인 요청이 Thymeleaf 화면에서 왔는지. htmx 요청이거나 CSRF 토큰이 {@code _csrf}
+     * <b>파라미터</b>로 온 경우(th:action 폼)다. SPA·기존 통합 테스트는 form-urlencoded 본문에
+     * {@code X-XSRF-TOKEN} 헤더를 붙여 보내고 JSON 응답을 기대하므로 이 기준으로 나눈다.
+     */
+    static boolean isPageLogin(HttpServletRequest req) {
+        return Htmx.isHtmx(req) || req.getParameter("_csrf") != null;
     }
 
     @Bean
@@ -277,6 +303,11 @@ public class AdminSecurityConfig {
             }
             log.info("admin login success: email={} role={} mfaRequired={}",
                     CryptoUtils.maskEmail(email), u.getRole(), mfaRequired);
+            if (isPageLogin(req)) {
+                // Thymeleaf 로그인 화면: MFA 대기면 로그인 화면(MFA 단계)으로, 아니면 홈으로.
+                Htmx.redirect(req, res, mfaRequired ? "/admin/login" : "/admin");
+                return;
+            }
             res.setStatus(HttpServletResponse.SC_OK);
             res.setContentType("application/json");
             // Use Jackson to avoid malformed JSON if email ever contains quotes/backslashes.
@@ -325,6 +356,11 @@ public class AdminSecurityConfig {
                     SecurityAlertEvent.Severity.MEDIUM,
                     "admin login failed",
                     Map.of("email", CryptoUtils.maskEmail(email), "reason", reason)));
+            if (isPageLogin(req)) {
+                // 필터 단계라 템플릿을 그리지 않고, 로그인 화면이 error 파라미터로 오류 문구를 보여준다.
+                Htmx.redirect(req, res, "/admin/login?error");
+                return;
+            }
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             res.setContentType("application/json");
             res.getWriter().write("{\"error\":\"unauthorized\"}");
@@ -345,13 +381,49 @@ public class AdminSecurityConfig {
         };
     }
 
+    /** describeError.ts 의 403 문구. */
+    static final String FORBIDDEN_TITLE = "권한이 없습니다";
+    static final String FORBIDDEN_MESSAGE = "이 작업을 할 권한이 없습니다. 운영자에게 문의하세요.";
+
+    /**
+     * 접근 거부(권한 부족, CSRF 토큰 누락·불일치):
+     *   - /admin/api/** 또는 JSON 요청 → 기존 403 JSON.
+     *   - htmx 요청 → 403 + 오류 토스트(HX-Trigger).
+     *   - 그 외 화면 → admin/error 템플릿을 403 으로 렌더링.
+     * ViewResolver 는 지연 조회한다(Thymeleaf 가 없는 컨텍스트에서는 JSON 으로 돌아간다).
+     */
     @Bean
-    public AccessDeniedHandler adminAccessDeniedHandler() {
+    public AccessDeniedHandler adminAccessDeniedHandler(
+            @Qualifier("thymeleafViewResolver") ObjectProvider<ViewResolver> viewResolver) {
         return (HttpServletRequest req, HttpServletResponse res, org.springframework.security.access.AccessDeniedException ex) -> {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String emailMasked = (auth == null) ? "anonymous" : CryptoUtils.maskEmail(auth.getName());
             log.warn("admin access denied: email={} method={} path={} cause={}",
                     emailMasked, req.getMethod(), req.getRequestURI(), ex.getClass().getSimpleName());
+            String uri = req.getRequestURI();
+            boolean isApi = uri != null && uri.startsWith("/admin/api/");
+            String accept = req.getHeader("Accept");
+            boolean wantsJson = accept != null && accept.contains("application/json");
+            if (!isApi && !wantsJson) {
+                if (Htmx.isHtmx(req)) {
+                    res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    Toasts.error(res, FORBIDDEN_MESSAGE);
+                    return;
+                }
+                ViewResolver resolver = viewResolver.getIfAvailable();
+                if (resolver != null) {
+                    try {
+                        if (ErrorPage.render(resolver, req, res, HttpServletResponse.SC_FORBIDDEN,
+                                FORBIDDEN_TITLE, FORBIDDEN_MESSAGE)) {
+                            return;
+                        }
+                    } catch (Exception renderEx) {
+                        log.warn("could not render admin error page; falling back to JSON: {}", renderEx.toString());
+                        if (res.isCommitted()) return;
+                        res.resetBuffer();
+                    }
+                }
+            }
             res.setStatus(HttpServletResponse.SC_FORBIDDEN);
             res.setContentType("application/json");
             res.getWriter().write("{\"error\":\"forbidden\"}");
