@@ -25,7 +25,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -66,7 +65,7 @@ public class AuditChainPageController {
     static final String VERIFY_PATH = BASE + "/verify";
     static final String BACKFILL_PATH = BASE + "/backfill";
     static final String INCIDENTS_PATH = BASE + "/incidents";
-    static final String RESOLVE_SUFFIX = "/resolve";
+    static final String RESOLVE_PATH = BASE + "/incidents/resolve";
     static final String REPORT_API = "/admin/api/audit/chain/monthly-report";
 
     static final String PAGE_VIEW = "admin/audit-chain/page";
@@ -74,6 +73,7 @@ public class AuditChainPageController {
     static final String FAILED_VIEW = "admin/audit-chain/overview :: loadFailed";
     static final String WARN_VIEW = "admin/audit-chain/overview :: warn";
     static final String ISSUE_VIEW = "admin/audit-chain/incidents :: issue";
+    static final String REFRESH_VIEW = "admin/audit-chain/incidents :: refresh";
     static final String EMPTY_VIEW = "admin/fragments/shell/empty :: none";
 
     /** AuditChainPage 의 {@code overview(24)}. */
@@ -103,8 +103,7 @@ public class AuditChainPageController {
     public record Tampered(String tenantId, String name, String entry, String auditHref, boolean hasOpen, boolean canCreate, String createId, String createTitle,
                            Map<String, Object> createAttrs) {}
 
-    public record Incident(String id, boolean open, String statusLabel, String tenant, String type, String created, String createdBy, String resolveId,
-                           Map<String, Object> resolveAttrs) {}
+    public record Incident(String id, boolean open, String statusLabel, String tenant, String type, String created, String createdBy, String label) {}
 
     public record ReportTenant(String name, String rows, boolean intact) {}
 
@@ -184,6 +183,13 @@ public class AuditChainPageController {
         return EMPTY_VIEW;
     }
 
+    /** 사건 목록만 다시 읽기(원본 refreshIncidents) — 카드·배너 배지만 OOB 로 갱신한다. 개요(전 tenant 검증)는 다시 돌리지 않는다. */
+    @GetMapping(INCIDENTS_PATH)
+    public String incidents(HttpServletResponse res, Model model) {
+        requirePlatform(model);
+        return refresh(model, res);
+    }
+
     /** 사건 생성(원본 handleCreateIncident). 서버가 위변조 재검증 결과에서 entry 를 도출한다 — 요청에는 tenantId 만 싣는다. */
     @PostMapping(INCIDENTS_PATH)
     public String createIncident(@RequestParam(name = "tenantId", defaultValue = "") String tenantId,
@@ -200,7 +206,7 @@ public class AuditChainPageController {
         } catch (IncidentConflictException e) {
             // 다른 운영자가 이미 OPEN incident 를 만든 stale 상태일 수 있다 — 닫고(루트 교체) 목록 동기화.
             Toasts.warnTitled(res, "이미 진행 중", "해당 tenant 에 OPEN 상태 incident 가 이미 있습니다.");
-            return renderRoot(model, res, view, false, true);
+            return refresh(model, res);
         } catch (IncidentNotTamperedException e) {
             return issue(model, res, slot, "warn", "위변조가 확인되지 않았습니다", "재검증 결과 위변조가 확인되지 않아 incident 를 생성하지 않았습니다.", false);
         } catch (RuntimeException e) {
@@ -210,15 +216,16 @@ public class AuditChainPageController {
         }
     }
 
-    @PostMapping(INCIDENTS_PATH + "/{id}" + RESOLVE_SUFFIX)
-    public String resolveIncident(@PathVariable String id,
+    /** 사건 해결(원본 handleResolveIncident). 다이얼로그는 하나를 공유하므로 대상 id 는 폼 값이다. */
+    @PostMapping(RESOLVE_PATH)
+    public String resolveIncident(@RequestParam(name = "id", defaultValue = "") String id,
                                   @RequestParam(name = "note", defaultValue = "") String note,
                                   @RequestParam(name = "view", defaultValue = "all") String view,
                                   Authentication auth, HttpServletResponse res, Model model) {
         requirePlatform(model);
         UUID iid = parseUuid(id);
         if (iid == null) throw new IllegalArgumentException("invalid incident id");
-        String slot = "chain-rs-issue-" + iid;
+        String slot = "chain-rs-issue";
         String trimmed = note.trim();
         IncidentDto.ResolveRequest body = new IncidentDto.ResolveRequest(trimmed);
         if (!validator.validate(body).isEmpty()) {
@@ -231,7 +238,7 @@ public class AuditChainPageController {
         } catch (IncidentConflictException e) {
             // 이미 RESOLVED — stale 다이얼로그를 닫고(루트 교체) 목록 동기화.
             Toasts.warnTitled(res, "이미 해결됨", "해당 incident 는 이미 RESOLVED 상태입니다.");
-            return renderRoot(model, res, view, false, true);
+            return refresh(model, res);
         } catch (IncidentNotFoundException e) {
             // 메모는 남기고 다이얼로그 안에서 알린다. 목록은 OOB 로 새로 읽는다.
             return issue(model, res, slot, "warn", "이미 처리되었거나 없는 incident입니다", "목록을 새로 고쳤습니다. 다이얼로그를 닫고 목록에서 확인하세요.", true);
@@ -253,6 +260,22 @@ public class AuditChainPageController {
         model.addAttribute("issueTitle", title);
         model.addAttribute("issueText", text);
         model.addAttribute("issueGone", gone);
+        fillIncidentsOob(model);
+        return ISSUE_VIEW;
+    }
+
+    /**
+     * 목록만 갱신하는 응답: 본문은 OOB 조각뿐이라 {@code HX-Reswap: none}(요청 대상 #chain-root 를 비우지 않는다). 다이얼로그는 닫는 쪽(요청 요소의
+     * after-request 성공)이 닫는다. 목록 조회가 실패하면 카드가 오류 상태(다시 시도)가 된다.
+     */
+    private String refresh(Model model, HttpServletResponse res) {
+        res.setHeader("HX-Reswap", "none");
+        fillIncidentsOob(model);
+        return REFRESH_VIEW;
+    }
+
+    /** 사건 목록을 독립적으로 읽어 카드·배너 배지 OOB 모델을 채운다(개요와 무관). 실패하면 목록 없음(오류 카드). */
+    private void fillIncidentsOob(Model model) {
         List<IncidentDto.IncidentView> list = null;
         try {
             list = chain.listIncidents();
@@ -260,9 +283,16 @@ public class AuditChainPageController {
             if (denied(e)) throw e;
             log.warn("[audit-chain] incidents refresh failed: {}", e.getClass().getSimpleName());
         }
-        model.addAttribute("incidentsOob", list != null);
-        if (list != null) fillIncidents(model, list, null, Set.of());
-        return ISSUE_VIEW;
+        model.addAttribute("incidentsOob", true);
+        fillIncidents(model, list, null);
+        // 배너의 행 동작(생성 버튼 ↔ "Incident 처리 중"): 사건이 있는 tenant 마다. 배너에 없는 tenant 의 요소는 htmx 가 무시한다.
+        List<Tampered> acts = new ArrayList<>();
+        if (list != null) {
+            Map<String, Boolean> byTenant = new LinkedHashMap<>();
+            for (IncidentDto.IncidentView i : list) byTenant.merge(i.tenantId(), "OPEN".equals(i.status()), (a, b) -> a || b);
+            byTenant.forEach((tid, open) -> acts.add(new Tampered(tid, null, null, null, open, true, "chain-ic-" + tid, null, null)));
+        }
+        model.addAttribute("actionsOob", acts);
     }
 
     /**
@@ -286,9 +316,13 @@ public class AuditChainPageController {
             res.setHeader("HX-Retarget", "#chain-warn");
             res.setHeader("HX-Reswap", "innerHTML");
             if (!mutated) res.setStatus(422);
+            // 앞선 변경은 성공했다 — 목록은 개요와 독립으로 다시 읽어 낡은 목록·열린 상태를 남기지 않는다(원본 refreshIncidents).
+            model.addAttribute("incidentsOob", mutated);
+            if (mutated) fillIncidentsOob(model);
             model.addAttribute("warnTitle", info.title());
             Map<String, Object> retry = disabledSelf(rootReq("hx-get", OVERVIEW_PATH, false));
             retry.put("data-chain-verify", true);
+            retry.put("data-chain-reverify", true);
             model.addAttribute("warnAttrs", retry);
             return WARN_VIEW;
         }
@@ -331,7 +365,7 @@ public class AuditChainPageController {
                 String entry = c.tamperedEntryId() == null ? null : tail8(c.tamperedEntryId().toString());
                 tamperedRows.add(new Tampered(tid, name, entry, tid == null ? null : "/admin/tenants/" + tid + "?tab=audit", hasOpen,
                         tid != null && known, tid == null ? null : "chain-ic-" + tid, title,
-                        tid == null ? null : post(INCIDENTS_PATH + "?tenantId=" + tid)));
+                        tid == null ? null : rootReq("hx-post", INCIDENTS_PATH + "?tenantId=" + tid, false)));
             }
         }
         model.addAttribute("view", view);
@@ -351,6 +385,8 @@ public class AuditChainPageController {
         model.addAttribute("kpiMs", fmt(t.verificationMs()) + "ms");
         model.addAttribute("tenantCount", tenants.size());
         model.addAttribute("tamperedCount", tamperedRows.size());
+        model.addAttribute("tamperedFlag", tampered ? "1" : "0");
+        model.addAttribute("incidentsKnownFlag", incidents != null ? "1" : "0");
         model.addAttribute("chainColumns", List.of(col("tenant", "Tenant", null), col("status", "상태", null), col("rows", "검증 행 수", "right"),
                 col("verifiedAt", "마지막 검증", null), col("actions", "액션", null)));
         model.addAttribute("segOptions", List.of(opt("all", "전체"), opt("tampered", "위변조만")));
@@ -363,11 +399,15 @@ public class AuditChainPageController {
         item.put("danger", true);
         item.put("disabled", tampered);
         item.put("disabledReason", BLOCK_TAMPERED);
-        item.put("attrs", Map.of("x-on:click.capture", "blocked ? $dispatch('toast', { kind: 'warn', title: '체인 백필을 쓸 수 없습니다', message: blockedReason }) : $dispatch('dialog:open', { id: 'chain-backfill' })"));
+        // 검증 중·재검증 실패에는 Alpine 이 항목을 비활성(aria-disabled + 사유 title)으로 바꾼다 — 메뉴가 클릭을 막고 다이얼로그도 없다.
+        Map<String, Object> ia = new LinkedHashMap<>();
+        ia.put("x-on:click.capture", "if (!blocked) $dispatch('dialog:open', { id: 'chain-backfill' })");
+        ia.put("x-bind:aria-disabled", "blocked ? 'true' : null");
+        ia.put("x-bind:title", "blocked ? blockedReason : null");
+        item.put("attrs", ia);
         model.addAttribute("menuItems", List.of(item));
-        Map<String, Object> bf = post(BACKFILL_PATH);
-        bf.put("hx-swap", "outerHTML");
-        model.addAttribute("backfillAttrs", bf);
+        model.addAttribute("resolveAttrs", rootReq("hx-post", RESOLVE_PATH, false));
+        model.addAttribute("backfillAttrs", rootReq("hx-post", BACKFILL_PATH, false));
 
         // 월간 보고서
         KstFormat.DateRange range = KstFormat.kstPrevMonthRange(now);
@@ -382,12 +422,13 @@ public class AuditChainPageController {
         // 새로고침 요청 속성
         Map<String, Object> reverify = disabledSelf(rootReq("hx-get", OVERVIEW_PATH, false));
         reverify.put("data-chain-verify", true);
+        reverify.put("data-chain-reverify", true);
         model.addAttribute("reverifyAttrs", reverify);
 
-        fillIncidents(model, incidents, tampered, Set.copyOf(openTenants));
+        fillIncidents(model, incidents, tampered);
     }
 
-    private void fillIncidents(Model model, List<IncidentDto.IncidentView> list, Boolean tampered, Set<String> openTenants) {
+    private void fillIncidents(Model model, List<IncidentDto.IncidentView> list, Boolean tampered) {
         boolean known = list != null;
         List<Incident> out = new ArrayList<>();
         int open = 0;
@@ -398,8 +439,7 @@ public class AuditChainPageController {
                 String created = i.createdAt() == null ? "—" : KstFormat.kstDateTime(i.createdAt());
                 if (created.length() > 16) created = created.substring(0, 16);
                 out.add(new Incident(i.id(), isOpen, Labels.statusLabel(i.status()), i.tenantName(), i.type(), created, i.createdByEmail(),
-                        isOpen ? "chain-rs-" + i.id() : null,
-                        isOpen ? post(INCIDENTS_PATH + "/" + i.id() + RESOLVE_SUFFIX) : null));
+                        i.tenantName() + " · " + i.type()));
             }
         }
         model.addAttribute("incidentColumns", List.of(col("status", "상태", null), col("tenant", "Tenant", null), col("type", "유형", null),
@@ -410,7 +450,13 @@ public class AuditChainPageController {
         model.addAttribute("openLabel", Labels.statusLabel("OPEN") + " " + open);
         model.addAttribute("emptyDesc", tampered == null ? null
                 : tampered ? "위변조 의심 tenant 는 위 배너에서 Incident 를 생성하세요." : "모든 chain 이 정상입니다.");
-        model.addAttribute("incidentRetryAttrs", disabledSelf(rootReq("hx-get", OVERVIEW_PATH, false)));
+        // 다시 시도 = 목록만 다시 읽기(원본 refreshIncidents). 응답은 OOB 뿐이라 swap none.
+        Map<String, Object> retry = new LinkedHashMap<>();
+        retry.put("hx-get", INCIDENTS_PATH);
+        retry.put("hx-swap", "none");
+        retry.put("hx-sync", "#chain-root:drop");
+        retry.put("hx-disabled-elt", "this");
+        model.addAttribute("incidentRetryAttrs", retry);
     }
 
     // ── 요청 속성 ───────────────────────────────────────────
@@ -425,11 +471,6 @@ public class AuditChainPageController {
         m.put("hx-include", "#chain-root [name=view]");
         m.put("hx-request", "{\"timeout\": " + LONG_TIMEOUT_MS + "}");
         if (self) m.put("hx-trigger", "load");
-        return m;
-    }
-
-    private static Map<String, Object> post(String url) {
-        Map<String, Object> m = rootReq("hx-post", url, false);
         return m;
     }
 

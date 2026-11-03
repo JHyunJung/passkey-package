@@ -647,7 +647,7 @@ TC = `AuditChainPageControllerTest`. 브라우저: 전부 미확인(R8) — 아�
 - Incident 목록 "다시 시도"는 개요 전체를 다시 읽는다(배너의 생성 버튼이 목록 결과에 달려 있다).
 - 백필 가드는 TSX 에서는 클라이언트 전용(`backfillAllowed`)이다. 서버에서도 지키려고 요청마다 `overview(24)` 로 재검증한다(위변조·실패면 거절). 동시 실행 직렬화는 서비스의 DB 락이 한다 — 컨트롤러에 별도 락을 만들지 않았다.
 - 월간 보고서 PDF 는 공통 다운로드 도우미(`data-csv-download`)를 재사용한다(실패 토스트 제목은 링크의 `data-download-error`, 진행은 `csv-download` 이벤트). 도우미에는 타임아웃이 없다(원본은 120초).
-- 다이얼로그 요청 요소(래퍼)를 다이얼로그 밖에 둬서 Escape 로 닫아도 요청과 결과 교체는 이어진다(원본은 진행 중에는 닫기를 막음).
+- 다이얼로그 요청 요소(래퍼)는 다이얼로그 밖이지만 래퍼의 `reqBusy` 를 dialog 의 `busy` 로 비춰(x-effect) 진행 중에는 Escape·스크림·취소가 막힌다(원본 onClose={busy ? noop : onClose}). 성공(2xx)이면 래퍼가 닫는다.
 - `verify-result.html` 은 만들지 않았다 — 한 tenant 검증은 토스트 + 루트 교체라 별도 조각이 없다.
 
 ## §설정
@@ -780,3 +780,10 @@ TC = `AuditChainPageControllerTest`. 브라우저: 전부 미확인(R8) — 아�
 - 더 보기 중 **첫 쪽(page 0) 조회가 실패하면** 카드 전체가 LoadError 로 바뀐다(TSX 는 기존 행을 유지하고 토스트) — stateless 재조회의 결과. 이후 쪽 실패는 읽은 행 유지 + 토스트.
 - 원본에는 쪽 상한이 없지만 stateless 재조회 비용 때문에 40쪽(2,000건)에서 멈추고 "더 불러올 수 없습니다 — 기간이나 필터를 좁혀 주세요." 를 보인다(TC `loadMoreCapShown`). CSV 도 같은 범위, 쪽 실패 시 부분 파일 대신 오류(TC `csvRejectsPartialFailure`).
 - 퍼널 기간 전환 중: 루트 Alpine `pending` 으로 이전 결과 숨김·스켈레톤·내보내기/CSV 링크 비활성(FT 4 차이 해소, 브라우저 미확인). 요청이 실패하면 결과는 돌아오지만 세그먼트 선택 표시는 새 값에 남는다(알려진 한계).
+
+### Task 15 Fix round 1 메모
+
+- tenant 한 곳 검증 중에는 "지금 검증"과 모든 행의 검증 버튼이 함께 잠긴다(루트 하나를 교체하는 단일 동기화 그룹) — TSX 는 행마다 `verifyingId` 라 다른 행은 눌렀다. 중복 요청 방지를 위한 의도된 차이.
+- 해결 다이얼로그는 하나를 공유한다(대상은 버튼의 data-*, 폼의 id 값). 사건 목록만 갱신(409·다시 시도·오류 경로)해도 다이얼로그 정의를 다시 그릴 필요가 없다. 배너의 "Incident 처리 중"/생성 버튼은 `#chain-act-{tid}` OOB 로 갱신.
+- 백필 메뉴 항목은 검증 중·재검증 실패에 Alpine 이 aria-disabled + 사유(title)로 바꾼다. 메뉴 항목에 별도 힌트 줄(.menu__reason)은 서버 렌더 비활성(위변조)일 때만 보인다.
+- 재검증이 타임아웃·네트워크·비 2xx 로 끝나면(data-chain-reverify 요청) `failed` → 백필 차단(TSX status !== ok).

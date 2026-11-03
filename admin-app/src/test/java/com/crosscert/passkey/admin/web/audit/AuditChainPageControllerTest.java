@@ -151,6 +151,7 @@ class AuditChainPageControllerTest {
 
     private static final String OVERVIEW = AuditChainPageController.OVERVIEW_PATH;
     private static final String INCIDENTS = AuditChainPageController.INCIDENTS_PATH;
+    private static final String RESOLVE = AuditChainPageController.RESOLVE_PATH;
 
     // ── 접근 ────────────────────────────────────────────────
 
@@ -181,7 +182,7 @@ class AuditChainPageControllerTest {
         assertThat(status(getFrag(AuditChainPageController.VERIFY_PATH + "?tenantId=" + T1, rp()))).isEqualTo(403);
         assertThat(status(mvc.perform(confirm(post(URI.create(AuditChainPageController.BACKFILL_PATH)), rp())).andReturn())).isEqualTo(403);
         assertThat(status(postFrag(INCIDENTS + "?tenantId=" + T1, rp()))).isEqualTo(403);
-        assertThat(status(mvc.perform(htmx(post(URI.create(INCIDENTS + "/" + INC1 + "/resolve")), rp()).param("note", "x")).andReturn())).isEqualTo(403);
+        assertThat(status(mvc.perform(htmx(post(URI.create(RESOLVE)), rp()).param("id", INC1.toString()).param("note", "x")).andReturn())).isEqualTo(403);
         verify(chain, never()).overview(anyInt());
         verify(chain, never()).verifyTenant(any());
         verify(chain, never()).backfill();
@@ -272,7 +273,7 @@ class AuditChainPageControllerTest {
         assertThat(card.text()).doesNotContain("등록된 incident가 없습니다");
         Element retry = card.selectFirst("button");
         assertThat(retry.text()).contains("다시 시도");
-        assertThat(retry.attr("hx-get")).isEqualTo(OVERVIEW);
+        assertThat(retry.attr("hx-get")).isEqualTo(INCIDENTS); // 목록만 다시 읽는다
         Element create = d.selectFirst(".banner--danger button.btn--danger-solid");
         assertThat(create.hasAttr("disabled")).isTrue();
         assertThat(create.attr("title")).isEqualTo("Incident 목록을 확인한 뒤 생성할 수 있습니다");
@@ -286,13 +287,15 @@ class AuditChainPageControllerTest {
         var rows = d.select("#chain-incidents tbody tr");
         assertThat(rows).hasSize(2);
         assertThat(rows.get(0).text()).contains("처리중", "Globex", "AUDIT_CHAIN_TAMPERED", "2026-10-11 11:00", "op@example.com", "해결");
-        assertThat(rows.get(0).selectFirst("button").attr("data-dlg")).isEqualTo("chain-rs-" + INC1);
+        assertThat(rows.get(0).selectFirst("button").attr("data-iid")).isEqualTo(INC1.toString());
+        assertThat(rows.get(0).selectFirst("button").attr("data-label")).isEqualTo("Globex · AUDIT_CHAIN_TAMPERED");
         assertThat(rows.get(1).text()).contains("해결", "Acme");
         assertThat(rows.get(1).select("button")).isEmpty();
         assertThat(d.select("#chain-incidents .card__head .badge").text()).isEqualTo("처리중 1");
         // 해결 다이얼로그: 메모 필수 textarea(maxlength 1024), 요청 요소는 다이얼로그 밖의 form
-        Element form = d.selectFirst("form[data-dlg=chain-rs-" + INC1 + "]");
-        assertThat(form.attr("hx-post")).isEqualTo(INCIDENTS + "/" + INC1 + "/resolve");
+        Element form = d.selectFirst("form#chain-resolve-form");
+        assertThat(form.attr("hx-post")).isEqualTo(RESOLVE);
+        assertThat(form.html()).contains("name=\"id\"", "name=\"note\"");
         assertThat(form.attr("hx-trigger")).isEqualTo("rs-submit");
     }
 
@@ -468,13 +471,18 @@ class AuditChainPageControllerTest {
     }
 
     @Test
-    @DisplayName("backfillGuardBlocksSecondRun — 확인 헤더 없으면 400, 첫 실행은 한 번만, 그 사이 위변조가 생기면 두 번째 실행은 막힌다")
+    @DisplayName("backfillGuardBlocksSecondRun — 같은 동기화 그룹(drop)이라 진행 중인 실행에 겹친 요청은 버려지고, 확인 헤더 없으면 400, 서버는 위변조가 생기면 두 번째 실행을 막는다")
     void backfillGuardBlocksSecondRun() throws Exception {
+        // 더블 제출: 확인 버튼은 #chain-root:drop 그룹(진행 중이면 뒤의 요청을 버림) + 다이얼로그 busy 로 잠긴다. 서비스는 별도 거절 없이 DB 락으로 직렬화한다.
         // 확인 절차(L3 의 X-Confirm) 없이는 실행되지 않는다
         assertThat(status(backfill(false))).isEqualTo(400);
         verify(chain, never()).backfill();
         verify(chain, never()).overview(anyInt());
 
+        assertThat(Jsoup.parse(body(getFrag(OVERVIEW, platform()))).selectFirst("button[data-confirm]").attr("hx-sync")).isEqualTo("#chain-root:drop");
+        reset(chain);
+        when(chain.overview(anyInt())).thenReturn(intact());
+        when(chain.listIncidents()).thenReturn(List.of());
         when(chain.backfill()).thenReturn(new AuditChainMonitorController.BackfillResponse(2, 1234, 0));
         MvcResult first = backfill(true);
         assertThat(status(first)).isEqualTo(200);
@@ -542,14 +550,21 @@ class AuditChainPageControllerTest {
     @DisplayName("incidentConflictShowsToast — 생성 409(IncidentConflict)는 경고 토스트 \"이미 진행 중\" + 닫고(루트 교체) 목록 동기화")
     void incidentConflictShowsToast() throws Exception {
         when(chain.createIncident(any(), any())).thenThrow(new IncidentConflictException("open incident already exists"));
+        when(chain.listIncidents()).thenReturn(List.of(inc(INC1, T2, "Globex", "OPEN")));
         MvcResult r = postFrag(INCIDENTS + "?tenantId=" + T2, platform());
         assertThat(status(r)).isEqualTo(200);
         JsonNode toast = trigger(r).get("toast");
         assertThat(toast.get("kind").asText()).isEqualTo("warn");
         assertThat(toast.get("title").asText()).isEqualTo("이미 진행 중");
         assertThat(toast.get("message").asText()).isEqualTo("해당 tenant 에 OPEN 상태 incident 가 이미 있습니다.");
-        assertThat(doc(r).selectFirst("#chain-root")).isNotNull();
+        // 목록만 다시 읽는다(원본 refreshIncidents) — 개요 재검증 없음, 본문은 OOB(swap none), 배너 배지도 갱신
         verify(chain).listIncidents();
+        verify(chain, never()).overview(anyInt());
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        Document d = doc(r);
+        assertThat(d.selectFirst("#chain-root")).isNull();
+        assertThat(d.selectFirst("#chain-incidents[hx-swap-oob]")).isNotNull();
+        assertThat(d.selectFirst("#chain-act-" + T2 + "[hx-swap-oob]").text()).contains("Incident 처리 중");
     }
 
     @Test
@@ -586,7 +601,7 @@ class AuditChainPageControllerTest {
     @DisplayName("Incident 해결: 메모를 trim 해 REST 호출 + 성공 토스트 + 재검증 결과 교체")
     void resolveOk() throws Exception {
         when(chain.resolveIncident(anyString(), any(), any())).thenReturn(inc(INC1, T2, "Globex", "RESOLVED"));
-        MvcResult r = mvc.perform(htmx(post(URI.create(INCIDENTS + "/" + INC1 + "/resolve")), platform()).param("note", "  조치 완료  ")).andReturn();
+        MvcResult r = mvc.perform(htmx(post(URI.create(RESOLVE)), platform()).param("id", INC1.toString()).param("note", "  조치 완료  ")).andReturn();
         assertThat(status(r)).isEqualTo(200);
         ArgumentCaptor<IncidentDto.ResolveRequest> cap = ArgumentCaptor.forClass(IncidentDto.ResolveRequest.class);
         verify(chain).resolveIncident(eq(INC1.toString()), cap.capture(), any(Authentication.class));
@@ -600,11 +615,11 @@ class AuditChainPageControllerTest {
     @Test
     @DisplayName("Incident 해결은 메모가 필수 — 공백뿐이면 REST 호출 없이 인라인 안내")
     void resolveRequiresNote() throws Exception {
-        MvcResult r = mvc.perform(htmx(post(URI.create(INCIDENTS + "/" + INC1 + "/resolve")), platform()).param("note", "   ")).andReturn();
+        MvcResult r = mvc.perform(htmx(post(URI.create(RESOLVE)), platform()).param("id", INC1.toString()).param("note", "   ")).andReturn();
         assertThat(status(r)).isEqualTo(422);
-        assertThat(r.getResponse().getHeader("HX-Retarget")).isEqualTo("#chain-rs-issue-" + INC1);
+        assertThat(r.getResponse().getHeader("HX-Retarget")).isEqualTo("#chain-rs-issue");
         verify(chain, never()).resolveIncident(any(), any(), any());
-        MvcResult tooLong = mvc.perform(htmx(post(URI.create(INCIDENTS + "/" + INC1 + "/resolve")), platform()).param("note", "x".repeat(1025))).andReturn();
+        MvcResult tooLong = mvc.perform(htmx(post(URI.create(RESOLVE)), platform()).param("id", INC1.toString()).param("note", "x".repeat(1025))).andReturn();
         assertThat(status(tooLong)).isEqualTo(422);
         verify(chain, never()).resolveIncident(any(), any(), any());
     }
@@ -613,22 +628,24 @@ class AuditChainPageControllerTest {
     @DisplayName("해결 409(IncidentConflict)는 경고 토스트 \"이미 해결됨\" + 루트 교체")
     void resolveConflictToast() throws Exception {
         when(chain.resolveIncident(anyString(), any(), any())).thenThrow(new IncidentConflictException("already resolved"));
-        MvcResult r = mvc.perform(htmx(post(URI.create(INCIDENTS + "/" + INC1 + "/resolve")), platform()).param("note", "x")).andReturn();
+        MvcResult r = mvc.perform(htmx(post(URI.create(RESOLVE)), platform()).param("id", INC1.toString()).param("note", "x")).andReturn();
         assertThat(status(r)).isEqualTo(200);
         JsonNode toast = trigger(r).get("toast");
         assertThat(toast.get("kind").asText()).isEqualTo("warn");
         assertThat(toast.get("title").asText()).isEqualTo("이미 해결됨");
         assertThat(toast.get("message").asText()).isEqualTo("해당 incident 는 이미 RESOLVED 상태입니다.");
-        assertThat(doc(r).selectFirst("#chain-root")).isNotNull();
+        verify(chain, never()).overview(anyInt());
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        assertThat(doc(r).selectFirst("#chain-incidents[hx-swap-oob]")).isNotNull();
     }
 
     @Test
     @DisplayName("해결 404(IncidentNotFound)는 다이얼로그 안 \"이미 처리되었거나 없는 incident입니다\" + 해결 버튼 잠금(resolve-gone) + 목록 새로고침(OOB), 토스트 없음")
     void resolveNotFoundInline() throws Exception {
         when(chain.resolveIncident(anyString(), any(), any())).thenThrow(new IncidentNotFoundException("gone"));
-        MvcResult r = mvc.perform(htmx(post(URI.create(INCIDENTS + "/" + INC1 + "/resolve")), platform()).param("note", "메모")).andReturn();
+        MvcResult r = mvc.perform(htmx(post(URI.create(RESOLVE)), platform()).param("id", INC1.toString()).param("note", "메모")).andReturn();
         assertThat(status(r)).isEqualTo(422);
-        assertThat(r.getResponse().getHeader("HX-Retarget")).isEqualTo("#chain-rs-issue-" + INC1);
+        assertThat(r.getResponse().getHeader("HX-Retarget")).isEqualTo("#chain-rs-issue");
         Document d = doc(r);
         assertThat(d.select(".banner--warning .banner__title").text()).isEqualTo("이미 처리되었거나 없는 incident입니다");
         assertThat(d.text()).contains("목록을 새로 고쳤습니다. 다이얼로그를 닫고 목록에서 확인하세요.");
@@ -641,7 +658,7 @@ class AuditChainPageControllerTest {
     @DisplayName("해결 그 밖의 실패는 다이얼로그 안 쉬운 문구, 원문 없음")
     void resolveFailureInline() throws Exception {
         when(chain.resolveIncident(anyString(), any(), any())).thenThrow(new RuntimeException("jdbc: secret"));
-        MvcResult r = mvc.perform(htmx(post(URI.create(INCIDENTS + "/" + INC1 + "/resolve")), platform()).param("note", "메모")).andReturn();
+        MvcResult r = mvc.perform(htmx(post(URI.create(RESOLVE)), platform()).param("id", INC1.toString()).param("note", "메모")).andReturn();
         assertThat(status(r)).isEqualTo(422);
         assertThat(doc(r).select(".banner--danger .banner__title").text()).isEqualTo("해결로 표시하지 못했습니다");
         assertThat(body(r)).doesNotContain("secret");
@@ -699,5 +716,120 @@ class AuditChainPageControllerTest {
         assertThat(e.select("tr.table__empty").text()).contains("위변조 의심 tenant 가 없습니다.");
         // 알 수 없는 값은 all
         assertThat(doc(getFrag(OVERVIEW + "?view=zzz", platform())).selectFirst("#chain-root").attr("data-view")).isEqualTo("all");
+    }
+
+    // ── Fix round 1 ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("대화상자 진행 상태: 래퍼는 reqBusy, 본문 x-effect 가 dialog 의 busy 로 비추고 버튼·라벨은 reqBusy 를 읽는다(안쪽 busy 가 가리지 않음)")
+    void dialogBusyIsMirroredNotShadowed() throws Exception {
+        when(chain.overview(anyInt())).thenReturn(tampered());
+        when(chain.listIncidents()).thenReturn(List.of(inc(INC1, T2, "Globex", "OPEN")));
+        String html = body(getFrag(OVERVIEW, platform()));
+        assertThat(html).doesNotContain("x-data=\"{ busy: false }\"");
+        Document d = Jsoup.parse(html);
+        for (Element wrap : List.of(d.selectFirst("#chain-dialogs > div[hx-post]"), d.selectFirst("form#chain-resolve-form"))) {
+            assertThat(wrap.attr("x-data")).contains("reqBusy: false").doesNotContain(" busy:");
+            assertThat(wrap.attr("x-on:htmx:before-request")).contains("reqBusy = true");
+            assertThat(wrap.attr("x-on:htmx:after-request")).contains("reqBusy = false").contains("dialog:close");
+            assertThat(wrap.select("[x-effect]").attr("x-effect")).isEqualTo("busy = reqBusy");
+            for (Element b : wrap.select(".dialog__foot button")) {
+                assertThat(b.attr("x-bind:disabled")).contains("reqBusy");
+                assertThat(b.attr("x-on:click")).doesNotContain("dialog:close");
+            }
+            assertThat(wrap.select(".dialog__foot [x-show=reqBusy]")).hasSize(2 - 1);
+        }
+    }
+
+    @Test
+    @DisplayName("해결 다이얼로그는 하나를 공유한다 — 새로 생긴 OPEN 사건의 해결 버튼도 같은 다이얼로그를 열고 id 는 폼 값으로 간다")
+    void sharedResolveDialog() throws Exception {
+        when(chain.listIncidents()).thenReturn(List.of(inc(INC1, T2, "Globex", "OPEN")));
+        Document d = overviewDoc();
+        assertThat(d.select("#chain-dialogs form")).hasSize(1);
+        assertThat(d.selectFirst("#chain-incidents tbody button").attr("x-on:click")).contains("resolve-open", "chain-resolve");
+        assertThat(d.selectFirst("form#chain-resolve-form").attr("x-on:resolve-open.window")).contains("rsId = $event.detail.id", "note = ''");
+    }
+
+    @Test
+    @DisplayName("재검증 요청 표식: 지금 검증·경고의 다시 시도만 data-chain-reverify — 실패(타임아웃·네트워크·비 2xx)는 failed 로 백필을 막는다. 행 검증은 아님")
+    void reverifyMarkersBlockBackfillOnFailure() throws Exception {
+        Document d = overviewDoc();
+        assertThat(d.selectFirst("button.btn--primary[hx-get]").hasAttr("data-chain-reverify")).isTrue();
+        assertThat(d.selectFirst("tbody button[data-vid]").hasAttr("data-chain-reverify")).isFalse();
+        String after = d.selectFirst("#chain-root").attr("x-on:htmx:after-request");
+        assertThat(after).contains("data-chain-reverify").contains("!$event.detail.successful").contains("failed = true");
+        when(chain.overview(anyInt())).thenThrow(new RuntimeException("x"));
+        assertThat(doc(getFrag(OVERVIEW, platform())).selectFirst("button").hasAttr("data-chain-reverify")).isTrue();
+    }
+
+    @Test
+    @DisplayName("변경 성공 뒤 재검증이 실패해도 목록·배너는 독립으로 갱신(OOB)하고 다이얼로그는 닫힌다(200) — 낡은 목록 없음")
+    void mutationSuccessThenOverviewFailureRefreshesList() throws Exception {
+        when(chain.createIncident(any(), any())).thenReturn(inc(INC1, T2, "Globex", "OPEN"));
+        when(chain.overview(anyInt())).thenThrow(new RuntimeException("down"));
+        when(chain.listIncidents()).thenReturn(List.of(inc(INC1, T2, "Globex", "OPEN")));
+        MvcResult r = postFrag(INCIDENTS + "?tenantId=" + T2, platform());
+        assertThat(status(r)).isEqualTo(200); // 요청 요소의 after-request successful → 래퍼가 다이얼로그를 닫는다
+        assertThat(r.getResponse().getHeader("HX-Retarget")).isEqualTo("#chain-warn");
+        Document d = doc(r);
+        assertThat(d.select(".banner__title").text()).isEqualTo("다시 검증하지 못했습니다");
+        assertThat(d.selectFirst("#chain-incidents[hx-swap-oob]").text()).contains("Globex");
+        assertThat(d.selectFirst("#chain-act-" + T2 + "[hx-swap-oob]").text()).contains("Incident 처리 중");
+        assertThat(trigger(r).get("toast").get("title").asText()).isEqualTo("Incident 생성됨");
+    }
+
+    @Test
+    @DisplayName("목록 다시 시도: 목록만 다시 읽는다(개요 재검증 없음, swap none). 실패하면 카드가 오류 상태 + incidentsKnown=false")
+    void incidentRetryRefreshesListOnly() throws Exception {
+        Element retryBtn;
+        when(chain.listIncidents()).thenThrow(new RuntimeException("x"));
+        Document d = overviewDoc();
+        retryBtn = d.selectFirst("#chain-incidents button");
+        assertThat(retryBtn.attr("hx-get")).isEqualTo(INCIDENTS);
+        assertThat(retryBtn.attr("hx-swap")).isEqualTo("none");
+        reset(chain);
+        when(chain.listIncidents()).thenReturn(List.of());
+        MvcResult ok = getFrag(INCIDENTS, platform());
+        assertThat(status(ok)).isEqualTo(200);
+        verify(chain, never()).overview(anyInt());
+        assertThat(ok.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        Document o = doc(ok);
+        assertThat(o.selectFirst("#chain-incidents[hx-swap-oob]").text()).contains("등록된 incident가 없습니다");
+        assertThat(body(ok)).contains("incidents-known', true");
+        when(chain.listIncidents()).thenThrow(new RuntimeException("x"));
+        MvcResult bad = getFrag(INCIDENTS, platform());
+        assertThat(doc(bad).selectFirst("#chain-incidents").text()).contains("Incident 목록을 불러오지 못했습니다.");
+        assertThat(body(bad)).contains("incidents-known', false");
+        assertThat(status(getFrag(INCIDENTS, rp()))).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("생성 버튼은 목록을 확인하기 전에는 비활성(Alpine incidentsKnown), 플랫폼 체인 행은 항상 비활성이고 바인딩이 없다")
+    void createButtonBindings() throws Exception {
+        when(chain.overview(anyInt())).thenReturn(ov(List.of(ten(null, "[platform]", false, 5, ENTRY), ten(T2, "Globex", false, 9, ENTRY))));
+        Document d = overviewDoc();
+        Element plat = d.select(".banner--danger li").get(0).selectFirst("button.btn--danger-solid");
+        assertThat(plat.hasAttr("x-bind:disabled")).isFalse();
+        Element globex = d.select(".banner--danger li").get(1).selectFirst("button.btn--danger-solid");
+        assertThat(globex.attr("x-bind:disabled")).isEqualTo("!incidentsKnown");
+        assertThat(d.selectFirst("#chain-root").attr("x-data")).contains("incidentsKnown");
+    }
+
+    @Test
+    @DisplayName("백필 메뉴 항목: 검증 중·재검증 실패에는 Alpine 이 aria-disabled + 사유(title)로 바꾸고 클릭은 다이얼로그를 열지 않는다(토스트를 지어내지 않음)")
+    void backfillMenuItemTracksBlocked() throws Exception {
+        Document d = overviewDoc();
+        Element item = d.selectFirst("[role=menuitem]");
+        assertThat(item.attr("x-bind:aria-disabled")).isEqualTo("blocked ? 'true' : null");
+        assertThat(item.attr("x-bind:title")).isEqualTo("blocked ? blockedReason : null");
+        assertThat(item.attr("x-on:click.capture")).startsWith("if (!blocked)").doesNotContain("toast");
+        assertThat(d.selectFirst("#chain-root").attr("x-data")).contains("검증 중에는 쓸 수 없습니다. 검증이 끝난 뒤 다시 시도하세요.", "최근 검증에 실패했습니다. 다시 검증해 정상임을 확인한 뒤 쓸 수 있습니다.");
+    }
+
+    @Test
+    @DisplayName("PDF 링크만 120초 타임아웃을 선택한다(CSV 링크는 그대로)")
+    void pdfLinkOptsIntoTimeout() throws Exception {
+        assertThat(overviewDoc().selectFirst("a[data-csv-download]").attr("data-download-timeout")).isEqualTo("120000");
     }
 }

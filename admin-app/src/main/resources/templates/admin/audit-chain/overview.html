@@ -28,7 +28,8 @@
 </div>
 
 <!-- warn: 다시 검증 실패. 이전 결과를 유지한 채 경고만 보인다. x-init 이 root 에 failed 를 알려 백필을 막는다. -->
-<div th:fragment="warn" class="banner banner--warning banner--top" role="status" x-init="$dispatch('chain-failed')">
+<th:block th:fragment="warn">
+<div class="banner banner--warning banner--top" role="status" x-init="$dispatch('chain-failed')">
   <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
   <div class="banner__body">
     <div class="banner__title">다시 검증하지 못했습니다</div>
@@ -38,12 +39,15 @@
     <button type="button" class="btn btn--sm" ui:attrs="${warnAttrs}" x-bind:disabled="busy"><th:block th:replace="~{admin/fragments/icons :: refresh(14)}"></th:block>다시 시도</button>
   </div>
 </div>
+<!-- 변경은 성공했지만 재검증이 실패한 응답: 목록·배너 동작은 독립으로 읽어 OOB 로 갱신한다(incidents.html oobParts). -->
+<th:block th:if="${incidentsOob}"><th:block th:replace="~{admin/audit-chain/incidents :: oobParts}"></th:block></th:block>
+</th:block>
 
-<div th:fragment="root" class="page" id="chain-root" th:attr="data-view=${view}, data-verified-at=${verifiedAtIso}"
-     x-data="{ busy: false, vid: '', failed: false, view: 'all',
+<div th:fragment="root" class="page" id="chain-root" th:attr="data-view=${view}, data-verified-at=${verifiedAtIso}, data-tampered=${tamperedFlag}, data-incidents-known=${incidentsKnownFlag}"
+     x-data="{ busy: false, vid: '', failed: false, view: 'all', incidentsKnown: true,
                get blocked() { return this.busy || this.failed; },
                get blockedReason() { return this.failed ? '최근 검증에 실패했습니다. 다시 검증해 정상임을 확인한 뒤 쓸 수 있습니다.' : '검증 중에는 쓸 수 없습니다. 검증이 끝난 뒤 다시 시도하세요.'; },
-               init() { this.view = this.$root.dataset.view || 'all'; },
+               init() { this.view = this.$root.dataset.view || 'all'; this.incidentsKnown = this.$root.dataset.incidentsKnown !== '0'; },
                ago() {
                  const t = Date.parse(this.$root.dataset.verifiedAt);
                  if (isNaN(t)) return '—';
@@ -56,9 +60,9 @@
                  if (d < 30) return d + '일 전';
                  return Math.floor(d / 30) + '개월 전';
                } }"
-     x-on:segmented-change="view = $event.detail.value" x-on:chain-failed="failed = true"
+     x-on:segmented-change="view = $event.detail.value" x-on:chain-failed="failed = true" x-on:incidents-known="incidentsKnown = $event.detail"
      x-on:htmx:before-request="if ($event.detail.elt.hasAttribute('data-chain-verify')) { busy = true; vid = $event.detail.elt.dataset.vid || ''; }"
-     x-on:htmx:after-request="if ($event.detail.elt.hasAttribute('data-chain-verify')) { busy = false; vid = ''; }">
+     x-on:htmx:after-request="if ($event.detail.elt.hasAttribute('data-chain-verify')) { busy = false; vid = ''; if ($event.detail.elt.hasAttribute('data-chain-reverify') &amp;&amp; !$event.detail.successful) failed = true; }">
   <th:block th:replace="~{:: header(~{:: headerActions})}"></th:block>
 
   <div id="chain-warn"></div>
@@ -86,9 +90,7 @@
           </span>
           <a class="btn btn--sm" th:if="${t.auditHref != null}" th:href="${t.auditHref}">감사 로그 열기 <th:block th:replace="~{admin/fragments/icons :: chevronRight(12)}"></th:block></a>
           <button type="button" class="btn btn--sm" th:if="${t.auditHref == null}" disabled>감사 로그 열기 <th:block th:replace="~{admin/fragments/icons :: chevronRight(12)}"></th:block></button>
-          <span class="badge badge--warning badge--dot" th:if="${t.hasOpen}">Incident 처리 중</span>
-          <button type="button" class="btn btn--sm btn--danger-solid" th:unless="${t.hasOpen}" th:disabled="${!t.canCreate}" th:title="${t.createTitle}"
-                  th:attr="data-dlg=${t.createId}" x-on:click="$dispatch('dialog:open', { id: $el.dataset.dlg })">Incident 생성</button>
+          <th:block th:replace="~{admin/audit-chain/incidents :: action(${t}, false)}"></th:block>
         </li>
       </ul>
     </div>
@@ -199,7 +201,7 @@
 
   <th:block th:fragment="reportFooter">
     <button type="button" class="btn" x-bind:disabled="busy" x-on:click="close()">취소</button>
-    <a class="btn btn--primary" th:href="${reportHref}" x-bind:href="href" download data-csv-download data-download-error="PDF 생성 실패" hx-boost="false"
+    <a class="btn btn--primary" th:href="${reportHref}" x-bind:href="href" download data-csv-download data-download-error="PDF 생성 실패" data-download-timeout="120000" hx-boost="false"
        x-bind:aria-disabled="busy || !ok" x-on:click="if (busy || !ok) $event.preventDefault()"
        x-on:csv-download="busy = $event.detail.state === 'start'; if ($event.detail.state === 'done') $dispatch('dialog:close', { id: 'chain-report' })"
        ><span x-show="!busy">PDF 생성 → 다운로드</span><span x-show="busy" x-cloak>생성 중…</span></a>

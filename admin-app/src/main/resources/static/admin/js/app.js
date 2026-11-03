@@ -270,6 +270,7 @@
     if (st === 429) return { title: '요청이 너무 많습니다', detail: '잠시 후 다시 시도하세요.' };
     if (st === 404) return { title: '찾을 수 없습니다', detail: '삭제되었거나 주소가 바뀌었을 수 있습니다.' };
     if (st) return { title: '요청을 처리하지 못했습니다', detail: e.serverMessage || '' };
+    if (e && e.name === 'AbortError') return { title: '서버가 잠시 응답하지 않습니다', detail: '응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요.' };
     if (e instanceof TypeError) return { title: '네트워크에 연결할 수 없습니다', detail: '연결 상태를 확인한 뒤 다시 시도하세요.' };
     return { title: '알 수 없는 오류가 발생했습니다', detail: e instanceof Error ? e.message : String(e) };
   }
@@ -295,8 +296,12 @@
     a.setAttribute('aria-busy', 'true');
     csvEvent(a, 'start');
     let state = 'fail';
+    // 선택: data-download-timeout(ms) 가 있으면 그 시간 안에 받지 못할 때 중단한다(PDF = 원본 LONG_TIMEOUT_MS). CSV 링크는 그대로.
+    const ms = parseInt(a.getAttribute('data-download-timeout') || '0', 10);
+    const ctrl = ms > 0 && window.AbortController ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, ms) : null;
     try {
-      const res = await fetch(a.href, { credentials: 'same-origin', redirect: 'follow' });
+      const res = await fetch(a.href, ctrl ? { credentials: 'same-origin', redirect: 'follow', signal: ctrl.signal } : { credentials: 'same-origin', redirect: 'follow' });
       if (res.redirected || !res.ok) {
         const err = new Error('HTTP ' + res.status);
         err.httpStatus = res.redirected ? 401 : res.status;
@@ -315,6 +320,7 @@
     } catch (e) {
       csvToast(e, a);
     } finally {
+      if (timer) clearTimeout(timer);
       a.removeAttribute('aria-busy');
       csvEvent(a, state);
     }
