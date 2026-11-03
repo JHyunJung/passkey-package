@@ -729,6 +729,109 @@ LPC = `LicensePageControllerTest`. PLATFORM 전용: RP 는 자기 tenant 로 302
 | 다시 확인 실패: 정보 유지 + 인라인 경고 | LP 12 | source ✅ (HX-Retarget #license-recheck-alert) | LPC `recheckFailureKeepsPrevious` | 미확인 |
 | 처음 로딩 Skeleton | LP 13 | 차이: 서버가 그려서 보내므로 로딩 상태 없음 | — | — |
 
+## §설정 (Task 16b, 소스 수준 점검 — Admin 사용자·보안 정책·MDS)
+
+AUT = `AdminUsersTabControllerTest`, SEC = `SecurityPolicyTabControllerTest`, MDT = `MdsTabControllerTest`. 브라우저: 전부 미확인(R8). 키 관리(KeyMgmtController)는 원본 설정 화면에 없어 이 탭들에 두지 않았다. `addTenant`/`removeTenant` 도 원본 AdminUsersTab 이 부르지 않아 화면이 없다.
+RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403, REST 미호출: AUT `rpAdminForbiddenEverywhere`, SEC `rpAdminForbidden`, MDT `rpAdminForbidden`. 리터럴 탭 매핑이 16a 일반 매핑보다 우선: AUT/SEC/MDT `literalWinsOverGeneric`.
+
+### AdminUsersTab.test.tsx (40)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 대기 요청 카드: 건수 배지·이메일·사유 | AU 71 | source ✅ | AUT `signupRequestsCard` | 미확인 |
+| 사유 없으면 '요청 사유 없음' | AU 80 | source ✅ | AUT `signupRequestsCard` | 미확인 |
+| 대기 요청 0건 안내 | AU 86 | source ✅ | AUT `signupEmptyAndFailure` | 미확인 |
+| 대기 건수를 탭 줄 배지에 알림 | AU 93 | source ✅ / 차이: 상위 상태 대신 승인·거절 응답의 OOB `#settings-tab-admins-count`(탭 줄 개수 자리, tabs.html 에 추가). 전체 화면 렌더 때는 SPC 가 계산 | AUT `approveRp`, `reject`, `tabStripCountSlot` | 미확인 |
+| 승인 대화상자: 요청자 표시 + 역할·tenant 제출 | AU 99 | source ✅ / 차이: 대화상자를 GET 으로 받아 슬롯에 연다(열 때 tenant 를 지금 읽음) | AUT `approveDialog`, `approveRp` | 미확인 |
+| RP Admin 인데 tenant 0개 → 오류, API 안 부름 | AU 118 | source ✅ / 차이: 서버도 같은 규칙으로 422 + 대화상자 안 오류(HX-Retarget) | AUT `approveValidation` · 스텁(signupApprove 제출 막기) / JS — 브라우저 확인 필요 | 미확인 |
+| tenant 검색으로 목록 좁힘 | AU 129 | source ✅ / 차이: 이미 그려진 목록을 Alpine 이 거름 | 스텁(signupApprove.matches·noMatch) / JS — 브라우저 확인 필요 | 미확인 |
+| Platform Operator → tenant 없이 승인 | AU 142 | source ✅ / 차이: 서버가 tenant 를 무시하고 빈 목록으로 호출 | AUT `approvePlatformIgnoresTenants` | 미확인 |
+| 거절은 L1 확인(기본 포커스 취소), 확인 라벨 '거절', 확인 시 호출 | AU 155 | source ✅ | AUT `rejectDialog`, `reject` | 미확인 |
+| 초대 버튼 없음 | AU 172 | source ✅ | AUT `signupRequestsCard` | 미확인 |
+| 승인 실패(409 외)는 대화상자 유지, 목록 다시 읽지 않음 | AU 179 | source ✅ / 차이: 오류 상태 + 토스트, 본문 없음 → htmx 가 스왑하지 않아 대화상자 유지 | AUT `approveConflictAndFailure` | 미확인 |
+| 승인 409 → 닫고 목록 다시 읽기(경고 토스트) | AU 192 | source ✅ / 차이: 200 + 목록 교체 + 자리 비움 OOB | AUT `approveConflictAndFailure` | 미확인 |
+| 거절 실패(409 외)는 확인창 안 인라인 오류, 유지 | AU 205 | source ✅ / 차이: confirmError(5xx 문구) | AUT `rejectConflictAndFailure` | 미확인 |
+| 거절 409 → 안내 후 닫고 요청 다시 읽기 | AU 218 | source ✅ | AUT `rejectConflictAndFailure` | 미확인 |
+| 승인 연타해도 한 번만 | AU 229 | source ✅ / 차이: hx-sync=this:drop + 요청 중 submitting(Alpine) | AUT `approveDialog`(hx-sync) · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 승인 실패 토스트는 서버 원문 대신 쉬운 문구 | AU 245 | source ✅ / 차이: 제목 '승인 실패'(원본 errorToast) | AUT `approveConflictAndFailure` | 미확인 |
+| 헤더 요약('N명 · 활성 M명')과 표 열 | AU 265 | source ✅ | AUT `operatorsTable` | 미확인 |
+| 세그먼트 PLATFORM/RP_ADMIN/정지/전체 필터 | AU 281 | source ✅ / 차이: 서버가 행에 data-role·data-status 를 달고 Alpine 이 거름 | AUT `operatorsTable`(속성) · 스텁(operatorFilter) / JS — 브라우저 확인 필요 | 미확인 |
+| 검색(이메일·ID, 대소문자 무시) + 결과 없음 | AU 303 | source ✅ / 차이: 결과 없음 행은 x-show | 스텁(operatorFilter.match·none) / JS — 브라우저 확인 필요 | 미확인 |
+| 세그먼트와 검색 함께 적용 | AU 316 | source ✅ | 스텁(operatorFilter) / JS — 브라우저 확인 필요 | 미확인 |
+| 정지·활성화 액션 버튼 | AU 325 | source ✅ | AUT `selfProtectionAndActions`, `suspendCallsRest`, `activate` | 미확인 |
+| 로딩 중 Skeleton | AU 343 | 차이: 서버 렌더라 목록 스켈레톤 없음(탭 로딩 자체는 컨테이너 스켈레톤, SPC `platformTabQueryLoadsLazily`) | — | 미확인 |
+| 운영자 목록 실패 → LoadError, 건수 '—', 검색 숨김, 다시 시도 | AU 353 | source ✅ / 차이: 검색·세그먼트는 비활성이 아니라 그리지 않음, 다시 시도 = 탭 다시 받기 | AUT `usersFailure` | 미확인 |
+| 가입 요청 실패 → LoadError, 대기 '—' | AU 365 | source ✅ | AUT `signupEmptyAndFailure` | 미확인 |
+| Tenant 열: 이름 조인·외 N개·전체 tenant | AU 373 | source ✅ | AUT `operatorsTable` | 미확인 |
+| tenants 못 읽으면 id 꼬리, 전체 id title | AU 382 | source ✅ | AUT `tenantNamesUnavailable` | 미확인 |
+| 다시 읽기 실패 → 데이터 유지 + 경고 | AU 391 | 차이: 서버 렌더엔 '이전 데이터'가 없다 — 변경 뒤 목록을 못 읽으면 운영자 카드가 LoadError(성공 토스트는 나감) | AUT `suspendThenReloadFails` | 미확인 |
+| 낡은 운영자 목록 → 행 액션 비활성·다시 시도 | AU 403 | 차이: 해당 없음(항상 방금 읽은 목록). 정지는 확인 때 서버가 목록을 다시 읽어 상태를 검증 | AUT `suspendBlockedNoRest` | 미확인 |
+| 낡은 가입 요청 → 승인·거절 비활성·다시 시도 | AU 421 | 차이: 해당 없음(항상 방금 읽은 목록). 이미 처리됐으면 409 경고 + 갱신 | AUT `approveConflictAndFailure`, `rejectConflictAndFailure` | 미확인 |
+| 정지… → L1 확인 → 정지 → 되돌리기 토스트 → 활성화 API | AU 447 | 차이: 토스트에 '되돌리기' 버튼 없음(토스트 액션은 링크만 지원) — 문구로 '목록의 “활성화”'를 안내. 활성화 경로는 같음 | AUT `suspendDialog`, `suspendCallsRest`, `activate` | 미확인 |
+| 정지 실패는 다이얼로그 안 인라인, 유지, 되돌리기 없음 | AU 467 | source ✅ | AUT `suspendRestFailure` | 미확인 |
+| 본인·마지막 활성 PLATFORM 은 정지 비활성 + 사유 | AU 479 | source ✅ / 차이: 서버도 확인 때 같은 규칙을 한 번 더 본다(REST 안 부름, 409) | AUT `selfProtectionAndActions`, `lastPlatformBlocked`, `suspendBlockedNoRest`, `units` | 미확인 |
+| 활성 PLATFORM 이 둘 이상이면 PLATFORM 도 정지 가능 | AU 490 | source ✅ | AUT `selfProtectionAndActions` | 미확인 |
+| 활성화 처리 중 '활성화 중…' 비활성, 연타 한 번 | AU 497 | source ✅ / 차이: 라벨은 안 바뀐다(hx-disabled-elt 로 비활성 + hx-sync=this:drop) | AUT `selfProtectionAndActions`(속성) / JS — 브라우저 확인 필요 | 미확인 |
+| 되돌리기 연타·실패·stale 3건(511·528·611·625) | AU 511/528/611/625 | 차이: 해당 없음 — 되돌리기 토스트 버튼이 없다(위 447 행) | — | 미확인 |
+| 활성화 실패 토스트도 쉬운 문구 | AU 543 | source ✅ / 차이: 제목 '활성화하지 못했습니다' | AUT `activate` | 미확인 |
+| 다른 운영자의 처리가 겹쳐도 행 표시는 독립 | AU 553 | source ✅ / 차이: hx-sync 는 버튼별이지만 성공 응답은 #au-users 전체를 교체 | AUT `selfProtectionAndActions`(속성) / JS — 브라우저 확인 필요 | 미확인 |
+| 열려 있던 정지 다이얼로그는 목록이 낡아지면 정지하지 않고 안내 | AU 571 | source ✅ / 차이: 서버가 확인 때 목록을 읽어 판정 | AUT `suspendBlockedNoRest` | 미확인 |
+| 이미 처리 중인 운영자는 정지하지 않고 성공 토스트 없음 | AU 587 | source ✅ / 차이: 확인 버튼 hx-sync=this:drop(서버 측 직렬화는 없음) | AUT `suspendDialog`(속성) / JS — 브라우저 확인 필요 | 미확인 |
+| 정지 다이얼로그는 목록 다시 읽기를 기다리지 않고 닫힘 | AU 641 | 차이: 응답이 갱신된 목록을 함께 돌려주고 #au-users 교체로 다이얼로그가 사라진다 | AUT `suspendCallsRest` | 미확인 |
+
+### SecurityPolicyTab.test.tsx (17)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 카드 헤더 캡션 '모든 콘솔 운영자에게 적용' | SP 33 | source ✅ | SEC `rendersPolicy` | 미확인 |
+| .set 3행 + 변경 없으면 SaveBar 없음 | SP 38 | source ✅ / 차이: SaveBar 는 변경 0건이면 x-show 로 숨김 | SEC `rendersPolicy` / JS — 브라우저 확인 필요 | 미확인 |
+| dirty → SaveBar(건수·요약), 저장하면 update 후 사라짐 | SP 46 | source ✅ / 차이: 저장 = 폼 PUT, 성공 응답이 탭 전체를 새 값으로 다시 그림 | SEC `savesAndRerendersTab`, `rendersPolicy` / JS — 브라우저 확인 필요 | 미확인 |
+| CORS: Enter 추가(새 칩 강조), 중복 안내, 취소 = 서버 값 | SP 65 | source ✅ / 차이: 중복·형식 검증은 서버 왕복(origin-check). 취소 = form.reset(탭을 그린 시점의 값) | SEC `originCheck` / JS — 브라우저 확인 필요 (Task 3 chipInput 스텁) | 미확인 |
+| dirty 상태 탭 이동은 이탈 확인 | SP 83 | source ✅ | SPC 탭 링크 data-guard-dirty + `$store.dirty` / JS — 브라우저 확인 필요 | 미확인 |
+| 로드 실패 → 기본값 대신 LoadError, 입력칸·저장 숨김, 다시 시도 | SP 93 | source ✅ | SEC `loadFailure` | 미확인 |
+| timeout 1–1440 인라인 오류, 저장해도 API 안 부름, 입력칸 포커스 | SP 104 | source ✅ / 차이: 서버도 422 + 필드 오류 | SEC `idleValidation` · 스텁(securityPolicy.timeoutErr·onSubmit) / JS — 브라우저 확인 필요 | 미확인 |
+| origin 형식 오류면 추가하지 않고 입력값 남김 | SP 123 | source ✅ / 차이: origin-check 가 오류 문구 | SEC `originCheck`, `corsValidation` / JS — 브라우저 확인 필요 | 미확인 |
+| origin 소문자 저장, 대소문자 중복 안내 | SP 134 | source ✅ | SEC `originCheck` | 미확인 |
+| 콘솔 origin 지우면 경고 + 삭제 되돌리기, 저장하면 L2 확인 | SP 145 | source ✅ / 차이: L2 확인은 422 + 다이얼로그(저장 바가 2xx 를 저장됨으로 세지 않게), 확인 = confirmLockout=1 PUT | SEC `removingConsoleAsksConfirmation`, `confirmedAndCaseInsensitive`, `consoleWarningConfig` · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 콘솔 origin 경고 문구는 실제 영향을 말한다 | SP 170 | source ✅ | SEC `consoleWarningConfig` | 미확인 |
+| 저장 중 입력 잠금, 저장은 한 번만 | SP 184 | 차이: 입력 잠금 없음(Task 10 과 같은 차이). 중복 전송은 hx-sync=this:drop + 저장 바 saving 이 막는다 | SEC `rendersPolicy`(hx-sync) / JS — 브라우저 확인 필요 | 미확인 |
+| 저장 실패는 쉬운 문구 토스트, 입력 그대로 | SP 201 | source ✅ | SEC `saveFailure` | 미확인 |
+| 삭제 되돌리기는 64개면 거부·안내 | SP 210 | source ✅ | 스텁(securityPolicy.restore) / JS — 브라우저 확인 필요 | 미확인 |
+| 저장 전 목록 전체 검증(64개 초과) | SP 224 | source ✅ / 차이: 서버 422 + 인라인 오류(확인창·REST 없음) | SEC `corsValidation` | 미확인 |
+| 대문자로 저장된 콘솔 origin 도 지우면 경고 | SP 235 | source ✅ | SEC `consoleWarningConfig`, `removesConsoleUnit`, `confirmedAndCaseInsensitive` | 미확인 |
+| 서버에 1440 초과가 저장돼 있어도 손대지 않으면 막지 않음 | SP 245 | source ✅ | SEC `idleBoundariesAndUntouched` · 스텁 | 미확인 |
+
+### MdsStatusTab.test.tsx · api/mdsStatus.test.ts (26)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 실패 행 errorMessage 한 줄 평문(길면 줄임), 전체 title | MD 43 | source ✅ | MDT `failureReasonIsPlain`, `units` | 미확인 |
+| 이력 limit=30, 스트립 막대 수 = 이력 수 | MD 59 | source ✅ | MDT `historyTableAndStrip` | 미확인 |
+| 헤드라인·KPI·설정 | MD 71 | source ✅ | MDT `headlineKpisSettings` | 미확인 |
+| 이력 표 최근 6행, 상태 라벨 한국어 | MD 83 | source ✅ | MDT `historyTableAndStrip`, `rowLabelsAndKst` | 미확인 |
+| 최신 실행이 실패면 실패 헤드라인 | MD 94 | source ✅ | MDT `failedHeadlineAndEmpty` | 미확인 |
+| 즉시 갱신 → sync 후 상태·이력 다시 읽기 | MD 100 | source ✅ / 차이: 응답이 #mds-root 를 통째로 교체 | MDT `syncSynced` | 미확인 |
+| 한 번도 동기화 안 된 설치(version 0, 1970 시드) → 중립 | MD 109 | source ✅ | MDT `neverSynced` | 미확인 |
+| fetchedAt 2000년 이전이면 이력 없음 | MD 124 | source ✅ | MDT `neverSynced`, `units` | 미확인 |
+| 이력이 오기 전에는 '정상' 헤드라인을 먼저 그리지 않음 | MD 130 | source ✅ / 차이: 서버가 상태·이력을 모두 읽은 뒤 한 번에 렌더(원천적으로 발생 안 함) | MDT `historyOnlyFailure` | 미확인 |
+| 상태 조회 실패는 오류 상태 | MD 142 | source ✅ | MDT `statusFailure` | 미확인 |
+| 이력 시각은 KST | MD 153 | source ✅ | MDT `rowLabelsAndKst` | 미확인 |
+| 신뢰 모드 라벨 + 설명, 원문은 툴팁 | MD 162 | source ✅ | MDT `headlineKpisSettings` | 미확인 |
+| 모르는 신뢰 모드는 원문 | MD 170 | source ✅ | MDT `trustModes` | 미확인 |
+| 서버가 값을 안 주면 '—' | MD 178 | source ✅ | MDT `trustModes`, `neverSynced` | 미확인 |
+| 영어 잔재 'next 갱신 예정' 없음 | MD 189 | source ✅ | MDT `headlineKpisSettings` | 미확인 |
+| 로드 실패 LoadError(다시 시도 + 오류 정보 복사), 토스트 없음 | MD 196 | source ✅ | MDT `statusFailure` | 미확인 |
+| 로딩 중 Skeleton | MD 205 | 차이: 탭 컨테이너 스켈레톤(SPC `platformTabQueryLoadsLazily`) | — | 미확인 |
+| 갱신 뒤 재조회 실패 → 데이터 유지 + 경고 | MD 215 | 차이: 서버 렌더엔 이전 데이터가 없다 — 갱신 토스트는 나가고 탭은 LoadError(다시 시도) | MDT `syncThenReloadFails` | 미확인 |
+| 즉시 갱신은 진행 중 재클릭해도 한 번만, 끝나면 다시 가능 | MD 228 | source ✅ / 차이: hx-sync=this:drop + hx-disabled-elt + 120초 제한. 라벨 전환은 .htmx-request CSS | MDT `syncButtonAttrs` / JS — 브라우저 확인 필요 | 미확인 |
+| 갱신 예외는 쉬운 문구(원문 없음), 버튼 복구 | MD 241 | source ✅ | MDT `syncException` | 미확인 |
+| 갱신 결과가 FAILED 여도 서버 원문 error 를 싣지 않음 | MD 255 | source ✅ | MDT `syncSkippedAndFailed` | 미확인 |
+| 이력만 실패 → 이력 영역 LoadError, '정상'·'이력 없음' 아님 | MD 264 | source ✅ | MDT `historyOnlyFailure` | 미확인 |
+| 재조회에서 이력만 실패하면 이전 이력 유지 + 경고 | MD 277 | 차이: 이전 이력이 없다(서버 렌더) — 이력 영역 LoadError | MDT `historyOnlyFailure` | 미확인 |
+| 겹친 재조회 순서가 바뀌어도 채택된 최신 이력 유지 | MD 289 | 차이: 해당 없음 — 응답 하나가 화면을 통째로 바꾸고 갱신 버튼은 hx-sync=this:drop | — | 미확인 |
+| Object.prototype 이름 같은 신뢰 모드도 원문 | MD 315 | source ✅ | MDT `trustModes` | 미확인 |
+| limit 쿼리·스트립 상수 30 (api/mdsStatus.test.ts) | MA 9·13 | source ✅ / 차이: 직접 메서드 호출 history(30) | MDT `historyTableAndStrip` | 미확인 |
+
 ## §Tenant 자격 증명 탭 (Task 12, 소스 수준 점검)
 
 약어: CT = `CredentialsTab.test.tsx` 순번, CD = `CredentialDetailDialog.test.tsx` 순번, CH = `credentialHelpers.test.ts`, CC = `CredentialsTabControllerTest`. 브라우저: 미확인(행 클릭 cred-open 이벤트, 다이얼로그 열기·닫기, 확인 입력 게이트, 디바운스는 JS — 브라우저 확인 필요).

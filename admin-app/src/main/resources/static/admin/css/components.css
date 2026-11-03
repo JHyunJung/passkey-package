@@ -396,7 +396,7 @@ a.menu__item { text-decoration: none; }
 .table a.row-link:focus-visible { outline: var(--focus-outline); outline-offset: 2px; border-radius: 4px; }
 
 /* Tenant WebAuthn·AAGUID 탭 */
-.tabs__badgeslot { display: contents; }
+.tabs__badgeslot, .tabs__countslot { display: contents; }
 .chg { display: none; }
 [data-field][data-changed] .chg { display: inline-flex; }
 [data-field][data-changed] .input--track { border-color: var(--warn-dot); }
@@ -500,3 +500,23 @@ a.menu__item { text-decoration: none; }
 .license-recheck__busy { display: none; }
 .htmx-request .license-recheck__idle { display: none; }
 .htmx-request .license-recheck__busy { display: inline; }
+
+/* ── 설정 › Admin 사용자·MDS·보안 정책 ── */
+.au-req { gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); }
+.au-req:last-child { border-bottom: 0; }
+.au-avatar-warn { width: 34px; height: 34px; background: var(--warn-soft); color: var(--warn); }
+.au-tenants { border: 1px solid var(--line); border-radius: var(--r); max-height: 176px; overflow: auto; }
+.au-tenants--bad { border-color: var(--bad); }
+.au-tenant { gap: 10px; flex-wrap: nowrap; padding: 10px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+.au-tenant:last-child { border-bottom: 0; }
+.au-tenant input { width: 16px; height: 16px; margin: 0; accent-color: var(--brand-700); }
+.mds-head { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 20px 24px; }
+.mds-head__icon { width: 48px; height: 48px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.mds-head__icon--ok { background: var(--ok-soft); color: var(--ok); }
+.mds-head__icon--bad { background: var(--bad-soft); color: var(--bad); }
+.mds-head__icon--neutral { background: var(--sunk); color: var(--mute); }
+.mds-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .mds-grid { grid-template-columns: minmax(0, 1fr); } }
+.mds-sync__busy { display: none; }
+.htmx-request .mds-sync__idle { display: none; }
+.htmx-request .mds-sync__busy { display: inline; }

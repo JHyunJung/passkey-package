@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  설정 › 보안 정책 탭(← pages/settings/SecurityPolicyTab.tsx). 컨트롤러: SecurityPolicyTabController(GET /admin/_/settings/tab/security, PUT /admin/_/settings/security; PLATFORM 전용).
+  모델: sp(Form: idle, mfa, cors, consoleOrigin, consoleSaved), savePath, originCheckUrl 또는 loadError/retryAttrs
+  흐름: 저장 바의 저장 = 폼 제출 = PUT. 검증 실패 → 422 + 필드 옆 오류(#sec-err-*, OOB). 콘솔 주소를 목록에서 빼면 422 + L2 확인 다이얼로그(#sec-confirm-slot) → 확인 = 같은 PUT(confirmLockout=1).
+  성공 응답은 탭 전체(#settings-tab)를 새 값으로 바꾼다(HX-Retarget). 콘솔 주소 경고·되돌리기와 idle 즉시 검증은 Alpine(securityPolicy).
+-->
+<th:block th:fragment="tab">
+  <section class="card" th:if="${loadError != null}">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('보안 정책', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+  </section>
+
+  <th:block th:if="${loadError == null}">
+    <form id="sec-form" class="stack-4" novalidate
+          data-savebar-labels='{"sessionIdleTimeoutMinutes":"세션 idle timeout","mfaRequired":"MFA 필수","corsAllowlist":"CORS Allowlist"}'
+          data-savebar-unordered="corsAllowlist"
+          th:hx-put="${savePath}" hx-target="#sec-confirm-slot" hx-swap="innerHTML" hx-sync="this:drop"
+          ui:xdata="${@fmt.xdata('securityPolicy', 'idle', sp.idle, 'cors', sp.cors, 'consoleOrigin', sp.consoleOrigin, 'consoleSaved', sp.consoleSaved, 'savedHasConsole', sp.consoleSaved != null)}"
+          x-on:submit="onSubmit($event)" x-on:chips-change="onChips($event)"
+          x-on:keydown.enter="$event.target.tagName === 'INPUT' &amp;&amp; $event.preventDefault()">
+      <section class="card">
+        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('세션 & 인증 정책', null, '모든 콘솔 운영자에게 적용', null)}"></th:block>
+
+        <div class="set" data-field="sessionIdleTimeoutMinutes">
+          <div>
+            <label class="set__label" for="sec-idle-timeout" style="display: block">세션 idle timeout (분)</label>
+            <p class="set__desc">이 시간 동안 활동이 없으면 세션이 만료됩니다. 만료 직전 연장 모달이 뜹니다.</p>
+          </div>
+          <div class="stack-1">
+            <div class="row" style="gap: 10px">
+              <input id="sec-idle-timeout" name="sessionIdleTimeoutMinutes" class="input mono" type="number" inputmode="numeric" min="1" max="1440" step="1"
+                     th:value="${sp.idle}" x-model="idle" x-ref="idle" style="max-width: 120px"
+                     x-bind:aria-invalid="timeoutErr ? 'true' : null"
+                     x-bind:aria-describedby="timeoutErr ? 'sec-idle-timeout-err' : 'sec-idle-timeout-help'">
+              <span style="font-size: 13px; color: var(--ink-2)">분</span>
+            </div>
+            <p id="sec-idle-timeout-err" class="field__error" role="alert" style="margin: 0" x-show="timeoutErr" x-cloak x-text="timeoutErr"></p>
+            <p id="sec-idle-timeout-help" class="hint" style="margin: 0" x-show="!timeoutErr">1–1440분 (최대 24시간)</p>
+            <p id="sec-err-sessionIdleTimeoutMinutes" class="field__error" data-field-error></p>
+          </div>
+        </div>
+
+        <div class="set" data-field="mfaRequired">
+          <div>
+            <span class="set__label" style="display: block">MFA 필수</span>
+            <p class="set__desc">켜면 MFA 를 등록하지 않은 운영자는 다음 로그인 때 등록해야 합니다.</p>
+          </div>
+          <div style="align-self: flex-start">
+            <th:block th:replace="~{admin/fragments/ui/switch :: switch('모든 운영자에게 MFA 필수', 'mfaRequired', ${sp.mfa}, null, null)}"></th:block>
+          </div>
+        </div>
+
+        <div class="set" data-field="corsAllowlist">
+          <div>
+            <span class="set__label" style="display: block">CORS Allowlist</span>
+            <p class="set__desc">콘솔 API 를 호출할 수 있는 origin. Enter 로 추가합니다.</p>
+          </div>
+          <div class="stack-2">
+            <th:block th:replace="~{admin/fragments/ui/chipInput :: chipInput('corsAllowlist', ${sp.cors}, 'https://… 추가 후 Enter', 'origin 추가', true, null, ${originCheckUrl}, null)}"></th:block>
+            <p class="field__error" role="alert" style="margin: 0" x-show="listError" x-cloak x-text="listError"></p>
+            <p id="sec-err-corsAllowlist" class="field__error" data-field-error></p>
+            <p class="hint" style="margin: 0">https://호스트[:포트] 형식. 경로 · 와일드카드(*) 불가.</p>
+            <!-- 지금 쓰고 있는 콘솔 주소를 허용 목록에서 뺐다(저장된 목록엔 있었음) — 경고 + 삭제 되돌리기 -->
+            <div class="banner banner--warning" role="status" x-show="removesConsole" x-cloak>
+              <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+              <div class="banner__body">
+                <div><span class="mono" th:text="${sp.consoleOrigin}">https://console.example.com</span> 은 지금 쓰고 있는 콘솔 주소입니다. 이 주소가 CORS 허용 목록에서 빠집니다. 다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.</div>
+              </div>
+              <div class="banner__actions"><button type="button" class="btn btn--sm" x-on:click="restore()">삭제 되돌리기</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <p id="sec-err-form" class="field__error" data-field-error></p>
+      <th:block th:replace="~{admin/fragments/ui/saveBar :: saveBar(null, null, '저장', '취소')}"></th:block>
+    </form>
+    <div id="sec-confirm-slot"></div>
+  </th:block>
+</th:block>
+
+<!--
+  저장 응답(422): 필드 오류 자리를 OOB 로 채우거나 비운다. dialog 이면 현재 콘솔 주소 제거 확인(L2) 다이얼로그도 함께 돌려준다(대상 #sec-confirm-slot 안쪽).
+  모델: errors, dialog, (dialog 면) draftIdle, draftMfa, draftCors, consoleOrigin, saveAttrs
+-->
+<th:block th:fragment="result">
+  <p th:each="k : ${ {'sessionIdleTimeoutMinutes', 'corsAllowlist', 'form'} }" th:id="${'sec-err-' + k}" class="field__error" data-field-error
+     hx-swap-oob="true" th:attr="role=${errors.get(k) != null} ? 'alert' : null" th:text="${errors.get(k)}"></p>
+
+  <form th:if="${dialog}" id="sec-confirm-form" class="fieldset--bare" novalidate x-data x-on:submit.prevent
+        x-init="$nextTick(() => $dispatch('dialog:open', { id: 'sec-confirm' }))">
+    <input type="hidden" name="sessionIdleTimeoutMinutes" th:value="${draftIdle}">
+    <input type="hidden" name="mfaRequired" th:value="${draftMfa}">
+    <input type="hidden" name="corsAllowlist" th:each="o : ${draftCors}" th:value="${o}">
+    <input type="hidden" name="confirmLockout" value="1">
+    <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog('sec-confirm', 'L2', '현재 콘솔 주소를 빼고 저장할까요?', '저장', null, ~{admin/settings/security :: lockBody}, false, null, null, null, ${saveAttrs})}"></th:block>
+  </form>
+</th:block>
+
+<th:block th:remove="all">
+  <th:block th:fragment="lockBody">
+    <p class="card__sub" style="margin: 0"><span class="mono" th:text="${consoleOrigin}">https://console.example.com</span> 이 CORS 허용 목록에서 빠집니다. 다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.</p>
+    <p class="hint" style="margin: 0">필요하면 이 주소를 다시 추가해 저장하세요.</p>
+  </th:block>
+</th:block>
+</body>
+</html>

@@ -881,6 +881,76 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // ── 설정 › Admin 사용자 ──
+  // 운영자 목록 필터(원본 matchesOperator): 역할 선택(segmented-change 가 filter 를 바꾼다)과 이메일·ID 검색을 이미 그려진 행에 적용한다.
+  Alpine.data('operatorFilter', () => ({
+    filter: 'all',
+    q: '',
+    match(el) {
+      const d = el.dataset;
+      if (this.filter === 'PLATFORM' && d.role !== 'PLATFORM_OPERATOR') return false;
+      if (this.filter === 'RP_ADMIN' && d.role !== 'RP_ADMIN') return false;
+      if (this.filter === 'SUSPENDED' && d.status !== 'SUSPENDED') return false;
+      const q = this.q.trim().toLowerCase();
+      return q === '' || (d.hay || '').includes(q);
+    },
+    get none() { return Array.from(this.$root.querySelectorAll('tr[data-op]')).every((r) => !this.match(r)); },
+  }));
+
+  // 가입 요청 승인 대화상자(원본 ApproveDialog): 역할 선택, RP Admin 이면 tenant 1개 이상(없으면 제출 막고 오류), 검색, 요청 중 닫기·중복 제출 막기.
+  // 서버가 같은 규칙을 다시 검증한다(422 + #au-approve-err). 요청 중에는 바깥 dialog 의 busy 를 비춰 Escape·스크림·취소로 닫히지 않게 한다.
+  Alpine.data('signupApprove', () => ({
+    role: 'RP_ADMIN',
+    tenantIds: [],
+    q: '',
+    touched: false,
+    submitting: false,
+    get formValid() { return this.role === 'PLATFORM_OPERATOR' || this.tenantIds.length > 0; },
+    get showErr() { return this.role === 'RP_ADMIN' && this.touched && this.tenantIds.length === 0; },
+    matches(hay) { const q = this.q.trim().toLowerCase(); return q === '' || (hay || '').includes(q); },
+    get noMatch() {
+      const rows = Array.from(this.$root.querySelectorAll('[data-tenant]'));
+      return rows.length > 0 && rows.every((r) => !this.matches(r.dataset.q));
+    },
+    onSubmit(e) { this.touched = true; if (!this.formValid || this.submitting) e.preventDefault(); },
+    onBefore(e) { if (!ownRequest(e, 'au-approve-form')) return; this.submitting = true; clearById('au-approve-err'); },
+    onAfter(e) { if (ownRequest(e, 'au-approve-form')) this.submitting = false; },
+  }));
+
+  // ── 설정 › 보안 정책 ──
+  // idle timeout 즉시 검증(원본 timeoutError: 손대지 않았으면 오류 아님), 콘솔 주소 제거 경고·삭제 되돌리기(원본 removesConsole / restoreConsoleOrigin).
+  // 칩 목록의 변경은 chips-change 로 받는다. 되돌리기는 삭제한 주소를 chip-add 로 다시 넣는다(저장 바는 이 목록을 순서 없이 비교하므로 변경 0건이 된다).
+  const SEC_TIMEOUT_ERROR = '1–1440 사이의 분을 입력하세요. 비워 둘 수 없습니다.';
+  const SEC_RESTORE_FULL = '목록이 가득 찼습니다(최대 64개). 다른 origin 을 지운 뒤 되돌리세요.';
+  Alpine.data('securityPolicy', (cfg = {}) => ({
+    idle: cfg.idle == null ? '' : String(cfg.idle),
+    cors: Array.isArray(cfg.cors) ? [...cfg.cors] : [],
+    listError: '',
+    init() {
+      const idle0 = this.idle;
+      const cors0 = [...this.cors];
+      onFormReset(this.$root, () => { this.idle = idle0; this.cors = [...cors0]; this.listError = ''; });
+    },
+    get timeoutErr() {
+      const v = this.idle.trim();
+      if (v === String(cfg.idle == null ? '' : cfg.idle)) return '';
+      if (!/^\d+$/.test(v)) return SEC_TIMEOUT_ERROR;
+      const n = parseInt(v, 10);
+      return n >= 1 && n <= 1440 ? '' : SEC_TIMEOUT_ERROR;
+    },
+    has(list) { const c = (cfg.consoleOrigin || '').toLowerCase(); return list.some((o) => String(o).toLowerCase() === c); },
+    get removesConsole() { return !!cfg.savedHasConsole && !this.has(this.cors); },
+    onChips(e) { this.listError = ''; this.cors = (e.detail && e.detail.values) || []; },
+    restore() {
+      if (this.cors.length >= 64) { this.listError = SEC_RESTORE_FULL; return; }
+      this.listError = '';
+      this.$root.dispatchEvent(new CustomEvent('chip-add', { detail: { name: 'corsAllowlist', value: cfg.consoleSaved } }));
+    },
+    onSubmit(e) {
+      if (this.timeoutErr) { e.preventDefault(); e.stopPropagation(); const i = this.$refs.idle; if (i) i.focus(); }
+    },
+  }));
+
   // 복구 코드 .txt 다운로드: 화면에 이미 그려진 코드를 브라우저에서 Blob 으로(서버 세션 저장 없음).
   window.adminDownloadText = (filename, text) => {
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8;' });

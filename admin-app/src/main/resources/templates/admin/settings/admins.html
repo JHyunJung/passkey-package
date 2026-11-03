@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  설정 › Admin 사용자 탭(← pages/settings/AdminUsersTab.tsx). 컨트롤러: AdminUsersTabController(GET /admin/_/settings/tab/admins, PLATFORM 전용).
+  구성: #au-content = 가입 요청 카드(#au-signups) + 콘솔 운영자 카드(#au-users), #au-dialog-slot = 승인 대화상자 자리.
+  변경 응답: 정지·활성화 = #au-users 교체, 거절 = #au-signups 교체 + 탭 줄 개수 OOB, 승인 = #au-content 교체 + 자리 비움 + 개수 OOB.
+  모델: pending/pendingCount/signupsError, ops/opsSummary/roleOptions/usersError, retryAttrs
+  이메일·tenant 이름·가입 사유는 사용자 입력이므로 th:text 로만 그린다.
+-->
+<th:block th:fragment="tab">
+  <th:block th:replace="~{admin/settings/admins :: content}"></th:block>
+  <div id="au-dialog-slot"></div>
+</th:block>
+
+<div th:fragment="content" id="au-content" class="stack-6">
+  <th:block th:replace="~{admin/settings/admins :: signups}"></th:block>
+  <th:block th:replace="~{admin/settings/admins :: users}"></th:block>
+</div>
+
+<!-- ── 가입 요청 ── -->
+<section th:fragment="signups" id="au-signups" class="card" aria-label="가입 요청" th:styleappend="${pending != null and !pending.isEmpty()} ? 'border-color: var(--warn-line)'">
+  <!-- 목록을 못 읽음: '없음'이 아니라 실패(대기 —) -->
+  <th:block th:if="${pending == null}">
+    <div class="card__head">
+      <h2 class="card__title">가입 요청</h2>
+      <span class="badge">대기 —</span>
+    </div>
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('가입 요청', ${signupsError}, ${retryAttrs}, false, true)}"></th:block>
+  </th:block>
+
+  <th:block th:if="${pending != null and pending.isEmpty()}">
+    <div class="card__head" style="border-bottom: 0">
+      <h2 class="card__title">가입 요청</h2>
+      <span class="badge">대기 0건</span>
+      <div class="spacer"></div>
+      <span class="hint hint--flush">대기 중인 요청이 없습니다</span>
+    </div>
+  </th:block>
+
+  <th:block th:if="${pending != null and !pending.isEmpty()}">
+    <div class="card__head" style="background: var(--warn-soft); border-radius: var(--r) var(--r) 0 0">
+      <div class="col" style="gap: 2px">
+        <div class="row" style="gap: 8px">
+          <h2 class="card__title">가입 요청</h2>
+          <span class="badge badge--warning" th:text="${'대기 ' + pending.size() + '건'}">대기 1건</span>
+        </div>
+        <p class="card__sub">로그인 화면에서 들어온 관리자 계정 요청. 승인 시 역할과 tenant 를 지정합니다.</p>
+      </div>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0">
+      <li th:each="r : ${pending}" class="row au-req" th:data-request="${r.id}">
+        <span class="avatar au-avatar-warn" aria-hidden="true" th:text="${r.initial}">A</span>
+        <div class="col" style="flex: 1 1 260px; min-width: 0">
+          <strong style="font-size: 13px" th:text="${r.email}">a@x.com</strong>
+          <span class="truncate" style="font-size: 13px; color: var(--ink-2)" th:title="${r.reason}" th:text="${r.reason ?: '요청 사유 없음'}">사유</span>
+        </div>
+        <span class="hint hint--flush" th:text="${r.ago}">5분 전</span>
+        <div class="row" style="gap: 6px">
+          <button type="button" class="btn" x-data x-on:click="$dispatch('dialog:open', { id: $el.dataset.dialog })" th:data-dialog="${r.rejectDialogId}">거절…</button>
+          <button type="button" class="btn btn--primary" ui:attrs="${r.approveAttrs}">승인…</button>
+        </div>
+      </li>
+    </ul>
+
+    <!-- 거절 확인(L1). 승인은 대화상자를 GET 으로 받아 #au-dialog-slot 에 연다. -->
+    <th:block th:each="r : ${pending}">
+      <th:block th:with="rTitle='가입 요청을 거절할까요?'">
+        <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog(${r.rejectDialogId}, 'L1', ${rTitle}, '거절', null, ~{admin/settings/admins :: rejectBody}, null, null, null, null, ${r.rejectAttrs})}"></th:block>
+      </th:block>
+    </th:block>
+  </th:block>
+</section>
+
+<!-- ── 콘솔 운영자 ── -->
+<section th:fragment="users" id="au-users" class="card" ui:xdata="${@fmt.xdata('operatorFilter')}" x-on:segmented-change="filter = $event.detail.value">
+  <div class="card__head">
+    <div class="col" style="gap: 2px">
+      <h2 class="card__title">콘솔 운영자</h2>
+      <span class="hint hint--flush" th:text="${ops != null} ? ${opsSummary} : '—'">3명 · 활성 3명</span>
+    </div>
+    <div class="spacer"></div>
+    <th:block th:if="${ops != null}">
+      <th:block th:replace="~{admin/fragments/ui/segmented :: segmented(null, ${roleOptions}, 'all', '역할')}"></th:block>
+      <div class="search" style="flex: 0 1 220px">
+        <th:block th:replace="~{admin/fragments/icons :: search(15)}"></th:block>
+        <input class="input" placeholder="이메일 · ID" aria-label="운영자 검색" x-model="q">
+      </div>
+    </th:block>
+  </div>
+
+  <th:block th:if="${ops == null}">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('운영자 목록', ${usersError}, ${retryAttrs}, false, false)}"></th:block>
+  </th:block>
+
+  <div class="tw" th:if="${ops != null}">
+    <table class="table">
+      <thead>
+        <tr><th>운영자</th><th>역할</th><th>Tenant</th><th>MFA</th><th>마지막 로그인</th><th>상태</th><th>액션</th></tr>
+      </thead>
+      <tbody>
+        <tr th:each="o : ${ops}" data-op th:data-role="${o.roleKey}" th:data-status="${o.statusKey}" th:data-hay="${o.hay}" x-show="match($el)">
+          <td>
+            <div class="row" style="gap: 10px; flex-wrap: nowrap">
+              <span class="avatar" style="width: 30px; height: 30px; font-size: 12px" aria-hidden="true" th:text="${o.initial}">A</span>
+              <div class="col" style="min-width: 0">
+                <strong style="font-size: 13px" th:text="${o.email}">a@x.com</strong>
+                <span class="hint hint--flush mono" th:text="${'…' + o.idTail}">…1234567890</span>
+              </div>
+            </div>
+          </td>
+          <td><span th:replace="~{admin/fragments/ui/badge :: badge(${o.roleLabel}, ${o.platform ? 'plat' : 'info'}, false, null, null)}"></span></td>
+          <td>
+            <span th:if="${o.tenant.kind == 'ALL'}" style="font-size: 13px; color: var(--ink-2)">전체 tenant</span>
+            <span th:if="${o.tenant.kind == 'NONE'}" class="faint">—</span>
+            <div th:if="${o.tenant.kind == 'NAME' or o.tenant.kind == 'ID'}" class="col" style="min-width: 0">
+              <span th:if="${o.tenant.kind == 'NAME'}" class="truncate" style="font-size: 13px" th:title="${o.tenant.title}" th:text="${o.tenant.text}">이름</span>
+              <span th:if="${o.tenant.kind == 'ID'}" class="mono" style="font-size: 12px" th:title="${o.tenant.title}" th:text="${o.tenant.text}">…id</span>
+              <span th:if="${o.tenant.more > 0}" class="hint hint--flush" th:text="${'외 ' + o.tenant.more + '개'}">외 1개</span>
+            </div>
+          </td>
+          <td><span th:replace="~{admin/fragments/ui/badge :: badge(${o.mfa ? 'ON' : 'OFF'}, ${o.mfa ? 'ok' : 'warn'}, null, null, null)}"></span></td>
+          <td><span style="font-size: 13px; color: var(--ink-2)" th:text="${o.lastLogin}">5분 전</span></td>
+          <td><th:block th:replace="~{admin/fragments/ui/statusBadge :: statusBadge(${o.status})}"></th:block></td>
+          <td>
+            <button th:if="${o.status == 'SUSPENDED'}" type="button" class="btn btn--sm" ui:attrs="${o.activateAttrs}">활성화</button>
+            <th:block th:if="${o.status == 'ACTIVE'}">
+              <div th:if="${o.block != null}" class="col" style="gap: 2px; align-items: flex-start">
+                <button type="button" class="btn btn--sm" disabled th:aria-describedby="${'suspend-why-' + o.id}">정지…</button>
+                <span th:id="${'suspend-why-' + o.id}" class="hint hint--flush" th:text="${o.block}">본인 계정은 정지할 수 없음</span>
+              </div>
+              <button th:if="${o.block == null}" type="button" class="btn btn--sm btn--danger" x-data
+                      x-on:click="$dispatch('dialog:open', { id: $el.dataset.dialog })" th:data-dialog="${o.dialogId}">정지…</button>
+            </th:block>
+          </td>
+        </tr>
+        <tr class="table__empty" x-show="none" x-cloak>
+          <td colspan="7">
+            <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', '조건에 맞는 운영자가 없습니다.', null, null, true)}"></th:block>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 정지 확인(L1): 막힌 운영자(본인·마지막 PLATFORM)는 다이얼로그를 만들지 않는다. -->
+  <th:block th:if="${ops != null}" th:each="o : ${ops}">
+    <th:block th:if="${o.status == 'ACTIVE' and o.block == null}" th:with="oTitle=${@fmt.withJosa(o.email, '을/를') + ' 정지할까요?'}">
+      <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog(${o.dialogId}, 'L1', ${oTitle}, '정지', null, ~{admin/settings/admins :: suspendBody}, null, null, null, null, ${o.suspendAttrs})}"></th:block>
+    </th:block>
+  </th:block>
+</section>
+
+<!-- 거절·정지 본문(조각 인자). r / o 는 호출한 th:each 변수. -->
+<th:block th:remove="all">
+  <th:block th:fragment="rejectBody">
+    <p class="card__sub" style="margin: 0"><th:block th:text="${r.email}">a@x.com</th:block>의 요청을 거절합니다. 요청자는 다시 가입 요청을 보낼 수 있습니다.</p>
+  </th:block>
+  <th:block th:fragment="suspendBody">
+    <dl class="kv" style="grid-template-columns: 80px minmax(0, 1fr)">
+      <dt>이메일</dt>
+      <dd th:text="${o.email}">a@x.com</dd>
+      <dt>역할</dt>
+      <dd class="row" style="gap: 6px">
+        <th:block th:text="${o.roleLabel + ' · '}">RP_ADMIN · </th:block>
+        <span th:if="${o.tenant.kind == 'ALL'}" style="font-size: 13px; color: var(--ink-2)">전체 tenant</span>
+        <span th:if="${o.tenant.kind == 'NONE'}" class="faint">—</span>
+        <span th:if="${o.tenant.kind == 'NAME'}" class="truncate" style="font-size: 13px" th:text="${o.tenant.text}">이름</span>
+        <span th:if="${o.tenant.kind == 'ID'}" class="mono" style="font-size: 12px" th:text="${o.tenant.text}">…id</span>
+        <span th:if="${o.tenant.more > 0}" class="hint hint--flush" th:text="${'외 ' + o.tenant.more + '개'}">외 1개</span>
+      </dd>
+    </dl>
+    <p class="card__sub" style="margin: 0">다음 요청부터 콘솔에 접근할 수 없고, 다시 로그인할 수도 없습니다.</p>
+    <p class="hint" style="margin: 0">계정과 기록은 남습니다. 목록의 “활성화”로 언제든 되돌릴 수 있습니다.</p>
+  </th:block>
+</th:block>
+
+<!-- ── 승인 대화상자(GET …/signups/{id}/approve → #au-dialog-slot) ── -->
+<div th:fragment="approveDialog" ui:xdata="${@fmt.xdata('dialog', 'id', 'au-approve', 'open', true)}" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown="onScrim($event)">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="au-approve-title" x-trap.noscroll="open" x-data="signupApprove">
+        <span hidden x-effect="busy = submitting"></span>
+        <div class="dialog__head"><h3 class="dialog__title" id="au-approve-title">가입 요청 승인</h3></div>
+        <div class="dialog__body">
+          <div class="row" style="gap: 12px; flex-wrap: nowrap; padding: 12px 14px; border-radius: var(--r); background: var(--canvas)">
+            <span class="avatar au-avatar-warn" aria-hidden="true" th:text="${req.initial}">A</span>
+            <div class="col" style="min-width: 0">
+              <strong style="font-size: 13px" th:text="${req.email}">a@x.com</strong>
+              <span style="font-size: 13px; color: var(--ink-2); white-space: pre-wrap" th:text="${req.reason ?: '요청 사유 없음'}">사유</span>
+            </div>
+          </div>
+          <form id="au-approve-form" class="stack-4" novalidate autocomplete="off"
+                th:hx-post="${approveUrl}" hx-target="#au-content" hx-swap="outerHTML" hx-sync="this:drop"
+                x-on:submit="onSubmit($event)" x-on:htmx:before-request="onBefore($event)" x-on:htmx:after-request="onAfter($event)">
+            <input type="hidden" name="role" x-bind:value="role" value="RP_ADMIN">
+            <div>
+              <span class="label" id="au-role-label">역할</span>
+              <div class="choices choices--2" role="radiogroup" aria-labelledby="au-role-label">
+                <th:block th:replace="~{admin/fragments/ui/choiceCard :: choiceCard(false, 'Platform Operator', '모든 tenant 와 플랫폼 설정 관리', ${rolePlatformAttrs})}"></th:block>
+                <th:block th:replace="~{admin/fragments/ui/choiceCard :: choiceCard(true, 'RP Admin', '할당된 tenant 만 관리', ${roleRpAttrs})}"></th:block>
+              </div>
+            </div>
+            <div x-show="role === 'RP_ADMIN'">
+              <div class="row" style="justify-content: space-between">
+                <span class="label">할당 Tenant</span>
+                <span class="hint" style="margin: 0 0 6px" x-text="tenantIds.length + '개 선택'">0개 선택</span>
+              </div>
+              <div class="search" style="margin-bottom: 8px">
+                <th:block th:replace="~{admin/fragments/icons :: search(15)}"></th:block>
+                <input class="input" placeholder="tenant 검색" aria-label="tenant 검색" x-model="q">
+              </div>
+              <div role="group" aria-label="할당 Tenant" class="au-tenants" x-bind:class="{ 'au-tenants--bad': showErr }">
+                <p th:if="${tenantOpts.isEmpty()}" class="hint" style="margin: 0; padding: 10px 14px">활성 tenant 없음</p>
+                <label th:each="t : ${tenantOpts}" class="row au-tenant" data-tenant th:data-q="${t.q}" x-show="matches($el.dataset.q)">
+                  <input type="checkbox" name="tenantId" th:value="${t.id}" x-model="tenantIds" x-on:change="touched = true">
+                  <span class="truncate" th:text="${t.name}">이름</span>
+                  <span class="spacer"></span>
+                  <span class="mono hint" style="margin: 0" th:text="${t.slug}">slug</span>
+                </label>
+                <p th:if="${!tenantOpts.isEmpty()}" class="hint" style="margin: 0; padding: 10px 14px" x-show="noMatch" x-cloak>일치하는 tenant 없음</p>
+              </div>
+              <p class="field__error" role="alert" x-show="showErr" x-cloak>Tenant를 최소 1개 선택해야 합니다.</p>
+            </div>
+            <div id="au-approve-err"></div>
+          </form>
+        </div>
+        <div class="dialog__foot">
+          <button type="button" class="btn" x-bind:disabled="submitting" x-on:click="if (!submitting) close()">취소</button>
+          <button type="submit" form="au-approve-form" class="btn btn--primary" x-bind:disabled="submitting">승인하고 계정 생성</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<!-- 승인 검증 실패(422, HX-Retarget #au-approve-err): 대화상자 안 오류만 바꾼다. -->
+<p th:fragment="approveError" class="field__error" role="alert" th:text="${approveError}">오류</p>
+
+<!-- 응답 조각 -->
+<th:block th:fragment="usersResponse"><th:block th:replace="~{admin/settings/admins :: users}"></th:block></th:block>
+<th:block th:fragment="signupsResponse">
+  <th:block th:replace="~{admin/settings/admins :: signups}"></th:block>
+  <th:block th:replace="~{admin/settings/admins :: countOob}"></th:block>
+</th:block>
+<th:block th:fragment="contentResponse">
+  <th:block th:replace="~{admin/settings/admins :: content}"></th:block>
+  <div id="au-dialog-slot" hx-swap-oob="true"></div>
+  <th:block th:replace="~{admin/settings/admins :: countOob}"></th:block>
+</th:block>
+
+<!-- 탭 줄의 가입 요청 수(settings 탭 줄 #settings-tab-admins-count). 목록을 읽지 못했으면 건드리지 않는다. -->
+<span th:fragment="countOob" th:if="${pendingCount != null}" id="settings-tab-admins-count" class="tabs__countslot" hx-swap-oob="true">
+  <span class="tabs__count" th:if="${pendingCount > 0}" th:text="${pendingCount}">0</span>
+</span>
+</body>
+</html>
