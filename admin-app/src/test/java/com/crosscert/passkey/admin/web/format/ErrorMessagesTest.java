@@ -106,4 +106,12 @@ class ErrorMessagesTest {
         assertThat(ErrorMessages.isTransient(new RuntimeException("boom"))).isFalse();
         assertThat(ErrorMessages.isTransient(null)).isFalse();
     }
+
+    @Test
+    @DisplayName("메시지 없는 알 수 없는 예외의 detail 은 빈 문자열(TS 의 e.message 가 빈 값일 때와 같다)")
+    void unknownWithNullMessageHasEmptyDetail() {
+        ErrorMessages.Info i = ErrorMessages.describe(new RuntimeException());
+        assertThat(i.title()).isEqualTo("알 수 없는 오류가 발생했습니다");
+        assertThat(i.detail()).isEmpty();
+    }
 }

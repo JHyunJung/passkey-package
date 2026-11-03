@@ -26,6 +26,22 @@ class ToastsTest {
     }
 
     @Test
+    void errorToastCarriesDetailAndTraceId() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        Toasts.error(res, "요청을 처리하지 못했습니다", "HTTP 409 · [T001] 중복", "abc123");
+        JsonNode toast = new ObjectMapper().readTree(res.getHeader("HX-Trigger")).get("toast");
+        assertThat(toast.get("message").asText()).isEqualTo("요청을 처리하지 못했습니다");
+        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 409 · [T001] 중복");
+        assertThat(toast.get("traceId").asText()).isEqualTo("abc123");
+
+        MockHttpServletResponse plain = new MockHttpServletResponse();
+        Toasts.error(plain, "x");
+        JsonNode t2 = new ObjectMapper().readTree(plain.getHeader("HX-Trigger")).get("toast");
+        assertThat(t2.has("detail")).isFalse();
+        assertThat(t2.has("traceId")).isFalse();
+    }
+
+    @Test
     void htmxRedirectVsPlainRedirect() throws Exception {
         MockHttpServletRequest htmx = new MockHttpServletRequest();
         htmx.addHeader("HX-Request", "true");

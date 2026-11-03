@@ -58,7 +58,7 @@ public final class ErrorMessages {
         if (e instanceof IOException || e instanceof UncheckedIOException) {
             return friendly("네트워크에 연결할 수 없습니다", "연결 상태를 확인한 뒤 다시 시도하세요.", null, null);
         }
-        return new Info("알 수 없는 오류가 발생했습니다", e == null ? "null" : String.valueOf(e.getMessage()), null, null, true);
+        return new Info("알 수 없는 오류가 발생했습니다", e == null || e.getMessage() == null ? "" : e.getMessage(), null, null, true);
     }
 
     /**

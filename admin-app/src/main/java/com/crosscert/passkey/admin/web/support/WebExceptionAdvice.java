@@ -5,6 +5,7 @@ import com.crosscert.passkey.core.api.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -18,7 +19,7 @@ import org.springframework.web.servlet.ModelAndView;
 
 /**
  * 화면 컨트롤러(admin.web 패키지)의 예외를 화면용 응답으로 바꾼다.
- * htmx 요청이면 오류 토스트({@code HX-Trigger}) + 204, 아니면 {@code admin/error} 페이지.
+ * htmx 요청이면 실제 오류 상태 + 오류 토스트({@code HX-Trigger}, 본문 없음), 아니면 {@code admin/error} 페이지.
  *
  * <p>core 의 {@code GlobalExceptionHandler} 는 패키지 제한 없는 {@code @RestControllerAdvice} 라
  * 우선순위를 가장 높게 두어 화면 컨트롤러에서는 이 advice 가 먼저 잡게 한다.
@@ -59,6 +60,16 @@ public class WebExceptionAdvice {
         return respond(e, status, req, res);
     }
 
+    /** 오류 원문(rawErrorDetail): {@code HTTP 상태 · [코드] 서버 메시지}. 예기치 못한 서버 오류는 내부 메시지를 싣지 않는다. */
+    private static String rawDetail(Exception e, int status, ErrorMessages.Info info) {
+        if (status >= 500 && !(e instanceof BusinessException)) return "HTTP " + status;
+        StringBuilder sb = new StringBuilder("HTTP ").append(status);
+        if (info.code() != null) sb.append(" · [").append(info.code()).append(']');
+        String msg = e.getMessage();
+        if (msg != null && !msg.isEmpty()) sb.append(' ').append(e instanceof ResponseStatusException r && r.getReason() != null ? r.getReason() : msg);
+        return sb.toString();
+    }
+
     private ModelAndView respond(Exception e, int status, HttpServletRequest req, HttpServletResponse res) {
         if (status >= 500) {
             log.error("[web] {} {} - status={}", req.getMethod(), req.getRequestURI(), status, e);
@@ -68,8 +79,10 @@ public class WebExceptionAdvice {
         }
         ErrorMessages.Info info = ErrorMessages.describe(e, status);
         if (Htmx.isHtmx(req)) {
-            Toasts.error(res, info.toastMessage());
-            res.setStatus(HttpStatus.NO_CONTENT.value());
+            // 규칙 A: 실제 오류 상태를 유지한다. htmx 는 4xx/5xx 를 스왑하지 않고 afterRequest(successful=false)를 올리며,
+            // HX-Trigger 헤더는 오류 응답에서도 처리된다(htmx 2.0.4 handleAjaxResponse).
+            Toasts.error(res, info.toastMessage(), rawDetail(e, status, info), MDC.get("traceId"));
+            res.setStatus(status);
             return null; // null = 응답 처리 완료(본문 없음)
         }
         ModelAndView mav = new ModelAndView(ErrorPage.VIEW);

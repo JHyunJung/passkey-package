@@ -30,13 +30,29 @@ public final class Toasts {
     }
 
     public static void error(HttpServletResponse res, String message) {
-        write(res, "error", message);
+        write(res, "error", message, null, null);
+    }
+
+    /**
+     * 오류 토스트. {@code detail}(예: {@code HTTP 409 · [CODE] 서버 메시지})과 {@code traceId} 는
+     * 토스트의 접힌 "자세히" 안에만 보인다(errorToast.ts). 본문 {@code message} 에는 쉬운 문구만 둔다.
+     */
+    public static void error(HttpServletResponse res, String message, String detail, String traceId) {
+        write(res, "error", message, detail, traceId);
     }
 
     private static void write(HttpServletResponse res, String kind, String message) {
+        write(res, kind, message, null, null);
+    }
+
+    private static void write(HttpServletResponse res, String kind, String message, String detail, String traceId) {
         try {
-            res.setHeader(HX_TRIGGER, JSON.writeValueAsString(
-                    Map.of("toast", Map.of("kind", kind, "message", message == null ? "" : message))));
+            Map<String, Object> toast = new java.util.LinkedHashMap<>();
+            toast.put("kind", kind);
+            toast.put("message", message == null ? "" : message);
+            if (detail != null && !detail.isEmpty()) toast.put("detail", detail);
+            if (traceId != null && !traceId.isEmpty()) toast.put("traceId", traceId);
+            res.setHeader(HX_TRIGGER, JSON.writeValueAsString(Map.of("toast", toast)));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("toast header serialization failed", e);
         }

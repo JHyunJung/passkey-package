@@ -6,7 +6,10 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -65,10 +69,29 @@ class WebExceptionAdviceTest {
     }
 
     @Test
-    void htmxErrorBecomesToastAnd204() throws Exception {
-        mvc.perform(get("/admin/_/test/business").header("HX-Request", "true").with(authentication(operator())))
-            .andExpect(status().isNoContent())
-            .andExpect(header().string("HX-Trigger", containsString("\"kind\":\"error\"")));
+    void htmxErrorKeepsRealStatusWithToastAndEmptyBody() throws Exception {
+        // 규칙 A: 실제 오류 상태(404)를 유지하고 토스트는 HX-Trigger 로, 본문은 비운다.
+        MvcResult r = mvc.perform(get("/admin/_/test/business").header("HX-Request", "true").with(authentication(operator())))
+            .andExpect(status().isNotFound())
+            .andExpect(header().string("HX-Trigger", containsString("\"kind\":\"error\"")))
+            .andExpect(content().string(""))
+            .andReturn();
+        JsonNode toast = new ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).get("toast");
+        assertThat(toast.get("message").asText()).isEqualTo("찾을 수 없습니다. 삭제되었거나 주소가 바뀌었을 수 있습니다.");
+        // 원문은 본문 메시지가 아니라 detail("자세히")로만 간다(errorToast.ts).
+        assertThat(toast.get("message").asText()).doesNotContain("HTTP");
+        assertThat(toast.get("detail").asText()).startsWith("HTTP 404 · [").contains(ErrorCode.TENANT_NOT_FOUND.getCode());
+    }
+
+    @Test
+    void htmxUnexpectedErrorIs500WithoutLeakingMessage() throws Exception {
+        MvcResult r = mvc.perform(get("/admin/_/test/boom").header("HX-Request", "true").with(authentication(operator())))
+            .andExpect(status().isInternalServerError())
+            .andExpect(content().string(""))
+            .andReturn();
+        JsonNode toast = new ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).get("toast");
+        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 500");
+        assertThat(r.getResponse().getHeader("HX-Trigger")).doesNotContain("boom");
     }
 
     @Test

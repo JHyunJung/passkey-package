@@ -21,8 +21,15 @@ import java.util.Set;
 
 /**
  * 공통 UI 조각이 호출자에게서 임의 속성을 받을 때 쓰는 {@code ui:attrs="${attrs}"}.
- * 맵의 각 항목을 요소 속성으로 쓴다. {@code class} 는 기존 값에 덧붙이고, 값이 null·빈 문자열이면
- * {@code disabled} 같은 값 없는 속성으로 쓴다. 값은 HTML 이스케이프한다(이름은 영숫자·_@:.- 만).
+ * 맵의 각 항목을 요소 속성으로 쓴다. 값이 {@code null}·{@code false} 면 속성을 쓰지 않고, {@code true} 면
+ * {@code disabled} 같은 값 없는 속성으로 쓴다. 이름이 {@code on} 으로 시작하는 인라인 이벤트 속성
+ * ({@code onclick} 등)은 조용히 버린다.
+ *
+ * <p><b>보안 규약:</b> JS 로 평가되는 속성군({@code x-on:*}, {@code @*}, {@code hx-on*}, {@code x-bind:*}, {@code :*},
+ * {@code x-data}, {@code hx-vals})의 값은 사용자 입력이 아닌 템플릿 상수여야 한다. 값은 HTML 이스케이프만 되고
+ * JS 로는 이스케이프되지 않는다. 데이터는 {@code data-*} 속성이나 {@code @fmt.json} 으로 넘긴다.
+ *
+ * <p>{@code class} 는 기존 값에 덧붙인다. 빈 문자열 값은 {@code name=""} 로 나간다. 이름은 영숫자·_@:.- 만 허용한다.
  */
 @Component
 public class UiDialect extends AbstractProcessorDialect {
@@ -60,8 +67,9 @@ public class UiDialect extends AbstractProcessorDialect {
             if (!(v instanceof Map<?, ?> map)) return;
             for (Map.Entry<?, ?> e : map.entrySet()) {
                 String name = String.valueOf(e.getKey());
-                if (!ATTR_NAME.matcher(name).matches()) continue;
-                String value = e.getValue() == null ? "" : String.valueOf(e.getValue());
+                if (!ATTR_NAME.matcher(name).matches() || name.regionMatches(true, 0, "on", 0, 2)) continue; // on* 인라인 이벤트 차단
+                if (e.getValue() == null || Boolean.FALSE.equals(e.getValue())) continue; // null·false 는 속성 생략, true 는 값 없는 속성
+                String value = Boolean.TRUE.equals(e.getValue()) ? "" : String.valueOf(e.getValue());
                 if (name.equals("class") && tag.hasAttribute("class")) {
                     structureHandler.setAttribute("class", tag.getAttributeValue("class") + " " + esc(value));
                 } else {

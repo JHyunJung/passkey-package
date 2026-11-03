@@ -11,23 +11,32 @@
     danger       true | null(기본 true → danger-solid) | false(primary)
     expected, typeLabel   L3 에서 이름을 입력해야 하면 정확한 값과 라벨(둘 다 null 이면 입력 없음)
     acknowledge  L3 에서 체크해야 하는 문구 또는 null (expected 가 있으면 무시)
-    confirmAttrs 확인 버튼 속성 Map(hx-post, hx-vals, hx-target 등). 서버가 오류를 보내면 토스트로 나가고, 성공 응답이면 닫힌다.
-  기본 포커스는 취소 버튼(role=alertdialog, 스크림 클릭으로 닫히지 않음). 오류를 안에서 보여 줄 자리는 #<id>-error (role=alert).
+    confirmAttrs 확인 버튼 속성 Map(hx-post, hx-target 등). 값은 템플릿 상수(JS 평가 속성은 사용자 입력 금지).
+  성공 응답(2xx)이면 닫는다. 실패(WebExceptionAdvice 의 4xx/5xx + HX-Trigger 토스트, 네트워크 오류)면 열어 둔 채
+  안에 '<verb>하지 못했습니다' + 토스트 메시지의 쉬운 문구를 보이고 확인 버튼을 다시 눌러 재시도할 수 있다(#<id>-error, role=alert).
+  기본 포커스는 취소 버튼(role=alertdialog, 스크림 클릭으로 닫히지 않음).
 -->
 <div th:fragment="confirmDialog(id, level, title, verb, sub, body, danger, expected, typeLabel, acknowledge, confirmAttrs)"
-     ui:xdata="${@fmt.xdata('dialog', 'id', id, 'level', level, 'closeOnScrim', false, 'typing', expected != null, 'ack', expected == null and acknowledge != null)}"
+     ui:xdata="${@fmt.xdata('dialog', 'id', id, 'level', level, 'verb', verb, 'closeOnScrim', false, 'typing', expected != null, 'ack', expected == null and acknowledge != null)}"
      x-on:dialog:open.window="onOpen($event)" x-on:dialog:close.window="onClose($event)" x-on:keydown.escape.window="onEscape()">
   <template x-if="open">
     <div class="scrim">
       <div class="dialog" role="alertdialog" aria-modal="true" th:aria-labelledby="${id + '-title'}"
            x-trap.noscroll="open" x-on:match-change="typed = $event.detail"
-           x-on:htmx:before-request="busy = true" x-on:htmx:after-request="busy = false; if ($event.detail.successful) open = false">
+           x-on:htmx:before-request="onBeforeRequest($event)" x-on:htmx:after-request="onAfterRequest($event)">
         <div class="dialog__head">
           <h3 class="dialog__title" th:id="${id + '-title'}" th:text="${title}">제목</h3>
           <div class="dialog__sub" th:if="${sub}" th:text="${sub}">설명</div>
         </div>
         <div class="dialog__body">
-          <div th:id="${id + '-error'}" role="alert"></div>
+          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <div class="banner banner--danger banner--top" role="alert" th:id="${id + '-error'}" x-show="error" x-cloak>
+            <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"/></span>
+            <div class="banner__body">
+              <div class="banner__title" x-text="error && error.title"></div>
+              <div x-text="error && error.text"></div>
+            </div>
+          </div>
           <th:block th:if="${body}"><th:block th:replace="${body}"/></th:block>
           <th:block th:if="${level == 'L3' and expected != null}">
             <th:block th:replace="~{admin/fragments/ui/confirmByTyping :: confirmByTyping(${id + '-confirm'}, ${expected}, ${typeLabel}, ${verb})}"/>
@@ -39,7 +48,7 @@
         <div class="dialog__foot">
           <button type="button" class="btn" autofocus x-on:click="close()" x-bind:disabled="busy">취소</button>
           <button type="button" class="btn" th:classappend="${danger == false} ? 'btn--primary' : 'btn--danger-solid'"
-                  ui:attrs="${confirmAttrs}" x-bind:disabled="busy || !gateOk"><span x-show="!busy" th:text="${verb}">확인</span><span x-show="busy" x-cloak th:text="${verb + ' 중…'}">확인 중…</span></button>
+                  data-confirm ui:attrs="${confirmAttrs}" x-bind:disabled="busy || !gateOk"><span x-show="!busy" th:text="${verb}">확인</span><span x-show="busy" x-cloak th:text="${verb + ' 중…'}">확인 중…</span></button>
         </div>
       </div>
     </div>

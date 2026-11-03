@@ -24,6 +24,24 @@ document.addEventListener('alpine:init', () => {
   }
   window.adminCopy = copyToClipboard;
 
+  function isConfirm(e) { return !!(e.target && e.target.hasAttribute && e.target.hasAttribute('data-confirm')); }
+
+  /** 오류 응답의 HX-Trigger 토스트 메시지(WebExceptionAdvice 가 정한 쉬운 문구). 없으면 기본 문구. */
+  function toastMessage(xhr) {
+    try {
+      const h = xhr && xhr.getResponseHeader && xhr.getResponseHeader('HX-Trigger');
+      const m = h && JSON.parse(h).toast && JSON.parse(h).toast.message;
+      if (m) return m;
+    } catch (err) { /* 기본 문구 */ }
+    return '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.';
+  }
+
+  /** 가장 가까운 form 의 reset 이벤트에 맞춰 Alpine 상태를 처음으로 되돌린다(SaveBar 되돌리기). */
+  function onFormReset(root, fn) {
+    const f = root.closest && root.closest('form');
+    if (f) f.addEventListener('reset', fn);
+  }
+
   // ── Dialog / ConfirmDialog ──────────────────────────────
   // 열기: 같은 x-data 범위에서 open=true, 또는 window 이벤트 `dialog:open` {id}. 닫기: `dialog:close` {id}.
   // Escape 와 스크림 클릭으로 닫힘(dismissible=false 이면 무시), 닫은 뒤 포커스는 열기 전 요소로 복귀.
@@ -40,13 +58,24 @@ document.addEventListener('alpine:init', () => {
     ack: !!cfg.ack,
     typed: false,
     acked: false,
+    verb: cfg.verb || '실행',
+    // ConfirmDialog 실패 표시(ConfirmDialog.tsx): 닫지 않고 안에서 `<verb>하지 못했습니다` + 쉬운 설명을 보여 주고 재시도하게 한다.
+    error: null,
     get gateOk() { return this.level !== 'L3' || (this.typing ? this.typed : this.ack ? this.acked : true); },
     init() {
       this.$watch('open', (v) => {
-        if (v) { this.prev = document.activeElement; this.busy = false; this.typed = false; this.acked = false; }
+        if (v) { this.prev = document.activeElement; this.busy = false; this.typed = false; this.acked = false; this.error = null; }
         else if (this.prev && this.prev.focus) { const p = this.prev; this.prev = null; this.$nextTick(() => p.focus()); }
       });
       if (this.open) this.prev = document.activeElement;
+    },
+    // 확인 버튼(data-confirm)의 htmx 요청만 본다. 성공이면 닫고, 실패(4xx/5xx·네트워크)면 열어 둔 채 오류를 보인다.
+    onBeforeRequest(e) { if (isConfirm(e)) { this.busy = true; this.error = null; } },
+    onAfterRequest(e) {
+      if (!isConfirm(e)) return;
+      this.busy = false;
+      if (e.detail && e.detail.successful) { this.open = false; return; }
+      this.error = { title: this.verb + '하지 못했습니다', text: toastMessage(e.detail && e.detail.xhr) };
     },
     onOpen(e) { if (!this.id || (e.detail && e.detail.id === this.id)) this.open = true; },
     onClose(e) { if (!this.id || !e.detail || e.detail.id === this.id) this.open = false; },
@@ -153,19 +182,32 @@ document.addEventListener('alpine:init', () => {
     draft: '',
     error: null,
     disabled: !!cfg.disabled,
+    validating: false,
+    init() {
+      const initial = Array.isArray(cfg.values) ? [...cfg.values] : [];
+      onFormReset(this.$root, () => { this.values = [...initial]; this.draft = ''; this.error = null; });
+    },
     async onEnter() {
-      if (this.disabled) return;
+      if (this.disabled || this.validating) return;
       const raw = this.draft.trim();
       if (!raw) return;
       let err = null;
       if (typeof cfg.validate === 'function') err = cfg.validate(raw, this.values) || null;
       else if (cfg.validateUrl) {
+        // 검증을 못 하면 통과로 보지 않는다: 초안을 남기고 재시도 가능한 오류만 보인다.
+        this.validating = true;
         try {
           const q = new URLSearchParams({ value: raw });
           this.values.forEach((v) => q.append('existing', v));
           const res = await fetch(cfg.validateUrl + (cfg.validateUrl.includes('?') ? '&' : '?') + q, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin' });
-          if (res.ok) err = (await res.text()).trim() || null;
-        } catch (e) { err = null; }
+          if (!res.ok) { this.error = '검증하지 못했습니다. 잠시 후 다시 시도하세요.'; return; }
+          err = (await res.text()).trim() || null;
+        } catch (e) {
+          this.error = '검증하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요.';
+          return;
+        } finally {
+          this.validating = false;
+        }
       }
       if (err) { this.error = err; return; }
       const v = typeof cfg.normalize === 'function' ? cfg.normalize(raw) : raw;
@@ -267,21 +309,38 @@ document.addEventListener('alpine:init', () => {
     count: 0,
     saveLabel: cfg.saveLabel || '저장',
     saving: false,
+    disarmed: false,
     beforeUnload: null,
+    disarm: null,
     init() {
       this.form = cfg.form ? document.getElementById(cfg.form) : this.$root.closest('form');
       if (!this.form) return;
-      this.base = formSnapshot(this.form);
-      this.form.addEventListener('input', () => this.recount());
-      this.form.addEventListener('change', () => this.recount());
-      this.form.addEventListener('chips-change', () => this.$nextTick(() => this.recount()));
-      this.form.addEventListener('reset', () => this.$nextTick(() => this.recount()));
-      this.form.addEventListener('submit', () => { this.saving = true; this.unguard(); });
-      this.beforeUnload = (e) => { if (this.count > 0 && !this.saving) { e.preventDefault(); e.returnValue = ''; } };
+      const f = this.form;
+      this.base = formSnapshot(f);
+      f.addEventListener('input', () => this.recount());
+      f.addEventListener('change', () => this.recount());
+      f.addEventListener('chips-change', () => this.$nextTick(() => this.recount()));
+      f.addEventListener('switch-change', () => this.$nextTick(() => this.recount()));
+      f.addEventListener('segmented-change', () => this.$nextTick(() => this.recount()));
+      f.addEventListener('reset', () => this.$nextTick(() => this.recount()));
+      // htmx 제출: 저장 중에만 막고, 실패하면 다시 켜서 재시도·경고가 가능하게 한다. 기준선은 성공이 확인된 뒤에만 갱신.
+      f.addEventListener('htmx:before-request', (e) => { if (e.target === f) this.saving = true; });
+      f.addEventListener('htmx:after-request', (e) => {
+        if (e.target !== f) return;
+        this.saving = false;
+        if (e.detail && e.detail.successful) { this.base = formSnapshot(f); this.recount(); }
+      });
+      // 일반(비 htmx) 제출은 페이지 이동이므로 경고를 끈다.
+      f.addEventListener('submit', () => { if (!f.hasAttribute('hx-post') && !f.hasAttribute('hx-put') && !f.hasAttribute('hx-patch') && !f.hasAttribute('hx-delete')) this.disarmed = true; });
+      this.beforeUnload = (e) => { if (this.count > 0 && !this.saving && !this.disarmed) { e.preventDefault(); e.returnValue = ''; } };
+      this.disarm = () => { this.disarmed = true; };
       window.addEventListener('beforeunload', this.beforeUnload);
+      window.addEventListener('unsaved-disarm', this.disarm); // unsavedGuard 가 '이동'을 확정했을 때
     },
-    destroy() { this.unguard(); },
-    unguard() { if (this.beforeUnload) window.removeEventListener('beforeunload', this.beforeUnload); },
+    destroy() {
+      if (this.beforeUnload) window.removeEventListener('beforeunload', this.beforeUnload);
+      if (this.disarm) window.removeEventListener('unsaved-disarm', this.disarm);
+    },
     recount() {
       const now = formSnapshot(this.form);
       const keys = new Set([...Object.keys(this.base), ...Object.keys(now)]);
@@ -293,6 +352,29 @@ document.addEventListener('alpine:init', () => {
     revert() { if (this.form) this.form.reset(); },
     save() { if (this.form) this.form.requestSubmit(); },
     get dirty() { return this.count > 0; },
+  }));
+
+  // ── Switch / Segmented ─────────────────────────────────
+  // 로컬 상태가 aria-checked / aria-pressed 와 form 제출용 hidden input 값을 정한다. form reset 이면 처음 값으로.
+  Alpine.data('switchToggle', (cfg = {}) => ({
+    on: !!cfg.checked,
+    init() {
+      const initial = !!cfg.checked;
+      onFormReset(this.$root, () => { this.on = initial; });
+      this.$watch('on', (v) => this.$dispatch('switch-change', { checked: v }));
+    },
+  }));
+  Alpine.data('segmented', (cfg = {}) => ({
+    value: cfg.value == null ? '' : String(cfg.value),
+    init() {
+      const initial = this.value;
+      onFormReset(this.$root, () => { this.value = initial; });
+    },
+    select(v) {
+      if (v === this.value) return;
+      this.value = v;
+      this.$dispatch('segmented-change', { value: v });
+    },
   }));
 
   // ── ToastHost ──────────────────────────────────────────
@@ -364,7 +446,14 @@ document.addEventListener('alpine:init', () => {
       this.open = true;
     },
     stay() { this.open = false; this.href = null; },
-    leave() { const h = this.href; this.dirty = false; this.open = false; if (h) window.location.assign(h); },
+    // 이동을 확정하면 SaveBar 의 beforeunload 도 끈다(경고가 두 번 뜨지 않게).
+    leave() {
+      const h = this.href;
+      this.dirty = false;
+      this.open = false;
+      window.dispatchEvent(new CustomEvent('unsaved-disarm'));
+      if (h) window.location.assign(h);
+    },
   }));
 
   // 복구 코드 .txt 다운로드: 화면에 이미 그려진 코드를 브라우저에서 Blob 으로(서버 세션 저장 없음).

@@ -330,7 +330,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .idle-progress { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
 .idle-progress__bar { display: block; height: 100%; transition: width 1s linear; }
 
-/* ===== port: thymeleaf ===== */
+/* ── thymeleaf port ── */
 /* React TSX 의 인라인 style 을 공통 조각(templates/admin/fragments/ui)이 쓰는 클래스로 옮긴 것. 위의 기존 규칙은 바꾸지 않는다. */
 [x-cloak] { display: none !important; }
 .hint--flush { margin: 0; }

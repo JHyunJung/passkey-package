@@ -13,6 +13,8 @@
   첫 항목 포커스, ArrowUp/Down 순환, Enter/Space 실행 후 닫힘, Escape 로 닫고 트리거로 포커스 복귀.
   비활성 항목은 aria-disabled + 사유(title·라벨 아래)가 보이되 실행되지 않는다(attrs 는 붙지 않는다).
   항목·트리거 클릭은 상위(행) 클릭으로 전파되지 않는다.
+  보안: attrs 값 중 JS 로 평가되는 속성군(x-on:*, @*, hx-on*, x-bind:*, :*, x-data, hx-vals)은 템플릿 상수여야 한다.
+  사용자 입력은 data-* 또는 @fmt.json 으로 넘긴다. on* 인라인 이벤트 속성 이름은 ui:attrs 가 버린다.
 -->
 <div th:fragment="menu(label, items, dangerItems, dangerTitle, trigger)" class="menu-wrap" x-data="menu"
      x-on:keydown="onKeydown($event)" x-on:mousedown.window="outside($event)" x-on:scroll.window.capture="dismiss($event)" x-on:resize.window="open = false">

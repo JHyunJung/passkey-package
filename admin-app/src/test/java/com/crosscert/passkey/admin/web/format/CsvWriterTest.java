@@ -23,14 +23,14 @@ class CsvWriterTest {
         assertThat(out[0]).isEqualTo((byte) 0xEF);
         assertThat(out[1]).isEqualTo((byte) 0xBB);
         assertThat(out[2]).isEqualTo((byte) 0xBF);
-        assertThat(text(out)).isEqualTo("﻿이름,값\na,1\nb,2");
+        assertThat(text(out)).isEqualTo("\uFEFF이름,값\na,1\nb,2");
     }
 
     @Test
     @DisplayName("쉼표·따옴표·줄바꿈 필드는 따옴표로 감싸고 따옴표는 두 번")
     void quotesFieldsThatNeedIt() {
         byte[] out = CsvWriter.write(List.of("h"), List.of(List.of("a,b"), List.of("say \"hi\""), List.of("x\ny"), List.of("x\ry")));
-        assertThat(text(out)).isEqualTo("﻿h\n\"a,b\"\n\"say \"\"hi\"\"\"\n\"x\ny\"\n\"x\ry\"");
+        assertThat(text(out)).isEqualTo("\uFEFFh\n\"a,b\"\n\"say \"\"hi\"\"\"\n\"x\ny\"\n\"x\ry\"");
     }
 
     @Test
@@ -46,8 +46,15 @@ class CsvWriterTest {
     }
 
     @Test
+    @DisplayName("BOM 은 소스에서도 \\uFEFF 이스케이프로 쓴다(보이지 않는 문자 방지)")
+    void bomIsWrittenAsEscapeInSource() throws Exception {
+        String src = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/crosscert/passkey/admin/web/format/CsvWriter.java"));
+        assertThat(src).contains("\\uFEFF").doesNotContain("\uFEFF".equals("") ? "" : new String(new char[]{(char) 0xFEFF}));
+    }
+
+    @Test
     @DisplayName("null 은 빈 칸")
     void nullIsEmpty() {
-        assertThat(text(CsvWriter.write(List.of("a", "b"), List.of(Arrays.asList(null, "x"))))).isEqualTo("﻿a,b\n,x");
+        assertThat(text(CsvWriter.write(List.of("a", "b"), List.of(Arrays.asList(null, "x"))))).isEqualTo("\uFEFFa,b\n,x");
     }
 }

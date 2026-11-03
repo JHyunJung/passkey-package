@@ -21,7 +21,7 @@ public final class CsvWriter {
         List<String> lines = new ArrayList<>();
         lines.add(join(header));
         for (List<String> row : rows) lines.add(join(row));
-        return ("﻿" + String.join("\n", lines)).getBytes(StandardCharsets.UTF_8);
+        return ("\uFEFF" + String.join("\n", lines)).getBytes(StandardCharsets.UTF_8);
     }
 
     private static String join(List<String> fields) {

@@ -43,4 +43,23 @@ class ViewHelpersTest {
         assertThat(fmt.apiKeyExpiry(null)).isFalse();
         assertThat(fmt.isExpiringSoon(OffsetDateTime.parse("2026-10-01T00:00:00Z"), OffsetDateTime.parse("2026-10-21T00:00:00Z"))).isFalse();
     }
+
+    @Test
+    @DisplayName("pager: pageSize 0 이하여도 0 나눗셈 없이 동작, 범위 보정")
+    void pagerGuardsPageSize() {
+        assertThat(fmt.pager(1, 0, 5).last()).isEqualTo(5);
+        assertThat(fmt.pager(1, -3, 0)).isEqualTo(new ViewHelpers.Pager(1, 1, 0, 0));
+        assertThat(fmt.pager(9, 50, 120)).isEqualTo(new ViewHelpers.Pager(3, 3, 101, 120));
+    }
+
+    @Test
+    @DisplayName("json 은 주입된 ObjectMapper(JavaTimeModule)로 날짜를 직렬화한다")
+    void jsonUsesInjectedMapper() {
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        ViewHelpers f = new ViewHelpers(Clock.systemUTC(), om);
+        assertThat(f.json(java.util.Map.of("t", java.time.LocalDate.of(2026, 1, 2)))).isEqualTo("{\"t\":\"2026-01-02\"}");
+        assertThat(fmt.json(java.util.Map.of("t", java.time.LocalDate.of(2026, 1, 2)))).contains("2026");
+    }
 }

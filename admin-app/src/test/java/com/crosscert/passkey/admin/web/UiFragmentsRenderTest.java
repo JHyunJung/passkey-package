@@ -169,6 +169,23 @@ class UiFragmentsRenderTest {
     }
 
     @Test
+    @DisplayName("ui:attrs: on* 인라인 이벤트 이름은 버리고, false·null 은 생략, true 는 값 없는 속성")
+    void attrsBlocksInlineHandlersAndHandlesBooleans() {
+        Map<String, Object> attrs = new java.util.LinkedHashMap<>();
+        attrs.put("onclick", "alert(1)");
+        attrs.put("OnMouseOver", "alert(2)");
+        attrs.put("hx-get", "/ok");
+        attrs.put("disabled", true);
+        attrs.put("hidden", false);
+        attrs.put("title", null);
+        attrs.put("bad name", "x");
+        String html = ui("button", "button('x', null, ${attrs})", m("attrs", attrs));
+        assertThat(html).contains("hx-get=\"/ok\"").contains("disabled=\"\"")
+                .doesNotContainIgnoringCase("onclick").doesNotContainIgnoringCase("onmouseover").doesNotContain("alert")
+                .doesNotContain("hidden").doesNotContain("title=").doesNotContain("bad name");
+    }
+
+    @Test
     @DisplayName("IconButton 은 label 을 aria-label 로 노출")
     void iconButtonLabel() {
         String html = ui("iconButton", "iconButton('더보기', ~{admin/fragments/icons :: dots(18)}, 'sm', 'danger', null)", Map.of());
@@ -235,23 +252,29 @@ class UiFragmentsRenderTest {
     // ── forms.test.tsx ───────────────────────────────────
 
     @Test
-    @DisplayName("Switch: role=switch, 접근 가능한 이름은 라벨")
+    @DisplayName("Switch: Alpine 상태(switchToggle)가 aria-checked 와 제출용 hidden input 을 정한다")
     void switchRole() {
-        String html = ui("switch", "switch('MFA 필수', false, null, ${ {'name': 'mfa', 'value': 'true'} })", Map.of());
-        assertThat(tag(html, "role=\"switch\"")).contains("type=\"checkbox\"", "class=\"sr-only\"", "name=\"mfa\"").doesNotContain("checked");
-        assertThat(html).contains("class=\"switch\"").contains(">MFA 필수<");
-        assertThat(tag(ui("switch", "switch('x', true, true, null)", Map.of()), "role=\"switch\"")).contains("checked").contains("disabled");
+        String html = ui("switch", "switch('MFA 필수', 'mfa', false, null, ${ {'hx-post': '/x'} })", Map.of());
+        assertThat(tag(html, "role=\"switch\"")).contains("type=\"checkbox\"", "class=\"sr-only\"", "aria-checked=\"false\"", "x-model=\"on\"",
+                "x-bind:aria-checked=\"on\"", "hx-post=\"/x\"").doesNotContain("checked=\"checked\"").doesNotContain("name=");
+        assertThat(tag(html, "type=\"hidden\"")).contains("name=\"mfa\"", "value=\"false\"", "x-bind:value=\"on ? 'true' : 'false'\"");
+        assertThat(html).contains("class=\"switch\"").contains(">MFA 필수<").contains("switchToggle(").contains("&quot;checked&quot;:false");
+        String on = ui("switch", "switch('x', 'f', true, true, null)", Map.of());
+        assertThat(tag(on, "role=\"switch\"")).contains("checked").contains("disabled").contains("aria-checked=\"true\"");
+        assertThat(tag(on, "type=\"hidden\"")).contains("value=\"true\"");
     }
 
     @Test
-    @DisplayName("Segmented aria-pressed")
+    @DisplayName("Segmented: Alpine 상태(segmented)가 aria-pressed 를 정하고 선택값을 hidden input 으로 제출")
     void segmentedPressed() {
         List<Map<String, Object>> opts = List.of(m("value", "24h", "label", "24h", "attrs", Map.of("hx-get", "/a")), m("value", "7d", "label", "7d"));
-        String html = ui("segmented", "segmented(${opts}, '7d', '기간')", m("opts", opts));
-        assertThat(html).contains("class=\"seg\"").contains("role=\"group\"").contains("aria-label=\"기간\"");
-        assertThat(tag(html, "seg__btn seg__btn--on")).contains("aria-pressed=\"true\"");
+        String html = ui("segmented", "segmented('range', ${opts}, '7d', '기간')", m("opts", opts));
+        assertThat(html).contains("class=\"seg\"").contains("role=\"group\"").contains("aria-label=\"기간\"").contains("segmented(").contains("&quot;value&quot;:&quot;7d&quot;");
+        assertThat(tag(html, "type=\"hidden\"")).contains("name=\"range\"", "value=\"7d\"", "x-bind:value=\"value\"");
+        assertThat(tag(html, "data-value=\"7d\"")).contains("aria-pressed=\"true\"", "class=\"seg__btn seg__btn--on\"");
         assertThat(count(html, "aria-pressed=\"false\"")).isEqualTo(1);
-        assertThat(html).contains("hx-get=\"/a\"");
+        assertThat(html).contains("hx-get=\"/a\"").contains("x-on:click=\"select($el.dataset.value)\"").contains("x-bind:aria-pressed=\"value === $el.dataset.value\"");
+        assertThat(ui("segmented", "segmented(null, ${opts}, '7d', '기간')", m("opts", opts))).doesNotContain("type=\"hidden\"");
     }
 
     @Test
@@ -334,6 +357,11 @@ class UiFragmentsRenderTest {
         assertThat(html).contains("<button type=\"button\" class=\"btn\" autofocus").contains(">취소<").contains("btn btn--danger-solid").contains("hx-post=\"/admin/tenants/1/suspend\"")
                 .contains("x-bind:disabled=\"busy || !gateOk\"").contains("&quot;typing&quot;:true").contains("&quot;closeOnScrim&quot;:false")
                 .contains("id=\"suspend-confirm\"").contains("일치해야 정지 버튼이 활성화됩니다.").contains("id=\"suspend-error\"");
+        // 실패 처리 계약: 확인 버튼(data-confirm)의 htmx 결과만 보고, 실패하면 열어 둔 채 안에서 오류를 보인다.
+        assertThat(html).contains("x-on:htmx:after-request=\"onAfterRequest($event)\"").contains("x-on:htmx:before-request=\"onBeforeRequest($event)\"")
+                .contains("&quot;verb&quot;:&quot;정지&quot;").contains("<button type=\"button\" class=\"btn btn--danger-solid\" data-confirm");
+        assertThat(tag(html, "id=\"suspend-error\"")).contains("role=\"alert\"", "x-show=\"error\"", "banner banner--danger");
+        assertThat(html).contains("x-text=\"error && error.title\"").contains("x-text=\"error && error.text\"");
     }
 
     @Test
@@ -360,6 +388,15 @@ class UiFragmentsRenderTest {
         assertThat(tag(html, "role=\"tablist\"")).contains("aria-label=\"Tenant 탭\"").contains("x-data=\"tabs\"");
         assertThat(tag(html, "href=\"/t?tab=a\"")).contains("role=\"tab\"", "aria-selected=\"true\"", "tabindex=\"0\"", "tabs__btn tabs__btn--active");
         assertThat(tag(html, "href=\"/t?tab=b\"")).contains("aria-selected=\"false\"", "tabindex=\"-1\"", "title=\"MDS 미확인 AAGUID 2건\"");
+        assertThat(tag(html, "href=\"/t?tab=c\"")).contains("tabindex=\"-1\"");
+    }
+
+    @Test
+    @DisplayName("Tabs: active 가 어느 항목과도 맞지 않으면 첫 탭이 tabindex=0")
+    void tabsFallbackToFirst() {
+        String html = ui("tabs", "tabs(${items}, 'zzz', 'Tenant 탭')", m("items", tabItems()));
+        assertThat(tag(html, "href=\"/t?tab=a\"")).contains("tabindex=\"0\"").contains("aria-selected=\"false\"");
+        assertThat(tag(html, "href=\"/t?tab=b\"")).contains("tabindex=\"-1\"");
         assertThat(tag(html, "href=\"/t?tab=c\"")).contains("tabindex=\"-1\"");
     }
 

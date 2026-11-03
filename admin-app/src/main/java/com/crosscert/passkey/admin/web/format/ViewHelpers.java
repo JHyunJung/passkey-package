@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.web.format;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -18,12 +19,19 @@ import java.util.Map;
 @Component("fmt")
 public class ViewHelpers {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-
     private final Clock clock;
+    private final ObjectMapper json;
 
-    public ViewHelpers(Clock clock) {
+    /** 스프링이 구성한 ObjectMapper(JavaTimeModule 등 포함)를 쓴다. */
+    @Autowired
+    public ViewHelpers(Clock clock, ObjectMapper json) {
         this.clock = clock;
+        this.json = json;
+    }
+
+    /** 스프링 컨텍스트 없는 단위 테스트용. */
+    public ViewHelpers(Clock clock) {
+        this(clock, new ObjectMapper().findAndRegisterModules());
     }
 
     // ── 라벨 ──
@@ -137,7 +145,7 @@ public class ViewHelpers {
     /** 값을 JSON 으로. 속성 값에 넣으면 Thymeleaf 가 이스케이프한다(th:x-data 등). */
     public String json(Object value) {
         try {
-            return JSON.writeValueAsString(value);
+            return json.writeValueAsString(value);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("JSON 직렬화 실패", e);
         }
@@ -146,6 +154,11 @@ public class ViewHelpers {
     /** {@code xdata('chipInput', 'values', v)} → {@code chipInput({"values":…})}. {@code ui:xdata} 속성에 쓴다. */
     public String xdata(String component, Object... keyValues) {
         return component + "(" + cfg(keyValues) + ")";
+    }
+
+    /** tabs 조각: items(각 Map 의 'id') 중 active 와 같은 것이 있는지. */
+    public boolean hasTab(java.util.List<? extends Map<String, ?>> items, Object active) {
+        return items != null && items.stream().anyMatch(t -> java.util.Objects.equals(t.get("id"), active));
     }
 
     /** 조각의 선택 옵션 Map 을 null 안전하게 읽는다(opts 가 null 이거나 키가 없으면 null). */
@@ -165,6 +178,7 @@ public class ViewHelpers {
     public record Pager(int page, int last, long from, long to) {}
 
     public Pager pager(int page, int pageSize, long total) {
+        if (pageSize <= 0) pageSize = 1; // 0 나눗셈 방지
         int last = (int) Math.max(1, (total + pageSize - 1) / pageSize);
         int p = Math.min(Math.max(1, page), last);
         long from = total == 0 ? 0 : (long) (p - 1) * pageSize + 1;
