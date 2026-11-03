@@ -7,8 +7,8 @@
   PLATFORM: [플랫폼] Tenants · 활동 · 감사 체인 · (온프렘) 라이선스, [관리] 설정.  RP_ADMIN: [관리] 설정만.
   PLATFORM 에게만 하단에 감사 체인 카드(30초 폴링, 응답 없는 조회는 120초 뒤 중단)를 둔다.
   카드(#chain-card)는 hx-preserve 라 boost 이동에도 같은 노드가 남고 폴링이 이어진다(React 셸은 한 번만 마운트). 카드 안 링크는
-  hx-disinherit 로 카드의 target/swap/sync 를 받지 않아 일반 boost 이동을 한다. 폴링과 다시 시도는 hx-sync="#chain-card:replace" 를
-  함께 써서 나중 요청이 앞 요청을 중단한다. "위변조 N" 배지는 Alpine.store('chain').tampered 로 그린다(OOB 는 hx-preserve 와 충돌). 카드 상태·경과 초는 app.js 의 chainCard.
+  hx-disinherit 로 카드의 target/swap/sync 를 받지 않아 일반 boost 이동을 한다. 폴링은 hx-sync="#chain-card:drop"(진행 중 조회가 있으면 건너뜀, Sidebar.tsx inFlight),
+  다시 시도만 hx-sync="#chain-card:replace"(진행 중 조회를 중단하고 대체)를 쓴다. "위변조 N" 배지는 Alpine.store('chain').tampered 로 그린다(OOB 는 hx-preserve 와 충돌). 카드 상태·경과 초는 app.js 의 chainCard.
 -->
 <aside th:fragment="sidebar" class="sidebar" aria-label="주 메뉴">
   <div class="sidebar__brand">
@@ -39,7 +39,7 @@
   <div class="sidebar__foot">
     <div th:if="${me != null and me.platform}" id="chain-card" hx-preserve data-quiet x-data="chainCard"
          th:attr="hx-get=@{/admin/_/shell/chain-card}" hx-trigger="load, every 30s" hx-target="#chain-card-body" hx-swap="innerHTML"
-         hx-sync="#chain-card:replace" hx-disinherit="hx-target hx-swap hx-sync"
+         hx-sync="#chain-card:drop" hx-disinherit="hx-target hx-swap hx-sync"
          hx-request='{"timeout": 120000}' x-on:htmx:before-request="before($event)" x-on:htmx:after-request="done($event)">
       <div id="chain-card-body" x-show="!checking &amp;&amp; !failed" x-cloak></div>
       <div class="chain-card chain-card--pending" x-show="checking">

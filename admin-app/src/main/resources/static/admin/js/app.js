@@ -56,7 +56,9 @@
   // 배너는 hx-preserve 로 이동 사이에 유지되므로 서버가 아니라 현재 주소로 판단한다(LicenseBanner.tsx: pathname !== '/license').
   function syncHiddenLinks() {
     document.querySelectorAll('[data-hide-on-path]').forEach(function (a) {
-      a.hidden = location.pathname === a.getAttribute('data-hide-on-path');
+      const hide = a.getAttribute('data-hide-on-path');
+      const p = location.pathname.replace(/\/+$/, '');
+      a.hidden = p === hide;
     });
   }
   document.addEventListener('htmx:afterSettle', syncHiddenLinks);

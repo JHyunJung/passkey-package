@@ -191,9 +191,9 @@ class ShellControllerTest {
         Element host = page("/admin/tenants", platform()).selectFirst("#chain-card");
         assertThat(host.hasAttr("hx-preserve")).isTrue();
         assertThat(host.attr("hx-disinherit").split("\\s+")).contains("hx-target", "hx-swap", "hx-sync");
-        assertThat(host.attr("hx-sync")).isEqualTo("#chain-card:replace");
+        assertThat(host.attr("hx-sync")).as("폴링은 진행 중 조회를 대체하지 않음").isEqualTo("#chain-card:drop");
         Element retry = host.selectFirst("button[hx-get]");
-        assertThat(retry.attr("hx-sync")).as("다시 시도도 같은 동기화 대상").isEqualTo(host.attr("hx-sync"));
+        assertThat(retry.attr("hx-sync")).as("다시 시도만 대체").isEqualTo("#chain-card:replace");
         assertThat(retry.attr("hx-target")).isEqualTo("#chain-card-body");
         assertThat(retry.attr("hx-swap")).isEqualTo("innerHTML");
         assertThat(retry.hasAttr("data-quiet")).isTrue();
@@ -565,6 +565,9 @@ class ShellControllerTest {
         // /license 화면에서 숨기는 일은 app.js 가 현재 주소로 한다(배너가 이동 사이에 유지되므로) — 링크에 표식이 있다.
         Element link = Jsoup.parseBodyFragment(banner(platform(), "http://localhost:8080/admin/license")).selectFirst("a[data-license-link]");
         assertThat(link.attr("data-hide-on-path")).isEqualTo("/admin/license");
+        String css = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/static/admin/css/components.css"));
+        assertThat(css).as("hidden 이 .btn 의 display 에 지지 않도록").contains("[hidden] { display: none !important; }");
+        assertThat(java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/static/admin/js/app.js"))).contains("replace(/\\/+$/, '')");
     }
 
     @Test
