@@ -7,6 +7,11 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":webauthn"))
     implementation("org.springframework.boot:spring-boot-starter-security")
+    // admin 화면(Thymeleaf + htmx + Alpine.js) — 서버 렌더링.
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
+    implementation("org.thymeleaf.extras:thymeleaf-extras-springsecurity6")
+    // MFA 등록 화면의 otpauth QR 을 서버에서 SVG 로 렌더링(외부 QR 서비스 미사용).
+    implementation("com.google.zxing:core:3.5.3")
     // Oracle NLS(orai18n) — 문자셋/날짜·언어 변환 시 드라이버가 런타임에 로드.
     runtimeOnly(rootProject.libs.oracle.nls)
     // F4 Task 6 — Monthly Audit Chain Report PDF generation.
@@ -16,6 +21,8 @@ dependencies {
     implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
 
     testImplementation("org.springframework.security:spring-security-test")
+    // 화면 HTML 응답 파싱용.
+    testImplementation("org.jsoup:jsoup:1.18.1")
     // T24 AdminFlowIT (Phase 2 acceptance gate) brings up a Testcontainers
     // Oracle XE 21 + Redis 7 and exercises admin flows end-to-end. Same
     // dependency shape as :passkey-app for Phase 1's Fido2EndToEndIT.
