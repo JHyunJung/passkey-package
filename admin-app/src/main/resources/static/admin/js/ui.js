@@ -460,6 +460,124 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // ── 설정 › 내 계정(MFA) — AccountTab.tsx, RecoveryCodesModal.tsx ──
+  // 세 컴포넌트 모두 바깥 dialog 범위 안(x-if)에 있다: open·busy 는 dialog 의 것이다(busy 는 템플릿의 x-effect 가 요청 상태로 비춘다).
+  // 서버 실패(코드 불일치·권한 등)는 422 + HX-Retarget 로 입력칸 아래에 그려진다. 응답이 없는 실패(전송 실패·시간 초과)와 그 밖의 상태는 netErr.
+  const MFA_NET = '네트워크에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요.';
+  const MFA_TIMEOUT = '서버가 잠시 응답하지 않습니다. 응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요.';
+  function mfaFailText(xhr) { return xhr && xhr.status ? toastMessage(xhr) : MFA_NET; }
+  function clearById(id) { const s = document.getElementById(id); if (s) s.replaceChildren(); }
+  function ownRequest(e, formId) { const elt = e && e.detail && e.detail.elt; return !!elt && elt.id === formId; }
+  // 다이얼로그가 닫히면(x-if 가 안쪽을 지우면) 응답으로 받은 래퍼([data-mfa-wrap])째 지워 secret·복구 코드가 <template> 안에도 남지 않게 한다.
+  function removeWrapLater(wrap) { setTimeout(() => { if (wrap && wrap.isConnected) wrap.remove(); }, 0); }
+
+  // 켜기 1–2 / 3: 진행 표시(코드를 한 자리라도 넣으면 QR 스캔 완료 → 코드 확인 중), 6자리여야 확인, 요청 중 입력·취소·Escape 잠금.
+  // 실패하면 코드를 비우고 첫 칸에 포커스(원본 focusKey). 다시 입력하면 오류가 사라진다.
+  Alpine.data('mfaEnroll', () => ({
+    code: '',
+    confirming: false,
+    netErr: '',
+    wrap: null,
+    init() { this.wrap = this.$root.closest('[data-mfa-wrap]'); },
+    destroy() { removeWrapLater(this.wrap); },
+    stepState(i) { const s = this.code.length > 0; if (i === 0) return s ? 'done' : 'now'; return s ? 'now' : 'todo'; },
+    otp() { const f = this.$root.querySelector('.otp-set'); return f ? Alpine.$data(f) : null; },
+    sync() {
+      this.$nextTick(() => {
+        const d = this.otp();
+        const v = d ? d.value : '';
+        if (v !== this.code) { this.code = v; this.clearErr(); }
+      });
+    },
+    clearErr() { this.netErr = ''; clearById('mfa-enroll-error'); },
+    cells(dis) { this.$root.querySelectorAll('.otp__cell').forEach((c) => { c.disabled = dis; }); },
+    onBefore(e) { if (!ownRequest(e, 'mfa-confirm-form')) return; this.confirming = true; this.clearErr(); this.cells(true); },
+    onAfter(e) {
+      if (!ownRequest(e, 'mfa-confirm-form')) return;
+      this.confirming = false;
+      this.cells(false);
+      const d = e.detail || {};
+      if (d.successful) return;
+      if (!(d.xhr && d.xhr.status === 422)) this.netErr = mfaFailText(d.xhr);
+      this.resetCode();
+    },
+    onNetwork(timeout) { this.confirming = false; this.cells(false); this.netErr = timeout ? MFA_TIMEOUT : MFA_NET; this.resetCode(); },
+    resetCode() { this.code = ''; const d = this.otp(); if (d) d.clear(); },
+  }));
+
+  // 끄기 확인창: 숫자 6자리만, 요청 중 읽기 전용(늦은 실패가 다시 친 값을 덮지 않음). 실패하면 값은 남기고 전체 선택 + 포커스 + aria-invalid.
+  // 성공하면 응답이 계정 카드(#mfa-account)를 통째로 바꾼다(계정 정보 새로고침이 실패한 경우엔 카드는 그대로, 확인창만 닫는다).
+  Alpine.data('mfaDisable', () => ({
+    code: '',
+    disabling: false,
+    invalid: false,
+    netErr: '',
+    onInput(e) {
+      if (this.disabling) { e.target.value = this.code; return; }
+      this.code = (e.target.value || '').replace(/\D/g, '').slice(0, 6);
+      e.target.value = this.code;
+      if (this.invalid || this.netErr) this.clearErr();
+    },
+    clearErr() { this.invalid = false; this.netErr = ''; clearById('mfa-disable-err'); },
+    onBefore(e) { if (!ownRequest(e, 'mfa-disable-form')) return; this.disabling = true; this.clearErr(); },
+    onAfter(e) {
+      if (!ownRequest(e, 'mfa-disable-form')) return;
+      this.disabling = false;
+      const d = e.detail || {};
+      if (d.successful) { this.open = false; return; }
+      if (!(d.xhr && d.xhr.status === 422)) this.netErr = mfaFailText(d.xhr);
+      this.failed();
+    },
+    onNetwork(timeout) { this.disabling = false; this.netErr = timeout ? MFA_TIMEOUT : MFA_NET; this.failed(); },
+    failed() {
+      this.invalid = true;
+      this.$nextTick(() => { const i = this.$refs.input; if (i) { i.focus(); i.select(); } });
+    },
+  }));
+
+  // 복구 코드(3 / 3): 화면의 코드로 복사(줄바꿈으로 이음)·.txt 다운로드(Blob, 파일명은 서버가 RecoveryCodeFilename 으로 준 값).
+  // "안전한 곳에 저장했습니다." 체크 뒤 닫기 버튼만 닫는다(Escape·스크림 무시: dialog dismissible=false). 열려 있는 동안 이동·새로고침을 막는다.
+  Alpine.data('recoveryCodes', () => ({
+    checked: false,
+    copied: false,
+    copyFailed: false,
+    timer: null,
+    wrap: null,
+    init() {
+      this.wrap = this.$root.closest('[data-mfa-wrap]');
+      const d = Alpine.store('dirty');
+      d.notice = { title: '복구 코드를 아직 저장하지 않았습니다', body: '이동하면 복구 코드를 다시 볼 수 없습니다.' };
+      d.report('mfa-recovery-codes', 1, false);
+    },
+    destroy() {
+      clearTimeout(this.timer);
+      const d = Alpine.store('dirty');
+      d.report('mfa-recovery-codes', 0, false);
+      d.notice = null;
+      removeWrapLater(this.wrap);
+    },
+    text() { return Array.from(this.$root.querySelectorAll('[data-rc-code]')).map((el) => el.textContent.trim()).join('\n'); },
+    async copy() {
+      const ok = await copyToClipboard(this.text());
+      this.copyFailed = !ok;
+      if (ok) {
+        this.copied = true;
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => { this.copied = false; }, 2000);
+      }
+    },
+    download() {
+      const blob = new Blob([this.text() + '\n'], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = this.$root.dataset.filename || 'passkey-admin-recovery-codes.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    finish() { if (this.checked) this.open = false; },
+  }));
+
   // ── SaveBar / 저장하지 않은 변경 ───────────────────────
   // form 의 필드 값을 처음 상태와 비교해 바뀐 개수를 센다. 되돌리기=form.reset(), 저장=form.requestSubmit().
   // 변경 개수와 저장 중 여부는 전역 Alpine.store('dirty')(app.js)에 보고한다. 새로고침·탭 닫기 경고(beforeunload)와 이동 확인은

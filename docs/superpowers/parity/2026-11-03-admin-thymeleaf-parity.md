@@ -650,17 +650,84 @@ TC = `AuditChainPageControllerTest`. 브라우저: 전부 미확인(R8) — 아�
 - 다이얼로그 요청 요소(래퍼)는 다이얼로그 밖이지만 래퍼의 `reqBusy` 를 dialog 의 `busy` 로 비춰(x-effect) 진행 중에는 Escape·스크림·취소가 막힌다(원본 onClose={busy ? noop : onClose}). 성공(2xx)이면 래퍼가 닫는다.
 - `verify-result.html` 은 만들지 않았다 — 한 tenant 검증은 토스트 + 루트 교체라 별도 조각이 없다.
 
-## §설정
+## §설정 (Task 16a, 소스 수준 점검 — 틀·내 계정·시스템. Admin 사용자·보안 정책·MDS 는 16b)
 
-| 체크 항목 | 원본 테스트 | 결과 |
-|---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+SPC = `SettingsPageControllerTest`, ATC = `AccountTabControllerTest`, SIT = `SystemInfoTabControllerTest`, QST = `QrSvgTest`. 브라우저: 전부 미확인(R8).
 
-## §라이선스
+### SettingsPage.test.tsx (6)
 
-| 체크 항목 | 원본 테스트 | 결과 |
-|---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 루트 .page, 제목·설명 | SP 1 | source ✅ | SPC `platformSeesAllTabs` | 미확인 |
+| PLATFORM 탭 5개, '설정 탭', 내 계정 선택 | SP 2 | source ✅ | SPC `platformSeesAllTabs` | 미확인 |
+| RP 는 내 계정 탭만, 가입 요청 조회 안 함 | SP 3 | source ✅ | SPC `rpAdminSeesOnlyAccountTab` | — |
+| Admin 사용자 탭 가입 요청 배지(tabs__count) | SP 4 | source ✅ / 차이: 실패 시 숨김(원본과 같음), 탭 안 변경 뒤 갱신은 16b | SPC `pendingBadge` | — |
+| 탭 클릭으로 내용 교체 | SP 5 | source ✅ / 차이: hx-get 조각 + push-url, 활성 표시는 ui.js — JS 브라우저 확인 필요 | SPC `tabLinksAreFragmentRequests` | 미확인 |
+| ?tab= 진입, RP 는 무시하고 내 계정 | SP 6 | source ✅ (resolveTab 그대로) | SPC `settingsTabResolveMatchesOriginal`, `platformTabQueryLoadsLazily`, `rpAdminSeesOnlyAccountTab` | — |
+| (추가) 리터럴 탭 매핑 우선, 미구현 PLATFORM 탭은 404 | 계약 | source ✅ | SPC `literalTabMappingWinsOverGeneric`, `genericTabFragment` | — |
+
+### AccountTab.test.tsx (15) · RecoveryCodesModal.test.tsx (7)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 꺼짐: 일러스트(장식) + 켜기 카드 | AT 1 | source ✅ | ATC `offShowsEnrollCard` | 미확인 |
+| 진행 표시 QR 스캔 → 코드 확인 → 복구 코드 다이얼로그, 켜기 창 닫힘, 카드 켜짐 | AT 2 | source ✅ / 진행 표시·6자리 활성은 Alpine(mfaEnroll) — JS 브라우저 확인 필요. 카드는 응답 OOB | ATC `enrollRendersDialog`, `confirmShowsRecoveryCodes` | 미확인 |
+| confirm 후 getMe 실패해도 복구 코드 표시 | AT 3 | source ✅ / 차이: 토스트가 응답당 하나라 성공 토스트 대신 새로고침 실패 경고만 | ATC `confirmMeReloadFailureStillShowsCodes` | — |
+| 잘못된 코드: 인라인 + 코드 지움 + 첫 칸 포커스, 토스트 없음, 다시 입력하면 지움 | AT 4 | source ✅ (422 + HX-Retarget) / 지움·포커스·재입력 해제는 JS | ATC `confirmInvalidCodeInline` | 미확인 |
+| 네트워크 오류는 쉬운 문구 인라인 | AT 5 | JS — 브라우저 확인 필요(status 0 → netErr) | — | 미확인 |
+| 403 은 권한 문구 인라인 | AT 6 | source ✅ | ATC `confirmOtherFailuresInline` | — |
+| 429(끄기)는 요청 과다 문구 인라인 | AT 7 | source ✅ | ATC `disableFailureInline` | — |
+| 취소하면 닫히고 confirm 안 부름 | AT 8 | JS — 브라우저 확인 필요(닫으면 래퍼째 제거) | — | 미확인 |
+| 켜짐: badge--success, 선택 줄 숨김, 위험 영역 | AT 9 | source ✅ | ATC `onShowsDangerZone` | — |
+| 등록일은 서버 값이 있을 때만, 보관 안내 | AT 10 | source ✅ / 차이: MeView 에 mfaEnrolledAt 없음 → 늘 숨김 | ATC `onShowsDangerZone` | — |
+| 끄기 alertdialog, 6자리 sanitize 후 disable(code), 꺼짐 | AT 11 | source ✅ / sanitize·버튼 활성은 JS(mfaDisable) | ATC `onShowsDangerZone`, `disableSuccess` | 미확인 |
+| 끄기 코드 틀림: 인라인, 값 유지·전체 선택·aria-invalid, 토스트 없음 | AT 12 | source ✅ (422 #mfa-disable-err) / 선택·포커스는 JS | ATC `disableFailureInline` | 미확인 |
+| 끄기 요청 중 읽기 전용, 늦은 실패가 값 덮지 않음, 취소 비활성 | AT 13 | JS — x-bind:readonly·busy 미러 | ATC `onShowsDangerZone`(속성) | 미확인 |
+| 복구 코드 표시 중 이동·새로고침 막기(문구) | AT 14 | JS — $store.dirty report + notice(recoveryCodes) | — | 미확인 |
+| 복사: 코드 줄바꿈 연결 / 실패 시 수동 안내 | RC 1·2 | JS — 화면의 코드로 copyToClipboard | ATC `confirmShowsRecoveryCodes`(문구) | 미확인 |
+| 코드 10개, 01–10, 목록 이름 | RC 3 | source ✅ | ATC `confirmShowsRecoveryCodes` | — |
+| 체크 전 닫기 비활성 '닫기 · 체크 필요' | RC 4 | source ✅ / 활성 전환 JS | ATC `confirmShowsRecoveryCodes` | 미확인 |
+| alertdialog, Escape·스크림으로 안 닫힘 | RC 5 | source ✅ (dismissible=false, closeOnScrim=false) | ATC `confirmShowsRecoveryCodes` | 미확인 |
+| 일러스트 장식 | RC 6 | source ✅ | ATC `confirmShowsRecoveryCodes` | — |
+| 다운로드 파일명 sanitize | RC 7 | source ✅ (RecoveryCodeFilename, KST 날짜) / Blob 다운로드는 JS | ATC `confirmShowsRecoveryCodes` | 미확인 |
+| (추가) 코드는 응답 본문에만(세션·플래시·헤더·토스트 없음, no-store) | 브리프 | source ✅ | ATC `recoveryCodesNotStoredInSession` | — |
+| (추가) QR 은 인라인 data URI, 외부 참조 없음 | 브리프 R4 | source ✅ | ATC/QST `qrIsInlineDataUriNoExternal`, QST `decodesBack` | — |
+| (추가) enroll 실패 토스트 '2단계 인증을 시작하지 못했습니다' | AccountTab.tsx | source ✅ | ATC `enrollFailureToast` | — |
+
+### SystemInfoTab.test.tsx (13)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 버전·KST 배포·환경·메모·가동 일수 | SI 1 | source ✅ | SIT `rendersInfo` | — |
+| 긴 버전 말줄임(title), kv, KST | SI 2 | source ✅ | SIT `longVersionTruncates` | — |
+| deployedAt null → 정보 없음 | SI 3 | source ✅ | SIT `deployedMissingOrInvalid` | — |
+| 실패 시 오류 표시 / LoadError(role=alert, 복사) / 일러스트 + 다시 시도 | SI 4·10·12 | source ✅ / 차이: 원문 없음(공유 계약) | SIT `loadFailure` | 미확인 |
+| 상태별 배지 클래스 | SI 5 | source ✅ | SIT `statusBadgesAndOverall` | — |
+| 전체 상태 = 가장 나쁜 상태 | SI 6 | source ✅ | SIT `statusBadgesAndOverall` | — |
+| latency 없으면 숨김 | SI 7 | 차이: 서버 DTO 에 latencyMs 없음 — 늘 숨김 | SIT `statusBadgesAndOverall` | — |
+| KPI 라벨 한국어 | SI 8 | source ✅ | SIT `rendersInfo` | — |
+| 로딩 중 Skeleton | SI 9 | source ✅ (탭 영역 공통 스켈레톤) | SPC `platformTabQueryLoadsLazily` | 미확인 |
+| 가동 일수 없음 → — | SI 11 | source ✅ | SIT `uptimeMissing` | — |
+| 깨진 배포 시각 → — | SI 13 | source ✅ | SIT `deployedMissingOrInvalid` | — |
+
+## §라이선스 (Task 16a, 소스 수준 점검)
+
+LPC = `LicensePageControllerTest`. PLATFORM 전용: RP 는 자기 tenant 로 302, 다시 확인 조각 403(LPC `licenseRpAdminRedirected`).
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 상태 배지(원문 툴팁) + 상대 시간 | LP 1 | source ✅ | LPC `headline` | — |
+| 만료까지 일수, 진행 바 없음 | LP 2 | source ✅ | LPC `daysOnly` | — |
+| 상세 항목 순서, ID 복사, 기능 태그, 유예 숨김 | LP 3 | source ✅ | LPC `detailCard` | — |
+| stack-5, kv--rows | LP 4 | source ✅ | LPC `detailCard` | — |
+| NETWORK_GRACE | LP 5 | source ✅ | LPC `networkGrace` | — |
+| null 값 —, DEAD 카드 | LP 6 | source ✅ | LPC `deadWithNulls` | — |
+| WARNING 카드 / VALID 카드 없음 | LP 7·8 | source ✅ | LPC `warningAndValid` | — |
+| SaaS 안내 | LP 9 | source ✅ | LPC `saas` | — |
+| 조회 실패 LoadError + 다시 시도 | LP 10 | source ✅ / 차이: 원문('boom') 은 보이지 않음(공유 계약) | LPC `loadFailure` | 미확인 |
+| 다시 확인 중 기존 정보 유지, '확인 중…' 비활성, 중복 없음 | LP 11 | source ✅ (hx-disabled-elt, hx-sync drop, htmx-request 클래스로 문구 전환) | LPC `recheckSuccess` | 미확인 |
+| 다시 확인 실패: 정보 유지 + 인라인 경고 | LP 12 | source ✅ (HX-Retarget #license-recheck-alert) | LPC `recheckFailureKeepsPrevious` | 미확인 |
+| 처음 로딩 Skeleton | LP 13 | 차이: 서버가 그려서 보내므로 로딩 상태 없음 | — | — |
 
 ## §Tenant 자격 증명 탭 (Task 12, 소스 수준 점검)
 

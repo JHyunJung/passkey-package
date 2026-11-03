@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}" xmlns:th="http://www.thymeleaf.org">
+<head><title>설정</title></head>
+<body>
+<!--
+  설정 화면 틀(← pages/SettingsPage.tsx): 머리글 + 탭 줄(설정 탭) + 탭 내용(#settings-tab).
+  내 계정 탭은 인라인, 다른 탭(?tab=admins|mds|system|security, PLATFORM 만)은 #settings-tab 이 hx-trigger=load 로 GET /admin/_/settings/tab/{tab} 를 불러온다.
+  탭 링크는 hx-get 조각 + hx-push-url + 같은 hx-sync 그룹(#settings-tab:replace) + data-guard-dirty(저장 안 한 변경·복구 코드 표시 중이면 이동 확인).
+  컨테이너는 hx-sync/hx-swap/hx-target 을 물려주지 않는다(탭 안의 요청은 자기 속성을 쓴다).
+  모델: tabs, activeTab, tabLazy/tabAttrsLoad, (내 계정이면) account 모델
+-->
+<th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>
+<main>
+  <div class="page">
+    <div class="stack-4">
+      <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('설정', '콘솔 운영자, MDS 신뢰 anchor, 시스템 상태.', null)}"></th:block>
+      <th:block th:replace="~{admin/fragments/ui/tabs :: tabs(${tabs}, ${activeTab}, '설정 탭')}"></th:block>
+    </div>
+
+    <div id="settings-tab" hx-disinherit="hx-sync hx-swap hx-target" th:unless="${tabLazy}">
+      <th:block th:replace="~{admin/settings/account :: content}"></th:block>
+    </div>
+    <div id="settings-tab" hx-disinherit="hx-sync hx-swap hx-target" th:if="${tabLazy}" ui:attrs="${tabAttrsLoad}">
+      <section class="card"><th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(6, '탭 불러오는 중')}"></th:block></section>
+    </div>
+  </div>
+</main>
+</body>
+</html>
