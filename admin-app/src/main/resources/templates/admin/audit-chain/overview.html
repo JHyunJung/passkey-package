@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  감사 체인 개요(← pages/AuditChainPage.tsx). 조각:
+    root        #chain-root 전체(헤더·전체 상태·위변조 배너·KPI·Tenant 표·사건 카드·다이얼로그). 개요·검증·백필·사건 변경 응답이 이 요소를 통째로 교체한다(원본 reverify).
+    loadFailed  처음 불러오기 실패(오류 카드 + 다시 시도, 422).
+    warn        다시 검증 실패(이전 결과는 그대로, HX-Retarget #chain-warn) — 원본의 "다시 검증하지 못했습니다" 경고.
+    header      제목 + 오른쪽 버튼(골격에서는 버튼 없음)
+  상태(Alpine, root 요소): busy(체인 검증 요청 중 — data-chain-verify 요소의 요청), vid(검증 중인 tenant), failed(다시 검증 실패), view(표 필터, 클라이언트).
+  요청은 요소마다 hx-* 를 가진다(hx-sync="#chain-root:drop"). 사용자 영향 값(tenant 이름·메모·이메일)은 th:text 로만.
+  모델: rows, tamperedRows, headline, lastLine, ago, agoCap, kpi*, view, segOptions, chainColumns, menuItems, backfillAllowed/Attrs, report*, reverifyAttrs, (incidents.html 의 모델)
+-->
+<div th:fragment="header(actions)" class="page__head">
+  <div class="page__head-main">
+    <h1 class="page__title">감사 체인 모니터</h1>
+    <!-- 스케줄러 없음: overview 호출 시마다 서버가 전체 tenant chain 을 검증한다(AuditChainMonitorController.overview). -->
+    <p class="page__sub">tenant별 감사 로그 해시 체인 무결성 — 화면을 열 때와 '지금 검증'을 누를 때 서버가 검증합니다.</p>
+  </div>
+  <th:block th:if="${actions}"><div class="spacer"></div><div class="row"><th:block th:replace="${actions}"/></div></th:block>
+</div>
+
+<div th:fragment="loadFailed" class="page" id="chain-root">
+  <th:block th:replace="~{:: header(null)}"></th:block>
+  <section class="card">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('감사 체인 상태', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+  </section>
+</div>
+
+<!-- warn: 다시 검증 실패. 이전 결과를 유지한 채 경고만 보인다. x-init 이 root 에 failed 를 알려 백필을 막는다. -->
+<div th:fragment="warn" class="banner banner--warning banner--top" role="status" x-init="$dispatch('chain-failed')">
+  <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+  <div class="banner__body">
+    <div class="banner__title">다시 검증하지 못했습니다</div>
+    <div><th:block th:text="${warnTitle}">서버가 잠시 응답하지 않습니다</th:block>. 아래는 <span x-text="ago()">방금 전</span> 검증 결과입니다.</div>
+  </div>
+  <div class="banner__actions">
+    <button type="button" class="btn btn--sm" ui:attrs="${warnAttrs}" x-bind:disabled="busy"><th:block th:replace="~{admin/fragments/icons :: refresh(14)}"></th:block>다시 시도</button>
+  </div>
+</div>
+
+<div th:fragment="root" class="page" id="chain-root" th:attr="data-view=${view}, data-verified-at=${verifiedAtIso}"
+     x-data="{ busy: false, vid: '', failed: false, view: 'all',
+               get blocked() { return this.busy || this.failed; },
+               get blockedReason() { return this.failed ? '최근 검증에 실패했습니다. 다시 검증해 정상임을 확인한 뒤 쓸 수 있습니다.' : '검증 중에는 쓸 수 없습니다. 검증이 끝난 뒤 다시 시도하세요.'; },
+               init() { this.view = this.$root.dataset.view || 'all'; },
+               ago() {
+                 const t = Date.parse(this.$root.dataset.verifiedAt);
+                 if (isNaN(t)) return '—';
+                 const m = Math.floor((Date.now() - t) / 60000);
+                 if (m < 1) return '방금 전';
+                 if (m < 60) return m + '분 전';
+                 const h = Math.floor(m / 60);
+                 if (h < 24) return h + '시간 전';
+                 const d = Math.floor(h / 24);
+                 if (d < 30) return d + '일 전';
+                 return Math.floor(d / 30) + '개월 전';
+               } }"
+     x-on:segmented-change="view = $event.detail.value" x-on:chain-failed="failed = true"
+     x-on:htmx:before-request="if ($event.detail.elt.hasAttribute('data-chain-verify')) { busy = true; vid = $event.detail.elt.dataset.vid || ''; }"
+     x-on:htmx:after-request="if ($event.detail.elt.hasAttribute('data-chain-verify')) { busy = false; vid = ''; }">
+  <th:block th:replace="~{:: header(~{:: headerActions})}"></th:block>
+
+  <div id="chain-warn"></div>
+
+  <section class="card" aria-label="전체 상태" style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 20px 24px">
+    <span aria-hidden="true" class="chain-ico" th:classappend="${tampered} ? 'chain-ico--bad' : 'chain-ico--ok'" style="width: 48px; height: 48px; border-radius: 12px">
+      <th:block th:replace="~{admin/fragments/icons :: link(24)}"></th:block>
+    </span>
+    <div class="col" style="gap: 2px; flex: 1 1 320px; min-width: 0">
+      <span class="t-over">전체 상태</span>
+      <strong style="font-size: 20px; line-height: 28px" th:text="${headline}">모든 tenant 정상 · 2 / 2</strong>
+      <span style="font-size: 13px; color: var(--ink-2)" th:text="${lastLine}">마지막 검증 방금 전</span>
+    </div>
+  </section>
+
+  <div class="banner banner--danger banner--top" role="alert" th:if="${tamperedCount > 0}">
+    <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+    <div class="banner__body">
+      <div class="banner__title" th:text="${'위변조 의심 — ' + tamperedCount + '개 tenant 모두 조사가 필요합니다'}">위변조 의심</div>
+      <ul aria-label="위변조 의심 tenant" style="list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+        <li class="row" style="gap: 8px" th:each="t : ${tamperedRows}">
+          <span style="flex: 1 1 240px; min-width: 0">
+            <strong th:text="${t.name}">Globex</strong>
+            chain 에서 hash 불일치가 감지되었습니다.<th:block th:if="${t.entry != null}" th:text="${' 불일치 entry …' + t.entry}"></th:block>
+          </span>
+          <a class="btn btn--sm" th:if="${t.auditHref != null}" th:href="${t.auditHref}">감사 로그 열기 <th:block th:replace="~{admin/fragments/icons :: chevronRight(12)}"></th:block></a>
+          <button type="button" class="btn btn--sm" th:if="${t.auditHref == null}" disabled>감사 로그 열기 <th:block th:replace="~{admin/fragments/icons :: chevronRight(12)}"></th:block></button>
+          <span class="badge badge--warning badge--dot" th:if="${t.hasOpen}">Incident 처리 중</span>
+          <button type="button" class="btn btn--sm btn--danger-solid" th:unless="${t.hasOpen}" th:disabled="${!t.canCreate}" th:title="${t.createTitle}"
+                  th:attr="data-dlg=${t.createId}" x-on:click="$dispatch('dialog:open', { id: $el.dataset.dlg })">Incident 생성</button>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('정상 / 전체', ${kpiRatio}, null, null, null, null)}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('검증된 audit row', ${kpiRows}, null, null, null, null)}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('검증 방식', '요청 시', '화면 진입 · 지금 검증', null, null, null)}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('검증 소요', ${kpiMs}, null, null, null, null)}"></th:block>
+  </div>
+
+  <section class="card">
+    <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('Tenant별 Chain 상태', null, ${agoCap}, ~{:: viewSeg})}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${chainColumns}, ~{:: chainBody})}"></th:block>
+  </section>
+
+  <th:block th:replace="~{admin/audit-chain/incidents :: card(false)}"></th:block>
+  <th:block th:replace="~{admin/audit-chain/incidents :: dialogs}"></th:block>
+
+  <!-- 체인 백필(L3): 더 보기 메뉴에서만. 검증 중·재검증 실패에는 다이얼로그 자체가 없다(blocked) — 열려 있던 것도 닫힌다. 위변조가 있으면 다이얼로그도 없다. -->
+  <template x-if="!blocked" th:if="${backfillAllowed}">
+    <div>
+      <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog('chain-backfill', 'L3', '체인 백필을 실행할까요?', '백필 실행', null, ~{:: backfillBody}, null, null, null, '위변조 흔적이 사라질 수 있고 되돌릴 수 없다는 것을 이해했습니다', ${backfillAttrs})}"></th:block>
+    </div>
+  </template>
+
+  <!-- 월간 보고서: 파일 다운로드라 링크가 기존 REST 를 그대로 가리킨다(공통 다운로드 도우미가 받아 저장하고 실패는 토스트). 포함 tenant 는 읽기 전용 목록. -->
+  <div x-data="{ from: '', to: '', busy: false,
+                 get rangeError() { return this.from &amp;&amp; this.to &amp;&amp; this.from &gt; this.to ? '시작일이 종료일보다 늦습니다. 날짜는 KST 기준입니다.' : ''; },
+                 get ok() { return !!this.from &amp;&amp; !!this.to &amp;&amp; !this.rangeError; },
+                 get href() { return this.$root.dataset.base + '?from=' + encodeURIComponent(this.from) + '&amp;to=' + encodeURIComponent(this.to); },
+                 init() { this.from = this.$root.dataset.from; this.to = this.$root.dataset.to; } }"
+       id="chain-report-wrap" th:attr="data-from=${reportFrom}, data-to=${reportTo}, data-base=${reportHref}">
+    <th:block th:replace="~{admin/fragments/ui/dialog :: dialog('chain-report', '월간 무결성 보고서 발급', '기간 내 전체 tenant 의 chain 검증 결과를 PDF 로 묶습니다.', ~{:: reportBody}, ~{:: reportFooter}, null, null, ${reportOpts})}"></th:block>
+  </div>
+</div>
+
+<th:block th:remove="all">
+  <th:block th:fragment="headerActions">
+    <button type="button" class="btn" x-on:click="$dispatch('dialog:open', { id: 'chain-report' })"><th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>월간 보고서</button>
+    <!-- 읽기 전용: overview 호출 시 서버가 전 tenant chain 을 검증한다. 진행률은 서버가 주지 않으므로 표시하지 않는다. -->
+    <button type="button" class="btn btn--primary" ui:attrs="${reverifyAttrs}" x-bind:disabled="busy"><th:block th:replace="~{admin/fragments/icons :: hash(14)}"></th:block><span x-text="busy &amp;&amp; vid === '' ? '검증 중…' : '지금 검증'">지금 검증</span></button>
+    <th:block th:replace="~{admin/fragments/ui/menu :: menu('더 보기', ${menuItems}, null, null, 'button')}"></th:block>
+  </th:block>
+
+  <th:block th:fragment="viewSeg">
+    <th:block th:replace="~{admin/fragments/ui/segmented :: segmented('view', ${segOptions}, ${view}, '상태 필터')}"></th:block>
+  </th:block>
+
+  <th:block th:fragment="chainBody">
+    <tr th:each="r : ${rows}" x-cloak x-show="view === 'all' || $el.dataset.tampered === '1'" th:attr="data-tampered=${r.intact ? '0' : '1'}">
+      <td>
+        <div class="row" style="gap: 10px; flex-wrap: nowrap; min-width: 0">
+          <span class="avatar avatar--sq avatar--sm" aria-hidden="true" th:text="${r.initial}">A</span>
+          <strong class="truncate" style="font-size: 13px; max-width: 260px" th:title="${r.name}" th:text="${r.name}">Acme</strong>
+        </div>
+      </td>
+      <td><th:block th:replace="~{admin/fragments/ui/badge :: badge(${r.intact ? '정상' : '위변조'}, ${r.intact ? 'ok' : 'bad'}, null, null, null)}"></th:block></td>
+      <td class="num" th:text="${r.rows}">1,200</td>
+      <td><span class="muted" th:text="${ago}">방금 전</span></td>
+      <td>
+        <div class="row" style="gap: 6px; flex-wrap: nowrap">
+          <a class="btn btn--sm" th:if="${r.openHref != null}" th:href="${r.openHref}">열기</a>
+          <button type="button" class="btn btn--sm" th:if="${r.openHref == null}" disabled>열기</button>
+          <button type="button" class="btn btn--sm" th:if="${r.verifyAttrs != null}" ui:attrs="${r.verifyAttrs}" x-bind:disabled="busy"
+                  x-text="vid === $el.dataset.vid ? '검증 중…' : '검증'">검증</button>
+          <button type="button" class="btn btn--sm" th:if="${r.verifyAttrs == null}" disabled>검증</button>
+        </div>
+      </td>
+    </tr>
+    <tr class="table__empty" th:if="${tenantCount == 0}" x-cloak x-show="view === 'all'"><td colspan="5"><p class="muted" style="margin: 0; padding: 24px 16px; text-align: center; font-size: 13px">검증할 tenant 가 없습니다.</p></td></tr>
+    <tr class="table__empty" th:if="${tamperedCount == 0}" x-cloak x-show="view === 'tampered'"><td colspan="5"><p class="muted" style="margin: 0; padding: 24px 16px; text-align: center; font-size: 13px">위변조 의심 tenant 가 없습니다.</p></td></tr>
+  </th:block>
+
+  <th:block th:fragment="backfillBody">
+    <p style="margin: 0; font-size: 13px; color: var(--ink-2)">백필은 검증이 아닙니다. 이전 행과 링크가 맞지 않는 모든 행의 hash 를 다시 계산해 덮어씁니다. 그 뒤의 체인도 모두 다시 연결합니다.</p>
+    <div class="banner banner--warning" role="status">
+      <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+      <div class="banner__body"><div>행이 삭제된 체인에 실행하면 빈자리가 다시 이어져, 삭제 흔적(위변조 증거)이 사라집니다. 되돌릴 수 없습니다.</div></div>
+    </div>
+    <p class="hint" style="margin: 0">hash 가 비어 있는 기존 데이터를 체인에 편입하는 마이그레이션 용도로만 사용하세요.</p>
+  </th:block>
+
+  <th:block th:fragment="reportBody">
+    <div class="grid-2" style="gap: 12px">
+      <div>
+        <label class="label" for="report-from">시작일</label>
+        <input id="report-from" class="input mono" type="date" x-model="from" x-bind:aria-invalid="!!rangeError">
+      </div>
+      <div>
+        <label class="label" for="report-to">종료일</label>
+        <input id="report-to" class="input mono" type="date" x-model="to" x-bind:aria-invalid="!!rangeError" x-bind:aria-describedby="rangeError ? 'report-to-error' : null">
+        <p class="field__error" id="report-to-error" x-show="rangeError" x-cloak x-text="rangeError"></p>
+      </div>
+    </div>
+    <div style="border: 1px solid var(--line); border-radius: var(--r); overflow: hidden">
+      <div style="padding: 10px 14px; background: var(--canvas); border-bottom: 1px solid var(--line-soft); font-size: 12px; font-weight: 600; color: var(--mute)" th:text="${'포함 tenant · ' + tenantCount + '개'}">포함 tenant · 2개</div>
+      <ul style="list-style: none; margin: 0; padding: 0">
+        <li class="row" style="gap: 10px; flex-wrap: nowrap; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); font-size: 13px" th:each="c : ${reportTenants}">
+          <span class="truncate" style="flex: 1 1 0" th:title="${c.name}" th:text="${c.name}">Acme</span>
+          <span class="mono muted" style="font-size: 12px" th:text="${c.rows}">1,200 rows</span>
+          <th:block th:replace="~{admin/fragments/ui/badge :: badge(${c.intact ? '정상' : '위변조'}, ${c.intact ? 'ok' : 'bad'}, null, null, null)}"></th:block>
+        </li>
+      </ul>
+    </div>
+  </th:block>
+
+  <th:block th:fragment="reportFooter">
+    <button type="button" class="btn" x-bind:disabled="busy" x-on:click="close()">취소</button>
+    <a class="btn btn--primary" th:href="${reportHref}" x-bind:href="href" download data-csv-download data-download-error="PDF 생성 실패" hx-boost="false"
+       x-bind:aria-disabled="busy || !ok" x-on:click="if (busy || !ok) $event.preventDefault()"
+       x-on:csv-download="busy = $event.detail.state === 'start'; if ($event.detail.state === 'done') $dispatch('dialog:close', { id: 'chain-report' })"
+       ><span x-show="!busy">PDF 생성 → 다운로드</span><span x-show="busy" x-cloak>생성 중…</span></a>
+  </th:block>
+</th:block>
+</body>
+</html>

@@ -592,11 +592,63 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | activityDiff: diff 우선 / changedFields 순서 / 값 다른 키만 / before·after 없거나 JSON 아님 → [] / arrayChange | AD 1–6 | source ✅ | ADT 전부 | — |
 | activityLabels: 라벨 매핑·fallback·문장·system | AL 1–4 | source ✅ | ALT 전부 | — |
 
-## §Audit chain
+## §Audit chain (Task 15, 소스 수준 점검)
 
-| 체크 항목 | 원본 테스트 | 결과 |
-|---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+TC = `AuditChainPageControllerTest`. 브라우저: 전부 미확인(R8) — 아래 JS 항목은 Alpine/htmx 동작이라 속성·소스까지만 본다. PLATFORM 전용(App.tsx RequirePlatform): 페이지는 RP 를 홈으로 보내고 모든 조각·동작은 403(TC `platformOnly`).
+
+### AuditChainPage.test.tsx (39) · backfillGuard (2)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 카드 헤더 캡션은 제목 옆 한 줄, 플랫폼 행 아바타 첫 글자 | AC 1 | source ✅ | TC `overviewIntact` | 미확인 |
+| recentRuns 없으면 스트립 열 숨김 / 있으면 14회 요약 / nextRunAt 유무 | AC 2·3·4 | 차이: 서버 DTO(AuditChainOverview)에 recentRuns·nextRunAt 이 없다 — 스트립·"다음 검증"은 그리지 않는다(원본의 "없을 때" 분기와 같다) | TC `overviewIntact`("요청 시") | — |
+| 60초 자동 검증을 주장하지 않는다 | AC 5 | source ✅ (검증 방식 "요청 시") | TC `overviewIntact` | — |
+| incident 0건이면 all-clear 빈 상태 | AC 6 | source ✅ | TC `overviewIntact` | 미확인 |
+| incident 목록 실패는 빈 상태로 오인시키지 않는다 | AC 7 | source ✅ / 차이: "마지막으로 조회된 목록" 은 서버가 이전 목록을 몰라 보이지 않는다(오류 알림만) | TC `incidentListFailureIsNotEmpty` | — |
+| overview 실패 시 오류 상태 + 다시 시도 | AC 8 | source ✅ (422 + LoadError, 원문 없음) | TC `firstLoadFailure` | 미확인 |
+| 위변조면 bad 배너 → 생성 다이얼로그 → createIncident(tenantId) | AC 9 | source ✅ | TC `tamperedBannerAndBackfillDisabled`,`createDialogMarkup`,`createIncidentOk` | 미확인 |
+| Incident 해결은 메모가 필수 | AC 10 | source ✅ (버튼 비활성은 JS, 서버도 공백·1025자 거절) | TC `incidentTable`,`resolveRequiresNote`,`resolveOk` | 미확인(Alpine) |
+| 위변조만 세그먼트 | AC 11 | source ✅ / JS: 행 x-show | TC `viewFilterSurvivesReload` | 미확인 |
+| 월간 보고서 다이얼로그: tenant 체크박스 없이 포함 목록 | AC 12 | source ✅ | TC `monthlyReportLinkPointsToExistingApi` | 미확인 |
+| 지금 검증은 읽기 전용(overview 만, backfill 안 부름) | AC 13 | source ✅ | TC `verifyRequestsAreSyncedAndTimeboxed`(GET overview) | — |
+| 체인 백필은 더 보기 메뉴 안 L3 확인(취소 기본 포커스·이해 체크) 후에만 | AC 14 | source ✅ (confirmDialog L3 ack, X-Confirm 필수) | TC `backfillDialogMarkup`,`backfillGuardBlocksSecondRun` | 미확인 |
+| 백필 실패는 다이얼로그 안 인라인, 열린 채 | AC 15 | source ✅ (confirmError) | TC `backfillFailureIsInline` | 미확인 |
+| 위변조면 백필 메뉴 비활성 + 사유, 눌러도 안 열림 | AC 16 | source ✅ (다이얼로그 자체를 그리지 않음) | TC `tamperedBannerAndBackfillDisabled` | — |
+| 다이얼로그가 열린 사이 위변조가 나타나면 닫힘 / 해소돼도 다시 안 열림 | AC 17·18 | 차이: 응답이 루트를 통째로 교체해 다이얼로그가 사라진다(재검증 응답이 곧 새 상태). 위변조면 다이얼로그를 그리지 않으므로 해소 뒤에도 자동으로 열리지 않는다 | TC `backfillDialogMarkup` | 미확인 |
+| 월간 보고서: 시작일>종료일이면 인라인 오류 + 생성 비활성, 고치면 해제 | AC 19 | source ✅ / JS: Alpine rangeError(문구 포함) | TC `monthlyReportLinkPointsToExistingApi` | 미확인 |
+| 검증 버튼은 "지금 검증" 하나 | AC 20 | source ✅ | TC `overviewIntact` | — |
+| 재검증 중에도 표 유지, "검증 중…"(비활성, 가짜 진행률 없음) | AC 21 | source ✅ / JS: busy | TC `verifyRequestsAreSyncedAndTimeboxed`(data-chain-verify·hx-disabled-elt) | 미확인 |
+| 다시 검증이 실패해도 이전 결과 유지 + 경고 | AC 22 | source ✅ (HX-Retarget #chain-warn) | TC `reverifyFailureKeepsPreviousResult` | 미확인 |
+| 위변조 tenant 가 여럿이면 모두 나열, 행마다 생성 | AC 23 | source ✅ | TC `createButtonRules`,`tamperedBannerAndBackfillDisabled` | — |
+| OPEN incident 가 있는 tenant 는 "Incident 처리 중" | AC 24 | source ✅ | TC `createButtonRules` | — |
+| 배너의 "감사 로그 열기" → 그 tenant 감사 로그 탭 | AC 25 | source ✅ | TC `tamperedBannerAndBackfillDisabled` | — |
+| 처음 불러오는 동안 Skeleton | AC 26 | source ✅ | TC `pageIsSkeleton` | 미확인 |
+| incident 목록이 오기 전에는 빈 상태·활성 생성 버튼 없음 | AC 27 | 차이: 서버는 두 호출이 끝난 뒤 한 번에 그린다(목록 대기 상태 없음). 목록 실패면 생성 비활성 | TC `incidentListFailureIsNotEmpty` | — |
+| Incident 생성 더블 클릭은 한 번만 요청 | AC 28 | source ✅ (hx-sync drop + busy 비활성) / JS | TC `createDialogMarkup` | 미확인 |
+| Incident 생성 실패는 알리고 버튼을 다시 쓸 수 있다 | AC 29 | source ✅ (422 인라인, busy 해제) | TC `createFailureInlineNoRaw` | 미확인 |
+| 백필 가드(A1): 정상 → 재검증 실패 / 검증 중 / 다이얼로그가 열린 사이 실패 | AC 30–32 | source ✅ (`blocked` = busy ∥ failed → 다이얼로그 x-if 접힘, 메뉴 클릭은 사유 토스트) | TC `backfillDialogMarkup` | 미확인 |
+| 해결 실패는 인라인(다이얼로그·메모 유지) | AC 33 | source ✅ | TC `resolveFailureInline` | 미확인 |
+| 생성 실패 원문([CODE] message)은 보이지 않는다 | AC 34 | source ✅ | TC `createFailureInlineNoRaw` | — |
+| 생성 422(위변조 아님)는 다이얼로그 안, 토스트 없음 | AC 35 | source ✅ | TC `createNotTamperedInline` | — |
+| 해결 404: 메모 유지·해결 비활성·닫기·목록 새로고침 | AC 36 | source ✅ (resolve-gone 이벤트, OOB 카드) | TC `resolveNotFoundInline` | 미확인 |
+| tenant 검증 실패 토스트는 쉬운 문구, 원문은 "자세히"만 | AC 37 | source ✅ (detail 은 HTTP 상태만) | TC `verifyTenantFailure` | — |
+| PDF 생성 실패 토스트에 원문이 본문으로 나오지 않는다 | AC 38 | source ✅ (공통 다운로드 도우미 + `data-download-error`="PDF 생성 실패") | TC `monthlyReportLinkPointsToExistingApi` | 미확인(JS) |
+| 위변조가 있는 상태에서 onConfirm 호출돼도 backfill 안 부름 | BG 1 | source ✅ (서버 가드: 요청마다 개요 재검증) | TC `backfillGuardBlocksTampered` | — |
+| 정상이던 체인 재검증 실패 후 onConfirm → backfill 안 부름 | BG 2 | source ✅ | TC `backfillGuardBlocksWhenVerifyFails` | — |
+| (추가) 중복 실행·확인 헤더 없는 호출 거절 | 브리프 | source ✅ (X-Confirm 없으면 400, 위변조가 생기면 두 번째 실행 거절) | TC `backfillGuardBlocksSecondRun` | — |
+| (추가) 생성·해결 409 → 경고 토스트(이미 진행 중/이미 해결됨) | AC 9 | source ✅ | TC `incidentConflictShowsToast`,`resolveConflictToast` | — |
+| (추가) tenant 검증 토스트(검증 완료 / 위변조 의심) | handleVerifyTenant | source ✅ | TC `verifyTenantIntact`,`verifyTenantTampered` | — |
+| (추가) 이름·이메일·tenant 이름 이스케이프 | 계약 | source ✅ | TC `escapesUserValues` | — |
+| (추가) 월간 보고서 링크는 기존 API, 기본 기간 KST 직전 달 | 브리프 | source ✅ | TC `monthlyReportLinkPointsToExistingApi` | 미확인 |
+
+### Task 15 메모 (TSX 와의 차이)
+
+- 상태가 서버에 없어 사건 목록 재조회(409 외의 실패 경로)는 사건 카드만 OOB 로 새로 그리고, 위변조 배너는 다음 개요 때 맞춰진다. 409 와 성공은 개요 전체를 다시 검증해 교체한다(원본의 reverify 와 같음; 409 는 원본이 목록만 다시 읽던 곳 — 서버가 위변조 행 목록을 모르므로 전체 재검증).
+- Incident 목록 "다시 시도"는 개요 전체를 다시 읽는다(배너의 생성 버튼이 목록 결과에 달려 있다).
+- 백필 가드는 TSX 에서는 클라이언트 전용(`backfillAllowed`)이다. 서버에서도 지키려고 요청마다 `overview(24)` 로 재검증한다(위변조·실패면 거절). 동시 실행 직렬화는 서비스의 DB 락이 한다 — 컨트롤러에 별도 락을 만들지 않았다.
+- 월간 보고서 PDF 는 공통 다운로드 도우미(`data-csv-download`)를 재사용한다(실패 토스트 제목은 링크의 `data-download-error`, 진행은 `csv-download` 이벤트). 도우미에는 타임아웃이 없다(원본은 120초).
+- 다이얼로그 요청 요소(래퍼)를 다이얼로그 밖에 둬서 Escape 로 닫아도 요청과 결과 교체는 이어진다(원본은 진행 중에는 닫기를 막음).
+- `verify-result.html` 은 만들지 않았다 — 한 tenant 검증은 토스트 + 루트 교체라 별도 조각이 없다.
 
 ## §설정
 

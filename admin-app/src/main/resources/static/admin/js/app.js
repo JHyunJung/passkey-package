@@ -282,13 +282,19 @@
     const m = /filename="?([^";]+)"?/i.exec(cd);
     return (m && m[1]) || a.getAttribute('download') || 'download.csv';
   }
-  function csvToast(e) {
+  function csvToast(e, a) {
     const d = describeFetchError(e);
-    window.dispatchEvent(new CustomEvent('toast', { detail: { kind: 'error', title: 'CSV 를 내려받지 못했습니다', message: d.title + (d.detail ? '. ' + d.detail : '') } }));
+    // PDF 같은 다른 파일도 같은 도우미를 쓴다 — 링크의 data-download-error 가 토스트 제목(기본 CSV 문구).
+    const title = (a && a.getAttribute('data-download-error')) || 'CSV 를 내려받지 못했습니다';
+    window.dispatchEvent(new CustomEvent('toast', { detail: { kind: 'error', title: title, message: d.title + (d.detail ? '. ' + d.detail : '') } }));
   }
+  // 진행 상태를 링크에서 올린다(bubbles): detail.state = start | done | fail. 화면이 "생성 중…"·성공 시 닫기에 쓴다.
+  function csvEvent(a, state) { a.dispatchEvent(new CustomEvent('csv-download', { bubbles: true, detail: { state: state } })); }
   async function csvDownload(a) {
     if (a.getAttribute('aria-busy') === 'true') return; // 연타 방지
     a.setAttribute('aria-busy', 'true');
+    csvEvent(a, 'start');
+    let state = 'fail';
     try {
       const res = await fetch(a.href, { credentials: 'same-origin', redirect: 'follow' });
       if (res.redirected || !res.ok) {
@@ -305,10 +311,12 @@
       t.click();
       t.remove();
       URL.revokeObjectURL(url);
+      state = 'done';
     } catch (e) {
-      csvToast(e);
+      csvToast(e, a);
     } finally {
       a.removeAttribute('aria-busy');
+      csvEvent(a, state);
     }
   }
   window.adminCsvDownload = csvDownload;

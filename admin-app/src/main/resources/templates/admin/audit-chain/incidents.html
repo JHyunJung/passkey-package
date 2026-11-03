@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  보안 Incident(← AuditChainPage.tsx 의 사건 카드·생성/해결 다이얼로그). 조각:
+    card(oob)   #chain-incidents 카드. oob=true 면 hx-swap-oob 로 이 카드만 교체(다이얼로그는 건드리지 않는다).
+    dialogs     #chain-dialogs — 위변조 tenant 마다 "Incident 생성", OPEN 사건마다 "Incident 해결" 다이얼로그.
+    issue       다이얼로그 안 인라인 알림(HX-Retarget 슬롯) + (incidentsOob 면) 사건 카드 OOB. 422 로 오므로 스왑된다(토스트 없음).
+  요청 요소는 다이얼로그 밖(래퍼 div/form)이다. 버튼은 ic-submit/rs-submit 이벤트만 올리므로 다이얼로그를 닫아도 요청은 계속되고,
+  래퍼의 busy 로 취소·실행 버튼이 잠긴다(더블 클릭 방지; 서버 쪽은 hx-sync #chain-root:drop). 이름·메모·이메일은 th:text 로만.
+  모델: incidentsKnown, incidentList(Incident), openCount/openLabel, emptyDesc, incidentColumns, incidentRetryAttrs, tamperedRows(Tampered)
+-->
+<section th:fragment="card(oob)" class="card" id="chain-incidents" th:attr="hx-swap-oob=${oob == true} ? 'outerHTML'">
+  <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('보안 Incident', null, '위변조 감지 시 등록되는 대응 incident', ${openCount > 0} ? ~{:: openBadge} : null)}"></th:block>
+  <!-- 목록 조회 실패는 "없음"으로 보이지 않게 한다(실제 OPEN incident 를 놓치지 않도록). 다시 시도는 개요 전체를 다시 읽는다(배너의 생성 버튼도 이 결과에 달려 있다). -->
+  <div class="card__body" th:unless="${incidentsKnown}">
+    <th:block th:replace="~{admin/fragments/ui/alert :: alert('bad', 'Incident 목록을 불러오지 못했습니다.', null, ~{:: retryButton}, null)}"></th:block>
+  </div>
+  <th:block th:if="${incidentsKnown and incidentList.isEmpty()}">
+    <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/all-clear.webp', '등록된 incident가 없습니다', ${emptyDesc}, null, true)}"></th:block>
+  </th:block>
+  <th:block th:if="${incidentsKnown and !incidentList.isEmpty()}">
+    <th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${incidentColumns}, ~{:: incidentBody})}"></th:block>
+  </th:block>
+</section>
+
+<div th:fragment="dialogs" id="chain-dialogs">
+  <!-- Incident 생성: 위변조 tenant 마다. 서버가 재검증해 위변조 entry 를 기록한다 — 요청에는 tenantId 만 싣는다. -->
+  <div th:each="t : ${tamperedRows}" th:if="${t.createId != null}" ui:attrs="${t.createAttrs}" hx-trigger="ic-submit"
+       x-data="{ busy: false }"
+       x-on:htmx:before-request="if ($event.detail.elt === $el) busy = true" x-on:htmx:after-request="if ($event.detail.elt === $el) busy = false">
+    <th:block th:replace="~{admin/fragments/ui/dialog :: dialog(${t.createId}, 'Incident 생성', ${t.name}, ~{:: icBody}, ~{:: icFooter}, null, null, null)}"></th:block>
+  </div>
+
+  <!-- Incident 해결: OPEN 사건마다. 메모 필수(공백뿐이면 해결 버튼 비활성), 열 때마다 메모·"없는 incident" 상태 초기화. -->
+  <form th:each="i : ${incidentList}" th:if="${i.open}" ui:attrs="${i.resolveAttrs}" hx-trigger="rs-submit" th:attr="data-dlg=${i.resolveId}"
+        x-data="{ note: '', gone: false, busy: false }" x-on:submit.prevent
+        x-on:dialog:open.window="if ($event.detail.id === $el.dataset.dlg) { note = ''; gone = false; }" x-on:resolve-gone="gone = true"
+        x-on:htmx:before-request="if ($event.detail.elt === $el) busy = true" x-on:htmx:after-request="if ($event.detail.elt === $el) busy = false">
+    <th:block th:replace="~{admin/fragments/ui/dialog :: dialog(${i.resolveId}, 'Incident 해결', ${i.tenant + ' · ' + i.type}, ~{:: rsBody}, ~{:: rsFooter}, null, null, null)}"></th:block>
+  </form>
+</div>
+
+<!-- issue: 인라인 알림. gone 이면 root 에 "없는 incident" 를 알려 해결 버튼을 막는다. -->
+<th:block th:fragment="issue">
+  <th:block th:replace="~{admin/fragments/ui/alert :: alert(${issueTone}, ${issueTitle}, ~{:: issueText}, null, null)}"></th:block>
+  <span th:if="${issueGone}" hidden x-init="$dispatch('resolve-gone')"></span>
+  <th:block th:if="${incidentsOob}"><th:block th:replace="~{:: card(true)}"></th:block></th:block>
+</th:block>
+
+<th:block th:remove="all">
+  <th:block th:fragment="issueText"><th:block th:text="${issueText}">설명</th:block></th:block>
+
+  <th:block th:fragment="openBadge"><span class="badge badge--warning badge--dot" th:text="${openLabel}">처리중 1</span></th:block>
+
+  <th:block th:fragment="retryButton">
+    <button type="button" class="btn btn--sm" ui:attrs="${incidentRetryAttrs}"><th:block th:replace="~{admin/fragments/icons :: refresh(14)}"></th:block>다시 시도</button>
+  </th:block>
+
+  <th:block th:fragment="incidentBody">
+    <tr th:each="i : ${incidentList}">
+      <td><th:block th:replace="~{admin/fragments/ui/badge :: badge(${i.statusLabel}, ${i.open ? 'warn' : 'ok'}, null, null, null)}"></th:block></td>
+      <td><strong style="font-size: 13px" th:text="${i.tenant}">Acme</strong></td>
+      <td><span class="tag" th:text="${i.type}">AUDIT_CHAIN_TAMPERED</span></td>
+      <td><span class="muted" th:text="${i.created}">2026-10-11 12:00</span></td>
+      <td><span class="muted" th:text="${i.createdBy}">op@example.com</span></td>
+      <td>
+        <button type="button" class="btn btn--sm" th:if="${i.open}" th:attr="data-dlg=${i.resolveId}" x-on:click="$dispatch('dialog:open', { id: $el.dataset.dlg })"><th:block th:replace="~{admin/fragments/icons :: check(14)}"></th:block>해결</button>
+      </td>
+    </tr>
+  </th:block>
+
+  <th:block th:fragment="icBody">
+    <div th:id="${'chain-ic-issue-' + t.tenantId}"></div>
+    <p style="margin: 0; font-size: 13px; color: var(--ink-2)" th:text="${t.name + ' 의 위변조 의심을 보안 incident 로 등록하고 대응 이력을 남깁니다.'}">Globex 의 위변조 의심을 보안 incident 로 등록하고 대응 이력을 남깁니다.</p>
+    <p class="hint" style="margin: 0">생성 시점에 서버가 재검증해 위변조 entry 를 기록합니다. 이미 진행 중인 incident 가 있거나 재검증 결과 위변조가 아니면 생성되지 않습니다.</p>
+  </th:block>
+
+  <th:block th:fragment="icFooter">
+    <button type="button" class="btn" th:attr="data-dlg=${t.createId}" x-bind:disabled="busy" x-on:click="$dispatch('dialog:close', { id: $el.dataset.dlg })">취소</button>
+    <button type="button" class="btn btn--danger-solid" x-bind:disabled="busy" x-on:click="$dispatch('ic-submit')"><span x-show="!busy">Incident 생성</span><span x-show="busy" x-cloak>생성 중…</span></button>
+  </th:block>
+
+  <th:block th:fragment="rsBody">
+    <div th:id="${'chain-rs-issue-' + i.id}"></div>
+    <label class="label" th:for="${'rs-note-' + i.id}">해결 메모<span class="field__req"> *</span></label>
+    <textarea th:id="${'rs-note-' + i.id}" class="input" rows="3" maxlength="1024" name="note" aria-required="true" x-model="note" placeholder="원인 · 조치 내용"></textarea>
+    <p class="hint">필수 · 감사 로그에 함께 기록됩니다.</p>
+  </th:block>
+
+  <th:block th:fragment="rsFooter">
+    <button type="button" class="btn" th:attr="data-dlg=${i.resolveId}" x-bind:disabled="busy" x-on:click="$dispatch('dialog:close', { id: $el.dataset.dlg })" x-text="gone ? '닫기' : '취소'">취소</button>
+    <button type="button" class="btn btn--primary" x-bind:disabled="busy || gone || note.trim().length === 0" x-on:click="$dispatch('rs-submit')"><span x-show="!busy">해결로 표시</span><span x-show="busy" x-cloak>처리 중…</span></button>
+  </th:block>
+</th:block>
+</body>
+</html>
