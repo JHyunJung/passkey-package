@@ -6,8 +6,8 @@ import com.crosscert.passkey.admin.operator.SignupRequestController;
 import com.crosscert.passkey.admin.operator.SignupRequestDto;
 import com.crosscert.passkey.admin.tenant.TenantAdminController;
 import com.crosscert.passkey.admin.tenant.TenantAdminDto;
-import com.crosscert.passkey.admin.web.format.KstFormat;
 import com.crosscert.passkey.admin.web.format.ErrorMessages;
+import com.crosscert.passkey.admin.web.format.KstFormat;
 import com.crosscert.passkey.admin.web.support.CurrentAdmin;
 import com.crosscert.passkey.admin.web.support.Toasts;
 import jakarta.servlet.http.HttpServletRequest;
@@ -159,30 +159,30 @@ public class AdminUsersTabController {
                            Authentication auth, HttpServletRequest req, HttpServletResponse res, Model model) {
         CurrentAdmin me = SettingsSupport.platform(model);
         boolean isUndo = "1".equals(undo);
-        if (isUndo) {
-            AdminUserDto.View row = users.list().stream().filter(u -> id.equals(u.id())).findFirst().orElse(null);
-            if (row == null || !"SUSPENDED".equals(row.status())) {
-                Toasts.warnTitled(res, "되돌릴 수 없습니다", "운영자 상태가 바뀌었습니다. " + STALE_REASON);
-                res.setHeader("HX-Reswap", "none");
-                return SettingsSupport.EMPTY_VIEW;
-            }
-        }
+        String known = ""; // 이미 아는 이메일(되돌리기는 사전 확인에서 읽은 행)
         try {
+            if (isUndo) {
+                AdminUserDto.View row = users.list().stream().filter(u -> id.equals(u.id())).findFirst().orElse(null);
+                if (row == null || !"SUSPENDED".equals(row.status())) {
+                    Toasts.warnTitled(res, "되돌릴 수 없습니다", "운영자 상태가 바뀌었습니다. " + STALE_REASON);
+                    res.setHeader("HX-Reswap", "none");
+                    return SettingsSupport.EMPTY_VIEW;
+                }
+                known = row.email();
+            }
             users.activate(id, auth);
         } catch (RuntimeException e) {
             if (e instanceof AccessDeniedException) throw e;
-            if (isUndo) {
-                ErrorMessages.Info info = ErrorMessages.describe(e);
-                int status = SettingsSupport.statusOf(e);
-                Toasts.errorTitled(res, "정지를 되돌리지 못했습니다", info.title() + ". 목록에서 “활성화”를 눌러 다시 시도하세요.", "HTTP " + status, org.slf4j.MDC.get("traceId"));
-                res.setStatus(status);
-                return SettingsSupport.EMPTY_VIEW;
-            }
-            return SettingsSupport.fail(res, "활성화하지 못했습니다", e, Toasts.isConfirm(req));
+            if (!isUndo) return SettingsSupport.fail(res, "활성화하지 못했습니다", e, Toasts.isConfirm(req));
+            // 되돌리기 실패(사전 확인·활성화): 원본은 실패 뒤에도 목록을 다시 읽는다 → 오류 토스트 + 갱신된 카드(200)
+            ErrorMessages.Info info = ErrorMessages.describe(e);
+            Toasts.errorTitled(res, "정지를 되돌리지 못했습니다", info.title() + ". 목록에서 “활성화”를 눌러 다시 시도하세요.",
+                    "HTTP " + SettingsSupport.statusOf(e), org.slf4j.MDC.get("traceId"));
+            return usersResult(model, res, me);
         }
         boolean ok = loadUsers(model, me, loadTenantNames());
-        String email = "";
-        if (ok) {
+        String email = known;
+        if (email.isEmpty() && ok) {
             @SuppressWarnings("unchecked") List<OpRow> ops = (List<OpRow>) model.getAttribute("ops");
             email = ops.stream().filter(o -> id.toString().equals(o.id())).map(OpRow::email).findFirst().orElse("");
         }

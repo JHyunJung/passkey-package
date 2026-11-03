@@ -209,6 +209,27 @@ class AdminUsersTabControllerTest {
     }
 
     @Test
+    @DisplayName("행 동작(승인·거절·정지·활성화)은 카드의 stale 상태에 묶여 비활성 + title=STALE_REASON(다시 읽기 실패 때만 켜짐)")
+    void rowActionsBoundToStale() throws Exception {
+        Document d = tab();
+        String title = "stale ? '" + AdminUsersTabController.STALE_REASON + "' : null";
+        for (Element b : d.select("#au-signups li button")) {
+            assertThat(b.attr("x-bind:disabled")).isEqualTo("stale");
+            assertThat(b.attr("x-bind:title")).isEqualTo(title);
+        }
+        assertThat(d.select("#au-signups li button")).hasSize(4);
+        Element suspend = row(d, "rp@x.com").select("button").stream().filter(b -> b.text().equals("정지…")).findFirst().orElseThrow();
+        Element activate = row(d, "gone@x.com").selectFirst("button");
+        for (Element b : List.of(suspend, activate)) {
+            assertThat(b.attr("x-bind:disabled")).isEqualTo("stale");
+            assertThat(b.attr("x-bind:title")).isEqualTo(title);
+        }
+        assertThat(d.selectFirst("#au-signups").attr("x-data")).contains("stale");
+        assertThat(d.selectFirst("#au-users").attr("x-data")).contains("operatorFilter");
+        assertThat(d.select("[x-init=\"stale = true\"]")).isEmpty(); // 정상 렌더엔 stale 표시 없음
+    }
+
+    @Test
     @DisplayName("본인·마지막 활성 PLATFORM 은 정지 버튼이 막히고 이유가 보이며 확인 다이얼로그도 없다. 활성화/정지 버튼 속성")
     void selfProtectionAndActions() throws Exception {
         Document d = tab();
@@ -536,6 +557,8 @@ class AdminUsersTabControllerTest {
         assertThat(warn.attr("hx-swap-oob")).isEqualTo("true");
         assertThat(warn.text()).contains("다시 확인하지 못했습니다").contains("아래는 마지막으로 읽은 운영자 목록입니다. 목록을 새로 고치기 전에는 처리할 수 없습니다.").doesNotContain("boom-internal");
         assertThat(warn.select("button").eachText()).contains("다시 시도");
+        assertThat(warn.attr("data-stale")).isEqualTo("true");
+        assertThat(warn.attr("x-init")).isEqualTo("stale = true"); // 카드의 행 동작을 STALE_REASON 으로 비활성(다음 성공 렌더가 카드를 새로 그리며 해제)
         assertThat(d.select("section#au-users, tr[data-op]")).isEmpty();
     }
 
@@ -550,6 +573,7 @@ class AdminUsersTabControllerTest {
         assertThat(trigger(r)).contains("가입 요청을 거절했습니다.");
         Document d = html(r);
         assertThat(d.selectFirst("#au-signups-warn").text()).contains("아래는 마지막으로 읽은 가입 요청입니다");
+        assertThat(d.selectFirst("#au-signups-warn").attr("x-init")).isEqualTo("stale = true");
         assertThat(d.select("#settings-tab-admins-count, section#au-signups")).isEmpty();
     }
 
@@ -564,6 +588,8 @@ class AdminUsersTabControllerTest {
         Document d = html(r);
         assertThat(d.selectFirst("section#au-signups").attr("hx-swap-oob")).isEqualTo("true");
         assertThat(d.selectFirst("#au-users-warn").attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(d.selectFirst("#au-users-warn").attr("x-init")).isEqualTo("stale = true");
+        assertThat(d.select("#au-signups-warn [x-init], section#au-signups #au-signups-warn[x-init]")).isEmpty();
         assertThat(d.selectFirst("#au-dialog-slot").attr("hx-swap-oob")).isEqualTo("true");
         assertThat(d.select("#au-content")).isEmpty();
     }
@@ -585,8 +611,38 @@ class AdminUsersTabControllerTest {
 
         doThrow(new IllegalStateException("db-secret")).when(users).activate(eq(SUSPENDED), any());
         MvcResult fail = send(post(BASE + "/admins/" + SUSPENDED + "/activate").param("undo", "1"), platform(), false);
-        assertThat(fail.getResponse().getStatus()).isEqualTo(500);
-        assertThat(trigger(fail)).contains("정지를 되돌리지 못했습니다").contains("목록에서 “활성화”를 눌러 다시 시도하세요.").doesNotContain("db-secret");
+        // 원본은 실패 뒤에도 목록을 다시 읽는다: 오류 토스트 + 갱신된 운영자 카드(200)
+        assertThat(fail.getResponse().getStatus()).isEqualTo(200);
+        assertThat(trigger(fail)).contains("정지를 되돌리지 못했습니다").contains("목록에서 “활성화”를 눌러 다시 시도하세요.").contains("error").doesNotContain("db-secret");
+        assertThat(html(fail).selectFirst("section#au-users")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("되돌리기 사전 확인(목록 읽기) 실패도 같은 실패 처리(오류 토스트), REST activate 미호출. 이미 아는 이메일을 쓴다(재조회 실패여도 빈 이메일·앞 공백 없음)")
+    void undoPrecheckFailureAndKnownEmail() throws Exception {
+        when(users.list()).thenThrow(new IllegalStateException("boom-internal"));
+        MvcResult pre = send(post(BASE + "/admins/" + SUSPENDED + "/activate").param("undo", "1"), platform(), false);
+        assertThat(trigger(pre)).contains("정지를 되돌리지 못했습니다").contains("error").doesNotContain("boom-internal");
+        verify(users, never()).activate(any(), any());
+
+        // 사전 확인은 성공, 재조회는 실패: 토스트에 이메일이 있고(앞 공백 없음) 화면은 그대로 + 경고
+        org.mockito.Mockito.doReturn(List.of(op(SUSPENDED, "gone@x.com", "RP_ADMIN", "SUSPENDED", List.of(T1), false)))
+                .doThrow(new IllegalStateException("boom-internal")).when(users).list();
+        MvcResult r = send(post(BASE + "/admins/" + SUSPENDED + "/activate").param("undo", "1"), platform(), false);
+        assertThat(trigger(r)).contains("title=gone@x.com 운영자의 정지를 되돌렸습니다.");
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        assertThat(html(r).selectFirst("#au-users-warn").attr("x-init")).isEqualTo("stale = true");
+    }
+
+    @Test
+    @DisplayName("일반 활성화 뒤 재조회 실패: 이메일을 모르면 메시지는 비우고(앞 공백·null 없음) 화면 유지 + 경고")
+    void activateReloadFailureNoBlankEmail() throws Exception {
+        when(users.list()).thenThrow(new IllegalStateException("boom-internal"));
+        MvcResult r = send(post(BASE + "/admins/" + SUSPENDED + "/activate"), platform(), false);
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        assertThat(trigger(r)).contains("운영자를 다시 활성화했습니다.").doesNotContain("null").doesNotContain("message= ");
+        verify(users).activate(eq(SUSPENDED), any());
     }
 
     @Test

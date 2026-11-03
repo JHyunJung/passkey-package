@@ -899,6 +899,7 @@ document.addEventListener('alpine:init', () => {
   // ── 설정 › Admin 사용자 ──
   // 운영자 목록 필터(원본 matchesOperator): 역할 선택(segmented-change 가 filter 를 바꾼다)과 이메일·ID 검색을 이미 그려진 행에 적용한다.
   Alpine.data('operatorFilter', () => ({
+    stale: false, // 변경 뒤 다시 읽기에 실패하면 서버가 경고 자리에 x-init="stale = true" 를 OOB 로 심는다: 행 동작 비활성(원본 usersStale). 다음 성공 렌더가 카드를 새로 그려 해제
     filter: 'all',
     q: '',
     match(el) {

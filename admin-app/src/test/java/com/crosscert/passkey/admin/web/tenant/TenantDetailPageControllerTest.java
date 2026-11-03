@@ -199,6 +199,19 @@ class TenantDetailPageControllerTest {
     }
 
     @Test
+    @DisplayName("탭 줄의 *-badge / *-count 자리 id 는 각각 한 번만(중첩·중복 없음)")
+    void tabSlotIdsAreUnique() throws Exception {
+        Document d = page("/admin/tenants/" + T1, platform());
+        for (String suffix : new String[] {"-badge", "-count"}) {
+            java.util.Map<String, Integer> seen = new java.util.HashMap<>();
+            d.select("[role=tablist] [id$=" + suffix + "]").forEach(e -> seen.merge(e.id(), 1, Integer::sum));
+            assertThat(seen).isNotEmpty();
+            assertThat(seen.values()).allMatch(n -> n == 1);
+            assertThat(d.select("[role=tablist] [id$=" + suffix + "] [id$=" + suffix + "]")).isEmpty();
+        }
+    }
+
+    @Test
     @DisplayName("탭 링크는 hx-get(조각) + hx-push-url(화면 주소), 대상은 #tenant-tab, 일반 링크 href 도 같은 화면 주소")
     void tabLinkAttributes() throws Exception {
         Document d = page("/admin/tenants/" + T1, platform());
