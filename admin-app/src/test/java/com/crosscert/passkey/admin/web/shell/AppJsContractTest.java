@@ -145,14 +145,15 @@ class AppJsContractTest {
     }
 
     @Test
-    @DisplayName("팔레트: 입력칸은 autofocus 속성이 있고, 열 때(show) 입력칸에 포커스를 준다")
-    void paletteFocusesInputOnOpen() throws IOException {
+    @DisplayName("[소스 문자열 가드] 팔레트: 입력칸 autofocus, 트랩은 noreturn, show() 가 opener 를 기억·입력칸 포커스, close() 가 opener 복귀")
+    void paletteFocusSourceGuard() throws IOException {
         String tpl = Files.readString(Path.of("src/main/resources/templates/admin/fragments/shell/command-palette.html"), StandardCharsets.UTF_8);
-        assertThat(tpl).contains("id=\"palette-input\"").contains("x-ref=\"input\"").contains("autofocus");
+        assertThat(tpl).contains("id=\"palette-input\"").contains("x-ref=\"input\"").contains("autofocus").contains("x-trap.noscroll.noreturn=\"open\"");
         String js = appJs();
-        int show = js.indexOf("show() {");
-        assertThat(show).isPositive();
-        assertThat(js.substring(show, show + 500)).contains("this.$refs.input.focus()");
+        int start = js.indexOf("Alpine.data('commandPalette'");
+        assertThat(start).isPositive();
+        String pal = js.substring(start, start + 4000);
+        assertThat(pal).contains("this.opener = ae").contains("this.$refs.input.focus()").contains("o.focus()");
     }
 
     @Test

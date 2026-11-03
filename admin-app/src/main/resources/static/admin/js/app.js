@@ -381,15 +381,32 @@
         sel: 0,
         count: 0,
         options() { return Array.from(this.$refs.list.querySelectorAll('[role="option"]')); },
+        // 포커스 규칙(CommandPalette.tsx · useFocusTrap): 열기 전 포커스를 가진 요소(opener)를 기억해 닫을 때 돌려준다.
+        // x-trap 은 .noreturn — 트랩은 15ms 뒤에 켜져 그때의 activeElement(이미 입력칸)를 기억하므로 복귀는 여기서 직접 한다.
+        opener: null,
         show() {
           if (this.open) return;
+          const ae = document.activeElement;
+          this.opener = ae && ae !== document.body ? ae : null;
           this.reset();
           this.open = true;
-          // CommandPalette.tsx: 열릴 때 검색칸에 포커스. x-show 가 표시한 뒤에야 포커스가 들어가므로 다음 틱, 포커스 트랩이 먼저 가져가도 다시 맞춘다.
-          this.$nextTick(() => { this.$refs.input.focus(); requestAnimationFrame(() => { if (this.open) this.$refs.input.focus(); }); });
+          // 표시된 뒤 입력칸에 포커스. 트랩이 켜진 뒤(≈15ms)에도 한 번 더 맞춰 어떤 경로로 열어도(버튼·단축키·반복) 입력칸이 포커스를 가진다.
+          const focusInput = () => { if (this.open && this.$refs.input) this.$refs.input.focus(); };
+          this.$nextTick(focusInput);
+          setTimeout(focusInput, 40);
         },
         toggle() { if (this.open) this.close(); else this.show(); },
-        close() { this.open = false; },
+        close() {
+          if (!this.open) return;
+          this.open = false;
+          const o = this.opener;
+          this.opener = null;
+          // 트랩이 풀린 뒤(inert 해제) 열기 전 요소로. 그 사이 사라졌으면(페이지 교체) 건너뛴다.
+          if (o) setTimeout(() => { if (this.open || !o.isConnected || o.closest('[inert]')) return;
+            // 실행한 동작이 다른 곳(대화상자 등)에 포커스를 줬으면 뺏지 않는다.
+            const cur = document.activeElement;
+            if (!cur || cur === document.body || this.$root.contains(cur)) o.focus(); }, 0);
+        },
         // 열 때마다: 검색칸 비움, 이전 결과 제거(이전 tenant 가 남지 않게), 결과 새로 요청.
         reload() {
           this.$refs.list.innerHTML = '';
