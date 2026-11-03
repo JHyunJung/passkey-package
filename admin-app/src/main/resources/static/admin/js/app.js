@@ -92,8 +92,8 @@
   });
   // hx-boost 이동(GET) + 본문 영역을 바꾸는 조각 GET(요소나 조상에 data-guard-dirty): dirty 면 요청을 취소하고 이동 확인(unsavedGuard)을 띄운다.
   // 탭 링크처럼 명시적 hx-get 인 요소는 boost 가 아니고 클릭 preventDefault 로는 htmx 가 멈추지 않으므로 이 표시로 같은 길을 태운다.
-  // "이동"은 요소가 <a href> 면 그 href(화면 주소, 전체 페이지 이동), 아니면 요청 주소로 새 boost 이동(adminNavigate)을 한다 — 조각을 직접 다시 보내지 않는다.
-  // 주소가 현재 화면(경로+쿼리)이면 건너뛴다(useUnsavedGuard 의 blocker 조건).
+  // "이동"은 요소가 <a href> 면 그 href(화면 주소, boost 이동), 아니면 요청 주소로 새 boost 이동(adminNavigate)을 한다 — 조각을 직접 다시 보내지 않는다.
+  // boost 이동은 주소가 현재 화면(경로+쿼리)이면 건너뛴다(useUnsavedGuard 의 blocker 조건).
   document.addEventListener('htmx:beforeRequest', function (e) {
     const d = e.detail || {};
     const cfg = d.requestConfig || {};
@@ -107,7 +107,8 @@
     const pi = d.pathInfo || {};
     const link = !d.boosted && !cfg.boosted && elt.closest ? elt.closest('a[href]') : null;
     const u = new URL(link ? link.getAttribute('href') : (pi.finalRequestPath || pi.requestPath || ''), window.location.href);
-    if (u.pathname === window.location.pathname && u.search === window.location.search) return;
+    // 같은 주소 건너뛰기는 boost 이동만. 표시된 조각 요청(활성 탭 다시 누르기 등)은 같은 주소여도 내용을 다시 받아 편집을 버리므로 똑같이 묻는다.
+    if (!marked && u.pathname === window.location.pathname && u.search === window.location.search) return;
     e.preventDefault();
     window.dispatchEvent(new CustomEvent('unsaved-ask', { detail: { href: u.href } }));
   });

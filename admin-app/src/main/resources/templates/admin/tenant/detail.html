@@ -51,10 +51,10 @@
     </div>
 
     <!-- 탭 내용. 개요는 인라인, 그 밖은 load 로 불러온다. 탭 링크(hx-get)는 이 영역의 안쪽을 교체한다. -->
-    <div id="tenant-tab" th:unless="${tabLazy}">
+    <div id="tenant-tab" hx-disinherit="hx-sync hx-swap hx-target" th:unless="${tabLazy}">
       <th:block th:replace="~{admin/tenant/overview :: content}"></th:block>
     </div>
-    <div id="tenant-tab" th:if="${tabLazy}" ui:attrs="${tabAttrsLoad}">
+    <div id="tenant-tab" hx-disinherit="hx-sync hx-swap hx-target" th:if="${tabLazy}" ui:attrs="${tabAttrsLoad}">
       <th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(6, '탭 불러오는 중')}"></th:block>
     </div>
 

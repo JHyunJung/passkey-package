@@ -62,7 +62,8 @@ public class WebExceptionAdvice {
 
     /** 오류 원문(rawErrorDetail): {@code HTTP 상태 · [코드] 서버 메시지}. 예기치 못한 서버 오류는 내부 메시지를 싣지 않는다. */
     private static String rawDetail(Exception e, int status, ErrorMessages.Info info) {
-        if (status >= 500 && !(e instanceof BusinessException)) return "HTTP " + status;
+        // 내부 예외(5xx)와 JDK 가 만든 IllegalArgumentException(예: Invalid UUID string)의 원문은 싣지 않는다.
+        if ((status >= 500 && !(e instanceof BusinessException)) || e instanceof IllegalArgumentException) return "HTTP " + status;
         StringBuilder sb = new StringBuilder("HTTP ").append(status);
         if (info.code() != null) sb.append(" · [").append(info.code()).append(']');
         String msg = e.getMessage();

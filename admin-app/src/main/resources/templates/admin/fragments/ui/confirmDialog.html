@@ -12,7 +12,7 @@
     expected, typeLabel   L3 에서 이름을 입력해야 하면 정확한 값과 라벨(둘 다 null 이면 입력 없음)
     acknowledge  L3 에서 체크해야 하는 문구 또는 null (expected 가 있으면 무시)
     confirmAttrs 확인 버튼 속성 Map(hx-post, hx-target 등). 값은 템플릿 상수(JS 평가 속성은 사용자 입력 금지).
-  확인 버튼은 요청 헤더 X-Confirm: 1 을 보내고, 서버는 그 요청의 실패를 토스트가 아니라 HX-Trigger confirmError 로만 알린다(WebExceptionAdvice). 성공 응답(2xx)이면 닫는다. 실패(WebExceptionAdvice 의 4xx/5xx + HX-Trigger 토스트, 네트워크 오류)면 열어 둔 채
+  확인 버튼은 요청 헤더 X-Confirm: 1 을 보내고, 서버는 그 요청의 실패를 토스트가 아니라 HX-Trigger confirmError 로만 알린다(WebExceptionAdvice). data-quiet 라 전송 실패·시간 초과도 전역 토스트 없이 대화상자 안에 보인다. 성공 응답(2xx)이면 닫는다. 실패(WebExceptionAdvice 의 4xx/5xx + HX-Trigger 토스트, 네트워크 오류)면 열어 둔 채
   안에 '<verb>하지 못했습니다' + 토스트 메시지의 쉬운 문구를 보이고 확인 버튼을 다시 눌러 재시도할 수 있다(#<id>-error, role=alert).
   기본 포커스는 취소 버튼(role=alertdialog, 스크림 클릭으로 닫히지 않음).
 -->
@@ -48,7 +48,7 @@
         <div class="dialog__foot">
           <button type="button" class="btn" autofocus x-on:click="close()" x-bind:disabled="busy">취소</button>
           <button type="button" class="btn" th:classappend="${danger == false} ? 'btn--primary' : 'btn--danger-solid'"
-                  data-confirm hx-headers='{"X-Confirm": "1"}' ui:attrs="${confirmAttrs}" x-bind:disabled="busy || !gateOk"><span x-show="!busy" th:text="${verb}">확인</span><span x-show="busy" x-cloak th:text="${verb + ' 중…'}">확인 중…</span></button>
+                  data-confirm data-quiet hx-headers='{"X-Confirm": "1"}' ui:attrs="${confirmAttrs}" x-bind:disabled="busy || !gateOk"><span x-show="!busy" th:text="${verb}">확인</span><span x-show="busy" x-cloak th:text="${verb + ' 중…'}">확인 중…</span></button>
         </div>
       </div>
     </div>

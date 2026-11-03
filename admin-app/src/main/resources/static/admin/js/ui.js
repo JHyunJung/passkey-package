@@ -67,6 +67,7 @@ document.addEventListener('alpine:init', () => {
         if (m) return m;
       }
     } catch (err) { /* 기본 문구 */ }
+    if (xhr && xhr.status === 0) return '서버에 연결하지 못했거나 응답이 오지 않았습니다. 연결 상태를 확인한 뒤 다시 시도하세요.'; // 전송 실패·시간 초과
     return '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.';
   }
 

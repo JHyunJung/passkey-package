@@ -723,6 +723,26 @@ class TenantDetailPageControllerTest {
     }
 
     @Test
+    @DisplayName("탭 컨테이너(인라인·lazy 모두)는 hx-sync·hx-swap·hx-target 상속을 막아 탭 안 요청이 서로·탭 전환과 취소하지 않는다")
+    void tabContainerDisinheritsRequestAttrs() throws Exception {
+        for (String url : List.of("/admin/tenants/" + T1, "/admin/tenants/" + T1 + "?tab=audit")) {
+            Element box = page(url, platform()).selectFirst("#tenant-tab");
+            assertThat(box.attr("hx-disinherit")).isEqualTo("hx-sync hx-swap hx-target");
+        }
+    }
+
+    @Test
+    @DisplayName("JDK 가 던진 IllegalArgumentException 의 원문은 400 이어도 토스트·화면에 싣지 않는다")
+    void illegalArgumentMessageNotSurfaced() throws Exception {
+        when(tenants.suspend(eq(T1.toString()), any())).thenThrow(new IllegalArgumentException("Invalid UUID string: secret"));
+        MockHttpServletResponse res = doPost("/admin/_/tenants/" + T1 + "/suspend", platform(), true, null).getResponse();
+        assertThat(res.getStatus()).isEqualTo(400);
+        assertThat(res.getHeader("HX-Trigger")).contains("HTTP 400").doesNotContain("secret");
+        MockHttpServletResponse full = mvc.perform(post(URI.create("/admin/_/tenants/" + T1 + "/suspend")).with(authentication(platform())).with(csrf())).andReturn().getResponse();
+        assertThat(full.getContentAsString(StandardCharsets.UTF_8)).doesNotContain("secret");
+    }
+
+    @Test
     @DisplayName("조회 실패 화면의 다시 시도 주소는 idOrSlug 를 경로 조각으로 인코딩한다")
     void retryUrlEncodesPathSegment() throws Exception {
         when(tenants.get("a b?c")).thenThrow(new IllegalStateException("x"));
@@ -746,6 +766,7 @@ class TenantDetailPageControllerTest {
 
         Element confirm = page("/admin/tenants/" + T1, platform()).selectFirst("main template button[data-confirm]");
         assertThat(confirm.attr("hx-headers").replace(" ", "")).isEqualTo("{\"X-Confirm\":\"1\"}");
+        assertThat(confirm.hasAttr("data-quiet")).isTrue(); // 전송 실패는 전역 토스트 없이 대화상자 안에
     }
 
     @Test

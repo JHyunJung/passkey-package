@@ -78,7 +78,8 @@ public final class ErrorMessages {
     public static Info describe(Throwable e, int status) {
         if (e instanceof ActionBlockedException) return describe(e);
         String code = e instanceof BusinessException be ? be.getErrorCode().getCode() : null;
-        return describe(status, e == null ? null : e.getMessage(), code);
+        // IllegalArgumentException 은 JDK·라이브러리가 던진 원문일 수 있어 4xx 원문 표시에서 뺀다(상태 문구만).
+        return describe(status, e == null || e instanceof IllegalArgumentException ? null : e.getMessage(), code);
     }
 
     /**
