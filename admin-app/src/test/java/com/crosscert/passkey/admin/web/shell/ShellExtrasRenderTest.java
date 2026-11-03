@@ -100,7 +100,7 @@ class ShellExtrasRenderTest {
         assertThat(list.attr("role")).isEqualTo("listbox");
         assertThat(list.attr("aria-label")).isEqualTo("검색 결과");
         assertThat(d.select(".palette__foot").text()).contains("이동").contains("실행").contains("닫기").contains("개 결과");
-        assertThat(d.selectFirst("#admin-nav-link").hasAttr("hidden")).isTrue();
+        assertThat(in.attr("x-on:input")).isEqualTo("onInput()");
     }
 
     @Test

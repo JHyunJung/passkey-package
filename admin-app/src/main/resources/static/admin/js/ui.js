@@ -64,11 +64,16 @@ document.addEventListener('alpine:init', () => {
     get gateOk() { return this.level !== 'L3' || (this.typing ? this.typed : this.ack ? this.acked : true); },
     init() {
       this.$watch('open', (v) => {
-        if (v) { this.prev = document.activeElement; this.busy = false; this.typed = false; this.acked = false; this.error = null; }
+        if (v) {
+          this.prev = document.activeElement; this.busy = false; this.typed = false; this.acked = false; this.error = null;
+          this.processHtmx();
+        }
         else if (this.prev && this.prev.focus) { const p = this.prev; this.prev = null; this.$nextTick(() => p.focus()); }
       });
-      if (this.open) this.prev = document.activeElement;
+      if (this.open) { this.prev = document.activeElement; this.processHtmx(); }
     },
+    // <template x-if> 로 그려진 안쪽의 hx-* 는 htmx 가 DOM 변이를 관찰하지 않아 처리되지 않는다 → 열린 뒤 직접 process 한다(initHash 로 중복 처리는 무해).
+    processHtmx() { this.$nextTick(() => { if (window.htmx) window.htmx.process(this.$root); }); },
     // 확인 버튼(data-confirm)의 htmx 요청만 본다. 성공이면 닫고, 실패(4xx/5xx·네트워크)면 열어 둔 채 오류를 보인다.
     onBeforeRequest(e) { if (isConfirm(e)) { this.busy = true; this.error = null; } },
     onAfterRequest(e) {

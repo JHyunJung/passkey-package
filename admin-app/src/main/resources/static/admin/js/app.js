@@ -65,19 +65,29 @@
   window.addEventListener('popstate', syncHiddenLinks);
 
   // ── 프로그램 이동 ─────────────────────────────────────
-  // 숨은 boost 링크(#admin-nav-link, 팔레트 조각)를 눌러 이동한다: hx-boost 와 이동 확인(unsavedGuard)이 링크 클릭과 같은 길을 탄다.
-  // 링크가 없으면(로그인 전 화면 등) 일반 이동.
+  // 새 링크를 만들어 htmx.process 한 뒤 눌러 이동한다: hx-boost 와 이동 확인(unsavedGuard)이 링크 클릭과 같은 길을 탄다.
+  // htmx 2.0.4 는 boost 링크의 href 를 처리(process)하는 시점에 한 번 읽어 두고(boostElement: o=ee(t,"href")) 이후 setAttribute 는 보지 않으며
+  // DOM 변이도 관찰하지 않는다. 그래서 링크를 재사용하지 않고 매번 새로 만들어 process 한다.
+  // htmx 가 없으면(드문 경우) 일반 이동. 안전장치: 3초 뒤에도 통과 허가가 남아 있으면 지운다(요청이 시작되지 않은 경우).
   window.adminNavigate = function (url) {
-    const a = document.getElementById('admin-nav-link');
-    if (!a) { window.location.assign(url); return; }
+    if (!window.htmx || !document.body) { window.location.assign(url); return; }
+    const a = document.createElement('a');
     a.setAttribute('href', url);
+    a.hidden = true;
+    a.setAttribute('tabindex', '-1');
+    a.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(a);
+    htmx.process(a);
     a.click();
+    setTimeout(function () { a.remove(); if (window.Alpine) Alpine.store('dirty').endPass(); }, 3000);
   };
 
   // ── 저장 안 한 변경 경고 ───────────────────────────────
   // 새로고침·탭 닫기: 리스너 하나. dirty 는 Alpine.store('dirty') 하나만 본다(저장 중·통과 허가·해제 상태는 스토어가 안다).
   window.addEventListener('beforeunload', function (e) {
     if (!window.Alpine) return;
+    const d = Alpine.store('dirty');
+    if (d.passing()) { d.endPass(); return; } // 이동 확인에서 "이동"을 누른 일반 이동 한 번
     if (Alpine.store('dirty').needsUnloadPrompt()) { e.preventDefault(); e.returnValue = ''; }
   });
   // hx-boost 이동(GET): dirty 면 요청을 취소하고 이동 확인(unsavedGuard)을 띄운다. 주소가 현재 화면(경로+쿼리)이면 건너뛴다(useUnsavedGuard 의 blocker 조건).
@@ -86,6 +96,7 @@
     const cfg = d.requestConfig || {};
     if (!window.Alpine || !(d.boosted || cfg.boosted)) return;
     if (String(cfg.verb || '').toLowerCase() !== 'get') return;
+    if (Alpine.store('dirty').passing()) { Alpine.store('dirty').endPass(); return; } // 확정된 이동 한 번만 통과(일회성)
     if (!Alpine.store('dirty').needsGuard()) return;
     const pi = d.pathInfo || {};
     const u = new URL(pi.finalRequestPath || pi.requestPath || '', window.location.href);
@@ -98,6 +109,24 @@
   // 이동이 끝나 새 화면이 들어오면(boost 이동·뒤로 가기) 이전 화면의 dirty 표시를 버린다.
   document.addEventListener('htmx:afterSwap', function (e) { if (e.detail && e.detail.boosted && window.Alpine) Alpine.store('dirty').reset(); });
   document.addEventListener('htmx:historyRestore', function () { if (window.Alpine) Alpine.store('dirty').reset(); });
+  // 뒤로/앞으로 가기(useBlocker 는 POP 도 막는다): htmx 는 window.onpopstate 로 화면을 교체한다(historyCacheSize=0 이면 서버에서 다시 받음).
+  // dirty 면 capture 단계에서 htmx 의 처리를 막고(stopImmediatePropagation) 주소를 직전 화면으로 되돌린 뒤(pushState) 이동 확인을 띄운다.
+  // "이동"은 그 주소로 새 boost 이동(adminNavigate)을 한다 — 히스토리 이동이 아니라 push 이동이 된다. "머무르기"는 그대로.
+  let stableUrl = window.location.href;
+  function syncStable() { stableUrl = window.location.href; }
+  document.addEventListener('htmx:pushedIntoHistory', syncStable);
+  document.addEventListener('htmx:afterSettle', syncStable);
+  window.addEventListener('popstate', function (e) {
+    const target = window.location.href;
+    if (!window.Alpine) { stableUrl = target; return; }
+    const s = Alpine.store('dirty');
+    const t = new URL(target, window.location.href);
+    const c = new URL(stableUrl, window.location.href);
+    if (!s.needsGuard() || (t.pathname === c.pathname && t.search === c.search)) { stableUrl = target; return; }
+    e.stopImmediatePropagation();
+    window.history.pushState(window.history.state, '', stableUrl);
+    window.dispatchEvent(new CustomEvent('unsaved-ask', { detail: { href: t.href } }));
+  }, true);
 
   // ── 전역 단축키 (useGoShortcuts / usePaletteShortcut / useHelpShortcut) ──
   // 리스너는 window 에 한 번만 단다(이동으로 body 가 바뀌어도 유지). 팔레트·시트는 window 이벤트로 연다.
@@ -188,7 +217,7 @@
       manual: false,
       parts: {},
       disarmed: false,
-      passUntil: 0,
+      pass: false,
       mark() { this.manual = true; this.refresh(); },
       clear() { this.manual = false; this.refresh(); },
       report(id, n, saving) {
@@ -204,10 +233,11 @@
       saving() { return Object.keys(this.parts).some((k) => this.parts[k].saving); },
       // 비 htmx 제출·로그아웃처럼 곧 페이지를 떠나는 동작: 경고를 끈다.
       disarm() { this.disarmed = true; },
-      // 이동 확인에서 "이동"을 누른 직후 5초 동안 경고 없이 통과(이동 한 번).
-      allow() { this.passUntil = Date.now() + 5000; },
-      passing() { return Date.now() < this.passUntil; },
-      reset() { this.manual = false; this.parts = {}; this.disarmed = false; this.passUntil = 0; this.refresh(); },
+      // 이동 확인에서 "이동"을 누른 뒤 다음 이동 한 번(boost 요청 또는 beforeunload)이 경고 없이 통과. 쓰이면 endPass() 로 소비한다.
+      allow() { this.pass = true; },
+      passing() { return this.pass; },
+      endPass() { this.pass = false; },
+      reset() { this.manual = false; this.parts = {}; this.disarmed = false; this.pass = false; this.refresh(); },
       needsGuard() { return this.count > 0 && !this.disarmed && !this.passing(); },
       needsUnloadPrompt() { return this.needsGuard() && !this.saving(); },
     });
@@ -232,9 +262,20 @@
           this.$nextTick(() => window.htmx && htmx.trigger(this.$refs.input, 'palette-load'));
         },
         reset() { this.$refs.input.value = ''; this.reload(); },
+        // 입력하는 즉시 현재 결과를 오래된 것으로 본다: 선택 표시를 지우고, 결과의 data-q 가 입력값과 같아질 때까지 Enter·클릭으로 실행하지 못한다
+        // (150ms 디바운스 동안 이전 결과의 항목을 실행하는 일을 막는다).
+        onInput() {
+          this.options().forEach((o) => o.setAttribute('aria-selected', 'false'));
+          this.$refs.input.removeAttribute('aria-activedescendant');
+          this.$refs.list.setAttribute('aria-busy', 'true');
+        },
+        // 이 결과가 지금 입력값에 대한 것인지.
+        // 빈 검색어는 속성이 생략될 수 있어(빈 값) 없으면 ''로 본다.
+        fresh(o) { return (o.dataset.q || '') === this.$refs.input.value; },
         // 결과가 바뀌면(검색어·다시 확인) 첫 실행 가능한 항목을 선택한다.
         afterSwap(e) {
           if (e.target !== this.$refs.list) return;
+          this.$refs.list.removeAttribute('aria-busy');
           this.loading = false;
           this.count = this.options().length;
           this.sel = this.firstEnabled();
@@ -247,6 +288,7 @@
         // dir 방향으로 다음 실행 가능한 항목. 없으면 제자리 — 비활성 항목에 선택이 멈추지 않는다.
         step(dir) {
           const os = this.options();
+          if (os.length && !this.fresh(os[0])) return; // 오래된 결과에서는 이동하지 않는다
           for (let i = this.sel + dir; i >= 0 && i < os.length; i += dir) {
             if (!os[i].disabled) { this.sel = i; break; }
           }
@@ -271,17 +313,17 @@
             if (e.target && e.target.closest && e.target.closest('button')) return;
             e.preventDefault();
             const o = this.options()[this.sel];
-            if (o && !o.disabled) this.run(o);
+            if (o && !o.disabled && this.fresh(o)) this.run(o);
           }
         },
         optionOf(e) { return e.target && e.target.closest ? e.target.closest('[role="option"]') : null; },
         hover(e) {
           const o = this.optionOf(e);
-          if (o && !o.disabled) { this.sel = this.options().indexOf(o); this.apply(); }
+          if (o && !o.disabled && this.fresh(o)) { this.sel = this.options().indexOf(o); this.apply(); }
         },
         activate(e) {
           const o = this.optionOf(e);
-          if (o && !o.disabled) this.run(o);
+          if (o && !o.disabled && this.fresh(o)) this.run(o);
         },
         // 실행: 이동·동작을 하고 닫는다(keepOpen 은 닫지 않는다). 닫힘의 포커스 복귀가 끝난 뒤 실행해 이어서 열리는 창이 제자리를 잡게 한다.
         run(o) {
@@ -333,8 +375,13 @@
           this.onActivity = () => this.bump();
           ACTIVITY.forEach((n) => window.addEventListener(n, this.onActivity, { passive: true }));
           this.onRequest = (e) => {
+            // 사용자 동작이 만든 요청만 리셋한다: 트리거 이벤트가 실제(isTrusted) 입력이어야 한다. htmx 가 만드는 `load`·`every`(폴링) 트리거는
+            // 합성 이벤트라 자동으로 제외되므로 폴링 요소에 data-quiet 이 없어도 안전하다. data-quiet 은 이중 안전장치.
+            const cfg = (e.detail && e.detail.requestConfig) || {};
+            const ev = cfg.triggeringEvent;
+            if (!ev || ev.isTrusted !== true) return;
             const el = e.detail && e.detail.elt;
-            if (el && el.hasAttribute && el.hasAttribute('data-quiet')) return; // 폴링(배너·체인 카드)은 사용자 활동이 아니다
+            if (el && el.hasAttribute && el.hasAttribute('data-quiet')) return;
             this.bump();
           };
           document.addEventListener('htmx:beforeRequest', this.onRequest);

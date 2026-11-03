@@ -148,6 +148,13 @@ class CommandPaletteControllerTest {
     }
 
     @Test
+    @DisplayName("모든 결과 항목이 자기 검색어를 data-q 로 가진다(입력값과 다르면 클라이언트가 실행을 막는다)")
+    void itemsCarryQuery() throws Exception {
+        assertThat(palette("로그", platform()).select("[role=option]").eachAttr("data-q")).isNotEmpty().containsOnly("로그");
+        assertThat(palette(" 설정 ", platform()).select("[role=option]").eachAttr("data-q")).as("trim 하지 않은 입력값 그대로").hasSize(0);
+    }
+
+    @Test
     @DisplayName("검색 결과 없음: 안내 문구(“검색어”와 일치하는 …)와 보조 설명, 빈 검색어면 다른 문구")
     void emptyState() throws Exception {
         Document d = palette("zzzzzz", platform());

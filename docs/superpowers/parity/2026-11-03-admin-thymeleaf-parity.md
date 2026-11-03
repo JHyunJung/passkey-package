@@ -97,7 +97,7 @@ JUnit: `web/shell/CommandPaletteControllerTest`(약칭 CPT, 서버가 그리는 
 | 활성 tenant 조회 실패: 첫 tenant 짐작 안 함, 탭 비활성 + 사유, "현재 tenant 다시 확인"으로 회복(열린 채) | V3 6 | source ✅ / 차이: 다시 확인 = 서버 재조회(결과 목록을 비우고 같은 검색어로 다시 받음) | CPT `rpActiveTenantFailure`, `rpNoActiveTenant` · 스텁 D15 | 미확인 |
 | 활성 tenant 확인 중: 탭 비활성 + "현재 tenant 확인 중…", Enter 로도 실행 안 됨 | V3 7 | **차이**: 서버 렌더에는 "확인 중" 상태가 없다. 요청 중에는 이전 결과를 비우고 "불러오는 중…"만 보이므로(항목이 없어 Enter 실행 불가) 안전은 같지만 "현재 tenant 확인 중…" 문구·비활성 탭 표시는 없다 | 스텁 D11, D16 / JS — 브라우저 확인 필요 | 미확인 |
 | PLATFORM 은 활성 tenant 를 조회하지 않는다 | V3 8 | source ✅ / 차이: 없음 | CPT `platformDefaultList`(`activeTenants.current()` 호출 없음) | 미확인 |
-| 화살표 이동·처음 선택은 비활성 항목을 건너뜀, 비활성(신규 tenant 생성) 권한 없음 표시 | V3 9 | source ✅ / 차이: 선택·이동은 JS(결과 조각이 바뀔 때마다 첫 실행 가능 항목 선택) | CPT `rpUsesActiveTenant`(비활성+권한 없음) · 스텁 D1–D3, D6, D10 / JS — 브라우저 확인 필요 | 미확인 |
+| 화살표 이동·처음 선택은 비활성 항목을 건너뜀, 비활성(신규 tenant 생성) 권한 없음 표시 | V3 9 | source ✅ / 차이: 선택·이동은 JS(결과 조각이 바뀔 때마다 첫 실행 가능 항목 선택). 입력 즉시 현재 결과를 오래된 것으로 보고(결과의 `data-q` ≠ 입력값) 새 결과가 올 때까지 Enter·클릭·화살표를 막는다 — 150ms 디바운스 중 이전 결과(예: 로그아웃) 실행 방지(스텁 S1–S5) | CPT `rpUsesActiveTenant`(비활성+권한 없음) · 스텁 D1–D3, D6, D10 / JS — 브라우저 확인 필요 | 미확인 |
 | "키보드 단축키" 항목(도움말 그룹, 힌트 ?)은 shortcuts 동작을 요청하고 닫는다 | 도움말 1 | source ✅ / 차이: 닫힘 포커스 복귀가 끝난 뒤(setTimeout 0) `open-shortcuts` 이벤트 | CPT `platformDefaultList`, `itemAttributes` · 스텁 D14 | 미확인 |
 | 닫고 다시 열 때 이전 tenant 라벨·이동이 남지 않음(조회 실패 시) | round1 1 | source ✅ / 차이: 서버가 열 때마다 새로 읽고 클라이언트는 열 때 이전 결과를 비운다 | CPT `rpFilterAndFreshRead` · 스텁 D16 | 미확인 |
 | 콤보박스 ARIA: aria-expanded·aria-controls·aria-activedescendant(선택 항목), 비활성은 aria-disabled | round1 2 | source ✅ / 차이: aria-selected·aria-activedescendant 는 JS 가 칠한다 | SER `paletteMarkup`, CPT `rpActiveTenantFailure`(aria-disabled) · 스텁 D1 | 미확인 |
@@ -105,7 +105,7 @@ JUnit: `web/shell/CommandPaletteControllerTest`(약칭 CPT, 서버가 그리는 
 
 ### IdleSessionModal.test.tsx (17)
 
-공통 차이: 활동 이벤트(mousemove·keydown·click·scroll)에 더해 **사용자 동작이 만든 htmx 요청**(`data-quiet` 폴링 제외)도 타이머를 리셋한다(브리프; TSX 에는 없음). 로그아웃은 `api.post('/admin/logout')` + 로컬 상태 정리 대신 숨은 폼 `POST /admin/logout`(CSRF 포함) 제출.
+공통 차이: 활동 이벤트(mousemove·keydown·click·scroll)에 더해 **사용자 동작이 만든 htmx 요청**도 타이머를 리셋한다(브리프; TSX 에는 없음). 판정은 요청의 트리거 이벤트가 실제 입력(`isTrusted`)인지로 한다 — htmx 가 만드는 `load`·`every`(폴링) 트리거는 합성 이벤트라 자동 제외되므로 폴링 요소에 `data-quiet` 을 깜빡해도 안전하다(`data-quiet` 은 이중 안전장치). 로그아웃은 `api.post('/admin/logout')` + 로컬 상태 정리 대신 숨은 폼 `POST /admin/logout`(CSRF 포함) 제출.
 
 | 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
 |---|---|---|---|---|
@@ -161,8 +161,8 @@ JUnit: `web/shell/CommandPaletteControllerTest`(약칭 CPT, 서버가 그리는 
 | 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
 |---|---|---|---|---|
 | dirty 가 아니면 바로 이동 | useUnsavedGuard 1 | source ✅ / 차이: 없음 | 스텁 B2a, B11 | 미확인 |
-| 검색 파라미터만 바뀌는 이동도 막고 "머무르기"(기본 포커스) | useUnsavedGuard 2 | source ✅ / 차이: 막는 길 둘 — 링크 클릭 capture(`unsavedGuard.onClick`)와 hx-boost GET 의 `htmx:beforeRequest` 취소(`unsaved-ask`). 같은 경로+쿼리면 건너뜀. **뒤로 가기(popstate)는 막지 못한다**(htmx 가 캐시 없이 다시 받아 교체) | UiFragmentsRenderTest `unsavedGuard`(alertdialog·autofocus), AJT `guardListenersReferenceDirtyStore` · 스텁 B12, B15b, B2b, B2c / JS — 브라우저 확인 필요 | 미확인 |
-| "이동" 을 누르면 진행 | useUnsavedGuard 3 | source ✅ / 차이: 통과 허가(5초, 1회성)를 주고 `adminNavigate`(숨은 boost 링크)로 같은 주소를 다시 요청 — boost 이동이면 boost 로 | 스텁 B2e–B2h / JS — 브라우저 확인 필요 | 미확인 |
+| 검색 파라미터만 바뀌는 이동도 막고 "머무르기"(기본 포커스) | useUnsavedGuard 2 | source ✅ / 차이: 막는 길 둘 — 링크 클릭 capture(`unsavedGuard.onClick`)와 hx-boost GET 의 `htmx:beforeRequest` 취소(`unsaved-ask`). 같은 경로+쿼리면 건너뜀. 뒤로/앞으로 가기(popstate)는 capture 단계에서 htmx 처리를 막고 주소를 되돌린 뒤 같은 확인창을 띄운다(TSX useBlocker 의 POP 차단과 같은 목적). 차이: "이동"은 히스토리 이동이 아니라 그 주소로의 새 boost 이동(push) | UiFragmentsRenderTest `unsavedGuard`(alertdialog·autofocus), AJT `guardListenersReferenceDirtyStore` · 스텁 B12, B15b, B2b, B2c / JS — 브라우저 확인 필요 | 미확인 |
+| "이동" 을 누르면 진행 | useUnsavedGuard 3 | source ✅ / 차이: 일회성 통과 허가(다음 boost 요청/beforeunload 한 번이 소비)를 주고 `adminNavigate`(매번 새 링크를 만들어 `htmx.process` 후 클릭 — htmx 2.0.4 는 처리 시점에 href 를 읽어 두므로)로 같은 주소를 다시 요청 | 스텁 B2e–B2h / JS — 브라우저 확인 필요 | 미확인 |
 | dirty 면 beforeunload 를 막는다 | useUnsavedGuard 4 | source ✅ / 차이: 리스너가 `app.js` 에 하나(saveBar 의 것을 없앴다). 저장 중이거나 통과 허가·해제 상태면 건너뜀. 브라우저 기본 확인창 | AJT `guardListenersReferenceDirtyStore`(리스너 하나·스토어 참조 문자열) · 스텁 B5–B9 | 미확인 |
 | SaveBar: count 0 이면 렌더하지 않음 | SaveBar 1 | source ✅ / 차이: `x-show="dirty"` 로 숨김(DOM 은 남음) | UiFragmentsRenderTest `saveBar`(Task 3) | 미확인 |
 | SaveBar: 건수와 버튼(저장…·되돌리기) | SaveBar 2 | source ✅ / 차이: 건수를 `dirty` 스토어에 보고(`report`) | UiFragmentsRenderTest `saveBar`, AJT `saveBarAndGuardUseStore`(문자열) / JS — 브라우저 확인 필요 | 미확인 |

@@ -77,6 +77,7 @@ public class CommandPaletteController {
         Map<String, List<Item>> groups = new LinkedHashMap<>();
         items.forEach(it -> groups.computeIfAbsent(it.group(), k -> new ArrayList<>()).add(it));
         String term = q.trim();
+        model.addAttribute("q", q); // 결과가 어떤 검색어에 대한 것인지(data-q) — 클라이언트가 오래된 결과 실행을 막는 데 쓴다
         model.addAttribute("groups", groups.entrySet().stream().map(e -> new Group(e.getKey(), e.getValue())).toList());
         model.addAttribute("total", items.size());
         model.addAttribute("emptyTitle", term.isEmpty() ? "실행할 수 있는 항목이 없습니다." : "“" + term + "”와 일치하는 tenant · 화면이 없습니다.");

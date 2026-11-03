@@ -388,4 +388,4 @@ a.menu__item { text-decoration: none; }
 .idle-ring { position: relative; display: block; width: 64px; height: 64px; flex: none; }
 .idle-ring__arc { transition: stroke-dashoffset 1s linear; }
 .idle-ring__text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
-.idle-copy { margin: 0; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.idle-copy { margin: 0; font-size: 13px; line-height: 1.6; } /* 색은 .dialog__text 가 준다(첫 문단만 ink-2, 굵은 문단은 본문색 — IdleSessionModal.tsx) */
