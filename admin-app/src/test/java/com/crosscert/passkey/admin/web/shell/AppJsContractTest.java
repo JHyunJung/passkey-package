@@ -149,6 +149,8 @@ class AppJsContractTest {
     void paletteFocusSourceGuard() throws IOException {
         String tpl = Files.readString(Path.of("src/main/resources/templates/admin/fragments/shell/command-palette.html"), StandardCharsets.UTF_8);
         assertThat(tpl).contains("id=\"palette-input\"").contains("x-ref=\"input\"").contains("autofocus").contains("x-trap.noscroll.noreturn=\"open\"");
+        // x-show 는 rAF 를 기다린다 — 팔레트 표시는 동기 style 바인딩이어야 한다.
+        assertThat(tpl).contains("x-bind:style=\"open ? null : 'display: none'\"").doesNotContain("x-show=\"open\"");
         String js = appJs();
         int start = js.indexOf("Alpine.data('commandPalette'");
         assertThat(start).isPositive();

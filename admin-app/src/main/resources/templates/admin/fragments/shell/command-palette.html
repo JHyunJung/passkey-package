@@ -12,7 +12,8 @@
   결과 항목의 data-q 는 그 결과가 어떤 검색어에 대한 것인지 — 입력값과 다르면(150ms 디바운스 중) 실행하지 못한다.
 -->
 <div th:fragment="palette" x-data="commandPalette" x-on:open-palette.window="show()" x-on:palette-toggle.window="toggle()" x-on:keydown.window="onKey($event)">
-  <div class="scrim" x-show="open" x-cloak x-on:mousedown.self="close()">
+  <!-- 표시는 x-show 가 아니라 style 바인딩: Alpine x-show 는 보이게 할 때 requestAnimationFrame 을 기다려, 창이 포커스·가시 상태가 아니면(프레임 지연) 입력칸이 0.5~1초 뒤에야 나타나 포커스가 닿지 않았다. -->
+  <div class="scrim" x-bind:style="open ? null : 'display: none'" x-cloak x-on:mousedown.self="close()">
     <div class="dialog palette" role="dialog" aria-label="명령 팔레트" x-bind:aria-modal="open ? 'true' : null" x-trap.noscroll.noreturn="open">
       <label class="palette__search">
         <th:block th:replace="~{admin/fragments/icons :: search(18)}"></th:block>
