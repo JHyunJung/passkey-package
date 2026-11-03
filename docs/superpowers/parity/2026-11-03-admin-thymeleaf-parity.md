@@ -975,3 +975,10 @@ Thymeleaf 앱에서 확인한 흐름(콘솔 오류 없음 — 아래 결함 제�
 4. 퍼널 화살표·단계 높이 — 단계의 이탈 자리 `<span class="hint">` 가 보통 공백(접혀 높이 0)이라 TSX `&nbsp;`(16px)와 단계 높이가 달랐다(254 vs 270). NBSP 로 수정(후속 커밋).
 5. audit-chain 콘솔 경고(hx-include 가 없는 `[name=view]` 를 가리킴) — 골격·불러오기 실패 요청에는 hx-include 를 붙이지 않음.
 6. Activity 필터 카드 높이(80px vs 68px) — 적용된 필터 래퍼 `#activity-applied`(높이 0 빈 블록)가 카드 flex gap 을 차지. `display: contents` 로 수정(후속 커밋).
+
+## 폐쇄망 기동 확인 (Task 17 Step 6, 2026-11-04)
+
+- 이미지: `docker build --platform linux/amd64 -t admin-app:verify -f admin-app/Dockerfile .` (커밋 df0dee19). 빌드 로그에 Node/npm 0건.
+- 폐쇄망 기동: `docker network create --internal passkey-offline`(외부 경로 없음)에 Oracle·Redis와 함께 `admin-app:verify`를 실행 → 15.5초 만에 기동, 외부 연결 시도·실패 로그 0건.
+  - 같은 내부 네트워크에서 curl: `/admin/login` 200, `tokens.css`·`fonts.css`·woff2·`htmx.min.js`·`alpine.min.js`·`app.js`·`ui.js`·`favicon.png` 모두 200, 로그인 POST 302 → `/admin`, `/admin/tenants`·`/admin/activity`·`/admin/audit-chain`·`/admin/settings` 200이며 페이지 안 절대 URL(`http(s)://`) 0건.
+- 브라우저 Network 확인(같은 이미지를 :8082로 노출): 로그인 후 Tenants·테넌트 상세(개요·WebAuthn·API 키·감사 로그·퍼널)·활동·감사 체인·설정(내 계정·보안 정책·MDS) 11개 화면을 돌며 요청 509건이 모두 `http://localhost:8082`. 외부 도메인 요청 0건, 실패 요청 0건, 콘솔 오류 0건.
