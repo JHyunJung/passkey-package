@@ -171,6 +171,7 @@ public class ApiKeysTabController {
         model.addAttribute("issued", new Issued(String.valueOf(created.id()), name, created.prefix(),
                 created.expiresAt() == null ? "무기한" : KstFormat.kstDate(created.expiresAt()), created.plainText(), null));
         refreshAfterChange(model, tid);
+        model.addAttribute("resetForm", true); // 발급 성공만 새 키 발급 폼을 비운다(원본: 성공했을 때만 초기화)
         return ISSUED_VIEW;
     }
 
@@ -267,6 +268,7 @@ public class ApiKeysTabController {
     /** 변경 뒤 목록을 다시 읽어 목록·탭 배지(OOB)를 채운다. 다시 읽기가 실패하면 목록 자리에 LoadError. */
     private List<ApiKeyAdminDto.ApiKeyView> refreshAfterChange(Model model, String tid) {
         fillForm(model, tid);
+        refreshKeyCount(model, tid);
         model.addAttribute("listOob", true);
         model.addAttribute("badgeOob", true);
         try {
@@ -278,6 +280,20 @@ public class ApiKeysTabController {
             model.addAttribute("badgeOob", false);
             return null;
         }
+    }
+
+    /**
+     * 정지 확인창의 "유효한 API 키 N개"(원본 onChanged → tenant 재조회). tenant 를 다시 읽어 {@code keyCount} 로 넘기고, 응답 조각이
+     * {@code #tenant-apikey-count} 를 OOB 로 바꾼다. 실패하면 조용히 생략(변경 자체는 성공했다).
+     */
+    private void refreshKeyCount(Model model, String tid) {
+        Long n = null;
+        try {
+            n = TenantTabs.load(tenants, tid).apiKeys();
+        } catch (RuntimeException e) {
+            log.warn("[apikeys-tab] tenant reload failed: {}", e.getClass().getSimpleName());
+        }
+        model.addAttribute("keyCount", n);
     }
 
     private void listFailed(Model model, String tid, RuntimeException e) {

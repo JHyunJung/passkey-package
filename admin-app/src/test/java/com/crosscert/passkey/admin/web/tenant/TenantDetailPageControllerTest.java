@@ -458,6 +458,21 @@ class TenantDetailPageControllerTest {
     }
 
     @Test
+    @DisplayName("정지 영향의 API 키 수는 템플릿 밖 #tenant-apikey-count(data-count)를 열 때 읽는다 — API 키 탭 변경 응답이 OOB 로 갱신")
+    void suspendKeyCountReadsLiveCountElement() throws Exception {
+        Document d = page("/admin/tenants/" + T1, platform());
+        Element count = d.selectFirst("#tenant-apikey-count");
+        assertThat(count).isNotNull();
+        assertThat(count.attr("data-count")).isEqualTo("3");
+        assertThat(count.hasAttr("hidden")).isTrue();
+        assertThat(count.parents().is("template")).isFalse();
+        Element li = d.select("template li").stream().filter(e -> e.text().contains("유효한 API 키")).findFirst().orElseThrow();
+        assertThat(li.attr("x-text")).contains("tenant-apikey-count").contains("dataset.count");
+        // RP_ADMIN 화면에도 자리가 있어 OOB 대상이 없다는 오류가 나지 않는다
+        assertThat(page("/admin/tenants/" + T1, rp(T1)).select("#tenant-apikey-count")).hasSize(1);
+    }
+
+    @Test
     @DisplayName("SUSPENDED: 배지 '정지'(danger), 메뉴에 '정지 해제'(정지 메뉴 없음), L1 다이얼로그 문구")
     void activateDialogForSuspended() throws Exception {
         when(tenants.get(T1.toString())).thenReturn(ApiResponse.ok(view("SUSPENDED")));

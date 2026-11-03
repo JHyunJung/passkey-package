@@ -516,7 +516,7 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 로드 실패: LoadError + 다시 시도(빈 상태 아님) | AKT 10 | source ✅ | AKC `loadErrorNotEmpty` | 미확인 |
 | 로딩 중 Skeleton | AKT 11 | source ✅ / 차이: 탭 컨테이너의 공통 스켈레톤(Task 9) | — | 미확인 |
 | 빈 상태: 첫 API 키 발급 + RP 연동 가이드 | AKT 12 | source ✅ | AKC `emptyState` | 미확인 |
-| 발급 실패: 다이얼로그 안 경고, 입력 유지, 토스트 없음 → 재발급 | AKT 13 | source ✅ (422 + `#ak-new-error` OOB, 폼은 교체 안 함) | AKC `issueFailureIsInlineAndKeepsInput`,`issueValidationRejectsWithoutCallingRest` | 미확인 |
+| 발급 실패: 다이얼로그 안 경고, 입력 유지, 토스트 없음 → 재발급 | AKT 13 | source ✅ (422 + `#ak-new-error` OOB, 폼은 교체 안 함. 폼 상태는 x-if 밖이라 취소 후 다시 열어도 유지, 발급 성공만 초기화 — Fix 1) | AKC `issueFailureIsInlineAndKeepsInput`,`issueValidationRejectsWithoutCallingRest` | 미확인 |
 | 발급 중 '발급 중…' 비활성, 입력 잠금 | AKT 14 | source ✅ / JS(busy → input·fieldset·칩 disabled) | AKC `newKeyDialogMarkup` / 스텁 | 미확인 |
 | 만료 열 글 배지: 정상·만료 임박·무기한·만료됨 | AKT 15 | source ✅ | AKC `expiryBadgeMatchesHelper` | 미확인 |
 | 권한 범위 한국어 라벨 + 원문 title | AKT 16 | source ✅ | AKC `scopeLabelsKoreanWithRawTitle` | 미확인 |
@@ -545,7 +545,10 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 회전·회수는 `X-Confirm` 없으면 400 | 신규 | AKC `mutationsRequireConfirmHeader` | — |
 | 발급·회전·회수 뒤 탭 줄 API 키 배지 OOB(`#tenant-tab-apikeys-badge`) | 신규(Task 9 이월) | AKC `issueCallsRestAndRendersIssuedDialog`,`rotateShowsNewKeyAndOldKeyExpiry`,`revokeSucceedsWithToastAndRefresh` | 미확인 |
 | 접두사 복사 → 토스트(상수 JS + data-prefix) | source ✅ | AKC `copyPrefixMenuItem` | 미확인 |
-| 정지 다이얼로그의 '유효한 API 키 N개' 는 키 변경 뒤 갱신 안 됨(원본 onChanged → tenant 재조회) | **차이** | — | 미확인 |
+| 정지 다이얼로그의 '유효한 API 키 N개' 는 키 변경 뒤 갱신(원본 onChanged → tenant 재조회): 변경 응답이 tenant 를 다시 읽어 `#tenant-apikey-count` OOB, 확인창은 열 때 그 값을 읽음 | source ✅ (Fix 1) | AKC `mutationsRefreshSuspendKeyCount`,`keyCountRefreshFailureIsSilent`, TDPT `suspendKeyCountReadsLiveCountElement` | 미확인 |
+| 발급 중 Escape·스크림·취소로 닫히지 않음(원본 onClose={busy ? noop : onClose}) | source ✅ (Fix 1, 바깥 dialog busy) | AKC `issueDialogBlocksDismissWhileIssuingAndKeepsState` / JS — 브라우저 확인 필요 | 미확인 |
+| 발급의 네트워크 오류·권한 거부는 다이얼로그 안 인라인(전역 토스트 없음) | source ✅ (Fix 1: data-quiet + X-Confirm → confirmError, netErr) | AKC `issueNetworkAndDeniedErrorsAreInline` / 스텁 | 미확인 |
+| 키 이름 이스케이프(목록·확인창·발급 완료) | source ✅ | AKC `keyNameIsEscaped` | — |
 
 ## §Activity
 

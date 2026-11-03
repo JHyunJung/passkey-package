@@ -113,8 +113,12 @@ class ApiKeysTabControllerTest {
     }
 
     static TenantAdminDto.TenantView tenant() {
+        return tenant(3);
+    }
+
+    static TenantAdminDto.TenantView tenant(long activeKeys) {
         return new TenantAdminDto.TenantView(T1, "acme", "Acme", "ACTIVE", "passkey.acme.com", "Acme",
-                List.of("https://passkey.acme.com"), Set.of("none"), true, false, "NONE", 60000, 0, 3, null,
+                List.of("https://passkey.acme.com"), Set.of("none"), true, false, "NONE", 60000, 0, activeKeys, null,
                 OffsetDateTime.parse("2026-03-01T16:00:00Z"), OffsetDateTime.parse("2026-03-01T16:00:00Z"));
     }
 
@@ -475,7 +479,7 @@ class ApiKeysTabControllerTest {
         assertThat(d.selectFirst("[x-data^=apiKeyForm]").attr("x-data")).contains("\"6\":\"2027-04-11\"").contains("\"36\":\"2029-10-11\"");
         Element submit = d.selectFirst("button[form=ak-new-form]");
         assertThat(submit.attr("type")).isEqualTo("submit");
-        assertThat(submit.attr("x-bind:disabled")).isEqualTo("!canSubmit");
+        assertThat(submit.attr("x-bind:disabled")).isEqualTo("busy || !canSubmit");
         assertThat(submit.text()).contains("발급").contains("발급 중…");
     }
 
@@ -619,5 +623,115 @@ class ApiKeysTabControllerTest {
         assertThat(item.attr("data-prefix")).isEqualTo("pk_live_ab");
         assertThat(item.attr("x-on:click.capture")).isEqualTo(ApiKeysTabController.COPY_PREFIX)
                 .contains("접두사를 복사했습니다.").contains("복사 실패").doesNotContain("pk_live_ab");
+    }
+
+    // ── Fix round 1 ─────────────────────────────────────────
+
+    private static Element keyCount(Document d) {
+        return d.selectFirst("#tenant-apikey-count");
+    }
+
+    @Test
+    @DisplayName("발급·회전·회수 응답은 tenant 를 다시 읽어 정지 확인창의 키 수(#tenant-apikey-count)를 OOB 로 갱신한다")
+    void mutationsRefreshSuspendKeyCount() throws Exception {
+        stubIssue();
+        when(tenants.get(T1.toString())).thenReturn(ApiResponse.ok(tenant(3)), ApiResponse.ok(tenant(4)));
+        Document issued = doc(mvc.perform(issueReq("staging", "24", "registration")).andReturn());
+        assertThat(keyCount(issued).attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(keyCount(issued).attr("data-count")).isEqualTo("4");
+        assertThat(keyCount(issued).hasAttr("hidden")).isTrue();
+
+        when(tenants.get(T1.toString())).thenReturn(ApiResponse.ok(tenant(3)), ApiResponse.ok(tenant(5)));
+        when(apiKeys.rotate(eq(KA), any())).thenReturn(ApiResponse.ok(new ApiKeyAdminDto.ApiKeyRotateResponse(KNEW, SECRET, "pk_new", Set.of("registration"), at(1))));
+        Document rotated = doc(mvc.perform(confirm(post(URI.create("/admin/_/api-keys/" + KA + "/rotate?tenantId=" + T1)), platform())).andReturn());
+        assertThat(keyCount(rotated).attr("data-count")).isEqualTo("5");
+
+        when(tenants.get(T1.toString())).thenReturn(ApiResponse.ok(tenant(3)), ApiResponse.ok(tenant(2)));
+        Document revoked = doc(mvc.perform(confirm(delete(URI.create("/admin/_/api-keys/" + KA + "?tenantId=" + T1)), platform())).andReturn());
+        assertThat(keyCount(revoked).attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(keyCount(revoked).attr("data-count")).isEqualTo("2");
+    }
+
+    @Test
+    @DisplayName("변경 뒤 tenant 다시 읽기가 실패해도 변경 응답은 그대로(키 수 OOB 만 빠진다)")
+    void keyCountRefreshFailureIsSilent() throws Exception {
+        stubIssue();
+        when(tenants.get(T1.toString())).thenReturn(ApiResponse.ok(tenant(3))).thenThrow(new IllegalStateException("down"));
+        MvcResult r = mvc.perform(issueReq("staging", "24", "registration")).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(r)).contains(SECRET);
+        assertThat(keyCount(doc(r))).isNull();
+    }
+
+    @Test
+    @DisplayName("발급 다이얼로그: 발급 중에는 바깥 dialog 의 busy 로 Escape·스크림·취소가 막힌다, 폼 상태는 x-if 밖(취소 후 다시 열어도 유지)")
+    void issueDialogBlocksDismissWhileIssuingAndKeepsState() throws Exception {
+        Document d = tab(platform());
+        Element formScope = d.selectFirst("[x-data^=apiKeyForm]");
+        Element dialogScope = d.selectFirst("[x-data*='\"id\":\"ak-new\"']");
+        assertThat(dialogScope).isNotNull();
+        assertThat(formScope.select("[x-data*='\"id\":\"ak-new\"']")).as("폼 상태가 다이얼로그(x-if) 바깥 조상").hasSize(1);
+        assertThat(formScope.parents().is("template")).isFalse();
+        assertThat(formScope.attr("x-on:ak-form-reset.window")).isEqualTo("reset()");
+        Element form = d.selectFirst("#ak-new-form");
+        assertThat(form.attr("x-on:htmx:before-request")).contains("busy = true");
+        assertThat(form.attr("x-on:htmx:after-request")).contains("busy = false");
+        assertThat(d.selectFirst("button[form=ak-new-form]").attr("x-bind:disabled")).contains("busy");
+    }
+
+    @Test
+    @DisplayName("발급 성공 응답만 폼 초기화를 보낸다(회전은 발급 폼을 건드리지 않음)")
+    void onlyIssueResetsForm() throws Exception {
+        stubIssue();
+        Document issued = doc(mvc.perform(issueReq("staging", "24", "registration")).andReturn());
+        assertThat(issued.selectFirst("[x-data^=dialog]").attr("data-reset-form")).isEqualTo("true");
+        assertThat(issued.selectFirst("[x-data^=dialog]").attr("x-init")).contains("ak-form-reset");
+        when(apiKeys.rotate(eq(KA), any())).thenReturn(ApiResponse.ok(new ApiKeyAdminDto.ApiKeyRotateResponse(KNEW, SECRET, "pk_new", Set.of("registration"), at(1))));
+        Document rotated = doc(mvc.perform(confirm(post(URI.create("/admin/_/api-keys/" + KA + "/rotate?tenantId=" + T1)), platform())).andReturn());
+        assertThat(rotated.selectFirst("[x-data^=dialog]").hasAttr("data-reset-form")).isFalse();
+    }
+
+    @Test
+    @DisplayName("발급의 네트워크 오류·권한 거부는 전역 토스트가 아니라 다이얼로그 안: 폼 data-quiet + X-Confirm(→ confirmError), 인라인 netErr 자리")
+    void issueNetworkAndDeniedErrorsAreInline() throws Exception {
+        Document d = tab(platform());
+        Element form = d.selectFirst("#ak-new-form");
+        assertThat(form.hasAttr("data-quiet")).isTrue();
+        assertThat(form.attr("hx-headers")).contains("X-Confirm");
+        assertThat(form.attr("x-on:htmx:send-error")).isEqualTo("netFail($event)");
+        assertThat(form.attr("x-on:htmx:timeout")).isEqualTo("netFail($event)");
+        Element inline = d.selectFirst("[x-show=netErr]");
+        assertThat(inline).isNotNull();
+        assertThat(inline.select(".banner__title").text()).isEqualTo("API 키를 발급하지 못했습니다.");
+        assertThat(inline.selectFirst("[x-text=netErr]")).isNotNull();
+
+        when(apiKeys.issue(any(), any())).thenThrow(new BusinessException(ErrorCode.ACCESS_DENIED, "denied"));
+        MvcResult r = mvc.perform(issueReq("staging", "24", "registration").header("X-Confirm", "1")).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(403);
+        assertThat(trigger(r).has("confirmError")).isTrue();
+        assertThat(trigger(r).has("toast")).isFalse();
+    }
+
+    @Test
+    @DisplayName("키 이름의 따옴표·꺾쇠는 목록·발급 완료·확인창에서 이스케이프된다")
+    void keyNameIsEscaped() throws Exception {
+        String evil = "a\"b'<img src=x onerror=alert(1)>";
+        when(apiKeys.list(T1.toString())).thenReturn(ApiResponse.ok(List.of(key(KA, evil, null, null, at(-1)))));
+        MvcResult tab = mvc.perform(htmx(get(URI.create(BASE + "/tab/apikeys")), platform())).andReturn();
+        String html = body(tab);
+        assertThat(html).doesNotContain("<img src=x").doesNotContain("onerror=alert(1)>");
+        Document d = Jsoup.parse(html);
+        assertThat(d.select("img[src=x]")).isEmpty();
+        assertThat(d.select("td strong").text()).isEqualTo(evil);
+        assertThat(d.select("button[aria-label]").stream().anyMatch(e -> e.attr("aria-label").equals(evil + " 키 액션"))).isTrue();
+        assertThat(d.select("[aria-labelledby=ak-revoke-" + KA + "-title] dd").first().text()).isEqualTo(evil);
+
+        stubIssue();
+        MvcResult r = mvc.perform(issueReq(evil, "24", "registration")).andReturn();
+        String ih = body(r);
+        assertThat(ih).doesNotContain("<img src=x");
+        Document id = Jsoup.parse(ih);
+        assertThat(id.select("img[src=x]")).isEmpty();
+        assertThat(id.select("[aria-labelledby=ak-issued-title] dd").first().text()).startsWith(evil);
     }
 }

@@ -48,6 +48,8 @@
         <th:block th:replace="~{admin/fragments/ui/propChip :: propChip('생성', ${t.createdKst}, false)}"></th:block>
       </div>
       <th:block th:replace="~{admin/fragments/ui/tabs :: tabs(${tabs}, ${activeTab}, 'Tenant 탭')}"></th:block>
+      <!-- 유효 API 키 수: 정지 확인창(x-if 템플릿 안)이 열 때 읽는다. API 키 탭의 발급·회전·회수 응답이 OOB 로 바꾼다(원본 onChanged → tenant 재조회). -->
+      <span id="tenant-apikey-count" hidden th:data-count="${t.apiKeys}"></span>
     </div>
 
     <!-- 탭 내용. 개요는 인라인, 그 밖은 load 로 불러온다. 탭 링크(hx-get)는 이 영역의 안쪽을 교체한다. -->
@@ -72,7 +74,8 @@
     <th:block th:replace="~{admin/fragments/ui/alert :: alert('bad', '영향 범위', ~{:: impactList}, null, null)}"></th:block>
   </th:block>
   <ul th:fragment="impactList" class="stack-1" style="list-style: none; margin: 0; padding: 0">
-    <li th:text="${'· 유효한 API 키 ' + t.apiKeys + '개를 즉시 회수'}">· 유효한 API 키 3개를 즉시 회수</li>
+    <li th:text="${'· 유효한 API 키 ' + t.apiKeys + '개를 즉시 회수'}" th:data-count="${t.apiKeys}"
+        x-text="'· 유효한 API 키 ' + ((document.getElementById('tenant-apikey-count') || $el).dataset.count) + '개를 즉시 회수'">· 유효한 API 키 3개를 즉시 회수</li>
     <li>· 이 tenant의 패스키 등록·인증 모두 거부</li>
     <li>· 정지를 해제해도 회수된 키는 복구되지 않음</li>
   </ul>

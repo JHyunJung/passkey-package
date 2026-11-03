@@ -12,23 +12,37 @@
   <div id="ak-root">
     <th:block th:replace="~{admin/tenant/api-keys :: list}"></th:block>
 
-    <!-- 새 키 발급(원본 NewKeyDialog). 실패하면 다이얼로그 안 경고(#ak-new-error, 422 OOB)이고 입력은 그대로다. 성공 응답이 이 다이얼로그를 닫는다. -->
+    <!-- 새 키 발급(원본 NewKeyDialog). 폼 상태(apiKeyForm)는 다이얼로그(x-if) 바깥이라 취소 후 다시 열어도 남고, 발급 성공 응답(ak-form-reset)만 비운다.
+         요청 중에는 바깥 dialog 의 busy 를 켜 Escape·스크림·취소로 닫히지 않는다(원본 onClose={busy ? noop : onClose}).
+         실패: 검증·REST 거절은 #ak-new-error(422 OOB), 네트워크 오류·권한 거부 등 스왑 없는 실패는 netErr 인라인(폼 data-quiet + X-Confirm → confirmError, 전역 토스트 없음). -->
+    <div ui:xdata="${@fmt.xdata('apiKeyForm', 'months', '24', 'previews', expiryPreviews, 'rotationDays', rotationDays, 'nameMax', nameMax, 'errorId', 'ak-new-error')}"
+         x-on:dialog:open.window="onDialogOpen($event)" x-on:ak-form-reset.window="reset()">
     <div ui:xdata="${@fmt.xdata('dialog', 'id', 'ak-new')}"
          x-on:dialog:open.window="onOpen($event)" x-on:dialog:close.window="onClose($event)" x-on:keydown.escape.window="onEscape()">
       <template x-if="open">
         <div class="scrim" x-on:mousedown="onScrim($event)">
-          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ak-new-title" x-trap.noscroll="open"
-               ui:xdata="${@fmt.xdata('apiKeyForm', 'months', '24', 'previews', expiryPreviews, 'rotationDays', rotationDays, 'nameMax', nameMax, 'errorId', 'ak-new-error')}">
+          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ak-new-title" x-trap.noscroll="open">
             <div class="dialog__head">
               <h3 class="dialog__title" id="ak-new-title">새 API 키 발급</h3>
               <div class="dialog__sub">RP 서버가 Passkey API 를 호출할 때 쓰는 키입니다.</div>
             </div>
             <div class="dialog__body">
               <div id="ak-new-error"></div>
+              <div x-show="netErr" x-cloak>
+                <div class="banner banner--danger banner--top" role="alert">
+                  <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+                  <div class="banner__body">
+                    <div class="banner__title">API 키를 발급하지 못했습니다.</div>
+                    <div x-text="netErr"></div>
+                  </div>
+                </div>
+              </div>
               <form id="ak-new-form" class="stack-4" novalidate autocomplete="off"
                     th:hx-post="${issueUrl}" hx-target="#ak-issued-slot" hx-swap="innerHTML" hx-sync="#ak-root:drop"
-                    x-on:submit="if (!canSubmit) $event.preventDefault()"
-                    x-on:htmx:before-request="onBefore()" x-on:htmx:after-request="onAfter()">
+                    hx-headers='{"X-Confirm": "1"}' data-quiet
+                    x-on:submit="if (busy || !canSubmit) $event.preventDefault()"
+                    x-on:htmx:before-request="onBefore(); busy = true" x-on:htmx:after-request="busy = false; onAfter($event)"
+                    x-on:htmx:send-error="netFail($event)" x-on:htmx:timeout="netFail($event)">
                 <div>
                   <div class="row" style="justify-content: space-between">
                     <label class="label" for="apikey-name">용도 (이름)</label>
@@ -66,13 +80,14 @@
             </div>
             <div class="dialog__foot">
               <button type="button" class="btn" x-on:click="if (!busy) close()" x-bind:disabled="busy">취소</button>
-              <button type="submit" form="ak-new-form" class="btn btn--primary" disabled x-bind:disabled="!canSubmit">
+              <button type="submit" form="ak-new-form" class="btn btn--primary" disabled x-bind:disabled="busy || !canSubmit">
                 <span x-show="!busy">발급</span><span x-show="busy" x-cloak>발급 중…</span>
               </button>
             </div>
           </div>
         </div>
       </template>
+    </div>
     </div>
 
     <!-- 발급·회전 응답(api-key-issued :: issued)이 들어오는 자리. 평문 키는 이 자리에만 그려지고, 닫으면 비운다. -->
@@ -154,6 +169,12 @@
 <th:block th:fragment="listResponse">
   <th:block th:replace="~{admin/tenant/api-keys :: list}"></th:block>
   <th:block th:if="${badgeOob}"><th:block th:replace="~{admin/tenant/api-keys :: badge}"></th:block></th:block>
+  <th:block th:replace="~{admin/tenant/api-keys :: keyCount}"></th:block>
+</th:block>
+
+<!-- 정지 확인창(Tenant 상세 detail.html)이 열 때 읽는 유효 API 키 수. 변경 뒤 tenant 를 다시 읽은 값(keyCount)이 있을 때만 OOB. -->
+<th:block th:fragment="keyCount">
+  <span th:if="${keyCount != null}" id="tenant-apikey-count" hidden th:data-count="${keyCount}" hx-swap-oob="true"></span>
 </th:block>
 
 <!-- 발급 실패(422): 새 키 발급 다이얼로그 안 경고만 OOB 로 바꾼다(입력 폼은 교체하지 않아 그대로). -->

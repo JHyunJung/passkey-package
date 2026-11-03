@@ -10,7 +10,8 @@
 -->
 <th:block th:fragment="issued">
   <div hx-history="false" ui:xdata="${@fmt.xdata('dialog', 'id', 'ak-issued', 'open', true, 'dismissible', false, 'closeOnScrim', false)}"
-       x-init="$dispatch('dialog:close', { id: 'ak-new' })" x-on:keydown.escape.window="onEscape()">
+       th:data-reset-form="${resetForm == true} ? 'true' : null"
+       x-init="$dispatch('dialog:close', { id: 'ak-new' }); if ($el.dataset.resetForm) $dispatch('ak-form-reset')" x-on:keydown.escape.window="onEscape()">
     <template x-if="open">
       <div class="scrim">
         <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="ak-issued-title" x-trap.noscroll="open"
@@ -50,6 +51,7 @@
 
   <th:block th:if="${listOob}"><th:block th:replace="~{admin/tenant/api-keys :: list}"></th:block></th:block>
   <th:block th:if="${badgeOob}"><th:block th:replace="~{admin/tenant/api-keys :: badge}"></th:block></th:block>
+  <th:block th:replace="~{admin/tenant/api-keys :: keyCount}"></th:block>
 </th:block>
 
 <th:block th:remove="all">

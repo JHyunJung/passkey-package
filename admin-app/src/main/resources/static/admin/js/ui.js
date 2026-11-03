@@ -397,23 +397,45 @@ document.addEventListener('alpine:init', () => {
   }));
 
   // ── API 키 탭(ApiKeysTab.tsx) ──────────────────────────
-  // 새 키 발급 폼: 이름·권한 범위·만료 프리셋. 만료일 미리보기는 서버가 프리셋별로 계산해 넘긴다(previews: {"6": "YYYY-MM-DD", …}).
-  // months 는 문자열('' = 무기한)이라 hidden 입력·칩 data-months 와 그대로 비교한다. 요청 중에는 입력을 잠그고, 시작할 때 이전 경고를 지운다.
+  // 새 키 발급 폼 상태: 이름·권한 범위·만료 프리셋. 다이얼로그(x-if) 바깥 요소에 두어 취소 후 다시 열어도 남고, 발급 성공 응답의 `ak-form-reset` 만 비운다.
+  // 만료일 미리보기는 서버가 프리셋별로 계산해 넘긴다(previews: {"6": "YYYY-MM-DD", …}). months 는 문자열('' = 무기한).
+  // 요청 중 잠금·닫기 차단은 안쪽 dialog 의 busy 를 쓰고(템플릿이 켜고 끈다), 여기 issuing 은 canSubmit 용이다.
+  // 실패: 422 는 서버가 errorId 자리에 그린다. 스왑 없는 실패(권한 거부 등 4xx/5xx 의 confirmError, 네트워크 오류·시간 초과)는 netErr 로 다이얼로그 안에.
+  const AK_DEFAULT_SCOPES = ['registration', 'authentication'];
   Alpine.data('apiKeyForm', (cfg = {}) => ({
     name: '',
-    scopes: ['registration', 'authentication'],
+    scopes: [...AK_DEFAULT_SCOPES],
     months: cfg.months == null ? '' : String(cfg.months),
     max: cfg.nameMax || 64,
-    busy: false,
+    issuing: false,
+    netErr: '',
     has(v) { return this.scopes.includes(v); },
     toggle(v) { this.scopes = this.has(v) ? this.scopes.filter((s) => s !== v) : [...this.scopes, v]; },
     get hint() {
       const p = this.months ? (cfg.previews || {})[this.months] : null;
       return (p ? `만료일 ${p} (KST)` : '만료 없음 — 키가 무기한으로 유효합니다.') + ` · 권장 회전 주기 ${cfg.rotationDays}일`;
     },
-    get canSubmit() { return !this.busy && this.name.length > 0 && this.scopes.length > 0; },
-    onBefore() { this.busy = true; const e = document.getElementById(cfg.errorId || ''); if (e) e.replaceChildren(); },
-    onAfter() { this.busy = false; },
+    get canSubmit() { return !this.issuing && this.name.length > 0 && this.scopes.length > 0; },
+    failText(xhr) { return toastMessage(xhr).trim().replace(/[.。]$/, '') + '. 입력한 내용은 그대로 있습니다.'; },
+    onBefore() {
+      this.issuing = true;
+      this.netErr = '';
+      const e = document.getElementById(cfg.errorId || '');
+      if (e) e.replaceChildren();
+    },
+    onAfter(e) {
+      this.issuing = false;
+      const d = (e && e.detail) || {};
+      if (d.successful) return;
+      const st = d.xhr ? d.xhr.status : 0;
+      if (st === 422) return; // 서버가 errorId 자리에 그렸다
+      this.netErr = this.failText(d.xhr);
+    },
+    // 전송 실패·시간 초과(afterRequest 와 겹쳐도 같은 문구): 응답이 없으므로 status 0 문구.
+    netFail() { this.issuing = false; this.netErr = this.failText({ status: 0 }); },
+    // 원본: 다이얼로그를 열 때 이전 오류만 지운다(입력은 유지).
+    onDialogOpen(e) { if (e && e.detail && e.detail.id === 'ak-new') this.netErr = ''; },
+    reset() { this.name = ''; this.scopes = [...AK_DEFAULT_SCOPES]; this.months = cfg.months == null ? '' : String(cfg.months); this.netErr = ''; this.issuing = false; },
   }));
 
   // 발급 완료 다이얼로그 안쪽(바깥 dialog 의 open 을 쓴다). 열려 있는 동안 $store.dirty 에 1건을 보고해 이동·새로고침을 막고(문구는 notice),
