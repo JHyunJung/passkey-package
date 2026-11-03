@@ -109,6 +109,7 @@ class LoginHandlerBranchTest {
                 .header("HX-Request", "true")
                 .param("email", EMAIL).param("password", "wrong")
                 .with(csrf().asHeader()))
+            .andExpect(status().isOk())
             .andExpect(header().string("HX-Redirect", "/admin/login?error"));
 
         ArgumentCaptor<AuditAppendRequest> captor = ArgumentCaptor.forClass(AuditAppendRequest.class);

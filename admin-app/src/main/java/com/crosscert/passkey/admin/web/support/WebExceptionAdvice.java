@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -73,7 +74,7 @@ public class WebExceptionAdvice {
             return null; // null = 응답 처리 완료(본문 없음)
         }
         ModelAndView mav = new ModelAndView(ErrorPage.VIEW);
-        mav.setStatus(HttpStatus.valueOf(status));
+        mav.setStatus(HttpStatusCode.valueOf(status)); // 499 같은 비표준 코드도 허용
         mav.addObject("status", status);
         mav.addObject("title", DEFAULT_TITLE);
         mav.addObject("message", DEFAULT_MESSAGE);

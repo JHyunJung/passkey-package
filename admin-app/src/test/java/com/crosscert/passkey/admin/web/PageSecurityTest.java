@@ -116,10 +116,21 @@ class PageSecurityTest {
     }
 
     @Test
-    void htmxPostWithoutCsrfGetsErrorToast() throws Exception {
+    void htmxPostWithoutCsrfGetsErrorPageAndToast() throws Exception {
         mvc.perform(post("/admin/_/tenants").header("HX-Request", "true").with(authentication(operator())))
             .andExpect(status().isForbidden())
-            .andExpect(header().string("HX-Trigger", containsString("\"kind\":\"error\"")));
+            .andExpect(header().string("HX-Trigger", containsString("\"kind\":\"error\"")))
+            .andExpect(content().string(containsString("권한이 없습니다")));
+    }
+
+    @Test
+    void pageDeniedWithJsonAcceptStillGetsErrorPage() throws Exception {
+        mvc.perform(post("/admin/_/tenants")
+                .accept("application/json")
+                .with(authentication(operator())))
+            .andExpect(status().isForbidden())
+            .andExpect(content().contentTypeCompatibleWith("text/html"))
+            .andExpect(content().string(containsString("권한이 없습니다")));
     }
 
     @Test

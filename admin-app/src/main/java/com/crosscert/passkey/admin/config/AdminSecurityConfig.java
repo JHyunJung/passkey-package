@@ -387,10 +387,10 @@ public class AdminSecurityConfig {
 
     /**
      * 접근 거부(권한 부족, CSRF 토큰 누락·불일치):
-     *   - /admin/api/** 또는 JSON 요청 → 기존 403 JSON.
-     *   - htmx 요청 → 403 + 오류 토스트(HX-Trigger).
-     *   - 그 외 화면 → admin/error 템플릿을 403 으로 렌더링.
-     * ViewResolver 는 지연 조회한다(Thymeleaf 가 없는 컨텍스트에서는 JSON 으로 돌아간다).
+     *   - /admin/api/** → 기존 403 JSON.
+     *   - 그 밖의 경로(화면) → Accept 헤더와 관계없이 admin/error 템플릿을 403 으로 렌더링.
+     *     htmx 요청이면 오류 토스트(HX-Trigger)도 함께 보낸다.
+     * ViewResolver 는 지연 조회한다(Thymeleaf 가 없거나 렌더링에 실패하면 JSON 으로 돌아간다).
      */
     @Bean
     public AccessDeniedHandler adminAccessDeniedHandler(
@@ -402,13 +402,9 @@ public class AdminSecurityConfig {
                     emailMasked, req.getMethod(), req.getRequestURI(), ex.getClass().getSimpleName());
             String uri = req.getRequestURI();
             boolean isApi = uri != null && uri.startsWith("/admin/api/");
-            String accept = req.getHeader("Accept");
-            boolean wantsJson = accept != null && accept.contains("application/json");
-            if (!isApi && !wantsJson) {
+            if (!isApi) {
                 if (Htmx.isHtmx(req)) {
-                    res.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     Toasts.error(res, FORBIDDEN_MESSAGE);
-                    return;
                 }
                 ViewResolver resolver = viewResolver.getIfAvailable();
                 if (resolver != null) {

@@ -48,6 +48,12 @@ class WebExceptionAdviceTest {
         @GetMapping("/admin/_/test/boom")
         String boom() { throw new IllegalStateException("boom"); }
 
+        @GetMapping("/admin/_/test/nonstandard")
+        String nonStandard() {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatusCode.valueOf(499), "client closed");
+        }
+
         @GetMapping("/admin/_/test/model")
         String model() { return "admin/error"; } // 아무 템플릿이나 — 모델만 본다
     }
@@ -77,6 +83,13 @@ class WebExceptionAdviceTest {
     void unexpectedErrorIs500Page() throws Exception {
         mvc.perform(get("/admin/_/test/boom").with(authentication(operator())))
             .andExpect(status().isInternalServerError())
+            .andExpect(view().name("admin/error"));
+    }
+
+    @Test
+    void nonStandardStatusCodeIsKept() throws Exception {
+        mvc.perform(get("/admin/_/test/nonstandard").with(authentication(operator())))
+            .andExpect(status().is(499))
             .andExpect(view().name("admin/error"));
     }
 
