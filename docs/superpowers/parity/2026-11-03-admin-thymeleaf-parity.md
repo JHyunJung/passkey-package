@@ -972,5 +972,6 @@ Thymeleaf 앱에서 확인한 흐름(콘솔 오류 없음 — 아래 결함 제�
 1. 팔레트 검색칸 미포커스 — `show()` 가 열린 뒤 입력칸에 focus(다음 틱 + rAF 재시도).
 2. Activity·audit-chain 첫 카드 위 여백 — 빈 `#activity-detail`·`#chain-warn` 이 flex gap 에 끼던 것을 `:empty { display: none }` 으로.
 3. MDS "동기화 설정" endpoint 줄바꿈 — `.kv dd` 의 overflow-wrap:anywhere 를 `kv__nowrap` 으로 해제.
-4. 퍼널 화살표·가로 스크롤 — 원본 TSX 와 마크업·CSS 가 소스 수준에서 동일해 원인을 소스로 특정하지 못함(변경 없음). 브라우저 재확인 필요.
+4. 퍼널 화살표·단계 높이 — 단계의 이탈 자리 `<span class="hint">` 가 보통 공백(접혀 높이 0)이라 TSX `&nbsp;`(16px)와 단계 높이가 달랐다(254 vs 270). NBSP 로 수정(후속 커밋).
+6. Activity 필터 카드 높이(80px vs 68px) — 적용된 필터 래퍼 `#activity-applied`(높이 0 빈 블록)가 카드 flex gap 을 차지. `display: contents` 로 수정(후속 커밋).
 5. audit-chain 콘솔 경고(hx-include 가 없는 `[name=view]` 를 가리킴) — 골격·불러오기 실패 요청에는 hx-include 를 붙이지 않음.

@@ -61,7 +61,7 @@
                   <span class="hint" style="margin: 0" th:text="${st.valueText}">100건 · 100%</span>
                 </div>
                 <div class="fn-track"><div class="fn-bar" th:classappend="${st.colorClass}" th:style="|height: ${st.heightPct}%|"></div></div>
-                <span class="hint" style="margin: 0" th:text="${st.dropText != null ? st.dropText : ' '}"> </span>
+                <span class="hint" style="margin: 0" th:text="${st.dropText != null ? st.dropText : ' '}">&nbsp;</span>
               </div>
             </th:block>
           </div>

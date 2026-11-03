@@ -160,5 +160,7 @@ class AppJsContractTest {
     void emptySlotsAreHidden() throws IOException {
         String css = Files.readString(Path.of("src/main/resources/static/admin/css/components.css"), StandardCharsets.UTF_8);
         assertThat(css).contains("#chain-warn:empty, #activity-detail:empty { display: none; }");
+        // 적용된 필터 래퍼는 상자를 만들지 않아(display: contents) 숨은 행이 있어도 필터 카드의 gap 을 차지하지 않는다.
+        assertThat(css).contains("#activity-applied { display: contents; }");
     }
 }

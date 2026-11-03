@@ -138,7 +138,9 @@ class FunnelTabControllerTest {
         assertThat(d.select(".kpi__label").first().text()).isEqualTo("전체 전환율 (등록 시도 → 인증 성공)");
         assertThat(d.select(".fn-between .tag").eachText()).containsExactly("80.0%", "87.5%", "90.0%");
         assertThat(d.select(".fn-step strong").eachText()).containsExactly("등록 시도", "등록 성공", "인증 시도", "인증 성공");
-        assertThat(d.select(".fn-step .hint").eachText()).containsExactly("100건 · 100%", "80건 · 80%", "이탈 20건", "70건 · 70%", "이탈 10건", "63건 · 63%", "이탈 7건");
+        assertThat(d.select(".fn-step .hint").eachText().stream().filter(t -> !t.isEmpty()).toList()).containsExactly("100건 · 100%", "80건 · 80%", "이탈 20건", "70건 · 70%", "이탈 10건", "63건 · 63%", "이탈 7건");
+        // 이탈 자리 표시는 NBSP(원본 &nbsp; → 16px 높이). 보통 공백이면 접혀서 단계 높이가 달라진다.
+        assertThat(d.select(".fn-step > .hint").get(0).wholeText()).isEqualTo("\u00a0");
     }
 
     @Test

@@ -525,3 +525,5 @@ a.menu__item { text-decoration: none; }
 #chain-warn:empty, #activity-detail:empty { display: none; }
 /* MDS 동기화 설정의 endpoint 값: 원본(MdsStatusTab.tsx)은 한 줄 — .kv dd 의 overflow-wrap:anywhere 를 풀어 준다. */
 .kv dd.kv__nowrap { overflow-wrap: normal; white-space: nowrap; }
+/* 적용된 필터 래퍼(OOB 교체 대상)는 상자를 만들지 않는다 — 안의 행이 숨겨져 있을 때 빈 블록이 카드의 flex gap 을 차지하지 않게. */
+#activity-applied { display: contents; }
