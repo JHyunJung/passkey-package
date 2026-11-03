@@ -11,6 +11,7 @@ import com.crosscert.passkey.admin.web.support.Toasts;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.api.PageView;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,8 +90,10 @@ public class CredentialsTabController {
     private final TenantAdminController tenants;
     private final CredentialAdminController credentials;
     private final Clock clock;
+    private final ObjectMapper json;
 
-    public CredentialsTabController(TenantAdminController tenants, CredentialAdminController credentials, Clock clock) {
+    public CredentialsTabController(TenantAdminController tenants, CredentialAdminController credentials, Clock clock, ObjectMapper json) {
+        this.json = json;
         this.tenants = tenants;
         this.credentials = credentials;
         this.clock = clock;
@@ -200,7 +204,8 @@ public class CredentialsTabController {
         model.addAttribute("attestation", c.attestationFormat());
         model.addAttribute("nav", f.window() == null ? null : nav(tid, cid, st, f));
         model.addAttribute("revokeGetAttrs", revokeConfirmAttrs(tid, cid, st));
-        model.addAttribute("retryAttrs", detailAttrs(tid, cid, st, false));
+        model.addAttribute("detailRetryAttrs", detailAttrs(tid, cid, st, false, false));
+        model.addAttribute("authName", c.authenticatorName());
         try {
             PageView<AuthEventView> ev = credentials.authEvents(tid, cid, 0, EVENTS_SIZE).data();
             List<Event> events = new ArrayList<>();
@@ -288,8 +293,7 @@ public class CredentialsTabController {
         for (CredentialView c : applyClientFilter(l.pv().content(), l.st())) {
             body.add(List.of(c.credentialId(), c.userHandle(), nz(c.label()), nz(c.authenticatorName()), ACTIVE, nz(c.aaguidHex()),
                     String.join("|", transports(c.transports()).stream().map(Transport::value).toList()), String.valueOf(c.signCount()),
-                    c.lastUsedAt() == null ? "" : c.lastUsedAt().toInstant().toString(),
-                    c.createdAt() == null ? "" : c.createdAt().toInstant().toString()));
+                    iso(c.lastUsedAt()), iso(c.createdAt())));
         }
         byte[] csv = CsvWriter.write(List.of("credentialId", "externalUserId", "label", "authenticatorName", "status", "aaguid", "transports",
                 "signatureCounter", "lastUsedAt", "createdAt"), body);
@@ -394,7 +398,7 @@ public class CredentialsTabController {
         model.addAttribute("pageBase", base);
         model.addAttribute("includeAll", "#cred-q, #cred-aaguid, #cred-status, #cred-size");
         model.addAttribute("includeForQ", "#cred-aaguid, #cred-status, " + inclSize);
-        model.addAttribute("includeForAaguid", "#cred-q, #cred-status, " + inclSize);
+        model.addAttribute("includeForAaguid", "#cred-q, #cred-status, #cred-page, " + inclSize);
         model.addAttribute("includeForSize", "#cred-q, #cred-aaguid, #cred-status");
         model.addAttribute("includeForStatus", "#cred-q, #cred-aaguid, " + inclSize);
         model.addAttribute("includeForAaguidChip", "#cred-q, #cred-status, " + inclSize);
@@ -406,12 +410,12 @@ public class CredentialsTabController {
             o.put("value", s);
             o.put("label", STATUS_LABELS.get(s));
             o.put("title", ALL.equals(s) ? null : s);
-            o.put("attrs", swap(base + "?status=" + s, "#cred-q, #cred-aaguid, " + inclSize));
+            o.put("attrs", swap(base + "?status=" + s, "#cred-q, #cred-aaguid, #cred-page, " + inclSize));
             options.add(o);
         }
         model.addAttribute("statusOptions", options);
-        model.addAttribute("chipAaguidAttrs", swap(base + "?reset=aaguid", "#cred-q, #cred-status, " + inclSize));
-        model.addAttribute("chipStatusAttrs", swap(base + "?status=ALL&reset=status", "#cred-q, #cred-aaguid, " + inclSize));
+        model.addAttribute("chipAaguidAttrs", swap(base + "?reset=aaguid", "#cred-q, #cred-status, #cred-page, " + inclSize));
+        model.addAttribute("chipStatusAttrs", swap(base + "?status=ALL&reset=status", "#cred-q, #cred-aaguid, #cred-page, " + inclSize));
         model.addAttribute("clearAttrs", swap(base + "?reset=all", inclSize));
         Map<String, Object> retry = swap(base + "?" + st.query(), null);
         model.addAttribute("retryAttrs", retry);
@@ -436,14 +440,14 @@ public class CredentialsTabController {
         String kind = cnt > 0 ? "value" : c.lastUsedAt() != null ? "na" : "zero";
         String lastUsed = c.lastUsedAt() == null ? "—" : KstFormat.timeAgo(c.lastUsedAt().toInstant(), clock.instant());
         return new Row(cid, tail8, c.userHandle(), c.label(), c.aaguidHex(), authenticatorLabel(c), named, transports(c.transports()), kind, cnt, lastUsed,
-                detailAttrs(tid, cid, st, false), revokeConfirmAttrs(tid, cid, st), "회수 · …" + tail8);
+                detailAttrs(tid, cid, st, false, true), revokeConfirmAttrs(tid, cid, st), "회수 · …" + tail8);
     }
 
     /** 행 클릭(cred-open 이벤트)이 상세 다이얼로그를 불러온다. */
-    private static Map<String, Object> detailAttrs(UUID tid, String cid, St st, boolean listToo) {
+    private static Map<String, Object> detailAttrs(UUID tid, String cid, St st, boolean listToo, boolean rowClick) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("hx-get", FRAG + tid + "/credentials/" + cid + "?" + st.query() + (listToo ? "&list=1" : ""));
-        m.put("hx-trigger", "cred-open");
+        if (rowClick) m.put("hx-trigger", "cred-open"); // 행만 이벤트로 연다. 버튼(이전/다음/다시 시도)은 기본 click.
         m.put("hx-target", "#cred-detail-slot");
         m.put("hx-swap", "innerHTML");
         m.put("hx-sync", "#cred-detail-slot:replace");
@@ -473,18 +477,18 @@ public class CredentialsTabController {
         Map<String, Object> prev = null;
         Map<String, Object> next = null;
         if (idx > 0) {
-            prev = detailAttrs(tid, visible.get(idx - 1).credentialId(), cur, false);
+            prev = detailAttrs(tid, visible.get(idx - 1).credentialId(), cur, false, false);
         } else if (!cf && cur.page() > 1) {
             St p = cur.withPage(cur.page() - 1);
             List<CredentialView> items = fetchQuiet(tid, p);
-            if (!items.isEmpty()) prev = detailAttrs(tid, items.get(items.size() - 1).credentialId(), p, true);
+            if (!items.isEmpty()) prev = detailAttrs(tid, items.get(items.size() - 1).credentialId(), p, true, false);
         }
         if (idx < visible.size() - 1) {
-            next = detailAttrs(tid, visible.get(idx + 1).credentialId(), cur, false);
+            next = detailAttrs(tid, visible.get(idx + 1).credentialId(), cur, false, false);
         } else if (!cf && cur.page() < lastPage) {
             St p = cur.withPage(cur.page() + 1);
             List<CredentialView> items = fetchQuiet(tid, p);
-            if (!items.isEmpty()) next = detailAttrs(tid, items.get(0).credentialId(), p, true);
+            if (!items.isEmpty()) next = detailAttrs(tid, items.get(0).credentialId(), p, true, false);
         }
         return new Nav(pos, prev, next);
     }
@@ -550,6 +554,16 @@ public class CredentialsTabController {
             return Integer.parseInt(v.trim());
         } catch (RuntimeException e) {
             return def;
+        }
+    }
+
+    /** 원본 CSV 는 서버 JSON 의 문자열을 그대로 쓴다 — 같은 ObjectMapper 직렬화 형태. */
+    private String iso(OffsetDateTime t) {
+        if (t == null) return "";
+        try {
+            return json.convertValue(t, String.class);
+        } catch (RuntimeException e) {
+            return t.toString();
         }
     }
 

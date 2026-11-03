@@ -683,4 +683,62 @@ class CredentialsTabControllerTest {
         assertThat(t.has("confirmError")).isTrue();
         assertThat(t.has("toast")).isFalse();
     }
+
+    @Test
+    @DisplayName("fix1: 상세 이전/다음·인증 기록 다시 시도 버튼은 cred-open 이 아니라 click(기본)으로 발동 — 렌더된 hx-trigger")
+    void detailButtonsFireOnClick() throws Exception {
+        Document mid = doc(hget(BASE + "/credentials/" + CB + "?page=1&size=50", platform()));
+        for (String label : List.of("이전 credential", "다음 credential")) {
+            Element b = mid.selectFirst("button[aria-label=" + label + "]");
+            assertThat(b.attr("hx-trigger")).as(label).isIn("click", "");
+            assertThat(b.attr("hx-trigger")).doesNotContain("cred-open");
+        }
+        when(credentials.authEvents(eq(T1), eq(CA), eq(0), eq(20))).thenThrow(new IllegalStateException("x"));
+        Document d = doc(hget(BASE + "/credentials/" + CA + "?page=1&size=50&list=1", platform()));
+        Element retry = d.select("[role=alert] button").stream().filter(e -> e.text().equals("다시 시도")).findFirst().orElseThrow();
+        assertThat(retry.attr("hx-trigger")).doesNotContain("cred-open");
+        assertThat(retry.attr("hx-target")).isEqualTo("#cred-detail-slot"); // list=1 이어도 목록 재시도로 덮이지 않는다
+        // 행만 cred-open
+        assertThat(rowOf(tab(""), "user-a").attr("hx-trigger")).isEqualTo("cred-open");
+    }
+
+    @Test
+    @DisplayName("fix3: 필터(aaguid 입력·상태 세그먼트·칩 제거)는 현재 페이지(#cred-page)를 싣고, 검색·페이지 크기는 싣지 않는다(1페이지로)")
+    void filterRequestsKeepCurrentPage() throws Exception {
+        when(credentials.list(eq(T1), eq(1), eq(50), isNull())).thenReturn(ApiResponse.ok(new PageView<>(List.of(cred(CB, "p2", null, AAGUID_B, null, null, 1, null)), 1, 50, 120, true)));
+        Document d = doc(hget(BASE + "/tab/credentials/list?page=2&status=ACTIVE&aaguid=0000", platform()));
+        assertThat(d.select("#cred-page").val()).isEqualTo("2");
+        assertThat(d.selectFirst("#cred-aaguid")).isNull(); // 패널은 OOB 아님 — 탭 렌더에서 확인
+        Document t = doc(hget(BASE + "/tab/credentials?page=2&status=ACTIVE&aaguid=0000", platform()));
+        assertThat(t.selectFirst("#cred-aaguid").attr("hx-include")).contains("#cred-page");
+        for (Element seg : t.select("#cred-filterpanel .seg__btn")) assertThat(seg.attr("hx-include")).contains("#cred-page");
+        for (Element x : t.select("#cred-controls .chip__x")) assertThat(x.attr("hx-include")).contains("#cred-page");
+        assertThat(t.selectFirst("#cred-q").attr("hx-include")).doesNotContain("#cred-page");
+        assertThat(t.selectFirst(".pager select").attr("hx-include")).doesNotContain("#cred-page");
+        // 서버: 칩 제거 요청이 page=2 를 받으면 그 페이지를 읽는다
+        hget(BASE + "/tab/credentials/list?reset=aaguid&page=2&status=ACTIVE", platform());
+        verify(credentials, org.mockito.Mockito.atLeastOnce()).list(eq(T1), eq(1), eq(50), isNull());
+    }
+
+    @Test
+    @DisplayName("fix4: CSV 시각은 서버 JSON 과 같은 ISO 문자열(초 포함)")
+    void csvTimestampsMatchJson() throws Exception {
+        OffsetDateTime t = OffsetDateTime.parse("2026-10-10T23:45:00Z");
+        stubList(List.of(new CredentialView(CA, "user-a", null, null, null, "packed", "usb", 1, t, t)));
+        String csv = mvc.perform(htmx(get(URI.create(BASE + "/credentials.csv")), platform())).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        String expected = JSON.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).convertValue(t, String.class);
+        assertThat(expected).isEqualTo("2026-10-10T23:45:00Z");
+        assertThat(csv).contains(",2026-10-10T23:45:00Z,2026-10-10T23:45:00Z");
+    }
+
+    @Test
+    @DisplayName("fix5: 상세는 ?? '—' 의미 — null 만 —/unknown, 빈 문자열은 그대로")
+    void detailNullishSemantics() throws Exception {
+        stubList(List.of(new CredentialView(CA, "user-a", "", AAGUID_A, "", "", "usb", 1, null, at(-1))));
+        Document d = doc(hget(BASE + "/credentials/" + CA + "?page=1&size=50", platform()));
+        assertThat(d.select("dl").get(0).select("dd").get(1).text()).isEmpty();       // 별칭 ""
+        assertThat(d.select("dl").get(1).select("dd").get(0).text()).isEmpty();       // authenticatorName ""
+        assertThat(d.select("dl").get(1).select("dd").get(4).text()).isEmpty();       // attestation ""
+    }
 }
