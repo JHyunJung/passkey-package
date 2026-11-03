@@ -33,6 +33,11 @@ public final class Toasts {
         write(res, "error", message, null, null);
     }
 
+    /** {@link #error(HttpServletResponse, String, String, String)} 에서 traceId 없이. */
+    public static void error(HttpServletResponse res, String message, String detail) {
+        error(res, message, detail, null);
+    }
+
     /**
      * 오류 토스트. {@code detail}(예: {@code HTTP 409 · [CODE] 서버 메시지})과 {@code traceId} 는
      * 토스트의 접힌 "자세히" 안에만 보인다(errorToast.ts). 본문 {@code message} 에는 쉬운 문구만 둔다.

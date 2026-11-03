@@ -42,6 +42,15 @@ class ToastsTest {
     }
 
     @Test
+    void threeArgErrorHasDetailAndNoTraceId() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        Toasts.error(res, "실패", "HTTP 500");
+        JsonNode toast = new ObjectMapper().readTree(res.getHeader("HX-Trigger")).get("toast");
+        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 500");
+        assertThat(toast.has("traceId")).isFalse();
+    }
+
+    @Test
     void htmxRedirectVsPlainRedirect() throws Exception {
         MockHttpServletRequest htmx = new MockHttpServletRequest();
         htmx.addHeader("HX-Request", "true");

@@ -273,7 +273,9 @@ class UiFragmentsRenderTest {
         assertThat(tag(html, "type=\"hidden\"")).contains("name=\"range\"", "value=\"7d\"", "x-bind:value=\"value\"");
         assertThat(tag(html, "data-value=\"7d\"")).contains("aria-pressed=\"true\"", "class=\"seg__btn seg__btn--on\"");
         assertThat(count(html, "aria-pressed=\"false\"")).isEqualTo(1);
-        assertThat(html).contains("hx-get=\"/a\"").contains("x-on:click=\"select($el.dataset.value)\"").contains("x-bind:aria-pressed=\"value === $el.dataset.value\"");
+        assertThat(html).contains("hx-get=\"/a\"").contains("x-on:click=\"select($el.dataset.value)\"").contains("x-bind:aria-pressed=\"value === $el.dataset.value\"")
+                // 객체 바인딩이어야 클라이언트 선택 시 서버가 그린 seg__btn--on 도 제거된다(문자열 바인딩은 기존 클래스를 남긴다)
+                .contains("x-bind:class=\"{ 'seg__btn--on': value === $el.dataset.value }\"").doesNotContain("? 'seg__btn seg__btn--on'");
         assertThat(ui("segmented", "segmented(null, ${opts}, '7d', '기간')", m("opts", opts))).doesNotContain("type=\"hidden\"");
     }
 

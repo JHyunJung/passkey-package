@@ -183,9 +183,10 @@ document.addEventListener('alpine:init', () => {
     error: null,
     disabled: !!cfg.disabled,
     validating: false,
+    gen: 0, // 되돌리기마다 올려, 이미 보낸 검증 응답이 늦게 와도 버려진 초안을 추가하지 못하게 한다
     init() {
       const initial = Array.isArray(cfg.values) ? [...cfg.values] : [];
-      onFormReset(this.$root, () => { this.values = [...initial]; this.draft = ''; this.error = null; });
+      onFormReset(this.$root, () => { this.gen += 1; this.validating = false; this.values = [...initial]; this.draft = ''; this.error = null; });
     },
     async onEnter() {
       if (this.disabled || this.validating) return;
@@ -196,17 +197,21 @@ document.addEventListener('alpine:init', () => {
       else if (cfg.validateUrl) {
         // 검증을 못 하면 통과로 보지 않는다: 초안을 남기고 재시도 가능한 오류만 보인다.
         this.validating = true;
+        const gen = this.gen;
         try {
           const q = new URLSearchParams({ value: raw });
           this.values.forEach((v) => q.append('existing', v));
           const res = await fetch(cfg.validateUrl + (cfg.validateUrl.includes('?') ? '&' : '?') + q, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin' });
+          if (gen !== this.gen) return;
           if (!res.ok) { this.error = '검증하지 못했습니다. 잠시 후 다시 시도하세요.'; return; }
-          err = (await res.text()).trim() || null;
+          const text = (await res.text()).trim();
+          if (gen !== this.gen) return;
+          err = text || null;
         } catch (e) {
-          this.error = '검증하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요.';
+          if (gen === this.gen) this.error = '검증하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요.';
           return;
         } finally {
-          this.validating = false;
+          if (gen === this.gen) this.validating = false;
         }
       }
       if (err) { this.error = err; return; }
@@ -310,6 +315,7 @@ document.addEventListener('alpine:init', () => {
     saveLabel: cfg.saveLabel || '저장',
     saving: false,
     disarmed: false,
+    submitted: null,
     beforeUnload: null,
     disarm: null,
     init() {
@@ -324,11 +330,17 @@ document.addEventListener('alpine:init', () => {
       f.addEventListener('segmented-change', () => this.$nextTick(() => this.recount()));
       f.addEventListener('reset', () => this.$nextTick(() => this.recount()));
       // htmx 제출: 저장 중에만 막고, 실패하면 다시 켜서 재시도·경고가 가능하게 한다. 기준선은 성공이 확인된 뒤에만 갱신.
-      f.addEventListener('htmx:before-request', (e) => { if (e.target === f) this.saving = true; });
+      // 기준선은 제출 시점의 값으로 잡는다: 저장 중에 더 고친 값은 성공 뒤에도 변경으로 남는다.
+      f.addEventListener('htmx:before-request', (e) => {
+        if (!f.contains(e.target)) return;
+        this.saving = true;
+        this.submitted = formSnapshot(f);
+      });
       f.addEventListener('htmx:after-request', (e) => {
-        if (e.target !== f) return;
+        if (!f.contains(e.target)) return;
         this.saving = false;
-        if (e.detail && e.detail.successful) { this.base = formSnapshot(f); this.recount(); }
+        if (e.detail && e.detail.successful && this.submitted) { this.base = this.submitted; this.recount(); }
+        this.submitted = null;
       });
       // 일반(비 htmx) 제출은 페이지 이동이므로 경고를 끈다.
       f.addEventListener('submit', () => { if (!f.hasAttribute('hx-post') && !f.hasAttribute('hx-put') && !f.hasAttribute('hx-patch') && !f.hasAttribute('hx-delete')) this.disarmed = true; });
