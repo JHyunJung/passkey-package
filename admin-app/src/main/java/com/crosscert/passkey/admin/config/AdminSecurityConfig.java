@@ -117,8 +117,8 @@ public class AdminSecurityConfig {
                                  "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
                                  "/admin/_/**", "/admin/login/mfa").authenticated()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                // /admin/api/profile 은 active profile 만 노출. Login.tsx 가 미인증 상태에서
-                // local 여부를 알아 테스트 계정 prefill 을 결정하는 데 쓴다.
+                // /admin/api/profile 은 active profile 만 노출. (React 시절 로그인 화면) 이 미인증 상태에서
+                // local 여부를 알아 데모 계정 표시를 결정하는 데 쓰던 경로다. 지금 로그인 화면은 서버가 직접 판단한다.
                 // /admin/api/license 는 DEAD 상태에서도 운영자가 라이선스 진단에 접근할 수 있어야 한다.
                 .requestMatchers("/admin/api/profile", "/admin/api/license").permitAll()
                 // 가입 요청(POST)만 미인증 허용 — 요청자는 아직 계정이 없다.
@@ -159,8 +159,8 @@ public class AdminSecurityConfig {
                 .maximumSessions(5))    // 5 parallel browsers per operator
             // Return 401 JSON for unauthenticated API requests instead of
             // redirecting to the login page (default Spring behavior with
-            // form login). The SPA checks /api/me on startup and expects
-            // a 401 to know it must navigate to the login page.
+            // form login). API (XHR/fetch) clients expect a 401 to know
+            // they must navigate to the login page; screen requests are redirected (see the entry point).
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(spaEntryPoint())
                 .accessDeniedHandler(accessDenied))
@@ -192,7 +192,7 @@ public class AdminSecurityConfig {
     }
 
     /**
-     * XSRF-TOKEN 쿠키 저장소. {@code withHttpOnlyFalse()} 로 SPA 가
+     * XSRF-TOKEN 쿠키 저장소. {@code withHttpOnlyFalse()} 로 화면의 JS(htmx·fetch)가
      * {@code document.cookie} 로 읽어 {@code X-XSRF-TOKEN} 헤더로 echo 하게 하고,
      * {@code Path=/admin} 으로 쿠키를 스코프한다.
      *
@@ -218,8 +218,8 @@ public class AdminSecurityConfig {
 
     /**
      * 미인증 요청 처리:
-     *   - /admin/api/** (XHR/fetch) → 401 JSON. SPA 가 이 401 을 받아 로그인 화면으로
-     *     navigate 한다(클라이언트 측 처리).
+     *   - /admin/api/** (XHR/fetch) → 401 JSON. 클라이언트(JS)가 이 401 을 받아 로그인 화면으로
+     *     이동한다(클라이언트 측 처리).
      *   - htmx 요청 → 401 + {@code HX-Redirect: /admin/login}. htmx 가 전체 페이지를 로그인 화면으로 옮긴다.
      *   - 그 외(화면 직접 접근) → /admin/login 으로 302 리다이렉트.
      *     페이지 요청에 401 JSON 을 주면 빈 화면이 되므로 리다이렉트가 맞다.
@@ -261,7 +261,7 @@ public class AdminSecurityConfig {
 
     /**
      * 로그인 요청이 Thymeleaf 화면에서 왔는지. htmx 요청이거나 CSRF 토큰이 {@code _csrf}
-     * <b>파라미터</b>로 온 경우(th:action 폼)다. SPA·기존 통합 테스트는 form-urlencoded 본문에
+     * <b>파라미터</b>로 온 경우(th:action 폼)다. JSON API 클라이언트·기존 통합 테스트는 form-urlencoded 본문에
      * {@code X-XSRF-TOKEN} 헤더를 붙여 보내고 JSON 응답을 기대하므로 이 기준으로 나눈다.
      */
     static boolean isPageLogin(HttpServletRequest req) {
