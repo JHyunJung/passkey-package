@@ -832,4 +832,44 @@ class AuditChainPageControllerTest {
     void pdfLinkOptsIntoTimeout() throws Exception {
         assertThat(overviewDoc().selectFirst("a[data-csv-download]").attr("data-download-timeout")).isEqualTo("120000");
     }
+
+    // ── Fix round 2 ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("incidentsKnown 상태 전달은 OOB 싱크(#chain-known-sink)로 — refresh 성공·실패, 인라인 알림, 변경 후 경고 응답 모두, 루트에는 싱크 자리가 있다")
+    void knownStateCarrierIsOob() throws Exception {
+        assertThat(overviewDoc().select("#chain-root #chain-known-sink")).hasSize(1);
+        // refresh 성공 / 실패 (swap none 이라 OOB 가 아닌 요소는 버려진다)
+        Element ok = doc(getFrag(INCIDENTS, platform())).selectFirst("#chain-known-sink[hx-swap-oob]");
+        assertThat(ok.attr("x-init")).isEqualTo("$dispatch('incidents-known', true)");
+        when(chain.listIncidents()).thenThrow(new RuntimeException("x"));
+        Element bad = doc(getFrag(INCIDENTS, platform())).selectFirst("#chain-known-sink[hx-swap-oob]");
+        assertThat(bad.attr("x-init")).isEqualTo("$dispatch('incidents-known', false)");
+        // 인라인 알림(422)
+        reset(chain);
+        when(chain.createIncident(any(), any())).thenThrow(new IncidentNotTamperedException("n"));
+        when(chain.listIncidents()).thenThrow(new RuntimeException("x"));
+        assertThat(doc(postFrag(INCIDENTS + "?tenantId=" + T2, platform())).selectFirst("#chain-known-sink[hx-swap-oob]").attr("x-init")).contains("false");
+        reset(chain);
+        when(chain.createIncident(any(), any())).thenThrow(new IncidentNotTamperedException("n"));
+        when(chain.listIncidents()).thenReturn(List.of());
+        assertThat(doc(postFrag(INCIDENTS + "?tenantId=" + T2, platform())).selectFirst("#chain-known-sink[hx-swap-oob]").attr("x-init")).contains("true");
+        // 변경 성공 뒤 재검증 실패
+        reset(chain);
+        when(chain.createIncident(any(), any())).thenReturn(inc(INC1, T2, "Globex", "OPEN"));
+        when(chain.listIncidents()).thenReturn(List.of());
+        when(chain.overview(anyInt())).thenThrow(new RuntimeException("down"));
+        assertThat(doc(postFrag(INCIDENTS + "?tenantId=" + T2, platform())).selectFirst("#chain-known-sink[hx-swap-oob]").attr("x-init")).contains("true");
+        // 어느 응답에도 OOB 가 아닌 incidents-known 디스패치는 없다
+        assertThat(doc(getFrag(INCIDENTS, platform())).select("[x-init*=incidents-known]:not([hx-swap-oob])")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("생성 다이얼로그를 닫으면 포커스가 떨어져 나간 버튼 대신 그 tenant 의 새 버튼으로 돌아간다(data-tid 조회)")
+    void createDialogRestoresFocusToReplacedButton() throws Exception {
+        when(chain.overview(anyInt())).thenReturn(tampered());
+        Element wrap = overviewDoc().selectFirst("#chain-dialogs > div[hx-post]");
+        assertThat(wrap.attr("data-tid")).isEqualTo(T2.toString());
+        assertThat(wrap.attr("x-on:dialog:close.window")).contains("#chain-act-", "dataset.tid", ".focus()");
+    }
 }

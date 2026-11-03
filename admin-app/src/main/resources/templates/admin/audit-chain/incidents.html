@@ -35,8 +35,9 @@
 
 <div th:fragment="dialogs" id="chain-dialogs">
   <!-- Incident 생성: 위변조 tenant 마다. 서버가 재검증해 위변조 entry 를 기록한다 — 요청에는 tenantId 만 싣는다. -->
-  <div th:each="t : ${tamperedRows}" th:if="${t.createId != null}" ui:attrs="${t.createAttrs}" hx-trigger="ic-submit" th:attr="data-dlg=${t.createId}"
+  <div th:each="t : ${tamperedRows}" th:if="${t.createId != null}" ui:attrs="${t.createAttrs}" hx-trigger="ic-submit" th:attr="data-dlg=${t.createId}, data-tid=${t.tenantId}"
        x-data="{ reqBusy: false }"
+       x-on:dialog:close.window="if ($event.detail.id === $el.dataset.dlg) $nextTick(() => $nextTick(() => { if (!document.activeElement || document.activeElement === document.body) { const b = document.querySelector('#chain-act-' + $el.dataset.tid + ' button'); if (b) b.focus(); } }))"
        x-on:htmx:before-request="if ($event.detail.elt === $el) reqBusy = true"
        x-on:htmx:after-request="if ($event.detail.elt === $el) { reqBusy = false; if ($event.detail.successful) $dispatch('dialog:close', { id: $el.dataset.dlg }); }">
     <th:block th:replace="~{admin/fragments/ui/dialog :: dialog(${t.createId}, 'Incident 생성', ${t.name}, ~{:: icBody}, ~{:: icFooter}, null, null, null)}"></th:block>
@@ -69,8 +70,9 @@
 <th:block th:fragment="oobParts">
   <th:block th:replace="~{:: card(true)}"></th:block>
   <th:block th:each="a : ${actionsOob}"><th:block th:replace="~{:: action(${a}, true)}"></th:block></th:block>
-  <span th:if="${incidentsKnown}" hidden x-init="$dispatch('incidents-known', true)"></span>
-  <span th:unless="${incidentsKnown}" hidden x-init="$dispatch('incidents-known', false)"></span>
+  <!-- 상태 전달은 OOB 싱크로: swap none 응답에서도 OOB 요소는 처리되고, 교체로 들어온 요소의 x-init 이 root 에 알린다. -->
+  <span id="chain-known-sink" th:if="${incidentsKnown}" hidden hx-swap-oob="true" x-init="$dispatch('incidents-known', true)"></span>
+  <span id="chain-known-sink" th:unless="${incidentsKnown}" hidden hx-swap-oob="true" x-init="$dispatch('incidents-known', false)"></span>
 </th:block>
 
 <!-- issue: 인라인 알림. gone 이면 root 에 "없는 incident" 를 알려 해결 버튼을 막는다. -->

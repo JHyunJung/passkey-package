@@ -66,6 +66,7 @@
   <th:block th:replace="~{:: header(~{:: headerActions})}"></th:block>
 
   <div id="chain-warn"></div>
+  <span id="chain-known-sink" hidden></span>
 
   <section class="card" aria-label="전체 상태" style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 20px 24px">
     <span aria-hidden="true" class="chain-ico" th:classappend="${tampered} ? 'chain-ico--bad' : 'chain-ico--ok'" style="width: 48px; height: 48px; border-radius: 12px">
