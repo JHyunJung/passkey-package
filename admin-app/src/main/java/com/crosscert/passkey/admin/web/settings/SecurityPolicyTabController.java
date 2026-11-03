@@ -41,6 +41,7 @@ import java.util.Map;
  *   <li>저장: {@code SecurityPolicyController.update}. 성공하면 탭을 새 값으로 다시 그리고 {@code saved} + 성공 토스트("보안 정책 저장됨").
  *       REST 거절·실패는 저장 바 경로면 오류 토스트("보안 정책을 저장하지 못했습니다" + "…입력한 내용은 그대로 있습니다."), 확인 다이얼로그 경로면 다이얼로그 안 인라인.</li>
  * </ol>
+ * 저장 바의 취소는 폼 reset 이 아니라 {@code GET …/tab/security?revert=1} 로 서버 값을 다시 읽어 탭을 바꾼다(원본 handleCancel).
  * 허용 목록의 origin 검증은 칩 추가 때 {@code GET …/security/origin-check} 가 {@link PolicyValidation#validateOrigin} 으로 한다.
  */
 @Slf4j
@@ -70,7 +71,7 @@ public class SecurityPolicyTabController {
     // ── 화면 ────────────────────────────────────────────────
 
     @GetMapping(TAB_PATH)
-    public String tab(HttpServletRequest req, Model model) {
+    public String tab(@RequestParam(name = "revert", defaultValue = "") String revert, HttpServletRequest req, HttpServletResponse res, Model model) {
         SettingsSupport.platform(model);
         model.addAttribute("retryAttrs", SettingsPageController.tabRequesterAttrs(TAB_PATH));
         SecurityPolicyDto.View v;
@@ -79,6 +80,8 @@ public class SecurityPolicyTabController {
         } catch (AccessDeniedException e) {
             throw e;
         } catch (RuntimeException e) {
+            // 저장 바의 취소(원본 handleCancel): 다시 읽기에 실패하면 화면·입력을 그대로 두고 오류만 알린다(스왑 없는 오류 상태 + 토스트).
+            if ("1".equals(revert)) return SettingsSupport.fail(res, "되돌리지 못했습니다", e, false);
             // 로드 실패를 기본값(30분·MFA 켜짐)처럼 보이지 않게: 입력칸·저장 없이 LoadError.
             log.warn("[settings] security policy load failed: {}", e.getClass().getSimpleName());
             model.addAttribute("loadError", e);
@@ -201,6 +204,7 @@ public class SecurityPolicyTabController {
         model.addAttribute("loadError", null);
         model.addAttribute("sp", new Form(String.valueOf(v.sessionIdleTimeoutMinutes()), v.mfaRequired(), v.corsAllowlist(), console, saved));
         model.addAttribute("savePath", SAVE_PATH);
+        model.addAttribute("revertUrl", TAB_PATH + "?revert=1");
         model.addAttribute("originCheckUrl", ORIGIN_CHECK_PATH);
     }
 

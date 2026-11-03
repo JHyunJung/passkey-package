@@ -41,6 +41,7 @@ public class MdsTabController {
     static final String TAB_PATH = "/admin/_/settings/tab/mds";
     static final String SYNC_PATH = "/admin/_/settings/mds/sync";
     static final String VIEW = "admin/settings/mds :: tab";
+    static final String WARN_VIEW = "admin/settings/mds :: reloadWarning";
     /** 원본 MDS_HISTORY_STRIP_LIMIT, TABLE_ROWS. */
     static final int HISTORY_LIMIT = 30;
     static final int TABLE_ROWS = 6;
@@ -72,7 +73,7 @@ public class MdsTabController {
     @GetMapping(TAB_PATH)
     public String tab(Model model) {
         SettingsSupport.platform(model);
-        load(model);
+        load(model, false);
         return VIEW;
     }
 
@@ -93,13 +94,17 @@ public class MdsTabController {
             // 서버 원문(r.error())은 화면에 싣지 않는다.
             Toasts.errorTitled(res, "MDS 갱신 실패", "갱신하지 못했습니다. 잠시 후 다시 시도하세요.", null, null);
         }
-        load(model);
-        return VIEW;
+        // 갱신은 성공했다. 다시 읽기(상태·이력 모두)에 실패하면 화면은 그대로 두고 경고만 보인다(원본: 이전 상태·이력을 유지 + 다시 시도).
+        if (load(model, true)) return VIEW;
+        res.setHeader("HX-Reswap", "none");
+        model.addAttribute("reloadError", model.getAttribute("loadError") != null ? model.getAttribute("loadError") : model.getAttribute("historyError"));
+        return WARN_VIEW;
     }
 
     // ── 읽기 ────────────────────────────────────────────────
 
-    private void load(Model model) {
+    /** strict 면 이력 조회 실패도 실패로 본다(false). 아니면 상태만 못 읽을 때 false. */
+    private boolean load(Model model, boolean strict) {
         model.addAttribute("retryAttrs", SettingsPageController.tabRequesterAttrs(TAB_PATH));
         model.addAttribute("syncAttrs", syncAttrs());
         model.addAttribute("loadError", null);
@@ -113,7 +118,7 @@ public class MdsTabController {
         } catch (RuntimeException e) {
             log.warn("[settings] mds status load failed: {}", e.getClass().getSimpleName());
             model.addAttribute("loadError", e);
-            return;
+            return false;
         }
         List<MdsHistoryView> history = null;
         try {
@@ -125,6 +130,7 @@ public class MdsTabController {
             model.addAttribute("historyError", e);
         }
         model.addAttribute("v", view(status, history, Instant.now(clock)));
+        return history != null || !strict;
     }
 
     static Map<String, Object> syncAttrs() {

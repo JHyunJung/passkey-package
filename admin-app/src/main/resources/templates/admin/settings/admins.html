@@ -19,7 +19,10 @@
 </div>
 
 <!-- ── 가입 요청 ── -->
-<section th:fragment="signups" id="au-signups" class="card" aria-label="가입 요청" th:styleappend="${pending != null and !pending.isEmpty()} ? 'border-color: var(--warn-line)'">
+<section th:fragment="signups" id="au-signups" class="card" aria-label="가입 요청" th:styleappend="${pending != null and !pending.isEmpty()} ? 'border-color: var(--warn-line)'"
+         th:attr="hx-swap-oob=${oobSignups == true} ? 'true' : null">
+  <!-- 변경 뒤 다시 읽기에 실패했을 때의 경고 자리(화면은 그대로 두고 여기만 OOB 로 채운다) -->
+  <div id="au-signups-warn"></div>
   <!-- 목록을 못 읽음: '없음'이 아니라 실패(대기 —) -->
   <th:block th:if="${pending == null}">
     <div class="card__head">
@@ -73,7 +76,9 @@
 </section>
 
 <!-- ── 콘솔 운영자 ── -->
-<section th:fragment="users" id="au-users" class="card" ui:xdata="${@fmt.xdata('operatorFilter')}" x-on:segmented-change="filter = $event.detail.value">
+<section th:fragment="users" id="au-users" class="card" ui:xdata="${@fmt.xdata('operatorFilter')}" x-on:segmented-change="filter = $event.detail.value"
+         x-on:au-undo-suspend.window="onUndo($event)" th:attr="hx-swap-oob=${oobUsers == true} ? 'true' : null">
+  <div id="au-users-warn"></div>
   <div class="card__head">
     <div class="col" style="gap: 2px">
       <h2 class="card__title">콘솔 운영자</h2>
@@ -192,7 +197,7 @@
           </div>
           <form id="au-approve-form" class="stack-4" novalidate autocomplete="off"
                 th:hx-post="${approveUrl}" hx-target="#au-content" hx-swap="outerHTML" hx-sync="this:drop"
-                x-on:submit="onSubmit($event)" x-on:htmx:before-request="onBefore($event)" x-on:htmx:after-request="onAfter($event)">
+                x-on:htmx:before-request="onBefore($event)" x-on:htmx:after-request="onAfter($event)">
             <input type="hidden" name="role" x-bind:value="role" value="RP_ADMIN">
             <div>
               <span class="label" id="au-role-label">역할</span>
@@ -213,7 +218,7 @@
               <div role="group" aria-label="할당 Tenant" class="au-tenants" x-bind:class="{ 'au-tenants--bad': showErr }">
                 <p th:if="${tenantOpts.isEmpty()}" class="hint" style="margin: 0; padding: 10px 14px">활성 tenant 없음</p>
                 <label th:each="t : ${tenantOpts}" class="row au-tenant" data-tenant th:data-q="${t.q}" x-show="matches($el.dataset.q)">
-                  <input type="checkbox" name="tenantId" th:value="${t.id}" x-model="tenantIds" x-on:change="touched = true">
+                  <input type="checkbox" name="tenantId" th:value="${t.id}" x-model="tenantIds" x-on:change="touched = true; clearErr()">
                   <span class="truncate" th:text="${t.name}">이름</span>
                   <span class="spacer"></span>
                   <span class="mono hint" style="margin: 0" th:text="${t.slug}">slug</span>
@@ -248,6 +253,35 @@
   <div id="au-dialog-slot" hx-swap-oob="true"></div>
   <th:block th:replace="~{admin/settings/admins :: countOob}"></th:block>
 </th:block>
+
+<!--
+  변경은 성공했지만 다시 읽기에 실패했을 때(HX-Reswap none): 본 대상은 스왑하지 않는다. 읽은 카드는 OOB 로 새로(oobSignups/oobUsers),
+  못 읽은 카드는 경고 자리(signupsWarn/usersWarn)만 채운다. clearSlot 이면 승인 대화상자 자리를 비운다(승인은 성공했다).
+-->
+<th:block th:fragment="partialResponse">
+  <th:block th:if="${oobSignups == true}"><th:block th:replace="~{admin/settings/admins :: signups}"></th:block></th:block>
+  <th:block th:if="${oobUsers == true}"><th:block th:replace="~{admin/settings/admins :: users}"></th:block></th:block>
+  <div th:if="${signupsWarn != null}" id="au-signups-warn" hx-swap-oob="true">
+    <th:block th:replace="~{admin/settings/admins :: staleWarning(${signupsWarn}, '가입 요청')}"></th:block>
+  </div>
+  <div th:if="${usersWarn != null}" id="au-users-warn" hx-swap-oob="true">
+    <th:block th:replace="~{admin/settings/admins :: staleWarning(${usersWarn}, '운영자 목록')}"></th:block>
+  </div>
+  <div th:if="${clearSlot == true}" id="au-dialog-slot" hx-swap-oob="true"></div>
+  <th:block th:replace="~{admin/settings/admins :: countOob}"></th:block>
+</th:block>
+
+<!-- 같은 화면에서 다시 읽기가 실패했을 때(원본 StaleWarning) — 데이터는 그대로 두고 마지막 확인 결과임을 알린다. 다시 시도 = 탭 다시 받기 -->
+<div th:fragment="staleWarning(err, what)" class="stack-3" style="padding: 10px 20px">
+  <div class="banner banner--warning banner--top" role="status">
+    <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+    <div class="banner__body">
+      <div class="banner__title">다시 확인하지 못했습니다</div>
+      <div th:text="${@fmt.errorInfo(err).title + '. 아래는 마지막으로 읽은 ' + what + '입니다. 목록을 새로 고치기 전에는 처리할 수 없습니다.'}">오류</div>
+    </div>
+  </div>
+  <div><button type="button" class="btn" ui:attrs="${retryAttrs}">다시 시도</button></div>
+</div>
 
 <!-- 탭 줄의 가입 요청 수(settings 탭 줄 #settings-tab-admins-count). 목록을 읽지 못했으면 건드리지 않는다. -->
 <span th:fragment="countOob" th:if="${pendingCount != null}" id="settings-tab-admins-count" class="tabs__countslot" hx-swap-oob="true">

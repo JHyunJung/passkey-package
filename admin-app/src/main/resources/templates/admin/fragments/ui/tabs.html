@@ -23,11 +23,7 @@
     <span class="badge badge--warning tabs__badge" th:unless="${t['elId']}" th:if="${t['badgeText']}" th:title="${t['badgeReason']}" th:text="${t['badgeText']}">확인 필요</span>
     <!-- 개수 자리(id=<elId>-count): 승인·거절 같은 화면 동작이 OOB 로 이 안쪽을 새로 바꾼다 -->
     <span th:if="${t['elId']}" th:id="${t['elId'] + '-count'}" class="tabs__countslot">
-      <!-- 개수 자리(id=<elId>-count): 승인·거절 같은 화면 동작이 OOB 로 이 안쪽을 새로 바꾼다 -->
-    <span th:if="${t['elId']}" th:id="${t['elId'] + '-count'}" class="tabs__countslot">
       <span class="tabs__count" th:if="${t['count'] != null and t['count'] > 0}" th:text="${t['count']}">0</span>
-    </span>
-    <span class="tabs__count" th:unless="${t['elId']}" th:if="${t['count'] != null and t['count'] > 0}" th:text="${t['count']}">0</span>
     </span>
     <span class="tabs__count" th:unless="${t['elId']}" th:if="${t['count'] != null and t['count'] > 0}" th:text="${t['count']}">0</span>
   </a>

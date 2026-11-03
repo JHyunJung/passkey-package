@@ -18,7 +18,9 @@
           data-savebar-unordered="corsAllowlist"
           th:hx-put="${savePath}" hx-target="#sec-confirm-slot" hx-swap="innerHTML" hx-sync="this:drop"
           ui:xdata="${@fmt.xdata('securityPolicy', 'idle', sp.idle, 'cors', sp.cors, 'consoleOrigin', sp.consoleOrigin, 'consoleSaved', sp.consoleSaved, 'savedHasConsole', sp.consoleSaved != null)}"
-          x-on:submit="onSubmit($event)" x-on:chips-change="onChips($event)"
+          th:attr="data-revert-url=${revertUrl}"
+          x-bind:inert="saving" x-on:htmx:before-request="onBefore($event)" x-on:htmx:after-request="onAfter($event)"
+          x-on:chips-change="onChips($event)"
           x-on:keydown.enter="$event.target.tagName === 'INPUT' &amp;&amp; $event.preventDefault()">
       <section class="card">
         <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('세션 & 인증 정책', null, '모든 콘솔 운영자에게 적용', null)}"></th:block>
@@ -31,7 +33,7 @@
           <div class="stack-1">
             <div class="row" style="gap: 10px">
               <input id="sec-idle-timeout" name="sessionIdleTimeoutMinutes" class="input mono" type="number" inputmode="numeric" min="1" max="1440" step="1"
-                     th:value="${sp.idle}" x-model="idle" x-ref="idle" style="max-width: 120px"
+                     th:value="${sp.idle}" x-model="idle" x-ref="idle" style="max-width: 120px" x-on:input="clearErr('sec-err-sessionIdleTimeoutMinutes')"
                      x-bind:aria-invalid="timeoutErr ? 'true' : null"
                      x-bind:aria-describedby="timeoutErr ? 'sec-idle-timeout-err' : 'sec-idle-timeout-help'">
               <span style="font-size: 13px; color: var(--ink-2)">분</span>

@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -267,7 +268,9 @@ class AdminUsersTabControllerTest {
         MvcResult r = send(post(BASE + "/admins/" + RP_USER + "/suspend"), platform(), true);
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         verify(users).suspend(eq(RP_USER), any(Authentication.class));
-        assertThat(trigger(r)).contains("rp@x.com 운영자를 정지했습니다.").contains("다음 요청부터 콘솔에 접근할 수 없습니다.").contains("success");
+        assertThat(trigger(r)).contains("rp@x.com 운영자를 정지했습니다.").contains("다음 요청부터 콘솔에 접근할 수 없습니다.").contains("success")
+                .doesNotContain("목록의").contains("label=되돌리기").contains("event=au-undo-suspend")
+                .contains("url=" + BASE + "/admins/" + RP_USER + "/activate?undo=1");
         Document d = html(r);
         assertThat(d.selectFirst("section#au-users")).isNotNull();
         assertThat(d.select("tr[data-op]")).hasSize(4);
@@ -311,6 +314,7 @@ class AdminUsersTabControllerTest {
         MvcResult r = send(post(BASE + "/admins/" + SUSPENDED + "/activate"), platform(), false);
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         verify(users).activate(eq(SUSPENDED), any(Authentication.class));
+        verify(users, times(1)).list(); // 활성화 전에 목록을 읽지 않는다(재조회 한 번뿐)
         assertThat(trigger(r)).contains("운영자를 다시 활성화했습니다.").contains("gone@x.com");
         assertThat(html(r).selectFirst("section#au-users")).isNotNull();
 
@@ -491,6 +495,16 @@ class AdminUsersTabControllerTest {
         Element slot = d.selectFirst("#settings-tab-admins-count");
         assertThat(slot).isNotNull();
         assertThat(slot.text()).isEqualTo("2");
+        // 각 *-count / *-badge 자리는 정확히 한 번(중첩·중복 id 없음)
+        for (String suffix : new String[] {"-count", "-badge"}) {
+            java.util.Map<String, Integer> seen = new java.util.HashMap<>();
+            d.select("[id$=" + suffix + "]").forEach(e -> seen.merge(e.id(), 1, Integer::sum));
+            assertThat(seen).isNotEmpty();
+            assertThat(seen.values()).allMatch(n -> n == 1);
+        }
+        assertThat(d.select("#settings-tab-admins-count [id$=-count]")).isEmpty();
+        assertThat(d.select("#settings-tab-admins-count .tabs__count")).hasSize(1);
+        assertThat(d.select("[role=tablist] .tabs__count")).hasSize(1);
         assertThat(d.selectFirst("#settings-tab-admins").attr("hx-get")).isEqualTo(AdminUsersTabController.TAB_PATH);
     }
 
@@ -507,16 +521,80 @@ class AdminUsersTabControllerTest {
     }
 
     @Test
-    @DisplayName("정지·활성화 뒤 목록 다시 읽기가 실패하면 성공 토스트는 나가고 운영자 카드는 LoadError")
-    void suspendThenReloadFails() throws Exception {
+    @DisplayName("정지 뒤 목록 다시 읽기가 실패하면 화면을 바꾸지 않고(HX-Reswap none) 운영자 카드의 경고 자리만 OOB, 성공 토스트는 나감")
+    void suspendThenReloadFailsKeepsDom() throws Exception {
         when(users.list()).thenReturn(List.of(
                 op(ME, ME_EMAIL, "PLATFORM_OPERATOR", "ACTIVE", List.of(), true),
                 op(RP_USER, "rp@x.com", "RP_ADMIN", "ACTIVE", List.of(T1), true)))
                 .thenThrow(new IllegalStateException("boom-internal"));
         MvcResult r = send(post(BASE + "/admins/" + RP_USER + "/suspend"), platform(), true);
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
         assertThat(trigger(r)).contains("rp@x.com 운영자를 정지했습니다.");
-        assertThat(html(r).selectFirst("section#au-users").text()).contains("운영자 목록을 불러오지 못했습니다").doesNotContain("boom-internal");
+        Document d = html(r);
+        Element warn = d.selectFirst("#au-users-warn");
+        assertThat(warn.attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(warn.text()).contains("다시 확인하지 못했습니다").contains("아래는 마지막으로 읽은 운영자 목록입니다. 목록을 새로 고치기 전에는 처리할 수 없습니다.").doesNotContain("boom-internal");
+        assertThat(warn.select("button").eachText()).contains("다시 시도");
+        assertThat(d.select("section#au-users, tr[data-op]")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("거절 뒤 가입 요청을 다시 읽지 못하면 화면 유지 + 가입 요청 경고 자리 OOB(탭 개수는 건드리지 않음)")
+    void rejectThenReloadFailsKeepsDom() throws Exception {
+        when(signups.list()).thenReturn(List.of(new SignupRequestDto.View(REQ1, "new1@x.com", "x", OffsetDateTime.parse("2026-10-10T23:55:00Z"))))
+                .thenThrow(new IllegalStateException("boom-internal"));
+        MvcResult r = send(post(BASE + "/signups/" + REQ1 + "/reject"), platform(), true);
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        assertThat(trigger(r)).contains("가입 요청을 거절했습니다.");
+        Document d = html(r);
+        assertThat(d.selectFirst("#au-signups-warn").text()).contains("아래는 마지막으로 읽은 가입 요청입니다");
+        assertThat(d.select("#settings-tab-admins-count, section#au-signups")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("승인 뒤 운영자 목록만 못 읽으면: 가입 요청 카드는 OOB 로 새로, 운영자 카드는 경고 OOB, 대화상자 자리는 비움, 본 대상은 스왑 안 함")
+    void approveThenPartialReloadFailure() throws Exception {
+        when(signups.approve(eq(REQ1), any(), any())).thenReturn(op(UUID.randomUUID(), "new1@x.com", "PLATFORM_OPERATOR", "ACTIVE", List.of(), false));
+        when(users.list()).thenThrow(new IllegalStateException("boom-internal"));
+        MvcResult r = send(post(BASE + "/signups/" + REQ1 + "/approve").param("role", "PLATFORM_OPERATOR"), platform(), false);
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        Document d = html(r);
+        assertThat(d.selectFirst("section#au-signups").attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(d.selectFirst("#au-users-warn").attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(d.selectFirst("#au-dialog-slot").attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(d.select("#au-content")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("정지 되돌리기(?undo=1): 정지 상태일 때만 activate, 원본 문구('정지를 되돌렸습니다'), 상태가 바뀌었으면 REST 미호출 + 경고, 실패는 원본 안내")
+    void undoSuspend() throws Exception {
+        MvcResult ok = send(post(BASE + "/admins/" + SUSPENDED + "/activate").param("undo", "1"), platform(), false);
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        verify(users).activate(eq(SUSPENDED), any(Authentication.class));
+        assertThat(trigger(ok)).contains("gone@x.com 운영자의 정지를 되돌렸습니다.");
+        assertThat(html(ok).selectFirst("section#au-users")).isNotNull();
+
+        MvcResult stale = send(post(BASE + "/admins/" + RP_USER + "/activate").param("undo", "1"), platform(), false);
+        assertThat(stale.getResponse().getStatus()).isEqualTo(200);
+        assertThat(stale.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        assertThat(trigger(stale)).contains("되돌릴 수 없습니다").contains("운영자 상태가 바뀌었습니다. 목록을 새로 고친 뒤 다시 시도하세요").contains("warn");
+        verify(users, never()).activate(eq(RP_USER), any());
+
+        doThrow(new IllegalStateException("db-secret")).when(users).activate(eq(SUSPENDED), any());
+        MvcResult fail = send(post(BASE + "/admins/" + SUSPENDED + "/activate").param("undo", "1"), platform(), false);
+        assertThat(fail.getResponse().getStatus()).isEqualTo(500);
+        assertThat(trigger(fail)).contains("정지를 되돌리지 못했습니다").contains("목록에서 “활성화”를 눌러 다시 시도하세요.").doesNotContain("db-secret");
+    }
+
+    @Test
+    @DisplayName("클라이언트 검증은 htmx 요청 전에 취소한다(x-on:submit 이 아니라 htmx:before-request)")
+    void approveFormCancelsInBeforeRequest() throws Exception {
+        Element form = html(send(get(BASE + "/signups/" + REQ1 + "/approve"), platform(), false)).selectFirst("form#au-approve-form");
+        assertThat(form.hasAttr("x-on:submit")).isFalse();
+        assertThat(form.attr("x-on:htmx:before-request")).isEqualTo("onBefore($event)");
     }
 
     @Test

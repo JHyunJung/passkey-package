@@ -706,7 +706,15 @@ document.addEventListener('alpine:init', () => {
       this.report();
       this.$dispatch('unsaved-change', { count: n });
     },
-    revert() { if (this.form) this.form.reset(); },
+    // 폼에 data-revert-url 이 있으면 취소 = 서버 값을 다시 읽어 화면(#settings-tab)을 바꾼다(성공하면 이 화면이 사라져 변경 표시도 없어진다, 실패하면 입력 그대로).
+    // 없으면 form.reset(). 읽기는 GET 이라 저장 요청으로 세지 않는다.
+    revert() {
+      if (!this.form) return;
+      const u = this.form.dataset.revertUrl;
+      const t = document.getElementById('settings-tab');
+      if (u && t && window.htmx) { window.htmx.ajax('GET', u, { source: t, target: t, swap: 'innerHTML' }); return; }
+      this.form.reset();
+    },
     save() { if (this.form) this.form.requestSubmit(); },
     get dirty() { return this.count > 0; },
   }));
@@ -824,7 +832,14 @@ document.addEventListener('alpine:init', () => {
     },
     pause(t, key, v) { t.hover = key === 'hover' ? v : t.hover; t.focus = key === 'focus' ? v : t.focus; this.arm(t); },
     close(id) { const t = this.toasts.find((x) => x.id === id); if (t) clearTimeout(t.timer); this.toasts = this.toasts.filter((x) => x.id !== id); },
-    run(t) { if (t.action && t.action.href) window.location.assign(t.action.href); this.close(t.id); },
+    // 동작 버튼: href 는 이동, event 는 window 이벤트(detail 포함)로 화면 쪽 리스너에 넘긴다(예: 정지 되돌리기). 기존 payload(action 없음·href)는 그대로.
+    run(t) {
+      const a = t.action;
+      this.close(t.id);
+      if (!a) return;
+      if (a.href) window.location.assign(a.href);
+      else if (a.event) window.dispatchEvent(new CustomEvent(a.event, { detail: a.detail || {} }));
+    },
   }));
 
   // ── Skeleton ───────────────────────────────────────────
@@ -895,6 +910,13 @@ document.addEventListener('alpine:init', () => {
       return q === '' || (d.hay || '').includes(q);
     },
     get none() { return Array.from(this.$root.querySelectorAll('tr[data-op]')).every((r) => !this.match(r)); },
+    // 정지 토스트의 "되돌리기"(toastHost 가 window 이벤트로 넘김): 서버가 준 활성화 주소로 요청한다. 같은 설정 화면의 주소만 받는다.
+    // 요청 출발 요소는 이 카드(hx-sync·CSRF 헤더 등 htmx 공통 처리), 결과는 행의 활성화와 같이 #au-users 교체.
+    onUndo(e) {
+      const url = e && e.detail && e.detail.url;
+      if (typeof url !== 'string' || !url.startsWith('/admin/_/settings/admins/') || !window.htmx) return;
+      window.htmx.ajax('POST', url, { source: this.$root, target: '#au-users', swap: 'outerHTML' });
+    },
   }));
 
   // 가입 요청 승인 대화상자(원본 ApproveDialog): 역할 선택, RP Admin 이면 tenant 1개 이상(없으면 제출 막고 오류), 검색, 요청 중 닫기·중복 제출 막기.
@@ -912,8 +934,15 @@ document.addEventListener('alpine:init', () => {
       const rows = Array.from(this.$root.querySelectorAll('[data-tenant]'));
       return rows.length > 0 && rows.every((r) => !this.matches(r.dataset.q));
     },
-    onSubmit(e) { this.touched = true; if (!this.formValid || this.submitting) e.preventDefault(); },
-    onBefore(e) { if (!ownRequest(e, 'au-approve-form')) return; this.submitting = true; clearById('au-approve-err'); },
+    // 클라이언트 검증은 htmx:before-request 에서 요청을 취소한다(htmx 2.0.4 는 submit 의 defaultPrevented 를 보지 않는다). 서버 오류는 입력이 바뀌면 지운다.
+    clearErr() { clearById('au-approve-err'); },
+    onBefore(e) {
+      if (!ownRequest(e, 'au-approve-form')) return;
+      this.touched = true;
+      if (!this.formValid || this.submitting) { e.preventDefault(); return; }
+      this.submitting = true;
+      this.clearErr();
+    },
     onAfter(e) { if (ownRequest(e, 'au-approve-form')) this.submitting = false; },
   }));
 
@@ -940,15 +969,22 @@ document.addEventListener('alpine:init', () => {
     },
     has(list) { const c = (cfg.consoleOrigin || '').toLowerCase(); return list.some((o) => String(o).toLowerCase() === c); },
     get removesConsole() { return !!cfg.savedHasConsole && !this.has(this.cors); },
-    onChips(e) { this.listError = ''; this.cors = (e.detail && e.detail.values) || []; },
+    saving: false, // 저장 요청 중 폼 잠금(inert): 응답이 탭을 통째로 바꾸므로 그 사이 입력이 사라지지 않게. 모든 결과(성공·422·오류)에서 푼다
+    clearErr(id) { clearById(id); },
+    onChips(e) { this.listError = ''; clearById('sec-err-corsAllowlist'); this.cors = (e.detail && e.detail.values) || []; },
     restore() {
       if (this.cors.length >= 64) { this.listError = SEC_RESTORE_FULL; return; }
       this.listError = '';
       this.$root.dispatchEvent(new CustomEvent('chip-add', { detail: { name: 'corsAllowlist', value: cfg.consoleSaved } }));
     },
-    onSubmit(e) {
-      if (this.timeoutErr) { e.preventDefault(); e.stopPropagation(); const i = this.$refs.idle; if (i) i.focus(); }
+    // 클라이언트 검증은 htmx:before-request 에서 요청을 취소한다(htmx 2.0.4 는 submit 의 defaultPrevented 를 보지 않는다).
+    onBefore(e) {
+      if (!ownRequest(e, 'sec-form')) return;
+      if (this.timeoutErr) { e.preventDefault(); const i = this.$refs.idle; if (i) i.focus(); return; }
+      document.querySelectorAll('#sec-form [data-field-error]').forEach((p) => { p.textContent = ''; p.removeAttribute('role'); });
+      this.saving = true;
     },
+    onAfter(e) { if (ownRequest(e, 'sec-form')) this.saving = false; },
   }));
 
   // 복구 코드 .txt 다운로드: 화면에 이미 그려진 코드를 브라우저에서 Blob 으로(서버 세션 저장 없음).

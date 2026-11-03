@@ -7,6 +7,7 @@ import com.crosscert.passkey.admin.operator.SignupRequestDto;
 import com.crosscert.passkey.admin.tenant.TenantAdminController;
 import com.crosscert.passkey.admin.tenant.TenantAdminDto;
 import com.crosscert.passkey.admin.web.format.KstFormat;
+import com.crosscert.passkey.admin.web.format.ErrorMessages;
 import com.crosscert.passkey.admin.web.support.CurrentAdmin;
 import com.crosscert.passkey.admin.web.support.Toasts;
 import jakarta.servlet.http.HttpServletRequest;
@@ -59,6 +60,8 @@ public class AdminUsersTabController {
     static final String USERS_VIEW = "admin/settings/admins :: usersResponse";
     static final String SIGNUPS_VIEW = "admin/settings/admins :: signupsResponse";
     static final String CONTENT_VIEW = "admin/settings/admins :: contentResponse";
+    static final String PARTIAL_VIEW = "admin/settings/admins :: partialResponse";
+    static final String UNDO_EVENT = "au-undo-suspend";
     static final String DIALOG_VIEW = "admin/settings/admins :: approveDialog";
     static final String APPROVE_ERROR_VIEW = "admin/settings/admins :: approveError";
 
@@ -141,25 +144,67 @@ public class AdminUsersTabController {
         String why = suspendBlock(row, list, me.email());
         if (why != null) return SettingsSupport.blocked(res, why, Toasts.isConfirm(req));
         users.suspend(id, auth);
-        Toasts.successTitled(res, row.email() + " 운영자를 정지했습니다.",
-                "다음 요청부터 콘솔에 접근할 수 없습니다. 목록의 “활성화”로 되돌릴 수 있습니다.");
-        loadUsers(model, me, loadTenantNames());
-        return USERS_VIEW;
+        Map<String, Object> undo = new LinkedHashMap<>();
+        undo.put("url", USER_BASE + id + "/activate?undo=1");
+        Toasts.successTitledAction(res, row.email() + " 운영자를 정지했습니다.", "다음 요청부터 콘솔에 접근할 수 없습니다.", "되돌리기", UNDO_EVENT, undo);
+        return usersResult(model, res, me);
     }
 
+    /**
+     * 활성화. 행의 "활성화" 버튼은 확인 없이 바로 호출한다(원본 handleActivate — 호출 전에 목록을 읽지 않는다; 토스트의 이메일은 다시 읽은 목록에서 찾는다).
+     * {@code undo=1} 은 정지 토스트의 "되돌리기"(원본 undoSuspend): 지금 정지 상태인지 확인하고(아니면 REST 미호출 + 경고), 원본의 성공·실패 문구를 쓴다.
+     */
     @PostMapping(USER_BASE + "{id}/activate")
-    public String activate(@PathVariable UUID id, Authentication auth, HttpServletRequest req, HttpServletResponse res, Model model) {
+    public String activate(@PathVariable UUID id, @RequestParam(name = "undo", defaultValue = "") String undo,
+                           Authentication auth, HttpServletRequest req, HttpServletResponse res, Model model) {
         CurrentAdmin me = SettingsSupport.platform(model);
-        String email = "";
+        boolean isUndo = "1".equals(undo);
+        if (isUndo) {
+            AdminUserDto.View row = users.list().stream().filter(u -> id.equals(u.id())).findFirst().orElse(null);
+            if (row == null || !"SUSPENDED".equals(row.status())) {
+                Toasts.warnTitled(res, "되돌릴 수 없습니다", "운영자 상태가 바뀌었습니다. " + STALE_REASON);
+                res.setHeader("HX-Reswap", "none");
+                return SettingsSupport.EMPTY_VIEW;
+            }
+        }
         try {
-            email = users.list().stream().filter(u -> id.equals(u.id())).map(AdminUserDto.View::email).findFirst().orElse("");
             users.activate(id, auth);
         } catch (RuntimeException e) {
+            if (e instanceof AccessDeniedException) throw e;
+            if (isUndo) {
+                ErrorMessages.Info info = ErrorMessages.describe(e);
+                int status = SettingsSupport.statusOf(e);
+                Toasts.errorTitled(res, "정지를 되돌리지 못했습니다", info.title() + ". 목록에서 “활성화”를 눌러 다시 시도하세요.", "HTTP " + status, org.slf4j.MDC.get("traceId"));
+                res.setStatus(status);
+                return SettingsSupport.EMPTY_VIEW;
+            }
             return SettingsSupport.fail(res, "활성화하지 못했습니다", e, Toasts.isConfirm(req));
         }
-        Toasts.successTitled(res, "운영자를 다시 활성화했습니다.", email);
-        loadUsers(model, me, loadTenantNames());
-        return USERS_VIEW;
+        boolean ok = loadUsers(model, me, loadTenantNames());
+        String email = "";
+        if (ok) {
+            @SuppressWarnings("unchecked") List<OpRow> ops = (List<OpRow>) model.getAttribute("ops");
+            email = ops.stream().filter(o -> id.toString().equals(o.id())).map(OpRow::email).findFirst().orElse("");
+        }
+        if (isUndo) Toasts.successTitled(res, email + " 운영자의 정지를 되돌렸습니다.", "");
+        else Toasts.successTitled(res, "운영자를 다시 활성화했습니다.", email);
+        return ok ? USERS_VIEW : warnUsers(model, res);
+    }
+
+    /** 변경 성공 뒤 운영자 카드 응답: 다시 읽기에 성공하면 카드를 교체, 실패하면 화면은 그대로 두고 경고 자리만 채운다(원본 StaleWarning). */
+    private String usersResult(Model model, HttpServletResponse res, CurrentAdmin me) {
+        return loadUsers(model, me, loadTenantNames()) ? USERS_VIEW : warnUsers(model, res);
+    }
+
+    private String warnUsers(Model model, HttpServletResponse res) {
+        res.setHeader("HX-Reswap", "none");
+        model.addAttribute("usersWarn", model.getAttribute("usersError"));
+        model.addAttribute("oobUsers", false);
+        model.addAttribute("oobSignups", false);
+        model.addAttribute("signupsWarn", null);
+        model.addAttribute("clearSlot", false);
+        model.addAttribute("pendingCount", null);
+        return PARTIAL_VIEW;
     }
 
     // ── 가입 요청 ───────────────────────────────────────────
@@ -194,14 +239,12 @@ public class AdminUsersTabController {
             if (SettingsSupport.statusOf(e) == 409) {
                 log.debug("[settings] signup approve conflict");
                 Toasts.warnTitled(res, "이미 처리된 요청입니다.", "다른 관리자가 먼저 처리했습니다.");
-                refreshAll(model, me);
-                return CONTENT_VIEW;
+                return refreshAll(model, res, me);
             }
             return SettingsSupport.fail(res, "승인 실패", e, false);
         }
         Toasts.successTitled(res, "가입 요청을 승인했습니다.", created.email() + " · 즉시 로그인 가능");
-        refreshAll(model, me);
-        return CONTENT_VIEW;
+        return refreshAll(model, res, me);
     }
 
     @PostMapping(SIGNUP_BASE + "{id}/reject")
@@ -222,8 +265,15 @@ public class AdminUsersTabController {
             if (SettingsSupport.statusOf(e) != 409) throw e; // 그 밖의 실패는 확인창 안(confirmError)
             Toasts.warnTitled(res, "이미 처리된 요청입니다.", "다른 관리자가 먼저 처리했습니다.");
         }
-        loadSignups(model);
-        return SIGNUPS_VIEW;
+        if (loadSignups(model)) return SIGNUPS_VIEW;
+        res.setHeader("HX-Reswap", "none");
+        model.addAttribute("signupsWarn", model.getAttribute("signupsError"));
+        model.addAttribute("oobSignups", false);
+        model.addAttribute("oobUsers", false);
+        model.addAttribute("usersWarn", null);
+        model.addAttribute("clearSlot", false);
+        model.addAttribute("pendingCount", null);
+        return PARTIAL_VIEW;
     }
 
     // ── 도우미 ──────────────────────────────────────────────
@@ -231,7 +281,7 @@ public class AdminUsersTabController {
     /** 역할 카드 속성(템플릿 상수만 — JS 평가 속성에 사용자 입력 없음). */
     private static Map<String, Object> roleAttrs(String role) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("x-on:click", "role = '" + role + "'");
+        m.put("x-on:click", "role = '" + role + "'; clearErr()");
         m.put("x-bind:class", "{ 'choice--on': role === '" + role + "' }");
         m.put("x-bind:aria-checked", "role === '" + role + "'");
         return m;
@@ -245,9 +295,18 @@ public class AdminUsersTabController {
         return APPROVE_ERROR_VIEW;
     }
 
-    private void refreshAll(Model model, CurrentAdmin me) {
-        loadSignups(model);
-        loadUsers(model, me, loadTenantNames());
+    /** 승인 뒤: 둘 다 다시 읽으면 #au-content 교체. 하나라도 실패하면 본 대상은 스왑하지 않고(HX-Reswap none) 읽은 쪽은 OOB 로 새로, 못 읽은 쪽은 경고 자리 OOB. */
+    private String refreshAll(Model model, HttpServletResponse res, CurrentAdmin me) {
+        boolean s = loadSignups(model);
+        boolean u = loadUsers(model, me, loadTenantNames());
+        if (s && u) return CONTENT_VIEW;
+        res.setHeader("HX-Reswap", "none");
+        model.addAttribute("oobSignups", s);
+        model.addAttribute("oobUsers", u);
+        model.addAttribute("signupsWarn", s ? null : model.getAttribute("signupsError"));
+        model.addAttribute("usersWarn", u ? null : model.getAttribute("usersError"));
+        model.addAttribute("clearSlot", true);
+        return PARTIAL_VIEW;
     }
 
     private Map<String, String> loadTenantNames() {
@@ -261,7 +320,7 @@ public class AdminUsersTabController {
         return names;
     }
 
-    private void loadSignups(Model model) {
+    private boolean loadSignups(Model model) {
         model.addAttribute("retryAttrs", SettingsPageController.tabRequesterAttrs(TAB_PATH)); // 다시 시도 = 탭 전체를 다시 받는다
         model.addAttribute("signupsError", null);
         model.addAttribute("pending", null);
@@ -272,11 +331,13 @@ public class AdminUsersTabController {
             for (SignupRequestDto.View r : signups.list()) rows.add(signupRow(r, now));
             model.addAttribute("pending", rows);
             model.addAttribute("pendingCount", rows.size());
+            return true;
         } catch (AccessDeniedException e) {
             throw e;
         } catch (RuntimeException e) {
             log.warn("[settings] signup requests load failed: {}", e.getClass().getSimpleName());
             model.addAttribute("signupsError", e);
+            return false;
         }
     }
 
@@ -296,7 +357,7 @@ public class AdminUsersTabController {
         return new SignupRow(id, r.email(), initial(r.email()), r.reason(), KstFormat.timeAgo(at, now), "au-reject-" + id, approve, reject);
     }
 
-    private void loadUsers(Model model, CurrentAdmin me, Map<String, String> names) {
+    private boolean loadUsers(Model model, CurrentAdmin me, Map<String, String> names) {
         model.addAttribute("retryAttrs", SettingsPageController.tabRequesterAttrs(TAB_PATH));
         model.addAttribute("usersError", null);
         model.addAttribute("ops", null);
@@ -309,11 +370,13 @@ public class AdminUsersTabController {
             model.addAttribute("ops", rows);
             model.addAttribute("opsSummary", list.size() + "명 · 활성 " + active + "명");
             model.addAttribute("roleOptions", List.of(opt("all", "전체"), opt("PLATFORM", "PLATFORM"), opt("RP_ADMIN", "RP_ADMIN"), opt("SUSPENDED", "정지")));
+            return true;
         } catch (AccessDeniedException e) {
             throw e;
         } catch (RuntimeException e) {
             log.warn("[settings] admin users load failed: {}", e.getClass().getSimpleName());
             model.addAttribute("usersError", e);
+            return false;
         }
     }
 

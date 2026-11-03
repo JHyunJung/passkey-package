@@ -101,6 +101,27 @@ public final class Toasts {
         }
     }
 
+    /**
+     * 동작 버튼이 있는 성공 토스트(원본 toast({action:{label,onClick}})). 버튼을 누르면 toastHost 가 window 이벤트 {@code event}(detail = {@code detail})를 올린다.
+     * 이벤트를 듣는 쪽이 요청을 보낸다 — 서버가 준 주소만 쓰도록 듣는 쪽이 접두사를 확인해야 한다.
+     */
+    public static void successTitledAction(HttpServletResponse res, String title, String message, String label, String event, Map<String, Object> detail) {
+        try {
+            Map<String, Object> action = new java.util.LinkedHashMap<>();
+            action.put("label", label);
+            action.put("event", event);
+            action.put("detail", detail);
+            Map<String, Object> toast = new java.util.LinkedHashMap<>();
+            toast.put("kind", "success");
+            if (title != null && !title.isEmpty()) toast.put("title", title);
+            toast.put("message", message == null ? "" : message);
+            toast.put("action", action);
+            res.setHeader(HX_TRIGGER, JSON.writeValueAsString(Map.of("toast", toast)));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("action toast header serialization failed", e);
+        }
+    }
+
     /** 제목이 있는 경고 토스트(예: MfaChallenge 의 "복구 코드를 사용했습니다." / "남은 복구 코드: N개"). */
     public static void warnTitled(HttpServletResponse res, String title, String message) {
         write(res, "warn", title, message, null, null);

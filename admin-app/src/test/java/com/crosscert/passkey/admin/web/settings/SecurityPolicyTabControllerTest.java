@@ -308,6 +308,30 @@ class SecurityPolicyTabControllerTest {
     }
 
     @Test
+    @DisplayName("저장 중 폼 잠금(x-bind:inert), 클라이언트 검증은 htmx:before-request 에서 취소, 취소 = 서버 재조회 주소")
+    void formHooks() throws Exception {
+        Element form = tab().selectFirst("form#sec-form");
+        assertThat(form.hasAttr("x-on:submit")).isFalse();
+        assertThat(form.attr("x-on:htmx:before-request")).isEqualTo("onBefore($event)");
+        assertThat(form.attr("x-on:htmx:after-request")).isEqualTo("onAfter($event)");
+        assertThat(form.attr("x-bind:inert")).isEqualTo("saving");
+        assertThat(form.attr("data-revert-url")).isEqualTo(SecurityPolicyTabController.TAB_PATH + "?revert=1");
+    }
+
+    @Test
+    @DisplayName("취소(?revert=1): 서버 값을 다시 읽어 탭을 돌려준다. 읽기 실패면 화면을 그대로 두고(스왑 없는 오류 상태) '되돌리지 못했습니다' 토스트")
+    void revertRefetch() throws Exception {
+        MvcResult ok = send(get(SecurityPolicyTabController.TAB_PATH).param("revert", "1"), platform(), false);
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        assertThat(html(ok).selectFirst("#sec-idle-timeout").val()).isEqualTo("30");
+        when(policy.get()).thenThrow(new IllegalStateException("boom-internal"));
+        MvcResult fail = send(get(SecurityPolicyTabController.TAB_PATH).param("revert", "1"), platform(), false);
+        assertThat(fail.getResponse().getStatus()).isEqualTo(500);
+        assertThat(trigger(fail)).contains("되돌리지 못했습니다").contains("error").doesNotContain("boom-internal");
+        assertThat(fail.getResponse().getContentAsString()).isEmpty();
+    }
+
+    @Test
     @DisplayName("저장 전 현재 정책을 읽지 못하면 저장하지 않고 오류(REST update 미호출)")
     void currentPolicyUnreadable() throws Exception {
         when(policy.get()).thenThrow(new IllegalStateException("boom"));

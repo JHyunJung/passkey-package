@@ -734,6 +734,8 @@ LPC = `LicensePageControllerTest`. PLATFORM 전용: RP 는 자기 tenant 로 302
 AUT = `AdminUsersTabControllerTest`, SEC = `SecurityPolicyTabControllerTest`, MDT = `MdsTabControllerTest`. 브라우저: 전부 미확인(R8). 키 관리(KeyMgmtController)는 원본 설정 화면에 없어 이 탭들에 두지 않았다. `addTenant`/`removeTenant` 도 원본 AdminUsersTab 이 부르지 않아 화면이 없다.
 RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403, REST 미호출: AUT `rpAdminForbiddenEverywhere`, SEC `rpAdminForbidden`, MDT `rpAdminForbidden`. 리터럴 탭 매핑이 16a 일반 매핑보다 우선: AUT/SEC/MDT `literalWinsOverGeneric`.
 
+비교·읽기 차이 메모: (1) 보안 정책 CORS 목록은 저장 바가 순서 없이 비교한다(TSX sameList 는 순서 비교) — 삭제 되돌리기가 목록 끝에 다시 넣어도 변경 0건이 되게 한 것이고, 순서만 바꾸는 UI 는 없다. 저장 때는 화면 순서 그대로 보낸다. (2) 승인 대화상자 GET 이 `SignupRequestController.list()` 를 한 번 더 읽어 요청을 찾는다(원본은 행 데이터를 들고 있음). 없어진 요청이면 404.
+
 ### AdminUsersTab.test.tsx (40)
 
 | 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
@@ -764,15 +766,15 @@ RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403
 | 가입 요청 실패 → LoadError, 대기 '—' | AU 365 | source ✅ | AUT `signupEmptyAndFailure` | 미확인 |
 | Tenant 열: 이름 조인·외 N개·전체 tenant | AU 373 | source ✅ | AUT `operatorsTable` | 미확인 |
 | tenants 못 읽으면 id 꼬리, 전체 id title | AU 382 | source ✅ | AUT `tenantNamesUnavailable` | 미확인 |
-| 다시 읽기 실패 → 데이터 유지 + 경고 | AU 391 | 차이: 서버 렌더엔 '이전 데이터'가 없다 — 변경 뒤 목록을 못 읽으면 운영자 카드가 LoadError(성공 토스트는 나감) | AUT `suspendThenReloadFails` | 미확인 |
+| 다시 읽기 실패 → 데이터 유지 + 경고 | AU 391 | source ✅ / 차이: 변경 뒤 다시 읽기에 실패하면 화면을 스왑하지 않고(HX-Reswap none) 경고 자리(#au-users-warn / #au-signups-warn)만 OOB. 행 액션은 비활성이 되지 않는다(정지는 확인 때 서버가 목록을 다시 검증) | AUT `suspendThenReloadFailsKeepsDom`, `rejectThenReloadFailsKeepsDom`, `approveThenPartialReloadFailure` | 미확인 |
 | 낡은 운영자 목록 → 행 액션 비활성·다시 시도 | AU 403 | 차이: 해당 없음(항상 방금 읽은 목록). 정지는 확인 때 서버가 목록을 다시 읽어 상태를 검증 | AUT `suspendBlockedNoRest` | 미확인 |
 | 낡은 가입 요청 → 승인·거절 비활성·다시 시도 | AU 421 | 차이: 해당 없음(항상 방금 읽은 목록). 이미 처리됐으면 409 경고 + 갱신 | AUT `approveConflictAndFailure`, `rejectConflictAndFailure` | 미확인 |
-| 정지… → L1 확인 → 정지 → 되돌리기 토스트 → 활성화 API | AU 447 | 차이: 토스트에 '되돌리기' 버튼 없음(토스트 액션은 링크만 지원) — 문구로 '목록의 “활성화”'를 안내. 활성화 경로는 같음 | AUT `suspendDialog`, `suspendCallsRest`, `activate` | 미확인 |
+| 정지… → L1 확인 → 정지 → 되돌리기 토스트 → 활성화 API | AU 447 | source ✅ / 차이: 토스트 '되돌리기'는 window 이벤트 `au-undo-suspend`(toastHost 확장, 기존 href 액션 호환)를 운영자 카드가 받아 `POST …/activate?undo=1` 을 보낸다(정지 상태일 때만 호출 — 아니면 '되돌릴 수 없습니다' 경고) | AUT `suspendDialog`, `suspendCallsRest`, `undoSuspend` · 스텁(toastHost.run·operatorFilter.onUndo) / JS — 브라우저 확인 필요 | 미확인 |
 | 정지 실패는 다이얼로그 안 인라인, 유지, 되돌리기 없음 | AU 467 | source ✅ | AUT `suspendRestFailure` | 미확인 |
 | 본인·마지막 활성 PLATFORM 은 정지 비활성 + 사유 | AU 479 | source ✅ / 차이: 서버도 확인 때 같은 규칙을 한 번 더 본다(REST 안 부름, 409) | AUT `selfProtectionAndActions`, `lastPlatformBlocked`, `suspendBlockedNoRest`, `units` | 미확인 |
 | 활성 PLATFORM 이 둘 이상이면 PLATFORM 도 정지 가능 | AU 490 | source ✅ | AUT `selfProtectionAndActions` | 미확인 |
 | 활성화 처리 중 '활성화 중…' 비활성, 연타 한 번 | AU 497 | source ✅ / 차이: 라벨은 안 바뀐다(hx-disabled-elt 로 비활성 + hx-sync=this:drop) | AUT `selfProtectionAndActions`(속성) / JS — 브라우저 확인 필요 | 미확인 |
-| 되돌리기 연타·실패·stale 3건(511·528·611·625) | AU 511/528/611/625 | 차이: 해당 없음 — 되돌리기 토스트 버튼이 없다(위 447 행) | — | 미확인 |
+| 되돌리기 연타·실패·stale(511·528·611·625) | AU 511/528/611/625 | source ✅ / 차이: 실패·stale 은 서버가 원본 문구로 처리. 연타 가드는 서버 직렬화가 없다(같은 활성화 요청이 두 번 가면 두 번째는 REST 가 거절할 수 있음) | AUT `undoSuspend` / JS — 브라우저 확인 필요 | 미확인 |
 | 활성화 실패 토스트도 쉬운 문구 | AU 543 | source ✅ / 차이: 제목 '활성화하지 못했습니다' | AUT `activate` | 미확인 |
 | 다른 운영자의 처리가 겹쳐도 행 표시는 독립 | AU 553 | source ✅ / 차이: hx-sync 는 버튼별이지만 성공 응답은 #au-users 전체를 교체 | AUT `selfProtectionAndActions`(속성) / JS — 브라우저 확인 필요 | 미확인 |
 | 열려 있던 정지 다이얼로그는 목록이 낡아지면 정지하지 않고 안내 | AU 571 | source ✅ / 차이: 서버가 확인 때 목록을 읽어 판정 | AUT `suspendBlockedNoRest` | 미확인 |
@@ -786,7 +788,7 @@ RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403
 | 카드 헤더 캡션 '모든 콘솔 운영자에게 적용' | SP 33 | source ✅ | SEC `rendersPolicy` | 미확인 |
 | .set 3행 + 변경 없으면 SaveBar 없음 | SP 38 | source ✅ / 차이: SaveBar 는 변경 0건이면 x-show 로 숨김 | SEC `rendersPolicy` / JS — 브라우저 확인 필요 | 미확인 |
 | dirty → SaveBar(건수·요약), 저장하면 update 후 사라짐 | SP 46 | source ✅ / 차이: 저장 = 폼 PUT, 성공 응답이 탭 전체를 새 값으로 다시 그림 | SEC `savesAndRerendersTab`, `rendersPolicy` / JS — 브라우저 확인 필요 | 미확인 |
-| CORS: Enter 추가(새 칩 강조), 중복 안내, 취소 = 서버 값 | SP 65 | source ✅ / 차이: 중복·형식 검증은 서버 왕복(origin-check). 취소 = form.reset(탭을 그린 시점의 값) | SEC `originCheck` / JS — 브라우저 확인 필요 (Task 3 chipInput 스텁) | 미확인 |
+| CORS: Enter 추가(새 칩 강조), 중복 안내, 취소 = 서버 값 | SP 65 | source ✅ / 차이: 중복·형식 검증은 서버 왕복(origin-check). 취소 = 서버 재조회(`?revert=1`, 실패하면 입력 유지 + '되돌리지 못했습니다') | SEC `originCheck`, `revertRefetch` · 스텁(saveBar.revert) / JS — 브라우저 확인 필요 (Task 3 chipInput 스텁) | 미확인 |
 | dirty 상태 탭 이동은 이탈 확인 | SP 83 | source ✅ | SPC 탭 링크 data-guard-dirty + `$store.dirty` / JS — 브라우저 확인 필요 | 미확인 |
 | 로드 실패 → 기본값 대신 LoadError, 입력칸·저장 숨김, 다시 시도 | SP 93 | source ✅ | SEC `loadFailure` | 미확인 |
 | timeout 1–1440 인라인 오류, 저장해도 API 안 부름, 입력칸 포커스 | SP 104 | source ✅ / 차이: 서버도 422 + 필드 오류 | SEC `idleValidation` · 스텁(securityPolicy.timeoutErr·onSubmit) / JS — 브라우저 확인 필요 | 미확인 |
@@ -794,7 +796,7 @@ RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403
 | origin 소문자 저장, 대소문자 중복 안내 | SP 134 | source ✅ | SEC `originCheck` | 미확인 |
 | 콘솔 origin 지우면 경고 + 삭제 되돌리기, 저장하면 L2 확인 | SP 145 | source ✅ / 차이: L2 확인은 422 + 다이얼로그(저장 바가 2xx 를 저장됨으로 세지 않게), 확인 = confirmLockout=1 PUT | SEC `removingConsoleAsksConfirmation`, `confirmedAndCaseInsensitive`, `consoleWarningConfig` · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
 | 콘솔 origin 경고 문구는 실제 영향을 말한다 | SP 170 | source ✅ | SEC `consoleWarningConfig` | 미확인 |
-| 저장 중 입력 잠금, 저장은 한 번만 | SP 184 | 차이: 입력 잠금 없음(Task 10 과 같은 차이). 중복 전송은 hx-sync=this:drop + 저장 바 saving 이 막는다 | SEC `rendersPolicy`(hx-sync) / JS — 브라우저 확인 필요 | 미확인 |
+| 저장 중 입력 잠금, 저장은 한 번만 | SP 184 | source ✅ / 차이: 저장 요청 중 폼을 inert 로 잠그고 모든 결과에서 푼다(확인 PUT 은 다이얼로그 스크림이 막는다). 중복 전송은 hx-sync=this:drop | SEC `formHooks` · 스텁(securityPolicy.saving) / JS — 브라우저 확인 필요 | 미확인 |
 | 저장 실패는 쉬운 문구 토스트, 입력 그대로 | SP 201 | source ✅ | SEC `saveFailure` | 미확인 |
 | 삭제 되돌리기는 64개면 거부·안내 | SP 210 | source ✅ | 스텁(securityPolicy.restore) / JS — 브라우저 확인 필요 | 미확인 |
 | 저장 전 목록 전체 검증(64개 초과) | SP 224 | source ✅ / 차이: 서버 422 + 인라인 오류(확인창·REST 없음) | SEC `corsValidation` | 미확인 |
@@ -822,12 +824,12 @@ RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403
 | 영어 잔재 'next 갱신 예정' 없음 | MD 189 | source ✅ | MDT `headlineKpisSettings` | 미확인 |
 | 로드 실패 LoadError(다시 시도 + 오류 정보 복사), 토스트 없음 | MD 196 | source ✅ | MDT `statusFailure` | 미확인 |
 | 로딩 중 Skeleton | MD 205 | 차이: 탭 컨테이너 스켈레톤(SPC `platformTabQueryLoadsLazily`) | — | 미확인 |
-| 갱신 뒤 재조회 실패 → 데이터 유지 + 경고 | MD 215 | 차이: 서버 렌더엔 이전 데이터가 없다 — 갱신 토스트는 나가고 탭은 LoadError(다시 시도) | MDT `syncThenReloadFails` | 미확인 |
+| 갱신 뒤 재조회 실패 → 데이터 유지 + 경고 | MD 215 | source ✅ / 차이: 화면 유지(HX-Reswap none) + #mds-warn 경고(다시 시도). 상태·이력 중 하나라도 못 읽으면 같은 처리 | MDT `syncThenReloadFailsKeepsDom`, `syncThenHistoryFailsKeepsDom` | 미확인 |
 | 즉시 갱신은 진행 중 재클릭해도 한 번만, 끝나면 다시 가능 | MD 228 | source ✅ / 차이: hx-sync=this:drop + hx-disabled-elt + 120초 제한. 라벨 전환은 .htmx-request CSS | MDT `syncButtonAttrs` / JS — 브라우저 확인 필요 | 미확인 |
 | 갱신 예외는 쉬운 문구(원문 없음), 버튼 복구 | MD 241 | source ✅ | MDT `syncException` | 미확인 |
 | 갱신 결과가 FAILED 여도 서버 원문 error 를 싣지 않음 | MD 255 | source ✅ | MDT `syncSkippedAndFailed` | 미확인 |
 | 이력만 실패 → 이력 영역 LoadError, '정상'·'이력 없음' 아님 | MD 264 | source ✅ | MDT `historyOnlyFailure` | 미확인 |
-| 재조회에서 이력만 실패하면 이전 이력 유지 + 경고 | MD 277 | 차이: 이전 이력이 없다(서버 렌더) — 이력 영역 LoadError | MDT `historyOnlyFailure` | 미확인 |
+| 재조회에서 이력만 실패하면 이전 이력 유지 + 경고 | MD 277 | source ✅ / 차이: 갱신 뒤 재조회의 이력 실패는 화면 유지 + 경고. 처음 렌더에서 이력만 실패하면 이력 영역 LoadError | MDT `historyOnlyFailure` | 미확인 |
 | 겹친 재조회 순서가 바뀌어도 채택된 최신 이력 유지 | MD 289 | 차이: 해당 없음 — 응답 하나가 화면을 통째로 바꾸고 갱신 버튼은 hx-sync=this:drop | — | 미확인 |
 | Object.prototype 이름 같은 신뢰 모드도 원문 | MD 315 | source ✅ | MDT `trustModes` | 미확인 |
 | limit 쿼리·스트립 상수 30 (api/mdsStatus.test.ts) | MA 9·13 | source ✅ / 차이: 직접 메서드 호출 history(30) | MDT `historyTableAndStrip` | 미확인 |

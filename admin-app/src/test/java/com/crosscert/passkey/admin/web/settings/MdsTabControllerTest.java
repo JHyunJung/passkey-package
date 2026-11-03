@@ -300,13 +300,29 @@ class MdsTabControllerTest {
     }
 
     @Test
-    @DisplayName("갱신 뒤 다시 읽기가 실패해도 갱신 결과 토스트는 나가고 LoadError 를 그린다")
-    void syncThenReloadFails() throws Exception {
-        when(mds.status()).thenThrow(new IllegalStateException("boom"));
+    @DisplayName("갱신 뒤 다시 읽기가 실패하면 화면을 바꾸지 않고(HX-Reswap none) 경고 자리(#mds-warn)만 OOB, 갱신 토스트는 나감")
+    void syncThenReloadFailsKeepsDom() throws Exception {
+        assertThat(tab().selectFirst("#mds-root #mds-warn")).isNotNull();
+        when(mds.status()).thenThrow(new IllegalStateException("boom-internal"));
         MvcResult r = send(post(MdsTabController.SYNC_PATH), platform());
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
         assertThat(trigger(r)).contains("MDS 즉시 갱신 완료");
-        assertThat(html(r).selectFirst("#mds-root [role=alert]").text()).contains("MDS 상태를 불러오지 못했습니다");
+        Document d = html(r);
+        Element warn = d.selectFirst("#mds-warn");
+        assertThat(warn.attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(warn.text()).contains("다시 확인하지 못했습니다").contains("아래는 마지막으로 읽은 MDS 상태입니다.").doesNotContain("boom-internal");
+        assertThat(warn.select("button").eachText()).contains("다시 시도");
+        assertThat(d.select("#mds-root")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("갱신 뒤 이력만 못 읽어도 화면 유지 + 경고(이전 이력을 지우지 않는다)")
+    void syncThenHistoryFailsKeepsDom() throws Exception {
+        when(mds.history(anyInt())).thenThrow(new IllegalStateException("boom"));
+        MvcResult r = send(post(MdsTabController.SYNC_PATH), platform());
+        assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
+        assertThat(html(r).selectFirst("#mds-warn").text()).contains("다시 확인하지 못했습니다");
     }
 
     @Test

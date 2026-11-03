@@ -7,6 +7,8 @@
   즉시 갱신 = POST(120초 제한, 요청 중 비활성·hx-sync=this:drop) → 응답이 #mds-root 를 통째로 바꾼다. 서버가 준 문자열(실패 사유·변경 요약)은 th:text 로만 그린다.
 -->
 <div th:fragment="tab" id="mds-root">
+  <!-- 갱신 뒤 다시 읽기에 실패했을 때의 경고 자리(화면은 그대로 두고 여기만 OOB 로 채운다) -->
+  <div id="mds-warn"></div>
   <section class="card" th:if="${loadError != null}">
     <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('MDS 상태', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
   </section>
@@ -93,6 +95,20 @@
         </div>
       </section>
     </div>
+  </div>
+</div>
+
+<!-- 갱신은 성공했지만 다시 읽기에 실패(HX-Reswap none): 본 대상은 스왑하지 않고 이 경고만 #mds-warn 에 OOB. 모델: reloadError, retryAttrs -->
+<div th:fragment="reloadWarning" id="mds-warn" hx-swap-oob="true">
+  <div class="stack-3" style="margin-bottom: 16px">
+    <div class="banner banner--warning banner--top" role="status">
+      <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+      <div class="banner__body">
+        <div class="banner__title">다시 확인하지 못했습니다</div>
+        <div th:text="${@fmt.errorInfo(reloadError).title + '. 아래는 마지막으로 읽은 MDS 상태입니다.'}">오류</div>
+      </div>
+    </div>
+    <div><button type="button" class="btn" ui:attrs="${retryAttrs}">다시 시도</button></div>
   </div>
 </div>
 
