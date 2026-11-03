@@ -31,8 +31,8 @@
                },
                end() { this.running = false; clearInterval(this.timer); } }"
      th:attr="hx-get=${verifyUrl}"
-     hx-trigger="verify-run" hx-target="this" hx-swap="outerHTML" hx-sync="this:drop" hx-request='{"timeout": 120000}'
-     x-on:htmx:before-request="begin()" x-on:htmx:after-request="end()">
+     hx-disinherit="hx-target hx-swap hx-sync hx-request" hx-trigger="verify-run" hx-target="this" hx-swap="outerHTML" hx-sync="this:drop" hx-request='{"timeout": 120000}'
+     x-on:htmx:before-request="if ($event.detail.elt === $el) begin()" x-on:htmx:after-request="if ($event.detail.elt === $el) end()">
   <section class="card">
     <div class="row" style="gap: 16px; padding: 16px 20px">
       <span aria-hidden="true" class="chain-ico" th:classappend="${chainResult != null and !chainResult.intact} ? 'chain-ico--bad' : 'chain-ico--ok'">

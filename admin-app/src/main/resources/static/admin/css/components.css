@@ -457,4 +457,3 @@ a.menu__item { text-decoration: none; }
 .fn-dist { height: 28px; border-radius: 6px; overflow: hidden; display: flex; flex-wrap: nowrap; background: var(--canvas); }
 .fn-dist > span { height: 100%; display: block; }
 .fn-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
-.fn-hdr .tw { margin: 0; }

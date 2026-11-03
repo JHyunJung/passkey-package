@@ -686,3 +686,9 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | (추가) 막대 높이·너비는 숫자만 th:style, 색은 클래스 | 계약 | source ✅ | FC `barsUseNumbersOnly` | — |
 | (추가) CSV 3종·수식 무력화 | csvExport.ts | source ✅ | FC `csvExports`,`csvNeutralizesFormula` | — |
 | (추가) 403·리터럴 매핑·이벤트 타입 이스케이프 | 계약 | source ✅ | FC `crossTenantForbidden`,`literalMappingWinsAndRpOwnTenant`,`escapesEventTypes` | — |
+
+### Task 13 Fix round 1 메모
+
+- 더 보기 중 **첫 쪽(page 0) 조회가 실패하면** 카드 전체가 LoadError 로 바뀐다(TSX 는 기존 행을 유지하고 토스트) — stateless 재조회의 결과. 이후 쪽 실패는 읽은 행 유지 + 토스트.
+- 원본에는 쪽 상한이 없지만 stateless 재조회 비용 때문에 40쪽(2,000건)에서 멈추고 "더 불러올 수 없습니다 — 기간이나 필터를 좁혀 주세요." 를 보인다(TC `loadMoreCapShown`). CSV 도 같은 범위, 쪽 실패 시 부분 파일 대신 오류(TC `csvRejectsPartialFailure`).
+- 퍼널 기간 전환 중: 루트 Alpine `pending` 으로 이전 결과 숨김·스켈레톤·내보내기/CSV 링크 비활성(FT 4 차이 해소, 브라우저 미확인). 요청이 실패하면 결과는 돌아오지만 세그먼트 선택 표시는 새 값에 남는다(알려진 한계).

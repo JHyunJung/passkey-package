@@ -540,6 +540,43 @@ class AuditTabControllerTest {
         assertThat(r.getResponse().getHeader("Content-Disposition")).isEqualTo("attachment; filename=\"audit-a_b_c__-2026-10-11.csv\"");
     }
 
+    @Test
+    @DisplayName("체인 카드 래퍼는 hx-target/swap/sync/request 를 자식에 상속시키지 않는다(월간 보고서 링크가 카드를 바꾸지 않게), begin/end 는 자기 요청만")
+    void chainWrapperDisinheritsAndGuardsOwnRequest() throws Exception {
+        Element wrap = tab("").selectFirst("#audit-chain");
+        assertThat(wrap.attr("hx-disinherit")).isEqualTo("hx-target hx-swap hx-sync hx-request");
+        assertThat(wrap.attr("x-on:htmx:before-request")).contains("$event.detail.elt === $el");
+        assertThat(wrap.attr("x-on:htmx:after-request")).contains("$event.detail.elt === $el");
+        when(chain.verifyTenant(T1.toString())).thenReturn(new AuditChainMonitorController.TenantVerifyResponse(T1, true, null, NOW));
+        Element link = doc(hget(BASE + "/audit/verify", platform())).selectFirst("#audit-chain a.btn");
+        assertThat(link.attr("href")).isEqualTo("/admin/audit-chain");
+        assertThat(link.parents().stream().filter(e -> e.hasAttr("hx-disinherit")).count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("CSV: 이후 쪽 읽기가 실패하면 부분 파일을 주지 않고 오류(5xx)")
+    void csvRejectsPartialFailure() throws Exception {
+        List<AuditLogView> first = new ArrayList<>();
+        for (int i = 0; i < 50; i++) first.add(ev("a" + i, null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.001 * i));
+        stubPage(0, first);
+        when(audit.list(isNull(), isNull(), eq(T1), any(), any(), eq(1), eq(50))).thenThrow(new IllegalStateException("boom"));
+        MvcResult r = mvc.perform(htmx(get(URI.create("/admin/tenants/" + T1 + "/audit.csv?pages=2&to=2026-10-11T00:00:00.000Z")), platform())).andReturn();
+        assertThat(r.getResponse().getStatus()).isGreaterThanOrEqualTo(500);
+        assertThat(r.getResponse().getContentAsByteArray()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("더 보기 상한(40쪽): 버튼 대신 안내, 같은 2,000건을 다시 읽는 요청을 만들지 않는다")
+    void loadMoreCapShown() throws Exception {
+        List<AuditLogView> full = new ArrayList<>();
+        for (int i = 0; i < 50; i++) full.add(ev("a" + i, null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.0001 * i));
+        for (int p = 0; p < 40; p++) stubPage(p, full);
+        Document d = doc(hget(BASE + "/tab/audit/card?pages=40&to=2026-10-11T00:00:00.000Z", platform()));
+        assertThat(d.select("#audit-card .card__foot button")).isEmpty();
+        assertThat(d.select("#audit-card .card__foot .hint").text()).contains("최근 2,000건").contains("더 불러올 수 없습니다");
+        assertThat(d.select("#audit-card [hx-get*=pages=41]")).isEmpty();
+    }
+
     // ── 경계 ────────────────────────────────────────────────
 
     @Test

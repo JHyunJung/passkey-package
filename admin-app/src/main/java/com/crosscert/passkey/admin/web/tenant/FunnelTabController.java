@@ -219,13 +219,13 @@ public class FunnelTabController {
             }
             case "series" -> {
                 List<List<String>> rows = new ArrayList<>();
-                for (FunnelDto.DailyPoint p : data.series()) rows.add(List.of(p.day(), String.valueOf(p.attempts()), String.valueOf(p.success())));
+                for (FunnelDto.DailyPoint p : data.series() == null ? List.<FunnelDto.DailyPoint>of() : data.series()) rows.add(List.of(p.day(), String.valueOf(p.attempts()), String.valueOf(p.success())));
                 csv = CsvWriter.write(List.of("day", "attempts", "success"), rows);
                 filename = "funnel-series-" + v.slug() + "-" + today + ".csv";
             }
             case "events" -> {
                 List<List<String>> rows = new ArrayList<>();
-                for (FunnelDto.EventCount e : data.byEventType()) rows.add(List.of(e.type(), String.valueOf(e.n())));
+                for (FunnelDto.EventCount e : data.byEventType() == null ? List.<FunnelDto.EventCount>of() : data.byEventType()) rows.add(List.of(e.type(), String.valueOf(e.n())));
                 csv = CsvWriter.write(List.of("type", "n"), rows);
                 filename = "funnel-events-" + v.slug() + "-" + today + ".csv";
             }

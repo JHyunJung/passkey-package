@@ -233,6 +233,7 @@ public class AuditTabController {
         St st = St.of(win, g, failures, pages, to, now);
         Loaded l = load(v.id(), st, now);
         if (l.error() != null) throw l.error();
+        if (l.moreError() != null) throw l.moreError(); // 부분 파일 금지
         List<List<String>> body = new ArrayList<>();
         for (Item it : filter(l.items(), st)) {
             AuditLogView a = it.view();
@@ -323,7 +324,6 @@ public class AuditTabController {
 
     private void fillChainAttrs(Model model, UUID tid) {
         model.addAttribute("verifyUrl", FRAG + tid + "/audit/verify");
-        model.addAttribute("verifyTimeoutMs", VERIFY_TIMEOUT_MS);
     }
 
     private void fillCard(Model model, HttpServletResponse res, UUID tid, String slug, St requested, Instant now) {
@@ -388,7 +388,7 @@ public class AuditTabController {
         model.addAttribute("windows", windows);
         model.addAttribute("retryAttrs", get(base + "?" + st.with(st.win(), st.groups(), st.failures(), 1, null).query()));
         model.addAttribute("moreAttrs", get(base + "?" + st.with(st.win(), st.groups(), st.failures(), Math.min(MAX_PAGES, st.pages() + 1), st.to()).query()));
-        model.addAttribute("moreDisabled", st.pages() >= MAX_PAGES);
+        model.addAttribute("moreCapped", l.hasMore() && !failed && st.pages() >= MAX_PAGES);
         model.addAttribute("slug", slug);
     }
 

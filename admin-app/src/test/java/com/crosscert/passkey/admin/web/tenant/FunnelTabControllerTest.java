@@ -270,6 +270,18 @@ class FunnelTabControllerTest {
         verify(funnel, never()).get(T1, 30);
     }
 
+    @Test
+    @DisplayName("기간 전환 중: 루트가 pending 을 들고 이전 결과를 숨기고 스켈레톤을, 내보내기·CSV 링크는 비활성(요청 실패 시 after-request 로 복구)")
+    void pendingStateHidesResults() throws Exception {
+        Element root = tab("").selectFirst("#funnel-root");
+        assertThat(root.attr("x-data")).isEqualTo("{ pending: false }");
+        assertThat(root.attr("x-on:htmx:before-request")).isEqualTo("pending = true");
+        assertThat(root.attr("x-on:htmx:after-request")).isEqualTo("pending = false");
+        assertThat(root.select("[x-show=!pending]")).isNotEmpty();
+        assertThat(root.select("[role=status][aria-busy=true]")).hasSize(1);
+        for (Element a : root.select("a[download]")) assertThat(a.attr("x-on:click")).isEqualTo("if (pending) $event.preventDefault()");
+    }
+
     // ── CSV ─────────────────────────────────────────────────
 
     private String csv(String q, String[] disposition) throws Exception {
