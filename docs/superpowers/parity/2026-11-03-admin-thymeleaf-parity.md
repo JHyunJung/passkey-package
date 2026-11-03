@@ -573,3 +573,58 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 체크 항목 | 원본 테스트 | 결과 |
 |---|---|---|
 | (해당 화면 task 에서 채움) | | 미확인 |
+
+## §Tenant 자격 증명 탭 (Task 12, 소스 수준 점검)
+
+약어: CT = `CredentialsTab.test.tsx` 순번, CD = `CredentialDetailDialog.test.tsx` 순번, CH = `credentialHelpers.test.ts`, CC = `CredentialsTabControllerTest`. 브라우저: 미확인(행 클릭 cred-open 이벤트, 다이얼로그 열기·닫기, 확인 입력 게이트, 디바운스는 JS — 브라우저 확인 필요).
+공통 차이: 필터(aaguid·상태)·페이징·검색은 원본처럼 클라이언트 상태가 아니라 요청 파라미터 + 서버 렌더(필터는 여전히 "현재 페이지 안"). 로딩 중 건수 "—"·스켈레톤은 목록 교체 방식이라 없음.
+
+### CredentialsTab.test.tsx (21)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 검색어 디바운스 → 서버 q(앞뒤 공백 제거, 첫 페이지) | CT 1 | source ✅ / JS: hx-trigger `input changed delay:300ms`, 새 검색은 page 를 싣지 않아 1페이지 | CC `searchInputContract` | 미확인 |
+| 사용자 열 말줄임, 전체 값은 title | CT 2 | source ✅ | CC `rendersColumnsAndCells` | 미확인 |
+| credential 이 없으면 빈 상태 일러스트 | CT 3 | source ✅ | CC `emptyStates` | 미확인 |
+| 검색 결과 없음 + 필터 지우기 | CT 4 | source ✅ / 차이: 서버가 입력·패널을 OOB 로 비움(`reset=all`) | CC `clientFilterAndChips`,`listResponseOob` | 미확인 |
+| + 필터: 토글, 상태 선택 시 칩·현재 페이지 안에서 거름 | CT 5 | source ✅ / 차이: 거르는 일을 서버가 함(요청 1회) | CC `clientFilterAndChips`,`countAndCsvLabels` | 미확인 |
+| 상세 이전/다음: 페이지 안·경계에서 이웃 페이지로 | CT 6 | source ✅ / 차이: 서버가 이웃 항목을 미리 계산해 링크로 줌(경계에서만 이웃 페이지 1회 조회), 넘어가면 `list=1` 로 그 페이지 목록도 OOB | CC `detailNavWithinPage`,`detailNavAcrossPages` | 미확인 |
+| 회수 L3 — 마지막 8자 입력해야 활성, 상세 푸터에서도 진입 | CT 7 | source ✅ / 차이: 입력 라벨의 mono 강조 없음(조각 라벨은 문자열) | CC `revokeConfirmDialog` / JS(confirmByTyping 게이트) — 브라우저 확인 필요 | 미확인 |
+| 회수 처리 중 "회수 중…" 비활성, 연타 한 번 | CT 8 | source ✅ / JS(confirmDialog busy) + hx-sync this:drop | CC `revokeConfirmDialog` | 미확인 |
+| 회수 실패는 다이얼로그 안 인라인, 닫히지 않고 토스트 없음 | CT 9 | source ✅ | CC `revokeFailureIsInline` | 미확인 |
+| 회수 성공 직후 다이얼로그는 닫히고 새로고침을 기다리지 않음 | CT 10 | source ✅ / 차이: 서버가 새로고침한 목록을 같은 응답에 싣는다 | CC `revokeCallsRestAndRefreshes` | 미확인 |
+| 회수 뒤 새로고침 실패 → 목록 자리 오류(+다시 시도) | CT 11 | source ✅ / 차이: 기존 행을 남기지 않고 LoadError | CC `revokeSucceedsEvenIfRefreshFails` | 미확인 |
+| 새로고침 실패 시 행 단위 회수 비활성 + 사유 | CT 12 | 해당 없음 / 차이: 서버는 상태를 안 갖는다(오래된 목록이 남지 않음) | — | — |
+| 확인 연 뒤 새로고침 실패해도 회수하지 않음 | CT 13 | 해당 없음(위와 같음). 대신 회수 직전 서버가 목록에서 credential 을 다시 확인(없으면 404, REST 호출 없음) | CC `foreignCredentialViaOwnTenantNotTouched` | — |
+| 다른 페이지 로딩 중 건수 "—"·페이지 표시 숨김 | CT 14 | 차이: 목록 교체 방식이라 로딩 표시 없음 | — | — |
+| 다른 페이지 요청 실패 → 이전 행 없이 전체 오류 + 다시 시도 | CT 15 | source ✅ | CC `loadError` | 미확인 |
+| 휴지통은 ACTIVE 행에만 | CT 16 | source ✅ / 서버 뷰에 status 가 없어 항상 ACTIVE(원본 adapt 와 같음) | CC `rendersColumnsAndCells` | 미확인 |
+| 검색 placeholder 는 실제 범위, 별칭은 안 된다고 알림 | CT 17 | source ✅ | CC `searchInputContract` | 미확인 |
+| 필터 없으면 서버 총 건수, CSV 라벨에 현재 페이지 건수 | CT 18 | source ✅ | CC `countAndCsvLabels`,`csvExport` | 미확인 |
+| 로드 실패: LoadError, 건수 —, CSV 비활성, 페이지네이션 없음, 다시 시도 | CT 19 | source ✅ / 차이: 검색 입력은 비활성화하지 않음(입력 유지) | CC `loadError` | 미확인 |
+| 로딩 중 Skeleton | CT 20 | 차이: 탭 컨테이너 공통 스켈레톤만(목록 교체 중 없음) | — | — |
+| 전송 방식은 한국어 라벨, 원문 title | CT 21 | source ✅ | CC `rendersColumnsAndCells` | 미확인 |
+
+### CredentialDetailDialog.test.tsx (11)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| props 로 즉시 상세 렌더 | CD 1 | source ✅ | CC `detailRenders` | 미확인 |
+| 섹션 3개 dlg-sec | CD 2 | source ✅ | CC `detailRenders` | 미확인 |
+| 인증 기록 표시 | CD 3 | source ✅ | CC `detailRenders` | 미확인 |
+| 이력 없음 안내 | CD 4 | source ✅ | CC `detailEmptyValuesAndEvents` | 미확인 |
+| 로드 실패 오류 + 다시 시도 | CD 5 | source ✅ | CC `detailEventsFailureIsLocal` | 미확인 |
+| 다시 시도 시 재조회 | CD 6 | source ✅ / 차이: 다시 시도가 상세 전체를 다시 불러옴 | CC `detailEventsFailureIsLocal` | 미확인 |
+| position 이 있으면 위치·이전/다음, 핸들러 없으면 비활성 | CD 7 | source ✅ | CC `detailNavWithinPage` | 미확인 |
+| position 없으면 이동 UI 없음 | CD 8 | source ✅ | CC `detailLookupFallbackAndNotFound` | 미확인 |
+| c 가 바뀌면 그 credential 의 기록 재조회 | CD 9 | source ✅(이동 = 새 상세 요청) | CC `detailNavWithinPage` | 미확인 |
+| 섹션 3개와 푸터 좌측 회수(ACTIVE) | CD 10 | source ✅ | CC `detailRenders` | 미확인 |
+| 인증 기록 로딩 Skeleton | CD 11 | 차이: 상세 요청에 기록이 함께 와 로딩 단계가 없음 | — | — |
+
+### credentialHelpers.test.ts (3)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| hasClientFilter | CH 1 | source ✅ | CC `countAndCsvLabels`(필터 유무로 건수 문구 분기) | — |
+| aaguid 하이픈·대소문자 무시 부분 일치, status 정확히 | CH 2 | source ✅ | CC `countAndCsvLabels`,`clientFilterAndChips` | — |
+| authenticatorLabel: MDS 이름 → aaguid 끝 8자 → unknown | CH 3 | source ✅ | CC `rendersColumnsAndCells` | — |

@@ -428,3 +428,7 @@ a.menu__item { text-decoration: none; }
 .ak-ack span { font-size: 13px; font-weight: 600; }
 .ak-issued-title { gap: 10px; flex-wrap: nowrap; }
 .ak-issued-title img { object-fit: contain; flex: none; }
+
+/* Tenant 자격 증명 탭 */
+.cred-filters { gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--line-soft); background: var(--canvas); }
+.cred-authn-ico { width: 22px; height: 22px; border-radius: 6px; background: var(--brand-100); color: var(--brand-700); display: inline-flex; align-items: center; justify-content: center; flex: none; }
