@@ -628,3 +628,61 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | hasClientFilter | CH 1 | source ✅ | CC `countAndCsvLabels`(필터 유무로 건수 문구 분기) | — |
 | aaguid 하이픈·대소문자 무시 부분 일치, status 정확히 | CH 2 | source ✅ | CC `countAndCsvLabels`,`clientFilterAndChips` | — |
 | authenticatorLabel: MDS 이름 → aaguid 끝 8자 → unknown | CH 3 | source ✅ | CC `rendersColumnsAndCells` | — |
+
+## §Tenant 감사 로그·퍼널 탭 (Task 13, 소스 수준 점검)
+
+약어: AT = `AuditTab.test.tsx` 순번, AH = `auditHelpers.test.ts`, FT = `FunnelTab.test.tsx`, FH = `funnelHelpers.test.ts`, TC = `AuditTabControllerTest`, FC = `FunnelTabControllerTest`, AHT = `AuditHelpersTest`, FHT = `FunnelHelpersTest`. 브라우저: 미확인(행 펼침·다이얼로그 열기, 체인 검증 경과 타이머·verify-run 이벤트, 표로 보기 토글은 JS — 브라우저 확인 필요).
+공통 차이: (1) **원본에는 자동 갱신(폴링)이 없다** — 브리프의 `hx-trigger="every …"` 는 두지 않았다(원본이 이긴다). (2) 필터·기간·더 보기는 상태가 아니라 요청 파라미터(서버가 다음 상태 주소를 만든다)이고 카드(`#audit-card`)/루트(`#funnel-root`)만 교체한다. (3) 로딩 중 스켈레톤은 서버 렌더라 없음. (4) 감사 목록 필터 파라미터는 브리프(`action=&from=&to=`)가 아니라 TSX(기간·이벤트 종류 그룹·실패만)를 따른다 — 그룹·실패만은 원본처럼 읽어 온 행 안에서 거른다.
+
+### AuditTab.test.tsx (16)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 기간 세그먼트를 서버 from/to 로 보냄(24시간 → 7일) | AT 1 | source ✅ | TC `windowSentAsRange`,`windowSegmentUrls` | 미확인 |
+| 실패만: result 우선, 없으면 실패 목록·이름 규칙 | AT 2 | source ✅ / 차이: REST 에 result 가 없어 이름 규칙만 실제로 쓰임(코드는 result 도 지원) | TC `failuresOnly`, AHT `isFailure` | 미확인 |
+| 그룹 칩(원시 코드는 title)·필터 지우기·건수 | AT 3 | source ✅ | TC `groupChips`,`countText` | 미확인 |
+| 어느 그룹에도 없는 이벤트는 "기타" | AT 4 | source ✅ | TC `groupChips`, AHT `eventGroup` | 미확인 |
+| 날짜 그룹 행 + 행 펼침(diff·payload·JSON 복사·상세 다이얼로그) | AT 5 | source ✅ / 차이: JSON 복사는 토스트 대신 버튼의 "복사됨" 표시(copyBtn 공용), 다이얼로그는 행마다 x-if 로 준비 | TC `rendersTable`,`expandedRow`,`eventDialog` | 미확인 |
+| 건수: total 없으면 "최근 N건" | AT 6 | source ✅ / 차이: REST 가 total 을 주지 않아 "기간 · 총 건수" 분기는 도달하지 않음 | TC `countText` | — |
+| 더 보기: 50건이면 같은 기간으로 다음 페이지를 붙임 | AT 7 | source ✅ / 차이: stateless 서버라 1..N 쪽을 같은 구간(to)으로 다시 읽음 | TC `loadMoreSameRange` | 미확인 |
+| 체인 검증 카드 PLATFORM 전용, 검증 실행 → 결과 배지 | AT 8 | source ✅ | TC `chainCardPlatformOnly`,`verifyIntact`,`verifyTampered` | 미확인 |
+| 더 보기 진행 중 기간 변경 → 이전 응답 폐기 | AT 9 | source ✅ / JS 아님: 카드의 `hx-sync="this:replace"` 가 앞 요청을 취소 | TC `pollingKeepsFilters`(hx-sync 속성) | 미확인 |
+| 체인 검증 중: 퍼센트 없이 "검증 중…" + 경과, 닫아도 계속, 연타 한 번 | AT 10 | source ✅ / JS: 래퍼 hx-sync `this:drop`, verify-run 이벤트가 요청 요소(래퍼)에서 계속 | TC `chainCardPlatformOnly`(마크업·hx 속성) | 미확인 |
+| 체인 검증 실패: 토스트 + 버튼 다시 활성 | AT 11 | source ✅ / 차이: 오류 상태 + 토스트(본문 없음)라 카드 교체 없음 | TC `verifyFailureAndRole` | 미확인 |
+| 로드 실패: LoadError, 건수 —, CSV 비활성, 다시 시도 | AT 12 | source ✅ | TC `loadFailure` | — |
+| 기간 변경 후 로드 실패 → 이전 행 남기지 않음 | AT 13 | source ✅ (카드 전체 교체) | TC `loadFailure` | — |
+| 로딩 중 Skeleton | AT 14 | 차이: 서버 렌더라 없음 | — | — |
+| 체인 검증 중 tenant 변경 → 이전 결과 폐기 | AT 15 | 해당 없음: tenant 마다 별도 탭 조각(래퍼가 교체되며 타이머는 isConnected 로 멈춤) | — | 미확인 |
+| 경과 시간이 실제로 늘어남 | AT 16 | JS — 브라우저 확인 필요 (Alpine begin()/setInterval) | TC `chainCardPlatformOnly`(경과 표시 마크업) | 미확인 |
+
+### auditHelpers.test.ts (8) · 추가
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| windowRange | AH 1 | source ✅ | AHT `windowRange` | — |
+| isFailure | AH 2 | source ✅ | AHT `isFailure` | — |
+| eventTone | AH 3 | source ✅ | AHT `eventTone` | — |
+| payloadDiff | AH 4 | source ✅ | AHT `payloadDiff` | — |
+| diffValue | AH 5 | source ✅ | AHT `diffValue` | — |
+| dayLabel (KST 오늘/어제/날짜) | AH 6 | source ✅ (공용 KstFormat) | AHT `dayLabel` | — |
+| eventGroup | AH 7 | source ✅ | AHT `eventGroup` | — |
+| (추가) JSON.stringify(v, null, 2) 모양 | — | source ✅ | AHT `pretty` | — |
+| (추가) CSV: BOM·헤더·이스케이프·수식 주입·파일명 | csvExport.ts | source ✅ / 차이: 서버 `CsvWriter`, 현재 화면과 같은 필터·구간의 행 | TC `csvMatchesOriginalFormat`,`csvNeutralizesFormulas` | — |
+| (추가) RP_ADMIN 다른 tenant → 탭·카드·검증·CSV 403 | 계약 | source ✅ | TC `crossTenantForbidden` | — |
+| (추가) 사용자 값(action·행위자·대상·payload) 이스케이프 | 계약 | source ✅ | TC `escapesUserControlledValues` | — |
+
+### FunnelTab.test.tsx (7) · funnelHelpers.test.ts (7)
+
+| 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| 7d KPI: 전체 전환율, 직전 7일 대비(30일 series), 최대 이탈, 전환율 칩 | FT 1 | source ✅ | FC `funnelPercentagesMatchHelper` | — |
+| 이벤트 타입 범례는 본문 글꼴 | FT 2 | source ✅ | FC `distributionCard` | — |
+| 24h·30d 는 직전 기간 대비·30일 비교 조회 없음 | FT 3 | source ✅ | FC `noComparisonOutside7d` | — |
+| 기간 전환 중 이전 숫자 숨김 | FT 4 | 차이: 서버 렌더 교체(이전 숫자는 응답 전까지 남음, hx-sync replace 로 늦은 응답이 덮지 않음) | FC `windowSegment`(hx 속성) | 미확인 |
+| 표로 보기 + 일별 시리즈 CSV | FT 5 | source ✅ / JS: x-show 토글 / 차이: CSV 는 서버(kind=series) | FC `seriesCard`,`csvExports` | 미확인 |
+| 조회 실패 LoadError·내보내기 비활성·다시 시도 | FT 6 | source ✅ | FC `loadFailure` | — |
+| 기간 전환 후 실패 → 이전 숫자 대신 LoadError | FT 7 | source ✅ (루트 전체 교체) | FC `loadFailure` | — |
+| funnelSummary 3 · priorPeriodDelta 3 · format 1 | FH 1–7 | source ✅ (toFixed 와 같은 반올림) | FHT `summary`,`noDrop`,`allZero`,`delta`,`deltaNegative`,`deltaNull`,`format` | — |
+| (추가) 막대 높이·너비는 숫자만 th:style, 색은 클래스 | 계약 | source ✅ | FC `barsUseNumbersOnly` | — |
+| (추가) CSV 3종·수식 무력화 | csvExport.ts | source ✅ | FC `csvExports`,`csvNeutralizesFormula` | — |
+| (추가) 403·리터럴 매핑·이벤트 타입 이스케이프 | 계약 | source ✅ | FC `crossTenantForbidden`,`literalMappingWinsAndRpOwnTenant`,`escapesEventTypes` | — |
