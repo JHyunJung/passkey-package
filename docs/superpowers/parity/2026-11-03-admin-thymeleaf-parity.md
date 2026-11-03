@@ -86,11 +86,11 @@ JUnit: `web/shell/CommandPaletteControllerTest`(약칭 CPT, 서버가 그리는 
 
 | 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
 |---|---|---|---|---|
-| 이동/액션 그룹(t-over)·"G T" 표시·결과 없음 문구 | V2 1 | source ✅ / 차이: 필터가 서버 왕복(입력 150ms 뒤 `GET /admin/_/palette?q=`), 서버가 같은 규칙(라벨·힌트·그룹 부분 일치, 대소문자 무시)으로 거른다 | CPT `platformDefaultList`, `filtersByLabelHintGroup`, `emptyState` | 미확인 |
-| Enter 로 선택 항목 실행(첫 항목 → Tenants 목록) | V2 2 | source ✅ / 차이: 실행이 `adminNavigate('/admin/tenants')`(boost 이동). 선택·실행은 JS | CPT `itemAttributes`(data-href) · 스텁 D1, D4, D12 / JS — 브라우저 확인 필요 | 미확인 |
+| 이동/액션 그룹(t-over)·"G T" 표시·결과 없음 문구 | V2 1 | source ✅ / 차이: 필터가 서버 왕복(입력 150ms 뒤 `GET /admin/_/palette?q=`), 서버가 같은 규칙(라벨·힌트·그룹 부분 일치, 대소문자 무시)으로 거른다 | CPT `platformDefaultList`, `filtersByLabelHintGroup`, `emptyState` | ✅ (2026-11-04 live pass) |
+| Enter 로 선택 항목 실행(첫 항목 → Tenants 목록) | V2 2 | source ✅ / 차이: 실행이 `adminNavigate('/admin/tenants')`(boost 이동). 선택·실행은 JS | CPT `itemAttributes`(data-href) · 스텁 D1, D4, D12 / JS — 브라우저 확인 필요 | ✅ (2026-11-04 live pass) |
 | 동작하지 않는 액션(Hash chain 즉시 검증·Role 전환 데모) 없음, 로그아웃 있음 | V2 3 | source ✅ / 차이: 없음 | CPT `platformDefaultList` | 미확인 |
 | 안내 문구가 실제 기능에 맞음(placeholder, credential·감사 ID 안내) | V3 1 | source ✅ / 차이: 없음 | CPT `emptyState`, SER `paletteMarkup` | 미확인 |
-| 열리면 검색칸 포커스, 닫히면 열기 전 위치로 | V3 2 | source ✅ / 차이: 포커스는 Alpine `x-trap`(+`autofocus`)이 맡는다(useFocusTrap 대신). 열 때마다 검색칸·이전 결과를 비운다 | SER `paletteMarkup`(autofocus·x-trap 속성은 마크업만), 스텁 D16 / JS — 브라우저 확인 필요 | 미확인 |
+| 열리면 검색칸 포커스, 닫히면 열기 전 위치로 | V3 2 | source ✅ / 차이: 포커스는 Alpine `x-trap`(+`autofocus`)이 맡는다(useFocusTrap 대신). 열 때마다 검색칸·이전 결과를 비운다 | SER `paletteMarkup`(autofocus·x-trap 속성은 마크업만), 스텁 D16 / JS — 브라우저 확인 필요 | ❌ → fixed in 브라우저 확인 결과 반영 커밋(show() 에서 입력칸 focus) |
 | Tab 은 팔레트 안에서 순환(검색칸이 유일한 탭 정지점), 항목 tabindex=-1 | V3 3 | source ✅ / 차이: TSX 는 Tab 을 막는다. 여기서는 `x-trap` 이 순환시키는데 탭 정지점이 검색칸 하나라 같은 결과여야 함(실제 확인 필요) | CPT `itemAttributes`(tabindex=-1) / JS — 브라우저 확인 필요 | 미확인 |
 | PLATFORM: "신규 tenant 생성"은 다이얼로그 열기 동작을 요청하고 닫는다 | V3 4 | source ✅ / 차이: 요청 = `/admin/tenants?new=1` 이동(App.tsx `navigate('/tenants?new=1')` 와 같은 목적지). 목록 화면이 `?new=1` 을 처리하는 것은 Tenant 목록 task 몫 | CPT `platformDefaultList`, `itemAttributes` · 스텁 D12 | 미확인 |
 | RP 관리자: 첫 tenant 가 아니라 활성 tenant, 그룹 "현재 Tenant · [이름]", 개요 → 그 tenant 개요 | V3 5 | source ✅ / 차이: 활성 tenant 를 서버가 `ActiveTenantController.current()` 로 읽는다(클라이언트 입력 불신) | CPT `rpUsesActiveTenant`, `rpScopeIsServerSide` | 미확인 |
@@ -504,10 +504,10 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 
 | 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
 |---|---|---|---|---|
-| ⋯ 메뉴는 ACTIVE 키에만, 회전·접두사 복사 + 위험 구획 회수, 회수 다이얼로그 기본 포커스 취소·danger 버튼 | AKT 1 | source ✅ | AKC `rendersKpisRowsAndMenuForActiveOnly`,`revokeIsL2WithoutTypedConfirm` | 미확인 |
+| ⋯ 메뉴는 ACTIVE 키에만, 회전·접두사 복사 + 위험 구획 회수, 회수 다이얼로그 기본 포커스 취소·danger 버튼 | AKT 1 | source ✅ | AKC `rendersKpisRowsAndMenuForActiveOnly`,`revokeIsL2WithoutTypedConfirm` | ✅ (2026-11-04 live pass) |
 | 접두사 뒤 keySuffix 는 값이 있을 때만 | AKT 2 | source ✅ / 차이: 서버 ApiKeyView 에 keySuffix 가 없어 항상 `prefix…` (원본도 실제 서버 응답에서는 같다) | AKC `rendersKpisRowsAndMenuForActiveOnly` | 미확인 |
 | 30일 이내 만료 경고 일수, KPI 초과 키 수(warn), 활성/만료/회수 | AKT 3 | source ✅ | AKC `rendersKpisRowsAndMenuForActiveOnly`,`expiryBadgeMatchesHelper` | 미확인 |
-| 발급 완료: Escape·스크림 무시, 체크 전 닫기 비활성, 체크 후 '닫기 (영구 소실)' | AKT 4 | source ✅ / JS(dismissible=false, closeOnScrim=false, x-bind:disabled=!checked) | AKC `issueCallsRestAndRendersIssuedDialog` / 스텁(finish) | 미확인 |
+| 발급 완료: Escape·스크림 무시, 체크 전 닫기 비활성, 체크 후 '닫기 (영구 소실)' | AKT 4 | source ✅ / JS(dismissible=false, closeOnScrim=false, x-bind:disabled=!checked) | AKC `issueCallsRestAndRendersIssuedDialog` / 스텁(finish) | ✅ (2026-11-04 live pass) |
 | 회전: 24시간 겹침 안내 → 새 키 + 이전 키 만료 시간 | AKT 5 | source ✅ | AKC `rotateDialogIsL2Primary`,`rotateShowsNewKeyAndOldKeyExpiry` | 미확인 |
 | 발급 다이얼로그가 열린 동안 이동·새로고침 막기('키를 아직 저장하지 않았습니다' / 머무르기) | AKT 6 | source ✅ / JS: `$store.dirty.report('apikey-issued',1)` + `notice` 로 unsavedGuard 문구 교체(app.js·unsavedGuard.html 공유 변경) | 스텁(apiKeyIssued init/destroy) / JS — 브라우저 확인 필요 | 미확인 |
 | 회전 다이얼로그는 새 키 id, 만료는 다시 읽은 새 키 값 | AKT 7 | source ✅ / 차이: 원본은 열린 뒤 목록 재조회로 채우고, 여기서는 응답 전에 서버가 목록을 다시 읽어 바로 그린다(못 찾으면 만료 줄 숨김) | AKC `rotateShowsNewKeyAndOldKeyExpiry`,`rotateHidesExpiryWhenNewKeyMissing` | 미확인 |
@@ -959,3 +959,18 @@ RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403
 - 해결 다이얼로그는 하나를 공유한다(대상은 버튼의 data-*, 폼의 id 값). 사건 목록만 갱신(409·다시 시도·오류 경로)해도 다이얼로그 정의를 다시 그릴 필요가 없다. 배너의 "Incident 처리 중"/생성 버튼은 `#chain-act-{tid}` OOB 로 갱신.
 - 백필 메뉴 항목은 검증 중·재검증 실패에 Alpine 이 aria-disabled + 사유(title)로 바꾼다. 메뉴 항목에 별도 힌트 줄(.menu__reason)은 서버 렌더 비활성(위변조)일 때만 보인다.
 - 재검증이 타임아웃·네트워크·비 2xx 로 끝나면(data-chain-reverify 요청) `failed` → 백필 차단(TSX status !== ok).
+
+## Live browser pass (2026-11-04)
+
+설정: 로컬 Oracle Free 23(arm64, FREEPDB1, gvenzl/oracle-free:23-slim-faststart — 로컬 전용, compose 변경 없음) + Redis 7, admin-app(브랜치 HEAD d31cca53)을 `--spring.profiles.active=local` 로 :8081, React admin-ui(메인 체크아웃, 변경 없음)를 vite :5173 에서 `/admin/api` 를 :8081 로 프록시. 뷰포트 1280x860, ego-browser.
+
+시각 쌍비교(픽셀 차이, 임계 24): login ≈ 동일 레이아웃; tenants 0.00%; tenant overview 0.01%; webauthn 0.02%; aaguid 0.01%; apikeys 0.01%; credentials 1.89%(스크롤바·헤더 줄바꿈, 같은 레이아웃); audit 0.02%; funnel 0.58%; activity 1.48%; audit-chain 3.12%; settings account 0.00%; admins 0.03%; security 0.00%; mds 0.81%; system 0.00%; license 0.00%.
+
+Thymeleaf 앱에서 확인한 흐름(콘솔 오류 없음 — 아래 결함 제외): 로그인(폼·DEV 데모) · 명령 팔레트 열기·목록 · 새 tenant 대화상자(422 인라인 오류, 성공 시 HX-Redirect + 토스트) · WebAuthn 저장(saveBar → diff 확인 → 저장, dirty 0) · API 키 발급(1회 시크릿, 체크 후 닫기)·행 메뉴·회수 L2 확인 · 계정 MFA 등록(QR)·확인(복구 코드)·해제 · Activity 5초 폴링·검색·상세 패널 · 단축키 시트(?)·G T 이동 · tenant 탭 전환·뒤로 가기.
+
+발견한 결함과 처리(모두 이 커밋에서 수정, 동작은 컨트롤러가 브라우저로 재확인):
+1. 팔레트 검색칸 미포커스 — `show()` 가 열린 뒤 입력칸에 focus(다음 틱 + rAF 재시도).
+2. Activity·audit-chain 첫 카드 위 여백 — 빈 `#activity-detail`·`#chain-warn` 이 flex gap 에 끼던 것을 `:empty { display: none }` 으로.
+3. MDS "동기화 설정" endpoint 줄바꿈 — `.kv dd` 의 overflow-wrap:anywhere 를 `kv__nowrap` 으로 해제.
+4. 퍼널 화살표·가로 스크롤 — 원본 TSX 와 마크업·CSS 가 소스 수준에서 동일해 원인을 소스로 특정하지 못함(변경 없음). 브라우저 재확인 필요.
+5. audit-chain 콘솔 경고(hx-include 가 없는 `[name=view]` 를 가리킴) — 골격·불러오기 실패 요청에는 hx-include 를 붙이지 않음.

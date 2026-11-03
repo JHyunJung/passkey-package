@@ -166,6 +166,8 @@ class AuditChainPageControllerTest {
         assertThat(root.attr("hx-trigger")).isEqualTo("load");
         assertThat(root.attr("hx-target")).isEqualTo("this");
         assertThat(root.attr("hx-swap")).isEqualTo("outerHTML");
+        // 골격에는 [name=view] 가 없다 — 없는 요소를 가리키는 hx-include 는 htmx 경고를 낸다.
+        assertThat(root.hasAttr("hx-include")).isFalse();
         assertThat(doc(r).title()).contains("감사 체인 모니터");
         assertThat(root.select("[role=status][aria-busy=true]")).isNotEmpty();
         verify(chain, never()).overview(anyInt());
@@ -323,6 +325,7 @@ class AuditChainPageControllerTest {
         Element retry = d.selectFirst("#chain-root button.btn--primary");
         assertThat(retry.attr("hx-get")).isEqualTo(OVERVIEW + "?first=1");
         assertThat(retry.attr("hx-target")).isEqualTo("#chain-root");
+        assertThat(retry.hasAttr("hx-include")).isFalse();
         assertThat(d.select("h1").text()).isEqualTo("감사 체인 모니터");
     }
 

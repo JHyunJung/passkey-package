@@ -114,7 +114,7 @@ public class AuditChainPageController {
         CurrentAdmin me = me(model);
         model.addAttribute("breadcrumbs", Crumbs.auditChain());
         if (!me.platform()) return "redirect:" + HomeRedirectController.homePath(me);
-        model.addAttribute("loadAttrs", rootReq("hx-get", OVERVIEW_PATH + "?first=1", true));
+        model.addAttribute("loadAttrs", rootReq("hx-get", OVERVIEW_PATH + "?first=1", true, false));
         return PAGE_VIEW;
     }
 
@@ -309,7 +309,7 @@ public class AuditChainPageController {
             if (first) {
                 res.setStatus(422);
                 model.addAttribute("loadError", e);
-                model.addAttribute("retryAttrs", disabledSelf(rootReq("hx-get", OVERVIEW_PATH + "?first=1", false)));
+                model.addAttribute("retryAttrs", disabledSelf(rootReq("hx-get", OVERVIEW_PATH + "?first=1", false, false)));
                 return FAILED_VIEW;
             }
             ErrorMessages.Info info = ErrorMessages.describe(e);
@@ -463,12 +463,17 @@ public class AuditChainPageController {
 
     /** 루트 교체 요청. 같은 동기화 그룹(#chain-root:drop)이라 더블 클릭·동시 실행은 뒤의 것을 버린다. view 는 표 필터를 보존한다. */
     private static Map<String, Object> rootReq(String method, String url, boolean self) {
+        return rootReq(method, url, self, true);
+    }
+
+    /** withView=false: 표(view 필터)가 아직 없는 골격·불러오기 실패 화면의 요청 — 가리킬 [name=view] 가 없어 hx-include 를 붙이지 않는다(htmx 경고 방지). */
+    private static Map<String, Object> rootReq(String method, String url, boolean self, boolean withView) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put(method, url);
         m.put("hx-target", self ? "this" : "#chain-root");
         m.put("hx-swap", "outerHTML");
         m.put("hx-sync", "#chain-root:drop");
-        m.put("hx-include", "#chain-root [name=view]");
+        if (withView) m.put("hx-include", "#chain-root [name=view]");
         m.put("hx-request", "{\"timeout\": " + LONG_TIMEOUT_MS + "}");
         if (self) m.put("hx-trigger", "load");
         return m;

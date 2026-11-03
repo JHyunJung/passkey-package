@@ -143,4 +143,22 @@ class AppJsContractTest {
                 .contains("idle-logout-form").contains("세션 만료까지 10초 남았습니다.").contains("세션 만료까지 30초 남았습니다.");
         assertThat(js).contains("Alpine.data('commandPalette'");
     }
+
+    @Test
+    @DisplayName("팔레트: 입력칸은 autofocus 속성이 있고, 열 때(show) 입력칸에 포커스를 준다")
+    void paletteFocusesInputOnOpen() throws IOException {
+        String tpl = Files.readString(Path.of("src/main/resources/templates/admin/fragments/shell/command-palette.html"), StandardCharsets.UTF_8);
+        assertThat(tpl).contains("id=\"palette-input\"").contains("x-ref=\"input\"").contains("autofocus");
+        String js = appJs();
+        int show = js.indexOf("show() {");
+        assertThat(show).isPositive();
+        assertThat(js.substring(show, show + 500)).contains("this.$refs.input.focus()");
+    }
+
+    @Test
+    @DisplayName("빈 자리 요소(#chain-warn · #activity-detail)는 :empty 일 때 숨긴다")
+    void emptySlotsAreHidden() throws IOException {
+        String css = Files.readString(Path.of("src/main/resources/static/admin/css/components.css"), StandardCharsets.UTF_8);
+        assertThat(css).contains("#chain-warn:empty, #activity-detail:empty { display: none; }");
+    }
 }

@@ -126,6 +126,7 @@ class MdsTabControllerTest {
         assertThat(kpi(d, "신뢰 앵커 (Trust anchors)").selectFirst(".kpi__value").text()).isEqualTo("42");
         assertThat(kpi(d, "마지막 동기화").selectFirst(".kpi__value").text()).isEqualTo("3분 전");
         Element dl = d.selectFirst("dl.kv");
+        assertThat(dl.selectFirst("dd.kv__nowrap").text()).isEqualTo("https://mds3.fidoalliance.org/");
         assertThat(dl.text()).contains("https://mds3.fidoalliance.org/").contains("2026-10-12 03:00 KST").contains("93%").contains("28 / 30");
         Element trust = d.selectFirst("dd span[title=MDS_STRICT_OPTIONAL]");
         assertThat(trust.text()).isEqualTo("MDS 확인 권장");

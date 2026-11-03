@@ -520,3 +520,8 @@ a.menu__item { text-decoration: none; }
 .mds-sync__busy { display: none; }
 .htmx-request .mds-sync__idle { display: none; }
 .htmx-request .mds-sync__busy { display: inline; }
+
+/* 빈 자리 요소(경고 슬롯·상세 패널 자리)는 flex gap 에 끼지 않게 한다. */
+#chain-warn:empty, #activity-detail:empty { display: none; }
+/* MDS 동기화 설정의 endpoint 값: 원본(MdsStatusTab.tsx)은 한 줄 — .kv dd 의 overflow-wrap:anywhere 를 풀어 준다. */
+.kv dd.kv__nowrap { overflow-wrap: normal; white-space: nowrap; }

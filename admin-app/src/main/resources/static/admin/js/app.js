@@ -381,7 +381,13 @@
         sel: 0,
         count: 0,
         options() { return Array.from(this.$refs.list.querySelectorAll('[role="option"]')); },
-        show() { if (!this.open) { this.reset(); this.open = true; } },
+        show() {
+          if (this.open) return;
+          this.reset();
+          this.open = true;
+          // CommandPalette.tsx: 열릴 때 검색칸에 포커스. x-show 가 표시한 뒤에야 포커스가 들어가므로 다음 틱, 포커스 트랩이 먼저 가져가도 다시 맞춘다.
+          this.$nextTick(() => { this.$refs.input.focus(); requestAnimationFrame(() => { if (this.open) this.$refs.input.focus(); }); });
+        },
         toggle() { if (this.open) this.close(); else this.show(); },
         close() { this.open = false; },
         // 열 때마다: 검색칸 비움, 이전 결과 제거(이전 tenant 가 남지 않게), 결과 새로 요청.
