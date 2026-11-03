@@ -396,6 +396,48 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // ── API 키 탭(ApiKeysTab.tsx) ──────────────────────────
+  // 새 키 발급 폼: 이름·권한 범위·만료 프리셋. 만료일 미리보기는 서버가 프리셋별로 계산해 넘긴다(previews: {"6": "YYYY-MM-DD", …}).
+  // months 는 문자열('' = 무기한)이라 hidden 입력·칩 data-months 와 그대로 비교한다. 요청 중에는 입력을 잠그고, 시작할 때 이전 경고를 지운다.
+  Alpine.data('apiKeyForm', (cfg = {}) => ({
+    name: '',
+    scopes: ['registration', 'authentication'],
+    months: cfg.months == null ? '' : String(cfg.months),
+    max: cfg.nameMax || 64,
+    busy: false,
+    has(v) { return this.scopes.includes(v); },
+    toggle(v) { this.scopes = this.has(v) ? this.scopes.filter((s) => s !== v) : [...this.scopes, v]; },
+    get hint() {
+      const p = this.months ? (cfg.previews || {})[this.months] : null;
+      return (p ? `만료일 ${p} (KST)` : '만료 없음 — 키가 무기한으로 유효합니다.') + ` · 권장 회전 주기 ${cfg.rotationDays}일`;
+    },
+    get canSubmit() { return !this.busy && this.name.length > 0 && this.scopes.length > 0; },
+    onBefore() { this.busy = true; const e = document.getElementById(cfg.errorId || ''); if (e) e.replaceChildren(); },
+    onAfter() { this.busy = false; },
+  }));
+
+  // 발급 완료 다이얼로그 안쪽(바깥 dialog 의 open 을 쓴다). 열려 있는 동안 $store.dirty 에 1건을 보고해 이동·새로고침을 막고(문구는 notice),
+  // 체크 뒤 닫으면 자리(slot)를 비워 평문 키가 DOM(<template> 안 포함)에 남지 않게 한다.
+  Alpine.data('apiKeyIssued', (cfg = {}) => ({
+    checked: false,
+    init() {
+      const d = Alpine.store('dirty');
+      d.notice = { title: cfg.leaveTitle || '', body: cfg.leaveBody || '' };
+      d.report('apikey-issued', 1, false);
+    },
+    destroy() {
+      const d = Alpine.store('dirty');
+      d.report('apikey-issued', 0, false);
+      d.notice = null;
+    },
+    finish() {
+      if (!this.checked) return;
+      this.open = false;
+      const slot = document.getElementById(cfg.slot || '');
+      this.$nextTick(() => { if (slot) slot.replaceChildren(); });
+    },
+  }));
+
   // ── SaveBar / 저장하지 않은 변경 ───────────────────────
   // form 의 필드 값을 처음 상태와 비교해 바뀐 개수를 센다. 되돌리기=form.reset(), 저장=form.requestSubmit().
   // 변경 개수와 저장 중 여부는 전역 Alpine.store('dirty')(app.js)에 보고한다. 새로고침·탭 닫기 경고(beforeunload)와 이동 확인은

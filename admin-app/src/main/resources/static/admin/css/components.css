@@ -416,3 +416,15 @@ a.menu__item { text-decoration: none; }
 .policy-row { flex-wrap: nowrap; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
 .policy-row:last-child { border-bottom: 0; }
 .policy-empty { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); }
+
+/* Tenant API 키 탭 */
+.scope-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; }
+.scope-opt input { margin-top: 3px; }
+.scope-opt--on { border-color: var(--brand-300); background: var(--brand-50); }
+.ak-rotate-flow { gap: 10px; flex-wrap: nowrap; font-size: 13px; padding: 12px 14px; background: var(--canvas); border-radius: var(--r); }
+.tag--new { background: var(--brand-100); color: var(--brand-700); }
+.kv--boxed { padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: var(--r); }
+.ak-ack { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--brand-700); border-radius: var(--r); background: var(--brand-50); cursor: pointer; }
+.ak-ack span { font-size: 13px; font-weight: 600; }
+.ak-issued-title { gap: 10px; flex-wrap: nowrap; }
+.ak-issued-title img { object-fit: contain; flex: none; }

@@ -496,6 +496,57 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 검증 실패 422 + 필드 옆 오류, 변경 없음은 경고 토스트 | 신규(ruling G) | ATC `previewNoChangeAndInvalid` | 미확인 |
 | 접근 경계 | 신규 | ATC `rpAdminOtherTenantDenied`,`rpAdminOwnTenantAllowed` | — |
 
+## §Tenant API 키 탭 (Task 11, 소스 수준 점검)
+
+약어: AKT = `ApiKeysTab.test.tsx` 순번, AKC = `ApiKeysTabControllerTest`. 브라우저 쪽(Alpine)은 Node 스텁(미커밋: apiKeyForm 토글·미리보기·canSubmit·요청 중 잠금, apiKeyIssued 보고·체크 전 닫기 불가·닫으면 자리 비움·destroy 해제)으로만 확인.
+
+### ApiKeysTab.test.tsx (24)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
+|---|---|---|---|---|
+| ⋯ 메뉴는 ACTIVE 키에만, 회전·접두사 복사 + 위험 구획 회수, 회수 다이얼로그 기본 포커스 취소·danger 버튼 | AKT 1 | source ✅ | AKC `rendersKpisRowsAndMenuForActiveOnly`,`revokeIsL2WithoutTypedConfirm` | 미확인 |
+| 접두사 뒤 keySuffix 는 값이 있을 때만 | AKT 2 | source ✅ / 차이: 서버 ApiKeyView 에 keySuffix 가 없어 항상 `prefix…` (원본도 실제 서버 응답에서는 같다) | AKC `rendersKpisRowsAndMenuForActiveOnly` | 미확인 |
+| 30일 이내 만료 경고 일수, KPI 초과 키 수(warn), 활성/만료/회수 | AKT 3 | source ✅ | AKC `rendersKpisRowsAndMenuForActiveOnly`,`expiryBadgeMatchesHelper` | 미확인 |
+| 발급 완료: Escape·스크림 무시, 체크 전 닫기 비활성, 체크 후 '닫기 (영구 소실)' | AKT 4 | source ✅ / JS(dismissible=false, closeOnScrim=false, x-bind:disabled=!checked) | AKC `issueCallsRestAndRendersIssuedDialog` / 스텁(finish) | 미확인 |
+| 회전: 24시간 겹침 안내 → 새 키 + 이전 키 만료 시간 | AKT 5 | source ✅ | AKC `rotateDialogIsL2Primary`,`rotateShowsNewKeyAndOldKeyExpiry` | 미확인 |
+| 발급 다이얼로그가 열린 동안 이동·새로고침 막기('키를 아직 저장하지 않았습니다' / 머무르기) | AKT 6 | source ✅ / JS: `$store.dirty.report('apikey-issued',1)` + `notice` 로 unsavedGuard 문구 교체(app.js·unsavedGuard.html 공유 변경) | 스텁(apiKeyIssued init/destroy) / JS — 브라우저 확인 필요 | 미확인 |
+| 회전 다이얼로그는 새 키 id, 만료는 다시 읽은 새 키 값 | AKT 7 | source ✅ / 차이: 원본은 열린 뒤 목록 재조회로 채우고, 여기서는 응답 전에 서버가 목록을 다시 읽어 바로 그린다(못 찾으면 만료 줄 숨김) | AKC `rotateShowsNewKeyAndOldKeyExpiry`,`rotateHidesExpiryWhenNewKeyMissing` | 미확인 |
+| 발급 버튼 연타는 한 번만 | AKT 8 | source ✅ / JS: form `hx-sync=#ak-root:drop` + busy 동안 버튼 disabled | 스텁(onBefore → canSubmit false) | 미확인 |
+| 회수·회전 확인 버튼 처리 중 비활성 '회수 중…' | AKT 9 | source ✅ (Task 3 confirmDialog busy) | AKC `revokeIsL2WithoutTypedConfirm`(라벨) | 미확인 |
+| 로드 실패: LoadError + 다시 시도(빈 상태 아님) | AKT 10 | source ✅ | AKC `loadErrorNotEmpty` | 미확인 |
+| 로딩 중 Skeleton | AKT 11 | source ✅ / 차이: 탭 컨테이너의 공통 스켈레톤(Task 9) | — | 미확인 |
+| 빈 상태: 첫 API 키 발급 + RP 연동 가이드 | AKT 12 | source ✅ | AKC `emptyState` | 미확인 |
+| 발급 실패: 다이얼로그 안 경고, 입력 유지, 토스트 없음 → 재발급 | AKT 13 | source ✅ (422 + `#ak-new-error` OOB, 폼은 교체 안 함) | AKC `issueFailureIsInlineAndKeepsInput`,`issueValidationRejectsWithoutCallingRest` | 미확인 |
+| 발급 중 '발급 중…' 비활성, 입력 잠금 | AKT 14 | source ✅ / JS(busy → input·fieldset·칩 disabled) | AKC `newKeyDialogMarkup` / 스텁 | 미확인 |
+| 만료 열 글 배지: 정상·만료 임박·무기한·만료됨 | AKT 15 | source ✅ | AKC `expiryBadgeMatchesHelper` | 미확인 |
+| 권한 범위 한국어 라벨 + 원문 title | AKT 16 | source ✅ | AKC `scopeLabelsKoreanWithRawTitle` | 미확인 |
+| RP 가이드 링크가 비면 렌더하지 않음 | AKT 17 | source ✅ (`helpLinks.rpGuide`) | AKC `emptyState` | 미확인 |
+| 회수: L2 영향 요약(입력 확인 없음), 성공 토스트 "회수했습니다" | AKT 18 | source ✅ / **브리프와 다름**: 브리프는 ConfirmByTyping 을 요구했지만 원본(답지)은 L2·입력 없음(`queryByRole('textbox')` null) — 원본을 따름 | AKC `revokeIsL2WithoutTypedConfirm`,`revokeSucceedsWithToastAndRefresh` | 미확인 |
+| 회수 실패는 다이얼로그 안 인라인 | AKT 19 | source ✅ (confirmError) | AKC `revokeFailureIsInline` | 미확인 |
+| 회전: L2 primary, 실패 인라인 | AKT 20 | source ✅ | AKC `rotateDialogIsL2Primary`,`rotateFailureIsInline` | 미확인 |
+| 발급 실패 경고 마침표 겹침 없음 | AKT 21 | source ✅ | AKC `issueFailureIsInlineAndKeepsInput` | — |
+| 발급 진행 중이면 회수·회전 동시 실행 안 됨(공용 가드) | AKT 22 | source ✅ / 차이: 같은 `hx-sync=#ak-root:drop` 그룹이라 뒤 요청은 조용히 버려진다('다른 작업이 진행 중' 문구 없음). 모달이라 화면에서는 겹치기 어렵다 | JS — 브라우저 확인 필요 | 미확인 |
+| KPI 라벨 '권장 회전 주기' | AKT 23 | source ✅ | AKC `rendersKpisRowsAndMenuForActiveOnly` | — |
+| 서버 설명이 비어도 마침표 겹침 없음 | AKT 24 | source ✅ | AKC `issueFailureIsInlineAndKeepsInput`(issueErrorText) | — |
+
+### apiKeyHelpers.test.ts · apiKeyExpiry.test.ts
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| rotationOverdueCount(90일 초과만), expiryState/daysLeft(올림), latestCreatedAt·keyStatusCounts, previewExpiry(말일 보정), expiryBadge 6경우 | apiKeyHelpers 1–6 | source ✅ / 차이: previewExpiry 는 서버가 KST 로 계산해 프리셋별로 넘긴다 | AKC `expiryBadgeMatchesHelper`,`newKeyDialogMarkup` | — |
+| isExpiringSoon(30일, 회수·만료·무기한 false) | apiKeyExpiry 1–3 | source ✅ (Task 9 `ApiKeyExpiry`) — 탭 배지 계산에 사용 | AKC `issueCallsRestAndRendersIssuedDialog`(배지) | — |
+
+### 추가 (원본 테스트 없음, 브리프·계약)
+
+| 체크 항목 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|
+| 평문 키는 응답 본문에만: 세션·플래시·헤더(토스트 포함)·리다이렉트 없음, `Cache-Control: no-store`, `hx-history=false`, 닫으면 자리 비움 | 신규 | AKC `issuedSecretOnlyInResponse` / 스텁(finish) | 미확인 |
+| 회전·회수 주소(키 id)는 `?tenantId=` 를 `TenantTabs.load` 로 확인하고 그 tenant 목록에 키가 있어야 REST 호출 | 신규 | AKC `rpAdminOtherTenantDenied`,`keyOfAnotherTenantViaOwnTenantIdNotMutated` | — |
+| 회전·회수는 `X-Confirm` 없으면 400 | 신규 | AKC `mutationsRequireConfirmHeader` | — |
+| 발급·회전·회수 뒤 탭 줄 API 키 배지 OOB(`#tenant-tab-apikeys-badge`) | 신규(Task 9 이월) | AKC `issueCallsRestAndRendersIssuedDialog`,`rotateShowsNewKeyAndOldKeyExpiry`,`revokeSucceedsWithToastAndRefresh` | 미확인 |
+| 접두사 복사 → 토스트(상수 JS + data-prefix) | source ✅ | AKC `copyPrefixMenuItem` | 미확인 |
+| 정지 다이얼로그의 '유효한 API 키 N개' 는 키 변경 뒤 갱신 안 됨(원본 onChanged → tenant 재조회) | **차이** | — | 미확인 |
+
 ## §Activity
 
 | 체크 항목 | 원본 테스트 | 결과 |

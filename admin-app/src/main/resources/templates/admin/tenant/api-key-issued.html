@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  발급 완료 다이얼로그(← ApiKeysTab.tsx IssuedKeyDialog). 발급(POST …/api-keys)·회전(POST /admin/_/api-keys/{id}/rotate) 성공 응답이 #ak-issued-slot 에 넣는다.
+  모델: issued(Issued: id, name, prefix, expiry(null 이면 줄 숨김), plaintext, oldKeyNotice), 그리고 목록 OOB(listOob)·배지 OOB(badgeOob) 용 api-keys 모델.
+  평문 키는 이 조각에만 그려진다(세션·헤더·토스트·리다이렉트 없음, 응답은 Cache-Control: no-store). hx-history=false 로 htmx 이력 저장도 막는다.
+  Escape·스크림으로 닫히지 않고, "안전한 장소에 복사했습니다." 체크 뒤에만 닫힌다. 닫으면 자리를 비워 DOM 에서도 평문을 지운다.
+  열려 있는 동안 이동·새로고침은 $store.dirty(apiKeyIssued 가 보고)로 막고, 이동 확인 문구는 '키를 아직 저장하지 않았습니다'.
+-->
+<th:block th:fragment="issued">
+  <div hx-history="false" ui:xdata="${@fmt.xdata('dialog', 'id', 'ak-issued', 'open', true, 'dismissible', false, 'closeOnScrim', false)}"
+       x-init="$dispatch('dialog:close', { id: 'ak-new' })" x-on:keydown.escape.window="onEscape()">
+    <template x-if="open">
+      <div class="scrim">
+        <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="ak-issued-title" x-trap.noscroll="open"
+             ui:xdata="${@fmt.xdata('apiKeyIssued', 'slot', 'ak-issued-slot', 'leaveTitle', '키를 아직 저장하지 않았습니다', 'leaveBody', '이동하면 발급된 키를 다시 볼 수 없습니다. 키는 서버에서 계속 유효합니다.')}">
+          <div class="dialog__head">
+            <h3 class="dialog__title row ak-issued-title" id="ak-issued-title">
+              <img th:src="@{/admin/img/api-key-issued.webp}" alt="" width="72" height="72">
+              <span>새 API key가 발급되었습니다 — 지금만 표시됩니다</span>
+            </h3>
+          </div>
+          <div class="dialog__body">
+            <th:block th:if="${issued.oldKeyNotice != null}">
+              <th:block th:replace="~{admin/fragments/ui/alert :: alert('warn', null, ~{admin/tenant/api-key-issued :: oldKeyBody}, null, null)}"></th:block>
+            </th:block>
+            <dl class="kv kv--boxed" style="grid-template-columns: 80px minmax(0, 1fr)">
+              <dt>이름</dt>
+              <dd><th:block th:text="${issued.name}">staging</th:block> <span style="margin-left: 6px"><span class="badge badge--success badge--dot">발급 완료</span></span></dd>
+              <dt>prefix</dt><dd class="mono" style="font-size: 12px" th:text="${issued.prefix}">pk_live_ab</dd>
+              <th:block th:if="${issued.expiry != null}"><dt>만료</dt><dd th:text="${issued.expiry}">2028-10-11</dd></th:block>
+              <dt>id</dt><dd class="mono" style="font-size: 12px" th:text="${issued.id}">id</dd>
+            </dl>
+            <th:block th:replace="~{admin/fragments/ui/secretBox :: secretBox(${issued.plaintext}, null)}"></th:block>
+            <label class="ak-ack">
+              <input type="checkbox" x-model="checked">
+              <span>안전한 장소에 복사했습니다.</span>
+            </label>
+          </div>
+          <div class="dialog__foot">
+            <div class="dialog__foot-start"><span class="hint hint--flush">server는 plaintext의 해시만 저장합니다.</span></div>
+            <button type="button" class="btn btn--primary" disabled x-bind:disabled="!checked" x-on:click="finish()"
+                    x-text="checked ? '닫기 (영구 소실)' : '닫기 (영구 소실) · 체크 필요'">닫기 (영구 소실) · 체크 필요</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <th:block th:if="${listOob}"><th:block th:replace="~{admin/tenant/api-keys :: list}"></th:block></th:block>
+  <th:block th:if="${badgeOob}"><th:block th:replace="~{admin/tenant/api-keys :: badge}"></th:block></th:block>
+</th:block>
+
+<th:block th:remove="all">
+  <th:block th:fragment="oldKeyBody" th:text="${issued.oldKeyNotice}">이전 키는 24시간 후 만료됩니다.</th:block>
+</th:block>
+</body>
+</html>

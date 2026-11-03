@@ -306,7 +306,9 @@
       allow() { this.pass = true; },
       passing() { return this.pass; },
       endPass() { this.pass = false; },
-      reset() { this.manual = false; this.parts = {}; this.disarmed = false; this.pass = false; this.refresh(); },
+      // 이동 확인 문구를 바꾸는 화면(예: API 키 발급 완료 다이얼로그): {title, body} 또는 null(기본 문구). unsavedGuard 가 읽는다.
+      notice: null,
+      reset() { this.manual = false; this.parts = {}; this.disarmed = false; this.pass = false; this.notice = null; this.refresh(); },
       needsGuard() { return this.count > 0 && !this.disarmed && !this.passing(); },
       needsUnloadPrompt() { return this.needsGuard() && !this.saving(); },
     });
