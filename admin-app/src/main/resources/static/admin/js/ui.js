@@ -431,6 +431,13 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('toastHost', () => ({
     toasts: [],
     seq: 0,
+    // 앞 화면이 이동 직전에 받은 토스트(auth.js: MFA 확인 응답의 HX-Trigger + HX-Redirect)를 한 번 띄운다.
+    init() {
+      let pending = null;
+      try { pending = window.sessionStorage.getItem('admin.pendingToast'); window.sessionStorage.removeItem('admin.pendingToast'); } catch (e) { pending = null; }
+      if (!pending) return;
+      try { this.push(JSON.parse(pending)); } catch (e) { /* 깨진 값은 버린다 */ }
+    },
     push(detail) {
       const d = detail || {};
       const kind = d.kind === 'error' || d.kind === 'err' ? 'err' : d.kind === 'warn' ? 'warn' : 'ok';

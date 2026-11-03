@@ -16,6 +16,8 @@ import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -99,6 +101,10 @@ public class AdminSecurityConfig {
             // 있으면 corsSource 가 null 을 반환 → CORS 헤더 미발급(same-origin 만 허용).
             .cors(cors -> cors.configurationSource(corsSource))
             .authorizeHttpRequests(authz -> authz
+                // 화면 경로에서 난 컨테이너 오류 디스패치(/error)는 원래 상태의 오류 화면을 그리게 둔다(아래 denyAll 이
+                // 막으면 404·500 이 "권한이 없습니다" 403 이 된다). 원래 주소가 /admin/api/** 인 오류 디스패치는 그대로 둔다.
+                // 클라이언트가 직접 부르는 GET /error 는 REQUEST 디스패치라 여기 해당하지 않는다(denyAll).
+                .requestMatchers(AdminSecurityConfig::isScreenErrorDispatch).permitAll()
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
                 // 미인증 화면(Thymeleaf): 비밀번호 찾기·재설정, 가입 요청. GET 화면과 POST 제출 모두.
                 .requestMatchers("/admin/forgot-password", "/admin/reset-password", "/admin/signup").permitAll()
@@ -242,6 +248,14 @@ public class AdminSecurityConfig {
                 res.sendRedirect("/admin/login");
             }
         };
+    }
+
+    /** 컨테이너 오류 디스패치이고, 오류가 난 원래 주소가 {@code /admin/api/**} 가 아닌지. */
+    static boolean isScreenErrorDispatch(HttpServletRequest req) {
+        if (req.getDispatcherType() != DispatcherType.ERROR) return false;
+        Object uri = req.getAttribute(RequestDispatcher.ERROR_REQUEST_URI);
+        String u = uri == null ? null : uri.toString();
+        return u == null || !(u.equals("/admin/api") || u.startsWith("/admin/api/"));
     }
 
     /**

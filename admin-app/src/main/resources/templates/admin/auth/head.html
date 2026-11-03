@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  로그인·MFA 단계 화면의 head(← index.html). 공통 틀(admin/layout)은 쓰지 않는다 — App.tsx 도 로그인 전·MFA 대기에는
+  사이드바·상단 바 없이 LoginPage / MfaChallenge 만 그린다.
+  스크립트: htmx → ui.js(otpInput·toastHost) → auth.js(로그인·MFA 컴포넌트, htmx 응답 처리) → alpine(defer, 마지막).
+  app.js 는 싣지 않는다(셸 단축키·팔레트·네트워크 오류 토스트 — 로그인 화면은 오류를 폼 안 한 곳에만 보인다).
+-->
+<head th:fragment="head(title)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">Crosscert Passkey Admin</title>
+  <link rel="icon" th:href="@{/admin/img/favicon.png}">
+  <link rel="stylesheet" th:href="@{/admin/css/fonts.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/tokens.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/globals.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/components.css}">
+  <script th:src="@{/admin/js/vendor/htmx.min.js}"></script>
+  <script th:src="@{/admin/js/ui.js}"></script>
+  <script th:src="@{/admin/js/auth.js}"></script>
+  <script th:src="@{/admin/js/vendor/alpine.min.js}" defer></script>
+</head>
+</html>

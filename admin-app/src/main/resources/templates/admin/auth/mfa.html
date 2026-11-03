@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<!--
+  MFA 단계(← pages/MfaChallenge.tsx). 비밀번호 인증을 마친 MFA 대기 세션이 GET /admin/login 에서 받는다.
+  제출: hx-post /admin/login/mfa(code, mode, _csrf) → LoginPageController.verifyMfa → MfaController.verify(Java 호출).
+    성공 → HX-Redirect /admin(복구 코드를 썼으면 남은 개수 경고 토스트를 HX-Trigger 로 함께; auth.js 가 다음 화면까지 넘긴다)
+    코드 틀림(401) → 아래 error 조각 + 422 → #mfa-error 에 스왑
+    잠금으로 세션이 무효화됨 → HX-Redirect /admin/login
+    5xx·네트워크 오류 → auth.js 가 "확인하지 못했습니다" 경고(코드가 틀렸다고 말하지 않는다)
+  TOTP / 복구 코드 모드 전환은 같은 카드 안(Alpine x-if — 지금 모드의 code 입력 하나만 제출된다).
+-->
+<head th:replace="~{admin/auth/head :: head('Crosscert Passkey Admin')}"></head>
+<body>
+<main class="auth" x-data="mfaChallenge">
+  <div class="auth__col">
+    <img class="auth__logo" th:src="@{/admin/img/crosscert-logo-transparent.png}" alt="CROSSCERT">
+    <form class="auth-card" id="mfa-form" hx-post="/admin/login/mfa" hx-target="#mfa-error" hx-swap="innerHTML" hx-sync="this:drop"
+          x-on:htmx:before-request="onBefore($event)" x-on:htmx:after-request="onAfter($event)"
+          x-on:htmx:send-error="onNetworkError(false)" x-on:htmx:timeout="onNetworkError(true)">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <input type="hidden" name="mode" value="totp" x-bind:value="mode">
+
+      <template x-if="mode === 'totp'">
+        <div class="col" style="gap: 6px; align-items: center; text-align: center;">
+          <img th:src="@{/admin/img/mfa.webp}" alt="" style="width: 88px; height: 88px; object-fit: contain;">
+          <h1 class="page__title">2단계 인증</h1>
+          <p class="card__sub">authenticator 앱에 표시된 6자리 코드를 입력하세요.</p>
+        </div>
+      </template>
+      <template x-if="mode === 'recovery'">
+        <div class="col" style="gap: 6px;">
+          <h1 class="page__title">복구 코드로 로그인</h1>
+          <p class="card__sub">MFA 등록 때 저장한 복구 코드 하나를 입력하세요. 사용한 코드는 다시 쓸 수 없습니다.</p>
+        </div>
+      </template>
+
+      <!-- 오류는 카드 안 한 곳(role="alert")에만. 코드 틀림은 서버 조각, 일시 오류는 아래 템플릿. -->
+      <div id="mfa-error" x-ref="error"></div>
+      <template x-if="transient">
+        <div class="banner banner--danger banner--top" role="alert">
+          <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+          <div class="banner__body">
+            <div class="banner__title">확인하지 못했습니다</div>
+            <div x-text="transient + '. 잠시 후 다시 시도하세요.'"></div>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="mode === 'totp'">
+        <div class="col" style="gap: 20px;">
+          <div x-ref="otp" x-on:input="syncOtp()" x-on:paste="syncOtp()" x-on:keydown="syncOtp()" x-on:otp-complete="syncOtp()">
+            <th:block th:replace="~{admin/fragments/ui/otpInput :: otpInput('code', 6, '인증 코드', true, true)}"></th:block>
+            <p class="hint" style="text-align: center;">붙여넣기 지원 · 6자리를 모두 입력하면 자동 확인</p>
+          </div>
+          <button type="submit" class="btn btn--primary btn--lg" x-bind:disabled="submitting || !ready" x-text="submitting ? '확인 중…' : '확인'">확인</button>
+          <div class="col" style="gap: 6px; align-items: center; padding-top: 4px; border-top: 1px solid var(--line-soft);">
+            <button type="button" class="btn btn--ghost btn--sm" x-bind:disabled="submitting" x-on:click="switchMode('recovery')">복구 코드로 로그인</button>
+            <p class="hint" style="margin: 0; text-align: center;">기기를 잃어버렸나요? 운영자에게 MFA 초기화를 요청하세요.</p>
+            <p class="hint" style="margin: 0; text-align: center;" x-show="wrongTotp" x-cloak>시계가 맞지 않으면 코드가 계속 틀릴 수 있습니다. 휴대폰 시간 자동 설정을 확인하세요.</p>
+          </div>
+        </div>
+      </template>
+      <template x-if="mode === 'recovery'">
+        <div class="col" style="gap: 20px;">
+          <div class="field">
+            <label class="label" for="mfa-recovery">복구 코드</label>
+            <input id="mfa-recovery" name="code" class="input input--lg mono" placeholder="AB3F-2K7M" autocomplete="off"
+                   style="min-height: 48px; font-size: 16px; letter-spacing: 0.08em; text-align: center;"
+                   x-ref="recovery" x-bind:value="code" x-bind:readonly="submitting" x-on:input="onRecoveryInput($event)">
+          </div>
+          <button type="submit" class="btn btn--primary btn--lg" x-bind:disabled="submitting || !ready" x-text="submitting ? '확인 중…' : '확인'">확인</button>
+          <button type="button" class="btn btn--ghost btn--sm" x-bind:disabled="submitting" x-on:click="switchMode('totp')">← authenticator 코드로 돌아가기</button>
+        </div>
+      </template>
+    </form>
+    <!-- 출구: MFA 대기 세션을 끝내고 로그인 화면으로(POST /admin/logout, th:action 이 _csrf 를 넣는다). -->
+    <form th:action="@{/admin/logout}" method="post" style="margin: 0;">
+      <button type="submit" class="btn btn--ghost" style="color: var(--ink-2);">← 로그인으로</button>
+    </form>
+  </div>
+</main>
+
+<!-- 코드 틀림(MfaController.verify 401) — LoginPageController 가 422 로 이 조각만 돌려준다. 전체 페이지에서는 mode 가 없어 그리지 않는다. -->
+<th:block th:fragment="error" th:if="${mode != null}">
+  <div class="banner banner--danger banner--top" role="alert">
+    <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+    <div class="banner__body" th:switch="${mode}">
+      <th:block th:case="'recovery'">
+        <div class="banner__title">복구 코드가 맞지 않습니다.</div>
+        <div>저장해 둔 복구 코드 중 아직 쓰지 않은 코드를 입력하세요.</div>
+      </th:block>
+      <th:block th:case="*">
+        <div class="banner__title">코드가 맞지 않습니다.</div>
+        <div>앱에 지금 표시된 코드를 다시 입력하세요.</div>
+      </th:block>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

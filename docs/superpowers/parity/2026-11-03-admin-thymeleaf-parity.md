@@ -167,11 +167,71 @@ JUnit: `web/shell/CommandPaletteControllerTest`(약칭 CPT, 서버가 그리는 
 | SaveBar: count 0 이면 렌더하지 않음 | SaveBar 1 | source ✅ / 차이: `x-show="dirty"` 로 숨김(DOM 은 남음) | UiFragmentsRenderTest `saveBar`(Task 3) | 미확인 |
 | SaveBar: 건수와 버튼(저장…·되돌리기) | SaveBar 2 | source ✅ / 차이: 건수를 `dirty` 스토어에 보고(`report`) | UiFragmentsRenderTest `saveBar`, AJT `saveBarAndGuardUseStore`(문자열) / JS — 브라우저 확인 필요 | 미확인 |
 
-## §로그인·MFA
+## §로그인·MFA (Task 6, 소스 수준 점검)
 
-| 체크 항목 | 원본 테스트 | 결과 |
-|---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과·Node 스텁(커밋 안 함)을 맞춘 것이고 브라우저 칸은 모두 "미확인"이다.
+JUnit: `web/auth/LoginPageControllerTest`(LPC), `web/HomeRedirectControllerTest`(HRC). Node 스텁 = `auth.js`·`ui.js` 를 가짜 window·Alpine 으로 돌린 시나리오(보고서). **JS 동작은 모두 "JS — 브라우저 확인 필요"**.
+공통 차이: 로그인 제출은 fetch 가 아니라 `hx-post /admin/login`(보안 체인의 폼 로그인)이고, 성공·실패 모두 `HX-Redirect` 로 전체 페이지를 다시 받는다(실패 = `/admin/login?error`). 화면 이동은 `/me` 재조회 대신 서버가 정한다.
+
+### LoginPage.test.tsx (15)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
+|---|---|---|---|---|
+| 브랜드 패널: 워드마크·헤드라인·장식 일러스트, 가짜 지표 대신 콘솔이 하는 일 | V3 1 | source ✅ / 차이: 워드마크 경로가 `/admin/img/crosscert-logo-transparent.png`(React public 자산 → 정적 자산 폴더) | LPC `anonymousGetsLoginPage` | 미확인 |
+| 이메일 칸에 자동 포커스 | V3 2 | source ✅ / 차이: `autofocus` 속성(서버 렌더) | LPC `anonymousGetsLoginPage` | 미확인 |
+| 재설정 링크·가입 요청 링크·자동 로그아웃 안내, 로그인 버튼 btn--primary btn--lg | V3 3 | source ✅ / 차이: 없음 | LPC `anonymousGetsLoginPage` | 미확인 |
+| 로그인 실패: 폼 맨 위 경고 하나(토스트 없음), 이메일 유지·비밀번호만 비우고 포커스 | V3 4 | source ✅ / 차이: 실패 핸들러가 `/admin/login?error` 로 보내 페이지를 다시 그린다. 경고·비밀번호 칸 `autofocus`·빈 비밀번호는 서버가, 이메일 유지는 `auth.js` 가 제출 직전 sessionStorage 에 둔 이메일을 한 번 되살린다(비밀번호는 저장 안 함) | LPC `errorParamShowsLoginError` · 스텁(이메일 복원·키 삭제) / JS — 브라우저 확인 필요 | 미확인 |
+| 입력을 바꾸면 경고가 사라진다 | V3 5 | source ✅ / 차이: Alpine `x-show="error === 'credentials'"` + 입력 `clearError()` | LPC `errorParamShowsLoginError`(속성) · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 5xx 는 일시 오류 + 다시 시도(입력 유지, HTTP 상태 표시, 같은 값으로 재요청) | V3 6 | source ✅ / 차이: `htmx:afterRequest` 의 xhr 상태로 판단, 다시 시도 = 폼 `requestSubmit()` | 스텁(503 → transient·status·retry) / JS — 브라우저 확인 필요 | 미확인 |
+| 네트워크 오류도 일시 오류 | V3 7 | source ✅ / 차이: `htmx:sendError`·`htmx:timeout` → 일시 오류(HTTP 줄 없음). 셸의 네트워크 토스트는 이 화면에 없다(app.js 미적재) | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 서버 예외(ApiError 503)도 일시 오류 | V3 8 | source ✅ / 차이: 서버 예외는 5xx 응답과 같은 경로(V3 6) | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 로그인 뒤 /me 가 403 이면 쉬운 문구 | V3 9 | 차이: 해당 없음 — 로그인 뒤 `/me` 를 따로 부르지 않는다(성공하면 서버가 `/admin`·MFA 단계로 보낸다). 리다이렉트 없이 온 4xx(예: CSRF 403)는 TSX 의 `!res.ok && <500` 과 같이 자격 오류로 보고 `?error` 로 다시 그린다 | 스텁(403 → `/admin/login?error`) / JS — 브라우저 확인 필요 | 미확인 |
+| 성공하면 onLogin(getMe) | V3 10 | source ✅ / 차이: 성공 핸들러의 `HX-Redirect: /admin`(MFA 대기면 `/admin/login` → MFA 단계). 핸들러 분기는 Task 2 | LoginHandlerBranchTest(Task 2), LPC `authenticatedWithoutMfaRedirectsHome`, `mfaPendingGetsMfaPage` | 미확인 |
+| 요청 중 입력 읽기 전용, 응답 뒤 다시 편집 | V3 11 | source ✅ / 차이: `x-bind:readonly="submitting"`(`htmx:beforeRequest`~`afterRequest`). 리다이렉트 응답이면 이동 중이라 그대로 둔다. 중복 제출은 `hx-sync="this:drop"`+가드 | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 비밀번호 표시 토글(aria-pressed, 라벨 표시/숨기기) | V3 12 | source ✅ / 차이: Alpine `showPw` | LPC `anonymousGetsLoginPage`(초기 속성) / JS — 브라우저 확인 필요 | 미확인 |
+| 문의 주소가 있을 때만 "도움말 · 운영자에게 문의" | V3 13 | source ✅ / 차이: 주소는 `passkey.admin.help.support`(ShellAdvice `helpLinks`, Task 4) | LPC `anonymousGetsLoginPage`(빈 값 → 없음), ShellHelpLinksTest(Task 4, 값 있음) | 미확인 |
+| dev/local 이 아니면 DEV 데모 카드 없음 | V3 14 | source ✅ / 차이: 카드와 데모 계정 값이 서버 렌더에서 아예 빠진다(TSX 는 번들에 항상 있음) | LPC `anonymousGetsLoginPage`, `nonLocalProfileHasNoDemoAccount` | 미확인 |
+| dev 프로필이면 DEV 데모 카드, 클릭 시 alice 계정 채움 | V3 15 | **차이**: `local` 프로필에서만(`ProfileController.profile().local`, 브리프·컨트롤러 판정). TSX 는 `dev` 도 보인다. 채우는 방식은 TSX 와 같이 카드 클릭 때(aria-pressed) | LPC `localProfilePrefill`, `nonLocalProfileHasNoDemoAccount` · 스텁(selectDemo) / JS — 브라우저 확인 필요 | 미확인 |
+
+### MfaChallenge.test.tsx (17)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
+|---|---|---|---|---|
+| 공통 카드 셸: 워드마크·장식 일러스트·OTP 6칸·카드 밖 "← 로그인으로" | V3 1 | source ✅ / 차이: "← 로그인으로" = `POST /admin/logout`(CSRF) 폼 제출(로그아웃 성공 → `/admin/login`) | LPC `mfaPendingGetsMfaPage` | 미확인 |
+| 기기 분실 안내 | V3 2 | source ✅ / 차이: 없음 | LPC `mfaPendingGetsMfaPage` | 미확인 |
+| TOTP 칸은 숫자만, 붙여넣기는 숫자만 6자리 | V3 3 | source ✅ / 차이: 공통 `otpInput` 조각(Task 3) | UiFragmentsRenderTest(Task 3) / JS — 브라우저 확인 필요 | 미확인 |
+| 6자리 입력 시 verify 정확히 한 번(자동 제출, 수동 확인 겹쳐도) | V3 4 | source ✅ / 차이: `otpInput(submit=true)` 의 `requestSubmit()` + `hx-sync="this:drop"` + `onBefore` 가드(진행 중·형식 불일치면 취소) | LPC `mfaSuccessRedirectsHome` · 스텁(이중 제출 차단) / JS — 브라우저 확인 필요 | 미확인 |
+| 수동 확인 버튼은 6자리 전 비활성, 실패하면 칸 비움·카드 안 경고(토스트 없음)·시계 안내 | V3 5 | source ✅ / 차이: 401 → 서버가 `auth/mfa :: error` 조각 + 422 를 `#mfa-error` 에 스왑. 칸 비움·시계 안내는 Alpine | LPC `mfaWrongCodeShowsError`(조각·422·HX-Trigger 없음), `mfaPendingGetsMfaPage`(시계 안내 문구) · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 검증 실패 후 첫 칸에 다시 포커스 | V3 6 | source ✅ / 차이: 칸 재활성 뒤 `otpInput.clear()`(첫 칸 포커스) | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 서버·네트워크 오류는 "확인하지 못했습니다" | V3 7 | source ✅ / 차이: verify 예외 → 본문·토스트 없는 500, 화면이 "확인하지 못했습니다 / 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도하세요."(네트워크 = "네트워크에 연결할 수 없습니다…") | LPC `mfaUnexpectedErrorIs500WithoutToast` · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 복구 코드가 틀리면 경고 + 칸 비우고 포커스 | V3 8 | source ✅ / 차이: 제출 값 `mode=recovery` 로 서버가 복구 코드 문구를 고른다 | LPC `mfaWrongCodeShowsError` · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 모드를 바꾸면 경고가 사라진다 | V3 9 | source ✅ / 차이: `switchMode` 가 `#mfa-error` 를 비운다 | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 복구 코드 모드는 같은 카드 안에서 전환, 대문자·대시 정형 | V3 10 | source ✅ / 차이: Alpine `x-if` 로 같은 form 안에서 전환(지금 모드의 `code` 입력 하나만 제출). 정형은 `formatRecoveryCode` 이식 | LPC `mfaPendingGetsMfaPage`(같은 카드 안 두 템플릿) · 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| TOTP 로 돌아가면 입력이 비워진다 | V3 11 | source ✅ / 차이: x-if 가 OTP 칸을 새로 만든다 | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 복구 코드 부분 입력이면 확인 비활성 | V3 12 | source ✅ / 차이: 없음(`RECOVERY_RE`) | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 복구 코드 완성되면 확인 활성, 그 코드로 verify | V3 13 | source ✅ / 차이: 서버가 `code.trim()` 으로 `MfaController.verify` 호출 | LPC `mfaRecoveryCodeShowsRemainingToast`(인자 `AB3F-2K7M`) · 스텁 | 미확인 |
+| 검증 중 입력 읽기 전용(늦은 실패가 새 입력을 못 지움) | V3 14 | source ✅ / 차이: `x-bind:readonly="submitting"` | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| TOTP 검증 중 칸 비활성 | V3 15 | source ✅ / 차이: 칸만 `disabled`(hidden `code` 는 그대로 — 값이 이미 모인 뒤) | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| 검증 중 모드 전환 버튼 비활성, 늦은 실패는 복구 칸으로 포커스 | V3 16 | source ✅ / 차이: 없음 | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+| TOTP 검증 중 "복구 코드로 로그인" 비활성 | V3 17 | source ✅ / 차이: 없음 | 스텁 / JS — 브라우저 확인 필요 | 미확인 |
+
+추가(원본 테스트 없음, 브리프·서버 규칙):
+| 체크 항목 | 근거 | 결과 | JUnit / 스텁 | 브라우저 |
+|---|---|---|---|---|
+| 복구 코드로 확인하면 "복구 코드를 사용했습니다." / "남은 복구 코드: N개" 경고 토스트 | MfaChallenge.tsx verify | source ✅ / 차이: `HX-Trigger`(warn) + `HX-Redirect`. 이동 직전 토스트를 `auth.js` 가 sessionStorage 로 넘기고 다음 화면 `toastHost.init()` 이 띄운다 | LPC `mfaRecoveryCodeShowsRemainingToast` · 스텁(ui.js toastHost) / JS — 브라우저 확인 필요 | 미확인 |
+| 실패로 잠금이 걸려 세션이 끝나면 로그인 화면으로 | 브리프 | 차이: TSX 는 같은 경고를 보이고 다음 요청이 401 로 끝난다. 여기서는 바로 `/admin/login` | LPC `mfaLockoutRedirectsToLogin`, `mfaLockoutWithoutHtmxIs302` | 미확인 |
+| MFA 대기가 아니면 verify 를 부르지 않고 `/admin`, CSRF 없으면 403, 미인증은 로그인으로 | 서버 규칙 | source ✅ | LPC `mfaSubmitWhenNotPendingSkipsVerify`, `mfaSubmitRequiresCsrf`, `mfaSubmitAnonymousGoesToLogin` | 미확인 |
+| 인증 코드는 로그에 남기지 않는다 | 보안 | source ✅ | LPC `mfaWrongCodeShowsError`, `mfaUnexpectedErrorIs500WithoutToast`(출력 캡처) | — |
+
+### App.tsx `*` 경로 · roles.test.ts (4) · RequirePlatform.test.tsx (3)
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit / 스텁 | 브라우저 |
+|---|---|---|---|---|
+| `*` → PLATFORM `/tenants`, RP_ADMIN `/tenants/{tenantIds[0]}` (홈·옛 주소 `/admin`, `/admin/`, `/admin/api-keys`, `/admin/audit`, `/admin/mds`, `/admin/keys`) | App.tsx | source ✅ / 차이: 서버 302 | HRC `platformHomeGoesToTenants`, `rpAdminHomeGoesToOwnTenant`, `legacyUrlsRedirect`, `anonymousGoesToLogin` | 미확인 |
+| isPlatform / isRpAdmin | roles 1·2 | source ✅ / 차이: `CurrentAdmin.platform`(Task 2) | HRC `homePathMatchesRolesTs` | — |
+| rpTenantId: RP 는 자기 tenant, PLATFORM 은 null | roles 3 | source ✅ | HRC `homePathMatchesRolesTs` | — |
+| rpTenantId: RP 인데 tenantIds 비면 null → `/tenants`(500 아님) | roles 4 | source ✅ | HRC `rpAdminWithoutTenantGoesToTenantsListNot500` | — |
+| RequirePlatform: PLATFORM 은 내용, RP 는 자기 tenant 로, tenant 없는 RP 는 "계정 구성 오류" | RequirePlatform 1–3 | 미확인 — PLATFORM 전용 화면(Tenant 목록·Activity·Audit chain·License) task 몫. 홈 리다이렉트는 tenant 없는 RP 를 `/admin/tenants` 로 보내므로 그 화면이 "계정 구성 오류"를 그려야 한다 | — | 미확인 |
 
 ## §비밀번호 찾기·재설정
 
