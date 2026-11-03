@@ -24,6 +24,8 @@ class OfflineAssetScanTest {
     private static final Pattern EXTERNAL_URL =
             Pattern.compile("(?i)(src|href|url\\()\\s*=?\\s*[\"']?(https?:)?//");
 
+    private static final Pattern URL_TOKEN = Pattern.compile("(https?:)?//[^\"'\\s)>]*");
+
     private static List<Path> scanTargets() throws IOException {
         List<Path> out = new ArrayList<>();
         for (String dir : new String[] {"templates", "static"}) {
@@ -44,21 +46,46 @@ class OfflineAssetScanTest {
         return out;
     }
 
+    /**
+     * 외부 URL 참조를 찾는다. 예외는 매치된 URL 토큰 자체가 정확히 http://www.thymeleaf.org 인 경우뿐이다.
+     * xmlns / xmlns:* 속성은 패턴(src|href|url()에 걸리지 않으므로 별도 예외가 필요 없다.
+     */
+    static List<String> findExternalUrls(String text) {
+        List<String> hits = new ArrayList<>();
+        Matcher m = EXTERNAL_URL.matcher(text);
+        while (m.find()) {
+            Matcher tok = URL_TOKEN.matcher(text);
+            tok.region(m.end() - (m.group(2) == null ? 2 : m.group(2).length() + 2), text.length());
+            String url = tok.lookingAt() ? tok.group() : "";
+            if (url.equals("http://www.thymeleaf.org")) {
+                continue;
+            }
+            hits.add(text.substring(m.start(), Math.min(text.length(), m.end() + 40)).replace('\n', ' '));
+        }
+        return hits;
+    }
+
     @Test
     void assertNoExternalUrl() throws IOException {
         List<String> hits = new ArrayList<>();
         for (Path p : scanTargets()) {
-            String text = Files.readString(p, StandardCharsets.UTF_8);
-            Matcher m = EXTERNAL_URL.matcher(text);
-            while (m.find()) {
-                String tail = text.substring(m.start(), Math.min(text.length(), m.end() + 40));
-                if (tail.contains("http://www.thymeleaf.org") || tail.contains("xmlns")) {
-                    continue;
-                }
-                hits.add(p + " : " + tail.replace('\n', ' '));
+            for (String h : findExternalUrls(Files.readString(p, StandardCharsets.UTF_8))) {
+                hits.add(p + " : " + h);
             }
         }
         assertThat(hits).as("외부 URL 참조").isEmpty();
+    }
+
+    @Test
+    void scannerRejectsExternalUrlEvenNextToXmlns() {
+        assertThat(findExternalUrls(
+                        "<image href=\"https://cdn.example/a.svg\" xmlns=\"http://www.w3.org/2000/svg\"/>"))
+                .hasSize(1);
+        assertThat(findExternalUrls("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>")).isEmpty();
+        assertThat(findExternalUrls("<html xmlns:th=\"http://www.thymeleaf.org\">")).isEmpty();
+        assertThat(findExternalUrls("<a href=\"//cdn.example/x\">")).hasSize(1);
+        assertThat(findExternalUrls("a{background:url(https://x.example/f.woff2)}")).hasSize(1);
+        assertThat(findExternalUrls("<a href=\"http://www.thymeleaf.org.evil/x\">")).hasSize(1);
     }
 
     @Test
