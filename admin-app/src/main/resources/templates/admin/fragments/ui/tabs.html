@@ -6,13 +6,13 @@
   th:replace="~{admin/fragments/ui/tabs :: tabs(items, active, ariaLabel)}"
     items  [{'id': 'overview', 'label': '개요', 'href': '/admin/tenants/1?tab=overview',
              'badgeText': '확인 필요 2', 'badgeReason': 'MDS 미확인 AAGUID 2건', 'count': 3}, ...]
-           (badge*, count 는 생략 가능). 탭은 role=tab 링크이며 서버가 active 를 정해 다시 그린다.
+           (badge*, count, elId(DOM id), attrs(링크 속성 Map: hx-get·data-* 등, 템플릿 상수만) 는 생략 가능). 탭은 role=tab 링크이며 서버가 active 를 정해 다시 그린다.
     active 선택된 탭의 id(items 의 id 중 하나), ariaLabel tablist 이름
   선택된 탭만 tabindex=0(로빙). active 가 어느 항목과도 맞지 않으면 첫 탭이 tabindex=0. ArrowLeft/Right 는 다음/이전(양 끝에서 되돌아감), Home/End 는 처음/마지막으로 이동·선택.
   경고는 색 점 대신 '확인 필요 N' 라벨(badge--warning), 사유는 title.
 -->
 <div th:fragment="tabs(items, active, ariaLabel)" class="tabs" role="tablist" th:aria-label="${ariaLabel}" th:with="activeOk=${@fmt.hasTab(items, active)}" x-data="tabs" x-on:keydown="onKeydown($event)">
-  <a th:each="t, st : ${items}" role="tab" class="tabs__btn" th:href="${t['href']}"
+  <a th:each="t, st : ${items}" role="tab" class="tabs__btn" th:href="${t['href']}" th:id="${t['elId']}" ui:attrs="${t['attrs']}"
      th:classappend="${t['id'] == active} ? 'tabs__btn--active'" th:aria-selected="${t['id'] == active}"
      th:tabindex="${t['id'] == active or (st.first and !activeOk)} ? 0 : -1" th:title="${t['badgeReason']}">
     <th:block th:text="${t['label']}">탭</th:block>

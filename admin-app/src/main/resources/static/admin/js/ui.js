@@ -14,6 +14,23 @@ document.addEventListener('htmx:beforeOnLoad', function (e) {
   if (!toast) return;
   try { window.sessionStorage.setItem('admin.pendingToast', JSON.stringify(toast)); } catch (err) { /* 저장소를 못 쓰면 토스트만 생략 */ }
 });
+// 탭 링크(role=tab + data-tab, hx-get 으로 조각 교체)가 성공하면 활성 표시·로빙 tabindex·마지막 브레드크럼을 맞춘다.
+// 서버 조각은 탭 내용만 돌려주므로(다른 탭 task 의 컨트롤러도 같다) 활성 표시는 여기서 한다. 실패·중단된 요청은 바꾸지 않는다.
+document.addEventListener('htmx:afterRequest', function (e) {
+  const d = e.detail || {};
+  const a = d.elt && d.elt.closest ? d.elt.closest('[role="tab"][data-tab]') : null;
+  if (!a || !d.successful) return;
+  const list = a.closest('[role="tablist"]');
+  if (!list) return;
+  list.querySelectorAll('[role="tab"]').forEach(function (t) {
+    const on = t === a;
+    t.classList.toggle('tabs__btn--active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+    t.setAttribute('tabindex', on ? '0' : '-1');
+  });
+  const cur = document.querySelector('.crumbs__current');
+  if (cur && a.dataset.label) cur.textContent = a.dataset.label;
+});
 document.addEventListener('alpine:init', () => {
   /** 클립보드 복사(lib/clipboard.ts). secure context 가 아니면 execCommand 폴백. */
   async function copyToClipboard(text) {

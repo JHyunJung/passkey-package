@@ -339,11 +339,75 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantsPa
 | CSV: 필터 적용 전체 행(페이지 무시), 열·BOM·`tenants-<KST 오늘>.csv`·수식 주입 방지 | source ✅ / 차이: 클라이언트 Blob 이 아니라 `GET /admin/_/tenants/export`(attachment) | TPC `csvExport`, `csvLink` | 미확인 |
 | 생성 CSRF·권한·검증 순서(REST 호출 전 검증) | source ✅ | TPC `createRequiresCsrf`, `rpAdminCannotUseFragments`, `createInvalidName` | 미확인 |
 
-## §Tenant 상세
+## §Tenant 상세 (Task 9, 소스 수준 점검)
 
-| 체크 항목 | 원본 테스트 | 결과 |
-|---|---|---|
-| (해당 화면 task 에서 채움) | | 미확인 |
+R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDetailPageControllerTest` = TDPT)를 맞춘 것이고 브라우저 칸은 모두 "미확인"이다. 약어: TDP=TenantDetailPage.test.tsx, TO=TenantOverview.test.tsx, TS=tenantSignals.test.ts, TF=tabFormat.test.ts.
+공통 차이: 전체 페이지는 헤더·탭 줄·개요 탭을 서버가 그린다(R3'). 다른 탭은 `#tenant-tab` 이 `hx-trigger=load` 로 `GET /admin/_/tenants/{id}/tab/{tab}` 를 불러온다. 일반 탭 매핑은 개요(모르는 키 포함)를 돌려주고 Task 10–13 의 리터럴 경로가 우선한다.
+
+### TenantDetailPage.test.tsx · useCrumbTenant
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| fmtDateKst(KST YYYY-MM-DD, 없으면 —) | TDP 1 | source ✅ / 차이: `KstFormat.kstDate`(JUnit 별도 `KstFormatTest`) 사용 | TDPT `headerAndTabs`(2026-03-02) | 미확인 |
+| 이름·상태 배지·RP 사이트 링크(새 창)·ID/RP ID 복사·slug·생성일·탭 7개(순서) | TDP 2 | source ✅ / 차이: 없음(탭은 role=tab 링크) | TDPT `headerAndTabs` | 미확인 |
+| 탭 클릭은 onTabChange | TDP 3 | source ✅ / 차이: `hx-get` 조각 + `hx-push-url`(주소 `?tab=`), 활성 표시·마지막 브레드크럼은 `ui.js`(htmx:afterRequest). 탭 키는 TSX 값(`apikeys`) — 브리프의 `api-keys` 는 TSX 가 이긴다 | TDPT `tabLinkAttributes`, `everyTabKeyIsSelectable` / JS — 브라우저 확인 필요 | 미확인 |
+| 감사 로그 탭에 PLATFORM 여부 전달 | TDP 4 | 미확인 — 감사 탭 task 몫(이 task 는 `platform` 모델 값을 제공) | — | 미확인 |
+| AAGUID 배지: mode≠ANY 이고 mdsName 없는 항목 수, 사유 툴팁 | TDP 5 | source ✅ / 차이: 전체 페이지 렌더 때 한 번 조회(탭 조각 교체로는 갱신 안 됨 — AAGUID 저장 후 갱신은 AAGUID 탭 task 몫) | TDPT `tabBadges` | 미확인 |
+| API 키 배지: 30일 안 만료 ACTIVE 키 수, 개요에 개수 전달 | TDP 6 | source ✅ / 차이: 판정은 `ApiKeyExpiry.isExpiringSoon`(회수·만료 제외, 경계 포함) | TDPT `kpis`, `tabBadges` | 미확인 |
+| 조건 없으면 배지 없음 | TDP 7 | source ✅ / 차이: 없음 | TDPT `tabBadges`(ANY 0) | 미확인 |
+| 신호 조회 실패는 조용히 무시 | TDP 8 | source ✅ / 차이: 없음 | TDPT `tabBadges`, `noExpiringHintWhenLookupFails` | 미확인 |
+| AAGUID 저장 후 onSaved 로 배지 갱신 | TDP 9 | 미확인 — AAGUID 탭 task 몫 | — | 미확인 |
+| PLATFORM ⋯ 트리거는 테두리 버튼 | TDP 10 | source ✅ / 차이: 없음(`btn btn--dots`) | TDPT `suspendDialogForPlatform` | 미확인 |
+| RP_ADMIN 에게는 ⋯ 메뉴 없음(서버 PLATFORM 전용) | TDP 11 | source ✅ / 차이: 서버도 `POST …/suspend|activate` 를 PLATFORM 만 허용(403, REST 미호출) | TDPT `suspendHiddenForRpAdmin` | 미확인 |
+| 정지 L3: 제목 조사·영향 범위·취소 기본 포커스·slug 일치 전 비활성·성공 토스트 "회수됨" | TDP 12 | source ✅ / 차이: 확인 라벨의 slug 를 mono 칩으로 강조하지 않음(라벨은 문자열). 성공 = 경고 토스트 + `HX-Redirect`(같은 탭 재조회, 원본 onReload) 후 이월 표시. 다이얼로그 비활성·일치 판정은 Task 3 JS | TDPT `suspendDialogForPlatform`, `suspendSuccess` / JS — 브라우저 확인 필요 | 미확인 |
+| 정지 실패는 인라인 오류, 닫히지 않음, 토스트 없음 | TDP 13 | **차이**: 인라인 오류("정지하지 못했습니다")는 Task 3 confirmDialog 가 그리지만 서버 오류 토스트(`HX-Trigger`)가 같이 뜬다(다이얼로그가 쉬운 문구를 그 헤더에서 읽는 계약) — 토스트 중복 | TDPT `suspendFailure`(5xx + 토스트, 리다이렉트 없음) / JS — 브라우저 확인 필요 | 미확인 |
+| 취소하면 다시 열 때 입력 초기화 | TDP 14 | source ✅ / 차이: `x-if` 로 다시 그려 비워짐(Task 3) | JS — 브라우저 확인 필요 | 미확인 |
+| 정지 해제: SUSPENDED 면 메뉴 "정지 해제" → L1 확인 → activate | TDP 15 | source ✅ / 차이: 성공 시 `HX-Redirect` | TDPT `activateDialogForSuspended`, `activateSuccess` | 미확인 |
+| 정지 해제 취소는 호출하지 않는다 | TDP 16 | source ✅ / 차이: 요청은 확인 버튼에만 있다 | JS — 브라우저 확인 필요 | 미확인 |
+| WebAuthn 저장·API 키 변경 후 onReload(개요 요약·배지 갱신) | TDP 17–18 | 미확인 — 해당 탭 task 몫(저장 후 갱신 규약은 그쪽이 정한다) | — | 미확인 |
+| A→B 빠른 이동에서 늦은 A 응답을 B 주소에 그리지 않음 | TDP 19 | source ✅ / 차이: 서버 렌더라 해당 없음(이동마다 전체 페이지·조각을 새로 받음). 탭 조각은 `hx-sync=#tenant-tab:replace` 로 이전 요청을 취소 | JS — 브라우저 확인 필요 | 미확인 |
+| 로딩 중 Skeleton("Tenant 정보 불러오는 중"), "Loading…" 없음 | TDP 20 | **차이**: 전체 페이지는 서버가 완성해 보내므로 로딩 스켈레톤이 없다. 다른 탭(`?tab=…`)은 탭 컨테이너가 스켈레톤("탭 불러오는 중") + load | TDPT `nonOverviewTabLoadsLazily` | 미확인 |
+| 404 면 "찾을 수 없습니다" + Tenants로 돌아가기(다시 시도 없음) | TDP 21 | source ✅ / 차이: 직접 접근은 404 상태, boost 이동은 4xx 를 스왑하지 않아 200 으로 같은 화면 | TDPT `notFound` | 미확인 |
+| 5xx 면 LoadError(다시 시도) + ‹ Tenant 목록으로, 성공 시 상세 | TDP 22 | source ✅ / 차이: 다시 시도 = 같은 전체 페이지를 다시 받아 body 교체. 200 + 카드(boost 가 5xx 를 스왑하지 않으므로, Task 8 규칙) | TDPT `loadFailure` | 미확인 |
+| 로드 실패를 토스트로 띄우지 않는다(인라인 하나) | TDP 23 | source ✅ / 차이: 없음 | TDPT `loadFailure`(HX-Trigger 없음, role=alert 1개) | 미확인 |
+| 열린 뒤 재조회 실패 → 상세 유지 + 경고 + 다시 시도 / 404 로 바뀌면 not-found | TDP 24–25 | **차이(해당 없음)**: 서버 렌더에는 "이전 내용 유지" 상태가 없다. 새로 받은 화면이 곧 최신이다 | — | 미확인 |
+| 재조회 실패 시 정지 메뉴 비활성(stale) / 다이얼로그 연 뒤 실패하면 정지 안 함 | TDP 26–27 | **차이(해당 없음)**: stale 상태가 없다. 대신 서버가 정지 요청마다 `tenants.get` 으로 테넌트를 다시 읽고 경계를 확인한다 | TDPT `suspendSuccess` | 미확인 |
+| (Review Focus 1) RP_ADMIN 이 다른 tenant 를 열면 | —(App.tsx: 403 LoadError) | source ✅ / 차이: 전체 페이지·조각 모두 403(`WebExceptionAdvice`: 직접 접근은 오류 화면, boost/조각은 토스트 + 본문 없음), 데이터를 읽는 REST 호출 0 | TDPT `rpAdminOtherTenantDenied` | 미확인 |
+| 모르는 탭 키 | —(TSX: 빈 화면) | **차이(R3')**: 개요로 떨어진다(전체 페이지·조각) | TDPT `unknownTabFallsBackToOverview`, `tabFragmentHasNoLayout` | 미확인 |
+| 이후 탭 task 의 리터럴 경로가 일반 매핑에 막히지 않음 | — | source ✅ | TDPT `literalTabMappingWinsOverGeneric` | 미확인 |
+| 브레드크럼 이름(useCrumbTenant): PLATFORM Tenants › 이름 › 탭, RP 이름 › 탭 | useCrumbTenant | source ✅ / 차이: 클라이언트 조회 대신 서버 조회 결과를 `breadcrumbs` 모델로 | TDPT `breadcrumbTenantName` | 미확인 |
+
+### TenantOverview.test.tsx
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| KPI 4개(등록 Credential 천 단위·유효 API Key·성공률 %·n / m 시도)와 요약 카드 3개 | TO 1 | source ✅ / 차이: 숫자 형식은 `NumberFormat(US)`(toLocaleString 기본과 같은 쉼표), 소수 1자리 `%.1f` | TDPT `headerAndTabs`, `kpis` | 미확인 |
+| WebAuthn 요약 origins 는 실제 allowedOrigins, 없으면 행 없음 | TO 2 | source ✅ / 차이: 없음(`origins` null 일 때만 행 생략) | TDPT `webauthnSummary` | 미확인 |
+| credentialsDelta7d 는 있을 때만 "7일 +N" | TO 3 | **차이**: 서버 `TenantView` 에 필드가 없어 원본도 항상 미표시 → 미구현 | TDPT `kpis`("7일 +" 없음) | 미확인 |
+| expiringKeyCount 없으면 만료 임박 줄 없음 | TO 4 | source ✅ | TDPT `noExpiringHintWhenLookupFails` | 미확인 |
+| PLATFORM: 최근 활동은 활동 피드에서 이 tenant 만 | TO 5 | source ✅ / 차이: 원본은 전체 피드를 받아 클라이언트에서 걸렀으나 REST 의 `tenantId` 필터로 서버에서 건다(이 tenant 이벤트가 전체 최근 N건 밖이어도 보임) + 같은 tenant 재검사, 최대 5건 | TDPT `platformRecentActivity` | 미확인 |
+| 감사 체인 무결 / 위변조(bad 배너, …끝 8자) | TO 6–7 | source ✅ / 차이: 첫 화면 "확인 중" 카드가 `hx-trigger=load` 로 `…/overview/chain` 을 받아 교체 | TDPT `chainCardIntact`, `chainCardTampered`, `chainCardInitialChecking` / JS — 브라우저 확인 필요 | 미확인 |
+| RP_ADMIN: PLATFORM 전용 API 미호출, 체인 카드 없음, 전체 보기는 audit 탭 | TO 8 | source ✅ / 차이: 체인 카드 엔드포인트도 PLATFORM 만(403) | TDPT `rpAdminOwnTenant`, `chainRequiresPlatform` | 미확인 |
+| PLATFORM 전체 보기는 활동 화면(tenant 필터) | TO 9 | source ✅ / 차이: `/admin/activity?tenantId=` | TDPT `platformRecentActivity` | 미확인 |
+| 전 tenant 체인 검증(overview)을 개요에서 부르지 않음, recentRuns 스트립 없음 | TO 10 | source ✅ / 차이: 없음(`verifyTenant` 만) | TDPT `chainCardIntact` | 미확인 |
+| 수동 검증=verifyTenant 재호출, 월간 보고서=감사 체인 화면, 자세히=감사 로그 탭 | TO 11 | source ✅ / 차이: 링크는 일반 `<a>`(boost) | TDPT `chainCardInitialChecking`, `chainCardIntact`, `chainManual` | 미확인 |
+| 퍼널 실패: 성공률 "—" + "불러오지 못했습니다", "시도 없음" 아님, 다시 시도 | TO 12 | source ✅ / 차이: 다시 시도 = 개요 조각 재요청 | TDPT `funnelFailureAndNoAttempts` | 미확인 |
+| 퍼널 로딩 중에는 "시도 없음"을 보이지 않는다 | TO 13 | **차이(해당 없음)**: 서버가 퍼널을 조회한 뒤 그리므로 로딩 상태가 없다 | — | 미확인 |
+| 체인 검증 실패: "확인 중"에 멈추지 않고 확인 불가 + 다시 시도 | TO 14 | source ✅ / 차이: 서버 실패는 200 + "확인 불가" 카드(토스트 없음) | TDPT `chainAutoFailureIsUnavailable` | 미확인 |
+| 체인 응답이 제한 시간(15초) 안에 없으면 확인 불가, "감사 로그로"는 audit 탭 | TO 15 | source ✅ / 차이: `hx-request` timeout 15000 + 카드 Alpine(`htmx:timeout`)이 "확인 불가"로 바꾼다 | TDPT `chainCardInitialChecking`, `chainCardAlpineIsConstant` / JS — 브라우저 확인 필요 | 미확인 |
+| 수동 검증 중 "검증 중…" 비활성, 연타해도 한 번만 | TO 16 | source ✅ / 차이: `verifying` 플래그 + `hx-sync=this:drop`, 버튼 `x-bind:disabled` | JS — 브라우저 확인 필요 | 미확인 |
+| 수동 검증이 시간 안에 응답 없으면 버튼 해제·이전 결과 유지, 늦은 응답 무시 | TO 17 | source ✅ / 차이: 시간 초과 시 `htmx:after-request` 로 verifying 해제(전역 시간 초과 토스트), 응답이 교체되지 않아 이전 결과 유지. 토스트 제목은 "서버가 잠시 응답하지 않습니다"(원본 "수동 검증 실패") | JS — 브라우저 확인 필요 | 미확인 |
+| 수동 검증 실패도 버튼 해제·이전 결과 유지, 토스트 "수동 검증 실패" | TO 18 | source ✅ / 차이: 서버가 오류 상태 + 제목 있는 오류 토스트(본문 없음) | TDPT `chainManual` | 미확인 |
+| 수동 검증 완료 토스트(무결 ok / 위변조 warn) | TO(코드) | source ✅ | TDPT `chainManual` | 미확인 |
+
+### tenantSignals.test.ts · tabFormat.test.ts
+
+| 체크 항목 | 원본 테스트 | 결과 | JUnit | 브라우저 |
+|---|---|---|---|---|
+| tenantSignals: 미확인 AAGUID 수(ANY 0·mdsName null·빈 aaguid 제외) | TS 1–4 | source ✅ / 차이: `TenantDetailPageController.unverifiedAaguid` | TDPT `tabBadges` | 미확인 |
+| tenantSignals: 30일 이내 ACTIVE 키만(경계 포함)·기간 변경·recentRuns 선택·요약 라벨 | TS 5–9 | source ✅ / 차이: 만료 판정은 기존 `ApiKeyExpiry`(Task 3). recentRuns 는 서버에 없어 미사용(원본도 미사용) | TDPT `kpis` | 미확인 |
+| tabFormat: KST 날짜·시각, 빈 값 —, timeAgo, 천 단위 | TF 1–4 | source ✅ / 차이: 기존 `KstFormat`(Task 3 `KstFormatTest`)을 재사용 | TDPT `platformRecentActivity`(상대 시간) | 미확인 |
+| 이벤트 점 색 eventColor | TO(코드) | source ✅ | TDPT `eventColor` | 미확인 |
 
 ## §Activity
 

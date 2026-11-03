@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}" xmlns:th="http://www.thymeleaf.org">
+<head><title>Tenant</title></head>
+<body>
+<!--
+  Tenant 상세 틀(← pages/TenantDetailPage.tsx): 헤더(이름·상태·RP 사이트·더보기) + 속성 칩 + 탭 줄 + 탭 내용.
+  전체 페이지는 개요 탭을 인라인으로 그린다. 다른 탭(?tab=webauthn 등)은 #tenant-tab 이 hx-trigger=load 로 GET /admin/_/tenants/{id}/tab/{tab} 를 불러온다(스켈레톤).
+  모델: platform, notFound, loadError/retryAttrs, t(TenantDetail), tabs, activeTab, tabLazy/tabAttrsLoad, suspendAttrs/activateAttrs, menuSuspend/menuActivate + overview 모델
+  정지·정지 해제 버튼과 다이얼로그는 PLATFORM 에게만 그린다(서버도 같은 역할을 요구한다).
+-->
+<th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>
+<main>
+  <!-- 404 만 "찾을 수 없습니다"(다시 시도 없음) -->
+  <div class="page" th:if="${notFound}">
+    <div role="alert">
+      <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/no-results.webp', 'Tenant를 찾을 수 없습니다', '삭제됐거나 주소가 잘못된 tenant입니다.', ~{:: backToTenants}, false)}"></th:block>
+    </div>
+  </div>
+
+  <!-- 5xx 등 조회 실패: LoadError(다시 시도) + 목록으로. 토스트 없이 인라인 하나만. -->
+  <div class="page" th:if="${loadError != null}">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('Tenant 정보', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+    <div class="row" style="justify-content: center">
+      <a class="btn btn--ghost" th:href="@{/admin/tenants}">‹ Tenant 목록으로</a>
+    </div>
+  </div>
+
+  <div class="page" th:if="${t != null}">
+    <div class="stack-3" style="gap: 14px">
+      <div class="row" style="gap: 14px">
+        <span class="avatar avatar--lg" aria-hidden="true" th:text="${t.initial}">A</span>
+        <div class="row" style="gap: 10px; flex: 1 1 280px; min-width: 0">
+          <h1 class="page__title truncate" th:title="${t.name}" th:text="${t.name}">Acme</h1>
+          <th:block th:replace="~{admin/fragments/ui/statusBadge :: statusBadge(${t.status})}"></th:block>
+        </div>
+        <div class="row">
+          <a class="btn" th:if="${t.rpSiteUrl != null}" th:href="${t.rpSiteUrl}" target="_blank" rel="noopener noreferrer">RP 사이트 열기 <th:block th:replace="~{admin/fragments/icons :: externalLink(13)}"></th:block></a>
+          <th:block th:if="${platform}">
+            <th:block th:if="${t.active}"><th:block th:replace="~{admin/fragments/ui/menu :: menu('더보기', null, ${menuSuspend}, null, 'button')}"></th:block></th:block>
+            <th:block th:unless="${t.active}"><th:block th:replace="~{admin/fragments/ui/menu :: menu('더보기', ${menuActivate}, null, null, 'button')}"></th:block></th:block>
+          </th:block>
+        </div>
+      </div>
+      <div class="propchips">
+        <th:block th:replace="~{admin/fragments/ui/propChip :: propChip('ID', ${t.id}, true)}"></th:block>
+        <th:block th:replace="~{admin/fragments/ui/propChip :: propChip('RP ID', ${t.rpId}, true)}"></th:block>
+        <th:block th:replace="~{admin/fragments/ui/propChip :: propChip('slug', ${t.slug}, false)}"></th:block>
+        <th:block th:replace="~{admin/fragments/ui/propChip :: propChip('생성', ${t.createdKst}, false)}"></th:block>
+      </div>
+      <th:block th:replace="~{admin/fragments/ui/tabs :: tabs(${tabs}, ${activeTab}, 'Tenant 탭')}"></th:block>
+    </div>
+
+    <!-- 탭 내용. 개요는 인라인, 그 밖은 load 로 불러온다. 탭 링크(hx-get)는 이 영역의 안쪽을 교체한다. -->
+    <div id="tenant-tab" th:unless="${tabLazy}">
+      <th:block th:replace="~{admin/tenant/overview :: content}"></th:block>
+    </div>
+    <div id="tenant-tab" th:if="${tabLazy}" ui:attrs="${tabAttrsLoad}">
+      <th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(6, '탭 불러오는 중')}"></th:block>
+    </div>
+
+    <th:block th:if="${platform}">
+      <th:block th:if="${t.active}"><th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog('suspend-tenant', 'L3', ${t.suspendTitle}, '정지', '정지하면 이 tenant의 모든 RP 서버 요청이 거부됩니다.', ~{:: suspendBody}, null, ${t.slug}, ${'확인을 위해 slug ' + t.slug + ' 를 입력하세요'}, null, ${suspendAttrs})}"></th:block></th:block>
+      <th:block th:unless="${t.active}"><th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog('activate-tenant', 'L1', '정지 해제', '정지 해제', ${t.name + ' 의 정지를 해제합니다.'}, ~{:: resumeBody}, false, null, null, null, ${activateAttrs})}"></th:block></th:block>
+    </th:block>
+  </div>
+</main>
+
+<!-- 조각 인자 원본: 화면에는 인자로 쓰이는 자리에서만 그려진다. -->
+<th:block th:remove="all">
+  <a th:fragment="backToTenants" class="btn btn--primary" th:href="@{/admin/tenants}">Tenants로 돌아가기</a>
+  <th:block th:fragment="suspendBody">
+    <th:block th:replace="~{admin/fragments/ui/alert :: alert('bad', '영향 범위', ~{:: impactList}, null, null)}"></th:block>
+  </th:block>
+  <ul th:fragment="impactList" class="stack-1" style="list-style: none; margin: 0; padding: 0">
+    <li th:text="${'· 유효한 API 키 ' + t.apiKeys + '개를 즉시 회수'}">· 유효한 API 키 3개를 즉시 회수</li>
+    <li>· 이 tenant의 패스키 등록·인증 모두 거부</li>
+    <li>· 정지를 해제해도 회수된 키는 복구되지 않음</li>
+  </ul>
+  <p th:fragment="resumeBody" style="margin: 0; font-size: 13px; color: var(--ink-2)">이 테넌트의 정지를 해제하시겠습니까? 패스키 등록·인증이 다시 허용됩니다. 정지 때 회수된 API 키는 복구되지 않으므로 필요하면 새로 발급하세요.</p>
+</th:block>
+</body>
+</html>
