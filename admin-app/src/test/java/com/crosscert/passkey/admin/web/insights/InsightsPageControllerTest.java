@@ -165,8 +165,19 @@ class InsightsPageControllerTest {
         assertThat(riskBtn.attr("hx-get")).isEqualTo("/admin/_/insights?win=7&sort=risk");
         assertThat(t.select("th[aria-sort=descending]").text()).isEqualTo("활성 사용자");
         Element root = d.selectFirst("#insights-root");
-        assertThat(root.attr("hx-target")).isEqualTo("this");
         assertThat(root.attr("x-data")).isEqualTo("funnelTab");
+        // 회귀: 루트와 그 조상에 hx-target 이 없어야 안의 테넌트 링크(boost)가 일반 페이지 이동을 한다(페이지 안에 페이지 X)
+        assertThat(root.hasAttr("hx-target")).isFalse();
+        for (Element p = root.parent(); p != null; p = p.parent()) assertThat(p.hasAttr("hx-target")).as(p.tagName()).isFalse();
+        for (Element a : root.select("a[href^=/admin/tenants/]")) {
+            assertThat(a.hasAttr("hx-target")).isFalse();
+            assertThat(a.attr("hx-boost")).isNotEqualTo("false");
+        }
+        // 루트를 교체하는 요청은 대상을 직접 가진다
+        assertThat(riskBtn.attr("hx-target")).isEqualTo("#insights-root");
+        assertThat(riskBtn.attr("hx-swap")).isEqualTo("outerHTML");
+        assertThat(riskBtn.attr("hx-sync")).isEqualTo("#insights-root:replace");
+        for (Element b : d.select(".seg button")) assertThat(b.attr("hx-target")).isEqualTo("#insights-root");
 
         Document byRisk = Jsoup.parse(body(htmx("/admin/_/insights?win=7&sort=risk", platform())));
         assertThat(byRisk.select("section[data-tenants] tbody tr td:first-child a").eachText()).containsExactly("Beta<b>", "Acme");
@@ -203,6 +214,7 @@ class InsightsPageControllerTest {
         assertThat(d.select(".kpi, section.card, a[download]")).isEmpty();
         Element retry = d.select("[role=alert] button").stream().filter(b -> b.text().equals("다시 시도")).findFirst().orElseThrow();
         assertThat(retry.attr("hx-get")).isEqualTo("/admin/_/insights?win=7&sort=risk");
+        assertThat(retry.attr("hx-target")).isEqualTo("#insights-root");
     }
 
     @Test
