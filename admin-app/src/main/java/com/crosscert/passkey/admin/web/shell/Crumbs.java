@@ -43,6 +43,10 @@ public final class Crumbs {
         return items;
     }
 
+    public static List<Crumb> insights() {
+        return List.of(Crumb.of("현황"));
+    }
+
     public static List<Crumb> activity() {
         return List.of(Crumb.of("활동"));
     }

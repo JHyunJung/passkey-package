@@ -51,30 +51,7 @@
     <p class="hint" style="margin: 0">성공하지 못한 시도에는 사용자 취소와 시간 초과도 포함돼요. 성공률이 평소보다 떨어지는지 추이로 확인하세요.</p>
 
     <div class="grid-2">
-      <section class="card" th:each="c : ${seriesCards}" x-data="{ asTable: false }" th:attr="data-series=${c.key}">
-        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader(${c.title}, null, null, ~{:: seriesLegend})}"></th:block>
-        <div class="card__body stack-3">
-          <div x-show="!asTable">
-            <div role="img" class="fn-series" th:classappend="${c.dense} ? 'fn-series--dense'" th:attr="aria-label=${c.aria}">
-              <div th:each="d : ${c.days}" class="fn-day">
-                <div class="fn-tip" aria-hidden="true"><strong th:text="${d.dateText}">10월 1일</strong><span th:text="${d.tipText}">시도 10 · 성공 9 · 90.0%</span></div>
-                <span class="fn-att" th:style="|height: ${d.attemptsPct}%|"></span>
-                <span th:class="${c.key == 'reg'} ? 'fn-ok-reg' : 'fn-ok-auth'" th:style="|height: ${d.successPct}%|"></span>
-              </div>
-            </div>
-            <div class="row hint" style="justify-content: space-between; padding: 0 4px; margin: 0">
-              <span th:each="l : ${c.axis}" th:text="${l}">10-01</span>
-            </div>
-          </div>
-          <div x-show="asTable" x-cloak>
-            <th:block th:with="days=${c.days}"><th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${seriesColumns}, ~{:: seriesBody})}"></th:block></th:block>
-          </div>
-          <div class="row" style="gap: 8px">
-            <button type="button" class="btn btn--ghost btn--sm" aria-pressed="false" x-bind:aria-pressed="asTable" x-on:click="asTable = !asTable">표로 보기</button>
-            <a class="btn btn--ghost btn--sm" th:href="${c.csv}" hx-boost="false" download data-csv-download x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
-          </div>
-        </div>
-      </section>
+      <th:block th:each="c : ${seriesCards}"><th:block th:replace="~{admin/fragments/ui/stats :: seriesCard(${c}, ${seriesColumns})}"></th:block></th:block>
     </div>
 
     <section class="card" data-failures>
@@ -102,61 +79,14 @@
       </div>
 
       <div class="grid-2">
-        <section class="card" data-monthly>
-          <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('월간 사용량', '인증 기록은 90일 보관돼요. 이번 달 포함 최근 3개월만 집계해요.', null, null)}"></th:block>
-          <div class="card__body stack-3">
-            <th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${monthColumns}, ~{:: monthBody})}"></th:block>
-            <div class="row" style="gap: 8px">
-              <a class="btn btn--ghost btn--sm" th:href="${csvMonthly}" hx-boost="false" download data-csv-download x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
-            </div>
-          </div>
-        </section>
+        <th:block th:replace="~{admin/fragments/ui/stats :: monthCard(${months}, ${monthColumns}, ${csvMonthly}, '인증 기록은 90일 보관돼요. 이번 달 포함 최근 3개월만 집계해요.')}"></th:block>
 
-        <section class="card" data-devices>
-          <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('사용자 기기 분포', '등록된 패스키를 만든 인증기별 비율이에요.', null, null)}"></th:block>
-          <div class="card__body stack-3">
-            <p th:if="${#lists.isEmpty(devices)}" class="hint" style="margin: 0">등록된 패스키가 없습니다.</p>
-            <div th:unless="${#lists.isEmpty(devices)}" class="stack-3">
-              <div th:each="d : ${devices}" class="dv-row">
-                <span class="dv-row__name truncate" th:text="${d.name}" th:title="${d.name}">iCloud 키체인</span>
-                <span class="dv-row__track"><span class="dv-row__bar" th:style="|width: ${d.widthPct}%|"></span></span>
-                <span class="dv-row__num"><strong th:text="${d.shareText}">40.0%</strong> <span class="hint" style="margin: 0" th:text="${d.countText}">8개</span></span>
-                <span class="dv-row__sub hint" th:text="${d.authText}">기간 인증 30건</span>
-              </div>
-            </div>
-            <div class="row" style="gap: 8px" th:unless="${#lists.isEmpty(devices)}">
-              <a class="btn btn--ghost btn--sm" th:href="${csvDevices}" hx-boost="false" download data-csv-download x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
-            </div>
-          </div>
-        </section>
+        <th:block th:replace="~{admin/fragments/ui/stats :: devicesCard(${devices}, ${csvDevices}, '등록된 패스키를 만든 인증기별 비율이에요.')}"></th:block>
       </div>
     </th:block>
   </th:block>
   </div>
 </div>
-
-<span th:fragment="seriesLegend" class="row hint" style="gap: 10px; margin: 0" x-show="!asTable">
-  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-att"></span>시도</span>
-  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot" th:classappend="${c.key == 'reg'} ? 'fn-ok-reg' : 'fn-ok-auth'"></span>성공</span>
-</span>
-
-<th:block th:fragment="seriesBody">
-  <tr th:each="d : ${days}">
-    <td><span class="mono" th:text="${d.day}">10-01</span></td>
-    <td class="num" th:text="${d.attemptsText}">10</td>
-    <td class="num" th:text="${d.successText}">9</td>
-    <td class="num" th:text="${d.rateText}">90.0%</td>
-  </tr>
-</th:block>
-
-<th:block th:fragment="monthBody">
-  <tr th:each="m : ${months}">
-    <td th:text="${m.label}">2026년 11월 (진행 중)</td>
-    <td class="num" th:text="${m.authText}">1,200</td>
-    <td class="num" th:text="${m.mauText}">300명</td>
-    <td class="num" th:text="${m.newText}">40</td>
-  </tr>
-</th:block>
 
 <th:block th:fragment="failureBody">
   <tr th:each="f : ${failures}">

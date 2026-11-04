@@ -84,6 +84,12 @@ passkey:
       enabled: false        # true 면 MailAlertChannel 등록, ops 메일 발송
       to:                   # 알림 수신 운영자 주소
       min-severity: HIGH    # 이 severity 이상만 메일(LOW/MEDIUM/HIGH/CRITICAL). 기본 LogAlertChannel 은 전 severity 로깅
+  insights:                     # 플랫폼 현황 "확인이 필요한 테넌트" 기준(최근 7일)
+    rate-drop-pp: 5             # 인증 성공률이 그 앞 7일보다 이 %p 이상 떨어지면
+    rate-drop-min-attempts: 30  #   단, 최근 7일 인증 시도가 이 건수 이상일 때만(작은 테넌트 오탐 방지)
+    risk-min: 1                 # 차단된 위험 인증이 이 건수 이상이면
+    single-passkey-ratio: 0.5   # 패스키 1개뿐인 사용자 비율이 이 값 이상이면
+    single-passkey-min-users: 10 #  단, 사용자가 이 수 이상일 때만
   retention:
     fixed-delay: P1D            # 하루 1회 실행
     initial-delay: PT5M         # 부팅 후 5분

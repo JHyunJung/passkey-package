@@ -126,7 +126,7 @@ class ShellControllerTest {
         Document d = page("/admin/tenants", platform());
         assertThat(d.select("aside.sidebar").attr("aria-label")).isEqualTo("주 메뉴");
         assertThat(d.select(".sidebar__label").eachText()).containsExactly("플랫폼", "관리");
-        assertThat(navHrefs(d)).containsExactly("/admin/tenants", "/admin/activity", "/admin/audit-chain", "/admin/license", "/admin/settings");
+        assertThat(navHrefs(d)).containsExactly("/admin/tenants", "/admin/insights", "/admin/activity", "/admin/audit-chain", "/admin/license", "/admin/settings");
         assertThat(d.select("a.nav-item").eachText()).anyMatch(t -> t.contains("Tenants")).anyMatch(t -> t.contains("활동"))
                 .anyMatch(t -> t.contains("감사 체인")).anyMatch(t -> t.contains("라이선스") && t.contains("온프렘")).anyMatch(t -> t.contains("설정"));
         Elements current = d.select("a.nav-item[aria-current=page]");
@@ -143,7 +143,7 @@ class ShellControllerTest {
     @DisplayName("라이선스 메뉴는 온프렘에서만(TSX mode === 'onprem')")
     void licenseLinkOnlyOnPrem() throws Exception {
         when(license.get()).thenReturn(ApiResponse.ok(view("saas", null, 0, null)));
-        assertThat(navHrefs(page("/admin/tenants", platform()))).containsExactly("/admin/tenants", "/admin/activity", "/admin/audit-chain", "/admin/settings");
+        assertThat(navHrefs(page("/admin/tenants", platform()))).containsExactly("/admin/tenants", "/admin/insights", "/admin/activity", "/admin/audit-chain", "/admin/settings");
         when(license.get()).thenThrow(new IllegalStateException("boom"));
         assertThat(navHrefs(page("/admin/tenants", platform()))).as("조회 실패는 saas 로 본다").doesNotContain("/admin/license");
     }
@@ -323,6 +323,8 @@ class ShellControllerTest {
         assertThat(ShellAdvice.navActive("/admin/tenants")).isEqualTo("tenants");
         assertThat(ShellAdvice.navActive("/admin/tenants/abc")).isEqualTo("tenants");
         assertThat(ShellAdvice.navActive("/admin/settings")).isEqualTo("settings");
+        assertThat(ShellAdvice.navActive("/admin/insights")).isEqualTo("insights");
+        assertThat(ShellAdvice.navActive("/admin/insights.csv")).isNull(); // CSV 는 레이아웃이 없다
         assertThat(ShellAdvice.navActive("/admin/_/shell/chain-card")).isNull();
         assertThat(ShellAdvice.navActive("/admin/tenantsfoo")).isNull();
     }

@@ -76,7 +76,7 @@ public class FunnelTabController {
         return m;
     }
 
-    private static final List<Map<String, Object>> SERIES_COLUMNS = List.of(
+    public static final List<Map<String, Object>> SERIES_COLUMNS = List.of(
             col("day", "날짜", false), col("a", "시도", true), col("s", "성공", true), col("r", "성공률", true));
     private static final List<Map<String, Object>> FAILURE_COLUMNS = List.of(
             col("reason", "원인", false), col("meaning", "의미", false), col("n", "건수", true));
@@ -88,7 +88,7 @@ public class FunnelTabController {
             CredentialAuthFailureReason.SIGN_COUNT_REPLAY, new String[] {"서명 카운터 재사용",
                     "인증기 카운터가 이전 값보다 작거나 같아요. 패스키 복제가 의심돼요."});
 
-    private static final List<Map<String, Object>> MONTH_COLUMNS = List.of(
+    public static final List<Map<String, Object>> MONTH_COLUMNS = List.of(
             col("month", "월", false), col("auth", "인증 성공", true), col("mau", "활성 사용자", true), col("new", "신규 패스키", true));
 
     // ── 모델 ────────────────────────────────────────────────
@@ -230,28 +230,37 @@ public class FunnelTabController {
                         a.totalUsers() == 0 ? "사용자 없음" : num(a.singlePasskeyUsers()) + "명 / " + num(a.totalUsers()) + "명 · 기기를 잃으면 로그인할 수 없어요",
                         single != null && single >= 0.5)));
 
-        List<MonthView> months = new ArrayList<>();
-        for (AdoptionDto.Month m : orEmpty(a.months())) {
-            months.add(new MonthView(monthLabel(m), num(m.authSuccess()), num(m.activeUsers()) + "명", num(m.newCredentials())));
-        }
-        model.addAttribute("months", months);
+        model.addAttribute("months", monthViews(a.months()));
         model.addAttribute("monthColumns", MONTH_COLUMNS);
-
-        List<DeviceView> devices = new ArrayList<>();
-        long total = 0;
-        for (AdoptionDto.Device d : orEmpty(a.devices())) total += d.credentials();
-        for (AdoptionDto.Device d : orEmpty(a.devices())) {
-            Double share = total > 0 ? (double) d.credentials() / total : null;
-            devices.add(new DeviceView(d.name(), num(d.credentials()) + "개", FunnelHelpers.fmtPct(share),
-                    pct(share == null ? 0 : share * 100), "기간 인증 " + num(d.authSuccess()) + "건"));
-        }
-        model.addAttribute("devices", devices);
+        model.addAttribute("devices", deviceViews(a.devices()));
         model.addAttribute("csvMonthly", csvBase + "&kind=monthly");
         model.addAttribute("csvDevices", csvBase + "&kind=devices");
     }
 
+    /** 월간 사용량 표의 줄(플랫폼 현황도 같은 모양으로 쓴다). */
+    public static List<MonthView> monthViews(List<AdoptionDto.Month> list) {
+        List<MonthView> months = new ArrayList<>();
+        for (AdoptionDto.Month m : orEmpty(list)) {
+            months.add(new MonthView(monthLabel(m), num(m.authSuccess()), num(m.activeUsers()) + "명", num(m.newCredentials())));
+        }
+        return months;
+    }
+
+    /** 기기 분포 줄: 비율은 전체 패스키 대비(플랫폼 현황도 같은 모양으로 쓴다). */
+    public static List<DeviceView> deviceViews(List<AdoptionDto.Device> list) {
+        List<DeviceView> devices = new ArrayList<>();
+        long total = 0;
+        for (AdoptionDto.Device d : orEmpty(list)) total += d.credentials();
+        for (AdoptionDto.Device d : orEmpty(list)) {
+            Double share = total > 0 ? (double) d.credentials() / total : null;
+            devices.add(new DeviceView(d.name(), num(d.credentials()) + "개", FunnelHelpers.fmtPct(share),
+                    pct(share == null ? 0 : share * 100), "기간 인증 " + num(d.authSuccess()) + "건"));
+        }
+        return devices;
+    }
+
     /** "2026-11" → "2026년 11월", 이번 달은 "(진행 중)". */
-    static String monthLabel(AdoptionDto.Month m) {
+    public static String monthLabel(AdoptionDto.Month m) {
         String s = m.month();
         String label = s != null && s.matches("\\d{4}-\\d{2}")
                 ? s.substring(0, 4) + "년 " + Integer.parseInt(s.substring(5)) + "월" : String.valueOf(s);
@@ -265,7 +274,7 @@ public class FunnelTabController {
         return new RateKpi(label, FunnelHelpers.fmtPct(FunnelHelpers.rate(s.success(), s.attempts())), hint);
     }
 
-    private static SeriesCard seriesCard(String key, String title, List<FunnelDto.DailyPoint> series, String csv) {
+    public static SeriesCard seriesCard(String key, String title, List<FunnelDto.DailyPoint> series, String csv) {
         long smax = 1;
         for (FunnelDto.DailyPoint p : series) smax = Math.max(smax, Math.max(p.attempts(), p.success()));
         List<DayView> days = new ArrayList<>();
