@@ -3,8 +3,8 @@
 <body>
 <!--
   사이드바(← shell/Sidebar.tsx)
-  모델: me(CurrentAdmin), navActive('tenants'|'activity'|'audit-chain'|'settings'|'license'|null), deploymentMode('onprem'이면 라이선스 항목)
-  PLATFORM: [플랫폼] Tenants · 활동 · 감사 체인 · (온프렘) 라이선스, [관리] 설정.  RP_ADMIN: [관리] 설정만.
+  모델: me(CurrentAdmin), navActive('tenants'|'insights'|'activity'|'audit-chain'|'settings'|'license'|null), deploymentMode('onprem'이면 라이선스 항목)
+  PLATFORM: [플랫폼] Tenants · 현황 · 활동 · 감사 체인 · (온프렘) 라이선스, [관리] 설정.  RP_ADMIN: [관리] 설정만.
   PLATFORM 에게만 하단에 감사 체인 카드(30초 폴링, 응답 없는 조회는 120초 뒤 중단)를 둔다.
   카드(#chain-card)는 hx-preserve 라 boost 이동에도 같은 노드가 남고 폴링이 이어진다(React 셸은 한 번만 마운트). 카드 안 링크는
   hx-disinherit 로 카드의 target/swap/sync 를 받지 않아 일반 boost 이동을 한다. 폴링은 hx-sync="#chain-card:drop"(진행 중 조회가 있으면 건너뜀, Sidebar.tsx inFlight),
@@ -19,6 +19,9 @@
     <span class="sidebar__label">플랫폼</span>
     <a class="nav-item" th:classappend="${navActive == 'tenants'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'tenants'} ? 'page'" th:href="@{/admin/tenants}">
       <th:block th:replace="~{admin/fragments/icons :: building(18)}"></th:block><span>Tenants</span>
+    </a>
+    <a class="nav-item" th:classappend="${navActive == 'insights'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'insights'} ? 'page'" th:href="@{/admin/insights}">
+      <th:block th:replace="~{admin/fragments/icons :: sparkles(18)}"></th:block><span>현황</span>
     </a>
     <a class="nav-item" th:classappend="${navActive == 'activity'} ? 'nav-item--active'" th:attr="aria-current=${navActive == 'activity'} ? 'page'" th:href="@{/admin/activity}">
       <th:block th:replace="~{admin/fragments/icons :: activity(18)}"></th:block><span>활동</span>

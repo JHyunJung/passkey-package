@@ -91,11 +91,11 @@ class CommandPaletteControllerTest {
     // ── PLATFORM ────────────────────────────────────────────
 
     @Test
-    @DisplayName("PLATFORM, 검색어 없음: 이동 4 · 도움말 · 액션 2 순서, 그룹 라벨, 이동 항목에 단축키(G T 등) 표시")
+    @DisplayName("PLATFORM, 검색어 없음: 이동 5 · 도움말 · 액션 2 순서, 그룹 라벨, 이동 항목에 단축키(G T 등) 표시")
     void platformDefaultList() throws Exception {
         Document d = palette("", platform());
         assertThat(groups(d)).containsExactly("이동", "도움말", "액션");
-        assertThat(labels(d)).containsExactly("Tenants 목록", "Activity", "감사 체인 모니터", "설정", "키보드 단축키", "신규 tenant 생성", "로그아웃");
+        assertThat(labels(d)).containsExactly("Tenants 목록", "현황", "Activity", "감사 체인 모니터", "설정", "키보드 단축키", "신규 tenant 생성", "로그아웃");
         // 그룹 제목은 t-over 이고 보조기기에는 숨긴다.
         assertThat(d.select("[role=group] > span.t-over[aria-hidden=true]").eachText()).containsExactly("이동", "도움말", "액션");
         assertThat(option(d, "Tenants 목록").select("kbd").text()).isEqualTo("G T");
@@ -130,7 +130,7 @@ class CommandPaletteControllerTest {
         assertThat(option(d, "설정").hasClass("menu__item--danger")).isFalse();
         Elements opts = d.select("[role=option]");
         assertThat(opts.eachAttr("id")).containsExactly("palette-opt-0", "palette-opt-1", "palette-opt-2", "palette-opt-3",
-                "palette-opt-4", "palette-opt-5", "palette-opt-6");
+                "palette-opt-4", "palette-opt-5", "palette-opt-6", "palette-opt-7");
         assertThat(opts.eachAttr("tabindex")).containsOnly("-1");
         assertThat(opts.eachAttr("type")).containsOnly("button");
         assertThat(opts.eachAttr("aria-selected")).containsOnly("false"); // 선택 표시는 클라이언트가 칠한다

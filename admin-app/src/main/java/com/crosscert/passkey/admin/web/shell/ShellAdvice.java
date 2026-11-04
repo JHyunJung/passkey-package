@@ -50,7 +50,7 @@ public class ShellAdvice {
     /** 경로 → 사이드바 항목. 테넌트 상세는 Tenants. 그 밖(조각·오류)은 null. */
     static String navActive(String path) {
         if (path == null) return null;
-        for (String id : new String[] {"tenants", "activity", "audit-chain", "settings", "license"}) {
+        for (String id : new String[] {"tenants", "insights", "activity", "audit-chain", "settings", "license"}) {
             String base = "/admin/" + id;
             if (path.equals(base) || path.startsWith(base + "/")) return id;
         }

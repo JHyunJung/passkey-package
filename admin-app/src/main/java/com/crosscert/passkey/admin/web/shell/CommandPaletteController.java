@@ -123,6 +123,7 @@ public class CommandPaletteController {
         List<Item> items = new ArrayList<>();
         if (platform) {
             items.add(nav("이동", "building", "Tenants 목록", "전체 RP 회사", "플랫폼", "/admin/tenants"));
+            items.add(nav("이동", "sparkles", "현황", "전 테넌트 사용량 · 인증 품질 · 확인 필요", "플랫폼", "/admin/insights"));
             items.add(nav("이동", "activity", "Activity", "cross-tenant 활동 피드", "플랫폼", "/admin/activity"));
             items.add(nav("이동", "hash", "감사 체인 모니터", "전 tenant 무결성 보드", "플랫폼", "/admin/audit-chain"));
             items.add(nav("이동", "cog", "설정", "Admin · MDS · 시스템", "관리", "/admin/settings"));
