@@ -282,9 +282,16 @@ public class InsightsPageController {
         return m;
     }
 
+    /**
+     * #insights-root 를 교체하는 요청(기간·정렬·다시 시도). 대상은 요소마다 직접 준다 — 루트에 hx-target 을 두면 안의 링크(boost)가
+     * 그것을 물려받아 이동한 페이지 전체가 루트 안에 그려진다(테넌트 링크 클릭 시 페이지 안에 페이지).
+     */
     private static Map<String, Object> get(String url) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("hx-get", url);
+        m.put("hx-target", "#insights-root");
+        m.put("hx-swap", "outerHTML");
+        m.put("hx-sync", "#insights-root:replace");
         return m;
     }
 
