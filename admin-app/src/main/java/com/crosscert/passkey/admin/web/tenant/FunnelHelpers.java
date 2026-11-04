@@ -4,46 +4,19 @@ import com.crosscert.passkey.admin.funnel.FunnelDto;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 퍼널 탭의 비율 계산(← pages/tenant/funnelHelpers.ts). 0/0 은 null(비율 없음)이며 숫자 모양은 JS 와 같다
+ * 인증 현황 탭의 성공률 계산. 0/0 은 null(비율 없음)이며 숫자 모양은 원본 JS 와 같다
  * (toFixed 는 double 의 정확한 이진 값을 반올림하므로 {@link BigDecimal#BigDecimal(double)} 로 맞춘다).
  */
 public final class FunnelHelpers {
 
     private FunnelHelpers() {}
 
-    private static final String[] LABELS = {"등록 시도", "등록 성공", "인증 시도", "인증 성공"};
-
-    /** 비율은 값 없음이면 null. */
-    public record Step(String label, long value, Double pctOfFirst, Double convFromPrev, long dropFromPrev) {}
-
-    public record Drop(String from, String to, long lost, double rate) {}
-
-    public record Summary(List<Step> steps, Double overallRate, Drop biggestDrop) {}
-
-    public static Summary summary(FunnelDto.View f) {
-        long[] values = {f.registration().attempts(), f.registration().success(), f.authentication().attempts(), f.authentication().success()};
-        long first = values[0];
-        List<Step> steps = new ArrayList<>();
-        for (int i = 0; i < values.length; i++) {
-            long v = values[i];
-            Long prev = i > 0 ? values[i - 1] : null;
-            steps.add(new Step(LABELS[i], v,
-                    first > 0 ? (double) v / first : null,
-                    prev != null && prev > 0 ? (double) v / prev : null,
-                    prev != null ? Math.max(0, prev - v) : 0));
-        }
-        Drop biggest = null;
-        for (int i = 1; i < steps.size(); i++) {
-            long lost = steps.get(i).dropFromPrev();
-            if (lost > 0 && (biggest == null || lost > biggest.lost())) {
-                biggest = new Drop(steps.get(i - 1).label(), steps.get(i).label(), lost, (double) lost / values[i - 1]);
-            }
-        }
-        return new Summary(steps, first > 0 ? (double) values[3] / first : null, biggest);
+    /** 성공률(0~1). 시도 0 이면 null(비율 없음). 기간 경계에서 성공이 시도보다 많아질 수 있어 1 로 자른다. */
+    public static Double rate(long success, long attempts) {
+        return attempts > 0 ? Math.min(1.0, (double) success / attempts) : null;
     }
 
     private static Double successRate(List<FunnelDto.DailyPoint> s) {
@@ -53,10 +26,10 @@ public final class FunnelHelpers {
             attempts += d.attempts();
             success += d.success();
         }
-        return attempts > 0 ? (double) success / attempts : null;
+        return rate(success, attempts);
     }
 
-    /** series(오래된 날 → 오늘)의 마지막 windowDays 일 vs 그 앞 windowDays 일 인증 성공률 차이(%p). */
+    /** series(오래된 날 → 오늘)의 마지막 windowDays 일 vs 그 앞 windowDays 일 성공률 차이(%p). */
     public static Double priorPeriodDelta(List<FunnelDto.DailyPoint> series, int windowDays) {
         if (windowDays <= 0 || series.size() < windowDays * 2) return null;
         int n = series.size();

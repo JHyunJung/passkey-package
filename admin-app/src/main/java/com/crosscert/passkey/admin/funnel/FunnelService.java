@@ -2,6 +2,8 @@ package com.crosscert.passkey.admin.funnel;
 
 import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.ceremony.CeremonyAction;
+import com.crosscert.passkey.core.ceremony.CredentialAuthResult;
+import com.crosscert.passkey.core.repository.CredentialAuthEventRepository;
 import com.crosscert.passkey.core.repository.CeremonyEventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,10 +41,12 @@ public class FunnelService {
     static final String AUTHENTICATION_SUCCESS = CeremonyAction.AUTHENTICATION_SUCCESS;
 
     private final CeremonyEventRepository repo;
+    private final CredentialAuthEventRepository authEvents;
     private final TenantBoundary tenantBoundary;
 
-    public FunnelService(CeremonyEventRepository repo, TenantBoundary tenantBoundary) {
+    public FunnelService(CeremonyEventRepository repo, CredentialAuthEventRepository authEvents, TenantBoundary tenantBoundary) {
         this.repo = repo;
+        this.authEvents = authEvents;
         this.tenantBoundary = tenantBoundary;
     }
 
@@ -64,10 +68,14 @@ public class FunnelService {
         long totalSuccess  = regSuccess + authSuccess;
         double conversion  = ratio(totalSuccess, totalAttempts);
 
-        List<FunnelDto.DailyPoint> series = buildSeries(tenantId, since, windowDays);
+        Daily daily = buildSeries(tenantId, since, windowDays);
         List<FunnelDto.EventCount> byType = buildByEventType(tenantId, since);
+        List<FunnelDto.FailureCount> failures = authEvents.countByReason(tenantId, CredentialAuthResult.FAILED, since).stream()
+                .map(row -> new FunnelDto.FailureCount((String) row[0], ((Number) row[1]).longValue()))
+                .toList();
 
-        return new FunnelDto.View(windowDays, registration, authentication, conversion, series, byType);
+        return new FunnelDto.View(windowDays, registration, authentication, conversion, daily.combined(), byType,
+                daily.registration(), daily.authentication(), failures);
     }
 
     private double ratio(long success, long attempts) {
@@ -78,7 +86,12 @@ public class FunnelService {
         return Math.min(r, 1.0);
     }
 
-    private List<FunnelDto.DailyPoint> buildSeries(UUID tenantId, OffsetDateTime since, int windowDays) {
+    /** 같은 날짜 축의 일별 값 3종: 합계(기존 series), 등록만, 인증만. */
+    private record Daily(List<FunnelDto.DailyPoint> combined,
+                         List<FunnelDto.DailyPoint> registration,
+                         List<FunnelDto.DailyPoint> authentication) {}
+
+    private Daily buildSeries(UUID tenantId, OffsetDateTime since, int windowDays) {
         Map<LocalDate, long[]> byDay = new HashMap<>();
         for (Object[] row : repo.aggregateDailyByTenantAndActions(
                 tenantId,
@@ -97,23 +110,30 @@ public class FunnelService {
             LocalDate day = dayInstant.atZone(KstTime.ZONE).toLocalDate();
             String action = (String) row[1];
             long count = ((Number) row[2]).longValue();
-            long[] cell = byDay.computeIfAbsent(day, k -> new long[]{0L, 0L});
-            if (action.equals(REGISTRATION_BEGIN) || action.equals(AUTHENTICATION_BEGIN)) {
-                cell[0] += count;
-            } else {
-                cell[1] += count;
+            // cell = [등록 시도, 등록 성공, 인증 시도, 인증 성공]
+            long[] cell = byDay.computeIfAbsent(day, k -> new long[4]);
+            switch (action) {
+                case REGISTRATION_BEGIN -> cell[0] += count;
+                case REGISTRATION_SUCCESS -> cell[1] += count;
+                case AUTHENTICATION_BEGIN -> cell[2] += count;
+                case AUTHENTICATION_SUCCESS -> cell[3] += count;
+                default -> { }
             }
         }
-        List<FunnelDto.DailyPoint> series = new ArrayList<>(windowDays);
+        List<FunnelDto.DailyPoint> combined = new ArrayList<>(windowDays);
+        List<FunnelDto.DailyPoint> registration = new ArrayList<>(windowDays);
+        List<FunnelDto.DailyPoint> authentication = new ArrayList<>(windowDays);
         LocalDate today = LocalDate.now(KstTime.ZONE);
         for (int i = windowDays - 1; i >= 0; i--) {
             LocalDate d = today.minusDays(i);
-            long[] cell = byDay.getOrDefault(d, new long[]{0L, 0L});
+            long[] cell = byDay.getOrDefault(d, new long[4]);
             // day label as "MM-DD"
             String label = d.toString().substring(5);
-            series.add(new FunnelDto.DailyPoint(label, cell[0], cell[1]));
+            combined.add(new FunnelDto.DailyPoint(label, cell[0] + cell[2], cell[1] + cell[3]));
+            registration.add(new FunnelDto.DailyPoint(label, cell[0], cell[1]));
+            authentication.add(new FunnelDto.DailyPoint(label, cell[2], cell[3]));
         }
-        return series;
+        return new Daily(combined, registration, authentication);
     }
 
     private List<FunnelDto.EventCount> buildByEventType(UUID tenantId, OffsetDateTime since) {

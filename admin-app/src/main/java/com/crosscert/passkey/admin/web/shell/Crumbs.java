@@ -20,7 +20,7 @@ public final class Crumbs {
             "apikeys", "API 키",
             "credentials", "Credentials",
             "audit", "감사 로그",
-            "funnel", "퍼널");
+            "funnel", "인증 현황");
 
     private Crumbs() {}
 

@@ -222,7 +222,7 @@ class CommandPaletteControllerTest {
                 List.of(new ActiveTenantController.TenantRef(T1, "Acme"), new ActiveTenantController.TenantRef(T2, "Globex"))));
         Document d = palette("", rp());
         assertThat(groups(d)).containsExactly("현재 Tenant · Globex", "도움말", "액션");
-        assertThat(labels(d)).containsExactly("개요", "WebAuthn", "AAGUID 정책", "API 키", "Credentials", "감사 로그", "퍼널",
+        assertThat(labels(d)).containsExactly("개요", "WebAuthn", "AAGUID 정책", "API 키", "Credentials", "감사 로그", "인증 현황",
                 "키보드 단축키", "신규 tenant 생성", "로그아웃");
         assertThat(option(d, "개요").attr("data-href")).isEqualTo("/admin/tenants/" + T2 + "?tab=overview");
         assertThat(d.select("[role=option]").eachAttr("data-href").stream().filter(h -> h.startsWith("/admin/tenants/")))
@@ -266,7 +266,7 @@ class CommandPaletteControllerTest {
         assertThat(retry.attr("data-action")).isEqualTo("recheck");
         assertThat(retry.attr("data-keep-open")).isEqualTo("true");
         assertThat(retry.hasAttr("disabled")).isFalse();
-        assertThat(labels(d)).containsSubsequence("퍼널", "현재 tenant 다시 확인", "키보드 단축키");
+        assertThat(labels(d)).containsSubsequence("인증 현황", "현재 tenant 다시 확인", "키보드 단축키");
     }
 
     @Test

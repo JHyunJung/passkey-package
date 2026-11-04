@@ -302,7 +302,7 @@ class ShellControllerTest {
         assertThat(Crumbs.tenant(false, "t1", "Demo RP", "audit")).extracting(Crumb::label).containsExactly("Demo RP", "감사 로그");
         assertThat(Crumbs.tenant(false, "t1", null, "overview")).isEmpty();
         assertThat(Crumbs.tenant(true, "t1", "X", "zzz")).extracting(Crumb::label).last().isEqualTo("zzz");
-        for (String[] kv : new String[][] {{"overview", "개요"}, {"webauthn", "WebAuthn"}, {"aaguid", "AAGUID 정책"}, {"credentials", "Credentials"}, {"funnel", "퍼널"}}) {
+        for (String[] kv : new String[][] {{"overview", "개요"}, {"webauthn", "WebAuthn"}, {"aaguid", "AAGUID 정책"}, {"credentials", "Credentials"}, {"funnel", "인증 현황"}}) {
             assertThat(Crumbs.tenant(true, "t", "n", kv[0])).extracting(Crumb::label).last().isEqualTo(kv[1]);
         }
         assertThat(Crumbs.tenants()).extracting(Crumb::label).containsExactly("Tenants");

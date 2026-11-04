@@ -39,7 +39,7 @@ class FunnelServiceKstBucketTest {
 
     private final CeremonyEventRepository repo = mock(CeremonyEventRepository.class);
     private final TenantBoundary tenantBoundary = mock(TenantBoundary.class);
-    private final FunnelService service = new FunnelService(repo, tenantBoundary);
+    private final FunnelService service = new FunnelService(repo, mock(com.crosscert.passkey.core.repository.CredentialAuthEventRepository.class), tenantBoundary);
 
     @Test
     void dailySeriesBucketsRowUnderKstDateNotUtcDate() {

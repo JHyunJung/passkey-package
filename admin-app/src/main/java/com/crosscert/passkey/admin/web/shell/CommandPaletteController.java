@@ -36,7 +36,7 @@ public class CommandPaletteController {
             new String[] {"apikeys", "API 키", "key"},
             new String[] {"credentials", "Credentials", "fingerprint"},
             new String[] {"audit", "감사 로그", "receipt"},
-            new String[] {"funnel", "퍼널", "activity"});
+            new String[] {"funnel", "인증 현황", "activity"});
 
     /** GO_BY_LABEL + GO_SHORTCUTS (CommandPalette.tsx, useGoShortcuts.ts). */
     static final Map<String, String> GO_BY_LABEL = Map.of(

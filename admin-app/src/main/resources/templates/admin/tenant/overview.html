@@ -17,7 +17,7 @@
     <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('인증 성공률 (7d)', ${authKpi.value}, ${authKpi.hint}, ${authKpi.tone}, null, null)}"></th:block>
   </div>
   <th:block th:if="${funnelError != null}">
-    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('퍼널 지표', ${funnelError}, ${funnelRetry}, false, true)}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('인증 현황 지표', ${funnelError}, ${funnelRetry}, false, true)}"></th:block>
   </th:block>
 
   <div th:class="${platform} ? 'grid-3' : 'grid-2'">

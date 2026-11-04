@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -26,6 +27,17 @@ public interface CredentialAuthEventRepository extends JpaRepository<CredentialA
      */
     Page<CredentialAuthEvent> findByTenantIdAndCredentialIdOrderByCreatedAtDesc(
             UUID tenantId, UUID credentialId, Pageable pageable);
+
+    /**
+     * admin "인증 현황" 탭의 실패 원인 집계 — 결과(result)가 같은 이벤트를 failure_reason 별로 센다.
+     * 반환 행: [failureReason String(null 가능), count Long], 건수 내림차순.
+     */
+    @Query("SELECT e.failureReason, COUNT(e) FROM CredentialAuthEvent e "
+         + "WHERE e.tenantId = :tenantId AND e.result = :result AND e.createdAt >= :since "
+         + "GROUP BY e.failureReason ORDER BY COUNT(e) DESC")
+    List<Object[]> countByReason(@Param("tenantId") UUID tenantId,
+                                 @Param("result") String result,
+                                 @Param("since") OffsetDateTime since);
 
     /** retention: created_at 이 cutoff 이전인 이벤트 batched 삭제. */
     @Modifying(clearAutomatically = true)
