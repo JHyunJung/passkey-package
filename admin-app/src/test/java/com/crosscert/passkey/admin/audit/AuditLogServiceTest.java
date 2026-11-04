@@ -107,6 +107,41 @@ class AuditLogServiceTest {
     }
 
     @Test
+    void createdAtAdvancesPastLatestRowWhenClockIsBehind() throws Exception {
+        // 직전 row 가 시계보다 5초 뒤(시계가 뒤로 감 / 다른 서버 시계가 빠름) → 새 row 는 직전 + 1µs,
+        // 해시도 그 보정된 시각으로 계산된다(검증기가 저장된 created_at 으로 다시 계산해도 일치).
+        OffsetDateTime ahead = OffsetDateTime.now(clock).plusSeconds(5);
+        AuditLog prev = new AuditLog(null, new byte[]{1}, null, null, "ADMIN_LOGIN", null, null, null, null, null, "{}", ahead);
+        when(repo.findLatestForUpdate()).thenReturn(Optional.of(prev));
+
+        service.append(new AuditAppendRequest(null, null, "ADMIN_LOGIN", null, null, null, Map.of()));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(repo).save(captor.capture());
+        AuditLog row = captor.getValue();
+        assertThat(row.getCreatedAt()).isEqualTo(ahead.plusNanos(1_000));
+        assertThat(row.getCreatedAt().getOffset()).isEqualTo(java.time.ZoneOffset.ofHours(9));
+        byte[] expected = MessageDigest.getInstance("SHA-256")
+                .digest(("01||ADMIN_LOGIN|||" + row.getCreatedAt() + "|{}").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(row.getHash()).containsExactly(toIntArray(expected));
+    }
+
+    @Test
+    void nextChainTimeIsStrictlyIncreasingAndKeepsCandidateOffset() {
+        OffsetDateTime t = OffsetDateTime.parse("2026-06-01T09:00:00.000001+09:00");
+        // 시계가 앞서면 그대로
+        assertThat(AuditLogService.nextChainTime(t.plusSeconds(1), t)).isEqualTo(t.plusSeconds(1));
+        // 같은 마이크로초 / 시계가 뒤 → 직전 + 1µs
+        assertThat(AuditLogService.nextChainTime(t, t)).isEqualTo(t.plusNanos(1_000));
+        assertThat(AuditLogService.nextChainTime(t.minusSeconds(3), t)).isEqualTo(t.plusNanos(1_000));
+        // 직전 row 가 UTC offset 으로 읽혀도 결과는 candidate 의 offset(KST)
+        OffsetDateTime latestUtc = t.withOffsetSameInstant(java.time.ZoneOffset.UTC);
+        assertThat(AuditLogService.nextChainTime(t, latestUtc).toString()).isEqualTo("2026-06-01T09:00:00.000002+09:00");
+        // 첫 row
+        assertThat(AuditLogService.nextChainTime(t, null)).isEqualTo(t);
+    }
+
+    @Test
     void payloadKeysAreSortedAlphabetically() {
         when(repo.findLatestForUpdate()).thenReturn(Optional.empty());
         Map<String, Object> payload = new LinkedHashMap<>();

@@ -441,10 +441,22 @@ a.menu__item { text-decoration: none; }
 .audit-pre--dlg { padding: 12px; background: var(--canvas); border-color: var(--line-soft); }
 
 /* ── 퍼널 탭 ── */
-.fn-c0 { background: var(--brand-700); } .fn-c1 { background: var(--brand-500); } .fn-c2 { background: var(--brand-300); } .fn-c3 { background: var(--brand-900); } .fn-c4 { background: var(--brand-600); } .fn-bad { background: var(--bad); }
+/* 인증 현황 일별 막대: 시도는 중립 회색, 성공은 카드별 색(인증 = 브랜드 파랑, 등록 = 보라) — 두 카드와 두 막대를 색으로 구분 */
+.fn-att { background: var(--line-strong); }
+.fn-ok-auth { background: var(--brand-700); }
+.fn-ok-reg { background: var(--plat); }
 .fn-series { height: 200px; display: flex; align-items: flex-end; gap: 14px; border-bottom: 1px solid var(--line); padding: 0 4px; }
 .fn-series--dense { gap: 4px; }
-.fn-day { flex: 1 1 0; display: flex; align-items: flex-end; gap: 3px; height: 100%; }
+.fn-day { flex: 1 1 0; display: flex; align-items: flex-end; gap: 3px; height: 100%; position: relative; border-radius: 4px 4px 0 0; }
+.fn-day:hover { background: var(--sunk); }
+/* 날짜 말풍선: 막대 위 중앙, 가장자리 3칸은 카드 밖으로 넘지 않게 왼쪽·오른쪽 정렬. 색은 잉크/표면을 뒤집어 다크 모드에서도 대비 유지 */
+.fn-tip { display: none; position: absolute; left: 50%; top: -6px; transform: translate(-50%, -100%); z-index: 5; pointer-events: none;
+  flex-direction: column; gap: 2px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--ink); color: var(--surface);
+  font-size: 12px; line-height: 16px; white-space: nowrap; box-shadow: var(--sh-2); }
+.fn-tip strong { font-weight: 700; }
+.fn-day:hover .fn-tip { display: flex; }
+.fn-day:nth-child(-n+3) .fn-tip { left: 0; transform: translateY(-100%); }
+.fn-day:nth-last-child(-n+3) .fn-tip { left: auto; right: 0; transform: translateY(-100%); }
 .fn-day > span { flex: 1 1 0; border-radius: 3px 3px 0 0; }
 .fn-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
 

@@ -122,9 +122,8 @@ public class AuditLogService {
             .setParameter("n", CHAIN_LOCK_NAME)
             .getSingleResult();
 
-        byte[] prevHash = repo.findLatestForUpdate()
-                .map(AuditLog::getHash)
-                .orElse(null);
+        java.util.Optional<AuditLog> latest = repo.findLatestForUpdate();
+        byte[] prevHash = latest.map(AuditLog::getHash).orElse(null);
         // Phase B — per-tenant chain head (lock 없이 읽어도 됨: global chain lock 이 직렬화 보장)
         java.util.List<AuditLog> latestTenantList = repo.findLatestByTenant(
                 req.tenantId(),
@@ -136,7 +135,9 @@ public class AuditLogService {
         // WITH TIME ZONE defaults to 6 fractional digits (microseconds).
         // OffsetDateTime.now(clock) carries the KST (+09:00) offset so the
         // hashed toString() and the stored value share one wall-clock form.
-        OffsetDateTime now = OffsetDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        OffsetDateTime now = nextChainTime(
+                OffsetDateTime.now(clock).truncatedTo(ChronoUnit.MICROS),
+                latest.map(AuditLog::getCreatedAt).orElse(null));
         String payloadJson = serialize(req.payload());
         byte[] hash = computeHash(prevHash, req, payloadJson, now);
         // Phase B — tenant-scoped chain hash (동일 알고리즘, tenantPrev 만 다름)
@@ -149,6 +150,19 @@ public class AuditLogService {
                 tenantPrev, tenantHash,
                 payloadJson, now);
         return repo.save(row);
+    }
+
+    /**
+     * 체인 순서 키(createdAt)를 직전 row 보다 반드시 뒤로 만든다. 시계가 뒤로 가거나(NTP 보정),
+     * 여러 서버의 시계가 어긋나거나, 같은 마이크로초에 두 건이 들어와도 createdAt 순서 = append 순서가
+     * 유지되어야 chain head 조회·검증(둘 다 createdAt 순서)이 같은 체인을 본다.
+     * latest 는 global chain 의 최신 row 이고, 어떤 tenant chain 의 최신 row 보다도 늦거나 같다.
+     * 보정한 값도 candidate 의 offset(KST)으로 표현해 해시 입력 형태를 바꾸지 않는다.
+     */
+    static OffsetDateTime nextChainTime(OffsetDateTime candidate, OffsetDateTime latest) {
+        if (latest == null || candidate.isAfter(latest)) return candidate;
+        return latest.toInstant().plus(1, ChronoUnit.MICROS).atOffset(candidate.getOffset())
+                .truncatedTo(ChronoUnit.MICROS);
     }
 
     private String serialize(Map<String, Object> payload) {

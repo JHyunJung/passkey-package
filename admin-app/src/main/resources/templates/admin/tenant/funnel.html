@@ -54,9 +54,10 @@
         <div class="card__body stack-3">
           <div x-show="!asTable">
             <div role="img" class="fn-series" th:classappend="${c.dense} ? 'fn-series--dense'" th:attr="aria-label=${c.aria}">
-              <div th:each="d : ${c.days}" class="fn-day" th:title="${d.title}">
-                <span class="fn-c2" th:style="|height: ${d.attemptsPct}%|"></span>
-                <span class="fn-c0" th:style="|height: ${d.successPct}%|"></span>
+              <div th:each="d : ${c.days}" class="fn-day">
+                <div class="fn-tip" aria-hidden="true"><strong th:text="${d.dateText}">10월 1일</strong><span th:text="${d.tipText}">시도 10 · 성공 9 · 90.0%</span></div>
+                <span class="fn-att" th:style="|height: ${d.attemptsPct}%|"></span>
+                <span th:class="${c.key == 'reg'} ? 'fn-ok-reg' : 'fn-ok-auth'" th:style="|height: ${d.successPct}%|"></span>
               </div>
             </div>
             <div class="row hint" style="justify-content: space-between; padding: 0 4px; margin: 0">
@@ -89,8 +90,8 @@
 </div>
 
 <span th:fragment="seriesLegend" class="row hint" style="gap: 10px; margin: 0" x-show="!asTable">
-  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-c2"></span>시도</span>
-  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-c0"></span>성공</span>
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-att"></span>시도</span>
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot" th:classappend="${c.key == 'reg'} ? 'fn-ok-reg' : 'fn-ok-auth'"></span>성공</span>
 </span>
 
 <th:block th:fragment="seriesBody">

@@ -170,7 +170,7 @@ class FunnelTabControllerTest {
         assertThat(card.text()).contains("기간 안에 인증 실패가 없습니다.");
         assertThat(card.select("table, a[download]")).isEmpty();
         // 시도 0 인 날의 막대 높이는 0, 성공률은 —
-        assertThat(d.select("section[data-series=auth] .fn-day span").eachAttr("style")).containsOnly("height: 0.0%");
+        assertThat(d.select("section[data-series=auth] .fn-day > span").eachAttr("style")).containsOnly("height: 0.0%");
         assertThat(d.select("section[data-series=auth] table tbody tr").first().select("td").eachText()).containsExactly("10-01", "0", "0", "—");
     }
 
@@ -228,8 +228,13 @@ class FunnelTabControllerTest {
         Element auth = d.selectFirst("section[data-series=auth]");
         assertThat(auth.attr("x-data")).isEqualTo("{ asTable: false }");
         assertThat(auth.select(".fn-day")).hasSize(7);
-        assertThat(auth.select(".fn-day").first().attr("title")).isEqualTo("10-01 · 시도 10 · 성공 9");
-        assertThat(auth.select(".fn-day").first().select("span").eachAttr("style")).containsExactly("height: 100.0%", "height: 90.0%");
+        // 날짜 말풍선(마우스 오버): 날짜 + 시도·성공·성공률, 보조기기에는 숨김(표로 보기가 같은 데이터)
+        Element tip = auth.select(".fn-day").first().selectFirst(".fn-tip");
+        assertThat(tip.attr("aria-hidden")).isEqualTo("true");
+        assertThat(tip.selectFirst("strong").text()).isEqualTo("10월 1일");
+        assertThat(tip.selectFirst("span").text()).isEqualTo("시도 10 · 성공 9 · 90.0%");
+        assertThat(auth.select(".fn-day").last().selectFirst(".fn-tip strong").text()).isEqualTo("10월 7일");
+        assertThat(auth.select(".fn-day").first().select("> span").eachAttr("style")).containsExactly("height: 100.0%", "height: 90.0%");
         assertThat(auth.selectFirst("[role=img]").attr("aria-label")).isEqualTo("일별 인증 시도와 성공 막대 차트, 7일");
         assertThat(auth.select("div.row.hint > span").eachText()).containsExactly("10-01", "10-04", "오늘");
         assertThat(auth.select("table th").eachText()).containsExactly("날짜", "시도", "성공", "성공률");
@@ -241,11 +246,16 @@ class FunnelTabControllerTest {
 
         // 등록 카드는 등록 값만(인증과 섞이지 않는다)
         Element reg = d.selectFirst("section[data-series=reg]");
-        assertThat(reg.select(".fn-day").first().attr("title")).isEqualTo("10-01 · 시도 4 · 성공 3");
-        assertThat(reg.select(".fn-day").first().select("span").eachAttr("style")).containsExactly("height: 100.0%", "height: 75.0%");
+        assertThat(reg.select(".fn-day").first().select(".fn-tip span").text()).isEqualTo("시도 4 · 성공 3 · 75.0%");
+        assertThat(reg.select(".fn-day").first().select("> span").eachAttr("style")).containsExactly("height: 100.0%", "height: 75.0%");
         assertThat(reg.select("table tbody tr").first().select("td").eachText()).containsExactly("10-01", "4", "3", "75.0%");
         assertThat(reg.select("a[download]").attr("href")).isEqualTo("/admin/tenants/" + T1 + "/funnel.csv?win=7&kind=reg");
 
+        // 색: 시도는 회색(fn-att), 성공은 카드별(인증 fn-ok-auth, 등록 fn-ok-reg) — 범례도 같은 색
+        assertThat(auth.select(".fn-day").first().select("> span").eachAttr("class")).containsExactly("fn-att", "fn-ok-auth");
+        assertThat(reg.select(".fn-day").first().select("> span").eachAttr("class")).containsExactly("fn-att", "fn-ok-reg");
+        assertThat(auth.select(".fn-legend-dot").eachAttr("class")).containsExactly("fn-legend-dot fn-att", "fn-legend-dot fn-ok-auth");
+        assertThat(reg.select(".fn-legend-dot").eachAttr("class")).containsExactly("fn-legend-dot fn-att", "fn-legend-dot fn-ok-reg");
         // style 속성에는 숫자 + % 만
         for (Element e : d.select(".fn-day > span")) assertThat(e.attr("style")).matches("height: [0-9.]+%");
     }
