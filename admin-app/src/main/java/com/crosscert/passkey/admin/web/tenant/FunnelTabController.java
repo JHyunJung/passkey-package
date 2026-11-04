@@ -89,8 +89,9 @@ public class FunnelTabController {
     /** 성공률 지표 카드 1장(등록·인증). */
     public record RateKpi(String label, String value, String hint) {}
 
+    /** dateText·tipText 는 막대에 마우스를 올리면 뜨는 말풍선 문구(예: "10월 29일", "시도 10 · 성공 9 · 90.0%"). */
     public record DayView(String day, long attempts, long success, String attemptsText, String successText, String rateText,
-                          double attemptsPct, double successPct, String title) {}
+                          double attemptsPct, double successPct, String dateText, String tipText) {}
 
     /** 일별 시도·성공 카드 1장(등록·인증). key 는 CSV kind·요소 구분용. */
     public record SeriesCard(String key, String title, List<DayView> days, List<String> axis, boolean dense, String aria, String csv) {}
@@ -204,13 +205,19 @@ public class FunnelTabController {
         for (FunnelDto.DailyPoint p : series) smax = Math.max(smax, Math.max(p.attempts(), p.success()));
         List<DayView> days = new ArrayList<>();
         for (FunnelDto.DailyPoint p : series) {
-            days.add(new DayView(p.day(), p.attempts(), p.success(), num(p.attempts()), num(p.success()),
-                    FunnelHelpers.fmtPct(FunnelHelpers.rate(p.success(), p.attempts())),
+            String rate = FunnelHelpers.fmtPct(FunnelHelpers.rate(p.success(), p.attempts()));
+            days.add(new DayView(p.day(), p.attempts(), p.success(), num(p.attempts()), num(p.success()), rate,
                     pct((double) p.attempts() / smax * 100), pct((double) p.success() / smax * 100),
-                    p.day() + " · 시도 " + p.attempts() + " · 성공 " + p.success()));
+                    dateText(p.day()), "시도 " + num(p.attempts()) + " · 성공 " + num(p.success()) + " · " + rate));
         }
         return new SeriesCard(key, title, days, axisLabels(series), series.size() > 14,
                 title + " 막대 차트, " + series.size() + "일", csv);
+    }
+
+    /** "MM-DD" → "M월 D일". 모양이 다르면 그대로. */
+    static String dateText(String day) {
+        if (day == null || !day.matches("\\d{2}-\\d{2}")) return day;
+        return Integer.parseInt(day.substring(0, 2)) + "월 " + Integer.parseInt(day.substring(3)) + "일";
     }
 
     private static <T> List<T> orEmpty(List<T> l) {
