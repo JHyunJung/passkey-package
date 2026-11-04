@@ -458,6 +458,14 @@ a.menu__item { text-decoration: none; }
 .fn-day:nth-child(-n+3) .fn-tip { left: 0; transform: translateY(-100%); }
 .fn-day:nth-last-child(-n+3) .fn-tip { left: auto; right: 0; transform: translateY(-100%); }
 .fn-day > span { flex: 1 1 0; border-radius: 3px 3px 0 0; }
+/* 인증 현황 탭의 묶음 제목(인증 품질 · 패스키 도입·사용) */
+.fn-section { margin: 4px 0 -8px; font-size: 15px; line-height: 22px; font-weight: 700; color: var(--ink); }
+/* 사용자 기기 분포: 이름 | 비율 막대 | 비율·개수, 아래 줄에 기간 인증 건수 */
+.dv-row { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; font-size: 13px; }
+.dv-row__track { height: 10px; border-radius: 5px; background: var(--sunk); overflow: hidden; }
+.dv-row__bar { display: block; height: 100%; border-radius: 5px; background: var(--brand-700); }
+.dv-row__num { white-space: nowrap; text-align: right; }
+.dv-row__sub { grid-column: 1 / -1; margin: 0; font-size: 12px; }
 .fn-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
 
 /* ── 활동 화면 ── */

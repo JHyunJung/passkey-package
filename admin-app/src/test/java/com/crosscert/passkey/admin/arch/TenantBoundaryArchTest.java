@@ -36,7 +36,7 @@ class TenantBoundaryArchTest {
                 new DescribedPredicate<>("is a tenant-scoped admin service") {
                     private final Set<String> TARGETS = Set.of(
                             "CredentialAdminService", "ApiKeyAdminService",
-                            "TenantAdminService", "WebauthnDiffService", "FunnelService");
+                            "TenantAdminService", "WebauthnDiffService", "FunnelService", "AdoptionService");
                     @Override public boolean test(JavaClass c) {
                         return TARGETS.contains(c.getSimpleName());
                     }
