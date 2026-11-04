@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Badge (← ui/Badge.tsx)
+  th:replace="~{admin/fragments/ui/badge :: badge(label, tone, dot, mono, title)}"
+    label 문자열
+    tone  'ok' | 'warn' | 'bad' | 'info' | 'plat' | 'neutral' (null 이면 neutral)
+    dot   true | false (null 이면 true)
+    mono  true | false | null
+    title 툴팁 문자열 또는 null
+-->
+<span th:fragment="badge(label, tone, dot, mono, title)" class="badge"
+      th:classappend="(${tone == 'ok'} ? 'badge--success' : (${tone == 'warn'} ? 'badge--warning' : (${tone == 'bad'} ? 'badge--danger' : (${tone == 'info'} ? 'badge--info' : (${tone == 'plat'} ? 'badge--violet' : '')))))
+        + (${dot == null or dot} ? ' badge--dot' : '') + (${mono == true} ? ' mono' : '')"
+      th:title="${title}" th:text="${label}">라벨</span>
+</body>
+</html>

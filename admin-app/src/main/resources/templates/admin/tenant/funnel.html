@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  퍼널 탭(← pages/tenant/FunnelTab.tsx). 탭 조각 GET /admin/_/tenants/{id}/tab/funnel?win=1|7|30.
+  모델: tid, win, segOptions, retryAttrs, loadError, hasData, kpi*(문자열), period/periodHint, steps, days/dense/axis/seriesAria, events/eventsAria, csvSteps/csvSeries/csvEvents
+  기간 전환·다시 시도는 #funnel-root 만 교체한다(hx-target=this). 루트 상태는 Alpine funnelTab(app.js). 막대 너비·높이는 서버가 계산한 숫자만 th:style 에 들어가고 색은 CSS 클래스다.
+  이벤트 타입·날짜는 th:text/th:title 로만 쓴다. 표로 보기는 서버가 둘 다 그려 두고 Alpine 이 보이는 쪽만 바꾼다.
+-->
+<div th:fragment="tab" id="funnel-root" class="stack-6" hx-target="this" hx-swap="outerHTML" hx-sync="this:replace" th:attr="data-win=${win}"
+     x-data="funnelTab" x-on:htmx:before-request="begin()" x-on:htmx:after-request="end($event)">
+  <div class="row" style="gap: 16px">
+    <th:block th:replace="~{admin/fragments/ui/segmented :: segmented(null, ${segOptions}, ${win}, '기간')}"></th:block>
+    <div class="spacer"></div>
+    <a th:if="${hasData}" class="btn" th:href="${csvSteps}" hx-boost="false" download data-csv-download
+       x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">
+      <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>내보내기</a>
+    <button th:unless="${hasData}" type="button" class="btn" disabled>
+      <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>내보내기</button>
+  </div>
+
+  <!-- 기간 전환 중에는 이전 결과를 숨기고 스켈레톤(원본: 전환 중 data 를 쓰지 않음). 요청이 교체 없이 실패하면(네트워크·서버 오류 토스트)
+       after-request 가 결과를 다시 보이고 세그먼트 선택도 보이는 기간(data-win)으로 되돌린다(funnelTab) — CSV 링크·숫자와 선택이 어긋나지 않는다. -->
+  <div x-show="pending" x-cloak><th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(6, '퍼널 데이터 불러오는 중')}"></th:block></div>
+  <div class="stack-6" x-show="!pending">
+  <th:block th:if="${loadError != null}">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('퍼널 데이터', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+  </th:block>
+
+  <th:block th:if="${loadError == null}">
+    <div class="kpis kpis--3">
+      <div class="kpi">
+        <span class="kpi__label">전체 전환율 (등록 시도 → 인증 성공)</span>
+        <span class="kpi__value" th:text="${kpiRate}">63.0%</span>
+        <span class="kpi__hint" th:if="${kpiRateHint != null}" th:text="${kpiRateHint}">직전 7일 대비 +30.0%p (인증 성공률)</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__label">최대 이탈 단계</span>
+        <span class="kpi__value"><span style="font-size: 20px" th:text="${kpiDrop}">등록 시도 → 등록 성공</span></span>
+        <span class="kpi__hint" th:text="${kpiDropHint}">이탈 20건 · 20.0%</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__label">기간</span>
+        <span class="kpi__value"><span style="font-size: 20px" th:text="${period}">최근 7일</span></span>
+        <span class="kpi__hint" th:text="${periodHint}">2026-10-05 – 2026-10-11</span>
+      </div>
+    </div>
+
+    <section class="card">
+      <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('Conversion Funnel', ${'등록 → 인증 단계별 전환 — ' + period + '.'}, null, null)}"></th:block>
+      <div class="card__body">
+        <div style="overflow-x: auto">
+          <div class="fn-steps">
+            <th:block th:each="st, i : ${steps}">
+              <div th:if="${i.index > 0}" class="fn-between">
+                <span class="tag" th:text="${st.convText}">80.0%</span>
+                <span class="fn-between__arrow"><th:block th:replace="~{admin/fragments/icons :: chevronRight(18)}"></th:block></span>
+              </div>
+              <div class="fn-step">
+                <div class="stack-1" style="gap: 2px">
+                  <strong style="font-size: 13px" th:text="${st.label}">등록 시도</strong>
+                  <span class="hint" style="margin: 0" th:text="${st.valueText}">100건 · 100%</span>
+                </div>
+                <div class="fn-track"><div class="fn-bar" th:classappend="${st.colorClass}" th:style="|height: ${st.heightPct}%|"></div></div>
+                <span class="hint" style="margin: 0" th:if="${st.dropText != null}" th:text="${st.dropText}">이탈 20건</span>
+                <span class="hint" style="margin: 0" th:unless="${st.dropText != null}">&nbsp;</span>
+              </div>
+            </th:block>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- 일별 인증 시도 vs 성공 -->
+      <section class="card" x-data="{ asTable: false }">
+        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('일별 인증 시도 vs 성공', null, null, ~{:: seriesLegend})}"></th:block>
+        <div class="card__body stack-3">
+          <div x-show="!asTable">
+            <div role="img" class="fn-series" th:classappend="${dense} ? 'fn-series--dense'" th:attr="aria-label=${seriesAria}">
+              <div th:each="d : ${days}" class="fn-day" th:title="${d.title}">
+                <span class="fn-c2" th:style="|height: ${d.attemptsPct}%|"></span>
+                <span class="fn-c0" th:style="|height: ${d.successPct}%|"></span>
+              </div>
+            </div>
+            <div class="row hint" style="justify-content: space-between; padding: 0 4px; margin: 0">
+              <span th:each="l : ${axis}" th:text="${l}">10-01</span>
+            </div>
+          </div>
+          <div x-show="asTable" x-cloak>
+            <th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${seriesColumns}, ~{:: seriesBody})}"></th:block>
+          </div>
+          <div class="row" style="gap: 8px">
+            <button type="button" class="btn btn--ghost btn--sm" aria-pressed="false" x-bind:aria-pressed="asTable" x-on:click="asTable = !asTable">표로 보기</button>
+            <a class="btn btn--ghost btn--sm" th:href="${csvSeries}" hx-boost="false" download data-csv-download x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- 이벤트 타입별 분포 -->
+      <section class="card" x-data="{ asTable: false }">
+        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('이벤트 타입별 분포', null, null, null)}"></th:block>
+        <div class="card__body stack-4">
+          <div x-show="!asTable" class="stack-4">
+            <div role="img" class="fn-dist" th:attr="aria-label=${eventsAria}">
+              <span th:each="e : ${events}" th:classappend="${e.colorClass}" th:title="${e.type + ': ' + e.nText}" th:style="|width: ${e.widthPct}%|"></span>
+            </div>
+            <p th:if="${#lists.isEmpty(events)}" class="hint" style="margin: 0">이벤트가 없습니다.</p>
+            <div th:unless="${#lists.isEmpty(events)}" class="stack-3" style="font-size: 13px">
+              <span th:each="e : ${events}" class="row" style="gap: 8px; flex-wrap: nowrap">
+                <span aria-hidden="true" class="fn-legend-dot" th:classappend="${e.colorClass}"></span>
+                <span class="truncate" th:text="${e.type}">AUTH_SUCCESS</span>
+                <span class="spacer"></span>
+                <strong th:text="${e.nText}">63</strong>
+              </span>
+            </div>
+          </div>
+          <div x-show="asTable" x-cloak>
+            <th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${eventColumns}, ~{:: eventBody})}"></th:block>
+          </div>
+          <div class="row" style="gap: 8px">
+            <button type="button" class="btn btn--ghost btn--sm" aria-pressed="false" x-bind:aria-pressed="asTable" x-on:click="asTable = !asTable">표로 보기</button>
+            <a class="btn btn--ghost btn--sm" th:href="${csvEvents}" hx-boost="false" download data-csv-download x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </th:block>
+  </div>
+</div>
+
+<span th:fragment="seriesLegend" class="row hint" style="gap: 10px; margin: 0" x-show="!asTable">
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-c2"></span>시도</span>
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-c0"></span>성공</span>
+</span>
+
+<th:block th:fragment="seriesBody">
+  <tr th:each="d : ${days}">
+    <td><span class="mono" th:text="${d.day}">10-01</span></td>
+    <td class="num" th:text="${d.attemptsText}">10</td>
+    <td class="num" th:text="${d.successText}">9</td>
+    <td class="num" th:text="${d.rateText}">90.0%</td>
+  </tr>
+</th:block>
+
+<th:block th:fragment="eventBody">
+  <tr th:each="e : ${events}">
+    <td><span class="mono" th:text="${e.type}">AUTH_SUCCESS</span></td>
+    <td class="num" th:text="${e.nText}">63</td>
+    <td class="num" th:text="${e.pctText}">90.0%</td>
+  </tr>
+</th:block>
+</body>
+</html>

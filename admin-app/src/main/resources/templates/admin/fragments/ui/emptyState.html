@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  EmptyState (← ui/EmptyState.tsx)
+  th:replace="~{admin/fragments/ui/emptyState :: emptyState(illustration, title, description, action, compact)}"
+    illustration /admin/img/ 아래 이미지 경로(예: '/admin/img/empty-tenants.webp') 또는 null — 장식(alt="")
+    title, description 문자열(없으면 null), action 조각 또는 null, compact true 면 작은 여백·일러스트
+-->
+<div th:fragment="emptyState(illustration, title, description, action, compact)" class="empty" th:classappend="${compact == true} ? 'empty--compact'">
+  <img class="empty__art" th:if="${illustration}" th:src="@{${illustration}}" alt="">
+  <p class="empty__title" th:text="${title}">제목</p>
+  <p class="empty__sub" th:if="${description}" th:text="${description}">설명</p>
+  <th:block th:if="${action}"><th:block th:replace="${action}"/></th:block>
+</div>
+</body>
+</html>

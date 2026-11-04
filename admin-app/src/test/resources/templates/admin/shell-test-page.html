@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}" xmlns:th="http://www.thymeleaf.org">
+<head><title>테스트 페이지</title></head>
+<body>
+<th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>
+<main><p id="page-content">본문</p></main>
+</body>
+</html>

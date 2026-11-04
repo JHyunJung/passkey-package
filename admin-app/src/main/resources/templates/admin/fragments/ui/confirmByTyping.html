@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  ConfirmByTyping (← ui/ConfirmByTyping.tsx) — Alpine.data('confirmByTyping')
+  th:replace="~{admin/fragments/ui/confirmByTyping :: confirmByTyping(id, expected, label, actionLabel)}"
+    id          필수(입력·힌트 id), expected 정확히 입력해야 하는 문자열, label 문자열, actionLabel 확인 버튼 이름(null 이면 '실행')
+  일치 여부가 바뀔 때마다 `match-change` 이벤트(detail: true/false)가 올라간다. 정확히 일치할 때만 true(공백 포함 비교).
+-->
+<div th:fragment="confirmByTyping(id, expected, label, actionLabel)"
+     ui:xdata="${@fmt.xdata('confirmByTyping', 'expected', expected, 'actionLabel', actionLabel ?: '실행')}">
+  <label class="label" th:for="${id}" th:text="${label}">확인 입력</label>
+  <input class="input mono" th:id="${id}" autocomplete="off" th:aria-describedby="${id + '-h'}"
+         x-model="v" x-on:input="onInput()" x-bind:class="ok ? 'input--ok' : ''">
+  <p class="hint" th:id="${id + '-h'}" x-bind:class="ok ? 'hint--ok' : ''" x-text="hint"
+     th:text="|일치해야 ${actionLabel ?: '실행'} 버튼이 활성화됩니다.|">일치해야 실행 버튼이 활성화됩니다.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  PropChip (← ui/PropChip.tsx)
+  th:replace="~{admin/fragments/ui/propChip :: propChip(label, value, copy)}"
+    label 문자열, value 문자열(긴 값은 말줄임 + title 로 전체값), copy true 면 복사 버튼(아이콘)
+-->
+<span th:fragment="propChip(label, value, copy)" class="propchip" th:classappend="${copy != true} ? 'propchip--nocopy'">
+  <span class="propchip__k" th:text="${label}">라벨</span>
+  <span class="propchip__v" th:title="${value}" th:text="${value}">값</span>
+  <th:block th:if="${copy == true}"><th:block th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(${value}, ${label + ' 복사'}, true)}"/></th:block>
+</span>
+</body>
+</html>

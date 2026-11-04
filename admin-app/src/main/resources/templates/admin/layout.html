@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, crumbs, content)">
+<!--
+  공통 레이아웃(← App.tsx AuthenticatedApp). 모든 인증 후 화면이 이 안에서 그려진다.
+
+  페이지 템플릿 규약 — 화면 템플릿은 정확히 이 한 줄로 시작한다.
+    <html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}">
+  그리고 같은 파일에 세 조각을 둔다.
+    <head><title>페이지 이름</title></head>                  → title   : <title> 요소 하나
+    <body>
+      <th:block th:fragment="crumbs">…</th:block>            → crumbs  : 상단 바의 브레드크럼(보통 breadcrumb 조각 호출)
+      <main>…</main>                                         → content : <main> 요소 하나
+    </body>
+  crumbs 조각이 없으면 상단 바에 브레드크럼이 없다. 모델의 me / navActive / deploymentMode / helpLinks 는 어드바이스가 넣는다.
+  주의: 모델 속성 이름을 crumbs 로 짓지 말 것 — 레이아웃의 같은 이름 조각 인자에 가려진다(화면은 breadcrumbs 처럼 다른 이름을 쓴다).
+
+  htmx 조각 응답(/admin/_/** 의 hx-get·hx-post)은 이 레이아웃을 쓰지 않고 조각만 반환한다.
+  hx-boost 로 이동하는 요청은 전체 페이지를 받아 htmx 가 body 만 교체한다.
+
+  head 스크립트 순서: htmx → alpine-focus(defer) → ui.js → app.js → alpine(defer, 마지막).
+-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:replace="${title}">Passkey Admin</title>
+  <link rel="icon" th:href="@{/admin/img/favicon.png}">
+  <link rel="stylesheet" th:href="@{/admin/css/fonts.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/tokens.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/globals.css}">
+  <link rel="stylesheet" th:href="@{/admin/css/components.css}">
+  <script th:src="@{/admin/js/vendor/htmx.min.js}"></script>
+  <script th:src="@{/admin/js/vendor/alpine-focus.min.js}" defer></script>
+  <script th:src="@{/admin/js/ui.js}"></script>
+  <script th:src="@{/admin/js/app.js}"></script>
+  <script th:src="@{/admin/js/vendor/alpine.min.js}" defer></script>
+</head>
+<body hx-boost="true"
+      th:attr="hx-headers=${'{&quot;X-XSRF-TOKEN&quot;: &quot;' + (_csrf != null ? _csrf.token : '') + '&quot;}'}">
+  <!-- 라이선스 배너: 5분(300초)마다 다시 조회. 조회 실패는 알리지 않는다(주변 UI). -->
+  <div th:replace="~{admin/fragments/shell/license-banner :: host}"></div>
+  <div class="app">
+    <aside th:replace="~{admin/fragments/shell/sidebar :: sidebar}"></aside>
+    <div class="content">
+      <header th:replace="~{admin/fragments/shell/header :: topbar(${crumbs})}"></header>
+      <th:block th:replace="${content}"><main></main></th:block>
+    </div>
+  </div>
+  <th:block th:replace="~{admin/fragments/shell/toast-host :: toastHost}"></th:block>
+  <th:block th:replace="~{admin/fragments/ui/unsavedGuard :: unsavedGuard(null, null)}"></th:block>
+  <!-- 명령 팔레트(⌘K)·단축키 시트(?)·유휴 세션 모달. 단축키 리스너는 app.js 가 window 에 한 번 단다. -->
+  <th:block th:replace="~{admin/fragments/shell/command-palette :: palette}"></th:block>
+  <th:block th:replace="~{admin/fragments/shell/shortcut-sheet :: sheet}"></th:block>
+  <th:block th:replace="~{admin/fragments/shell/idle-session-modal :: modal}"></th:block>
+</body>
+</html>

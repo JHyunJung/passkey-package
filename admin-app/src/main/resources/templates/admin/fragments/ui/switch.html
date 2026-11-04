@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Switch (← ui/Switch.tsx) — Alpine.data('switchToggle')
+  th:replace="~{admin/fragments/ui/switch :: switch(label, name, checked, disabled, attrs)}"
+    label 문자열, name form 필드 이름(hidden input 으로 'true'/'false' 가 제출된다), checked true | false, disabled true | false | null
+    attrs input 에 붙는 속성 Map(hx-post, hx-trigger 등) 또는 null. 값은 템플릿 상수(JS 평가 속성에 사용자 입력 금지).
+  로컬 상태가 role=switch 입력의 aria-checked 를 정한다. 바뀌면 `switch-change`(detail.checked) 이벤트를 올리고
+  (saveBar 가 변경 개수를 센다), 가까운 form 이 reset 되면 처음 값으로 돌아간다.
+-->
+<label th:fragment="switch(label, name, checked, disabled, attrs)" class="switch"
+       ui:xdata="${@fmt.xdata('switchToggle', 'checked', checked == true)}">
+  <input type="hidden" th:name="${name}" th:value="${checked == true ? 'true' : 'false'}" x-bind:value="on ? 'true' : 'false'">
+  <input type="checkbox" role="switch" class="sr-only" th:checked="${checked == true}" th:aria-checked="${checked == true}"
+         th:disabled="${disabled == true}" x-model="on" x-bind:aria-checked="on" ui:attrs="${attrs}">
+  <span class="switch__track" aria-hidden="true"></span>
+  <span th:text="${label}">라벨</span>
+</label>
+</body>
+</html>

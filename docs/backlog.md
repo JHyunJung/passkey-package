@@ -29,18 +29,17 @@
 
 ## 1. 기능 개발 (별도 spec 필요)
 
-- [ ] F01 **mfaRequired 강제화** — enroll-required vs verify-required 세션 상태 + admin-ui 라우팅. 프론트+백 크로스커팅. [zero-base 2026-07-04]
+- [ ] F01 **mfaRequired 강제화** — enroll-required vs verify-required 세션 상태 + 화면(Thymeleaf) 라우팅. 프론트+백 크로스커팅. [zero-base 2026-07-04]
 - [ ] **MFA 복구 코드 재발급 백엔드 엔드포인트** — `MfaController` 에 `/verify`·`/enroll`·`/confirm`·`/disable` 만 있고
       재발급 경로가 없다. [admin-ui-followup-screens 2026-05-31]
-- [ ] **NAV_RP dead code 해소** — `admin-ui/src/shell/Sidebar.tsx:32,175`. RP_ADMIN 네비게이션이 정의돼 있으나
-      호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. [rp-admin-role-gating 2026-05-31]
+- [ ] **NAV_RP dead code 해소** — (React 시절 `admin-ui/src/shell/Sidebar.tsx`; Thymeleaf 이식 후 위치는 `templates/admin/fragments/shell/sidebar.html`). RP_ADMIN 네비게이션이 정의돼 있으나
+      호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. (Thymeleaf 포트에서 RP_ADMIN 은 [관리] 설정만 노출 — 재확인 후 종결 후보) [rp-admin-role-gating 2026-05-31]
 - [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.java:43` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
 - [ ] **p95 응답 metric** — Activity KPI 가 'N/A'. admin-app 에 p95 산출 0건. [activity-page 2026-05-28]
-- [ ] **Activity 실시간 갱신을 push 로** — `admin-ui/src/pages/ActivityPage.tsx:253,291` 이 5초 폴링이다.
+- [ ] **Activity 실시간 갱신을 push 로** — (React 시절 `ActivityPage.tsx`; 현재 `templates/admin/activity/*.html` + `web/activity/ActivityPageController`) 가 5초 htmx 폴링이다.
       WebSocket/SSE 로 바꾸면 유휴 부하와 지연이 함께 줄어든다. 서버 측 이벤트 발행 설계가 선행돼야 한다.
       [activity-page 2026-05-28]
-- [ ] **Activity KPI·topTenants 초기값이 fixture** — `admin-ui/src/pages/ActivityPage.tsx:232-233` 이
-      `activityFixture.kpi`/`topTenants` 를 초기 state 로 쓴다. 첫 로딩·첫 오류는 `:349,358` 가드가 막지만,
+- [ ] **Activity KPI·topTenants 초기값이 fixture** — (React 시절 `ActivityPage.tsx` 의 `activityFixture` 초기 state — Thymeleaf 포트(`templates/admin/activity/`, `ActivityPageController`)는 서버 렌더라 fixture 초기값이 없다. 갱신 실패·부분 응답 시 이전 값 잔존 여부만 재확인 필요). 원래 기록: 첫 로딩·첫 오류는 가드가 막지만,
       **갱신 실패(2회차 이후)나 KPI 만 비는 부분 응답에서는 이전 fixture 값이 그대로 남는다**.
       초기값을 null 로 두고 KPI 영역에도 로딩·오류 표시를 따로 두는 편이 안전하다. [master-backlog 2026-05-31]
 - [ ] **`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다** — `admin-app/.../config/AdminSecurityConfig.java:242-245` 가
@@ -98,13 +97,12 @@
 - [ ] **`searchByTenantId` native query 에 ORDER BY 미명시** — `Pageable` 의 Sort 에만 의존해 페이지 경계가 불안정.
       `CredentialRepository.java:78-93`. [admin-tenant-detail 2026-05-27]
 - [ ] **audit chain overview/verify 가 전체 스캔 + 중복 수행** [master-backlog 2026-05-31]
-- [ ] **admin-ui 코드 스플리팅 부재** — 372KB 단일 청크. `App.tsx`/`vite.config.ts` 에 `React.lazy`·`manualChunks` 0건.
-      `QrCode.tsx:2` 의 `qrcode` eager import 포함. [master-backlog 2026-05-31]
+- [ ] **(superseded: Thymeleaf 포트로 해당 없음) admin-ui 코드 스플리팅 부재** — React 시절 372KB 단일 청크. 번들러가 없어졌다(htmx + Alpine vendor 파일). [master-backlog 2026-05-31]
 - [ ] **F04 `KeyRotationService` 리스 미해제 · G07 lease 하트비트 부재** — `release` 0건. [zero-base 2026-07-04]
 - [ ] **`KeyExpirationJob`/`MdsSyncJob` 도 lease release 패턴으로 통일** — 둘 다 `release` 0건, TTL 만료에만 의존. [data-retention-D 2026-05-31]
 - [ ] **F10 `FunnelService` rolling-window vs day-bucket 불일치 · F11 `MdsHistoryService` WITH TIME ZONE 왕복이 JVM TZ 의존**
       — KST 전환(`988d909`) 이후 재확인 필요. [zero-base 2026-07-04]
-- [ ] **admin-ui 가상화/디바운스/폰트 CSS/license 3중 fetch/chain overview 중복/idle 리스너 재바인딩** (6건) [master-backlog 2026-05-31]
+- [ ] **(React 시절 항목, Thymeleaf 포트에서 재평가 필요) 가상화/디바운스/폰트 CSS/license 3중 fetch/chain overview 중복/idle 리스너 재바인딩** (6건) [master-backlog 2026-05-31]
 - [ ] (하위) AAGUID 정책 등록마다 DB 조회, rate-limit Redis 2 RTT, 로그 마스킹 정규식 short-circuit 부재,
       onprem 매 요청 `LicenseStateMachine.recompute()`, CORS negative cache, alert executor 포화. [master-backlog 2026-05-31]
 
@@ -144,9 +142,9 @@
       private 중복. `sha256Hex`/`hex`/`maskEmail`/`randomToken` 은 이미 통합됐다. [master-backlog 2026-05-31]
 - [ ] **JWT TTL 900 하드코딩** — `AuthenticationFinishService.java:232,234` 리터럴 2곳. [master-backlog 2026-05-31]
 - [ ] **`MfaPendingFilter` 가 `getRequestURI()`** — 다른 필터는 `getServletPath()`. `:74`(및 `:71` javadoc). [master-backlog 2026-05-31]
-- [ ] **`TweaksPanel` 이 prod 에서도 무조건 렌더 + `as any`** — `:125` 에 `as any` 잔존, `import.meta.env.DEV` 가드 0건.
+- [ ] **(superseded: React 제거로 해당 없음) `TweaksPanel` 이 prod 에서도 무조건 렌더 + `as any`** — `:125` 에 `as any` 잔존, `import.meta.env.DEV` 가드 0건.
       `App.tsx` 의 `handleSwitchRole` stub·잔여 `as any` 도 함께. [master-backlog 2026-05-31, rp-admin-role-gating 2026-05-31]
-- [ ] **거대 컴포넌트 분리, 확인 다이얼로그 double-submit 가드(Rotate/Revoke), Header '내 계정' 링크, `/admin/favicon.ico` 500**
+- [ ] **(React 시절 항목, Thymeleaf 포트에서 재평가 필요) 거대 컴포넌트 분리, 확인 다이얼로그 double-submit 가드(Rotate/Revoke), Header '내 계정' 링크, `/admin/favicon.ico` 500(현재 favicon 은 `/admin/img/favicon.png`)**
       [master-backlog 2026-05-31, admin-ui-followup-screens 2026-05-31, admin-ui-mfa-suspend 2026-05-30]
 - [ ] **`PasskeyResponseErrorHandler` deprecation** — Spring major bump 시 필수.
       `sdk-java/.../internal/PasskeyResponseErrorHandler.java` 존재. [monorepo-merge 2026-05-28]
@@ -176,9 +174,9 @@
 ### vite **^5.4.6 — KEEP**
 
 - 취약점: GHSA-67mh-4wv8-2f99 (esbuild 0.21.5 경유). 수정은 Vite 6(major).
-  (`admin-ui/package.json:34` = `"^5.4.6"`)
+  (React 시절 `admin-ui/package.json` = `"^5.4.6"`; admin-ui 는 삭제됨)
 - prod 는 `vite build` 정적 산출물만 서빙하므로 **dev-server-only** 이고 운영 노출은 0 이다.
-- **재평가 트리거**: admin-ui 차기 업그레이드 시 Vite 6. [QW-3 2026-05-31]
+- **재평가 트리거**: (admin-ui 삭제로 **superseded** — Vite 사용 안 함) [QW-3 2026-05-31]
 
 ### 추적만 (조치 불요)
 

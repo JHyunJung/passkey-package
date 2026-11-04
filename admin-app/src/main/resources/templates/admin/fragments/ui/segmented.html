@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Segmented (← ui/Segmented.tsx) — Alpine.data('segmented')
+  th:replace="~{admin/fragments/ui/segmented :: segmented(name, options, value, ariaLabel)}"
+    name     form 필드 이름 또는 null(있으면 선택값이 hidden input 으로 제출된다)
+    options  [{'value': '24h', 'label': '24h', 'title': null, 'attrs': {'hx-get': '/x', 'hx-trigger': 'click'}}, ...]
+             attrs 는 버튼 속성 Map 또는 null.
+    보안: attrs 값 중 JS 로 평가되는 속성군(x-on:*, @*, hx-on*, x-bind:*, :*, x-data, hx-vals)은 템플릿 상수여야 한다.
+          사용자 입력은 data-* 또는 @fmt.json 으로 넘긴다. on* 인라인 이벤트 속성 이름은 ui:attrs 가 버린다.
+    value    처음 선택된 option 의 value, ariaLabel 그룹 이름
+  선택은 클라이언트에서 바로 바뀐다(aria-pressed·seg__btn--on 이 로컬 상태를 따름). 바뀌면 `segmented-change`
+  (detail.value) 이벤트, form reset 이면 처음 값으로. 서버 재조회가 필요하면 option 의 attrs(hx-*)를 쓴다.
+-->
+<div th:fragment="segmented(name, options, value, ariaLabel)" class="seg" role="group" th:aria-label="${ariaLabel}"
+     ui:xdata="${@fmt.xdata('segmented', 'value', value)}">
+  <input type="hidden" th:if="${name}" th:name="${name}" th:value="${value}" x-bind:value="value">
+  <button th:each="o : ${options}" type="button" class="seg__btn" th:classappend="${o['value'] == value} ? 'seg__btn--on'"
+          th:aria-pressed="${o['value'] == value}" th:title="${o['title']}" th:data-value="${o['value']}"
+          x-on:click="select($el.dataset.value)" x-bind:aria-pressed="value === $el.dataset.value"
+          x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          ui:attrs="${o['attrs']}" th:text="${o['label']}">옵션</button>
+</div>
+</body>
+</html>

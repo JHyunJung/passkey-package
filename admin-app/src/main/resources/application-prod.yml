@@ -66,10 +66,11 @@ passkey:
 
 admin:
   invite:
-    # 공개 페이지 base URL — 메일 본문의 링크 앞에 붙는다.
+    # 공개 페이지 base URL — 메일 본문의 링크 앞에 붙는다. 실제 admin 콘솔 주소(예: https://admin.example.com,
+    # 로컬은 http://localhost:8081)를 넣는다. 기본값 :5173 은 옛 React 개발 서버 주소로 이제 쓰지 않는다(기동 검사용 표식).
     # 비밀번호 재설정(/reset-password?token=) 과 가입 승인 메일의 로그인 링크(/admin)
-    # 가 이 값을 쓴다. PasswordResetService·SignupRequestService 의
-    # @Value("${admin.invite.base-url:...}") 가 읽는다. 속성 이름은 호환성 때문에 유지.
+    # 가 이 값을 쓴다. /reset-password 는 콘솔이 쿼리를 보존해 /admin/reset-password 로 리다이렉트한다.
+    # PasswordResetService·SignupRequestService 의 @Value("${admin.invite.base-url:...}") 가 읽는다. 속성 이름은 호환성 때문에 유지.
     base-url: ${ADMIN_INVITE_BASE_URL:http://localhost:5173}
 
 logging:

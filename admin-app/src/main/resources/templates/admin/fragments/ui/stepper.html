@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Stepper (← ui/Stepper.tsx)
+  th:replace="~{admin/fragments/ui/stepper :: stepper(title, steps)}"
+    title 문자열 또는 null(aria-label 은 null 이면 '진행 단계')
+    steps [{'label': 'QR 스캔', 'description': null, 'state': 'done' | 'now' | 'todo'}, ...]
+  done 은 체크 표시, now 는 aria-current=step.
+-->
+<nav th:fragment="stepper(title, steps)" th:aria-label="${title ?: '진행 단계'}">
+  <span class="t-over stepper__over" th:if="${title}" th:text="${title}">제목</span>
+  <ol class="stepper">
+    <li th:each="s, st : ${steps}" class="stepper__item" th:classappend="'stepper__item--' + ${s['state']}" th:aria-current="${s['state'] == 'now'} ? 'step'">
+      <span class="stepper__mark" aria-hidden="true" th:text="${s['state'] == 'done'} ? '✓' : ${st.count}">1</span>
+      <span class="stepper__text">
+        <span class="stepper__label" th:text="${s['label']}">단계</span>
+        <span class="stepper__desc" th:if="${s['description']}" th:text="${s['description']}">설명</span>
+      </span>
+    </li>
+  </ol>
+</nav>
+</body>
+</html>

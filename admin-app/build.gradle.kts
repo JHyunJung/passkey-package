@@ -1,12 +1,16 @@
 plugins {
     alias(libs.plugins.spring.boot)
-    alias(libs.plugins.node.gradle)
 }
 
 dependencies {
     implementation(project(":core"))
     implementation(project(":webauthn"))
     implementation("org.springframework.boot:spring-boot-starter-security")
+    // admin 화면(Thymeleaf + htmx + Alpine.js) — 서버 렌더링.
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
+    implementation("org.thymeleaf.extras:thymeleaf-extras-springsecurity6")
+    // MFA 등록 화면의 otpauth QR 을 서버에서 SVG 로 렌더링(외부 QR 서비스 미사용).
+    implementation("com.google.zxing:core:3.5.3")
     // Oracle NLS(orai18n) — 문자셋/날짜·언어 변환 시 드라이버가 런타임에 로드.
     runtimeOnly(rootProject.libs.oracle.nls)
     // F4 Task 6 — Monthly Audit Chain Report PDF generation.
@@ -16,6 +20,8 @@ dependencies {
     implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
 
     testImplementation("org.springframework.security:spring-security-test")
+    // 화면 HTML 응답 파싱용.
+    testImplementation("org.jsoup:jsoup:1.18.1")
     // T24 AdminFlowIT (Phase 2 acceptance gate) brings up a Testcontainers
     // Oracle XE 21 + Redis 7 and exercises admin flows end-to-end. Same
     // dependency shape as :passkey-app for Phase 1's Fido2EndToEndIT.
@@ -43,36 +49,6 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     archiveFileName.set("admin-app.jar")
     // 실행 가능한 jar 를 루트 deploy/ 에 모아 배포 편의를 높인다.
     destinationDirectory.set(rootProject.layout.projectDirectory.dir("deploy"))
-}
-
-// admin-ui (React+Vite) lives at the repo root. We tell the node plugin
-// to operate there and to download a project-local Node 18.
-node {
-    version.set("18.20.0")
-    download.set(true)
-    nodeProjectDir.set(rootProject.file("admin-ui"))
-}
-
-// `npm install` + `npm run build` produce admin-ui/dist/. Then copy
-// that into the admin-app classpath so Spring Boot's static serving
-// picks it up at /admin/<asset>.
-val buildUi by tasks.registering(com.github.gradle.node.npm.task.NpmTask::class) {
-    dependsOn("npmInstall")
-    workingDir.set(rootProject.file("admin-ui"))
-    npmCommand.set(listOf("run", "build"))
-    inputs.dir(rootProject.file("admin-ui/src"))
-    inputs.file(rootProject.file("admin-ui/index.html"))
-    inputs.file(rootProject.file("admin-ui/package.json"))
-    inputs.file(rootProject.file("admin-ui/package-lock.json"))
-    inputs.file(rootProject.file("admin-ui/vite.config.ts"))
-    outputs.dir(rootProject.file("admin-ui/dist"))
-}
-
-tasks.named<Copy>("processResources") {
-    dependsOn(buildUi)
-    from(rootProject.file("admin-ui/dist")) {
-        into("static/admin")
-    }
 }
 
 tasks.named<Test>("test") {

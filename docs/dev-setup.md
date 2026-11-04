@@ -1,7 +1,7 @@
 # Passkey2 — 개발자 환경 기동 가이드
 
 앱 개발자 (RP 측) 가 패스키 등록 / 인증 테스트를 빠르게 시작할 수 있도록 작성한 문서.
-**local 또는 dev profile** 로 띄우면 admin-ui 콘솔과 RP 측 API 가 모두 동작하고,
+**local 또는 dev profile** 로 띄우면 admin 콘솔과 RP 측 API 가 모두 동작하고,
 프로필별 시드 tenant 1개 + API key 1개로 즉시 호출할 수 있다.
 
 최종 갱신: 2026-09-13
@@ -19,7 +19,6 @@
 |---|---|---|
 | Docker | recent | Oracle XE + Redis 컨테이너 |
 | JDK | 17 | passkey-app / admin-app / sdk-java / rp-app |
-| Node.js | 18+ | admin-ui (선택, HMR 개발 시) |
 
 ### 1.2 저장소 구조 (monorepo)
 
@@ -29,8 +28,7 @@
     ├── core/        # JPA entity + repository + 테넌트 격리(Hibernate @Filter) + Flyway
     ├── webauthn/    # WebAuthn 검증 코어 (attestation 포맷 + MDS) — 자체 구현
     ├── passkey-app/ # FIDO2 server (port 8080)
-    ├── admin-app/   # 운영 콘솔 API + admin-ui 정적 serving (port 8081)
-    ├── admin-ui/    # React + Vite 콘솔 SPA
+    ├── admin-app/   # 운영 콘솔 (Thymeleaf 서버 렌더링, port 8081)
     ├── sdk-java/    # 패스키 SDK (Java) — rp-app 가 의존
     ├── rp-app/      # 데모 RP 앱 (port 9090)
     ├── scripts/     # DB 부트스트랩·초기화·리셋 스크립트 (Docker 로컬 + 외부 Oracle)
@@ -115,7 +113,7 @@ bob 은 시드 SQL 이 `mfa_enabled='N'` 을 명시하고, alice 는 INSERT 에 
 결정되므로(`AdminSecurityConfig` 의 `isMfaEnabled()`), 시드 직후에는 둘 다 TOTP 단계가
 없다. TOTP 를 써 보려면 로그인 후 **설정 → 계정**에서 직접 등록한다.
 
-`local`/`dev` profile 의 admin-ui 로그인 화면은 "데모 계정으로 로그인" 카드를 띄우는데,
+`local`/`dev` profile 의 admin 로그인 화면은 "데모 계정으로 로그인" 카드를 띄우는데,
 자동 prefill 대상은 alice(PLATFORM_OPERATOR) 뿐이다. bob 은 직접 입력한다.
 
 ---
@@ -166,21 +164,9 @@ curl -s http://localhost:8080/actuator/health
 # {"status":"UP"}
 ```
 
-### 3.4 admin-ui (선택)
+### 3.4 admin 콘솔
 
-#### 옵션 A — 빌드된 dist (port 8081)
-
-브라우저에서 `http://localhost:8081/admin/` 접속.
-
-#### 옵션 B — Vite dev server (HMR + port 5173)
-
-```bash
-cd admin-ui
-npm install   # 최초 한 번
-npm run dev
-```
-
-`http://localhost:5173/admin/` 로 접속.
+별도 프런트 빌드는 없다. 브라우저에서 `http://localhost:8081/admin/` 접속.
 
 ### 3.5 rp-app (port 9090) — monorepo 안에서 직접 실행
 
@@ -249,10 +235,10 @@ rp-app 은 저장소 안의 `:sdk-java` 모듈에 직접 의존한다. SDK 를 �
 
 ## 4. 동작 확인
 
-### 4.1 admin-ui 시점
+### 4.1 admin 콘솔 시점
 
 alice 자동 prefill 로 로그인 후. 사이드바는 **어디에 있느냐로 두 벌**이 뜬다
-(`admin-ui/src/shell/Sidebar.tsx`):
+(`templates/admin/fragments/shell/sidebar.html`):
 
 - **플랫폼 스코프** (테넌트 밖): Tenants / 활동 / 감사 체인 / 설정.
   `deployment.mode=onprem` 이면 감사 체인과 설정 사이에 **라이선스** 가 끼어든다.
@@ -328,7 +314,7 @@ passkey-app 의 `--passkey.id-token.issuer-base` 와 rp-app 의 `PASSKEY_ISSUER_
 ### 5.5 port 충돌
 
 ```bash
-lsof -ti :8080 -ti :8081 -ti :5173 -ti :9090 | xargs kill
+lsof -ti :8080 -ti :8081 -ti :9090 | xargs kill
 ```
 
 ---

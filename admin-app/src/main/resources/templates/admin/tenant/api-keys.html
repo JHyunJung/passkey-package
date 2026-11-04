@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  API 키 탭(← pages/tenant/ApiKeysTab.tsx). 탭 조각 GET /admin/_/tenants/{id}/tab/apikeys.
+  모델: tid, issueUrl, nameMax, rotationDays, scopeOptions, expiryOptions, expiryPreviews, rows(Row), kpis(Kpis), loadError/retryAttrs, helpLinks(ShellAdvice)
+        변경 응답만 listOob(목록을 OOB 로), badgeOob/badgeText/badgeReason(탭 줄 "확인 필요" 배지 OOB).
+  #ak-root 안: #ak-list(KPI·표·행별 회전/회수 확인 다이얼로그), 새 키 발급 다이얼로그(ak-new), #ak-issued-slot(발급·회전 응답 = 발급 완료 다이얼로그).
+  발급·회전·회수는 같은 hx-sync 그룹(#ak-root:drop)이라 동시에 돌지 않는다(원본 공용 가드).
+-->
+<th:block th:fragment="tab">
+  <div id="ak-root">
+    <th:block th:replace="~{admin/tenant/api-keys :: list}"></th:block>
+
+    <!-- 새 키 발급(원본 NewKeyDialog). 폼 상태(apiKeyForm)는 다이얼로그(x-if) 바깥이라 취소 후 다시 열어도 남고, 발급 성공 응답(ak-form-reset)만 비운다.
+         요청 중에는 바깥 dialog 의 busy 를 켜 Escape·스크림·취소로 닫히지 않는다(원본 onClose={busy ? noop : onClose}).
+         실패: 검증·REST 거절은 #ak-new-error(422 OOB), 네트워크 오류·권한 거부 등 스왑 없는 실패는 netErr 인라인(폼 data-quiet + X-Confirm → confirmError, 전역 토스트 없음). -->
+    <div ui:xdata="${@fmt.xdata('apiKeyForm', 'months', '24', 'previews', expiryPreviews, 'rotationDays', rotationDays, 'nameMax', nameMax, 'errorId', 'ak-new-error')}"
+         x-on:dialog:open.window="onDialogOpen($event)" x-on:ak-form-reset.window="reset()">
+    <div ui:xdata="${@fmt.xdata('dialog', 'id', 'ak-new')}"
+         x-on:dialog:open.window="onOpen($event)" x-on:dialog:close.window="onClose($event)" x-on:keydown.escape.window="onEscape()">
+      <template x-if="open">
+        <div class="scrim" x-on:mousedown="onScrim($event)">
+          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ak-new-title" x-trap.noscroll="open">
+            <div class="dialog__head">
+              <h3 class="dialog__title" id="ak-new-title">새 API 키 발급</h3>
+              <div class="dialog__sub">RP 서버가 Passkey API 를 호출할 때 쓰는 키입니다.</div>
+            </div>
+            <div class="dialog__body">
+              <div id="ak-new-error"></div>
+              <div x-show="netErr" x-cloak>
+                <div class="banner banner--danger banner--top" role="alert">
+                  <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+                  <div class="banner__body">
+                    <div class="banner__title">API 키를 발급하지 못했습니다.</div>
+                    <div x-text="netErr"></div>
+                  </div>
+                </div>
+              </div>
+              <form id="ak-new-form" class="stack-4" novalidate autocomplete="off"
+                    th:hx-post="${issueUrl}" hx-target="#ak-issued-slot" hx-swap="innerHTML" hx-sync="#ak-root:drop"
+                    hx-headers='{"X-Confirm": "1"}' data-quiet
+                    x-on:submit="if (busy || !canSubmit) $event.preventDefault()"
+                    x-on:htmx:before-request="onBefore(); busy = true" x-on:htmx:after-request="busy = false; onAfter($event)"
+                    x-on:htmx:send-error="netFail($event)" x-on:htmx:timeout="netFail($event)">
+                <div>
+                  <div class="row" style="justify-content: space-between">
+                    <label class="label" for="apikey-name">용도 (이름)</label>
+                    <span class="hint hint--flush" x-text="name.length + '/' + max" th:text="${'0/' + nameMax}">0/64</span>
+                  </div>
+                  <input id="apikey-name" name="name" class="input" th:maxlength="${nameMax}" placeholder="예: prod RP 서버"
+                         x-model="name" x-bind:disabled="busy">
+                </div>
+                <fieldset class="fieldset--bare" x-bind:disabled="busy">
+                  <legend class="label">권한 범위 (scope)</legend>
+                  <div class="stack-2">
+                    <label th:each="o : ${scopeOptions}" class="scope-opt scope-opt--on" th:data-value="${o.value}"
+                           x-bind:class="{ 'scope-opt--on': has($el.dataset.value) }">
+                      <input type="checkbox" name="scopes" th:value="${o.value}" checked x-bind:checked="has($el.value)" x-on:change="toggle($el.value)">
+                      <span class="stack-1" style="gap: 0">
+                        <span class="mono" style="font-size: 13px; font-weight: 600" th:text="${o.value}">registration</span>
+                        <span class="hint hint--flush" th:text="${o.label}">설명</span>
+                      </span>
+                    </label>
+                  </div>
+                  <p class="field__error" x-show="scopes.length === 0" x-cloak>하나 이상 선택하세요.</p>
+                </fieldset>
+                <div>
+                  <span class="label" id="apikey-expiry">만료 기간</span>
+                  <input type="hidden" name="expiresInMonths" value="24" x-bind:value="months">
+                  <div class="row" style="gap: 6px" role="group" aria-labelledby="apikey-expiry">
+                    <button th:each="o : ${expiryOptions}" type="button" class="fchip" th:classappend="${o.value == '24'} ? 'fchip--on'"
+                            th:aria-pressed="${o.value == '24'}" th:data-months="${o.value}" th:text="${o.label}"
+                            x-bind:class="{ 'fchip--on': months === $el.dataset.months }" x-bind:aria-pressed="months === $el.dataset.months"
+                            x-bind:disabled="busy" x-on:click="months = $el.dataset.months">24개월</button>
+                  </div>
+                  <p class="hint" x-text="hint" th:text="${'만료일 ' + expiryPreviews.get('24') + ' (KST) · 권장 회전 주기 ' + rotationDays + '일'}">만료일</p>
+                </div>
+              </form>
+            </div>
+            <div class="dialog__foot">
+              <button type="button" class="btn" x-on:click="if (!busy) close()" x-bind:disabled="busy">취소</button>
+              <button type="submit" form="ak-new-form" class="btn btn--primary" disabled x-bind:disabled="busy || !canSubmit">
+                <span x-show="!busy">발급</span><span x-show="busy" x-cloak>발급 중…</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+    </div>
+
+    <!-- 발급·회전 응답(api-key-issued :: issued)이 들어오는 자리. 평문 키는 이 자리에만 그려지고, 닫으면 비운다. -->
+    <div id="ak-issued-slot"></div>
+  </div>
+</th:block>
+
+<!-- 목록(KPI·표·행별 확인 다이얼로그). 변경 응답에서는 OOB(listOob) 또는 회수 응답의 본 대상(outerHTML)이다. -->
+<div th:fragment="list" id="ak-list" class="stack-6" th:attr="hx-swap-oob=${listOob == true} ? 'true' : null">
+  <div class="kpis kpis--3">
+    <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('총 API Key', ${kpis.total}, ${kpis.totalHint}, 'default', null, null)}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('최근 발급', ${kpis.latest}, null, 'default', null, null)}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('권장 회전 주기', ${rotationDays + '일'}, ${kpis.overdueHint}, ${kpis.overdueWarn ? 'warn' : 'default'}, null, null)}"></th:block>
+  </div>
+
+  <section class="card">
+    <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('API 키', '키 원문은 발급 직후 한 번만 보입니다. 서버는 해시만 저장합니다.', null, ~{admin/tenant/api-keys :: akActions})}"></th:block>
+    <th:block th:if="${loadError != null}">
+      <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('API 키 목록', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+    </th:block>
+    <th:block th:if="${loadError == null and rows.isEmpty()}">
+      <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState('/admin/img/api-key-issued.webp', '아직 발급한 API 키가 없습니다', 'RP 서버가 패스키 등록·인증 API를 호출하려면 키가 필요합니다.', ~{admin/tenant/api-keys :: akEmptyActions}, false)}"></th:block>
+    </th:block>
+    <div class="tw" th:if="${loadError == null and !rows.isEmpty()}">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>이름 · 키 접두사</th>
+            <th>권한 범위</th>
+            <th>상태</th>
+            <th>마지막 사용</th>
+            <th>생성일</th>
+            <th>만료</th>
+            <th style="width: 48px"><span class="sr-only">액션</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="r : ${rows}" th:data-key="${r.id}">
+            <td>
+              <div class="stack-1" style="gap: 0">
+                <strong style="font-size: 13px" th:text="${r.name}">prod</strong>
+                <span class="mono" style="font-size: 12px; color: var(--mute)" th:text="${r.prefix + '…'}">pk_live_ab…</span>
+              </div>
+            </td>
+            <td><div class="row" style="gap: 4px"><span th:each="s : ${r.scopes}" class="tag" th:title="${s.value}" th:text="${s.label}">패스키 등록</span></div></td>
+            <td><th:block th:replace="~{admin/fragments/ui/statusBadge :: statusBadge(${r.status})}"></th:block></td>
+            <td><span style="font-size: 13px; color: var(--ink-2)" th:text="${r.lastUsed}">미사용</span></td>
+            <td><span style="font-size: 13px; color: var(--ink-2)" th:text="${r.created}">2026-01-01</span></td>
+            <td>
+              <div class="stack-1" style="gap: 2px">
+                <th:block th:replace="~{admin/fragments/ui/badge :: badge(${r.expiry.label}, ${r.expiry.tone}, false, null, null)}"></th:block>
+                <span class="hint hint--flush" th:text="${r.expiry.sub}">만료일 없음</span>
+              </div>
+            </td>
+            <td>
+              <th:block th:if="${r.active}">
+                <th:block th:replace="~{admin/fragments/ui/menu :: menu(${r.name + ' 키 액션'}, ${r.menuItems}, ${r.menuDanger}, null, null)}"></th:block>
+              </th:block>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 행별 확인 다이얼로그(ACTIVE 키만). 회전: L2 영향 요약(primary), 회수: L2 영향 요약(입력 확인 없음, danger) — 원본과 같다. -->
+  <th:block th:each="r : ${rows}" th:if="${r.active}">
+    <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog(${'ak-rotate-' + r.id}, 'L2', 'API 키를 회전할까요?', '회전', null, ~{admin/tenant/api-keys :: akRotateBody}, false, null, null, null, ${r.rotateAttrs})}"></th:block>
+    <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog(${'ak-revoke-' + r.id}, 'L2', 'API 키를 회수할까요?', '회수', null, ~{admin/tenant/api-keys :: akRevokeBody}, null, null, null, null, ${r.revokeAttrs})}"></th:block>
+  </th:block>
+</div>
+
+<!-- 탭 줄의 API 키 "확인 필요"(30일 안 만료) 배지. 배지 자리는 tabs 조각의 <elId>-badge. -->
+<span th:fragment="badge" id="tenant-tab-apikeys-badge" class="tabs__badgeslot" hx-swap-oob="true">
+  <span class="badge badge--warning tabs__badge" th:if="${badgeText}" th:title="${badgeReason}" th:text="${badgeText}">확인 필요</span>
+</span>
+
+<!-- 회수 응답: 목록(본 대상 #ak-list outerHTML) + 배지 OOB -->
+<th:block th:fragment="listResponse">
+  <th:block th:replace="~{admin/tenant/api-keys :: list}"></th:block>
+  <th:block th:if="${badgeOob}"><th:block th:replace="~{admin/tenant/api-keys :: badge}"></th:block></th:block>
+  <th:block th:replace="~{admin/tenant/api-keys :: keyCount}"></th:block>
+</th:block>
+
+<!-- 정지 확인창(Tenant 상세 detail.html)이 열 때 읽는 유효 API 키 수. 변경 뒤 tenant 를 다시 읽은 값(keyCount)이 있을 때만 OOB. -->
+<th:block th:fragment="keyCount">
+  <span th:if="${keyCount != null}" id="tenant-apikey-count" hidden th:data-count="${keyCount}" hx-swap-oob="true"></span>
+</th:block>
+
+<!-- 발급 실패(422): 새 키 발급 다이얼로그 안 경고만 OOB 로 바꾼다(입력 폼은 교체하지 않아 그대로). -->
+<div th:fragment="issueError" id="ak-new-error" hx-swap-oob="true">
+  <th:block th:replace="~{admin/fragments/ui/alert :: alert('bad', 'API 키를 발급하지 못했습니다.', ~{admin/tenant/api-keys :: akIssueErrorBody}, null, null)}"></th:block>
+</div>
+
+<!-- 조각 인자 원본: 화면에는 인자로 쓰이는 자리에서만 그려진다. -->
+<th:block th:remove="all">
+  <th:block th:fragment="akGuide">
+    <a th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.rpGuide)}" class="btn btn--ghost" th:href="${helpLinks.rpGuide}" target="_blank" rel="noopener noreferrer">RP 연동 가이드 <th:block th:replace="~{admin/fragments/icons :: externalLink(13)}"></th:block></a>
+  </th:block>
+  <div th:fragment="akActions" class="row" style="gap: 8px">
+    <th:block th:replace="~{admin/tenant/api-keys :: akGuide}"></th:block>
+    <button type="button" class="btn btn--primary" x-data x-on:click="$dispatch('dialog:open', { id: 'ak-new' })"><th:block th:replace="~{admin/fragments/icons :: plus(14)}"></th:block>새 키 발급</button>
+  </div>
+  <div th:fragment="akEmptyActions" class="row" style="gap: 8px; justify-content: center">
+    <button type="button" class="btn btn--primary" x-data x-on:click="$dispatch('dialog:open', { id: 'ak-new' })"><th:block th:replace="~{admin/fragments/icons :: plus(14)}"></th:block>첫 API 키 발급</button>
+    <th:block th:replace="~{admin/tenant/api-keys :: akGuide}"></th:block>
+  </div>
+  <th:block th:fragment="akRotateBody">
+    <dl class="kv" style="grid-template-columns: 80px minmax(0, 1fr)">
+      <dt>이름</dt><dd th:text="${r.name}">prod</dd>
+      <dt>prefix</dt><dd class="mono" style="font-size: 12px" th:text="${r.prefix}">pk_live_ab</dd>
+    </dl>
+    <div class="row ak-rotate-flow">
+      <span class="tag" th:text="${'기존 ' + r.prefix}">기존 pk_live_ab</span>
+      <span style="color: var(--ink-2)">24시간 함께 유효</span>
+      <th:block th:replace="~{admin/fragments/icons :: chevronRight(14)}"></th:block>
+      <span class="tag tag--new">새 키</span>
+      <span style="color: var(--ink-2)">즉시 발급 · 1회 표시</span>
+    </div>
+    <p style="margin: 0; font-size: 13px; color: var(--ink-2)">유예 기간 안에 RP 서버 설정을 새 키로 바꾸세요. 유예가 끝나면 기존 키 요청은 거부됩니다.</p>
+  </th:block>
+  <th:block th:fragment="akRevokeBody">
+    <dl class="kv" style="grid-template-columns: 80px minmax(0, 1fr)">
+      <dt>이름</dt><dd th:text="${r.name}">prod</dd>
+      <dt>prefix</dt><dd class="mono" style="font-size: 12px" th:text="${r.prefix}">pk_live_ab</dd>
+      <dt>마지막 사용</dt><dd th:text="${r.lastUsedLong}">사용 안 함</dd>
+    </dl>
+    <th:block th:replace="~{admin/fragments/ui/alert :: alert('bad', '영향', ~{admin/tenant/api-keys :: akRevokeImpact}, null, null)}"></th:block>
+  </th:block>
+  <th:block th:fragment="akRevokeImpact">이 키를 쓰는 RP 서버의 요청이 즉시 거부됩니다(401). 회수는 되돌릴 수 없습니다.</th:block>
+  <th:block th:fragment="akIssueErrorBody" th:text="${issueError}">오류</th:block>
+</th:block>
+</body>
+</html>

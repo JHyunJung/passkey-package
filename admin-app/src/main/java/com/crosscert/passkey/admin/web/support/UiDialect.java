@@ -1,0 +1,100 @@
+package com.crosscert.passkey.admin.web.support;
+
+import org.springframework.stereotype.Component;
+import org.thymeleaf.context.ITemplateContext;
+import org.thymeleaf.engine.AttributeName;
+import org.thymeleaf.model.IProcessableElementTag;
+import org.thymeleaf.processor.IProcessor;
+import org.thymeleaf.processor.element.AbstractAttributeTagProcessor;
+import org.thymeleaf.processor.element.IElementTagStructureHandler;
+import org.thymeleaf.standard.expression.IStandardExpression;
+import org.thymeleaf.standard.expression.IStandardExpressionParser;
+import org.thymeleaf.standard.expression.StandardExpressions;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.dialect.AbstractProcessorDialect;
+
+import org.unbescape.html.HtmlEscape;
+
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.Set;
+
+/**
+ * 공통 UI 조각이 호출자에게서 임의 속성을 받을 때 쓰는 {@code ui:attrs="${attrs}"}.
+ * 맵의 각 항목을 요소 속성으로 쓴다. 값이 {@code null}·{@code false} 면 속성을 쓰지 않고, {@code true} 면
+ * {@code disabled} 같은 값 없는 속성으로 쓴다. 이름이 {@code on} 으로 시작하는 인라인 이벤트 속성
+ * ({@code onclick} 등)은 조용히 버린다.
+ *
+ * <p><b>보안 규약:</b> JS 로 평가되는 속성군({@code x-on:*}, {@code @*}, {@code hx-on*}, {@code x-bind:*}, {@code :*},
+ * {@code x-data}, {@code hx-vals})의 값은 사용자 입력이 아닌 템플릿 상수여야 한다. 값은 HTML 이스케이프만 되고
+ * JS 로는 이스케이프되지 않는다. 데이터는 {@code data-*} 속성이나 {@code @fmt.json} 으로 넘긴다.
+ *
+ * <p>{@code class} 는 기존 값에 덧붙인다. 빈 문자열 값은 {@code name=""} 로 나간다. 이름은 영숫자·_@:.- 만 허용한다.
+ */
+@Component
+public class UiDialect extends AbstractProcessorDialect {
+
+    public static final String PREFIX = "ui";
+
+    private static final Pattern ATTR_NAME = Pattern.compile("[A-Za-z_@:][A-Za-z0-9_@:.\\-]*");
+
+    /** setAttribute 는 값을 이스케이프하지 않으므로 직접 한다(속성 값 탈출 방지). */
+    private static String esc(String value) {
+        return HtmlEscape.escapeHtml4Xml(value);
+    }
+
+    public UiDialect() {
+        super("Admin UI", PREFIX, 1000);
+    }
+
+    @Override
+    public Set<IProcessor> getProcessors(String dialectPrefix) {
+        return Set.of(new AttrsProcessor(dialectPrefix), new XdataProcessor(dialectPrefix));
+    }
+
+    static final class AttrsProcessor extends AbstractAttributeTagProcessor {
+
+        AttrsProcessor(String dialectPrefix) {
+            super(TemplateMode.HTML, dialectPrefix, null, false, "attrs", true, 1000, true);
+        }
+
+        @Override
+        protected void doProcess(ITemplateContext context, IProcessableElementTag tag, AttributeName attributeName,
+                                 String attributeValue, IElementTagStructureHandler structureHandler) {
+            IStandardExpressionParser parser = StandardExpressions.getExpressionParser(context.getConfiguration());
+            IStandardExpression expr = parser.parseExpression(context, attributeValue);
+            Object v = expr.execute(context);
+            if (!(v instanceof Map<?, ?> map)) return;
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                String name = String.valueOf(e.getKey());
+                if (!ATTR_NAME.matcher(name).matches() || name.regionMatches(true, 0, "on", 0, 2)) continue; // on* 인라인 이벤트 차단
+                if (e.getValue() == null || Boolean.FALSE.equals(e.getValue())) continue; // null·false 는 속성 생략, true 는 값 없는 속성
+                String value = Boolean.TRUE.equals(e.getValue()) ? "" : String.valueOf(e.getValue());
+                if (name.equals("class") && tag.hasAttribute("class")) {
+                    structureHandler.setAttribute("class", tag.getAttributeValue("class") + " " + esc(value));
+                } else {
+                    structureHandler.setAttribute(name, esc(value));
+                }
+            }
+        }
+    }
+
+    /**
+     * {@code ui:xdata="${@fmt.xdata('chipInput', 'values', values)}"} → {@code x-data="chipInput({...})"}.
+     * Thymeleaf 의 일반 {@code th:*} 속성은 {@code @빈} 호출 표현식을 막기 때문에 Alpine 설정 JSON 은 이 속성으로 쓴다.
+     */
+    static final class XdataProcessor extends AbstractAttributeTagProcessor {
+
+        XdataProcessor(String dialectPrefix) {
+            super(TemplateMode.HTML, dialectPrefix, null, false, "xdata", true, 1000, true);
+        }
+
+        @Override
+        protected void doProcess(ITemplateContext context, IProcessableElementTag tag, AttributeName attributeName,
+                                 String attributeValue, IElementTagStructureHandler structureHandler) {
+            IStandardExpressionParser parser = StandardExpressions.getExpressionParser(context.getConfiguration());
+            Object v = parser.parseExpression(context, attributeValue).execute(context);
+            if (v != null) structureHandler.setAttribute("x-data", esc(String.valueOf(v)));
+        }
+    }
+}

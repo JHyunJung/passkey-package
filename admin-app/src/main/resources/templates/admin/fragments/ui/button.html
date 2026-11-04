@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Button (← ui/Button.tsx)
+  th:replace="~{admin/fragments/ui/button :: button(label, variant, attrs)}"
+    label   문자열
+    variant 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-solid' (null 이면 secondary)
+    attrs   추가 속성 Map(예: {'hx-post': '/admin/x', 'disabled': ''}) 또는 null. class 는 덧붙고 type 은 덮어쓸 수 있다.
+  크기·아이콘이 필요하면 buttonX.html 의 buttonX(label, variant, size, icon, attrs) 를 쓴다.
+  (한 파일에 <button> 이 둘이면 'button' 선택자가 태그 이름으로도 둘 다 잡히므로 파일을 나눴다.)
+-->
+<button th:fragment="button(label, variant, attrs)" type="button" class="btn"
+        th:classappend="${variant != null and variant != 'secondary'} ? 'btn--' + ${variant}"
+        ui:attrs="${attrs}" th:text="${label}">라벨</button>
+
+</body>
+</html>

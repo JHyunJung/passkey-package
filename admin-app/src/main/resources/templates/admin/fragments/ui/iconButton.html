@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  IconButton (← ui/IconButton.tsx)
+  th:replace="~{admin/fragments/ui/iconButton :: iconButton(label, icon, size, tone, attrs)}"
+    label aria-label 이자 title
+    icon  조각(예: ~{admin/fragments/icons :: dots(18)})
+    size  'sm' | 'md' (null 이면 md)
+    tone  'default' | 'danger' (null 이면 default)
+    attrs 추가 속성 Map 또는 null
+-->
+<button th:fragment="iconButton(label, icon, size, tone, attrs)" type="button" class="icon-btn"
+        th:classappend="(${size == 'sm'} ? 'icon-btn--sm' : '') + (${tone == 'danger'} ? ' icon-btn--danger' : '')"
+        th:aria-label="${label}" th:title="${label}" ui:attrs="${attrs}"><th:block th:replace="${icon}"/></button>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Skeleton (← ui/Skeleton.tsx) — Alpine.data('skeleton')
+  th:replace="~{admin/fragments/ui/skeleton :: skeleton(rows, label)}"
+    rows 줄 수(null 이면 4), label 접근 가능한 이름(null 이면 '불러오는 중')
+  role=status aria-busy=true. 3초가 넘으면 '아직 불러오는 중입니다…' 를 덧붙인다. 줄 너비는 CSS 가 순환시킨다.
+-->
+<div th:fragment="skeleton(rows, label)" class="skeleton-block" role="status" aria-busy="true" th:aria-label="${label ?: '불러오는 중'}" x-data="skeleton">
+  <span class="skeleton-block__line" th:each="i : ${#numbers.sequence(1, rows ?: 4)}"></span>
+  <p class="hint hint--flush" x-show="slow" x-cloak>아직 불러오는 중입니다…</p>
+</div>
+</body>
+</html>

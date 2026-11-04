@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  SaveBar (← ui/SaveBar.tsx) — Alpine.data('saveBar')
+  th:replace="~{admin/fragments/ui/saveBar :: saveBar(form, summary, saveLabel, revertLabel)}"
+    form        감시할 <form> 의 id(null 이면 가장 가까운 form 조상). 처음 값과 달라진 필드 수를 센다.
+    summary     문자열 또는 null, saveLabel('저장'), revertLabel('되돌리기')
+                summary 가 null 이고 form 에 data-savebar-labels(JSON {필드이름: 라벨}, 화면 순서)가 있으면 바뀐 필드의 라벨을 ' · ' 로 이어 보인다.
+                form 안의 [data-field=필드이름] 요소에는 그 필드가 바뀐 동안 data-changed 속성이 붙는다(CSS 로 '변경됨' 표시).
+                form 요청에 data-preview 속성이 있으면 저장으로 세지 않는다(저장 전 비교·확인 요청). 그 요청 동안 form 은 inert(입력 잠금)이고 '저장 중…'이며,
+                form 안의 [data-field-error] 요소 내용은 요청 시작 때 비운다. form 의 data-savebar-unordered(공백 구분 필드 이름)는 순서 무관 비교,
+                data-savebar-numeric 은 정수 비교.
+  변경이 없으면 숨김. 되돌리기=form.reset(), 저장=form.requestSubmit(). 변경이 있는 동안 새로고침·탭 닫기를 막고,
+  `unsaved-change`(detail.count) 이벤트로 unsavedGuard 에 알린다.
+-->
+<div th:fragment="saveBar(form, summary, saveLabel, revertLabel)" class="savebar" role="region" aria-label="저장되지 않은 변경"
+     ui:xdata="${@fmt.xdata('saveBar', 'form', form, 'saveLabel', saveLabel ?: '저장')}" x-show="dirty" x-cloak>
+  <span class="savebar__dot" aria-hidden="true"></span>
+  <strong class="savebar__title">저장하지 않은 변경 <span x-text="count">0</span>건</strong>
+  <span class="hint hint--flush" th:if="${summary}" th:text="${summary}">요약</span>
+  <span class="hint hint--flush" th:unless="${summary}" x-show="changedText" x-cloak x-text="changedText"></span>
+  <div class="spacer"></div>
+  <button type="button" class="btn" x-on:click="revert()" x-bind:disabled="saving || previewing" th:text="${revertLabel ?: '되돌리기'}">되돌리기</button>
+  <button type="button" class="btn btn--primary" x-on:click="save()" x-bind:disabled="saving || previewing"
+          x-text="(saving || previewing) ? '저장 중…' : saveLabel" th:text="${saveLabel ?: '저장'}">저장</button>
+</div>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  WebAuthn 설정 미리보기 응답(POST …/webauthn/diff). 대상은 #wa-confirm-slot 안쪽이고, 필드 오류 자리 #wa-err-<필드> 는 OOB 로 채우거나 비운다
+  (입력 폼은 교체하지 않아 입력값·변경 상태가 그대로 남는다).
+  모델: errors(필드 → 문구), dialog(true 면 확인 다이얼로그), rows, title, draft, changeCount, saveAttrs
+  다이얼로그는 form 으로 감싸 비교한 값을 hidden input 으로 들고 있다 — 확인 버튼(hx-put)이 그 form 의 값을 보내므로 저장은 정확히 비교한 값이다.
+  열기: form 의 x-init 이 다이얼로그 초기화 뒤에 dialog:open 을 올린다.
+-->
+<th:block th:fragment="result">
+  <p th:each="k : ${ {'rpName', 'timeoutMs', 'origins', 'userVerification', 'attestationConveyance', 'form'} }" th:id="${'wa-err-' + k}" class="field__error" data-field-error
+     hx-swap-oob="true" th:attr="role=${errors.get(k) != null} ? 'alert' : null" th:text="${errors.get(k)}"></p>
+
+  <form th:if="${dialog}" id="wa-confirm-form" class="fieldset--bare" novalidate x-data x-on:submit.prevent
+        x-init="$nextTick(() => $dispatch('dialog:open', { id: 'wa-confirm' }))">
+    <input type="hidden" name="rpName" th:value="${draft.rpName}">
+    <input type="hidden" name="timeoutMs" th:value="${draft.timeoutMs}">
+    <input type="hidden" name="origins" th:each="o : ${draft.origins}" th:value="${o}">
+    <input type="hidden" name="userVerification" th:value="${draft.uv}">
+    <input type="hidden" name="attestationConveyance" th:value="${draft.at}">
+    <input type="hidden" name="changes" th:value="${changeCount}">
+    <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog('wa-confirm', 'L2', ${title}, '저장', '다음 패스키 등록·인증부터 적용됩니다.', ~{:: diffBody}, false, null, null, null, ${saveAttrs})}"></th:block>
+  </form>
+</th:block>
+
+<th:block th:remove="all">
+  <th:block th:fragment="diffBody">
+    <div class="diff">
+      <div th:each="r : ${rows}" class="row diff__row">
+        <span class="diff__key" th:title="${r.key}" th:text="${r.label}">대기 시간</span>
+        <th:block th:if="${r.array}">
+          <span th:each="x : ${r.removed}" class="tag mono tag--from" th:title="${x}" th:text="${'- ' + x}">- origin</span>
+          <span th:each="x : ${r.added}" class="tag mono tag--to" th:title="${x}" th:text="${'+ ' + x}">+ origin</span>
+        </th:block>
+        <th:block th:unless="${r.array}">
+          <span class="tag tag--from" th:title="${r.fromTitle}" th:text="${r.from}">60초</span>
+          <span class="diff__arrow" aria-hidden="true"><th:block th:replace="~{admin/fragments/icons :: chevronRight(14)}"></th:block></span>
+          <span class="tag tag--to" th:title="${r.toTitle}" th:text="${r.to}">120초</span>
+        </th:block>
+      </div>
+    </div>
+    <th:block th:replace="~{admin/fragments/ui/alert :: alert('info', null, ~{:: auditNote}, null, null)}"></th:block>
+  </th:block>
+  <th:block th:fragment="auditNote">저장하면 감사 로그에 “WebAuthn 설정 변경”이 기록됩니다.</th:block>
+</th:block>
+</body>
+</html>

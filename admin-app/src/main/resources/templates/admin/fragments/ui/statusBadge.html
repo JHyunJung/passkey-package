@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  StatusBadge (← ui/StatusBadge.tsx)
+  th:replace="~{admin/fragments/ui/statusBadge :: statusBadge(status)}"
+    status 상태 enum(ACTIVE 등). 라벨은 @fmt.status, 톤은 @fmt.statusTone, title 에 원문 enum.
+  (th:replace 의 인자에서는 @빈 호출이 막혀 있어 th:with 로 먼저 계산한다.)
+-->
+<th:block th:fragment="statusBadge(status)" th:with="lbl=${@fmt.status(status)}, tone=${@fmt.statusTone(status)}">
+  <span th:replace="~{admin/fragments/ui/badge :: badge(${lbl}, ${tone}, true, null, ${status})}">활성</span>
+</th:block>
+</body>
+</html>

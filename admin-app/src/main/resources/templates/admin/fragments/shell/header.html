@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  상단 바(← shell/Header.tsx)
+  th:replace="~{admin/fragments/shell/header :: topbar(${crumbs})}"   (레이아웃이 호출한다)
+    crumbs: 페이지가 넘긴 브레드크럼 조각(없으면 비어 있음)
+  모델: me(CurrentAdmin), helpLinks(apiDocs, rpGuide, support — 비어 있는 항목은 숨긴다. config/links.ts)
+  명령 팔레트·키보드 단축키 시트는 Task 5 가 맡는다. 이 바는 window 로 `open-palette` / `open-shortcuts` 이벤트만 올린다.
+  메뉴 동작(열기·바깥 클릭·Esc·화살표 이동)은 app.js 의 shellMenu, 단축키 표기(⌘K / Ctrl K)는 platformKey.
+-->
+<header th:fragment="topbar(crumbs)" class="topbar">
+  <th:block th:if="${crumbs != null}"><th:block th:replace="${crumbs}"></th:block></th:block>
+  <div class="spacer"></div>
+  <div th:if="${me != null and me.role == 'RP_ADMIN'}" id="tenant-switcher" hx-preserve data-quiet th:attr="hx-get=@{/admin/_/shell/tenant-switcher}" hx-trigger="load" hx-swap="innerHTML"></div>
+  <!-- 문구는 실제 검색 범위(lib/search.ts: tenant 이름·slug)만 약속한다. -->
+  <button type="button" class="topbar__search" x-data="platformKey" x-on:click="$dispatch('open-palette')"
+          aria-label="tenant 이름 · slug 검색 (Ctrl K)" x-bind:aria-label="'tenant 이름 · slug 검색 (' + key + ')'">
+    <th:block th:replace="~{admin/fragments/icons :: search(15)}"></th:block><span>tenant 이름 · slug 검색</span><kbd x-text="key">Ctrl K</kbd>
+  </button>
+  <!-- 도움말(H10). 주소가 빈 항목은 숨긴다. -->
+  <div class="menu-wrap" x-data="shellMenu(true)" x-on:keydown.escape.window="close()" x-on:mousedown.window="outside($event)">
+    <button type="button" class="btn" aria-haspopup="menu" aria-expanded="false" x-bind:aria-expanded="open" x-on:click="toggle()">
+      <th:block th:replace="~{admin/fragments/icons :: help(16)}"></th:block>도움말
+    </button>
+    <div class="menu" role="menu" aria-label="도움말" tabindex="-1" style="min-width: 220px" x-show="open" x-cloak x-on:keydown="arrow($event)">
+      <a th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.apiDocs)}" role="menuitem" class="menu__item" th:href="${helpLinks.apiDocs}" target="_blank" rel="noopener noreferrer" x-on:click="close()">
+        API 문서 열기
+        <span class="hint" style="margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 4px">새 창 <th:block th:replace="~{admin/fragments/icons :: externalLink(13)}"></th:block></span>
+      </a>
+      <a th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.rpGuide)}" role="menuitem" class="menu__item" th:href="${helpLinks.rpGuide}" target="_blank" rel="noopener noreferrer" x-on:click="close()">
+        RP 연동 가이드
+        <span class="hint" style="margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 4px">새 창 <th:block th:replace="~{admin/fragments/icons :: externalLink(13)}"></th:block></span>
+      </a>
+      <button type="button" role="menuitem" class="menu__item" aria-keyshortcuts="?" x-on:click="close(); $dispatch('open-shortcuts')">
+        키보드 단축키<kbd aria-hidden="true" style="margin-left: auto">?</kbd>
+      </button>
+      <th:block th:if="${helpLinks != null and !#strings.isEmpty(helpLinks.support)}">
+        <div class="menu__sep"></div>
+        <a role="menuitem" class="menu__item" th:href="${helpLinks.support}" x-on:click="close()">운영자에게 문의</a>
+      </th:block>
+    </div>
+  </div>
+  <!-- 사용자 메뉴: 로그아웃만(동작하지 않는 역할 전환은 없다). -->
+  <div class="menu-wrap" th:if="${me != null}" x-data="shellMenu(false)" x-on:keydown.escape.window="close()" x-on:mousedown.window="outside($event)"
+       th:with="roleLabel=${me.platform} ? 'PLATFORM' : 'RP_ADMIN', roleTone=${me.platform} ? 'plat' : 'info'">
+    <button type="button" class="user-pill" aria-label="사용자 메뉴" aria-haspopup="menu" aria-expanded="false" x-bind:aria-expanded="open" x-on:click="toggle()">
+      <span class="avatar" th:text="${#strings.toUpperCase(#strings.substring(me.email, 0, 1))}">A</span>
+      <span class="stack-1" style="gap: 0; line-height: 1.2; text-align: left"><span style="font-weight: 600" th:text="${me.email}">a@x.com</span><span style="font-size: 11px; color: var(--mute)" th:text="${me.email}">a@x.com</span></span>
+      <th:block th:replace="~{admin/fragments/ui/badge :: badge(${roleLabel}, ${roleTone}, false, null, null)}"></th:block>
+      <th:block th:replace="~{admin/fragments/icons :: chevronDown(14)}"></th:block>
+    </button>
+    <div class="menu" role="menu" aria-label="사용자 메뉴" style="min-width: 240px" x-show="open" x-cloak>
+      <div class="stack-1" style="padding: 8px 10px 10px; border-bottom: 1px solid var(--line-soft); margin-bottom: 4px; gap: 2px">
+        <strong style="font-size: 13px" th:text="${me.email}">a@x.com</strong><span style="font-size: 12px; color: var(--mute)" th:text="${me.email}">a@x.com</span>
+        <span style="margin-top: 4px"><th:block th:replace="~{admin/fragments/ui/badge :: badge(${roleLabel}, ${roleTone}, false, null, null)}"></th:block></span>
+      </div>
+      <form method="post" th:action="@{/admin/logout}" hx-boost="false">
+        <button type="submit" role="menuitem" class="menu__item menu__item--danger"><th:block th:replace="~{admin/fragments/icons :: logOut(14)}"></th:block>로그아웃</button>
+      </form>
+    </div>
+  </div>
+</header>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  설정 › MDS Status 탭(← pages/settings/MdsStatusTab.tsx). 컨트롤러: MdsTabController(GET /admin/_/settings/tab/mds, POST /admin/_/settings/mds/sync; PLATFORM 전용).
+  모델: v(MdsTabController.View) 또는 loadError(상태 조회 실패), historyError(이력만 실패), retryAttrs(탭 다시 받기), syncAttrs(즉시 갱신 버튼)
+  즉시 갱신 = POST(120초 제한, 요청 중 비활성·hx-sync=this:drop) → 응답이 #mds-root 를 통째로 바꾼다. 서버가 준 문자열(실패 사유·변경 요약)은 th:text 로만 그린다.
+-->
+<div th:fragment="tab" id="mds-root">
+  <!-- 갱신 뒤 다시 읽기에 실패했을 때의 경고 자리(화면은 그대로 두고 여기만 OOB 로 채운다) -->
+  <div id="mds-warn"></div>
+  <section class="card" th:if="${loadError != null}">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('MDS 상태', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+  </section>
+
+  <div class="stack-6" th:if="${v != null}">
+    <section class="card mds-head">
+      <span aria-hidden="true" class="mds-head__icon" th:classappend="${'mds-head__icon--' + v.headTone}">
+        <th:block th:if="${v.headTone == 'ok'}"><th:block th:replace="~{admin/fragments/icons :: check(24)}"></th:block></th:block>
+        <th:block th:unless="${v.headTone == 'ok'}"><th:block th:replace="~{admin/fragments/icons :: alert(24)}"></th:block></th:block>
+      </span>
+      <div class="col" style="gap: 2px; flex: 1 1 320px; min-width: 0">
+        <span class="t-over">MDS 동기화 상태</span>
+        <strong style="font-size: 20px; line-height: 28px" th:text="${v.headTitle}">정상 · BLOB #12</strong>
+        <span class="card__sub" th:text="${v.sub}">FIDO MDS3 BLOB 을 매일 03:00 KST 에 갱신합니다</span>
+      </div>
+      <button type="button" class="btn" ui:attrs="${syncAttrs}" hx-request='{"timeout": 120000}'>
+        <th:block th:replace="~{admin/fragments/icons :: refresh(14)}"></th:block>
+        <span class="mds-sync__idle">즉시 갱신</span><span class="mds-sync__busy">갱신 중…</span>
+      </button>
+    </section>
+
+    <div class="kpis kpis--3">
+      <div class="kpi">
+        <span class="kpi__label">MDS BLOB 버전</span>
+        <span class="kpi__value"><span class="mono" th:text="${v.version}">#12</span></span>
+      </div>
+      <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('신뢰 앵커 (Trust anchors)', ${v.anchors}, null, null, null, null)}"></th:block>
+      <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('마지막 동기화', ${v.lastSync}, null, null, null, null)}"></th:block>
+    </div>
+
+    <div class="mds-grid">
+      <section class="card">
+        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('동기화 설정', null, null, null)}"></th:block>
+        <div class="card__body">
+          <dl class="kv">
+            <dt>주소 (endpoint)</dt>
+            <dd class="mono kv__nowrap"><span style="font-size: 12px">https://mds3.fidoalliance.org/</span></dd>
+            <dt>다음 갱신 예정</dt>
+            <dd th:text="${v.nextUpdate != null} ? ${v.nextUpdate + ' 03:00 KST'} : '—'">—</dd>
+            <dt>동기화 성공률 (30일)</dt>
+            <dd>
+              <th:block th:if="${v.rate != null}"><span th:text="${v.rate.percent}">100%</span><span class="muted" th:text="${' · ' + v.rate.counts}"> · 1 / 1</span></th:block>
+              <th:block th:if="${v.rate == null}">—</th:block>
+            </dd>
+            <dt>신뢰 모드</dt>
+            <dd>
+              <span th:if="${v.trust == null}">— <span class="hint hint--flush">설정되지 않음</span></span>
+              <span th:if="${v.trust != null}" class="col" style="gap: 6px; align-items: flex-start">
+                <span th:title="${v.trust.mode}"><span th:replace="~{admin/fragments/ui/badge :: badge(${v.trust.label}, 'info', false, null, null)}"></span></span>
+                <span th:if="${v.trust.description != null}" class="hint hint--flush" th:text="${v.trust.description}">설명</span>
+              </span>
+            </dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card">
+        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('최근 동기화 이력', null, null, ~{admin/settings/mds :: stripActions})}"></th:block>
+        <th:block th:if="${!v.historyOk}">
+          <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('동기화 이력', ${historyError}, ${retryAttrs}, false, true)}"></th:block>
+        </th:block>
+        <div class="tw" th:if="${v.historyOk}">
+          <table class="table">
+            <thead>
+              <tr><th>시각 (KST)</th><th>버전</th><th>변경</th><th>상태</th><th class="num">응답 시간</th></tr>
+            </thead>
+            <tbody>
+              <tr th:each="r : ${v.runs}">
+                <td><span style="font-size: 13px; color: var(--ink-2)" th:text="${r.time}">2026-06-01 03:00</span></td>
+                <td><span class="mono" style="font-size: 12px" th:text="${r.version}">#12</span></td>
+                <td>
+                  <span th:if="${r.failed}" class="truncate" style="display: inline-block; max-width: 360px; vertical-align: middle; font-size: 13px; color: var(--bad-ink)"
+                        th:title="${r.changeTitle}" th:text="${r.changeText}">실패 사유</span>
+                  <span th:unless="${r.failed}" style="font-size: 13px; color: var(--ink-2)" th:text="${r.changeText}">변경 없음</span>
+                </td>
+                <td><span th:replace="~{admin/fragments/ui/badge :: badge(${r.label}, ${r.tone}, null, null, null)}"></span></td>
+                <td class="num"><span class="mono" style="font-size: 12px" th:text="${r.ms}">120ms</span></td>
+              </tr>
+              <tr class="table__empty" th:if="${v.runs.isEmpty()}">
+                <td colspan="5"><p class="hint" style="margin: 0; padding: 16px 20px">동기화 이력이 없습니다.</p></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- 갱신은 성공했지만 다시 읽기에 실패(HX-Reswap none): 본 대상은 스왑하지 않고 이 경고만 #mds-warn 에 OOB. 모델: reloadError, retryAttrs -->
+<div th:fragment="reloadWarning" id="mds-warn" hx-swap-oob="true">
+  <div class="stack-3" style="margin-bottom: 16px">
+    <div class="banner banner--warning banner--top" role="status">
+      <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>
+      <div class="banner__body">
+        <div class="banner__title">다시 확인하지 못했습니다</div>
+        <div th:text="${@fmt.errorInfo(reloadError).title + '. 아래는 마지막으로 읽은 MDS 상태입니다.'}">오류</div>
+      </div>
+    </div>
+    <div><button type="button" class="btn" ui:attrs="${retryAttrs}">다시 시도</button></div>
+  </div>
+</div>
+
+<!-- 이력 카드 머리글 오른쪽: 최근 실행 막대(이력을 읽었고 비어 있지 않을 때만) -->
+<th:block th:remove="all">
+  <th:block th:fragment="stripActions">
+    <th:block th:if="${v.historyOk and !v.strip.isEmpty()}">
+      <th:block th:replace="~{admin/fragments/ui/statusStrip :: statusStrip(${v.strip}, ${v.stripLabel}, null)}"></th:block>
+    </th:block>
+  </th:block>
+</th:block>
+</body>
+</html>

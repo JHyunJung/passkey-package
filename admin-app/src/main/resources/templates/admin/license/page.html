@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}" xmlns:th="http://www.thymeleaf.org">
+<head><title>라이선스</title></head>
+<body>
+<!--
+  라이선스 화면(← pages/LicensePage.tsx). PLATFORM 전용(RP 는 컨트롤러가 홈으로 보낸다). 컨트롤러: LicensePageController.
+  모델: view(View: onprem 이 false 면 SaaS 안내) 또는 loadError(+ retryAttrs), recheckAttrs
+  licenseBody   #license-body: 오류 알림 자리 + 상태 카드 + 할 일 카드 + 상세. "지금 다시 확인"(GET /admin/_/license/recheck) 성공 응답이 통째로 바꾼다.
+  recheckAlert  다시 확인 실패: 이전 정보를 그대로 두고 #license-recheck-alert 에만 경고(HX-Retarget).
+  확인하는 동안 버튼은 '확인 중…'(비활성, hx-disabled-elt), 중복 요청은 hx-sync drop.
+-->
+<th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>
+<main>
+  <div class="page" th:if="${view == null}">
+    <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('라이선스', '이 설치본(온프레미스)의 라이선스 상태와 상세 정보입니다.', null)}"></th:block>
+    <section class="card">
+      <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('라이선스 정보', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+    </section>
+  </div>
+
+  <div class="page" th:if="${view != null and !view.onprem}">
+    <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('라이선스', null, null)}"></th:block>
+    <section class="card">
+      <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState(null, '라이선스 관리는 온프레미스 설치본에서만 사용합니다', '클라우드 설치본은 계약에 따라 자동 관리됩니다.', null, false)}"></th:block>
+    </section>
+  </div>
+
+  <div class="page" th:if="${view != null and view.onprem}">
+    <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('라이선스', '이 설치본(온프레미스)의 라이선스 상태와 상세 정보입니다.', null)}"></th:block>
+    <th:block th:replace="~{admin/license/page :: licenseBody}"></th:block>
+  </div>
+</main>
+
+<div th:fragment="licenseBody" id="license-body" class="stack-5" style="max-width: 820px">
+  <div id="license-recheck-alert"></div>
+
+  <!-- 상태 헤드라인 — 원시 enum 대신 배지(원문은 툴팁) -->
+  <section class="card">
+    <div class="row" style="gap: 20px; padding: 20px 24px">
+      <div class="col" style="gap: 6px; flex: 1 1 240px; min-width: 0">
+        <span class="t-over">상태</span>
+        <span class="row" style="gap: 10px">
+          <span th:if="${view.badge != null}" th:title="${view.state}"><th:block th:replace="~{admin/fragments/ui/badge :: badge(${view.badge.label}, ${view.badge.tone}, null, null, null)}"></th:block></span>
+          <span class="muted" th:if="${view.badge == null}">알 수 없음</span>
+        </span>
+        <span class="card__sub" th:if="${!#strings.isEmpty(view.heartbeat)}" th:text="${view.heartbeat}">마지막 확인 5분 전</span>
+      </div>
+      <div class="col" style="gap: 6px; flex: 1 1 240px; min-width: 0">
+        <div class="row">
+          <span class="hint hint--flush">만료까지</span>
+          <div class="spacer"></div>
+          <strong th:style="${view.daysColor != null} ? ${'font-size: 13px; color: ' + view.daysColor} : 'font-size: 13px'" th:text="${view.days}">200일</strong>
+        </div>
+        <span class="hint hint--flush" th:if="${view.expiresLine != null}" th:text="${view.expiresLine}">만료일</span>
+      </div>
+      <button type="button" class="btn" ui:attrs="${recheckAttrs}" hx-disabled-elt="this">
+        <span class="license-recheck__idle">지금 다시 확인</span><span class="license-recheck__busy">확인 중…</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="card" th:if="${view.action != null}" th:aria-label="${view.action.title}">
+    <div class="card__head"><h2 class="card__title" th:text="${view.action.title}">지금 해야 할 일</h2></div>
+    <div class="card__body license-action">
+      <p style="margin: 0" th:text="${view.action.lead}">설명</p>
+      <ol class="license-steps"><li th:each="s : ${view.action.steps}" th:text="${s}">단계</li></ol>
+    </div>
+  </section>
+
+  <section class="card">
+    <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('상세', null, null, null)}"></th:block>
+    <dl class="kv kv--rows">
+      <th:block th:each="r : ${view.rows}">
+        <dt th:text="${r.k}">항목</dt>
+        <dd>
+          <span th:if="${r.copy != null}" class="row" style="gap: 6px; flex-wrap: nowrap">
+            <span class="mono" style="word-break: break-all" th:text="${r.v}">lic_1</span>
+            <th:block th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(${r.copy}, '라이선스 ID 복사', true)}"></th:block>
+          </span>
+          <span th:if="${r.tags != null}" class="row" style="gap: 6px"><span class="tag" th:each="f : ${r.tags}" th:text="${f}">mds</span></span>
+          <th:block th:if="${r.copy == null and r.tags == null}" th:text="${r.v}">값</th:block>
+        </dd>
+      </th:block>
+    </dl>
+  </section>
+</div>
+
+<th:block th:fragment="recheckAlert">
+  <th:block th:replace="~{admin/fragments/ui/alert :: alert('warn', '다시 확인하지 못했습니다', ~{admin/license/page :: recheckText}, null, null)}"></th:block>
+</th:block>
+
+<th:block th:remove="all">
+  <th:block th:fragment="recheckText" th:text="${recheckError}">서버가 잠시 응답하지 않습니다. 아래는 마지막으로 확인한 정보입니다.</th:block>
+</th:block>
+</body>
+</html>

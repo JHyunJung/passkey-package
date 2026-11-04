@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  설정 › 시스템 탭(← pages/settings/SystemInfoTab.tsx). 컨트롤러: SystemInfoTabController(GET /admin/_/settings/tab/system, PLATFORM 전용).
+  모델: info(SystemInfoTabController.Info) 또는 loadError(+ retryAttrs: 이 조각을 탭 영역에 다시 받는다)
+-->
+<th:block th:fragment="content">
+  <section class="card" th:if="${loadError != null}">
+    <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('시스템 정보', ${loadError}, ${retryAttrs}, false, false)}"></th:block>
+  </section>
+
+  <div class="stack-6" th:if="${info != null}">
+    <div class="kpis kpis--3">
+      <div class="kpi">
+        <span class="kpi__label">전체 상태</span>
+        <span class="kpi__value"><span class="row" style="gap: 8px"><span class="dot" th:style="${'width: 10px; height: 10px; background: ' + info.overall.dot}"></span><th:block th:text="${info.overall.label}">정상</th:block></span></span>
+        <span class="kpi__hint" th:text="${info.overallHint}">컴포넌트 2 / 2</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__label">서버 버전</span>
+        <span class="kpi__value"><span class="mono" style="font-size: 22px" th:text="${info.serverVersion}">1.2.3</span></span>
+        <span class="kpi__hint" th:text="${info.deployedHint}">배포 시각 정보 없음</span>
+      </div>
+      <!-- 시간 단위 세분화는 서버 지원 후(스펙 §8). -->
+      <th:block th:replace="~{admin/fragments/ui/kpiCard :: kpiCard('가동 시간', ${info.uptime}, null, null, null, null)}"></th:block>
+    </div>
+
+    <div class="grid-2">
+      <section class="card">
+        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('백엔드 컴포넌트', null, null, null)}"></th:block>
+        <ul aria-label="백엔드 컴포넌트" style="list-style: none; margin: 0; padding: 0">
+          <li th:each="c, st : ${info.components}" class="row sys-comp" th:classappend="${st.last} ? 'sys-comp--last'">
+            <span aria-hidden="true" class="sys-comp__icon"><th:block th:replace="~{admin/fragments/icons :: server(15)}"></th:block></span>
+            <span class="col" style="flex: 1 1 0; min-width: 0">
+              <span class="mono truncate" th:text="${c.name}">admin-app</span>
+              <span class="hint hint--flush" th:if="${c.note != null}" th:text="${c.note}">Spring Boot</span>
+            </span>
+            <span class="hint hint--flush mono truncate" style="max-width: 45%" th:title="${c.version}" th:text="${c.version}">1.2.3</span>
+            <th:block th:replace="~{admin/fragments/ui/badge :: badge(${c.status.label}, ${c.status.tone}, null, null, null)}"></th:block>
+          </li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('호스트 정보', null, null, ~{admin/settings/system :: envBadge})}"></th:block>
+        <div class="card__body">
+          <dl class="kv" style="grid-template-columns: 120px minmax(0, 1fr)">
+            <dt>활성 프로필</dt>
+            <dd><span class="chips"><span class="tag" th:each="p : ${info.profiles}" th:text="${p}">prod</span></span></dd>
+            <dt>배포 시각</dt>
+            <dd class="mono" style="font-size: 12px" th:text="${info.deployed ?: '—'}">—</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+  </div>
+</th:block>
+
+<th:block th:remove="all">
+  <span th:fragment="envBadge" class="badge badge--info">환경 · <span th:text="${info.environment}">prod</span></span>
+</th:block>
+</body>
+</html>
