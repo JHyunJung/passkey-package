@@ -58,6 +58,17 @@ class WebExceptionAdviceTest {
                     org.springframework.http.HttpStatusCode.valueOf(499), "client closed");
         }
 
+        @GetMapping("/admin/_/test/uuid/{id}")
+        String uuid(@org.springframework.web.bind.annotation.PathVariable UUID id) { return "admin/error"; }
+
+        @GetMapping("/admin/_/test/denied")
+        String denied() { throw new org.springframework.security.access.AccessDeniedException("platform operator only"); }
+
+        @GetMapping("/admin/_/test/conflict")
+        String conflict() {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "이미 처리된 요청입니다");
+        }
+
         @GetMapping("/admin/_/test/model")
         String model() { return "admin/error"; } // 아무 템플릿이나 — 모델만 본다
     }
@@ -126,5 +137,36 @@ class WebExceptionAdviceTest {
             .andExpect(status().isOk())
             .andExpect(model().attribute("me", instanceOf(CurrentAdmin.class)))
             .andExpect(model().attribute("profile", instanceOf(com.crosscert.passkey.admin.config.ProfileController.ProfileView.class)));
+    }
+
+    @Test
+    void badUuidPathIs400WithoutFrameworkMessage() throws Exception {
+        // 경로의 UUID 변환 실패(MethodArgumentTypeMismatchException): 400, 원문("Failed to convert…", "Invalid UUID string")은 토스트·오류 화면 어디에도 없다.
+        MvcResult r = mvc.perform(get("/admin/_/test/uuid/not-a-uuid").header("HX-Request", "true").with(authentication(operator())))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().string(""))
+            .andReturn();
+        String trig = r.getResponse().getHeader("HX-Trigger");
+        JsonNode toast = new ObjectMapper().readTree(trig).get("toast");
+        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 400");
+        assertThat(trig).doesNotContain("convert").doesNotContain("UUID").doesNotContain("not-a-uuid");
+        String page = mvc.perform(get("/admin/_/test/uuid/not-a-uuid").with(authentication(operator())))
+            .andExpect(status().isBadRequest())
+            .andExpect(view().name("admin/error"))
+            .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(page).doesNotContain("convert").doesNotContain("Invalid UUID").doesNotContain("not-a-uuid");
+    }
+
+    @Test
+    void rawDetailOnlyCarriesBusinessMessagesAndStatusReasons() throws Exception {
+        // 권한 거부의 원문(내부 사유)은 싣지 않는다
+        MvcResult d = mvc.perform(get("/admin/_/test/denied").header("HX-Request", "true").with(authentication(operator())))
+            .andExpect(status().isForbidden()).andReturn();
+        assertThat(new ObjectMapper().readTree(d.getResponse().getHeader("HX-Trigger")).get("toast").get("detail").asText()).isEqualTo("HTTP 403");
+        // 4xx ResponseStatusException 은 reason 만(“409 CONFLICT \"…\"” 원문 아님)
+        MvcResult c = mvc.perform(get("/admin/_/test/conflict").header("HX-Request", "true").with(authentication(operator())))
+            .andExpect(status().isConflict()).andReturn();
+        assertThat(new ObjectMapper().readTree(c.getResponse().getHeader("HX-Trigger")).get("toast").get("detail").asText())
+            .isEqualTo("HTTP 409 이미 처리된 요청입니다");
     }
 }

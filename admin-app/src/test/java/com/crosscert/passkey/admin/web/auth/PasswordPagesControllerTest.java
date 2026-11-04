@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.operator.PasswordResetController;
 import com.crosscert.passkey.admin.web.AdminWebSliceTest;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -338,5 +339,19 @@ class PasswordPagesControllerTest {
                 .andExpect(status().isForbidden());
         verify(reset, never()).request(any());
         verify(reset, never()).confirm(any());
+    }
+
+    @Test
+    @DisplayName("재설정 메일 링크(/reset-password?token=…, base-url 기준 루트 경로)는 미인증 GET 에서 쿼리를 보존해 /admin/reset-password 로 302")
+    void rootResetLinkRedirectsWithQuery() throws Exception {
+        MvcResult r = mvc.perform(get("/reset-password?token=abc")).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(302);
+        assertThat(r.getResponse().getHeader("Location")).isEqualTo("/admin/reset-password?token=abc");
+        assertThat(r.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
+        assertThat(r.getResponse().getHeader("Referrer-Policy")).isEqualTo("no-referrer");
+        // 인코딩된 쿼리는 그대로, 쿼리가 없으면 경로만
+        assertThat(mvc.perform(get(java.net.URI.create("/reset-password?token=a%2Bb%3D&x=1"))).andReturn().getResponse().getHeader("Location"))
+                .isEqualTo("/admin/reset-password?token=a%2Bb%3D&x=1");
+        assertThat(mvc.perform(get("/reset-password")).andReturn().getResponse().getHeader("Location")).isEqualTo("/admin/reset-password");
     }
 }

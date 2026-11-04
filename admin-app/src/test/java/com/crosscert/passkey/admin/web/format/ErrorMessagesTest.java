@@ -118,4 +118,27 @@ class ErrorMessagesTest {
             assertThat(i.detailIsRaw()).isFalse();
         }
     }
+
+    @Test
+    @DisplayName("rawDetail(공통): BusinessException 메시지·4xx ResponseStatusException reason 만 붙이고 ErrorResponse·타입 변환·JDK·권한 거부·5xx 원문은 빼고 상태만")
+    void rawDetailOnlySafeMessages() throws Exception {
+        BusinessException be = new BusinessException(ErrorCode.INVALID_INPUT, "slug 형식이 올바르지 않습니다");
+        assertThat(ErrorMessages.rawDetail(be, 400, ErrorMessages.describe(be)))
+                .isEqualTo("HTTP 400 · [" + ErrorCode.INVALID_INPUT.getCode() + "] slug 형식이 올바르지 않습니다");
+        ResponseStatusException rse = new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "이미 활성");
+        assertThat(ErrorMessages.rawDetail(rse, 409, ErrorMessages.describe(rse))).isEqualTo("HTTP 409 이미 활성");
+        ResponseStatusException rse5 = new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "pool exhausted");
+        assertThat(ErrorMessages.rawDetail(rse5, 503, ErrorMessages.describe(rse5))).isEqualTo("HTTP 503");
+        var missing = new org.springframework.web.bind.MissingServletRequestParameterException("tenantId", "String");
+        assertThat(ErrorMessages.rawDetail(missing, 400, ErrorMessages.describe(missing, 400))).isEqualTo("HTTP 400");
+        var mismatch = new org.springframework.web.method.annotation.MethodArgumentTypeMismatchException("x", java.util.UUID.class, "id", null,
+                new IllegalArgumentException("Invalid UUID string: x"));
+        assertThat(ErrorMessages.rawDetail(mismatch, 400, ErrorMessages.describe(mismatch, 400))).isEqualTo("HTTP 400");
+        assertThat(ErrorMessages.describe(mismatch, 400).detail()).isNull(); // 오류 화면 설명에도 원문 없음
+        var iae = new IllegalArgumentException("Invalid UUID string: x");
+        assertThat(ErrorMessages.rawDetail(iae, 400, ErrorMessages.describe(iae, 400))).isEqualTo("HTTP 400");
+        var denied = new org.springframework.security.access.AccessDeniedException("platform operator only");
+        assertThat(ErrorMessages.rawDetail(denied, 403, ErrorMessages.describe(denied))).isEqualTo("HTTP 403");
+        assertThat(ErrorMessages.rawDetail(new IllegalStateException("jdbc:secret"), 500, ErrorMessages.describe(500, null))).isEqualTo("HTTP 500");
+    }
 }

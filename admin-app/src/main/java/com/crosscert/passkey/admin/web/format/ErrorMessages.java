@@ -78,8 +78,29 @@ public final class ErrorMessages {
     public static Info describe(Throwable e, int status) {
         if (e instanceof ActionBlockedException) return describe(e);
         String code = e instanceof BusinessException be ? be.getErrorCode().getCode() : null;
-        // IllegalArgumentException 은 JDK·라이브러리가 던진 원문일 수 있어 4xx 원문 표시에서 뺀다(상태 문구만).
-        return describe(status, e == null || e instanceof IllegalArgumentException ? null : e.getMessage(), code);
+        // 원문 표시(4xx 의 detail)는 업무 규칙 문구만 — JDK·라이브러리·Spring MVC 표준 예외의 원문(예: "Invalid UUID string", 타입 변환 실패)은 뺀다.
+        return describe(status, serverMessage(e, status), code);
+    }
+
+    /** 화면에 보여도 되는 서버 메시지: BusinessException 의 메시지, 4xx ResponseStatusException 의 reason. 그 밖은 null. */
+    private static String serverMessage(Throwable e, int status) {
+        if (e instanceof BusinessException be) return be.getMessage();
+        if (e instanceof ResponseStatusException rse && status < 500) return rse.getReason();
+        return null;
+    }
+
+    /**
+     * 오류 원문(rawErrorDetail): {@code HTTP 상태 · [코드] 서버 메시지}. 화면 예외 처리기(WebExceptionAdvice)와 RP 전환 실패(ShellController)가 같이 쓴다.
+     * 서버 메시지는 업무 규칙이 정한 문구만 붙인다 — {@link BusinessException} 의 메시지와 4xx {@link ResponseStatusException} 의 reason.
+     * Spring MVC 표준 예외({@link ErrorResponse}·타입 변환 실패 등)·JDK 예외(IllegalArgumentException "Invalid UUID string" 등)·
+     * 권한 거부·예기치 못한 5xx 의 원문은 싣지 않는다(상태와 코드만).
+     */
+    public static String rawDetail(Throwable e, int status, Info info) {
+        StringBuilder sb = new StringBuilder("HTTP ").append(status);
+        if (e instanceof BusinessException && info != null && info.code() != null) sb.append(" · [").append(info.code()).append(']');
+        String msg = serverMessage(e, status);
+        if (msg != null && !msg.isEmpty()) sb.append(' ').append(msg);
+        return sb.toString();
     }
 
     /**

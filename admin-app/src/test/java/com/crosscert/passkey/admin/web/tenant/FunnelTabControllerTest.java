@@ -273,12 +273,15 @@ class FunnelTabControllerTest {
     }
 
     @Test
-    @DisplayName("기간 전환 중: 루트가 pending 을 들고 이전 결과를 숨기고 스켈레톤을, 내보내기·CSV 링크는 비활성(요청 실패 시 after-request 로 복구)")
+    @DisplayName("기간 전환 중: 루트가 pending 을 들고 이전 결과를 숨기고 스켈레톤을, 내보내기·CSV 링크는 비활성(요청 실패 시 after-request 로 복구 + 선택을 보이는 기간 data-win 으로)")
     void pendingStateHidesResults() throws Exception {
         Element root = tab("").selectFirst("#funnel-root");
-        assertThat(root.attr("x-data")).isEqualTo("{ n: 0, get pending() { return this.n > 0; } }");
-        assertThat(root.attr("x-on:htmx:before-request")).isEqualTo("n++");
-        assertThat(root.attr("x-on:htmx:after-request")).isEqualTo("n = Math.max(0, n - 1)");
+        // pending·실패 시 되돌리기는 Alpine funnelTab(app.js) — 화면에 보이는 기간은 data-win(서버 값)
+        assertThat(root.attr("x-data")).isEqualTo("funnelTab");
+        assertThat(root.attr("x-on:htmx:before-request")).isEqualTo("begin()");
+        assertThat(root.attr("x-on:htmx:after-request")).isEqualTo("end($event)");
+        assertThat(root.attr("data-win")).isEqualTo("7");
+        assertThat(tab("?win=30").selectFirst("#funnel-root").attr("data-win")).isEqualTo("30");
         assertThat(root.select("[x-show=!pending]")).isNotEmpty();
         assertThat(root.select("[role=status][aria-busy=true]")).hasSize(1);
         for (Element a : root.select("a[download]")) assertThat(a.attr("x-on:click")).isEqualTo("if (pending) $event.preventDefault()");

@@ -3,28 +3,56 @@
 <body>
 <!--
   감사 로그 카드(← AuditTab.tsx 의 Card). 탭(audit.html)과 GET …/tab/audit/card 가 같은 조각을 그린다.
-    response  카드 한 벌(#audit-card). 요청은 모두 카드를 outerHTML 로 교체한다(hx-target=this).
-  모델: tid, win, days[{label, events[Ev]}], loadError/retryAttrs, filtering, failures, chips, clearAttrs, failuresAttrs, windows,
-        countText, emptyTitle, csvLabel/csvDisabled/csvUrl, hasMore/moreAttrs
-  각 컨트롤의 hx-get 은 서버가 만든 "다음 상태" 주소(요소마다 별도 Map — ui:attrs 가 다른 속성을 덮지 않는다).
-  행위자·대상·payload 는 사용자가 정할 수 있는 값이라 th:text 로만 쓴다. 속성 중 JS 로 평가되는 곳에는 서버가 만든 UUID 만(data-*) 들어간다.
+    response  카드 한 벌(#audit-card). 기간 전환·다시 시도는 카드를 outerHTML 로 교체한다(hx-target=this, 구간 끝을 새로 잡고 첫 쪽).
+    more      더 보기 응답(hx-swap=none): 같은 구간의 다음 한 쪽 행을 #audit-rows 끝에 붙이고(OOB beforeend) 숨은 상태·더 보기 버튼을 갱신.
+              htmx 는 응답을 <template> 로 파싱한다 — 표 조각(<tbody>)이 맨 앞이어야 tr 이 버려지지 않는다.
+  모델: tid, win, days[{label, key, head, events[Ev]}], total, loadError/retryAttrs, chips, windows, countText, csvLabel/csvBase/csvUrl,
+        hasMore/moreUrl, toIso/nextPage/lastDay
+  이벤트 종류·실패만 필터는 클라이언트(Alpine auditFilter, 상태는 카드 밖 #audit-root)가 읽어 온 행의 data-g·data-fail 로 거른다(원본 filtered).
+  건수·CSV 라벨·빈 목록 문구도 그 컴포넌트가 다시 센다(서버 값은 필터 없는 처음 값).
+  행위자·대상·payload 는 사용자가 정할 수 있는 값이라 th:text 로만 쓴다. 속성 중 JS 로 평가되는 곳에는 서버가 만든 값(UUID·그룹 id·날짜 키)만 data-* 로 들어간다.
 -->
 <th:block th:fragment="response"><th:block th:replace="~{:: card}"></th:block></th:block>
 
+<th:block th:fragment="more">
+  <tbody hx-swap-oob="beforeend:#audit-rows"><th:block th:replace="~{:: lines(${days})}"></th:block></tbody>
+  <input type="hidden" id="audit-page" name="page" th:value="${nextPage}" hx-swap-oob="true">
+  <input type="hidden" id="audit-last-day" name="lastDay" th:value="${lastDay}" hx-swap-oob="true">
+  <th:block th:replace="~{:: moreSlot(true)}"></th:block>
+</th:block>
+
 <section th:fragment="card" id="audit-card" class="card" hx-target="this" hx-swap="outerHTML" hx-sync="this:replace">
+  <!-- 더 보기·CSV 가 이어 받는 구간(win·to)과 다음 쪽 번호(= 불러온 쪽 수)·마지막 행의 날짜 키 -->
+  <div id="audit-state" hidden>
+    <input type="hidden" name="win" th:value="${win}">
+    <input type="hidden" name="to" th:value="${toIso}">
+    <input type="hidden" id="audit-page" name="page" th:value="${nextPage}">
+    <input type="hidden" id="audit-last-day" name="lastDay" th:value="${lastDay}">
+  </div>
   <div class="card__head">
     <div class="row" role="group" aria-label="이벤트 종류" style="gap: 6px">
-      <th:block th:each="c : ${chips}"><th:block
-                th:replace="~{admin/fragments/ui/chips :: filterChip(${c['label']}, ${c['active']}, false, false, ${c['title']}, ${c['attrs']})}"></th:block></th:block>
+      <button th:each="c : ${chips}" type="button" class="fchip" aria-pressed="false" th:title="${c.title}" th:attr="data-g=${c.id}"
+              x-bind:class="{ 'fchip--on': has($el.dataset.g) }" x-bind:aria-pressed="has($el.dataset.g) ? 'true' : 'false'"
+              x-on:click="toggle($el.dataset.g)" th:text="${c.label}">인증</button>
     </div>
-    <button th:if="${filtering}" type="button" class="btn btn--ghost btn--sm" ui:attrs="${clearAttrs}">필터 지우기</button>
+    <button type="button" class="btn btn--ghost btn--sm" x-show="filtering" x-cloak x-on:click="clear()">필터 지우기</button>
     <div class="spacer"></div>
-    <th:block th:replace="~{admin/fragments/ui/switch :: switch('실패만', 'failures', ${failures}, null, ${failuresAttrs})}"></th:block>
+    <label class="switch">
+      <input type="checkbox" role="switch" class="sr-only" aria-checked="false"
+             x-bind:checked="failures" x-bind:aria-checked="failures ? 'true' : 'false'" x-on:change="setFailures($el.checked)">
+      <span class="switch__track" aria-hidden="true"></span>
+      <span>실패만</span>
+    </label>
     <th:block th:replace="~{admin/fragments/ui/segmented :: segmented(null, ${windows}, ${win}, '기간')}"></th:block>
-    <a th:unless="${csvDisabled}" class="btn" th:href="${csvUrl}" hx-boost="false" download data-csv-download>
-      <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block><th:block th:text="${csvLabel}">CSV 내보내기 (현재 페이지 0건)</th:block></a>
-    <button th:if="${csvDisabled}" type="button" class="btn" disabled>
-      <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block><th:block th:text="${csvLabel}">CSV 내보내기 (현재 페이지 0건)</th:block></button>
+    <button th:if="${loadError != null}" type="button" class="btn" disabled>
+      <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block><span th:text="${csvLabel}">CSV 내보내기 (현재 페이지 0건)</span></button>
+    <th:block th:if="${loadError == null}">
+      <a class="btn" th:href="${csvUrl}" th:attr="data-base=${csvBase}, x-cloak=${total == 0 ? 'true' : null}" hx-boost="false" download data-csv-download
+         x-show="shown > 0" x-bind:href="csvHref($el.dataset.base)">
+        <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block><span x-text="csvLabel" th:text="${csvLabel}">CSV 내보내기 (현재 페이지 0건)</span></a>
+      <button type="button" class="btn" disabled th:attr="x-cloak=${total > 0 ? 'true' : null}" x-show="shown === 0">
+        <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block><span x-text="csvLabel" th:text="${csvLabel}">CSV 내보내기 (현재 페이지 0건)</span></button>
+    </th:block>
   </div>
 
   <th:block th:if="${loadError != null}">
@@ -39,117 +67,130 @@
           <th style="width: 32px"><span class="sr-only">펼치기</span></th>
         </tr>
       </thead>
-      <tbody th:if="${#lists.isEmpty(days)}">
-        <th:block th:replace="~{admin/fragments/ui/dataTable :: tableEmptyRow(6, ~{:: emptyBody})}"></th:block>
-      </tbody>
-      <tbody th:each="d : ${days}">
-        <th:block th:replace="~{admin/fragments/ui/dataTable :: tableGroupRow(6, ${d.label})}"></th:block>
-        <th:block th:each="e : ${d.events}">
-          <tr class="is-clickable" tabindex="0" th:attr="data-id=${e.id}"
-              x-on:click="exp = exp === $el.dataset.id ? null : $el.dataset.id"
-              x-on:keydown.self.enter.prevent="$el.click()" x-on:keydown.self.space.prevent="$el.click()"
-              x-bind:class="{ 'is-expanded': exp === $el.dataset.id }" x-bind:aria-expanded="exp === $el.dataset.id">
-            <td>
-              <div class="stack-1" style="gap: 0">
-                <span style="font-size: 13px" th:text="${e.hms}">12:00:00</span>
-                <span class="hint" style="margin: 0" th:text="${e.ago}">3분 전</span>
-              </div>
-            </td>
-            <td><th:block th:replace="~{admin/fragments/ui/badge :: badge(${e.eventType}, ${e.tone}, false, true, null)}"></th:block></td>
-            <td>
-              <span class="row" style="gap: 6px; flex-wrap: nowrap">
-                <span class="tag" th:text="${e.actorType}">ADMIN</span>
-                <span th:if="${e.actorTail != null}" class="mono hint" style="margin: 0" th:text="${e.actorTail}">…admin@x.com</span>
-              </span>
-            </td>
-            <td>
-              <span class="row" style="gap: 6px; flex-wrap: nowrap">
-                <span class="tag" th:text="${e.subjectType}">TENANT</span>
-                <span th:if="${e.subjectTail != null}" class="mono hint" style="margin: 0" th:text="${e.subjectTail}">…t1</span>
-              </span>
-            </td>
-            <td><span class="mono hint truncate" style="display: inline-block; max-width: 280px; margin: 0; vertical-align: middle" th:text="${e.detail}">{}</span></td>
-            <td>
-              <span style="color: var(--mute); display: inline-flex">
-                <span x-show="exp !== $el.closest('tr').dataset.id"><th:block th:replace="~{admin/fragments/icons :: chevronDown(14)}"></th:block></span>
-                <span x-show="exp === $el.closest('tr').dataset.id" x-cloak><th:block th:replace="~{admin/fragments/icons :: chevronUp(14)}"></th:block></span>
-              </span>
-            </td>
-          </tr>
-          <tr class="table__expanded" th:attr="data-id=${e.id}" x-show="exp === $el.dataset.id" x-cloak>
-            <td colspan="6">
-              <div class="stack-3" style="padding-left: 140px">
-                <div th:each="df : ${e.diff}" class="row" style="gap: 8px; font-size: 12px; flex-wrap: nowrap">
-                  <span class="mono truncate" style="width: 96px; color: var(--mute)" th:text="${df.field}">field</span>
-                  <del class="tag" style="background: var(--bad-soft); color: var(--bad-ink)" th:text="${df.from}">from</del>
-                  <span aria-hidden="true">→</span>
-                  <ins class="tag" style="background: var(--ok-soft); color: var(--ok-ink); text-decoration: none" th:text="${df.to}">to</ins>
-                </div>
-                <div class="row" style="gap: 8px">
-                  <span class="t-over">payload</span>
-                  <div class="spacer"></div>
-                  <th:block th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(${e.pretty}, 'JSON 복사', false)}"></th:block>
-                  <button type="button" class="btn btn--sm" th:attr="data-dlg=${'audit-evt-' + e.id}"
-                          x-on:click="$dispatch('dialog:open', { id: $el.dataset.dlg })">상세 다이얼로그</button>
-                </div>
-                <pre class="mono audit-pre" th:text="${e.pretty}">{}</pre>
-              </div>
-              <!-- Audit Event 다이얼로그(V2: 언제 · 누가 · 대상 · payload). 열릴 때 안쪽을 그린다(x-if). -->
-              <div ui:xdata="${@fmt.xdata('dialog', 'id', 'audit-evt-' + e.id)}"
-                   x-on:dialog:open.window="onOpen($event)" x-on:dialog:close.window="onClose($event)" x-on:keydown.escape.window="onEscape()">
-                <template x-if="open">
-                  <div class="scrim" x-on:mousedown="onScrim($event)">
-                    <div class="dialog" role="dialog" aria-modal="true" th:attr="aria-labelledby=${'audit-evt-' + e.id + '-title'}" x-trap.noscroll="open">
-                      <div class="dialog__head">
-                        <h3 class="dialog__title" th:id="${'audit-evt-' + e.id + '-title'}">
-                          <span class="row" style="gap: 8px"><span>Audit Event</span><th:block
-                                  th:replace="~{admin/fragments/ui/badge :: badge(${e.eventType}, ${e.tone}, false, true, null)}"></th:block></span>
-                        </h3>
-                      </div>
-                      <div class="dialog__body stack-4">
-                        <div class="stack-1">
-                          <span class="t-over">언제</span>
-                          <span style="font-size: 13px" th:text="${e.whenKst + ' KST'}">2026-10-11 12:00:00 KST</span>
-                          <span class="mono hint" style="margin: 0" th:text="${e.whenIso}">2026-10-11T03:00:00.000Z</span>
-                        </div>
-                        <div class="row" style="gap: 24px; align-items: flex-start">
-                          <div class="stack-1">
-                            <span class="t-over">누가 (actor)</span>
-                            <span class="row" style="gap: 6px; font-size: 13px"><span class="tag" th:text="${e.actorType}">ADMIN</span><span class="mono hint" style="margin: 0" th:text="${e.actorId != null ? e.actorId : '—'}">—</span></span>
-                          </div>
-                          <div class="stack-1">
-                            <span class="t-over">대상 (subject)</span>
-                            <span class="row" style="gap: 6px; font-size: 13px"><span class="tag" th:text="${e.subjectType}">TENANT</span><span class="mono hint" style="margin: 0" th:text="${e.subjectId != null ? e.subjectId : '—'}">—</span></span>
-                          </div>
-                        </div>
-                        <div class="stack-2">
-                          <div class="row"><span class="t-over">payload</span><div class="spacer"></div>
-                            <th:block th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(${e.pretty}, 'JSON 복사', false)}"></th:block></div>
-                          <pre class="mono audit-pre audit-pre--dlg" th:text="${e.pretty}">{}</pre>
-                        </div>
-                      </div>
-                      <div class="dialog__foot"><button type="button" class="btn" x-on:click="close()">닫기</button></div>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </td>
-          </tr>
-        </th:block>
+      <!-- 행 하나뿐인 tbody: 더 보기가 끝에 이어 붙이고, 필터는 행의 hidden 으로 거른다(auditFilter.apply). -->
+      <tbody id="audit-rows">
+        <tr class="table__empty" x-show="shown === 0" th:attr="x-cloak=${total > 0 ? 'true' : null}">
+          <td colspan="6">
+            <div x-show="!filtering"><th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState(null, '이 기간에 감사 이벤트가 없습니다.', null, null, true)}"></th:block></div>
+            <div x-show="filtering" x-cloak><th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState(null, '조건에 맞는 이벤트가 없습니다.', null, null, true)}"></th:block></div>
+          </td>
+        </tr>
+        <th:block th:replace="~{:: lines(${days})}"></th:block>
       </tbody>
     </table>
   </div>
 
   <div class="card__foot">
-    <span class="hint" style="margin: 0" th:text="${countText}">최근 0건</span>
+    <span th:if="${loadError != null}" class="hint" style="margin: 0">—</span>
+    <span th:unless="${loadError != null}" class="hint" style="margin: 0" x-text="countText" th:text="${countText}">최근 0건</span>
     <div class="spacer"></div>
-    <span th:if="${moreCapped}" class="hint" style="margin: 0">더 불러올 수 없습니다 — 기간이나 필터를 좁혀 주세요.</span>
-    <button th:if="${hasMore and !moreCapped}" type="button" class="btn btn--sm" ui:attrs="${moreAttrs}">더 보기</button>
+    <th:block th:replace="~{:: moreSlot(false)}"></th:block>
   </div>
 </section>
 
-<th:block th:fragment="emptyBody">
-  <th:block th:replace="~{admin/fragments/ui/emptyState :: emptyState(null, ${emptyTitle}, null, null, true)}"></th:block>
+<!-- 날짜 머리글 + 이벤트 행(+ 펼침 행). 머리글·행은 data-day(KST 날짜 키)로 묶인다 — 필터가 그 날짜의 행을 모두 숨기면 머리글도 숨는다. -->
+<th:block th:fragment="lines(days)">
+  <th:block th:each="d : ${days}">
+    <tr th:if="${d.head}" class="table__group" th:attr="data-day=${d.key}"><td colspan="6" th:text="${d.label}">오늘</td></tr>
+  <th:block th:each="e : ${d.events}">
+    <tr class="is-clickable" tabindex="0" data-ev th:attr="data-id=${e.id}, data-g=${e.group}, data-fail=${e.fail ? '1' : '0'}, data-day=${e.dayKey}"
+        x-on:click="exp = exp === $el.dataset.id ? null : $el.dataset.id"
+        x-on:keydown.self.enter.prevent="$el.click()" x-on:keydown.self.space.prevent="$el.click()"
+        x-bind:class="{ 'is-expanded': exp === $el.dataset.id }" x-bind:aria-expanded="exp === $el.dataset.id">
+      <td>
+        <div class="stack-1" style="gap: 0">
+          <span style="font-size: 13px" th:text="${e.hms}">12:00:00</span>
+          <span class="hint" style="margin: 0" th:text="${e.ago}">3분 전</span>
+        </div>
+      </td>
+      <td><th:block th:replace="~{admin/fragments/ui/badge :: badge(${e.eventType}, ${e.tone}, false, true, null)}"></th:block></td>
+      <td>
+        <span class="row" style="gap: 6px; flex-wrap: nowrap">
+          <span class="tag" th:text="${e.actorType}">ADMIN</span>
+          <span th:if="${e.actorTail != null}" class="mono hint" style="margin: 0" th:text="${e.actorTail}">…admin@x.com</span>
+        </span>
+      </td>
+      <td>
+        <span class="row" style="gap: 6px; flex-wrap: nowrap">
+          <span class="tag" th:text="${e.subjectType}">TENANT</span>
+          <span th:if="${e.subjectTail != null}" class="mono hint" style="margin: 0" th:text="${e.subjectTail}">…t1</span>
+        </span>
+      </td>
+      <td><span class="mono hint truncate" style="display: inline-block; max-width: 280px; margin: 0; vertical-align: middle" th:text="${e.detail}">{}</span></td>
+      <td>
+        <span style="color: var(--mute); display: inline-flex">
+          <span x-show="exp !== $el.closest('tr').dataset.id"><th:block th:replace="~{admin/fragments/icons :: chevronDown(14)}"></th:block></span>
+          <span x-show="exp === $el.closest('tr').dataset.id" x-cloak><th:block th:replace="~{admin/fragments/icons :: chevronUp(14)}"></th:block></span>
+        </span>
+      </td>
+    </tr>
+    <tr class="table__expanded" th:attr="data-id=${e.id}" x-show="exp === $el.dataset.id" x-cloak>
+      <td colspan="6">
+        <div class="stack-3" style="padding-left: 140px">
+          <div th:each="df : ${e.diff}" class="row" style="gap: 8px; font-size: 12px; flex-wrap: nowrap">
+            <span class="mono truncate" style="width: 96px; color: var(--mute)" th:text="${df.field}">field</span>
+            <del class="tag" style="background: var(--bad-soft); color: var(--bad-ink)" th:text="${df.from}">from</del>
+            <span aria-hidden="true">→</span>
+            <ins class="tag" style="background: var(--ok-soft); color: var(--ok-ink); text-decoration: none" th:text="${df.to}">to</ins>
+          </div>
+          <div class="row" style="gap: 8px">
+            <span class="t-over">payload</span>
+            <div class="spacer"></div>
+            <th:block th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(${e.pretty}, 'JSON 복사', false)}"></th:block>
+            <button type="button" class="btn btn--sm" th:attr="data-dlg=${'audit-evt-' + e.id}"
+                    x-on:click="$dispatch('dialog:open', { id: $el.dataset.dlg })">상세 다이얼로그</button>
+          </div>
+          <pre class="mono audit-pre" th:text="${e.pretty}">{}</pre>
+        </div>
+        <!-- Audit Event 다이얼로그(V2: 언제 · 누가 · 대상 · payload). 열릴 때 안쪽을 그린다(x-if). -->
+        <div ui:xdata="${@fmt.xdata('dialog', 'id', 'audit-evt-' + e.id)}"
+             x-on:dialog:open.window="onOpen($event)" x-on:dialog:close.window="onClose($event)" x-on:keydown.escape.window="onEscape()">
+          <template x-if="open">
+            <div class="scrim" x-on:mousedown="onScrim($event)">
+              <div class="dialog" role="dialog" aria-modal="true" th:attr="aria-labelledby=${'audit-evt-' + e.id + '-title'}" x-trap.noscroll="open">
+                <div class="dialog__head">
+                  <h3 class="dialog__title" th:id="${'audit-evt-' + e.id + '-title'}">
+                    <span class="row" style="gap: 8px"><span>Audit Event</span><th:block
+                            th:replace="~{admin/fragments/ui/badge :: badge(${e.eventType}, ${e.tone}, false, true, null)}"></th:block></span>
+                  </h3>
+                </div>
+                <div class="dialog__body stack-4">
+                  <div class="stack-1">
+                    <span class="t-over">언제</span>
+                    <span style="font-size: 13px" th:text="${e.whenKst + ' KST'}">2026-10-11 12:00:00 KST</span>
+                    <span class="mono hint" style="margin: 0" th:text="${e.whenIso}">2026-10-11T03:00:00.000Z</span>
+                  </div>
+                  <div class="row" style="gap: 24px; align-items: flex-start">
+                    <div class="stack-1">
+                      <span class="t-over">누가 (actor)</span>
+                      <span class="row" style="gap: 6px; font-size: 13px"><span class="tag" th:text="${e.actorType}">ADMIN</span><span class="mono hint" style="margin: 0" th:text="${e.actorId != null ? e.actorId : '—'}">—</span></span>
+                    </div>
+                    <div class="stack-1">
+                      <span class="t-over">대상 (subject)</span>
+                      <span class="row" style="gap: 6px; font-size: 13px"><span class="tag" th:text="${e.subjectType}">TENANT</span><span class="mono hint" style="margin: 0" th:text="${e.subjectId != null ? e.subjectId : '—'}">—</span></span>
+                    </div>
+                  </div>
+                  <div class="stack-2">
+                    <div class="row"><span class="t-over">payload</span><div class="spacer"></div>
+                      <th:block th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(${e.pretty}, 'JSON 복사', false)}"></th:block></div>
+                    <pre class="mono audit-pre audit-pre--dlg" th:text="${e.pretty}">{}</pre>
+                  </div>
+                </div>
+                <div class="dialog__foot"><button type="button" class="btn" x-on:click="close()">닫기</button></div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </td>
+    </tr>
+  </th:block>
+  </th:block>
+</th:block>
+
+<!-- 더 보기 버튼 자리. 같은 구간의 다음 쪽(숨은 상태 #audit-state)을 요청하고 응답의 OOB 만 적용한다(hx-swap=none). -->
+<div th:fragment="moreSlot(oob)" id="audit-more" style="display: contents" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+  <button th:if="${hasMore}" type="button" class="btn btn--sm" th:attr="hx-get=${moreUrl}" hx-include="#audit-state" hx-swap="none" hx-disabled-elt="this">더 보기</button>
+</div>
 </th:block>
 </body>
 </html>

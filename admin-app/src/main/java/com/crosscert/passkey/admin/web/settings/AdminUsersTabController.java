@@ -151,11 +151,12 @@ public class AdminUsersTabController {
     }
 
     /**
-     * 활성화. 행의 "활성화" 버튼은 확인 없이 바로 호출한다(원본 handleActivate — 호출 전에 목록을 읽지 않는다; 토스트의 이메일은 다시 읽은 목록에서 찾는다).
+     * 활성화. 행의 "활성화" 버튼은 확인 없이 바로 호출한다(원본 handleActivate — 호출 전에 목록을 읽지 않는다; 토스트의 이메일은 버튼이 보낸 그 행의 이메일).
      * {@code undo=1} 은 정지 토스트의 "되돌리기"(원본 undoSuspend): 지금 정지 상태인지 확인하고(아니면 REST 미호출 + 경고), 원본의 성공·실패 문구를 쓴다.
      */
     @PostMapping(USER_BASE + "{id}/activate")
     public String activate(@PathVariable UUID id, @RequestParam(name = "undo", defaultValue = "") String undo,
+                           @RequestParam(name = "email", defaultValue = "") String rowEmail,
                            Authentication auth, HttpServletRequest req, HttpServletResponse res, Model model) {
         CurrentAdmin me = SettingsSupport.platform(model);
         boolean isUndo = "1".equals(undo);
@@ -181,7 +182,9 @@ public class AdminUsersTabController {
             return usersResult(model, res, me);
         }
         boolean ok = loadUsers(model, me, loadTenantNames());
-        String email = known;
+        // 토스트의 이메일(원본 u.email): 되돌리기는 사전 확인에서 읽은 행, 행의 "활성화"는 버튼이 함께 보낸 그 행의 이메일(활성화 전에 화면이 알던 값 —
+        // 다시 읽기에 실패해도 남는다). 둘 다 없으면 다시 읽은 목록에서 찾는다. 토스트 문구에만 쓰고 th:text/x-text 로만 그린다.
+        String email = known.isEmpty() ? rowEmail.trim() : known;
         if (email.isEmpty() && ok) {
             @SuppressWarnings("unchecked") List<OpRow> ops = (List<OpRow>) model.getAttribute("ops");
             email = ops.stream().filter(o -> id.toString().equals(o.id())).map(OpRow::email).findFirst().orElse("");

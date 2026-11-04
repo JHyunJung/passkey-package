@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>GET /admin/api/nope(인증): 404 application/json {"success":false,"code":"C003","message":"Entity not found",…}</li>
  *   <li>GET /admin/api/nope(미인증): 401 {"error":"unauthorized"}</li>
  *   <li>/admin/api/** 에서 난 ERROR 디스패치: 403(denyAll → 접근 거부 처리기)</li>
- *   <li>GET /error 직접 요청: 403, GET /admin/nope(규칙 밖 경로): 403</li>
+ *   <li>GET /error 직접 요청: 403, GET /admin/nope(규칙 밖 경로): 403 → (최종 검토) 인증된 GET 은 404 화면, 미인증은 로그인, POST 는 그대로 403</li>
  *   <li>/admin 밖: GET /favicon.ico(없음) 404 JSON C003, /admin 밖에서 난 ERROR 디스패치 403</li>
  * </ul>
  * 바뀐 값(화면): 인증된 GET /admin/tenants/a/b/c 404 JSON → 404 admin/error, 화면 ERROR 디스패치 403 → 원래 상태(404/500),
@@ -84,10 +84,42 @@ class ScreenErrorTest {
     }
 
     @Test
-    void pathOutsideRulesStillDenied() throws Exception {
-        // 보안 규칙(anyRequest().denyAll())은 바꾸지 않는다.
-        mvc.perform(get("/admin/nope").with(authentication(PageSecurityTest.operator())))
+    void unknownAdminGetIs404PageForPlatformAndRp() throws Exception {
+        // 규칙 목록에 없는 /admin 아래 GET 은 인증만 요구한다(GET /admin/** authenticated) — 로그인한 운영자는 403 "권한이 없습니다" 대신 404 화면.
+        for (var a : java.util.List.of(PageSecurityTest.operator(), rpAdmin())) {
+            mvc.perform(get("/admin/nonexistent").with(authentication(a)))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
+                .andExpect(content().string(containsString("찾을 수 없습니다")))
+                .andExpect(content().string(not(containsString("권한이 없습니다"))));
+        }
+        mvc.perform(get("/admin/nonexistent").header("HX-Request", "true").with(authentication(rpAdmin())))
+            .andExpect(status().isNotFound())
+            .andExpect(content().string(emptyString()));
+    }
+
+    @Test
+    void unknownAdminGetAnonymousRedirectsToLogin() throws Exception {
+        mvc.perform(get("/admin/nonexistent"))
+            .andExpect(status().isFound())
+            .andExpect(redirectedUrl("/admin/login"));
+    }
+
+    @Test
+    void pathOutsideRulesNonGetStillDenied() throws Exception {
+        // GET 이 아닌 메서드와 /admin 밖은 그대로 anyRequest().denyAll().
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/admin/nope")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                .with(authentication(PageSecurityTest.operator())))
             .andExpect(status().isForbidden());
+        mvc.perform(get("/nope").with(authentication(PageSecurityTest.operator())))
+            .andExpect(status().isForbidden());
+    }
+
+    private static org.springframework.security.core.Authentication rpAdmin() {
+        var p = new com.crosscert.passkey.admin.auth.AdminUserDetails(java.util.UUID.randomUUID(), "rp@example.com", "x",
+                "RP_ADMIN", java.util.Set.of(java.util.UUID.randomUUID()), true, null, java.time.Clock.systemUTC());
+        return new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(p, "x", p.getAuthorities());
     }
 
     // ── /admin 밖: core 동작 그대로 ──

@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -47,6 +48,12 @@ public class WebExceptionAdvice {
         return respond(e, HttpStatus.FORBIDDEN.value(), req, res);
     }
 
+    /** 경로·요청 값의 타입 변환 실패(예: UUID 자리에 다른 문자열) — 클라이언트 오류 400. 원문(변환 예외 메시지)은 싣지 않는다. */
+    @ExceptionHandler(TypeMismatchException.class)
+    public ModelAndView typeMismatch(TypeMismatchException e, HttpServletRequest req, HttpServletResponse res) {
+        return respond(e, HttpStatus.BAD_REQUEST.value(), req, res);
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ModelAndView responseStatus(ResponseStatusException e, HttpServletRequest req, HttpServletResponse res) {
         return respond(e, e.getStatusCode().value(), req, res);
@@ -58,17 +65,6 @@ public class WebExceptionAdvice {
         int status = (e instanceof ErrorResponse er) ? er.getStatusCode().value()
                 : HttpStatus.INTERNAL_SERVER_ERROR.value();
         return respond(e, status, req, res);
-    }
-
-    /** 오류 원문(rawErrorDetail): {@code HTTP 상태 · [코드] 서버 메시지}. 예기치 못한 서버 오류는 내부 메시지를 싣지 않는다. */
-    private static String rawDetail(Exception e, int status, ErrorMessages.Info info) {
-        // 내부 예외(5xx)와 JDK 가 만든 IllegalArgumentException(예: Invalid UUID string)의 원문은 싣지 않는다.
-        if ((status >= 500 && !(e instanceof BusinessException)) || e instanceof IllegalArgumentException) return "HTTP " + status;
-        StringBuilder sb = new StringBuilder("HTTP ").append(status);
-        if (info.code() != null) sb.append(" · [").append(info.code()).append(']');
-        String msg = e.getMessage();
-        if (msg != null && !msg.isEmpty()) sb.append(' ').append(e instanceof ResponseStatusException r && r.getReason() != null ? r.getReason() : msg);
-        return sb.toString();
     }
 
     private ModelAndView respond(Exception e, int status, HttpServletRequest req, HttpServletResponse res) {
@@ -83,8 +79,8 @@ public class WebExceptionAdvice {
             // 규칙 A: 실제 오류 상태를 유지한다. htmx 는 4xx/5xx 를 스왑하지 않고 afterRequest(successful=false)를 올리며,
             // HX-Trigger 헤더는 오류 응답에서도 처리된다(htmx 2.0.4 handleAjaxResponse).
             // 확인 대화상자(X-Confirm)의 요청은 토스트 없이 대화상자 안 인라인 오류로만 알린다(confirmError).
-            if (Toasts.isConfirm(req)) Toasts.confirmError(res, info.toastMessage(), rawDetail(e, status, info), MDC.get("traceId"));
-            else Toasts.error(res, info.toastMessage(), rawDetail(e, status, info), MDC.get("traceId"));
+            if (Toasts.isConfirm(req)) Toasts.confirmError(res, info.toastMessage(), ErrorMessages.rawDetail(e, status, info), MDC.get("traceId"));
+            else Toasts.error(res, info.toastMessage(), ErrorMessages.rawDetail(e, status, info), MDC.get("traceId"));
             res.setStatus(status);
             return null; // null = 응답 처리 완료(본문 없음)
         }

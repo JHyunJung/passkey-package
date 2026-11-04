@@ -646,6 +646,19 @@ class AdminUsersTabControllerTest {
     }
 
     @Test
+    @DisplayName("일반 활성화 토스트의 이메일은 행 버튼이 함께 보낸 그 행의 이메일(원본 u.email) — 재조회가 실패해도 남는다")
+    void activateToastUsesRowEmailWhenReloadFails() throws Exception {
+        Element btn = row(html(send(get(BASE + "/tab/admins"), platform(), false)), "gone@x.com").selectFirst("button");
+        assertThat(btn.attr("name")).isEqualTo("email");
+        assertThat(btn.attr("value")).isEqualTo("gone@x.com");
+        when(users.list()).thenThrow(new IllegalStateException("boom-internal"));
+        MvcResult r = send(post(BASE + "/admins/" + SUSPENDED + "/activate").param("email", "gone@x.com"), platform(), false);
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(trigger(r)).contains("운영자를 다시 활성화했습니다.").contains("gone@x.com");
+        verify(users).activate(eq(SUSPENDED), any());
+    }
+
+    @Test
     @DisplayName("클라이언트 검증은 htmx 요청 전에 취소한다(x-on:submit 이 아니라 htmx:before-request)")
     void approveFormCancelsInBeforeRequest() throws Exception {
         Element form = html(send(get(BASE + "/signups/" + REQ1 + "/approve"), platform(), false)).selectFirst("form#au-approve-form");

@@ -13,6 +13,7 @@ import com.crosscert.passkey.admin.web.format.ErrorMessages;
 import com.crosscert.passkey.admin.web.format.KstFormat;
 import com.crosscert.passkey.admin.web.shell.Crumbs;
 import com.crosscert.passkey.admin.web.support.CurrentAdmin;
+import com.crosscert.passkey.admin.web.support.ExportLimit;
 import com.crosscert.passkey.admin.web.support.Toasts;
 import com.crosscert.passkey.admin.web.tenant.AuditHelpers;
 import com.crosscert.passkey.core.api.BusinessException;
@@ -83,8 +84,6 @@ public class ActivityPageController {
     static final int POLL_MS = 5000;
     /** 서버 피드 한 쪽 크기(ActivityService.FEED_PAGE). CSV 가 불러온 행까지 이어 읽을 때 쓴다. */
     static final int FEED_PAGE = 50;
-    /** CSV 가 읽는 최대 쪽 수(50건 × 40). */
-    static final int EXPORT_MAX_PAGES = 40;
 
     private static final Set<String> FAILURE_TYPES = Set.of("SIGNATURE_COUNTER_REGRESSION", "ATTESTATION_TRUST_FAILED", "ADMIN_LOGIN_FAILED");
     private static final java.util.regex.Pattern FAILURE_NAME = java.util.regex.Pattern.compile("_(FAILED|FAIL|REGRESSION)$");
@@ -313,7 +312,10 @@ public class ActivityPageController {
 
     /**
      * CSV(원본 downloadCsv: activity-{KST 오늘}.csv, 열 timestamp·tenant·type·category·actor·subject). 원본은 화면에 읽어 온 행 전부(액션 검색은
-     * 거르지 않음)를 내보낸다 — 서버는 최신 쪽부터 {@code before}/{@code beforeId} 커서의 행까지 이어 읽는다(커서가 없으면 최신 한 쪽). 일부만 읽히면 실패(부분 파일 금지).
+     * 거르지 않음)를 내보낸다 — 서버는 최신 쪽부터 경계 행({@code beforeId} = 화면의 가장 오래된 행)이 나올 때까지 이어 읽는다(커서가 없으면 최신 한 쪽).
+     * 화면의 더 보기는 쪽 수 상한이 없으므로 내보내기도 경계까지 읽되 {@link ExportLimit#MAX_PAGES} 쪽 안에 닿지 못하면 422(이유 문구).
+     * 그 사이 위에 새 행이 생겨도 경계는 id 로 찾으므로 영향이 없다(새 행은 폴링이 화면 맨 위에도 붙인다).
+     * 경계 행이 사라졌거나(끝까지 읽음) 읽기에 실패하면 일부만 내보내지 않고 오류.
      */
     @GetMapping(EXPORT_PATH)
     public ResponseEntity<byte[]> export(@RequestParam(name = "category", defaultValue = "") String category,
@@ -326,26 +328,24 @@ public class ActivityPageController {
         List<ActivityView.Event> all = new ArrayList<>();
         OffsetDateTime cursor = null;
         UUID cursorId = null;
-        for (int p = 0; p < EXPORT_MAX_PAGES; p++) {
+        for (int p = 0; ; p++) {
+            if (p >= ExportLimit.MAX_PAGES) return ExportLimit.tooLarge(); // 경계에 닿기 전에 상한 — 조용히 일부만 내보내지 않는다
             List<ActivityView.Event> page = feedOf(activity.activity(null, f.categoryParam(), cursor, cursorId, f.tenantId()).data());
+            int k = until == null ? -1 : indexOfId(page, until.toString());
+            if (k >= 0) {
+                all.addAll(page.subList(0, k + 1));
+                break;
+            }
             all.addAll(page);
-            if (until == null || page.size() < FEED_PAGE) break;
-            if (page.stream().anyMatch(e -> until.equals(e.id()))) break;
+            if (until == null) break; // 커서가 없으면 최신 한 쪽
+            // 경계 행을 찾지 못한 채 끝에 닿았다(행이 사라짐) — 실패
+            if (page.size() < FEED_PAGE) throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
             ActivityView.Event last = page.get(page.size() - 1);
             cursor = last.createdAt();
             cursorId = last.id();
         }
-        int end = all.size();
-        if (until != null) {
-            end = -1;
-            for (int i = 0; i < all.size(); i++) {
-                if (until.equals(all.get(i).id())) { end = i + 1; break; }
-            }
-            // 경계 행에 닿지 못했다(쪽 상한 초과·행이 사라짐) — 조용히 일부만 내보내지 않고 실패시킨다.
-            if (end < 0) throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
         List<List<String>> body = new ArrayList<>();
-        for (ActivityView.Event e : all.subList(0, end)) {
+        for (ActivityView.Event e : all) {
             String tenant = e.tenantSlug() != null ? e.tenantSlug() : (e.tenantId() != null ? e.tenantId().toString() : "");
             body.add(List.of(rawTs(e), tenant, nz(e.action()), nz(e.category()), nz(e.actorEmail()), e.targetId() != null ? e.targetId() : "—"));
         }

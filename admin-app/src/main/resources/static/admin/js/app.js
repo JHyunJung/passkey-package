@@ -265,6 +265,8 @@
   // describeError.ts 와 같은 문구.
   function describeFetchError(e) {
     const st = e && e.httpStatus;
+    // 로그인 화면으로 리다이렉트된 응답(세션 만료) — htmx 요청은 서버가 401 + HX-Redirect 로 로그인 화면으로 보낸다.
+    if (st === 401) return { title: '세션이 만료되었습니다', detail: '다시 로그인해 주세요. 로그인 화면으로 이동합니다.' };
     if (st >= 500) return { title: '서버가 잠시 응답하지 않습니다', detail: '저장된 데이터는 그대로 있습니다. 잠시 후 다시 시도하세요.' };
     if (st === 403) return { title: '권한이 없습니다', detail: '이 작업을 할 권한이 없습니다. 운영자에게 문의하세요.' };
     if (st === 429) return { title: '요청이 너무 많습니다', detail: '잠시 후 다시 시도하세요.' };
@@ -273,6 +275,15 @@
     if (e && e.name === 'AbortError') return { title: '서버가 잠시 응답하지 않습니다', detail: '응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요.' };
     if (e instanceof TypeError) return { title: '네트워크에 연결할 수 없습니다', detail: '연결 상태를 확인한 뒤 다시 시도하세요.' };
     return { title: '알 수 없는 오류가 발생했습니다', detail: e instanceof Error ? e.message : String(e) };
+  }
+  // fetch 로 부른 요청이 세션 만료(로그인 화면으로 리다이렉트, httpStatus 401)면 알리고 로그인 화면으로 보낸다.
+  // htmx 요청의 401 + HX-Redirect(/admin/login) 과 같은 결과다. 토스트를 읽을 틈을 잠깐 둔다. 처리했으면 true.
+  function handleSessionExpired(e) {
+    if (!e || e.httpStatus !== 401) return false;
+    const d = describeFetchError(e);
+    window.dispatchEvent(new CustomEvent('toast', { detail: { kind: 'error', title: d.title, message: d.detail } }));
+    setTimeout(function () { window.location.assign('/admin/login'); }, 1200);
+    return true;
   }
 
   // ── CSV 다운로드 공통 처리(ruling L) ────────────────────
@@ -305,6 +316,10 @@
       if (res.redirected || !res.ok) {
         const err = new Error('HTTP ' + res.status);
         err.httpStatus = res.redirected ? 401 : res.status;
+        // 서버가 이유를 JSON message 로 준 거절(예: 내보내기 상한 422)은 그 문구를 토스트에 싣는다.
+        if (!res.redirected && res.status < 500) {
+          try { const j = await res.json(); err.serverMessage = (j && typeof j.message === 'string') ? j.message : ''; } catch (x) { /* 본문 없음 */ }
+        }
         throw err;
       }
       const blob = await res.blob();
@@ -315,10 +330,11 @@
       document.body.appendChild(t);
       t.click();
       t.remove();
-      URL.revokeObjectURL(url);
+      // Safari(WebKit)는 click 직후 URL 을 해제하면 저장이 시작되기 전에 끊길 수 있어 조금 뒤에 해제한다.
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
       state = 'done';
     } catch (e) {
-      csvToast(e, a);
+      if (!handleSessionExpired(e)) csvToast(e, a);
     } finally {
       if (timer) clearTimeout(timer);
       a.removeAttribute('aria-busy');
@@ -334,8 +350,113 @@
     void csvDownload(a);
   });
 
+  // ── Tenant 목록: 상태 필터의 숨은 값(#tenants-state) 동기화 ──
+  // 검색 입력은 250ms 지연 뒤 #tenants-state 의 status 를 싣는다. 그 사이 상태를 바꾸는 요청(상태 세그먼트·활성 KPI·칩 제거·모두 지우기)이
+  // 나가면 응답 전까지 숨은 값이 옛 상태라, 늦게 나간 검색 요청이 새 상태 요청을 중단(hx-sync replace)하고 옛 상태로 되돌린다.
+  // 그래서 상태를 주소에 실은 목록 요청이 출발하는 순간 숨은 값을 그 상태로 맞춘다(검색 입력 자신의 요청은 주소에 status 가 없어 건드리지 않는다).
+  function statusOfListRequest(path) {
+    const p = String(path || '');
+    if (p.indexOf('/admin/_/tenants/list') !== 0) return null;
+    try { return new URL(p, 'http://x').searchParams.get('status'); } catch (e) { return null; }
+  }
+  document.addEventListener('htmx:configRequest', function (e) {
+    const st = statusOfListRequest(e.detail && e.detail.path);
+    if (st === null) return;
+    const input = document.querySelector('#tenants-state input[name="status"]');
+    if (input) input.value = st;
+  });
+
+  // 감사 로그 탭(AuditTab.tsx filtered): 이벤트 종류·실패만 필터로 표의 행을 거른다. rows 는 tbody 의 tr 들.
+  // 이벤트 행(data-ev)은 data-g(그룹 id)·data-fail('1') 로 판정, 펼침 행(table__expanded)은 같은 data-id 의 이벤트 행을 따르고,
+  // 날짜 머리글(table__group)은 같은 data-day 에 보이는 이벤트 행이 있을 때만 보인다. 반환: 읽어 온 행 수·보이는 행 수.
+  function auditApply(rows, groups, failures) {
+    let total = 0;
+    let shown = 0;
+    const days = new Set();
+    const ids = new Set();
+    rows.forEach(function (tr) {
+      const d = tr.dataset || {};
+      if (d.ev === undefined) return;
+      total++;
+      const ok = (groups.length === 0 || groups.indexOf(d.g) >= 0) && (!failures || d.fail === '1');
+      tr.hidden = !ok;
+      if (ok) { shown++; days.add(d.day); ids.add(d.id); }
+    });
+    rows.forEach(function (tr) {
+      const d = tr.dataset || {};
+      if (d.ev !== undefined) return;
+      if (tr.classList.contains('table__group')) tr.hidden = !days.has(d.day);
+      else if (tr.classList.contains('table__expanded')) tr.hidden = !ids.has(d.id);
+    });
+    return { total: total, shown: shown };
+  }
+  const fmtNum = function (n) { return Number(n).toLocaleString('ko-KR'); };
+
   // ── Alpine 컴포넌트 ───────────────────────────────────
   document.addEventListener('alpine:init', function () {
+    // 감사 로그 탭의 필터(#audit-root). 상태는 카드 밖이라 기간 전환·다시 시도로 카드가 바뀌어도 남는다(원본 groups/onlyFailures 와 같다).
+    // apply() 는 카드 교체·더 보기 응답(htmx after-swap/settle) 뒤에도 불려 새 행을 같은 필터로 거른다.
+    // pages = 불러온 쪽 수(#audit-page, 더 보기 응답이 OOB 로 올린다) — CSV 가 같은 구간의 그만큼을 다시 읽는다.
+    Alpine.data('auditFilter', function () {
+      return {
+        groups: [],
+        failures: false,
+        total: 0,
+        shown: 0,
+        pages: 1,
+        init() { this.apply(); },
+        get filtering() { return this.groups.length > 0 || this.failures; },
+        has(g) { return this.groups.indexOf(g) >= 0; },
+        toggle(g) {
+          this.groups = this.has(g) ? this.groups.filter(function (x) { return x !== g; }) : this.groups.concat([g]);
+          this.apply();
+        },
+        setFailures(v) { this.failures = !!v; this.apply(); },
+        clear() { this.groups = []; this.failures = false; this.apply(); },
+        apply() {
+          const body = this.$root.querySelector('#audit-rows');
+          const page = this.$root.querySelector('#audit-page');
+          this.pages = Math.max(1, parseInt(page ? page.value : '1', 10) || 1);
+          const r = body ? auditApply(Array.prototype.slice.call(body.querySelectorAll('tr')), this.groups, this.failures) : { total: 0, shown: 0 };
+          this.total = r.total;
+          this.shown = r.shown;
+        },
+        get countText() {
+          return this.filtering ? '이 페이지 ' + fmtNum(this.total) + '건 중 ' + fmtNum(this.shown) + '건' : '최근 ' + fmtNum(this.total) + '건';
+        },
+        get csvLabel() { return 'CSV 내보내기 (현재 페이지 ' + fmtNum(this.shown) + '건)'; },
+        csvHref(base) {
+          let u = String(base || '') + '&pages=' + this.pages;
+          if (this.failures) u += '&failures=true';
+          this.groups.forEach(function (g) { u += '&g=' + encodeURIComponent(g); });
+          return u;
+        },
+      };
+    });
+
+    // 퍼널 탭 루트(#funnel-root). 기간 전환·다시 시도 요청 중에는 pending(스켈레톤, 내보내기 막음).
+    // 요청이 교체 없이 끝나면(네트워크 오류·시간 초과·서버 오류 응답 — 토스트로 알림) 세그먼트 선택을 화면에 보이는 기간(data-win)으로 되돌린다
+    // — CSV 링크·숫자는 그 기간의 것이다. hx-sync replace 로 중단된 앞 요청도 실패로 올라오므로, 바로 이어진 새 요청이 있으면 되돌리지 않는다.
+    Alpine.data('funnelTab', function () {
+      return {
+        n: 0,
+        get pending() { return this.n > 0; },
+        begin() { this.n++; },
+        end(e) {
+          this.n = Math.max(0, this.n - 1);
+          if (e && e.detail && e.detail.successful) return;
+          setTimeout(() => { if (this.n === 0) this.restore(); }, 0);
+        },
+        restore() {
+          const seg = this.$root.querySelector('.seg[role="group"]');
+          const win = this.$root.dataset.win;
+          if (!seg || !win || !window.Alpine) return;
+          const d = Alpine.$data(seg);
+          if (d && d.value !== win) d.value = win;
+        },
+      };
+    });
+
     // 사이드바 "위변조 N" 배지가 읽는 값. chainCard 가 응답마다 갱신하고, 이동으로 사이드바가 다시 그려져도 남는다.
     Alpine.store('chain', { tampered: 0 });
 
@@ -611,6 +732,7 @@
           } catch (err) {
             if (this.gone || this.loggedOut) return;
             if (this.expired) { this.expireLogout(); return; }
+            if (handleSessionExpired(err)) return; // 이미 만료된 세션 — 로그인 화면으로
             this.extendError = describeFetchError(err);
           } finally {
             if (!this.gone) {

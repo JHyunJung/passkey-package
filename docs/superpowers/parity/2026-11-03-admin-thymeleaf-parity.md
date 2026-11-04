@@ -584,7 +584,7 @@ R8: 결과는 TSX·테스트 소스와 JUnit 렌더 결과(`web/tenant/TenantDet
 | 카테고리·tenant 를 바꿔도 컨트롤이 다시 마운트되지 않아 포커스가 남는다 | AP 27, 28 | source ✅ (세그먼트·선택 상자·검색 입력은 응답이 다시 그리지 않음 — `reset` 요청만 OOB) | APC `rowsFragment`,`rowsResetControls` | 미확인 |
 | 적용된 필터 칩 + 모두 지우기 + 검색어 칩 | (소스) | source ✅ | APC `rowsResetControls`,`rowsQueryFilters`,`controlsCarryOtherFilters` | 미확인 |
 | 더 보기: (시각, id) 튜플 커서로 이전 쪽을 아래에 붙임, 실패는 토스트 | (소스) | source ✅ | APC `loadMore`,`loadMoreNoopCases`,`loadMoreFailureToasts`,`moreButtonAttributes` | 미확인 |
-| CSV(activity-KST오늘.csv, 6열, 액션 검색 무시), 읽은 행이 없으면 경고 토스트 | (소스) | source ✅ / 차이: 원본은 화면에 읽은 행 전부 — 서버가 최신 쪽부터 가장 오래된 행의 커서까지 이어 읽는다(부분 파일 금지, 최대 40쪽) | APC `csvExport`,`csvFailure`,`csvLinkAttributes` + 스텁 | 미확인 |
+| CSV(activity-KST오늘.csv, 6열, 액션 검색 무시), 읽은 행이 없으면 경고 토스트 | (소스) | source ✅ / 차이: 원본은 화면에 읽은 행 전부 — 서버가 최신 쪽부터 가장 오래된 행의 커서까지 이어 읽는다(부분 파일 금지, 경계까지 — 400쪽 초과는 422 + 이유 문구) | APC `csvExport`,`csvFailure`,`csvLinkAttributes`,`csvExportBeyondFortyPages`,`csvExportNewRowsAtTop`,`csvExportSanityLimit` + 스텁 | 미확인 |
 | 활발한 Tenant 클릭 = tenant 필터, 폴링은 목록이 바뀔 때만 이 카드를 다시 그림(포커스 보존) | (소스) | source ✅ (원본은 React 가 포커스 유지 → 서명 비교로 대체) | APC `tenantsCardOnlyWhenChanged`,`filtersFromUrl` | 미확인 |
 | PLATFORM 만: RP_ADMIN 은 홈, 조각·상세·CSV 는 403 | (App.tsx RequirePlatform) | source ✅ | APC `rpAdminRedirectedHome`,`fragmentsRejectRpAdmin`,`unauthenticated` | — |
 | 사용자 값(행위자·tenant 이름·diff 값)은 HTML 로 해석되지 않음 | 신규 | — | APC `userValuesAreEscaped`,`detailEscapes` | — |
@@ -899,12 +899,12 @@ RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403
 | 체크 항목 | 원본 | 결과 | JUnit | 브라우저 |
 |---|---|---|---|---|
 | 기간 세그먼트를 서버 from/to 로 보냄(24시간 → 7일) | AT 1 | source ✅ | TC `windowSentAsRange`,`windowSegmentUrls` | 미확인 |
-| 실패만: result 우선, 없으면 실패 목록·이름 규칙 | AT 2 | source ✅ / 차이: REST 에 result 가 없어 이름 규칙만 실제로 쓰임(코드는 result 도 지원) | TC `failuresOnly`, AHT `isFailure` | 미확인 |
-| 그룹 칩(원시 코드는 title)·필터 지우기·건수 | AT 3 | source ✅ | TC `groupChips`,`countText` | 미확인 |
+| 실패만: result 우선, 없으면 실패 목록·이름 규칙 | AT 2 | source ✅ / 차이: REST 에 result 가 없어 이름 규칙만 실제로 쓰임(코드는 result 도 지원). 판정은 서버(data-fail), 거르기는 클라이언트(auditFilter, 원본처럼 읽어 온 행 안에서) | TC `failuresOnly`,`rowFilterData`, AHT `isFailure` + 스텁 | 미확인 |
+| 그룹 칩(원시 코드는 title)·필터 지우기·건수 | AT 3 | source ✅ / JS: 칩 토글·건수·CSV 라벨은 auditFilter(더 보기로 붙인 행 포함) | TC `groupChips`,`countText` + 스텁 | 미확인 |
 | 어느 그룹에도 없는 이벤트는 "기타" | AT 4 | source ✅ | TC `groupChips`, AHT `eventGroup` | 미확인 |
 | 날짜 그룹 행 + 행 펼침(diff·payload·JSON 복사·상세 다이얼로그) | AT 5 | source ✅ / 차이: JSON 복사는 토스트 대신 버튼의 "복사됨" 표시(copyBtn 공용), 다이얼로그는 행마다 x-if 로 준비 | TC `rendersTable`,`expandedRow`,`eventDialog` | 미확인 |
 | 건수: total 없으면 "최근 N건" | AT 6 | source ✅ / 차이: REST 가 total 을 주지 않아 "기간 · 총 건수" 분기는 도달하지 않음 | TC `countText` | — |
-| 더 보기: 50건이면 같은 기간으로 다음 페이지를 붙임 | AT 7 | source ✅ / 차이: stateless 서버라 1..N 쪽을 같은 구간(to)으로 다시 읽음 | TC `loadMoreSameRange` | 미확인 |
+| 더 보기: 50건이면 같은 기간으로 다음 페이지를 붙임 | AT 7 | source ✅ (최종 검토) 같은 구간(win·to)의 다음 한 쪽만 읽어 표 끝에 OOB 로 붙임, 쪽 상한 없음 | TC `loadMoreButtonCarriesState`,`loadMoreFetchesOnlyNextPage`,`loadMoreHasNoPageCap`,`loadMoreFailure` | 미확인 |
 | 체인 검증 카드 PLATFORM 전용, 검증 실행 → 결과 배지 | AT 8 | source ✅ | TC `chainCardPlatformOnly`,`verifyIntact`,`verifyTampered` | 미확인 |
 | 더 보기 진행 중 기간 변경 → 이전 응답 폐기 | AT 9 | source ✅ / JS 아님: 카드의 `hx-sync="this:replace"` 가 앞 요청을 취소 | TC `pollingKeepsFilters`(hx-sync 속성) | 미확인 |
 | 체인 검증 중: 퍼센트 없이 "검증 중…" + 경과, 닫아도 계속, 연타 한 번 | AT 10 | source ✅ / JS: 래퍼 hx-sync `this:drop`, verify-run 이벤트가 요청 요소(래퍼)에서 계속 | TC `chainCardPlatformOnly`(마크업·hx 속성) | 미확인 |
@@ -950,8 +950,8 @@ RP_ADMIN 은 세 탭의 모든 엔드포인트(조각·변경·검증)에서 403
 ### Task 13 Fix round 1 메모
 
 - 더 보기 중 **첫 쪽(page 0) 조회가 실패하면** 카드 전체가 LoadError 로 바뀐다(TSX 는 기존 행을 유지하고 토스트) — stateless 재조회의 결과. 이후 쪽 실패는 읽은 행 유지 + 토스트.
-- 원본에는 쪽 상한이 없지만 stateless 재조회 비용 때문에 40쪽(2,000건)에서 멈추고 "더 불러올 수 없습니다 — 기간이나 필터를 좁혀 주세요." 를 보인다(TC `loadMoreCapShown`). CSV 도 같은 범위, 쪽 실패 시 부분 파일 대신 오류(TC `csvRejectsPartialFailure`).
-- 퍼널 기간 전환 중: 루트 Alpine `pending` 으로 이전 결과 숨김·스켈레톤·내보내기/CSV 링크 비활성(FT 4 차이 해소, 브라우저 미확인). 요청이 실패하면 결과는 돌아오지만 세그먼트 선택 표시는 새 값에 남는다(알려진 한계).
+- ~~원본에는 쪽 상한이 없지만 stateless 재조회 비용 때문에 40쪽(2,000건)에서 멈춘다~~ → 최종 검토 반영: 더 보기는 다음 한 쪽만 읽어 붙이고(상한 없음, 실패는 토스트 + 행 유지 — TSX 와 같음, 위 "첫 쪽 실패 → LoadError" 차이도 사라짐), 필터는 클라이언트가 붙인 행까지 거른다. CSV 는 불러온 쪽 수만큼 같은 구간을 다시 읽고 400쪽(20,000건) 초과는 422 + 이유 문구(TC `csvReadsLoadedPages`,`csvSanityLimit`), 쪽 실패 시 부분 파일 대신 오류(TC `csvRejectsPartialFailure`).
+- 퍼널 기간 전환 중: 루트 Alpine `pending` 으로 이전 결과 숨김·스켈레톤·내보내기/CSV 링크 비활성(FT 4 차이 해소, 브라우저 미확인). 요청이 실패하면 결과는 돌아오지만 세그먼트 선택 표시는 새 값에 남는다(알려진 한계) → 최종 검토 반영: 교체 없이 끝난 실패(네트워크·서버 오류 토스트)면 선택을 보이는 기간(data-win)으로 되돌린다(funnelTab, 스텁). TSX 는 새 기간의 LoadError 를 보인다 — 여기서는 토스트 + 이전 기간 유지(CSV·숫자·선택 일치).
 
 ### Task 15 Fix round 1 메모
 

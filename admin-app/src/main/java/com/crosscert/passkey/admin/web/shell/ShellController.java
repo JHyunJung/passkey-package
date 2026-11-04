@@ -9,7 +9,6 @@ import com.crosscert.passkey.admin.web.format.ErrorMessages;
 import com.crosscert.passkey.admin.web.support.CurrentAdmin;
 import com.crosscert.passkey.admin.web.support.Htmx;
 import com.crosscert.passkey.admin.web.support.Toasts;
-import com.crosscert.passkey.core.api.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -183,17 +182,8 @@ public class ShellController {
             // 현재 RP 이름을 못 구해도 오류 안내는 한다.
         }
         String message = info.title() + ". 지금 보고 있는 RP(" + current + ")는 그대로입니다.";
-        Toasts.errorTitled(res, "RP를 전환하지 못했습니다", message, rawDetail(e, status, info), MDC.get("traceId"));
+        Toasts.errorTitled(res, "RP를 전환하지 못했습니다", message, ErrorMessages.rawDetail(e, status, info), MDC.get("traceId"));
         res.setStatus(status);
-    }
-
-    /** rawErrorDetail: {@code HTTP 상태 · [코드] 서버 메시지}. 예기치 못한 서버 오류는 내부 메시지를 싣지 않는다. */
-    private static String rawDetail(RuntimeException e, int status, ErrorMessages.Info info) {
-        if (status >= 500 && !(e instanceof BusinessException)) return "HTTP " + status;
-        StringBuilder sb = new StringBuilder("HTTP ").append(status);
-        if (info.code() != null) sb.append(" · [").append(info.code()).append(']');
-        if (e.getMessage() != null && !e.getMessage().isEmpty()) sb.append(' ').append(e.getMessage());
-        return sb.toString();
     }
 
     private static Map<UUID, String> names(ActiveTenantController.ActiveTenantView view) {

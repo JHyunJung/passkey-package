@@ -5,7 +5,8 @@
   감사 로그 탭(← pages/tenant/AuditTab.tsx). 탭 조각 GET /admin/_/tenants/{id}/tab/audit.
   모델: tid, platform, tenantName, chainResult(null | ChainResult), verifyUrl, (audit-rows 의 카드 모델 전부)
   #audit-root 안: #audit-chain(PLATFORM 전용 체인 검증 카드·다이얼로그), #audit-card(필터·표·더 보기).
-  원본에는 자동 갱신(폴링)이 없다 — hx-trigger every 를 두지 않는다. 필터·기간·더 보기 요청은 #tenant-tab 이 아니라 #audit-card 만 교체한다.
+  원본에는 자동 갱신(폴링)이 없다 — hx-trigger every 를 두지 않는다. 기간·다시 시도 요청은 #tenant-tab 이 아니라 #audit-card 만 교체하고,
+  더 보기는 표 끝에 행을 붙인다. 필터는 클라이언트(auditFilter)가 거른다.
 
   chain 조각: 래퍼 #audit-chain 이 요청 요소다(hx-trigger=verify-run). 다이얼로그의 "검증 실행"은 verify-run 이벤트만 올리므로
   다이얼로그를 닫아도(요소가 사라져도) 요청은 래퍼에서 계속된다. 성공하면 래퍼 전체가 결과로 교체되고(다이얼로그도 닫힘),
@@ -13,7 +14,9 @@
   tenantName 은 th:text 로만 쓴다.
 -->
 <th:block th:fragment="tab">
-  <div id="audit-root" class="stack-6">
+  <!-- 이벤트 종류·실패만 필터 상태(Alpine auditFilter)는 카드 밖 여기 있다 — 기간 전환·다시 시도로 카드가 바뀌어도 유지되고(원본과 같다),
+       카드 교체·더 보기로 행이 들어오면(htmx after-swap/settle) 다시 거른다. -->
+  <div id="audit-root" class="stack-6" x-data="auditFilter" x-on:htmx:after-swap="apply()" x-on:htmx:after-settle="apply()">
     <th:block th:if="${platform}"><th:block th:replace="~{:: chain}"></th:block></th:block>
     <th:block th:replace="~{admin/tenant/audit-rows :: card}"></th:block>
   </div>

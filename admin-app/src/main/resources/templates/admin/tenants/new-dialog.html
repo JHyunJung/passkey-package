@@ -8,6 +8,7 @@
   모델: nt = NewTenantForm(name, slug, rpId, nameError, slugError, rpIdError, failure)
   다이얼로그 안쪽은 x-if 로 그려지므로 열릴 때 dialog 컴포넌트가 htmx.process 한다(ui.js processHtmx). 닫았다 열면 폼이 새로 그려져 비워진다.
   요청 중에는 busy(dialog 컴포넌트)가 켜져 취소·생성 버튼이 비활성, 입력은 readonly, 닫기(Esc·스크림)도 막힌다.
+  성공(HX-Redirect)은 htmx 2.0.4 가 successful 을 정하기 전에 이동을 시작하므로(afterRequest 의 successful 이 비어 있음) 응답 헤더로 성공을 알아보고 busy 를 유지한다(이동 중 다시 제출 방지).
 -->
 <th:block th:fragment="dialog">
   <th:block th:replace="~{admin/fragments/ui/dialog :: dialog('new-tenant', '신규 Tenant 생성', 'RP 회사 하나에 대한 격리된 Passkey 환경을 만듭니다.', ~{:: ntBody}, ~{:: ntFooter}, null, null, ${ntOpts})}"></th:block>
@@ -73,7 +74,7 @@
         hx-post="/admin/_/tenants" hx-target="this" hx-swap="innerHTML" hx-sync="this:drop"
         x-data="{ netErr: null }"
         x-on:htmx:before-request="busy = true; netErr = null"
-        x-on:htmx:after-request="if (!$event.detail.successful) busy = false"
+        x-on:htmx:after-request="if (!$event.detail.successful &amp;&amp; !($event.detail.xhr &amp;&amp; $event.detail.xhr.getResponseHeader('HX-Redirect'))) busy = false"
         x-on:htmx:send-error="netErr = '네트워크에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요. 입력한 내용은 그대로 있습니다.'"
         x-on:htmx:timeout="netErr = '서버가 잠시 응답하지 않습니다. 응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요. 입력한 내용은 그대로 있습니다.'"
         x-on:htmx:after-swap="$nextTick(() => { const f = $el.querySelector('[aria-invalid=true]'); if (f) f.focus() })">

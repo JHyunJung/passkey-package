@@ -692,6 +692,68 @@ class ActivityPageControllerTest {
         assertThat(r.getResponse().getContentAsString()).doesNotContain("timestamp,tenant");
     }
 
+    /** 50건짜리 쪽. 쪽 번호 p 의 행 id 는 10000 + p*50 + i, 시각은 p·i 가 클수록 과거. */
+    private static List<ActivityView.Event> fullPage(int p) {
+        List<ActivityView.Event> out = new java.util.ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            out.add(ev(id(10000 + p * 50 + i), NOW.minusSeconds(60L * (p * 50 + i + 1)).toString(), "TENANT_UPDATE", "ops", T1, "acme", "op@x.com"));
+        }
+        return out;
+    }
+
+    @Test
+    @DisplayName("CSV: 더 보기로 40쪽(2,000건)을 넘게 불러온 경계도 끝까지 이어 읽는다(상한 40쪽 아님), 경계 행까지만")
+    void csvExportBeyondFortyPages() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        when(activity.activity(any(), any(), any(), any(), any())).thenAnswer(inv -> ApiResponse.ok(view(fullPage(calls.getAndIncrement()))));
+        UUID boundary = id(10000 + 45 * 50 + 9); // 46번째 쪽(인덱스 45)의 10번째 행
+        MvcResult r = mvc.perform(get(URI.create("/admin/_/activity/export?beforeId=" + boundary)).with(authentication(platform()))).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        String[] lines = r.getResponse().getContentAsString(StandardCharsets.UTF_8).substring(1).split("\n");
+        assertThat(lines).hasSize(1 + 45 * 50 + 10);
+        assertThat(calls.get()).isEqualTo(46);
+    }
+
+    @Test
+    @DisplayName("CSV: 그 사이 위에 새 행이 생겨도 경계는 id 로 찾는다(새 행 포함, 경계 행에서 끝)")
+    void csvExportNewRowsAtTop() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        // 첫 쪽: 새 행 3개 + 원래 첫 쪽의 앞 47개 — 경계(원래 첫 쪽의 마지막 행)는 둘째 쪽 맨 앞으로 밀린다
+        when(activity.activity(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            int c = calls.getAndIncrement();
+            List<ActivityView.Event> orig = fullPage(0);
+            List<ActivityView.Event> page = new java.util.ArrayList<>();
+            if (c == 0) {
+                for (int i = 0; i < 3; i++) page.add(ev(id(90000 + i), NOW.plusSeconds(10 - i).toString(), "API_KEY_ISSUE", "ops", T1, "acme", "new@x.com"));
+                page.addAll(orig.subList(0, 47));
+            } else {
+                page.addAll(orig.subList(47, 50));
+                page.addAll(fullPage(1).subList(0, 47));
+            }
+            return ApiResponse.ok(view(page));
+        });
+        UUID boundary = id(10000 + 49);
+        MvcResult r = mvc.perform(get(URI.create("/admin/_/activity/export?beforeId=" + boundary)).with(authentication(platform()))).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        String[] lines = r.getResponse().getContentAsString(StandardCharsets.UTF_8).substring(1).split("\n");
+        assertThat(lines).hasSize(1 + 53); // 새 행 3 + 원래 50
+        assertThat(lines[1]).contains("new@x.com");
+        assertThat(calls.get()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("CSV: 안전 상한(400쪽 = 20,000건) 안에 경계에 닿지 못하면 422 + 이유 문구(JSON message), 일부만 담은 파일 없음")
+    void csvExportSanityLimit() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        when(activity.activity(any(), any(), any(), any(), any())).thenAnswer(inv -> ApiResponse.ok(view(fullPage(calls.getAndIncrement()))));
+        MvcResult r = mvc.perform(get(URI.create("/admin/_/activity/export?beforeId=" + id(999))).with(authentication(platform()))).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(422);
+        assertThat(r.getResponse().getContentType()).startsWith("application/json");
+        String body = r.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(body).contains("\"message\"").contains("20,000건").doesNotContain("timestamp,tenant");
+        assertThat(calls.get()).isEqualTo(400);
+    }
+
     @Test
     @DisplayName("CSV 조회 실패는 5xx(부분 파일 없음) — 공통 다운로드 헬퍼가 토스트한다")
     void csvFailure() throws Exception {

@@ -853,7 +853,9 @@ class TenantsPageControllerTest {
         assertThat(form.attr("x-on:htmx:send-error")).contains("netErr").contains("네트워크에 연결할 수 없습니다").contains("입력한 내용은 그대로 있습니다");
         assertThat(form.attr("x-on:htmx:timeout")).contains("서버가 잠시 응답하지 않습니다").contains("입력한 내용은 그대로 있습니다");
         assertThat(form.attr("x-on:htmx:before-request")).contains("busy = true").contains("netErr = null");
-        assertThat(form.attr("x-on:htmx:after-request")).isEqualTo("if (!$event.detail.successful) busy = false");
+        // 성공(HX-Redirect)은 htmx 가 successful 을 정하기 전에 이동을 시작한다 — 응답 헤더로 성공을 알아보고 busy 를 유지(이동 중 다시 제출 방지)
+        assertThat(form.attr("x-on:htmx:after-request"))
+                .isEqualTo("if (!$event.detail.successful && !($event.detail.xhr && $event.detail.xhr.getResponseHeader('HX-Redirect'))) busy = false");
         assertThat(form.attr("x-on:htmx:after-swap")).contains("aria-invalid=true").contains("focus()");
         Element alert = inner.select("[x-show=netErr]").first();
         assertThat(alert.select(".banner__title").text()).isEqualTo("Tenant를 만들지 못했습니다");

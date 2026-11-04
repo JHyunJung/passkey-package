@@ -77,6 +77,19 @@ public class PasswordPagesController {
         return mav;
     }
 
+    /**
+     * 재설정 메일의 링크는 {@code admin.invite.base-url + /reset-password?token=…} 이다(PasswordResetService — React 시절 SPA 경로, base-url 기본값은 바꾸지 않는다).
+     * base-url 이 콘솔 주소면 그 경로는 /admin 밖이라 화면이 없으므로 쿼리(토큰)를 그대로 붙여 {@code /admin/reset-password} 로 보낸다.
+     * 이동할 곳은 고정 경로라 열린 리다이렉트가 아니다. 토큰이 든 주소라 응답은 캐시·리퍼러를 남기지 않는다.
+     */
+    @GetMapping("/reset-password")
+    public void resetLink(HttpServletRequest req, HttpServletResponse res) {
+        noLeak(res);
+        String q = req.getQueryString();
+        res.setStatus(HttpStatus.FOUND.value());
+        res.setHeader("Location", "/admin/reset-password" + (q == null || q.isEmpty() ? "" : "?" + q));
+    }
+
     @GetMapping("/admin/reset-password")
     public ModelAndView resetForm(@RequestParam(name = "token", required = false) String token, HttpServletResponse res) {
         noLeak(res);

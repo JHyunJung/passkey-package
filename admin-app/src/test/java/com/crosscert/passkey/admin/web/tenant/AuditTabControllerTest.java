@@ -193,12 +193,31 @@ class AuditTabControllerTest {
     }
 
     @Test
-    @DisplayName("건수: total 이 없으므로 '최근 N건', 필터가 있으면 '이 페이지 N건 중 M건'")
+    @DisplayName("건수: total 이 없으므로 '최근 N건'(서버 처음 값), 필터가 있으면 '이 페이지 N건 중 M건'은 클라이언트(auditFilter.countText)가 다시 센다")
     void countText() throws Exception {
-        assertThat(tab("").select("#audit-card .card__foot .hint").text()).isEqualTo("최근 4건");
-        assertThat(tab("?failures=true").select("#audit-card .card__foot .hint").text()).isEqualTo("이 페이지 4건 중 1건");
+        Document d = tab("");
+        Element hint = d.selectFirst("#audit-card .card__foot .hint");
+        assertThat(hint.text()).isEqualTo("최근 4건");
+        assertThat(hint.attr("x-text")).isEqualTo("countText");
+        assertThat(d.selectFirst("#audit-root").attr("x-data")).isEqualTo("auditFilter");
     }
 
+    @Test
+    @DisplayName("필터 판정값: 행마다 data-g(이벤트 그룹)·data-fail(실패 여부)·data-day(KST 날짜 키), 날짜 머리글도 data-day — 서버 상수만")
+    void rowFilterData() throws Exception {
+        Document d = tab("");
+        assertThat(rowOf(d, "WEBAUTHN_CONFIG_UPDATED").attr("data-g")).isEqualTo("config");
+        assertThat(rowOf(d, "AUTH_SUCCESS").attr("data-g")).isEqualTo("auth");
+        assertThat(rowOf(d, "API_KEY_ROTATED").attr("data-g")).isEqualTo("keys");
+        assertThat(rowOf(d, "ATTESTATION_TRUST_FAILED").attr("data-fail")).isEqualTo("1");
+        assertThat(rowOf(d, "AUTH_SUCCESS").attr("data-fail")).isEqualTo("0");
+        assertThat(rowOf(d, "AUTH_SUCCESS").hasAttr("data-ev")).isTrue();
+        assertThat(rowOf(d, "AUTH_SUCCESS").attr("data-day")).isEqualTo("2026-10-11");
+        assertThat(rowOf(d, "API_KEY_ROTATED").attr("data-day")).isEqualTo("2026-10-10");
+        assertThat(d.select("#audit-rows tr.table__group").eachAttr("data-day")).containsExactly("2026-10-11", "2026-10-10");
+        // 처음 응답은 모든 행을 그린다(필터는 클라이언트)
+        assertThat(d.select("#audit-rows tr[data-ev]")).hasSize(4);
+    }
     // ── REST 호출 ───────────────────────────────────────────
 
     @Test
@@ -225,113 +244,149 @@ class AuditTabControllerTest {
     }
 
     @Test
-    @DisplayName("기간 세그먼트의 주소: 기간을 바꾸면 구간 끝(to)을 새로 잡고 1쪽부터, 필터는 유지")
+    @DisplayName("기간 세그먼트의 주소: 기간을 바꾸면 카드를 새로 그린다(구간 끝을 새로 잡고 첫 쪽, 필터는 카드 밖 Alpine 상태라 주소에 없다)")
     void windowSegmentUrls() throws Exception {
-        Document d = tab("?g=keys&failures=true&pages=1&to=2026-10-10T23:00:00.000Z");
+        Document d = tab("");
         Element seg = d.selectFirst("#audit-card .seg");
         assertThat(seg.attr("aria-label")).isEqualTo("기간");
         assertThat(seg.select("button").eachText()).containsExactly("24시간", "7일", "30일");
-        String seven = seg.select("button").get(1).attr("hx-get");
-        assertThat(seven).isEqualTo(BASE + "/tab/audit/card?win=7d&pages=1&failures=true&g=keys");
+        assertThat(seg.select("button").get(1).attr("hx-get")).isEqualTo(BASE + "/tab/audit/card?win=7d");
         assertThat(seg.select("button").get(0).attr("aria-pressed")).isEqualTo("true");
     }
+    /** 더 보기 응답(OOB 조각)을 표 안에서 파싱한다 — 브라우저(htmx)는 &lt;template&gt; 로 파싱해 tbody 를 살린다. */
+    private static Document moreDoc(MvcResult r) throws Exception {
+        return Jsoup.parse("<table>" + body(r) + "</table>");
+    }
+
+    private static List<AuditLogView> fullPage(String prefix, double startDays) {
+        List<AuditLogView> out = new ArrayList<>();
+        for (int i = 0; i < 50; i++) out.add(ev(prefix + i, null, i % 2 == 0 ? "WEBAUTHN_CONFIG_UPDATED" : "ATTESTATION_TRUST_FAILED", "TENANT", "t1", null, startDays - 0.0001 * i));
+        return out;
+    }
 
     @Test
-    @DisplayName("더 보기: 50건이면 버튼, 같은 구간(to)으로 다음 쪽까지 다시 읽고 붙인다 — 50건 미만이면 버튼 없음")
-    void loadMoreSameRange() throws Exception {
-        List<AuditLogView> first = new ArrayList<>();
-        for (int i = 0; i < 50; i++) first.add(ev("a" + i, null, "WEBAUTHN_CONFIG_UPDATED", "TENANT", "t1", null, -0.001 * i));
-        stubPage(0, first);
-        stubPage(1, List.of(ev("b0", null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.5)));
-
+    @DisplayName("더 보기 버튼: 50건이면 보이고 같은 구간(숨은 상태 win·to·page=1·lastDay)을 싣고 OOB 만 적용(hx-swap=none) — 50건 미만이면 버튼 없음")
+    void loadMoreButtonCarriesState() throws Exception {
+        stubPage(0, fullPage("a", -0.001));
         Document d = tab("");
-        Element more = d.selectFirst("#audit-card .card__foot button");
+        Element more = d.selectFirst("#audit-card #audit-more button");
         assertThat(more.text()).isEqualTo("더 보기");
-        String url = more.attr("hx-get");
-        assertThat(url).startsWith(BASE + "/tab/audit/card?win=24h&pages=2&to=2026-10-11T00%3A00%3A00.000Z");
+        assertThat(more.attr("hx-get")).isEqualTo(BASE + "/tab/audit/more");
+        assertThat(more.attr("hx-include")).isEqualTo("#audit-state");
+        assertThat(more.attr("hx-swap")).isEqualTo("none");
+        Element st = d.selectFirst("#audit-card #audit-state");
+        assertThat(st.select("input[name=win]").val()).isEqualTo("24h");
+        assertThat(st.select("input[name=to]").val()).isEqualTo("2026-10-11T00:00:00.000Z");
+        assertThat(st.select("#audit-page").val()).isEqualTo("1");
+        assertThat(st.select("#audit-last-day").val()).isEqualTo("2026-10-11");
 
-        Document d2 = doc(hget(url, platform()));
-        assertThat(d2.select("#audit-card tbody tr.is-clickable")).hasSize(51);
-        assertThat(d2.select("#audit-card .card__foot .hint").text()).isEqualTo("최근 51건");
-        assertThat(d2.select("#audit-card .card__foot button")).isEmpty();
-        // 두 쪽 모두 같은 from/to
+        stubPage(0, List.of(ev("x", null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.1)));
+        assertThat(tab("").select("#audit-more button")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("더 보기 = 같은 구간의 다음 한 쪽만 읽어 표 끝에 붙인다(OOB beforeend #audit-rows) — 앞 쪽을 다시 읽지 않고, 다음 쪽 번호·마지막 날짜·버튼을 OOB 로 갱신")
+    void loadMoreFetchesOnlyNextPage() throws Exception {
+        stubPage(1, List.of(ev("b0", null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.2), ev("b1", null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -1.2)));
+        MvcResult r = hget(BASE + "/tab/audit/more?win=24h&to=2026-10-10T23:00:00.000Z&page=1&lastDay=2026-10-11", platform());
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(r).trim()).startsWith("<tbody"); // htmx 의 template 파싱에서 tr 이 살아남도록 표 조각이 맨 앞
+        Document d = moreDoc(r);
+        Element oob = d.selectFirst("tbody[hx-swap-oob]");
+        assertThat(oob.attr("hx-swap-oob")).isEqualTo("beforeend:#audit-rows");
+        assertThat(oob.select("tr[data-ev]")).hasSize(2);
+        // 첫 행은 화면 마지막 그룹(2026-10-11)과 같은 날짜 → 머리글 없음, 다음 날짜는 머리글
+        assertThat(oob.select("tr.table__group").eachText()).containsExactly("어제");
+        assertThat(d.selectFirst("#audit-page").attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(d.selectFirst("#audit-page").val()).isEqualTo("2");
+        assertThat(d.selectFirst("#audit-last-day").val()).isEqualTo("2026-10-10");
+        assertThat(d.selectFirst("#audit-more").attr("hx-swap-oob")).isEqualTo("true");
+        assertThat(d.select("#audit-more button")).isEmpty(); // 50건 미만 → 끝
+        // 같은 구간(to 고정)의 1쪽만
         ArgumentCaptor<OffsetDateTime> from = ArgumentCaptor.forClass(OffsetDateTime.class);
         ArgumentCaptor<OffsetDateTime> to = ArgumentCaptor.forClass(OffsetDateTime.class);
-        verify(audit, times(2)).list(isNull(), isNull(), eq(T1), from.capture(), to.capture(), eq(0), eq(50));
-        verify(audit).list(isNull(), isNull(), eq(T1), eq(from.getAllValues().get(1)), eq(to.getAllValues().get(1)), eq(1), eq(50));
-        assertThat(from.getAllValues().get(0).toInstant().plus(Duration.ofHours(24))).isEqualTo(to.getAllValues().get(0).toInstant());
+        verify(audit).list(isNull(), isNull(), eq(T1), from.capture(), to.capture(), eq(1), eq(50));
+        verify(audit, never()).list(any(), any(), any(), any(), any(), eq(0), anyInt());
+        assertThat(to.getValue().toInstant()).isEqualTo(Instant.parse("2026-10-10T23:00:00Z"));
+        assertThat(Duration.between(from.getValue(), to.getValue())).isEqualTo(Duration.ofHours(24));
     }
 
     @Test
-    @DisplayName("더 보기 쪽 읽기가 실패하면 읽은 행은 남기고 토스트(+ 더 보기 다시 활성), 첫 쪽 실패는 LoadError")
-    void loadMoreFailure() throws Exception {
-        List<AuditLogView> first = new ArrayList<>();
-        for (int i = 0; i < 50; i++) first.add(ev("a" + i, null, "WEBAUTHN_CONFIG_UPDATED", "TENANT", "t1", null, -0.001 * i));
-        stubPage(0, first);
-        when(audit.list(isNull(), isNull(), eq(T1), any(), any(), eq(1), eq(50))).thenThrow(new IllegalStateException("db password=secret"));
-        MvcResult r = hget(BASE + "/tab/audit/card?pages=2&to=2026-10-11T00:00:00.000Z", platform());
+    @DisplayName("더 보기에 쪽 수 상한이 없다(이전 40쪽 상한 제거): 45쪽도 그 쪽 하나만 읽고, 50건이면 다음 쪽(46) 버튼")
+    void loadMoreHasNoPageCap() throws Exception {
+        stubPage(45, fullPage("p", -0.5));
+        MvcResult r = hget(BASE + "/tab/audit/more?win=30d&to=2026-10-10T23:00:00.000Z&page=45&lastDay=2026-10-10", platform());
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
-        Document d = doc(r);
-        assertThat(d.select("#audit-card tbody tr.is-clickable")).hasSize(50);
-        assertThat(d.select("#audit-card .card__foot button").text()).isEqualTo("더 보기");
-        assertThat(d.select("#audit-card .card__foot button").attr("hx-get")).contains("pages=2");
+        Document d = moreDoc(r);
+        assertThat(d.select("tbody[hx-swap-oob] tr[data-ev]")).hasSize(50);
+        assertThat(d.selectFirst("#audit-page").val()).isEqualTo("46");
+        assertThat(d.select("#audit-more button").text()).isEqualTo("더 보기");
+        verify(audit).list(isNull(), isNull(), eq(T1), any(), any(), eq(45), eq(50));
+        verify(audit, times(1)).list(any(), any(), any(), any(), any(), anyInt(), anyInt());
+        assertThat(body(r)).doesNotContain("더 불러올 수 없습니다");
+    }
+    @Test
+    @DisplayName("더 보기 쪽 읽기가 실패하면 실제 오류 상태 + 토스트(본문 없음) — 붙인 행·숨은 상태·버튼은 그대로라 다시 누를 수 있다. 내부 메시지 비노출")
+    void loadMoreFailure() throws Exception {
+        when(audit.list(isNull(), isNull(), eq(T1), any(), any(), eq(1), eq(50))).thenThrow(new IllegalStateException("db password=secret"));
+        MvcResult r = hget(BASE + "/tab/audit/more?win=24h&to=2026-10-11T00:00:00.000Z&page=1&lastDay=2026-10-11", platform());
+        assertThat(r.getResponse().getStatus()).isGreaterThanOrEqualTo(500);
+        assertThat(body(r).trim()).isEmpty();
         JsonNode t = JSON.readTree(r.getResponse().getHeader("HX-Trigger"));
         assertThat(t.toString()).contains("감사 로그를 더 불러오지 못했습니다").doesNotContain("secret");
-        assertThat(body(r)).doesNotContain("secret");
     }
-
     // ── 필터 ────────────────────────────────────────────────
 
     @Test
-    @DisplayName("실패만: 실패 액션 목록·이름 규칙으로 현재 페이지를 거른다 + 필터 지우기 노출")
+    @DisplayName("실패만 스위치·필터 지우기는 클라이언트 필터(auditFilter): 서버 요청 없이 상태를 바꾼다(role=switch, failures 를 따름)")
     void failuresOnly() throws Exception {
-        Document d = tab("?failures=true");
-        assertThat(d.select("#audit-card tbody tr.is-clickable .badge").eachText()).containsExactly("ATTESTATION_TRUST_FAILED");
+        Document d = tab("");
         Element sw = d.selectFirst("#audit-card input[role=switch]");
-        assertThat(sw.hasAttr("checked")).isTrue();
-        assertThat(d.select("#audit-card .card__head button").stream().anyMatch(b -> b.text().equals("필터 지우기"))).isTrue();
-        // 스위치를 끄는 요청 = failures 없는 같은 상태
-        assertThat(sw.attr("hx-get")).isEqualTo(BASE + "/tab/audit/card?win=24h&pages=1&to=" + TO0);
-        assertThat(sw.attr("hx-trigger")).isEqualTo("change");
+        assertThat(sw.attr("x-bind:checked")).isEqualTo("failures");
+        assertThat(sw.attr("x-on:change")).isEqualTo("setFailures($el.checked)");
+        assertThat(sw.hasAttr("hx-get")).isFalse();
+        assertThat(sw.parent().text()).isEqualTo("실패만");
+        Element clear = d.select("#audit-card .card__head button").stream().filter(b -> b.text().equals("필터 지우기")).findFirst().orElseThrow();
+        assertThat(clear.attr("x-show")).isEqualTo("filtering");
+        assertThat(clear.attr("x-on:click")).isEqualTo("clear()");
+        assertThat(clear.hasAttr("hx-get")).isFalse();
     }
-
     @Test
-    @DisplayName("이벤트 종류 그룹 칩: 라벨 5개(원시 코드는 title), 눌림 상태, 토글 주소, 어느 그룹에도 없는 건 '기타'")
+    @DisplayName("이벤트 종류 그룹 칩: 라벨 5개(원시 코드는 title), 눌림 상태·토글은 클라이언트(has/toggle, data-g 는 서버 상수), 어느 그룹에도 없는 건 '기타'")
     void groupChips() throws Exception {
-        Document d = tab("?g=keys");
+        Document d = tab("");
         Element group = d.selectFirst("#audit-card [role=group][aria-label=이벤트 종류]");
         assertThat(group.select("button").eachText()).containsExactly("인증", "등록", "설정 변경", "키 관리", "기타");
         Element keys = group.select("button").get(3);
         assertThat(keys.attr("title")).isEqualTo("API_KEY_* · CREDENTIAL_REVOKE*");
-        assertThat(keys.attr("aria-pressed")).isEqualTo("true");
-        assertThat(group.select("button").get(0).attr("aria-pressed")).isEqualTo("false");
-        assertThat(d.select("#audit-card tbody tr.is-clickable .badge").eachText()).containsExactly("API_KEY_ROTATED");
-        // 켜진 칩을 누르면 g 에서 빠지고, 꺼진 칩을 누르면 추가된다
-        assertThat(keys.attr("hx-get")).isEqualTo(BASE + "/tab/audit/card?win=24h&pages=1&to=" + TO0);
-        assertThat(group.select("button").get(0).attr("hx-get")).endsWith("&g=keys&g=auth");
-        // 필터 지우기
-        Element clear = d.select("#audit-card .card__head button").stream().filter(b -> b.text().equals("필터 지우기")).findFirst().orElseThrow();
-        assertThat(clear.attr("hx-get")).isEqualTo(BASE + "/tab/audit/card?win=24h&pages=1&to=" + TO0);
+        assertThat(keys.attr("data-g")).isEqualTo("keys");
+        assertThat(keys.attr("aria-pressed")).isEqualTo("false");
+        assertThat(keys.attr("x-bind:aria-pressed")).isEqualTo("has($el.dataset.g) ? 'true' : 'false'");
+        assertThat(keys.attr("x-on:click")).isEqualTo("toggle($el.dataset.g)");
+        assertThat(keys.hasAttr("hx-get")).isFalse();
+        assertThat(group.select("button").eachAttr("data-g")).containsExactly("auth", "registration", "config", "keys", "other");
 
         stubPage(0, List.of(ev("x1", null, "MDS_BLOB_SYNC", "SYSTEM", "s", null, -0.1), ev("x2", null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.1)));
-        assertThat(tab("?g=other").select("#audit-card tbody tr.is-clickable .badge").eachText()).containsExactly("MDS_BLOB_SYNC");
-        // 알 수 없는 그룹 값은 무시
-        assertThat(tab("?g=bogus").select("#audit-card tbody tr.is-clickable")).hasSize(2);
+        assertThat(rowOf(tab(""), "MDS_BLOB_SYNC").attr("data-g")).isEqualTo("other");
     }
-
     @Test
-    @DisplayName("빈 목록: 필터가 없으면 '이 기간에 감사 이벤트가 없습니다.', 필터가 있으면 '조건에 맞는 이벤트가 없습니다.'")
+    @DisplayName("빈 목록: 필터가 없으면 '이 기간에 감사 이벤트가 없습니다.', 필터가 있으면 '조건에 맞는 이벤트가 없습니다.'(보이는 행이 0일 때, 클라이언트 판정)")
     void emptyStates() throws Exception {
         stubPage(0, List.of());
-        assertThat(tab("").select("#audit-card tr.table__empty").text()).isEqualTo("이 기간에 감사 이벤트가 없습니다.");
+        Document d = tab("");
+        Element empty = d.selectFirst("#audit-card tr.table__empty");
+        assertThat(empty.attr("x-show")).isEqualTo("shown === 0");
+        assertThat(empty.hasAttr("x-cloak")).isFalse(); // 행이 없으면 처음부터 보인다
+        assertThat(empty.select("[x-show=!filtering]").text()).isEqualTo("이 기간에 감사 이벤트가 없습니다.");
+        assertThat(empty.select("[x-show=filtering]").text()).isEqualTo("조건에 맞는 이벤트가 없습니다.");
+        // 행이 있으면 빈 행은 처음에 숨는다(x-cloak)
         stubPage(0, List.of(ev("e1", null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.1)));
-        assertThat(tab("?failures=true").select("#audit-card tr.table__empty").text()).isEqualTo("조건에 맞는 이벤트가 없습니다.");
+        assertThat(tab("").selectFirst("#audit-card tr.table__empty").hasAttr("x-cloak")).isTrue();
     }
-
     @Test
-    @DisplayName("자동 갱신(폴링)은 없다(원본에 없음) — every 트리거가 없고, 모든 컨트롤의 hx-get 이 현재 필터·구간을 싣는다. 대상은 #tenant-tab 이 아니라 카드(this)")
+    @DisplayName("자동 갱신(폴링)은 없다(원본에 없음) — every 트리거가 없다. 카드 요청의 대상은 #tenant-tab 이 아니라 카드(this), 필터 상태는 카드 밖(#audit-root)")
     void pollingKeepsFilters() throws Exception {
-        MvcResult r = hget(BASE + "/tab/audit?win=7d&g=auth&g=registration&failures=true&pages=1&to=2026-10-10T23:00:00.000Z", platform());
+        MvcResult r = hget(BASE + "/tab/audit?win=7d", platform());
         Document d = doc(r);
         assertThat(body(r)).doesNotContain("every ").doesNotContain("hx-trigger=\"load\"");
         Element card = d.selectFirst("#audit-card");
@@ -339,26 +394,27 @@ class AuditTabControllerTest {
         assertThat(card.attr("hx-swap")).isEqualTo("outerHTML");
         assertThat(card.attr("hx-sync")).isEqualTo("this:replace");
         assertThat(d.select("[hx-target=#tenant-tab]")).isEmpty();
-        // 구간 끝 to 가 컨트롤마다 이어진다(기간 세그먼트·다시 시도 제외)
+        Element root = d.selectFirst("#audit-root");
+        assertThat(root.attr("x-on:htmx:after-swap")).isEqualTo("apply()");
+        assertThat(root.attr("x-on:htmx:after-settle")).isEqualTo("apply()");
         for (Element e : card.select("[hx-get]")) {
             String u = e.attr("hx-get");
-            assertThat(u).startsWith(BASE + "/tab/audit/card?");
-            if (e.parent().hasClass("seg")) continue;
-            assertThat(u).contains("to=2026-10-10T23%3A00%3A00.000Z");
+            assertThat(u).satisfiesAnyOf(x -> assertThat(x).startsWith(BASE + "/tab/audit/card?win="), x -> assertThat(x).isEqualTo(BASE + "/tab/audit/more"));
         }
-        assertThat(card.select(".card__foot button, #audit-card .card__head button.btn--ghost").stream()
-                .filter(b -> b.hasAttr("hx-get")).allMatch(b -> b.attr("hx-get").contains("g=auth&g=registration") || b.text().equals("필터 지우기"))).isTrue();
-        // CSV 링크도 같은 상태
-        assertThat(card.select("a[download]").attr("href")).startsWith("/admin/tenants/" + T1 + "/audit.csv?win=7d&pages=1&to=").contains("failures=true").contains("g=auth&g=registration");
+        // CSV 링크: 구간(win·to)은 서버가, 불러온 쪽 수·필터는 클라이언트(csvHref)가 붙인다. 처음 href 는 1쪽
+        Element a = card.selectFirst("a[download]");
+        assertThat(a.attr("data-base")).isEqualTo("/admin/tenants/" + T1 + "/audit.csv?win=7d&to=" + TO0);
+        assertThat(a.attr("href")).isEqualTo("/admin/tenants/" + T1 + "/audit.csv?win=7d&to=" + TO0 + "&pages=1");
+        assertThat(a.attr("x-bind:href")).isEqualTo("csvHref($el.dataset.base)");
+        assertThat(a.attr("x-show")).isEqualTo("shown > 0");
     }
-
     // ── 오류 ────────────────────────────────────────────────
 
     @Test
-    @DisplayName("로드 실패: '이벤트 없음'이 아니라 LoadError(다시 시도 = 새 구간 1쪽), 건수 —, CSV 비활성, 내부 메시지 비노출")
+    @DisplayName("로드 실패: '이벤트 없음'이 아니라 LoadError(다시 시도 = 새 구간 1쪽), 건수 —, CSV 비활성, 더 보기 없음, 내부 메시지 비노출")
     void loadFailure() throws Exception {
         when(audit.list(isNull(), isNull(), eq(T1), any(), any(), anyInt(), anyInt())).thenThrow(new IllegalStateException("jdbc:secret"));
-        MvcResult r = hget(BASE + "/tab/audit?win=7d&g=keys&to=2026-10-10T23:00:00.000Z", platform());
+        MvcResult r = hget(BASE + "/tab/audit?win=7d", platform());
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         assertThat(body(r)).doesNotContain("secret");
         Document d = doc(r);
@@ -366,10 +422,11 @@ class AuditTabControllerTest {
         assertThat(d.select("#audit-card tr.table__empty")).isEmpty();
         assertThat(d.select("#audit-card .card__foot .hint").text()).isEqualTo("—");
         assertThat(d.select("#audit-card .card__head button[disabled]").stream().anyMatch(b -> b.text().startsWith("CSV"))).isTrue();
+        assertThat(d.select("#audit-card a[download]")).isEmpty();
+        assertThat(d.select("#audit-more button")).isEmpty();
         Element retry = d.select("#audit-card [role=alert] button").stream().filter(b -> b.text().equals("다시 시도")).findFirst().orElseThrow();
-        assertThat(retry.attr("hx-get")).isEqualTo(BASE + "/tab/audit/card?win=7d&pages=1&g=keys");
+        assertThat(retry.attr("hx-get")).isEqualTo(BASE + "/tab/audit/card?win=7d");
     }
-
     // ── 펼침·다이얼로그 ─────────────────────────────────────
 
     @Test
@@ -567,17 +624,35 @@ class AuditTabControllerTest {
     }
 
     @Test
-    @DisplayName("더 보기 상한(40쪽): 버튼 대신 안내, 같은 2,000건을 다시 읽는 요청을 만들지 않는다")
-    void loadMoreCapShown() throws Exception {
-        List<AuditLogView> full = new ArrayList<>();
-        for (int i = 0; i < 50; i++) full.add(ev("a" + i, null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.0001 * i));
-        for (int p = 0; p < 40; p++) stubPage(p, full);
-        Document d = doc(hget(BASE + "/tab/audit/card?pages=40&to=2026-10-11T00:00:00.000Z", platform()));
-        assertThat(d.select("#audit-card .card__foot button")).isEmpty();
-        assertThat(d.select("#audit-card .card__foot .hint").text()).contains("최근 2,000건").contains("더 불러올 수 없습니다");
-        assertThat(d.select("#audit-card [hx-get*=pages=41]")).isEmpty();
+    @DisplayName("CSV(불러온 범위): pages = 화면이 불러온 쪽 수 — 같은 구간의 0..pages-1 쪽을 읽는다(40쪽 상한 없음), 50건 미만 쪽에서 멈춘다")
+    void csvReadsLoadedPages() throws Exception {
+        for (int p = 0; p < 44; p++) stubPage(p, fullPage("c" + p + "_", -0.001 - p * 0.006));
+        stubPage(44, List.of(ev("last", null, "AUTH_SUCCESS", "CREDENTIAL", "c", null, -0.9)));
+        MvcResult r = mvc.perform(htmx(get(URI.create("/admin/tenants/" + T1 + "/audit.csv?win=30d&pages=45&to=2026-10-11T00:00:00.000Z")), platform())).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        String csv = new String(r.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
+        assertThat(csv.substring(1).split("\n")).hasSize(1 + 44 * 50 + 1);
+        verify(audit, times(45)).list(isNull(), isNull(), eq(T1), any(), any(), anyInt(), eq(50));
+        verify(audit, never()).list(any(), any(), any(), any(), any(), eq(45), anyInt());
+        // 필터(g·failures)는 화면과 같다 — 실패만이면 ATTESTATION_TRUST_FAILED 행만
+        org.mockito.Mockito.clearInvocations(audit);
+        MvcResult f = mvc.perform(htmx(get(URI.create("/admin/tenants/" + T1 + "/audit.csv?win=30d&pages=2&failures=true&g=registration&g=auth&to=2026-10-11T00:00:00.000Z")), platform())).andReturn();
+        String fc = new String(f.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
+        assertThat(fc.substring(1).split("\n")).hasSize(1 + 50); // 두 쪽(100건) 중 ATTESTATION_TRUST_FAILED(registration 그룹·실패) 50건
+        assertThat(fc).doesNotContain("WEBAUTHN_CONFIG_UPDATED");
     }
 
+    @Test
+    @DisplayName("CSV 안전 상한: pages 가 400쪽을 넘으면 422 + 이유 문구(JSON message) — 조용한 일부 파일 없음, REST 미호출")
+    void csvSanityLimit() throws Exception {
+        MvcResult r = mvc.perform(htmx(get(URI.create("/admin/tenants/" + T1 + "/audit.csv?pages=401&to=2026-10-11T00:00:00.000Z")), platform())).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(422);
+        assertThat(r.getResponse().getContentType()).startsWith("application/json");
+        assertThat(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).contains("\"message\"").contains("20,000건");
+        verify(audit, never()).list(any(), any(), any(), any(), any(), anyInt(), anyInt());
+        // 400쪽은 허용
+        assertThat(mvc.perform(htmx(get(URI.create("/admin/tenants/" + T1 + "/audit.csv?pages=400")), platform())).andReturn().getResponse().getStatus()).isEqualTo(200);
+    }
     @Test
     @DisplayName("CSV 링크는 공통 다운로드 표식(data-csv-download)과 href 를 함께 가진다(JS 없이도 동작)")
     void csvLinkCarriesMarker() throws Exception {
@@ -596,6 +671,7 @@ class AuditTabControllerTest {
         Authentication rp = rp(T1);
         assertThat(hget(base + "/tab/audit", rp).getResponse().getStatus()).isEqualTo(403);
         assertThat(hget(base + "/tab/audit/card", rp).getResponse().getStatus()).isEqualTo(403);
+        assertThat(hget(base + "/tab/audit/more?page=1", rp).getResponse().getStatus()).isEqualTo(403);
         assertThat(hget(base + "/audit/verify", rp).getResponse().getStatus()).isEqualTo(403);
         assertThat(hget("/admin/tenants/" + OTHER + "/audit.csv", rp).getResponse().getStatus()).isEqualTo(403);
         assertThat(mvc.perform(get(URI.create("/admin/tenants/" + OTHER + "/audit.csv")).with(authentication(rp))).andReturn().getResponse().getStatus()).isEqualTo(403);

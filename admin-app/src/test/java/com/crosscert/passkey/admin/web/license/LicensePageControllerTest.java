@@ -116,6 +116,16 @@ class LicensePageControllerTest {
     }
 
     @Test
+    @DisplayName("만료까지 일수의 글자 크기 13px 은 색이 없을 때(VALID)도 유지, WARNING 은 13px + 경고 색")
+    void daysKeepFontSize() throws Exception {
+        Element strong = page().select("main strong").stream().filter(e -> e.text().equals("200일")).findFirst().orElseThrow();
+        assertThat(strong.attr("style")).isEqualTo("font-size: 13px");
+        stub(new LicenseView("onprem", "WARNING", "acme-bank", "lic_1", BASE.expiresAt(), 30, List.of(), null, null, null));
+        Element warn = page().select("main strong").stream().filter(e -> e.text().equals("30일")).findFirst().orElseThrow();
+        assertThat(warn.attr("style")).isEqualTo("font-size: 13px; color: var(--warn)");
+    }
+
+    @Test
     @DisplayName("상세 카드: 한국어 항목 순서, 라이선스 ID mono + 복사 버튼, 기능 태그, 유예 없으면 줄 없음, stack-5 / kv--rows")
     void detailCard() throws Exception {
         Document d = page();

@@ -108,6 +108,8 @@ public class AdminSecurityConfig {
                 .requestMatchers("/admin/login", "/admin/logout").permitAll()
                 // 미인증 화면(Thymeleaf): 비밀번호 찾기·재설정, 가입 요청. GET 화면과 POST 제출 모두.
                 .requestMatchers("/admin/forgot-password", "/admin/reset-password", "/admin/signup").permitAll()
+                // 재설정 메일 링크(base-url + /reset-password?token=…)를 /admin/reset-password 로 넘기는 리다이렉트(화면 계층, PasswordPagesController).
+                .requestMatchers(HttpMethod.GET, "/reset-password").permitAll()
                 // 화면 정적 에셋(로그인 화면에서도 쓰므로 미인증 허용).
                 .requestMatchers("/admin/css/**", "/admin/js/**", "/admin/fonts/**", "/admin/img/**", "/favicon.ico").permitAll()
                 // 서버가 그리는 화면은 인증 필수. /admin/_/** 는 htmx 조각 전용 경로 접두사.
@@ -129,6 +131,10 @@ public class AdminSecurityConfig {
                 // the operator has no session (they forgot their password).
                 .requestMatchers("/admin/api/password-reset/**").permitAll()
                 .requestMatchers("/admin/api/**").authenticated()
+                // 위 규칙에 없는 /admin 아래 GET(주소를 잘못 친 화면 경로 등)은 로그인한 운영자에게 403 "권한이 없습니다" 대신
+                // 404 화면(ScreenNotFoundAdvice)을 보이도록 인증만 요구한다. 화면 컨트롤러는 각자 역할을 검사한다(PLATFORM 전용 화면·조각).
+                // GET 밖의 메서드와 /admin 밖은 그대로 denyAll.
+                .requestMatchers(HttpMethod.GET, "/admin/**").authenticated()
                 .anyRequest().denyAll())
             .formLogin(form -> form
                 .loginProcessingUrl("/admin/login")

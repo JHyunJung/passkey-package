@@ -129,7 +129,7 @@
           <td><span style="font-size: 13px; color: var(--ink-2)" th:text="${o.lastLogin}">5분 전</span></td>
           <td><th:block th:replace="~{admin/fragments/ui/statusBadge :: statusBadge(${o.status})}"></th:block></td>
           <td>
-            <button th:if="${o.status == 'SUSPENDED'}" type="button" class="btn btn--sm" ui:attrs="${o.activateAttrs}" x-bind:disabled="stale" x-bind:title="stale ? '목록을 새로 고친 뒤 다시 시도하세요' : null">활성화</button>
+            <button th:if="${o.status == 'SUSPENDED'}" type="button" class="btn btn--sm" name="email" th:value="${o.email}" ui:attrs="${o.activateAttrs}" x-bind:disabled="stale" x-bind:title="stale ? '목록을 새로 고친 뒤 다시 시도하세요' : null">활성화</button>
             <th:block th:if="${o.status == 'ACTIVE'}">
               <div th:if="${o.block != null}" class="col" style="gap: 2px; align-items: flex-start">
                 <button type="button" class="btn btn--sm" disabled th:aria-describedby="${'suspend-why-' + o.id}">정지…</button>

@@ -101,6 +101,9 @@ class ShellExtrasRenderTest {
         assertThat(list.attr("aria-label")).isEqualTo("검색 결과");
         assertThat(d.select(".palette__foot").text()).contains("이동").contains("실행").contains("닫기").contains("개 결과");
         assertThat(in.attr("x-on:input")).isEqualTo("onInput()");
+        // 스크림 표시: 열리면 빈 문자열(null 이 아님 — Alpine 은 null 스타일 바인딩에서 이전 display:none 을 지우지 않을 수 있다)
+        assertThat(dlg.parents().stream().filter(e -> e.hasClass("scrim")).findFirst().orElseThrow().attr("x-bind:style"))
+                .isEqualTo("open ? '' : 'display: none'");
     }
 
     @Test
