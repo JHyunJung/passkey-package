@@ -189,7 +189,7 @@ class TenantDetailPageControllerTest {
         assertThat(rp.text()).contains("RP 사이트 열기");
         assertThat(d.select("button[aria-label='ID 복사'], button[aria-label='RP ID 복사']")).hasSize(2);
         assertThat(d.select(".propchip__v").eachText()).contains("acme", "2026-03-02");
-        assertThat(tabLabels(d)).containsExactly("개요", "WebAuthn", "AAGUID 정책", "API 키", "Credentials", "감사 로그", "퍼널");
+        assertThat(tabLabels(d)).containsExactly("개요", "WebAuthn", "AAGUID 정책", "API 키", "Credentials", "감사 로그", "인증 현황");
         assertThat(d.select("[role=tab][aria-selected=true]").text()).isEqualTo("개요");
         assertThat(d.select("[role=tablist]").attr("aria-label")).isEqualTo("Tenant 탭");
         // 개요는 서버가 그린다(R3')
@@ -333,7 +333,7 @@ class TenantDetailPageControllerTest {
         assertThat(d.select(".kpi__hint").eachText()).filteredOn(s -> s.equals("불러오지 못했습니다")).hasSize(2);
         assertThat(d.text()).doesNotContain("시도 없음");
         Element err = d.selectFirst("#tenant-tab [role=alert].empty");
-        assertThat(err.text()).contains("퍼널 지표");
+        assertThat(err.text()).contains("인증 현황 지표");
         assertThat(err.selectFirst("button[hx-get]").attr("hx-get")).isEqualTo("/admin/_/tenants/" + T1 + "/tab/overview");
 
         when(funnel.get(eq(T1), anyInt())).thenReturn(new FunnelDto.View(7, new FunnelDto.Stage(0, 0, 0), new FunnelDto.Stage(0, 0, 0), 0, List.of(), List.of()));

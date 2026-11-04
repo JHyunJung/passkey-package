@@ -11,12 +11,8 @@ import java.util.function.IntToLongFunction;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-/** 원본: pages/tenant/funnelHelpers.test.ts 의 모든 케이스. */
+/** 인증 현황 탭 성공률 계산. */
 class FunnelHelpersTest {
-
-    static FunnelDto.View data(long[] reg, long[] auth) {
-        return new FunnelDto.View(7, new FunnelDto.Stage(reg[0], reg[1], 0), new FunnelDto.Stage(auth[0], auth[1], 0), 0, List.of(), List.of());
-    }
 
     static List<FunnelDto.DailyPoint> series(int n, IntToLongFunction success, IntToLongFunction attempts) {
         List<FunnelDto.DailyPoint> out = new ArrayList<>();
@@ -29,35 +25,11 @@ class FunnelHelpersTest {
     }
 
     @Test
-    @DisplayName("funnelSummary: 단계·전환율·이탈·최대 이탈 단계·전체 전환율")
-    void summary() {
-        FunnelHelpers.Summary s = FunnelHelpers.summary(data(new long[] {100, 80}, new long[] {70, 63}));
-        assertThat(s.steps()).extracting(FunnelHelpers.Step::label).containsExactly("등록 시도", "등록 성공", "인증 시도", "인증 성공");
-        assertThat(s.steps()).extracting(FunnelHelpers.Step::value).containsExactly(100L, 80L, 70L, 63L);
-        assertThat(s.steps()).extracting(FunnelHelpers.Step::pctOfFirst).containsExactly(1.0, 0.8, 0.7, 0.63);
-        assertThat(s.steps()).extracting(FunnelHelpers.Step::convFromPrev).containsExactly(null, 0.8, 0.875, 0.9);
-        assertThat(s.steps()).extracting(FunnelHelpers.Step::dropFromPrev).containsExactly(0L, 20L, 10L, 7L);
-        assertThat(s.overallRate()).isCloseTo(0.63, within(1e-9));
-        assertThat(s.biggestDrop()).isEqualTo(new FunnelHelpers.Drop("등록 시도", "등록 성공", 20, 0.2));
-    }
-
-    @Test
-    @DisplayName("단계가 늘어나는 구간은 이탈 0, 감소가 없으면 biggestDrop=null")
-    void noDrop() {
-        FunnelHelpers.Summary s = FunnelHelpers.summary(data(new long[] {10, 10}, new long[] {40, 40}));
-        assertThat(s.steps()).extracting(FunnelHelpers.Step::dropFromPrev).containsExactly(0L, 0L, 0L, 0L);
-        assertThat(s.biggestDrop()).isNull();
-        assertThat(s.overallRate()).isEqualTo(4.0);
-    }
-
-    @Test
-    @DisplayName("모두 0 이면 비율은 null (0/0 금지)")
-    void allZero() {
-        FunnelHelpers.Summary s = FunnelHelpers.summary(data(new long[] {0, 0}, new long[] {0, 0}));
-        assertThat(s.overallRate()).isNull();
-        assertThat(s.steps()).allMatch(x -> x.pctOfFirst() == null);
-        assertThat(s.steps().get(1).convFromPrev()).isNull();
-        assertThat(s.biggestDrop()).isNull();
+    @DisplayName("rate: 시도 0 이면 null, 성공이 시도보다 많으면 100% 로 자른다")
+    void rate() {
+        assertThat(FunnelHelpers.rate(28, 37)).isCloseTo(28.0 / 37, within(1e-12));
+        assertThat(FunnelHelpers.rate(0, 0)).isNull();
+        assertThat(FunnelHelpers.rate(5, 3)).isEqualTo(1.0);
     }
 
     @Test

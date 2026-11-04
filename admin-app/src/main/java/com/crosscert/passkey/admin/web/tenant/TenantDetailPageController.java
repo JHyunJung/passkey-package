@@ -85,7 +85,7 @@ public class TenantDetailPageController {
             new String[] {"apikeys", "API 키"},
             new String[] {"credentials", "Credentials"},
             new String[] {"audit", "감사 로그"},
-            new String[] {"funnel", "퍼널"});
+            new String[] {"funnel", "인증 현황"});
 
     /** 체인 검증 응답을 이 시간(초)까지 기다린 뒤 "확인 불가"로 바꾼다(CHAIN_TIMEOUT_MS = 15_000). 템플릿의 hx-request 와 같은 값. */
     static final int CHAIN_TIMEOUT_SECONDS = 15;
