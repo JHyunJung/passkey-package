@@ -23,9 +23,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * rows whose prev_hash both point at the same predecessor.
      *
      * <p>Orders by {@code createdAt DESC} (microsecond precision) with {@code id}
-     * as tie-breaker. UUID v1 (time-ordered) id also correlates with time,
-     * but {@code createdAt} is the primary insert-order proxy — consistent
-     * with {@link #findAllOrdered()}.
+     * as tie-breaker. {@code createdAt} is the insert-order key: AuditLogService
+     * makes it strictly increasing along the chain. The id must NOT be used as
+     * the order key — Hibernate's TIME-style UUID changes its middle bits on
+     * every JVM start, so ids from a restarted app can sort before older rows.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from AuditLog a order by a.createdAt desc, a.id desc limit 1")
@@ -46,25 +47,30 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * Phase B — per-tenant chain head 조회.
      * tenant_id 가 NULL 인 경우(PLATFORM_OPERATOR row)와 non-NULL 인 경우를
      * 모두 올바르게 처리하기 위해 JPQL is null 비교를 사용한다.
-     * 인덱스 hint: audit_log_tenant_seq_ix (tenant_id, id) 로 ORDER BY id DESC LIMIT 1 최적화.
+     *
+     * <p>순서는 global chain({@link #findLatestForUpdate()})과 같은 createdAt DESC, id DESC.
+     * 예전에는 id DESC 였는데, TIME 방식 UUID 는 앱을 재시작할 때마다 가운데 자리가 바뀌어
+     * 재시작 뒤 row 가 이전 row 보다 작게 정렬될 수 있다 → 같은 직전 row 를 두 번 이어 체인이
+     * 갈라지고 검증이 위변조로 판정했다. 인덱스: audit_log_tenant_ix (tenant_id, created_at).
      */
     @Query("""
             select a from AuditLog a
             where (:tenantId is null and a.tenantId is null)
                or (a.tenantId = :tenantId)
-            order by a.id desc
+            order by a.createdAt desc, a.id desc
             """)
     List<AuditLog> findLatestByTenant(@Param("tenantId") UUID tenantId, Pageable limit);
 
     /**
-     * Phase B Task 4 — per-tenant chain 검증용 전체 스캔 (id ASC).
+     * Phase B Task 4 — per-tenant chain 검증·백필용 전체 스캔 (append 순서 = createdAt ASC, id ASC).
      * tenantId 가 null 인 경우(PLATFORM_OPERATOR row) 와 non-null 인 경우를 모두 처리.
+     * {@link #findLatestByTenant} 와 같은 순서여야 append 가 이은 체인을 검증이 같은 순서로 따라간다.
      */
     @Query("""
             select a from AuditLog a
             where (:tenantId is null and a.tenantId is null)
                or (a.tenantId = :tenantId)
-            order by a.id asc
+            order by a.createdAt asc, a.id asc
             """)
     List<AuditLog> findAllByTenantOrdered(@Param("tenantId") UUID tenantId);
 
