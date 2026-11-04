@@ -4,7 +4,8 @@
 <!--
   인증 현황 탭(URL 키는 funnel). 탭 조각 GET /admin/_/tenants/{id}/tab/funnel?win=1|7|30.
   모델: tid, win, segOptions, retryAttrs, loadError, hasData, rateKpis(RateKpi 2장: 등록·인증), failTotal/failHint/failAlert, period/periodHint,
-        seriesCards(SeriesCard 2장)/seriesColumns, failures/failureColumns, csvSummary/csvFailures
+        seriesCards(SeriesCard 2장)/seriesColumns, failures/failureColumns, csvSummary/csvFailures,
+        adoptError, adoptKpis(AdoptKpi 4장), months/monthColumns, devices, csvMonthly/csvDevices
   기간 전환·다시 시도는 #funnel-root 만 교체한다(hx-target=this). 루트 상태는 Alpine funnelTab(app.js). 막대 너비·높이는 서버가 계산한 숫자만 th:style 에 들어가고 색은 CSS 클래스다.
   실패 원인 코드·이름·날짜는 th:text/th:title 로만 쓴다. 표로 보기는 서버가 둘 다 그려 두고 Alpine 이 보이는 쪽만 바꾼다.
 -->
@@ -29,6 +30,7 @@
   </th:block>
 
   <th:block th:if="${loadError == null}">
+    <h2 class="fn-section">인증 품질</h2>
     <div class="kpis">
       <div class="kpi" th:each="k : ${rateKpis}">
         <span class="kpi__label" th:text="${k.label}">인증 성공률</span>
@@ -36,7 +38,7 @@
         <span class="kpi__hint" th:text="${k.hint}">성공 106 / 시도 119 · 직전 7일 대비 +1.2%p</span>
       </div>
       <div class="kpi">
-        <span class="kpi__label">인증 실패</span>
+        <span class="kpi__label">차단된 위험 인증</span>
         <span class="kpi__value" th:text="${failTotal}">3건</span>
         <span class="kpi__hint" th:classappend="${failAlert} ? 'kpi__hint--warn'" th:text="${failHint}">서명 검증 실패 2 · 서명 카운터 재사용 1</span>
       </div>
@@ -85,6 +87,50 @@
         </div>
       </div>
     </section>
+
+    <h2 class="fn-section">패스키 도입·사용</h2>
+    <th:block th:if="${adoptError != null}">
+      <th:block th:replace="~{admin/fragments/ui/loadError :: loadError('패스키 도입 지표', ${adoptError}, ${retryAttrs}, false, false)}"></th:block>
+    </th:block>
+    <th:block th:if="${adoptError == null}">
+      <div class="kpis" data-adoption>
+        <div class="kpi" th:each="k : ${adoptKpis}">
+          <span class="kpi__label" th:text="${k.label}">활성 사용자</span>
+          <span class="kpi__value" th:text="${k.value}">120명</span>
+          <span class="kpi__hint" th:classappend="${k.warn} ? 'kpi__hint--warn'" th:text="${k.hint}">기간 중 인증 성공</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <section class="card" data-monthly>
+          <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('월간 사용량', '인증 기록은 90일 보관돼요. 이번 달 포함 최근 3개월만 집계해요.', null, null)}"></th:block>
+          <div class="card__body stack-3">
+            <th:block th:replace="~{admin/fragments/ui/dataTable :: dataTable(${monthColumns}, ~{:: monthBody})}"></th:block>
+            <div class="row" style="gap: 8px">
+              <a class="btn btn--ghost btn--sm" th:href="${csvMonthly}" hx-boost="false" download data-csv-download x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" data-devices>
+          <th:block th:replace="~{admin/fragments/ui/card :: cardHeader('사용자 기기 분포', '등록된 패스키를 만든 인증기별 비율이에요.', null, null)}"></th:block>
+          <div class="card__body stack-3">
+            <p th:if="${#lists.isEmpty(devices)}" class="hint" style="margin: 0">등록된 패스키가 없습니다.</p>
+            <div th:unless="${#lists.isEmpty(devices)}" class="stack-3">
+              <div th:each="d : ${devices}" class="dv-row">
+                <span class="dv-row__name truncate" th:text="${d.name}" th:title="${d.name}">iCloud 키체인</span>
+                <span class="dv-row__track"><span class="dv-row__bar" th:style="|width: ${d.widthPct}%|"></span></span>
+                <span class="dv-row__num"><strong th:text="${d.shareText}">40.0%</strong> <span class="hint" style="margin: 0" th:text="${d.countText}">8개</span></span>
+                <span class="dv-row__sub hint" th:text="${d.authText}">기간 인증 30건</span>
+              </div>
+            </div>
+            <div class="row" style="gap: 8px" th:unless="${#lists.isEmpty(devices)}">
+              <a class="btn btn--ghost btn--sm" th:href="${csvDevices}" hx-boost="false" download data-csv-download x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+            </div>
+          </div>
+        </section>
+      </div>
+    </th:block>
   </th:block>
   </div>
 </div>
@@ -100,6 +146,15 @@
     <td class="num" th:text="${d.attemptsText}">10</td>
     <td class="num" th:text="${d.successText}">9</td>
     <td class="num" th:text="${d.rateText}">90.0%</td>
+  </tr>
+</th:block>
+
+<th:block th:fragment="monthBody">
+  <tr th:each="m : ${months}">
+    <td th:text="${m.label}">2026년 11월 (진행 중)</td>
+    <td class="num" th:text="${m.authText}">1,200</td>
+    <td class="num" th:text="${m.mauText}">300명</td>
+    <td class="num" th:text="${m.newText}">40</td>
   </tr>
 </th:block>
 

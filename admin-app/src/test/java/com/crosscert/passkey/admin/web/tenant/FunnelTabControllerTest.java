@@ -59,6 +59,7 @@ class FunnelTabControllerTest {
     @Autowired Clock clock;
     @MockBean TenantAdminController tenants;
     @MockBean FunnelController funnel;
+    @MockBean com.crosscert.passkey.admin.funnel.AdoptionController adoption;
     @MockBean AaguidPolicyController aaguid;
     @MockBean LicenseController license;
     @MockBean AuditChainMonitorController chain;
@@ -68,6 +69,8 @@ class FunnelTabControllerTest {
     static final UUID T1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
     static final UUID OTHER = UUID.fromString("00000000-0000-0000-0000-0000000000ff");
     static final String BASE = "/admin/_/tenants/" + T1;
+    /** 인증 품질 지표 줄(도입·사용 지표 줄 제외). */
+    static final String Q = "div.kpis:not([data-adoption]) ";
 
     static List<FunnelDto.DailyPoint> days(int n, java.util.function.IntToLongFunction success) {
         return days(n, i -> 10, success);
@@ -91,8 +94,18 @@ class FunnelTabControllerTest {
         return data(w, days(w, i -> 4, i -> 3), auth, FAILS);
     }
 
+    static com.crosscert.passkey.admin.funnel.AdoptionDto.View adoptionData(int w) {
+        return new com.crosscert.passkey.admin.funnel.AdoptionDto.View(w, 20, 3, 12, 9, 15, 10,
+                List.of(new com.crosscert.passkey.admin.funnel.AdoptionDto.Month("2026-08", false, 300, 40, 5),
+                        new com.crosscert.passkey.admin.funnel.AdoptionDto.Month("2026-09", false, 1234, 52, 7),
+                        new com.crosscert.passkey.admin.funnel.AdoptionDto.Month("2026-10", true, 90, 9, 3)),
+                List.of(new com.crosscert.passkey.admin.funnel.AdoptionDto.Device("iCloud 키체인", 15, 40),
+                        new com.crosscert.passkey.admin.funnel.AdoptionDto.Device("<b>x</b>", 5, 2)));
+    }
+
     @BeforeEach
     void setUp() {
+        when(adoption.get(eq(T1), anyInt())).thenAnswer(inv -> adoptionData(inv.getArgument(1)));
         when(clock.instant()).thenReturn(NOW);
         when(clock.getZone()).thenReturn(ZoneOffset.UTC);
         when(license.get()).thenReturn(ApiResponse.ok(new LicenseView("saas", "VALID", "acme", "lic_1", NOW.plusSeconds(86400L * 30), 30, List.of(), null, null, null)));
@@ -146,14 +159,14 @@ class FunnelTabControllerTest {
         assertThat(d.text()).doesNotContain("전환율").doesNotContain("Funnel").doesNotContain("이탈");
         verify(funnel).get(T1, 7);
         verify(funnel).get(T1, 30);
-        assertThat(d.select(".kpi .kpi__label").eachText()).containsExactly("등록 성공률", "인증 성공률", "인증 실패", "기간");
-        assertThat(d.select(".kpi .kpi__value").eachText()).containsExactly("80.0%", "90.0%", "7건", "최근 7일");
-        assertThat(d.select(".kpi .kpi__hint").eachText()).containsExactly(
+        assertThat(d.select(Q + ".kpi__label").eachText()).containsExactly("등록 성공률", "인증 성공률", "차단된 위험 인증", "기간");
+        assertThat(d.select(Q + ".kpi__value").eachText()).containsExactly("80.0%", "90.0%", "7건", "최근 7일");
+        assertThat(d.select(Q + ".kpi__hint").eachText()).containsExactly(
                 "성공 80 / 시도 100 · 직전 7일 대비 +30.0%p",
                 "성공 63 / 시도 70 · 직전 7일 대비 ±0.0%p",
                 "서명 검증 실패 5 · 서명 카운터 재사용 2",
                 "2026-10-05 – 2026-10-11");
-        assertThat(d.select(".kpi .kpi__hint").get(2).hasClass("kpi__hint--warn")).isTrue();
+        assertThat(d.select(Q + ".kpi__hint").get(2).hasClass("kpi__hint--warn")).isTrue();
         assertThat(d.select("#funnel-root p.hint").text()).contains("사용자 취소와 시간 초과");
     }
 
@@ -163,9 +176,9 @@ class FunnelTabControllerTest {
         when(funnel.get(eq(T1), eq(7))).thenReturn(new FunnelDto.View(7, new FunnelDto.Stage(0, 0, 0), new FunnelDto.Stage(0, 0, 0), 0,
                 List.of(), List.of(), days(7, i -> 0, i -> 0), days(7, i -> 0, i -> 0), List.of()));
         Document d = tab("");
-        assertThat(d.select(".kpi .kpi__value").eachText()).containsExactly("—", "—", "0건", "최근 7일");
-        assertThat(d.select(".kpi .kpi__hint").eachText()).startsWith("시도 없음", "시도 없음", "실패 없음");
-        assertThat(d.select(".kpi .kpi__hint").get(2).hasClass("kpi__hint--warn")).isFalse();
+        assertThat(d.select(Q + ".kpi__value").eachText()).containsExactly("—", "—", "0건", "최근 7일");
+        assertThat(d.select(Q + ".kpi__hint").eachText()).startsWith("시도 없음", "시도 없음", "실패 없음");
+        assertThat(d.select(Q + ".kpi__hint").get(2).hasClass("kpi__hint--warn")).isFalse();
         Element card = d.selectFirst("section[data-failures]");
         assertThat(card.text()).contains("기간 안에 인증 실패가 없습니다.");
         assertThat(card.select("table, a[download]")).isEmpty();
@@ -178,17 +191,17 @@ class FunnelTabControllerTest {
     @DisplayName("24h·30d 에서는 직전 기간 대비를 계산·표시하지 않고 30일 비교 조회도 하지 않는다")
     void noComparisonOutside7d() throws Exception {
         Document d24 = tab("?win=1");
-        assertThat(d24.select(".kpi__hint").eachText()).noneMatch(t -> t.contains("직전 7일 대비"));
-        assertThat(d24.select(".kpi .kpi__value").get(3).text()).isEqualTo("최근 24시간");
-        assertThat(d24.select(".kpi__hint").get(3).text()).isEqualTo("2026-10-10 – 2026-10-11"); // 24h: 하루 전부터
+        assertThat(d24.select(Q + ".kpi__hint").eachText()).noneMatch(t -> t.contains("직전 7일 대비"));
+        assertThat(d24.select(Q + ".kpi__value").get(3).text()).isEqualTo("최근 24시간");
+        assertThat(d24.select(Q + ".kpi__hint").get(3).text()).isEqualTo("2026-10-10 – 2026-10-11"); // 24h: 하루 전부터
         verify(funnel, never()).get(T1, 30);
 
         Document d30 = tab("?win=30");
-        assertThat(d30.select(".kpi__hint").eachText()).noneMatch(t -> t.contains("직전 7일 대비"));
-        assertThat(d30.select(".kpi .kpi__value").get(3).text()).isEqualTo("최근 30일");
+        assertThat(d30.select(Q + ".kpi__hint").eachText()).noneMatch(t -> t.contains("직전 7일 대비"));
+        assertThat(d30.select(Q + ".kpi__value").get(3).text()).isEqualTo("최근 30일");
         verify(funnel, times(1)).get(T1, 30); // 본 조회 1회(비교 조회 없음)
         // 알 수 없는 기간은 7일
-        assertThat(tab("?win=999").select(".kpi .kpi__value").get(3).text()).isEqualTo("최근 7일");
+        assertThat(tab("?win=999").select(Q + ".kpi__value").get(3).text()).isEqualTo("최근 7일");
     }
 
     @Test
@@ -196,9 +209,9 @@ class FunnelTabControllerTest {
     void comparisonFailureOmitsLineOnly() throws Exception {
         when(funnel.get(eq(T1), eq(30))).thenThrow(new IllegalStateException("boom"));
         Document d = tab("");
-        assertThat(d.select(".kpi .kpi__value").first().text()).isEqualTo("80.0%");
-        assertThat(d.select(".kpi__hint").first().text()).isEqualTo("성공 80 / 시도 100");
-        assertThat(d.select(".kpi__hint").get(1).text()).isEqualTo("성공 63 / 시도 70");
+        assertThat(d.select(Q + ".kpi__value").first().text()).isEqualTo("80.0%");
+        assertThat(d.select(Q + ".kpi__hint").first().text()).isEqualTo("성공 80 / 시도 100");
+        assertThat(d.select(Q + ".kpi__hint").get(1).text()).isEqualTo("성공 63 / 시도 70");
     }
 
     @Test
@@ -287,6 +300,90 @@ class FunnelTabControllerTest {
         assertThat(d.select("section[data-failures] tbody strong").text()).isEqualTo("<img src=x onerror=alert(1)>");
     }
 
+    // ── 패스키 도입·사용 ─────────────────────────────────────
+
+    @Test
+    @DisplayName("도입·사용 지표: 활성 사용자·신규·누적 패스키·패스키 1개뿐인 사용자 비율(50% 이상이면 경고), 기간은 탭과 같다")
+    void adoptionKpis() throws Exception {
+        Document d = tab("?win=30");
+        verify(adoption).get(T1, 30);
+        Element row = d.selectFirst("div.kpis[data-adoption]");
+        assertThat(row.select(".kpi__label").eachText()).containsExactly("활성 사용자", "신규 패스키", "누적 패스키", "패스키 1개뿐인 사용자");
+        assertThat(row.select(".kpi__value").eachText()).containsExactly("9명", "3개", "20개", "66.7%");
+        assertThat(row.select(".kpi__hint").eachText()).containsExactly(
+                "기간 중 인증 성공 · 사용된 패스키 12개", "기간 중 새로 등록", "사용자 15명",
+                "10명 / 15명 · 기기를 잃으면 로그인할 수 없어요");
+        assertThat(row.select(".kpi__hint").get(3).hasClass("kpi__hint--warn")).isTrue();
+        assertThat(d.select("h2.fn-section").eachText()).containsExactly("인증 품질", "패스키 도입·사용");
+    }
+
+    @Test
+    @DisplayName("사용자 0명: 1개뿐 비율은 '—' + '사용자 없음'(경고 아님), 기기 분포는 빈 문구만")
+    void adoptionEmpty() throws Exception {
+        when(adoption.get(eq(T1), anyInt())).thenReturn(new com.crosscert.passkey.admin.funnel.AdoptionDto.View(7, 0, 0, 0, 0, 0, 0, List.of(), List.of()));
+        Document d = tab("");
+        Element row = d.selectFirst("div.kpis[data-adoption]");
+        assertThat(row.select(".kpi__value").eachText()).containsExactly("0명", "0개", "0개", "—");
+        assertThat(row.select(".kpi__hint").get(3).text()).isEqualTo("사용자 없음");
+        assertThat(row.select(".kpi__hint").get(3).hasClass("kpi__hint--warn")).isFalse();
+        Element dev = d.selectFirst("section[data-devices]");
+        assertThat(dev.text()).contains("등록된 패스키가 없습니다.");
+        assertThat(dev.select(".dv-row, a[download]")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("월간 사용량: 최근 3개월(이번 달은 진행 중), 인증 성공·활성 사용자·신규 패스키, CSV 링크")
+    void monthlyCard() throws Exception {
+        Element card = tab("").selectFirst("section[data-monthly]");
+        assertThat(card.select(".card__title").text()).isEqualTo("월간 사용량");
+        assertThat(card.select("table th").eachText()).containsExactly("월", "인증 성공", "활성 사용자", "신규 패스키");
+        assertThat(card.select("tbody tr").get(1).select("td").eachText()).containsExactly("2026년 9월", "1,234", "52명", "7");
+        assertThat(card.select("tbody tr").get(2).select("td").first().text()).isEqualTo("2026년 10월 (진행 중)");
+        assertThat(card.select("a[download]").attr("href")).isEqualTo("/admin/tenants/" + T1 + "/funnel.csv?win=7&kind=monthly");
+    }
+
+    @Test
+    @DisplayName("기기 분포: 인증기 이름(이스케이프)·비율 막대(숫자만 style)·비율·개수·기간 인증 건수, CSV 링크")
+    void devicesCard() throws Exception {
+        String html = body(hget(BASE + "/tab/funnel", platform()));
+        assertThat(html).doesNotContain("<b>x</b>");
+        Element card = Jsoup.parse(html).selectFirst("section[data-devices]");
+        assertThat(card.select(".dv-row__name").eachText()).containsExactly("iCloud 키체인", "<b>x</b>");
+        assertThat(card.select(".dv-row__bar").eachAttr("style")).containsExactly("width: 75.0%", "width: 25.0%");
+        assertThat(card.select(".dv-row__num").eachText()).containsExactly("75.0% 15개", "25.0% 5개");
+        assertThat(card.select(".dv-row__sub").eachText()).containsExactly("기간 인증 40건", "기간 인증 2건");
+        assertThat(card.select("a[download]").attr("href")).isEqualTo("/admin/tenants/" + T1 + "/funnel.csv?win=7&kind=devices");
+    }
+
+    @Test
+    @DisplayName("도입 지표 조회가 실패해도 인증 품질 영역은 그대로, 도입 영역만 오류(내부 메시지 비노출)")
+    void adoptionFailureIsolated() throws Exception {
+        when(adoption.get(eq(T1), anyInt())).thenThrow(new IllegalStateException("jdbc:secret"));
+        MvcResult r = hget(BASE + "/tab/funnel", platform());
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(r)).doesNotContain("secret");
+        Document d = Jsoup.parse(body(r));
+        assertThat(d.select(Q + ".kpi__value").first().text()).isEqualTo("80.0%");
+        assertThat(d.select("[role=alert]").text()).contains("패스키 도입 지표를 불러오지 못했습니다");
+        assertThat(d.select("div.kpis[data-adoption], section[data-monthly], section[data-devices]")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CSV: 월간 사용량·기기 분포 — 퍼널 조회 없이 도입 지표만, 수식 문자 무력화")
+    void adoptionCsv() throws Exception {
+        String[] disp = new String[1];
+        String monthly = csv("?win=7&kind=monthly", disp);
+        assertThat(disp[0]).isEqualTo("attachment; filename=\"monthly-usage-acme-2026-10-11.csv\"");
+        assertThat(monthly.split("\n")).containsExactly("month,inProgress,authSuccess,activeUsers,newPasskeys",
+                "2026-08,N,300,40,5", "2026-09,N,1234,52,7", "2026-10,Y,90,9,3");
+        when(adoption.get(eq(T1), eq(30))).thenReturn(new com.crosscert.passkey.admin.funnel.AdoptionDto.View(30, 1, 0, 0, 0, 1, 1, List.of(),
+                List.of(new com.crosscert.passkey.admin.funnel.AdoptionDto.Device("=cmd", 1, 0))));
+        String devices = csv("?win=30&kind=devices", disp);
+        assertThat(disp[0]).isEqualTo("attachment; filename=\"devices-acme-30d-2026-10-11.csv\"");
+        assertThat(devices.split("\n")).containsExactly("authenticator,passkeys,authSuccessInWindow", "'=cmd,1,0");
+        verify(funnel, never()).get(any(), anyInt());
+    }
+
     // ── 오류 ────────────────────────────────────────────────
 
     @Test
@@ -322,10 +419,10 @@ class FunnelTabControllerTest {
     }
 
     @Test
-    @DisplayName("CSV 링크 4개(내보내기·일별 인증·일별 등록·실패 원인) 모두 공통 다운로드 표식")
+    @DisplayName("CSV 링크 6개(내보내기·일별 인증·일별 등록·실패 원인·월간 사용량·기기 분포) 모두 공통 다운로드 표식")
     void csvLinksCarryMarker() throws Exception {
         Document d = tab("");
-        assertThat(d.select("a[download]")).hasSize(4);
+        assertThat(d.select("a[download]")).hasSize(6);
         assertThat(d.select("a[download]").stream().allMatch(a -> a.hasAttr("data-csv-download"))).isTrue();
     }
 

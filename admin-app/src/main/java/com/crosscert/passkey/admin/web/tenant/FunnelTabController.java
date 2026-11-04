@@ -1,5 +1,7 @@
 package com.crosscert.passkey.admin.web.tenant;
 
+import com.crosscert.passkey.admin.funnel.AdoptionController;
+import com.crosscert.passkey.admin.funnel.AdoptionDto;
 import com.crosscert.passkey.admin.funnel.FunnelController;
 import com.crosscert.passkey.admin.funnel.FunnelDto;
 import com.crosscert.passkey.admin.tenant.TenantAdminController;
@@ -54,11 +56,13 @@ public class FunnelTabController {
 
     private final TenantAdminController tenants;
     private final FunnelController funnel;
+    private final AdoptionController adoption;
     private final Clock clock;
 
-    public FunnelTabController(TenantAdminController tenants, FunnelController funnel, Clock clock) {
+    public FunnelTabController(TenantAdminController tenants, FunnelController funnel, AdoptionController adoption, Clock clock) {
         this.tenants = tenants;
         this.funnel = funnel;
+        this.adoption = adoption;
         this.clock = clock;
     }
 
@@ -84,7 +88,18 @@ public class FunnelTabController {
             CredentialAuthFailureReason.SIGN_COUNT_REPLAY, new String[] {"서명 카운터 재사용",
                     "인증기 카운터가 이전 값보다 작거나 같아요. 패스키 복제가 의심돼요."});
 
+    private static final List<Map<String, Object>> MONTH_COLUMNS = List.of(
+            col("month", "월", false), col("auth", "인증 성공", true), col("mau", "활성 사용자", true), col("new", "신규 패스키", true));
+
     // ── 모델 ────────────────────────────────────────────────
+
+    /** 도입·사용 지표 카드 1장. warn 이면 힌트를 경고색으로. */
+    public record AdoptKpi(String label, String value, String hint, boolean warn) {}
+
+    public record MonthView(String label, String authText, String mauText, String newText) {}
+
+    /** 기기 분포 1줄. widthPct 는 패스키 수 / 전체 패스키 퍼센트 숫자(막대 너비). */
+    public record DeviceView(String name, String countText, String shareText, double widthPct, String authText) {}
 
     /** 성공률 지표 카드 1장(등록·인증). */
     public record RateKpi(String label, String value, String hint) {}
@@ -190,7 +205,57 @@ public class FunnelTabController {
         model.addAttribute("seriesColumns", SERIES_COLUMNS);
         model.addAttribute("csvSummary", PAGE + tid + "/funnel.csv" + q + "&kind=summary");
         model.addAttribute("csvFailures", PAGE + tid + "/funnel.csv" + q + "&kind=failures");
+        addAdoption(model, tid, w, PAGE + tid + "/funnel.csv" + q);
         return TAB_VIEW;
+    }
+
+    /** 패스키 도입·사용 지표. 조회가 실패해도 탭의 나머지(성공률)는 그대로 보이고 이 영역만 오류 + 다시 시도. */
+    private void addAdoption(Model model, UUID tid, int w, String csvBase) {
+        AdoptionDto.View a;
+        try {
+            a = adoption.get(tid, w);
+        } catch (RuntimeException e) {
+            if (denied(e)) throw e;
+            log.warn("[funnel-tab] adoption load failed: {}", e.getClass().getSimpleName());
+            model.addAttribute("adoptError", e);
+            return;
+        }
+        model.addAttribute("adoptError", null);
+        Double single = a.totalUsers() > 0 ? (double) a.singlePasskeyUsers() / a.totalUsers() : null;
+        model.addAttribute("adoptKpis", List.of(
+                new AdoptKpi("활성 사용자", num(a.activeUsers()) + "명", "기간 중 인증 성공 · 사용된 패스키 " + num(a.activeCredentials()) + "개", false),
+                new AdoptKpi("신규 패스키", num(a.newCredentials()) + "개", "기간 중 새로 등록", false),
+                new AdoptKpi("누적 패스키", num(a.totalCredentials()) + "개", "사용자 " + num(a.totalUsers()) + "명", false),
+                new AdoptKpi("패스키 1개뿐인 사용자", FunnelHelpers.fmtPct(single),
+                        a.totalUsers() == 0 ? "사용자 없음" : num(a.singlePasskeyUsers()) + "명 / " + num(a.totalUsers()) + "명 · 기기를 잃으면 로그인할 수 없어요",
+                        single != null && single >= 0.5)));
+
+        List<MonthView> months = new ArrayList<>();
+        for (AdoptionDto.Month m : orEmpty(a.months())) {
+            months.add(new MonthView(monthLabel(m), num(m.authSuccess()), num(m.activeUsers()) + "명", num(m.newCredentials())));
+        }
+        model.addAttribute("months", months);
+        model.addAttribute("monthColumns", MONTH_COLUMNS);
+
+        List<DeviceView> devices = new ArrayList<>();
+        long total = 0;
+        for (AdoptionDto.Device d : orEmpty(a.devices())) total += d.credentials();
+        for (AdoptionDto.Device d : orEmpty(a.devices())) {
+            Double share = total > 0 ? (double) d.credentials() / total : null;
+            devices.add(new DeviceView(d.name(), num(d.credentials()) + "개", FunnelHelpers.fmtPct(share),
+                    pct(share == null ? 0 : share * 100), "기간 인증 " + num(d.authSuccess()) + "건"));
+        }
+        model.addAttribute("devices", devices);
+        model.addAttribute("csvMonthly", csvBase + "&kind=monthly");
+        model.addAttribute("csvDevices", csvBase + "&kind=devices");
+    }
+
+    /** "2026-11" → "2026년 11월", 이번 달은 "(진행 중)". */
+    static String monthLabel(AdoptionDto.Month m) {
+        String s = m.month();
+        String label = s != null && s.matches("\\d{4}-\\d{2}")
+                ? s.substring(0, 4) + "년 " + Integer.parseInt(s.substring(5)) + "월" : String.valueOf(s);
+        return m.current() ? label + " (진행 중)" : label;
     }
 
     private static RateKpi rateKpi(String label, FunnelDto.Stage s, Double delta) {
@@ -231,8 +296,9 @@ public class FunnelTabController {
                                          @RequestParam(name = "kind", defaultValue = "summary") String kind) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         int w = window(win);
-        FunnelDto.View data = funnel.get(v.id(), w);
         String today = KstFormat.kstToday(clock.instant());
+        if ("monthly".equals(kind) || "devices".equals(kind)) return adoptionCsv(v, w, kind, today);
+        FunnelDto.View data = funnel.get(v.id(), w);
         byte[] csv;
         String filename;
         switch (kind) {
@@ -261,6 +327,31 @@ public class FunnelTabController {
                 filename = "auth-failures-" + v.slug() + "-" + w + "d-" + today + ".csv";
             }
             default -> throw new BusinessException(ErrorCode.ENTITY_NOT_FOUND, "알 수 없는 내보내기");
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replaceAll("[^A-Za-z0-9._-]", "_") + "\"")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csv);
+    }
+
+    /** 도입·사용 CSV 2종: 월간 사용량(최근 3개월), 기기 분포. */
+    private ResponseEntity<byte[]> adoptionCsv(TenantAdminDto.TenantView v, int w, String kind, String today) {
+        AdoptionDto.View a = adoption.get(v.id(), w);
+        List<List<String>> rows = new ArrayList<>();
+        byte[] csv;
+        String filename;
+        if ("monthly".equals(kind)) {
+            for (AdoptionDto.Month m : orEmpty(a.months())) {
+                rows.add(List.of(m.month(), m.current() ? "Y" : "N", String.valueOf(m.authSuccess()), String.valueOf(m.activeUsers()), String.valueOf(m.newCredentials())));
+            }
+            csv = CsvWriter.write(List.of("month", "inProgress", "authSuccess", "activeUsers", "newPasskeys"), rows);
+            filename = "monthly-usage-" + v.slug() + "-" + today + ".csv";
+        } else {
+            for (AdoptionDto.Device d : orEmpty(a.devices())) {
+                rows.add(List.of(d.name(), String.valueOf(d.credentials()), String.valueOf(d.authSuccess())));
+            }
+            csv = CsvWriter.write(List.of("authenticator", "passkeys", "authSuccessInWindow"), rows);
+            filename = "devices-" + v.slug() + "-" + w + "d-" + today + ".csv";
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replaceAll("[^A-Za-z0-9._-]", "_") + "\"")
