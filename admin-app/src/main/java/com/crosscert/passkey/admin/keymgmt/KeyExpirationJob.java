@@ -61,7 +61,12 @@ public class KeyExpirationJob {
         }
         OffsetDateTime cutoff = OffsetDateTime.now(clock).minus(grace);
         List<SigningKey> expired = repo.findAllByStatusAndRotatedAtBefore("ROTATED", cutoff);
-        log.info("key expiration tick: candidates={}", expired.size());
+        // 1분마다 돌므로 정리할 키가 없는 tick 은 DEBUG 로 낮춰 INFO 로그를 덮지 않게 한다.
+        if (expired.isEmpty()) {
+            log.debug("key expiration tick: candidates=0");
+        } else {
+            log.info("key expiration tick: candidates={}", expired.size());
+        }
         OffsetDateTime now = OffsetDateTime.now(clock);
         for (SigningKey k : expired) {
             long ageMs = Duration.between(k.getRotatedAt(), now).toMillis();
