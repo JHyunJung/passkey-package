@@ -25,7 +25,8 @@ import tools.jackson.databind.cfg.DateTimeFeature;
  *   <li>{@link MapperFeature#DETECT_PARAMETER_NAMES} 켬 — {@code configureForJackson2()} 는 이를 끄지만,
  *       Boot 3 는 jackson-module-parameter-names 를 자동 등록해 생성자 파라미터 이름 감지가 켜져 있었다.</li>
  *   <li>{@link JsonWriteFeature#COMBINE_UNICODE_SURROGATES_IN_UTF8} 끔 — Jackson 3 기본값(켬)은 BMP 밖 문자
- *       (이모지 등)를 4바이트 UTF-8 로 쓰지만, Jackson 2 는 {@code 😀} 이스케이프로 썼다.
+ *       (이모지 등)를 4바이트 UTF-8 로 쓰지만, Jackson 2 는 서로게이트 쌍 이스케이프 두 개
+ *       ({@code \\uD83D\\uDE00} 형태의 ASCII 12자)로 썼다.
  *       응답 바이트를 업그레이드 전과 같게 유지한다.</li>
  * </ul>
  */
