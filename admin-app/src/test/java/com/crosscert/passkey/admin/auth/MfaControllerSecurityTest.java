@@ -85,6 +85,10 @@ class MfaControllerSecurityTest {
     @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    // AdminSecurityConfig 협력 빈(adminLoginSuccessHandler 의 SecurityPolicyService, adminFilterChain 의 TenantBoundary).
+    // 이 클래스는 자체 SliceConfig(실제 TotpService·고정 Clock)를 쓰므로 AdminWebSliceTest 묶음(Clock mock 포함) 대신 개별로 둔다.
+    @MockitoBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockitoBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
     @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static AdminUser adminUserWithUuid() {

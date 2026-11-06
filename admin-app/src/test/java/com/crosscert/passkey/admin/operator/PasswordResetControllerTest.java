@@ -53,6 +53,10 @@ class PasswordResetControllerTest {
     @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
     @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
     @MockitoBean com.crosscert.passkey.core.repository.AdminUserRepository users;
+    // AdminSecurityConfig 협력 빈(adminLoginSuccessHandler 의 SecurityPolicyService, adminFilterChain 의 TenantBoundary).
+    // 이 클래스는 자체 SliceConfig(실제 고정 Clock)를 쓰므로 AdminWebSliceTest 묶음(Clock mock 포함) 대신 개별로 둔다.
+    @MockitoBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockitoBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
 
     @Test
     void request_always_200_even_for_unknown() throws Exception {

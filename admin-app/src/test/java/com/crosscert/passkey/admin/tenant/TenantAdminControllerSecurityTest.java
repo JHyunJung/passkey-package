@@ -1,15 +1,10 @@
 package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.core.repository.AdminUserRepository;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.metamodel.Metamodel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
+import com.crosscert.passkey.admin.web.AdminWebSliceTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,69 +22,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-    controllers = TenantAdminController.class,
-    excludeAutoConfiguration = {
-        org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration.class,
-        org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration.class,
-        org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class,
-        org.springframework.boot.data.autoconfigure.web.DataWebAutoConfiguration.class
-    }
-)
-@Import({
-    com.crosscert.passkey.admin.config.AdminSecurityConfig.class,
-    TenantAdminControllerSecurityTest.JpaStubs.class
-})
+@AdminWebSliceTest(controllers = TenantAdminController.class)
 class TenantAdminControllerSecurityTest {
-
-    /**
-     * AdminApplication carries @EnableJpaRepositories which registers
-     * jpaSharedEM_entityManagerFactory even in @WebMvcTest slices.
-     * We provide a stub EMF with a real (empty) Metamodel so the
-     * JPA wiring succeeds without a real DataSource.
-     */
-    @TestConfiguration
-    static class JpaStubs {
-        @Bean
-        EntityManagerFactory entityManagerFactory() {
-            Metamodel metamodel = mock(Metamodel.class);
-            org.mockito.Mockito.when(metamodel.getEntities()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getManagedTypes()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getEmbeddables()).thenReturn(Set.of());
-
-            EntityManagerFactory emf = mock(EntityManagerFactory.class);
-            org.mockito.Mockito.when(emf.getMetamodel()).thenReturn(metamodel);
-            return emf;
-        }
-    }
 
     @Autowired MockMvc mvc;
     @MockitoBean TenantAdminService service;
     @MockitoBean WebauthnDiffService webauthnDiffService;
     @MockitoBean TenantLifecycleService lifecycle;
-    @MockitoBean AdminUserRepository admins;
-    @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockitoBean java.time.Clock clock;
-    @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    // AdminSecurityConfig now wires a DynamicCorsConfigurationSource constructor param.
-    @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
-    // Prevent @EnableJpaRepositories from wiring real Spring Data repos
-    @MockitoBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
+    @Autowired AdminUserRepository admins;
 
     private static final String BODY = """
             {"slug":"tenant-a","displayName":"Tenant A","rpId":"localhost","rpName":"Tenant A",

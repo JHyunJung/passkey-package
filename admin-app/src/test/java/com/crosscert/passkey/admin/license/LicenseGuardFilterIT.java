@@ -7,12 +7,10 @@ import com.crosscert.passkey.core.license.LicenseState;
 import com.crosscert.passkey.core.license.LicenseStateMachine;
 import com.crosscert.passkey.core.license.LicenseToken;
 import com.crosscert.passkey.core.license.LicenseGuardFilter;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.metamodel.Metamodel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import com.crosscert.passkey.admin.web.AdminWebSliceTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
@@ -47,25 +45,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>DEAD 상태에서 /actuator/health → 200 (exempt)</li>
  * </ol>
  */
-@WebMvcTest(
-        controllers = {TenantAdminController.class, LicenseController.class},
-        excludeAutoConfiguration = {
-                org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration.class,
-                org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration.class,
-                org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class,
-                org.springframework.boot.data.autoconfigure.web.DataWebAutoConfiguration.class
-        }
-)
+@AdminWebSliceTest(controllers = {TenantAdminController.class, LicenseController.class})
 @TestPropertySource(properties = {
         "passkey.deployment.mode=onprem",
         "passkey.license.path=/dev/null",
         "passkey.license.heartbeat-url=http://localhost:9"
 })
 @Import({
-        com.crosscert.passkey.admin.config.AdminSecurityConfig.class,
         LicenseGuardFilter.class,
-        LicenseGuardFilterIT.DeadStateConfig.class,
-        LicenseGuardFilterIT.JpaStubs.class
+        LicenseGuardFilterIT.DeadStateConfig.class
 })
 class LicenseGuardFilterIT {
 
@@ -101,26 +89,6 @@ class LicenseGuardFilterIT {
         }
     }
 
-    /**
-     * AdminApplication carries @EnableJpaRepositories which registers
-     * jpaSharedEM_entityManagerFactory even in @WebMvcTest slices.
-     * We provide a stub EMF with a real (empty) Metamodel so the
-     * JPA wiring succeeds without a real DataSource.
-     */
-    @TestConfiguration
-    static class JpaStubs {
-        @Bean
-        EntityManagerFactory entityManagerFactory() {
-            Metamodel metamodel = org.mockito.Mockito.mock(Metamodel.class);
-            org.mockito.Mockito.when(metamodel.getEntities()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getManagedTypes()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getEmbeddables()).thenReturn(Set.of());
-
-            EntityManagerFactory emf = org.mockito.Mockito.mock(EntityManagerFactory.class);
-            org.mockito.Mockito.when(emf.getMetamodel()).thenReturn(metamodel);
-            return emf;
-        }
-    }
 
     @Autowired
     MockMvc mvc;
@@ -134,30 +102,11 @@ class LicenseGuardFilterIT {
     // Mocked beans required by AdminSecurityConfig + TenantAdminController
     // ----------------------------------------------------------------
 
-    @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockitoBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
-    @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockitoBean java.time.Clock clock;
+    // AdminSecurityConfig·리포지토리 mock 은 AdminWebSliceTest 묶음이 제공한다(clock 은 묶음의 mock 을 받아 스텁).
+    @Autowired java.time.Clock clock;
     @MockitoBean com.crosscert.passkey.admin.tenant.TenantAdminService tenantAdminService;
     @MockitoBean com.crosscert.passkey.admin.tenant.WebauthnDiffService webauthnDiffService;
-
-    // JPA repos required by @EnableJpaRepositories scanning (full list from core)
-    @MockitoBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
-    @MockitoBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
+    @MockitoBean com.crosscert.passkey.admin.tenant.TenantLifecycleService tenantLifecycleService;
 
     // ----------------------------------------------------------------
     // Tests

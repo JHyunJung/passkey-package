@@ -68,6 +68,10 @@ class MfaControllerRecoveryTest {
     @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
     @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
     @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    // AdminSecurityConfig 협력 빈(adminLoginSuccessHandler 의 SecurityPolicyService, adminFilterChain 의 TenantBoundary).
+    // 이 클래스는 자체 SliceConfig(실제 TotpService·고정 Clock)를 쓰므로 AdminWebSliceTest 묶음(Clock mock 포함) 대신 개별로 둔다.
+    @MockitoBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockitoBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
     @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static AdminUser adminUserWithUuid() {
@@ -87,7 +91,9 @@ class MfaControllerRecoveryTest {
         u.setMfaSecret("enc:v1:stored");
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
         when(secretCipher.open("enc:v1:stored")).thenReturn("PLAINSECRET");
-        when(totp.verifyAt(eq("PLAINSECRET"), anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
+        // MfaController.validCode 는 F02(재사용 방지) 이후 matchedCounter 로 매칭된 time-step 을 받는다.
+        when(totp.matchedCounter(eq("PLAINSECRET"), anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.OptionalLong.of(56_666_666L));
         when(recoveryCodes.generate(u.getId()))
                 .thenReturn(List.of("AAAA-BBBB", "CCCC-DDDD"));
 
@@ -111,7 +117,8 @@ class MfaControllerRecoveryTest {
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
         when(secretCipher.open("enc:v1:stored")).thenReturn("PLAINSECRET");
         // TOTP fails for any code → controller must try recovery consume.
-        when(totp.verifyAt(anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(false);
+        when(totp.matchedCounter(anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.OptionalLong.empty());
         when(recoveryCodes.consume(eq(u.getId()), anyString())).thenReturn(true);
         when(recoveryCodes.remaining(u.getId())).thenReturn(9L);
 

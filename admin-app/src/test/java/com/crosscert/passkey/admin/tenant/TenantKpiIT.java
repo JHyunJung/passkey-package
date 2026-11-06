@@ -1,6 +1,7 @@
 package com.crosscert.passkey.admin.tenant;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -8,6 +9,7 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -21,6 +23,7 @@ import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
+import javax.sql.DataSource;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +93,26 @@ class TenantKpiIT {
 
     @LocalServerPort int port;
     @Autowired TestRestTemplate rest;
+    @Autowired DataSource ds;
+
+    /**
+     * 목록에 테넌트 한 건을 심는다. 예전엔 V11/V19 시드 마이그레이션이 테넌트를 넣었지만 Flyway squash 이후
+     * 테넌트 시드는 db/local·db/dev 에만 있고 test 프로필(db/migration + db/testfix)엔 없다 — 다른 IT
+     * (RpAdminBoundaryIT 등)처럼 직접 넣는다. attestation_conveyance / webauthn_timeout_ms 는 일부러 빼서
+     * 아래 단언이 DB 기본값(NONE / 60000)을 검증하게 둔다.
+     */
+    @BeforeEach
+    void seedTenant() {
+        new JdbcTemplate(ds).update("""
+                INSERT INTO PSK_APP_OWNER.tenant (id, slug, display_name, rp_id, rp_name, status,
+                    require_user_verification, mds_required, created_at, updated_at)
+                SELECT HEXTORAW('0000000000000000000000000000C0DE'),
+                    'demo-rp', 'Demo RP', 'localhost', 'Demo RP', 'active', 'Y', 'N',
+                    SYSTIMESTAMP, SYSTIMESTAMP
+                  FROM dual
+                 WHERE NOT EXISTS (SELECT 1 FROM PSK_APP_OWNER.tenant WHERE slug = 'demo-rp')
+                """);
+    }
 
     private String url(String path) { return "http://localhost:" + port + path; }
 
@@ -188,7 +211,7 @@ class TenantKpiIT {
         JsonNode list = envelope.get("data");
         assertThat(list).as("ApiResponse.data array").isNotNull();
         assertThat(list.isArray()).isTrue();
-        assertThat(list).as("tenant list non-empty (V11/V19 seed data)").isNotEmpty();
+        assertThat(list).as("tenant list non-empty (seedTenant)").isNotEmpty();
 
         JsonNode first = list.get(0);
         // Commit 075bbf0 added 5 fields. Non-null fields must be present on
