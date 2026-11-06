@@ -189,7 +189,6 @@ RP 서버와 SPA가 **다른 origin**이면, RP 서버가 그 origin을 **정확
   "code": "OK",
   "message": "Success",
   "data": { /* 엔드포인트별 응답 */ },
-  "error": null,
   "traceId": "a1b2c3...",
   "timestamp": "2026-06-01T12:00:00"
 }
@@ -199,12 +198,13 @@ RP 서버와 SPA가 **다른 origin**이면, RP 서버가 그 origin을 **정확
   "success": false,
   "code": "W002",                 // §6 ErrorCode
   "message": "Registration token missing or expired",
-  "data": null,
-  "error": { "errorCode": "W002", "fieldErrors": null },
+  "error": { "errorCode": "W002" },
   "traceId": "a1b2c3...",
   "timestamp": "2026-06-01T12:00:00"
 }
 ```
+
+값이 `null` 인 envelope 필드(`data`·`error`·`traceId`)와 `error.fieldErrors` 는 응답에서 **생략**됩니다 — 키가 없을 수 있다고 보고 파싱하세요. (`fieldErrors[].rejectedValue` 는 `null` 이어도 그대로 내려갑니다.)
 
 아래 각 엔드포인트의 **응답**은 envelope의 `data` 필드 내용만 표기합니다(웹은 `data` 안의 `challenge`·`id`를 변환해야 하며 §3에서 다룹니다).
 
@@ -357,7 +357,6 @@ Content-Type: application/json
     },
     "regRelayToken": "eyJydCI6....bWFj"
   },
-  "error": null,
   "traceId": "a1b2c3d4",
   "timestamp": "2026-06-01T12:00:00"
 }
@@ -417,7 +416,6 @@ Content-Type: application/json
     "attestationFormat": "none",
     "createdAt": "2026-06-01T12:00:01Z"
   },
-  "error": null,
   "traceId": "a1b2c3d4",
   "timestamp": "2026-06-01T12:00:01"
 }
@@ -476,7 +474,6 @@ Content-Type: application/json
     },
     "authenticationToken": "QXV0aFRva2Vu...Zng"
   },
-  "error": null,
   "traceId": "b2c3d4e5",
   "timestamp": "2026-06-01T12:05:00"
 }
@@ -542,7 +539,6 @@ Content-Type: application/json
     "userHandle": "ZGV2LXVzZXItMDAx",
     "displayName": "Alice"
   },
-  "error": null,
   "traceId": "b2c3d4e5",
   "timestamp": "2026-06-01T12:05:02"
 }
@@ -646,8 +642,7 @@ export async function postJson(url, body) {
   "success": false,
   "code": "W002",
   "message": "Registration token missing or expired",
-  "data": null,
-  "error": { "errorCode": "W002", "fieldErrors": null },
+  "error": { "errorCode": "W002" },
   "traceId": "e5f6a7b8",
   "timestamp": "2026-06-01T12:03:00"
 }
@@ -660,7 +655,6 @@ export async function postJson(url, body) {
   "success": false,
   "code": "C001",
   "message": "Invalid input value",
-  "data": null,
   "error": {
     "errorCode": "C001",
     "fieldErrors": [ { "field": "username", "rejectedValue": null, "reason": "must not be blank" } ]

@@ -19,6 +19,7 @@
 |---|---|---|
 | Docker | recent | Oracle XE + Redis 컨테이너 |
 | JDK | 17 | passkey-app / admin-app / sdk-java / rp-app |
+| Gradle | 9.7.0 (wrapper) | `./gradlew` 가 자동으로 받는다 — 별도 설치 불필요. Gradle 9 는 JDK 17+ 에서만 실행된다 |
 
 ### 1.2 저장소 구조 (monorepo)
 

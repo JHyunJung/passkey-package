@@ -61,6 +61,41 @@
 - 시스템 시간이 `lastVerifiedAt` 보다 과거로 돌아가면 자동으로 DEAD 상태 진입 (rollback 공격 보호)
 - 잘못된 시계로 인한 false DEAD 시 운영자가 NTP 복구 후 서비스 재시작 필요
 
+## 업그레이드 배포 — Spring Boot 4.1 로 처음 교체할 때 (1회): admin 세션 정리 → 전원 재로그인
+
+Spring Boot 4.1(Spring Framework 7 · Spring Security 7) 빌드는 admin-app 의 Spring Session
+(Redis 에 JDK 직렬화로 저장) 형식이 이전(Spring Boot 3.5) 빌드와 **호환되지 않는다**. 이전 빌드가
+남긴 세션을 새 admin-app 이 읽지 못하므로, 교체 시 **한 번** admin 세션 키를 지운다.
+**admin 콘솔 사용자는 전원 다시 로그인**해야 한다. passkey-app(등록·인증 API)·rp-app 은 영향 없다.
+
+1. 이전 버전 admin-app 중지 (passkey-app 은 계속 돌아도 된다)
+2. Redis 에서 admin 세션 네임스페이스 `spring:session:*` 키만 삭제
+   (`admin-app` 의 `spring.session.data.redis.namespace` 기본값. 바꿔 운영 중이면 그 값으로)
+3. 새 버전 admin-app 기동
+
+삭제 대상은 `spring:session:*` 뿐이다. passkey-app 의 챌린지(`challenge:*`)·rate limit 키가 같은
+Redis 에 있으므로 **`FLUSHALL`/`FLUSHDB` 는 쓰지 않는다**. 앱이 쓰는 접속 값(`REDIS_HOST`,
+`REDIS_PORT`, `REDIS_PASSWORD`)으로 실행한다.
+
+```bash
+export REDISCLI_AUTH="$REDIS_PASSWORD"   # redis-cli 가 읽는 비밀번호 변수 (명령줄·ps 에 노출 안 됨)
+R="redis-cli -h $REDIS_HOST -p ${REDIS_PORT:-6379}"
+$R --scan --pattern 'spring:session:*' | wc -l                       # 지울 개수
+$R --scan --pattern 'spring:session:*' | xargs -r -n 100 $R unlink   # 삭제
+$R --scan --pattern 'spring:session:*' | wc -l                       # 0 이어야 한다
+```
+
+Redis 를 `deploy/docker-compose.redis.yml` 컨테이너로 운영한다면 호스트에 `redis-cli` 가 없어도
+컨테이너 안에서 실행할 수 있다(`deploy/` 에서, `REDIS_BIND_ADDR`·`REDIS_PASSWORD` 를 export 한 셸):
+
+```bash
+docker compose -f docker-compose.redis.yml exec redis sh -c \
+  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" \
+   | xargs -r -n 100 redis-cli -a "$REDIS_PASSWORD" --no-auth-warning unlink'
+```
+
+이후 같은 4.1 계열 빌드끼리의 재배포에는 이 단계가 필요 없다.
+
 ## 부팅 실패 트러블슈팅
 
 | 오류 메시지 (stderr) | 원인 | 조치 |

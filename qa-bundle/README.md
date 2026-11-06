@@ -230,6 +230,44 @@ admin-app 이 기동하지 않으면 로그로 원인을 본다.
 cd deploy && docker compose logs -f admin-app
 ```
 
+### 6-1. Spring Boot 4.1 이미지로 처음 교체할 때 (1회) — admin 세션 정리 → 전원 재로그인
+
+Spring Boot 4.1(Spring Framework 7 · Spring Security 7) 로 올린 이미지는 admin-app 의
+Spring Session(Redis 에 JDK 직렬화로 저장) 형식이 이전 이미지와 **호환되지 않는다**. 이전
+이미지가 만든 세션이 Redis 에 남아 있으면 새 admin-app 이 그 세션을 읽지 못하므로, 교체할 때
+**한 번** admin 세션 키를 지운다. 결과로 **admin 콘솔 사용자는 전원 다시 로그인**해야 한다
+(passkey-app 의 등록·인증과 rp-app 은 영향 없음).
+
+지우는 것은 admin-app 의 세션 네임스페이스 `spring:session:*` 뿐이다
+(`admin-app` 의 `spring.session.data.redis.namespace`). passkey-app 이 쓰는 챌린지
+(`challenge:*`)·rate limit 키는 건드리지 않는다 — `FLUSHALL`/`FLUSHDB` 금지.
+
+```bash
+./load-images.sh                  # 새 이미지 적재
+./start.sh --stop                 # 앱 스택 중지 (Redis 는 유지)
+
+cd deploy
+set -a; . ./.env; set +a          # REDIS_PASSWORD 등 (7번과 같은 방식)
+export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}
+# 지울 키 개수 확인
+docker compose -f docker-compose.redis.yml exec redis sh -c \
+  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" | wc -l'
+# admin 세션 키만 삭제
+docker compose -f docker-compose.redis.yml exec redis sh -c \
+  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" \
+   | xargs -r -n 100 redis-cli -a "$REDIS_PASSWORD" --no-auth-warning unlink'
+# 다시 개수 확인 → 0
+docker compose -f docker-compose.redis.yml exec redis sh -c \
+  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" | wc -l'
+cd ..
+
+./start.sh                        # 새 이미지로 기동
+```
+
+`sh -c '…'` 의 작은따옴표는 그대로 둔다 — `$REDIS_PASSWORD` 를 서버 셸이 아니라 Redis
+컨테이너 안에서 풀어야 한다(컨테이너에 같은 값이 환경변수로 들어 있다). 이후 같은 4.1 계열
+이미지끼리의 재배포에서는 이 단계가 필요 없다.
+
 ### 7. (참고) compose 직접 실행
 
 `start.sh` 없이 손으로 띄운다면 아래가 최소 절차다. 프로파일과 두 export 를
