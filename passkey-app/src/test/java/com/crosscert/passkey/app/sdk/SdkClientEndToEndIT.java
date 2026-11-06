@@ -13,6 +13,7 @@ import com.crosscert.passkey.sdk.dto.RegistrationFinishRequest;
 import com.crosscert.passkey.sdk.dto.RegistrationFinishResponse;
 import com.crosscert.passkey.sdk.dto.RegistrationStartRequest;
 import com.crosscert.passkey.sdk.dto.RegistrationStartResponse;
+import com.crosscert.passkey.sdk.exception.PasskeyAuthException;
 import com.crosscert.passkey.sdk.idtoken.IdTokenClaims;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.webauthn4j.data.client.Origin;
@@ -37,6 +38,7 @@ import java.net.URI;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * sdk-java {@link PasskeyClient} → passkey-app 전 구간 E2E (Boot 4 업그레이드 안전망).
@@ -136,5 +138,21 @@ class SdkClientEndToEndIT {
         assertThat(claims.sub()).isEqualTo(USER_HANDLE);
         assertThat(claims.aud()).isEqualTo(TENANT_ID);
         assertThat(claims.amr()).containsExactly("webauthn");
+    }
+
+    /**
+     * 에러 경로: 잘못된 API Key → passkey-app 401 → SDK {@link PasskeyAuthException}.
+     * 이 서버(Spring 7)와 같은 클래스패스에서 SDK 의 에러 핸들러(3-인자 handleError)가 실제로
+     * 호출되는지 확인한다 — Spring 7 은 1-인자 handleError 를 호출하지 않는다.
+     */
+    @Test
+    void wrongApiKey_throwsPasskeyAuthException_throughSdk() {
+        PasskeyClient client = PasskeyClient.of(
+                PasskeyClientConfig.defaults(URI.create(origin()), () -> PREFIX + "WRONG-SECRET-xxxxxxxxxxxxxxxx"));
+
+        assertThatThrownBy(() -> client.registrationStart(
+                new RegistrationStartRequest(USER_HANDLE, "SDK User", "sdk-user")))
+                .isInstanceOf(PasskeyAuthException.class)
+                .satisfies(e -> assertThat(((PasskeyAuthException) e).getHttpStatus()).isEqualTo(401));
     }
 }

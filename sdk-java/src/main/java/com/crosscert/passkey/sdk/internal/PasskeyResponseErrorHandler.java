@@ -6,9 +6,11 @@ import com.crosscert.passkey.sdk.exception.PasskeyApiException;
 import com.crosscert.passkey.sdk.exception.PasskeyAuthException;
 import com.crosscert.passkey.sdk.exception.PasskeyRateLimitException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.ResponseErrorHandler;
 import java.io.IOException;
+import java.net.URI;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -29,8 +31,29 @@ public class PasskeyResponseErrorHandler implements ResponseErrorHandler {
         return response.getStatusCode().isError();
     }
 
+    /**
+     * RestClient/RestTemplate 이 실제로 호출하는 진입점(Spring 6.x 의 {@code StatusHandler} 와
+     * Spring 7 모두 3-인자 버전을 호출한다). Spring 7 에서는 1-인자 {@code handleError} 가
+     * 인터페이스에서 제거되어 3-인자 기본 구현이 아무것도 하지 않으므로, 이 메서드를 직접
+     * 구현해야 4xx/5xx → {@link PasskeyApiException} 매핑이 Spring 6·7 양쪽에서 동작한다.
+     */
     @Override
+    public void handleError(URI url, HttpMethod method, ClientHttpResponse response) throws IOException {
+        mapAndThrow(response);
+    }
+
+    /**
+     * Spring 6.0/6.1 에서는 이 1-인자 메서드가 추상 메서드라 구현이 필요하다(Spring 7 은 호출하지
+     * 않는다). 프레임워크는 위 3-인자 메서드만 호출하고 3-인자 메서드는 이 메서드를 거치지
+     * 않으므로 이중 처리는 없다.
+     */
+    @Override
+    @SuppressWarnings("removal") // Spring 6.2 에서 deprecated-for-removal — 6.0/6.1 호환을 위해 의도적으로 유지.
     public void handleError(ClientHttpResponse response) throws IOException {
+        mapAndThrow(response);
+    }
+
+    private void mapAndThrow(ClientHttpResponse response) throws IOException {
         int status = response.getStatusCode().value();
         byte[] bodyBytes = response.getBody().readAllBytes();
         ApiResponseEnvelope<?> env = parseQuietly(bodyBytes);
