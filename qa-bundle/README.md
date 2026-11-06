@@ -255,12 +255,21 @@ set -a; . ./.env; set +a          # REDIS_PASSWORD 등 — 값의 따옴표를 �
 export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}   # redis compose 가 요구, 0.0.0.0 금지
 docker compose -f docker-compose.redis.yml exec -T redis sh -c '
   export REDISCLI_AUTH="$REDIS_PASSWORD"
+  fail() { echo "중단: $*" >&2; exit 1; }
   pong=$(redis-cli ping 2>&1)
-  [ "$pong" = PONG ] || { echo "중단: Redis 접속/인증 실패 ($pong)" >&2; exit 1; }
-  echo "삭제 대상: $(redis-cli --scan --pattern "spring:session:*" | wc -l) 개"
-  redis-cli --scan --pattern "spring:session:*" | xargs -r -n 100 redis-cli unlink > /dev/null
-  left=$(redis-cli --scan --pattern "spring:session:*") || { echo "중단: 검증 조회 실패" >&2; exit 1; }
-  [ -z "$left" ] || { echo "중단: spring:session 키가 남아 있음" >&2; exit 1; }
+  [ "$pong" = PONG ] || fail "Redis 접속/인증 실패 ($pong)"
+  keys=$(redis-cli --scan --pattern "spring:session:*" 2>&1) || fail "키 조회 실패"
+  bad=$(printf "%s\n" "$keys" | grep -v "^spring:session:" | grep . | head -n 1)
+  [ -z "$bad" ] || fail "키 조회 실패 ($bad)"
+  n=0; [ -z "$keys" ] || n=$(printf "%s\n" "$keys" | wc -l)
+  echo "삭제 대상: $n 개"
+  if [ -n "$keys" ]; then
+    out=$(printf "%s\n" "$keys" | xargs -n 100 redis-cli unlink 2>&1) || fail "삭제 실패 (종료코드 $?)"
+    bad=$(printf "%s\n" "$out" | grep -v "^[0-9][0-9]*\$" | grep . | head -n 1)
+    [ -z "$bad" ] || fail "삭제 실패 ($bad)"
+  fi
+  left=$(redis-cli --scan --pattern "spring:session:*" 2>&1) || fail "검증 조회 실패"
+  [ -z "$left" ] || fail "spring:session 키가 남아 있음 ($(printf "%s\n" "$left" | head -n 1))"
   echo "OK: admin 세션 키 0"
 ' && cd .. && ./start.sh          # OK 일 때만 새 이미지로 기동
 ```
@@ -268,8 +277,10 @@ docker compose -f docker-compose.redis.yml exec -T redis sh -c '
 마지막 명령은 `&&` 로 묶여 있어 **`OK:` 가 나온 경우에만** `./start.sh` 까지 진행한다.
 `중단:` 이 나오거나 Redis 컨테이너가 멈춰 있으면(`service "redis" is not running`) 0 이 아닌
 코드로 멈추고 `deploy/` 에 남는다 — 원인을 고치고 같은 명령을 다시 실행한다(이미 지워졌으면
-`삭제 대상: 0 개` → `OK`). 컨테이너의 sh(busybox)에는 `pipefail` 이 없어서 PONG 확인과 삭제 후
-재조회로 실패를 잡는다.
+`삭제 대상: 0 개` → `OK`). 컨테이너의 sh(busybox)에는 `pipefail` 이 없으므로 조회 결과를 먼저
+변수에 받아 종료코드를 확인한 뒤 삭제하고, 삭제는 xargs 종료코드와 응답 내용을 각각 확인한다 —
+`redis-cli` 는 Redis 오류 응답(`NOAUTH`, `READONLY` 등)에도 종료코드 0 을 내기 때문에 조회 결과는
+`spring:session:` 키만, 삭제 결과는 숫자만 와야 통과한다.
 
 `sh -c '…'` 의 작은따옴표는 그대로 둔다 — `$REDIS_PASSWORD` 는 서버 셸이 아니라 Redis
 컨테이너 안의 같은 이름 환경변수로 풀린다. 이후 같은 4.1 계열 이미지끼리의 재배포에서는 이

@@ -91,6 +91,9 @@ set -a; . ./.env; set +a          # 값의 따옴표를 셸이 벗겨준다
 그다음 아래 블록을 통째로 붙여 넣는다. `bash -euo pipefail` 로 따로 실행하므로 어느 단계든
 실패하면 그 자리에서 0 이 아닌 코드로 끝나고, 로그인 셸(zsh 포함)은 영향받지 않는다.
 `REDIS_PASSWORD` 가 비어 있으면(requirepass 없는 Redis) 인증 없이 접속한다.
+`redis-cli` 는 Redis 가 오류로 응답해도(`NOAUTH`, 읽기 전용 replica 의 `READONLY` 등) 종료코드 0 을
+내므로, 블록은 종료코드와 함께 응답 내용(조회 결과는 `spring:session:` 키만, 삭제 결과는 숫자만)도
+확인한다. 조회·삭제·검증 중 하나라도 실패하면 `중단:` 을 출력하고 exit 1 로 끝난다.
 
 ```bash
 bash -euo pipefail <<'EOF'
@@ -98,19 +101,32 @@ bash -euo pipefail <<'EOF'
 : "${REDIS_HOST:?REDIS_HOST 가 비어 있음}"
 if [ -n "${REDIS_PASSWORD:-}" ]; then export REDISCLI_AUTH="$REDIS_PASSWORD"; fi
 rc() { redis-cli -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" "$@"; }
+fail() { echo "중단: $*" >&2; exit 1; }
+# redis-cli 는 Redis 오류 응답(NOAUTH·READONLY 등)에도 종료코드 0 을 낸다 → 출력 내용까지 확인한다
 
 # 1) 접속·인증 확인 — PONG 이 아니면 중단
 pong=$(rc ping 2>&1) || true
-[ "$pong" = PONG ] || { echo "중단: Redis 접속/인증 실패 ($pong)" >&2; exit 1; }
+[ "$pong" = PONG ] || fail "Redis 접속/인증 실패 ($pong)"
 
-# 2) admin 세션 키만 삭제 (spring:session:*)
-echo "삭제 대상: $(rc --scan --pattern 'spring:session:*' | wc -l | tr -d ' ') 개"
-rc --scan --pattern 'spring:session:*' \
-  | xargs -r -n 100 redis-cli -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" unlink > /dev/null
+# 2) 대상 조회 — 실패하거나 spring:session: 이 아닌 줄(오류 응답)이 섞이면 중단
+keys=$(rc --scan --pattern 'spring:session:*' 2>&1) || fail "키 조회 실패"
+bad=$(printf '%s\n' "$keys" | grep -v '^spring:session:' | grep . | head -n 1 || true)
+[ -z "$bad" ] || fail "키 조회 실패 ($bad)"
+n=0; [ -z "$keys" ] || n=$(printf '%s\n' "$keys" | wc -l | tr -d ' ')
+echo "삭제 대상: $n 개"
 
-# 3) 검증 — 남은 키가 0 이 아니면 중단
-left=$(rc --scan --pattern 'spring:session:*')
-[ -z "$left" ] || { echo "중단: spring:session 키가 남아 있음" >&2; exit 1; }
+# 3) 삭제 — 종료코드와 응답(삭제 개수 숫자만 와야 한다)을 모두 확인
+if [ -n "$keys" ]; then
+  out=$(printf '%s\n' "$keys" \
+    | xargs -n 100 redis-cli -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" unlink 2>&1) \
+    || fail "삭제 실패 (종료코드 $?)"
+  bad=$(printf '%s\n' "$out" | grep -v '^[0-9][0-9]*$' | grep . | head -n 1 || true)
+  [ -z "$bad" ] || fail "삭제 실패 ($bad)"
+fi
+
+# 4) 검증 — 남은 키가 하나라도 있으면 중단
+left=$(rc --scan --pattern 'spring:session:*' 2>&1) || fail "검증 조회 실패"
+[ -z "$left" ] || fail "spring:session 키가 남아 있음 ($(printf '%s\n' "$left" | head -n 1))"
 echo "OK: admin 세션 키 0 — 새 admin-app 을 기동해도 된다"
 EOF
 ```
@@ -120,18 +136,28 @@ EOF
 Redis 를 `deploy/docker-compose.redis.yml` 컨테이너로 운영한다면 호스트에 `redis-cli` 가 없어도
 컨테이너 안에서 같은 확인·삭제·검증을 할 수 있다. 위처럼 `deploy/` 에서 `.env` 를 읽은 셸에서
 실행한다(compose 파일이 `REDIS_BIND_ADDR` 를 요구한다). 컨테이너의 sh(busybox)에는 `pipefail`
-이 없어 PONG 확인과 삭제 후 재조회로 실패를 잡는다:
+이 없으므로 조회 결과를 먼저 변수에 받아 종료코드를 확인한 뒤 삭제하고, 삭제는 xargs 종료코드와
+응답 내용을 각각 확인한다(위 블록과 같은 판정):
 
 ```bash
 export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}   # 0.0.0.0 금지
 docker compose -f docker-compose.redis.yml exec -T redis sh -c '
   export REDISCLI_AUTH="$REDIS_PASSWORD"
+  fail() { echo "중단: $*" >&2; exit 1; }
   pong=$(redis-cli ping 2>&1)
-  [ "$pong" = PONG ] || { echo "중단: Redis 접속/인증 실패 ($pong)" >&2; exit 1; }
-  echo "삭제 대상: $(redis-cli --scan --pattern "spring:session:*" | wc -l) 개"
-  redis-cli --scan --pattern "spring:session:*" | xargs -r -n 100 redis-cli unlink > /dev/null
-  left=$(redis-cli --scan --pattern "spring:session:*") || { echo "중단: 검증 조회 실패" >&2; exit 1; }
-  [ -z "$left" ] || { echo "중단: spring:session 키가 남아 있음" >&2; exit 1; }
+  [ "$pong" = PONG ] || fail "Redis 접속/인증 실패 ($pong)"
+  keys=$(redis-cli --scan --pattern "spring:session:*" 2>&1) || fail "키 조회 실패"
+  bad=$(printf "%s\n" "$keys" | grep -v "^spring:session:" | grep . | head -n 1)
+  [ -z "$bad" ] || fail "키 조회 실패 ($bad)"
+  n=0; [ -z "$keys" ] || n=$(printf "%s\n" "$keys" | wc -l)
+  echo "삭제 대상: $n 개"
+  if [ -n "$keys" ]; then
+    out=$(printf "%s\n" "$keys" | xargs -n 100 redis-cli unlink 2>&1) || fail "삭제 실패 (종료코드 $?)"
+    bad=$(printf "%s\n" "$out" | grep -v "^[0-9][0-9]*\$" | grep . | head -n 1)
+    [ -z "$bad" ] || fail "삭제 실패 ($bad)"
+  fi
+  left=$(redis-cli --scan --pattern "spring:session:*" 2>&1) || fail "검증 조회 실패"
+  [ -z "$left" ] || fail "spring:session 키가 남아 있음 ($(printf "%s\n" "$left" | head -n 1))"
   echo "OK: admin 세션 키 0"
 '
 ```
