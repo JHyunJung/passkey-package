@@ -2,7 +2,7 @@ package com.crosscert.passkey.core.jwt;
 
 import com.crosscert.passkey.core.entity.SigningKey;
 import com.crosscert.passkey.core.repository.SigningKeyRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;

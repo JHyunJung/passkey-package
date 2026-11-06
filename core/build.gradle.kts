@@ -10,9 +10,6 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-data-jpa")
     api("org.springframework.boot:spring-boot-starter-data-redis")
     api("org.springframework.boot:spring-boot-starter-session-data-redis")
-    // Jackson 2 자동설정 유지(Boot 4 기본은 Jackson 3). Jackson 2 ObjectMapper 빈과
-    // Jackson 2 기반 MVC 컨버터를 계속 쓰기 위한 호환 모듈 — Task 7 에서 해제.
-    api("org.springframework.boot:spring-boot-jackson2")
     // Required at RUNTIME by Lettuce pooling (application-common.yml enables it).
     // spring-boot-starter-data-redis bundles Lettuce but NOT commons-pool2.
     // implementation (not api) — app code does not compile against pool2 types.
@@ -39,6 +36,10 @@ dependencies {
     api(rootProject.libs.bucket4j.core)
     api(rootProject.libs.bucket4j.redis)
     api(rootProject.libs.logstash.logback.encoder)
+    // 앱 코드는 Jackson 3(tools.jackson) 이지만, logstash-logback-encoder 의 JsonProvider API 가
+    // Jackson 2 JsonGenerator 를 쓰므로 RedactingMessageJsonProvider 만 Jackson 2 에 의존한다.
+    // logstash 의 전이 의존에 기대지 않고 명시 선언(버전은 Boot BOM 의 jackson-2-bom).
+    implementation("com.fasterxml.jackson.core:jackson-core")
     runtimeOnly("org.codehaus.janino:janino:3.1.12")
 
     testImplementation(rootProject.libs.testcontainers.oracle)

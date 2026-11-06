@@ -1,9 +1,9 @@
 package com.crosscert.passkey.app.config;
 
-import com.fasterxml.jackson.core.StreamReadConstraints;
-import org.springframework.boot.jackson2.autoconfigure.Jackson2ObjectMapperBuilderCustomizer;
+import org.springframework.boot.jackson.autoconfigure.JsonFactoryBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.core.StreamReadConstraints;
 
 /**
  * G02 방어심화: /registration/finish 등의 {@code publicKeyCredential} 은 컨트롤러
@@ -13,10 +13,13 @@ import org.springframework.context.annotation.Configuration;
  * 막지 못한다 — 인증 필요 + RateLimitFilter 토큰버킷으로 실질 영향은 제한적이지만
  * 방어심화로 파서 레벨 상한을 둔다.
  *
- * <p>기본값(문서 20MB, 중첩 1000, 문자열 20MB) 대비 등록 요청 실측 크기에 맞춰
- * 보수적으로 좁힌다. 이 커스터마이저는 core 의 {@link com.crosscert.passkey.core.config.CoreJacksonConfig}
- * (모든 모듈 공통)와 별개로 passkey-app 에만 적용된다 — Spring Boot 는 여러
- * {@link Jackson2ObjectMapperBuilderCustomizer} 빈을 순서대로 모두 적용한다.
+ * <p>Jackson 기본값 대비 등록 요청 실측 크기에 맞춰 보수적으로 좁힌다. Jackson 3 에서
+ * 파서 상한은 {@code JsonFactory} 빌더에 설정하며, Boot 4 는 자동설정 {@code JsonFactory}
+ * (MVC JSON 컨버터와 주입되는 {@code JsonMapper} 가 공유)를 만들 때
+ * {@link JsonFactoryBuilderCustomizer} 빈을 순서대로 적용한다. 이 빈은 순서 미지정(최저 우선순위)
+ * 이라 Boot 표준 커스터마이저({@code spring.jackson.factory.constraints.*}, order 0) 뒤에 실행되어
+ * 그 값을 덮는다. core 의 {@link com.crosscert.passkey.core.config.CoreJacksonConfig}
+ * (모든 모듈 공통)와 별개로 passkey-app 에만 적용된다.
  */
 @Configuration
 public class PasskeyAppJacksonConfig {
@@ -27,13 +30,12 @@ public class PasskeyAppJacksonConfig {
     private static final long MAX_DOCUMENT_LENGTH = 1024 * 1024; // 1MB
 
     @Bean
-    public Jackson2ObjectMapperBuilderCustomizer jsonDosJacksonCustomizer() {
+    public JsonFactoryBuilderCustomizer jsonDosJacksonCustomizer() {
         StreamReadConstraints constraints = StreamReadConstraints.builder()
                 .maxNestingDepth(MAX_NESTING_DEPTH)
                 .maxStringLength(MAX_STRING_LENGTH)
                 .maxDocumentLength(MAX_DOCUMENT_LENGTH)
                 .build();
-        return builder -> builder.postConfigurer(
-                mapper -> mapper.getFactory().setStreamReadConstraints(constraints));
+        return builder -> builder.streamReadConstraints(constraints);
     }
 }

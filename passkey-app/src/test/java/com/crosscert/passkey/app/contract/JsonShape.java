@@ -1,9 +1,11 @@
 package com.crosscert.passkey.app.contract;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -50,9 +52,10 @@ public final class JsonShape {
 
     static final int B64URL_MIN_LEN = 20;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
             .enable(SerializationFeature.INDENT_OUTPUT)
-            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .build();
 
     private static final Pattern JWT = Pattern.compile(
             "^[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+$");
@@ -69,7 +72,7 @@ public final class JsonShape {
     public static String of(String json) {
         try {
             return of(MAPPER.readTree(json));
-        } catch (java.io.IOException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("not JSON: " + e.getMessage(), e);
         }
     }
@@ -82,7 +85,7 @@ public final class JsonShape {
         paths.forEach((path, tokens) -> out.put(path, String.join("|", tokens)));
         try {
             return MAPPER.writeValueAsString(out) + "\n";
-        } catch (java.io.IOException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -90,7 +93,7 @@ public final class JsonShape {
     private static void walk(String path, JsonNode node, Map<String, TreeSet<String>> paths) {
         paths.computeIfAbsent(path, k -> new TreeSet<>()).add(token(node));
         if (node.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> it = node.fields();
+            Iterator<Map.Entry<String, JsonNode>> it = node.properties().iterator();
             while (it.hasNext()) {
                 Map.Entry<String, JsonNode> e = it.next();
                 walk(path + "." + e.getKey(), e.getValue(), paths);
@@ -112,7 +115,7 @@ public final class JsonShape {
             for (JsonNode el : node) elements.add(token(el));
             return "array<" + String.join("|", elements) + ">";
         }
-        if (node.isTextual()) return stringToken(node.asText());
+        if (node.isString()) return stringToken(node.asString());
         throw new IllegalArgumentException("unsupported JSON node type: " + node.getNodeType());
     }
 

@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
-import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
@@ -89,7 +88,6 @@ class PasskeyAppHttpConvertersConfigTest {
                 .withInitializer(new ConfigDataApplicationContextInitializer())
                 .withConfiguration(AutoConfigurations.of(
                         JacksonAutoConfiguration.class,
-                        Jackson2AutoConfiguration.class,
                         HttpMessageConvertersAutoConfiguration.class,
                         WebMvcAutoConfiguration.class))
                 .withUserConfiguration(CoreJacksonConfig.class, PasskeyAppJacksonConfig.class);

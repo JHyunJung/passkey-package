@@ -1,8 +1,9 @@
 package com.crosscert.passkey.core.license;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -28,7 +29,10 @@ import java.util.Set;
 @Component
 public class LicenseCache {
 
+    // Jackson 3: configureForJackson2() — 업그레이드 전(Jackson 2 + JavaTimeModule 기본값)과 같은
+    // 파일 형식 유지(Instant 를 epoch 초 숫자로 기록). 읽기는 숫자·ISO 문자열 모두 허용.
     private static final ObjectMapper M = JsonMapper.builder()
+            .configureForJackson2()
             .findAndAddModules()
             .build();
     private static final Set<PosixFilePermission> RW_USER =
@@ -42,7 +46,9 @@ public class LicenseCache {
             byte[] bytes = Files.readAllBytes(path);
             Entry e = M.readValue(bytes, Entry.class);
             return Optional.ofNullable(e);
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
+            // Jackson 3 예외는 unchecked(JacksonException) — Jackson 2 시절 IOException 으로 잡히던
+            // 파싱 실패를 같은 경로(경고 후 빈 값)로 처리한다.
             log.warn("license cache read failed: path={} reason={}", path, e.getMessage());
             return Optional.empty();
         }
@@ -58,7 +64,7 @@ public class LicenseCache {
             } catch (UnsupportedOperationException ignored) {
                 // Non-POSIX FS (Windows) — skip.
             }
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             log.warn("license cache write failed: path={} reason={}", path, e.getMessage());
         }
     }

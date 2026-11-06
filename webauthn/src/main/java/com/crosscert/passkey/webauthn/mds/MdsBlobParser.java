@@ -1,8 +1,8 @@
 package com.crosscert.passkey.webauthn.mds;
 
 import com.crosscert.passkey.webauthn.JsonMappers;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -48,20 +48,20 @@ public final class MdsBlobParser {
     private static MdsBlobEntry parseEntry(JsonNode entryNode) throws MdsException {
         byte[] aaguid = null;
         JsonNode aaguidNode = entryNode.get("aaguid");
-        if (aaguidNode != null && aaguidNode.isTextual() && !aaguidNode.asText().isBlank()) {
-            aaguid = uuidToBytes(aaguidNode.asText());
+        if (aaguidNode != null && aaguidNode.isString() && !aaguidNode.asString().isBlank()) {
+            aaguid = uuidToBytes(aaguidNode.asString());
         }
         List<MdsStatusReport> reports = new ArrayList<>();
         JsonNode srNode = entryNode.get("statusReports");
         if (srNode != null && srNode.isArray()) {
             for (JsonNode r : srNode) {
                 JsonNode statusNode = r.get("status");
-                if (statusNode == null || !statusNode.isTextual()) {
+                if (statusNode == null || !statusNode.isString()) {
                     throw new MdsException(MdsException.Reason.MALFORMED_PAYLOAD,
                             "statusReport missing status");
                 }
                 LocalDate eff = parseDate(r.get("effectiveDate"), "effectiveDate", false);
-                reports.add(new MdsStatusReport(statusNode.asText(), eff));
+                reports.add(new MdsStatusReport(statusNode.asString(), eff));
             }
         }
         return new MdsBlobEntry(aaguid, reports);
@@ -81,16 +81,16 @@ public final class MdsBlobParser {
     }
 
     private static LocalDate parseDate(JsonNode node, String field, boolean required) throws MdsException {
-        if (node == null || node.isNull() || !node.isTextual()) {
+        if (node == null || node.isNull() || !node.isString()) {
             if (required) {
                 throw new MdsException(MdsException.Reason.MALFORMED_PAYLOAD, "payload missing " + field);
             }
             return null;
         }
         try {
-            return LocalDate.parse(node.asText());
+            return LocalDate.parse(node.asString());
         } catch (DateTimeParseException e) {
-            throw new MdsException(MdsException.Reason.MALFORMED_PAYLOAD, field + " not a date: " + node.asText(), e);
+            throw new MdsException(MdsException.Reason.MALFORMED_PAYLOAD, field + " not a date: " + node.asString(), e);
         }
     }
 }

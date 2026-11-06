@@ -15,7 +15,7 @@ import com.crosscert.passkey.sdk.dto.RegistrationStartRequest;
 import com.crosscert.passkey.sdk.dto.RegistrationStartResponse;
 import com.crosscert.passkey.sdk.exception.PasskeyAuthException;
 import com.crosscert.passkey.sdk.idtoken.IdTokenClaims;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.webauthn4j.data.client.Origin;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -112,6 +112,25 @@ class SdkClientEndToEndIT {
         return "http://localhost:" + port;
     }
 
+    /**
+     * sdk-java 공개 API 는 Jackson 2 {@code JsonNode} 를 쓰고(외부 RP 호환 — 프로젝트 제약), 서버 측
+     * 테스트 authenticator 는 Jackson 3 트리를 쓴다. 두 트리는 JSON 문자열로만 건넌다.
+     */
+    private tools.jackson.databind.JsonNode fromSdk(com.fasterxml.jackson.databind.JsonNode sdkNode) {
+        return mapper.readTree(sdkNode.toString());
+    }
+
+    private static com.fasterxml.jackson.databind.JsonNode toSdk(tools.jackson.databind.JsonNode node) {
+        try {
+            return SDK_JSON.readTree(node.toString());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper SDK_JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
     @Test
     void registerAuthenticateAndVerifyIdToken_throughSdk() {
         PasskeyClient client = PasskeyClient.of(
@@ -122,14 +141,14 @@ class SdkClientEndToEndIT {
                 new RegistrationStartRequest(USER_HANDLE, "SDK User", "sdk-user"));
         RegistrationFinishResponse regFinish = client.registrationFinish(new RegistrationFinishRequest(
                 regStart.registrationToken(),
-                authn.register(regStart.publicKeyCredentialCreationOptions())));
+                toSdk(authn.register(fromSdk(regStart.publicKeyCredentialCreationOptions())))));
         assertThat(regFinish.credentialId()).isNotBlank();
 
         AuthenticationStartResponse authStart = client.authenticationStart(
                 new AuthenticationStartRequest(USER_HANDLE));
         AuthenticationFinishResponse authFinish = client.authenticationFinish(new AuthenticationFinishRequest(
                 authStart.authenticationToken(),
-                authn.authenticate(authStart.publicKeyCredentialRequestOptions())));
+                toSdk(authn.authenticate(fromSdk(authStart.publicKeyCredentialRequestOptions())))));
         assertThat(authFinish.idToken()).isNotBlank();
 
         // rp-app WebAuthnController 와 같은 규칙: expectedIssuer = issuerBase + "/" + tenantId.

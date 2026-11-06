@@ -6,9 +6,9 @@ import com.crosscert.passkey.webauthn.verifier.NativeWebAuthnVerifier;
 import com.crosscert.passkey.webauthn.verifier.RegistrationInput;
 import com.crosscert.passkey.webauthn.verifier.RegistrationResult;
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -92,7 +92,7 @@ class RegistrationDifferentialTest {
         // 의존하지 않는 위치 탐색).
         ObjectNode root = (ObjectNode) reg;
         ObjectNode resp = (ObjectNode) root.get("response");
-        byte[] ao = Base64.getUrlDecoder().decode(resp.get("attestationObject").asText());
+        byte[] ao = Base64.getUrlDecoder().decode(resp.get("attestationObject").asString());
         byte[] rpIdHash = MessageDigest.getInstance("SHA-256")
                 .digest(fx.rpId().getBytes(StandardCharsets.UTF_8));
         int pos = indexOf(ao, rpIdHash);
@@ -128,7 +128,7 @@ class RegistrationDifferentialTest {
 
         ObjectNode root = (ObjectNode) reg;
         ObjectNode resp = (ObjectNode) root.get("response");
-        byte[] ao = Base64.getUrlDecoder().decode(resp.get("attestationObject").asText());
+        byte[] ao = Base64.getUrlDecoder().decode(resp.get("attestationObject").asString());
 
         // attStmt.sig 는 ECDSA DER 서명(0x30 SEQUENCE 로 시작). attestationObject 안에서
         // sig 바이트열을 찾기 위해, native 디코더로 sig 를 꺼내 그 위치를 탐색한 뒤 중간

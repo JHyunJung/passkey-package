@@ -2,9 +2,9 @@ package com.crosscert.passkey.app.fido2;
 
 import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.zaxxer.hikari.HikariDataSource;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -379,25 +379,25 @@ class Fido2EndToEndIT {
                 Origin.create(origin()), mapper);
 
         JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String regToken = regStart.get("registrationToken").asText();
+        String regToken = regStart.get("registrationToken").asString();
         JsonNode creationOptions = regStart.get("publicKeyCredentialCreationOptions");
 
         JsonNode attestationJson = authn.register(creationOptions);
         JsonNode regFinish = registerFinish(PREFIX_A, SECRET_A, regToken, attestationJson);
-        assertThat(regFinish.get("credentialId").asText()).isNotBlank();
+        assertThat(regFinish.get("credentialId").asString()).isNotBlank();
 
         // Authenticate against the same credential. Pass USER_HANDLE_A
         // so /start filters its allowCredentials to that one credential
         // (otherwise the usernameless path returns empty and ClientPlatform
         // has no descriptor to look up).
         JsonNode authStart = authenticationStart(PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String authToken = authStart.get("authenticationToken").asText();
+        String authToken = authStart.get("authenticationToken").asString();
         JsonNode requestOptions = authStart.get("publicKeyCredentialRequestOptions");
 
         JsonNode assertionJson = authn.authenticate(requestOptions);
         JsonNode authFinish = authenticationFinish(PREFIX_A, SECRET_A, authToken, assertionJson);
 
-        String idToken = authFinish.get("idToken").asText();
+        String idToken = authFinish.get("idToken").asString();
         assertThat(idToken).isNotBlank();
 
         // Verify JWT signature against the JWKS endpoint — this proves
@@ -480,7 +480,7 @@ class Fido2EndToEndIT {
         JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
         JsonNode attestationJson = authn.register(
                 regStart.get("publicKeyCredentialCreationOptions"));
-        registerFinish(PREFIX_A, SECRET_A, regStart.get("registrationToken").asText(),
+        registerFinish(PREFIX_A, SECRET_A, regStart.get("registrationToken").asString(),
                 attestationJson);
 
         // Now call /authentication/start from T_B with T_A's userHandle.
@@ -539,7 +539,7 @@ class Fido2EndToEndIT {
         Fido2TestAuthenticator authn = new Fido2TestAuthenticator(
                 Origin.create(origin()), mapper);
         JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String token = regStart.get("registrationToken").asText();
+        String token = regStart.get("registrationToken").asString();
 
         // Simulate TTL expiry by deleting the Redis key directly. The
         // ChallengeStore key namespace is "challenge:reg:<token>" — see
@@ -588,7 +588,7 @@ class Fido2EndToEndIT {
         JsonNode attestationJson = authn.register(
                 regStart.get("publicKeyCredentialCreationOptions"));
         registerFinish(PREFIX_A, SECRET_A,
-                regStart.get("registrationToken").asText(), attestationJson);
+                regStart.get("registrationToken").asString(), attestationJson);
 
         // Inflate the stored signCount past any value the test
         // authenticator will return on the next assertion. The
@@ -601,7 +601,7 @@ class Fido2EndToEndIT {
         // well below the inflated stored value, so the strict-monotonic
         // branch (`newCounter <= storedCounter`) MUST reject with 400.
         JsonNode authStart = authenticationStart(PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String authToken = authStart.get("authenticationToken").asText();
+        String authToken = authStart.get("authenticationToken").asString();
         JsonNode assertionJson = authn.authenticate(
                 authStart.get("publicKeyCredentialRequestOptions"));
         ObjectNode finishBody = mapper.createObjectNode();
@@ -685,9 +685,9 @@ class Fido2EndToEndIT {
         assertThat(keys.isArray()).isTrue();
         assertThat(keys.size()).isGreaterThanOrEqualTo(1);
         JsonNode jwk = keys.get(0);
-        assertThat(jwk.get("alg").asText()).isEqualTo("RS256");
-        assertThat(jwk.get("use").asText()).isEqualTo("sig");
-        assertThat(jwk.get("kid").asText()).isNotBlank();
+        assertThat(jwk.get("alg").asString()).isEqualTo("RS256");
+        assertThat(jwk.get("use").asString()).isEqualTo("sig");
+        assertThat(jwk.get("kid").asString()).isNotBlank();
     }
 
     // ------------------------------------------------------------

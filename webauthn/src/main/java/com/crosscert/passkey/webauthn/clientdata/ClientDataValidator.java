@@ -1,7 +1,7 @@
 package com.crosscert.passkey.webauthn.clientdata;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Base64;
 import java.util.Set;
@@ -84,10 +84,10 @@ public final class ClientDataValidator {
 
     private static String text(JsonNode root, String field) {
         JsonNode n = root.get(field);
-        if (n == null || !n.isTextual()) {
+        if (n == null || !n.isString()) {
             throw new ClientDataException(ClientDataException.Reason.MALFORMED,
                     "clientData missing field: " + field);
         }
-        return n.asText();
+        return n.asString();
     }
 }

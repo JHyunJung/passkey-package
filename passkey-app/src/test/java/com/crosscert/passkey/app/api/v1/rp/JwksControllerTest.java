@@ -1,8 +1,8 @@
 package com.crosscert.passkey.app.api.v1.rp;
 
 import com.crosscert.passkey.core.jwt.SigningKeyProvider;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -56,7 +56,7 @@ class JwksControllerTest {
                 .thenReturn(java.util.List.of(activeRow));
 
         keys = new com.crosscert.passkey.core.jwt.SigningKeyProvider(
-                repo, envelope, new com.fasterxml.jackson.databind.ObjectMapper(), clock);
+                repo, envelope, new tools.jackson.databind.ObjectMapper(), clock);
         keys.init();
         mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
                 .standaloneSetup(new JwksController(keys)).build();
@@ -71,11 +71,11 @@ class JwksControllerTest {
         assertThat(keysNode).hasSize(1);
 
         JsonNode jwk = keysNode.get(0);
-        assertThat(jwk.get("kty").asText()).isEqualTo("RSA");
-        assertThat(jwk.get("kid").asText()).isEqualTo(keys.signingKey().getKeyID());
-        assertThat(jwk.get("use").asText()).isEqualTo("sig");
+        assertThat(jwk.get("kty").asString()).isEqualTo("RSA");
+        assertThat(jwk.get("kid").asString()).isEqualTo(keys.signingKey().getKeyID());
+        assertThat(jwk.get("use").asString()).isEqualTo("sig");
         // codex P2: spec requires alg=RS256 in the published JWKS.
-        assertThat(jwk.get("alg").asText()).isEqualTo("RS256");
+        assertThat(jwk.get("alg").asString()).isEqualTo("RS256");
         // RSA public components must be present so RPs can verify.
         assertThat(jwk.get("n")).isNotNull();
         assertThat(jwk.get("e")).isNotNull();

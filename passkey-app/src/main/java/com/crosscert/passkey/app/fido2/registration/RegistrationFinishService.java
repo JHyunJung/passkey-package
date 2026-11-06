@@ -21,7 +21,7 @@ import com.crosscert.passkey.webauthn.verifier.RegistrationInput;
 import com.crosscert.passkey.webauthn.verifier.RegistrationResult;
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException;
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerifier;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

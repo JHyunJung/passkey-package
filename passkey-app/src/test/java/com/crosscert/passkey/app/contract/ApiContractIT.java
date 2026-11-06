@@ -3,9 +3,9 @@ package com.crosscert.passkey.app.contract;
 import com.crosscert.passkey.app.fido2.Fido2TestAuthenticator;
 import com.crosscert.passkey.app.support.PasskeyAppItSupport;
 import com.crosscert.passkey.core.tenant.TenantContextHolder;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.webauthn4j.data.client.Origin;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -172,7 +172,7 @@ class ApiContractIT {
     void idToken_claimShape() throws Exception {
         Ceremony c = new Ceremony();
         c.register();
-        String idToken = data(c.authenticationFinishRaw()).get("idToken").asText();
+        String idToken = data(c.authenticationFinishRaw()).get("idToken").asString();
 
         String[] parts = idToken.split("\\.");
         assertThat(parts).hasSize(3);
@@ -190,7 +190,7 @@ class ApiContractIT {
         c.register();
         c.authenticationFinishRaw();
         JsonNode listed = data(get("/api/v1/rp/credentials?userHandle=" + USER_HANDLE));
-        String credentialId = listed.get(0).get("credentialId").asText();
+        String credentialId = listed.get(0).get("credentialId").asString();
         ResponseEntity<String> renamed = post("/api/v1/rp/credentials/" + credentialId + "/label",
                 "{\"userHandle\":\"" + USER_HANDLE + "\",\"label\":\"contract key\"}");
         assertOkJson(renamed);
@@ -269,13 +269,13 @@ class ApiContractIT {
         // 바깥 객체(깊이 1) + 배열 64겹 = 깊이 65 → StreamReadConstraints(maxNestingDepth=64) 초과.
         ResponseEntity<String> tooDeep = post("/api/v1/rp/registration/finish", nestedFinishBody(64));
         assertErrorEnvelope(tooDeep, 400, "C001");
-        assertThat(mapper.readTree(tooDeep.getBody()).get("message").asText())
+        assertThat(mapper.readTree(tooDeep.getBody()).get("message").asString())
                 .isEqualTo("Malformed JSON request");
 
         // 대조군: 깊이 64 는 파서를 통과해 토큰 검증 단계에서 거부된다(파서 거부가 아님을 확인).
         ResponseEntity<String> atLimit = post("/api/v1/rp/registration/finish", nestedFinishBody(63));
         assertErrorEnvelope(atLimit, 400, "C001");
-        assertThat(mapper.readTree(atLimit.getBody()).get("message").asText())
+        assertThat(mapper.readTree(atLimit.getBody()).get("message").asString())
                 .isNotEqualTo("Malformed JSON request");
     }
 
@@ -289,7 +289,7 @@ class ApiContractIT {
         ResponseEntity<String> registerFinishRaw() throws Exception {
             JsonNode start = data(post("/api/v1/rp/registration/start", registrationStartBody()));
             ObjectNode body = mapper.createObjectNode();
-            body.put("registrationToken", start.get("registrationToken").asText());
+            body.put("registrationToken", start.get("registrationToken").asString());
             body.set("publicKeyCredential", authn.register(start.get("publicKeyCredentialCreationOptions")));
             return post("/api/v1/rp/registration/finish", mapper.writeValueAsString(body));
         }
@@ -305,7 +305,7 @@ class ApiContractIT {
         ResponseEntity<String> authenticationFinishRaw() throws Exception {
             JsonNode start = data(authenticationStartRaw());
             ObjectNode body = mapper.createObjectNode();
-            body.put("authenticationToken", start.get("authenticationToken").asText());
+            body.put("authenticationToken", start.get("authenticationToken").asString());
             body.set("publicKeyCredential", authn.authenticate(start.get("publicKeyCredentialRequestOptions")));
             return post("/api/v1/rp/authentication/finish", mapper.writeValueAsString(body));
         }
@@ -362,8 +362,8 @@ class ApiContractIT {
         assertThat(res.getStatusCode().value()).as("status, body=%s", res.getBody()).isEqualTo(status);
         JsonNode tree = mapper.readTree(res.getBody());
         assertThat(tree.path("success").asBoolean()).isFalse();
-        assertThat(tree.path("code").asText()).isEqualTo(code);
-        assertThat(tree.path("error").path("errorCode").asText()).isEqualTo(code);
+        assertThat(tree.path("code").asString()).isEqualTo(code);
+        assertThat(tree.path("error").path("errorCode").asString()).isEqualTo(code);
     }
 
     /**

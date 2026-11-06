@@ -2,12 +2,13 @@ package com.crosscert.passkey.app.fido2.challenge;
 
 import com.crosscert.passkey.app.config.PasskeyAppJacksonConfig;
 import com.crosscert.passkey.core.config.CoreJacksonConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -37,7 +38,7 @@ import static org.mockito.Mockito.when;
  * 픽스처({@code contract/redis/*.json})는 업그레이드 전 직렬화기로 기록했고 이후 수정하지 않는다.
  *
  * <p>ObjectMapper 는 운영과 같은 경로로 만든다: Boot 의 Jackson 자동구성 + core/passkey-app
- * 커스터마이저 + {@code application.yml}(→ {@code application-common.yml}) 의 {@code spring.jackson2.*}.
+ * 커스터마이저 + {@code application.yml}(→ {@code application-common.yml}) 의 {@code spring.jackson.*}.
  * ChallengeStore 의 (de)serialize 는 private 이라 {@link StringRedisTemplate} mock 으로
  * {@code set}/{@code getAndDelete} 를 경유해 검증한다.
  *
@@ -72,9 +73,9 @@ class ChallengeStoreFormatCompatTest {
         AtomicReference<ObjectMapper> ref = new AtomicReference<>();
         new ApplicationContextRunner()
                 .withInitializer(new ConfigDataApplicationContextInitializer())
-                .withConfiguration(AutoConfigurations.of(Jackson2AutoConfiguration.class))
+                .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class))
                 .withUserConfiguration(CoreJacksonConfig.class, PasskeyAppJacksonConfig.class)
-                .run(ctx -> ref.set(ctx.getBean(ObjectMapper.class)));
+                .run(ctx -> ref.set(ctx.getBean(JsonMapper.class)));
         mapper = ref.get();
 
         StringRedisTemplate redis = mock(StringRedisTemplate.class);

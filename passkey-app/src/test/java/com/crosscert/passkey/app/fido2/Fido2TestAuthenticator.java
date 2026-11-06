@@ -1,9 +1,9 @@
 package com.crosscert.passkey.app.fido2;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.webauthn4j.data.AttestationConveyancePreference;
 import com.webauthn4j.data.AuthenticatorAssertionResponse;
 import com.webauthn4j.data.AuthenticatorAttestationResponse;
@@ -110,23 +110,23 @@ public final class Fido2TestAuthenticator {
 
     private PublicKeyCredentialCreationOptions parseCreationOptions(JsonNode n) {
         PublicKeyCredentialRpEntity rp = new PublicKeyCredentialRpEntity(
-                n.get("rp").get("id").asText(),
-                n.get("rp").get("name").asText());
+                n.get("rp").get("id").asString(),
+                n.get("rp").get("name").asString());
 
         JsonNode user = n.get("user");
         PublicKeyCredentialUserEntity userEntity = new PublicKeyCredentialUserEntity(
-                B64URL_DEC.decode(user.get("id").asText()),
-                user.get("name").asText(),
-                user.get("displayName").asText());
+                B64URL_DEC.decode(user.get("id").asString()),
+                user.get("name").asString(),
+                user.get("displayName").asString());
 
-        Challenge challenge = new DefaultChallenge(B64URL_DEC.decode(n.get("challenge").asText()));
+        Challenge challenge = new DefaultChallenge(B64URL_DEC.decode(n.get("challenge").asString()));
 
         List<PublicKeyCredentialParameters> params = new ArrayList<>();
         for (JsonNode p : n.get("pubKeyCredParams")) {
             long alg = p.get("alg").asLong();
             COSEAlgorithmIdentifier coseAlg = COSEAlgorithmIdentifier.create(alg);
             params.add(new PublicKeyCredentialParameters(
-                    PublicKeyCredentialType.create(p.get("type").asText()),
+                    PublicKeyCredentialType.create(p.get("type").asString()),
                     coseAlg));
         }
 
@@ -136,10 +136,10 @@ public final class Fido2TestAuthenticator {
         if (n.hasNonNull("authenticatorSelection")) {
             JsonNode s = n.get("authenticatorSelection");
             UserVerificationRequirement uv = s.hasNonNull("userVerification")
-                    ? UserVerificationRequirement.create(s.get("userVerification").asText())
+                    ? UserVerificationRequirement.create(s.get("userVerification").asString())
                     : null;
             ResidentKeyRequirement rk = s.hasNonNull("residentKey")
-                    ? ResidentKeyRequirement.create(s.get("residentKey").asText())
+                    ? ResidentKeyRequirement.create(s.get("residentKey").asString())
                     : null;
             // The 3-arg (attachment, residentKey, userVerification)
             // ctor — we don't model attachment in this RP.
@@ -165,16 +165,16 @@ public final class Fido2TestAuthenticator {
     }
 
     private PublicKeyCredentialRequestOptions parseRequestOptions(JsonNode n) {
-        Challenge challenge = new DefaultChallenge(B64URL_DEC.decode(n.get("challenge").asText()));
+        Challenge challenge = new DefaultChallenge(B64URL_DEC.decode(n.get("challenge").asString()));
         Long timeout = n.hasNonNull("timeout") ? n.get("timeout").asLong() : null;
-        String rpId = n.hasNonNull("rpId") ? n.get("rpId").asText() : null;
+        String rpId = n.hasNonNull("rpId") ? n.get("rpId").asString() : null;
 
         List<PublicKeyCredentialDescriptor> allow = new ArrayList<>();
         if (n.hasNonNull("allowCredentials")) {
             for (JsonNode entry : n.get("allowCredentials")) {
                 allow.add(new PublicKeyCredentialDescriptor(
-                        PublicKeyCredentialType.create(entry.get("type").asText()),
-                        B64URL_DEC.decode(entry.get("id").asText()),
+                        PublicKeyCredentialType.create(entry.get("type").asString()),
+                        B64URL_DEC.decode(entry.get("id").asString()),
                         /* transports */ null));
             }
         }
@@ -183,7 +183,7 @@ public final class Fido2TestAuthenticator {
         }
 
         UserVerificationRequirement uv = n.hasNonNull("userVerification")
-                ? UserVerificationRequirement.create(n.get("userVerification").asText())
+                ? UserVerificationRequirement.create(n.get("userVerification").asString())
                 : null;
 
         return new PublicKeyCredentialRequestOptions(

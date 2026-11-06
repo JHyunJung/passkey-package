@@ -20,7 +20,7 @@ import com.crosscert.passkey.webauthn.trust.CertPathVerifier;
 import com.crosscert.passkey.webauthn.trust.EmptyTrustAnchorProvider;
 import com.crosscert.passkey.webauthn.trust.TrustAnchorProvider;
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException.Reason;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
