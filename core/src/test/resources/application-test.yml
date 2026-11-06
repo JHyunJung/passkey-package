@@ -44,8 +44,10 @@ spring:
   # by another 30+ seconds for zero coverage benefit.
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      # Boot 4: 자동설정 클래스가 모듈 패키지로 이동·개명(Redis* → DataRedis*).
+      # 존재하지 않는 클래스명은 조용히 무시되므로 반드시 새 이름을 써야 한다.
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
 
 management:
   endpoints.web.exposure.include: health

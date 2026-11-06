@@ -1,10 +1,18 @@
 spring:
-  jackson:
+  # Boot 4: Jackson 2 자동설정(spring-boot-jackson2) 은 spring.jackson2.* 를 읽는다
+  # (spring.jackson.* 는 Jackson 3 전용). 값은 Boot 3 의 spring.jackson.* 그대로.
+  # Task 7(Jackson 3 전환) 에서 spring.jackson.* 로 되돌린다.
+  jackson2:
     serialization:
       write-dates-as-timestamps: false
     deserialization:
       fail-on-unknown-properties: true
     default-property-inclusion: non_null
+  http:
+    converters:
+      # Boot 4 기본 MVC JSON 컨버터는 Jackson 3. Jackson 2 ObjectMapper 기반
+      # 컨버터를 쓰도록 고정(DTO 가 Jackson 2 JsonNode/어노테이션을 사용).
+      preferred-json-mapper: jackson2
   jpa:
     open-in-view: false
     properties:

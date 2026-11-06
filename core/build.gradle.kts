@@ -4,10 +4,15 @@ plugins {
 
 dependencies {
     api("org.springframework.boot:spring-boot-starter")
-    api("org.springframework.boot:spring-boot-starter-web")
+    // Boot 4 모듈화 스타터: -web → -webmvc, Spring Session 은 Boot 측 자동설정 모듈
+    // (spring-boot-session-data-redis) 을 끌어오는 전용 스타터로 교체.
+    api("org.springframework.boot:spring-boot-starter-webmvc")
     api("org.springframework.boot:spring-boot-starter-data-jpa")
     api("org.springframework.boot:spring-boot-starter-data-redis")
-    api("org.springframework.session:spring-session-data-redis")
+    api("org.springframework.boot:spring-boot-starter-session-data-redis")
+    // Jackson 2 자동설정 유지(Boot 4 기본은 Jackson 3). Jackson 2 ObjectMapper 빈과
+    // Jackson 2 기반 MVC 컨버터를 계속 쓰기 위한 호환 모듈 — Task 7 에서 해제.
+    api("org.springframework.boot:spring-boot-jackson2")
     // Required at RUNTIME by Lettuce pooling (application-common.yml enables it).
     // spring-boot-starter-data-redis bundles Lettuce but NOT commons-pool2.
     // implementation (not api) — app code does not compile against pool2 types.
@@ -16,9 +21,12 @@ dependencies {
     api("io.micrometer:micrometer-registry-prometheus")
     api("org.springframework.boot:spring-boot-starter-validation")
     api("org.springframework.boot:spring-boot-starter-mail")
-    implementation("org.springframework.boot:spring-boot-starter-aop")
+    // Boot 4: spring-boot-starter-aop → spring-boot-starter-aspectj
+    implementation("org.springframework.boot:spring-boot-starter-aspectj")
 
     api(rootProject.libs.oracle.jdbc)
+    // Boot 4 는 flyway-core 만으로 Flyway 자동설정이 켜지지 않는다 — 전용 스타터 필요.
+    api("org.springframework.boot:spring-boot-starter-flyway")
     api(rootProject.libs.flyway.core)
     api(rootProject.libs.flyway.oracle)
 
