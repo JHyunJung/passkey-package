@@ -169,6 +169,10 @@ class RateLimitConfigTest {
                 .isEqualTo(ByteBuffer.wrap("한글k".getBytes(StandardCharsets.UTF_8)));
         byte[] value = {1, 2, (byte) 0xff};
         ByteBuffer encoded = codec.encodeValue(value);
+        // 저장 형식 동결: 값은 변환 없이 원 바이트 그대로 Redis 에 기록된다.
+        byte[] stored = new byte[encoded.remaining()];
+        encoded.duplicate().get(stored);
+        assertThat(stored).containsExactly(1, 2, (byte) 0xff);
         assertThat(codec.decodeValue(encoded)).containsExactly(1, 2, (byte) 0xff);
     }
 

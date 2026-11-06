@@ -312,4 +312,14 @@ class RateLimitFilterCharacterizationTest {
                 .isSameAs(redisDown);
         verifyNoInteractions(chain);
     }
+
+    @Test
+    void missing_tier_in_do_filter_internal_throws_npe_like_original() {
+        // shouldNotFilter 가 막는 경로라 운영상 도달 불가 — 원 Java 의 NPE 예외 흐름을 고정한다.
+        MockHttpServletRequest r = req("POST", "/not/limited", null);
+        assertThatThrownBy(() -> filter.doFilterInternal(r, new MockHttpServletResponse(),
+                mock(FilterChain.class)))
+                .isExactlyInstanceOf(NullPointerException.class);
+        verify(proxy, never()).builder();
+    }
 }

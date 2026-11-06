@@ -3,6 +3,9 @@ package com.crosscert.passkey.app.security
 import org.springframework.stereotype.Component
 import java.util.Optional
 
+/** 어떤 키도 보유할 수 없는 sentinel scope — /api/v1/rp 하위 미매핑 경로를 fail-closed 로 만든다. */
+private const val UNMAPPED_RP_SCOPE = "__unmapped_rp__"
+
 /**
  * RP-facing 요청 경로를 요구 API key scope 로 매핑 (P1-5).
  *
@@ -33,10 +36,6 @@ class ApiKeyScopeResolver {
             else -> null
         },
     )
-
-    private companion object {
-        const val UNMAPPED_RP_SCOPE = "__unmapped_rp__"
-    }
 }
 
 /** prefix 가 경로 세그먼트 경계에서 매칭될 때만 true (registration 이 registrationXYZ 를 잡지 않게). */

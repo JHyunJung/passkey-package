@@ -470,4 +470,26 @@ class ApiKeyAuthFilterCharacterizationTest {
         verifyNoInteractions(chain, encoder);
         assertThat(TenantContextHolder.get()).isNull();
     }
+
+    @Test
+    void null_key_hash_follows_bad_secret_path_with_real_bcrypt() throws Exception {
+        // 원 record 는 null keyHash 를 허용했고 BCryptPasswordEncoder.matches(raw, null) 은 false →
+        // 401 + bad_secret + brute-force 알림. 500 이 되면 안 된다.
+        ApiKeyAuthFilter real = new ApiKeyAuthFilter(lookup,
+                new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4),
+                scopeRepo, new ApiKeyScopeResolver(), meters, events, Clock.fixed(NOW, ZoneOffset.UTC));
+        when(lookup.findByPrefix(PREFIX)).thenReturn(Optional.of(
+                new ApiKeyLookupService.ApiKeyAuthRow(KEY_ID, TENANT, null, null, null)));
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        real.doFilter(req(REG_PATH, PREFIX + SECRET), res, chain);
+
+        assertThat(res.getStatus()).isEqualTo(401);
+        assertThat(res.getContentAsString()).isEqualTo(UNAUTHORIZED_BODY);
+        assertThat(count("bad_secret")).isEqualTo(1.0);
+        verify(events).publishEvent(any(SecurityAlertEvent.class));
+        verifyNoInteractions(chain, scopeRepo);
+        assertThat(TenantContextHolder.get()).isNull();
+    }
 }

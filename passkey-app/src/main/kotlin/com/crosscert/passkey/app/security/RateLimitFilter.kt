@@ -119,10 +119,9 @@ class RateLimitFilter(private val proxy: ProxyManager<String>) : OncePerRequestF
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
         val startNs = System.nanoTime()
-        // shouldNotFilter already guaranteed resolveTier(...) != null.
-        val (uri, config) = checkNotNull(resolveTier(req.servletPath, req.method)) {
-            "rate-limit tier vanished after shouldNotFilter"
-        }
+        // shouldNotFilter already guaranteed resolveTier(...) != null. `!!` 는 의도적:
+        // 원 Java 가 null tier 에서 NullPointerException 을 던지던 예외 흐름을 그대로 보존한다.
+        val (uri, config) = resolveTier(req.servletPath, req.method)!!
 
         // IP bucket — fired on EVERY request. Attackers spraying prefixes
         // get capped here before the key bucket can be circumvented.

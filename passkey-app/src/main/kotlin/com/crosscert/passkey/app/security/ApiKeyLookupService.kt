@@ -48,7 +48,7 @@ class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) 
     private val jdbc = JdbcTemplate(dataSource)
     private val schema = dbSchema.schema()
 
-    fun findByPrefix(keyPrefix: String): Optional<ApiKeyAuthRow> {
+    fun findByPrefix(keyPrefix: String?): Optional<ApiKeyAuthRow> {
         // 인증 시점에는 아직 tenant context 가 없다. key_prefix 는 전역 UNIQUE(V7)
         // 이므로 tenant 없이 1행 룩업이 정확하다. JdbcTemplate 의 직접 SQL 은
         // Hibernate @Filter(ORM 레벨) 를 거치지 않으므로 모든 테넌트의 행을 본다.
@@ -63,7 +63,6 @@ class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) 
                 ApiKeyAuthRow(
                     id = toUuidOrFail(rs.getBytes("id"), "id"),
                     tenantId = toUuidOrFail(rs.getBytes("tenant_id"), "tenant_id"),
-                    // V1 스키마의 key_hash 는 NOT NULL.
                     keyHash = rs.getString("key_hash"),
                     expiresAt = rs.getTimestamp("expires_at")?.toInstant(),
                     revokedAt = rs.getTimestamp("revoked_at")?.toInstant(),
@@ -73,7 +72,9 @@ class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) 
         return Optional.ofNullable(row)
     }
 
-    fun touchLastUsed(apiKeyId: UUID, tenantId: UUID, now: Instant) {
+    // 파라미터는 원 Java 와 같은 입력을 받도록 nullable: null id 는 SQL NULL 로 바인딩돼 0행 UPDATE(no-op),
+    // null now 는 setter 안 Timestamp.from 에서 NPE(커넥션 획득 이후 — 원 예외 순서 그대로).
+    fun touchLastUsed(apiKeyId: UUID?, tenantId: UUID?, now: Instant?) {
         // Best-effort: touch 실패가 유효 인증을 500 으로 만들면 안 된다.
         // tenant_id 를 WHERE 에 명시 — context 부재를 인가로 취급하지 않는다(타 테넌트
         // 행 변조 차단). VPD 제거 후에도 격리 의미를 명시 검증으로 유지.
@@ -82,8 +83,8 @@ class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) 
                 "UPDATE $schema.api_key SET last_used_at = ? WHERE id = ? AND tenant_id = ?",
                 PreparedStatementSetter { ps ->
                     ps.setTimestamp(1, Timestamp.from(now))
-                    ps.setBytes(2, apiKeyId.toRawBytes())
-                    ps.setBytes(3, tenantId.toRawBytes())
+                    ps.setBytes(2, apiKeyId?.toRawBytes())
+                    ps.setBytes(3, tenantId?.toRawBytes())
                 },
             )
         } catch (e: DataAccessException) {
@@ -97,7 +98,8 @@ class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) 
     data class ApiKeyAuthRow(
         val id: UUID,
         val tenantId: UUID,
-        val keyHash: String,
+        // null 허용(원 record 와 동일): null 해시는 BCrypt matches=false → 401 bad-secret 경로.
+        val keyHash: String?,
         val expiresAt: Instant?,
         val revokedAt: Instant?,
     ) {

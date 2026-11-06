@@ -187,4 +187,57 @@ class ApiKeyLookupServiceTest {
         assertThatThrownBy(() -> service.touchLastUsed(ID, TENANT, Instant.now())).isSameAs(boom);
         assertThat(appender.list).isEmpty();
     }
+
+    // ── null inputs (원 Java 가 받던 입력 그대로) ──────────────────────────────
+
+    @Test
+    void findByPrefix_null_prefix_binds_sql_null_and_returns_empty() throws SQLException {
+        when(rs.next()).thenReturn(false);
+
+        assertThat(service.findByPrefix(null)).isEmpty();
+        verify(ps).setString(1, null);
+    }
+
+    @Test
+    void findByPrefix_null_key_hash_maps_to_row_with_null_hash() throws SQLException {
+        when(rs.next()).thenReturn(true);
+        when(rs.getBytes("id")).thenReturn(ID_BYTES);
+        when(rs.getBytes("tenant_id")).thenReturn(TENANT_BYTES);
+        when(rs.getString("key_hash")).thenReturn(null);
+
+        ApiKeyLookupService.ApiKeyAuthRow row = service.findByPrefix("pk_abcd1234").orElseThrow();
+
+        assertThat(row).isEqualTo(new ApiKeyLookupService.ApiKeyAuthRow(ID, TENANT, null, null, null));
+    }
+
+    @Test
+    void touchLastUsed_null_ids_bind_sql_null_without_exception() throws SQLException {
+        Instant now = Instant.parse("2026-11-06T01:02:03Z");
+        when(ps.executeUpdate()).thenReturn(0);
+
+        service.touchLastUsed(null, null, now);
+
+        var order = inOrder(ps);
+        order.verify(ps).setTimestamp(1, Timestamp.from(now));
+        order.verify(ps).setBytes(2, null);
+        order.verify(ps).setBytes(3, null);
+        order.verify(ps).executeUpdate();
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    void touchLastUsed_null_now_throws_npe_after_connection() throws SQLException {
+        assertThatThrownBy(() -> service.touchLastUsed(ID, TENANT, null))
+                .isInstanceOf(NullPointerException.class);
+        verify(dataSource).getConnection();
+    }
+
+    @Test
+    void touchLastUsed_null_now_with_connection_failure_is_swallowed() throws SQLException {
+        when(dataSource.getConnection()).thenThrow(new SQLException("down"));
+
+        service.touchLastUsed(ID, TENANT, null);
+
+        assertThat(appender.list).hasSize(1);
+    }
 }
