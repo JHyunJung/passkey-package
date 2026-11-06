@@ -47,7 +47,7 @@ dependencies {
 }
 
 springBoot {
-    mainClass.set("com.crosscert.passkey.app.PasskeyApplication")
+    mainClass.set("com.crosscert.passkey.app.PasskeyApplicationKt")
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
