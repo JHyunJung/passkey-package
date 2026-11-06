@@ -43,14 +43,23 @@ class FunnelServiceKstBucketTest {
 
     @Test
     void dailySeriesBucketsRowUnderKstDateNotUtcDate() {
-        UUID tenant = UUID.randomUUID();
-
         // What Oracle's TRUNC(created_at) returns for "today" in a KST DB
-        // session: today's KST midnight, as a Timestamp (Timestamp.toInstant()
-        // yields the same underlying instant regardless of any zone).
+        // session under Hibernate 6: today's KST midnight, as a Timestamp
+        // (Timestamp.toInstant() yields the same underlying instant regardless of any zone).
         LocalDate todayKst = LocalDate.now(KstTime.ZONE);
-        Timestamp dbTruncRow = Timestamp.from(
-                todayKst.atStartOfDay(KstTime.ZONE).toInstant());
+        assertTodayBucket(todayKst, Timestamp.from(todayKst.atStartOfDay(KstTime.ZONE).toInstant()));
+    }
+
+    @Test
+    void dailySeriesBucketsHibernate7LocalDateTimeRowUnderSameKstDate() {
+        // Hibernate 7 returns the native-query DATE column as LocalDateTime — the DB
+        // wall clock (KST midnight) itself. It must land in the same bucket as above.
+        LocalDate todayKst = LocalDate.now(KstTime.ZONE);
+        assertTodayBucket(todayKst, todayKst.atStartOfDay());
+    }
+
+    private void assertTodayBucket(LocalDate todayKst, Object dbTruncRow) {
+        UUID tenant = UUID.randomUUID();
 
         List<Object[]> rows = new java.util.ArrayList<>();
         rows.add(new Object[]{dbTruncRow, CeremonyAction.REGISTRATION_BEGIN, 7L});

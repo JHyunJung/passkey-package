@@ -10,8 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.crosscert.passkey.core.config.KstTime;
 
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -97,17 +95,13 @@ public class FunnelService {
                 tenantId,
                 List.of(REGISTRATION_BEGIN, AUTHENTICATION_BEGIN, REGISTRATION_SUCCESS, AUTHENTICATION_SUCCESS),
                 since)) {
-            // row[0] = TRUNC(created_at) (Oracle DATE -> java.sql.Timestamp), row[1] = action, row[2] = count
-            Object dayCol = row[0];
-            Instant dayInstant = dayCol instanceof Timestamp ts
-                    ? ts.toInstant()
-                    : ((java.util.Date) dayCol).toInstant();
+            // row[0] = TRUNC(created_at) (Oracle DATE; Hibernate 7 -> LocalDateTime), row[1] = action, row[2] = count
             // F06: reinterpret in KST — the same timezone the DB session used to
             // compute TRUNC(created_at) (JVM TZ=Asia/Seoul, hibernate.jdbc.time_zone=
             // Asia/Seoul). Reinterpreting in UTC shifted every daily bucket back by
             // one day and, for KST 00:00–09:00 queries, pushed today's freshest
             // data out of the rendering window below entirely.
-            LocalDate day = dayInstant.atZone(KstTime.ZONE).toLocalDate();
+            LocalDate day = KstTime.dbDay(row[0]);
             String action = (String) row[1];
             long count = ((Number) row[2]).longValue();
             // cell = [등록 시도, 등록 성공, 인증 시도, 인증 성공]

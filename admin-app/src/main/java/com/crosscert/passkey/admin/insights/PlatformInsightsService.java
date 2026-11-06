@@ -13,9 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Timestamp;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
@@ -187,8 +185,7 @@ public class PlatformInsightsService {
                 .setParameter("since", since)
                 .getResultList();
         for (Object[] r : rows) {
-            Instant day = r[0] instanceof Timestamp ts ? ts.toInstant() : ((java.util.Date) r[0]).toInstant();
-            long[] cell = byDay.computeIfAbsent(day.atZone(KstTime.ZONE).toLocalDate(), k -> new long[2]);
+            long[] cell = byDay.computeIfAbsent(KstTime.dbDay(r[0]), k -> new long[2]);
             if (CeremonyAction.AUTHENTICATION_BEGIN.equals(r[1])) cell[0] += num(r[2]); else cell[1] += num(r[2]);
         }
         List<FunnelDto.DailyPoint> out = new ArrayList<>(windowDays);
