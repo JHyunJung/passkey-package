@@ -242,31 +242,38 @@ Spring Session(Redis 에 JDK 직렬화로 저장) 형식이 이전 이미지와 
 (`admin-app` 의 `spring.session.data.redis.namespace`). passkey-app 이 쓰는 챌린지
 (`challenge:*`)·rate limit 키는 건드리지 않는다 — `FLUSHALL`/`FLUSHDB` 금지.
 
+순서: 새 이미지 적재 → **admin-app 을 전부 중지**(이 번들은 `./start.sh --stop` 이 이 호스트의
+앱 스택을 모두 내린다. 다른 호스트에도 admin-app 을 띄웠다면 그것도 먼저 내린다 — 하나라도 살아
+있으면 지운 뒤에 옛 형식 세션을 다시 써 넣는다) → 세션 키 삭제·검증 → 새 이미지로 기동.
+
 ```bash
 ./load-images.sh                  # 새 이미지 적재
 ./start.sh --stop                 # 앱 스택 중지 (Redis 는 유지)
 
 cd deploy
-set -a; . ./.env; set +a          # REDIS_PASSWORD 등 (7번과 같은 방식)
-export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}
-# 지울 키 개수 확인
-docker compose -f docker-compose.redis.yml exec redis sh -c \
-  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" | wc -l'
-# admin 세션 키만 삭제
-docker compose -f docker-compose.redis.yml exec redis sh -c \
-  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" \
-   | xargs -r -n 100 redis-cli -a "$REDIS_PASSWORD" --no-auth-warning unlink'
-# 다시 개수 확인 → 0
-docker compose -f docker-compose.redis.yml exec redis sh -c \
-  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" | wc -l'
-cd ..
-
-./start.sh                        # 새 이미지로 기동
+set -a; . ./.env; set +a          # REDIS_PASSWORD 등 — 값의 따옴표를 셸이 벗겨준다
+export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}   # redis compose 가 요구, 0.0.0.0 금지
+docker compose -f docker-compose.redis.yml exec -T redis sh -c '
+  export REDISCLI_AUTH="$REDIS_PASSWORD"
+  pong=$(redis-cli ping 2>&1)
+  [ "$pong" = PONG ] || { echo "중단: Redis 접속/인증 실패 ($pong)" >&2; exit 1; }
+  echo "삭제 대상: $(redis-cli --scan --pattern "spring:session:*" | wc -l) 개"
+  redis-cli --scan --pattern "spring:session:*" | xargs -r -n 100 redis-cli unlink > /dev/null
+  left=$(redis-cli --scan --pattern "spring:session:*") || { echo "중단: 검증 조회 실패" >&2; exit 1; }
+  [ -z "$left" ] || { echo "중단: spring:session 키가 남아 있음" >&2; exit 1; }
+  echo "OK: admin 세션 키 0"
+' && cd .. && ./start.sh          # OK 일 때만 새 이미지로 기동
 ```
 
-`sh -c '…'` 의 작은따옴표는 그대로 둔다 — `$REDIS_PASSWORD` 를 서버 셸이 아니라 Redis
-컨테이너 안에서 풀어야 한다(컨테이너에 같은 값이 환경변수로 들어 있다). 이후 같은 4.1 계열
-이미지끼리의 재배포에서는 이 단계가 필요 없다.
+마지막 명령은 `&&` 로 묶여 있어 **`OK:` 가 나온 경우에만** `./start.sh` 까지 진행한다.
+`중단:` 이 나오거나 Redis 컨테이너가 멈춰 있으면(`service "redis" is not running`) 0 이 아닌
+코드로 멈추고 `deploy/` 에 남는다 — 원인을 고치고 같은 명령을 다시 실행한다(이미 지워졌으면
+`삭제 대상: 0 개` → `OK`). 컨테이너의 sh(busybox)에는 `pipefail` 이 없어서 PONG 확인과 삭제 후
+재조회로 실패를 잡는다.
+
+`sh -c '…'` 의 작은따옴표는 그대로 둔다 — `$REDIS_PASSWORD` 는 서버 셸이 아니라 Redis
+컨테이너 안의 같은 이름 환경변수로 풀린다. 이후 같은 4.1 계열 이미지끼리의 재배포에서는 이
+단계가 필요 없다.
 
 ### 7. (참고) compose 직접 실행
 

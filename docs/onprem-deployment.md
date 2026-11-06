@@ -68,31 +68,76 @@ Spring Boot 4.1(Spring Framework 7 · Spring Security 7) 빌드는 admin-app 의
 남긴 세션을 새 admin-app 이 읽지 못하므로, 교체 시 **한 번** admin 세션 키를 지운다.
 **admin 콘솔 사용자는 전원 다시 로그인**해야 한다. passkey-app(등록·인증 API)·rp-app 은 영향 없다.
 
-1. 이전 버전 admin-app 중지 (passkey-app 은 계속 돌아도 된다)
-2. Redis 에서 admin 세션 네임스페이스 `spring:session:*` 키만 삭제
-   (`admin-app` 의 `spring.session.data.redis.namespace` 기본값. 바꿔 운영 중이면 그 값으로)
+1. **모든 호스트의 이전 버전 admin-app 인스턴스를 전부 중지**한다(`--scale` 복제본 포함).
+   하나라도 살아 있으면 키를 지운 뒤에도 그 인스턴스가 옛 형식 세션을 다시 써 넣는다.
+   passkey-app 은 계속 돌아도 된다.
+2. Redis 에서 admin 세션 네임스페이스 `spring:session:*` 키만 삭제하고, 남은 키가 0 인지 확인한다
+   (`admin-app` 의 `spring.session.data.redis.namespace` 기본값. 바꿔 운영 중이면 그 값으로).
+   아래 명령이 마지막에 `OK:` 를 출력하고 exit 0 으로 끝난 경우에만 3단계로 간다.
+   `중단:` 이 나오면(접속·인증 실패, 키 잔존) 원인을 고치기 전까지 새 admin-app 을 띄우지 않는다.
 3. 새 버전 admin-app 기동
 
 삭제 대상은 `spring:session:*` 뿐이다. passkey-app 의 챌린지(`challenge:*`)·rate limit 키가 같은
-Redis 에 있으므로 **`FLUSHALL`/`FLUSHDB` 는 쓰지 않는다**. 앱이 쓰는 접속 값(`REDIS_HOST`,
-`REDIS_PORT`, `REDIS_PASSWORD`)으로 실행한다.
+Redis 에 있으므로 **`FLUSHALL`/`FLUSHDB` 는 쓰지 않는다**.
+
+먼저 앱이 쓰는 Redis 접속 값(`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`)을 셸에 올린다.
+compose 로 배포했다면 `deploy/.env` 를 읽는다(그 외 배포는 같은 세 변수를 직접 `export`):
 
 ```bash
-export REDISCLI_AUTH="$REDIS_PASSWORD"   # redis-cli 가 읽는 비밀번호 변수 (명령줄·ps 에 노출 안 됨)
-R="redis-cli -h $REDIS_HOST -p ${REDIS_PORT:-6379}"
-$R --scan --pattern 'spring:session:*' | wc -l                       # 지울 개수
-$R --scan --pattern 'spring:session:*' | xargs -r -n 100 $R unlink   # 삭제
-$R --scan --pattern 'spring:session:*' | wc -l                       # 0 이어야 한다
+cd deploy
+set -a; . ./.env; set +a          # 값의 따옴표를 셸이 벗겨준다
 ```
+
+그다음 아래 블록을 통째로 붙여 넣는다. `bash -euo pipefail` 로 따로 실행하므로 어느 단계든
+실패하면 그 자리에서 0 이 아닌 코드로 끝나고, 로그인 셸(zsh 포함)은 영향받지 않는다.
+`REDIS_PASSWORD` 가 비어 있으면(requirepass 없는 Redis) 인증 없이 접속한다.
+
+```bash
+bash -euo pipefail <<'EOF'
+# REDIS_HOST / REDIS_PORT / REDIS_PASSWORD 는 위에서 셸에 올린 값을 쓴다
+: "${REDIS_HOST:?REDIS_HOST 가 비어 있음}"
+if [ -n "${REDIS_PASSWORD:-}" ]; then export REDISCLI_AUTH="$REDIS_PASSWORD"; fi
+rc() { redis-cli -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" "$@"; }
+
+# 1) 접속·인증 확인 — PONG 이 아니면 중단
+pong=$(rc ping 2>&1) || true
+[ "$pong" = PONG ] || { echo "중단: Redis 접속/인증 실패 ($pong)" >&2; exit 1; }
+
+# 2) admin 세션 키만 삭제 (spring:session:*)
+echo "삭제 대상: $(rc --scan --pattern 'spring:session:*' | wc -l | tr -d ' ') 개"
+rc --scan --pattern 'spring:session:*' \
+  | xargs -r -n 100 redis-cli -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" unlink > /dev/null
+
+# 3) 검증 — 남은 키가 0 이 아니면 중단
+left=$(rc --scan --pattern 'spring:session:*')
+[ -z "$left" ] || { echo "중단: spring:session 키가 남아 있음" >&2; exit 1; }
+echo "OK: admin 세션 키 0 — 새 admin-app 을 기동해도 된다"
+EOF
+```
+
+비밀번호는 `REDISCLI_AUTH` 로 넘기므로 명령줄·`ps` 에 드러나지 않는다.
 
 Redis 를 `deploy/docker-compose.redis.yml` 컨테이너로 운영한다면 호스트에 `redis-cli` 가 없어도
-컨테이너 안에서 실행할 수 있다(`deploy/` 에서, `REDIS_BIND_ADDR`·`REDIS_PASSWORD` 를 export 한 셸):
+컨테이너 안에서 같은 확인·삭제·검증을 할 수 있다. 위처럼 `deploy/` 에서 `.env` 를 읽은 셸에서
+실행한다(compose 파일이 `REDIS_BIND_ADDR` 를 요구한다). 컨테이너의 sh(busybox)에는 `pipefail`
+이 없어 PONG 확인과 삭제 후 재조회로 실패를 잡는다:
 
 ```bash
-docker compose -f docker-compose.redis.yml exec redis sh -c \
-  'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern "spring:session:*" \
-   | xargs -r -n 100 redis-cli -a "$REDIS_PASSWORD" --no-auth-warning unlink'
+export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}   # 0.0.0.0 금지
+docker compose -f docker-compose.redis.yml exec -T redis sh -c '
+  export REDISCLI_AUTH="$REDIS_PASSWORD"
+  pong=$(redis-cli ping 2>&1)
+  [ "$pong" = PONG ] || { echo "중단: Redis 접속/인증 실패 ($pong)" >&2; exit 1; }
+  echo "삭제 대상: $(redis-cli --scan --pattern "spring:session:*" | wc -l) 개"
+  redis-cli --scan --pattern "spring:session:*" | xargs -r -n 100 redis-cli unlink > /dev/null
+  left=$(redis-cli --scan --pattern "spring:session:*") || { echo "중단: 검증 조회 실패" >&2; exit 1; }
+  [ -z "$left" ] || { echo "중단: spring:session 키가 남아 있음" >&2; exit 1; }
+  echo "OK: admin 세션 키 0"
+'
 ```
+
+`sh -c '…'` 의 작은따옴표는 그대로 둔다 — `$REDIS_PASSWORD` 는 서버 셸이 아니라 컨테이너
+안의 같은 이름 환경변수로 풀린다. Redis 컨테이너가 멈춰 있으면 `exec` 자체가 실패한다(exit ≠ 0).
 
 이후 같은 4.1 계열 빌드끼리의 재배포에는 이 단계가 필요 없다.
 
