@@ -19,7 +19,6 @@ import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import java.time.Clock
 import java.time.Instant
-import java.util.Optional
 import java.util.UUID
 
 private val TENANT_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -71,12 +70,12 @@ class ApiKeyAuthFilterTest {
         filter.doFilter(req, res, chain)
         assertThat(res.status).isEqualTo(401)
         // No DB call for malformed prefix.
-        verify(lookup, never()).findByPrefix(anyOrNull())
+        verify(lookup, never()).findByPrefix(any())
     }
 
     @Test
     fun rejectsUnknownPrefix() {
-        whenever(lookup.findByPrefix("pk_unknwn")).thenReturn(Optional.empty())
+        whenever(lookup.findByPrefix("pk_unknwn")).thenReturn(null)
 
         val req = request("GET", "/api/v1/rp/x", "pk_unknwnSECRETSECRETSECRET")
         val res = MockHttpServletResponse()
@@ -92,7 +91,7 @@ class ApiKeyAuthFilterTest {
         val prefix = "pk_abcd1234"
         val hash = encoder.encode("DIFFERENT_SECRET")
         whenever(lookup.findByPrefix(prefix)).thenReturn(
-            Optional.of(ApiKeyLookupService.ApiKeyAuthRow(KEY_ID_1, TENANT_A, hash, null, null)),
+            ApiKeyLookupService.ApiKeyAuthRow(KEY_ID_1, TENANT_A, hash, null, null),
         )
 
         val req = request("GET", "/api/v1/rp/x", fullKey)
@@ -110,7 +109,7 @@ class ApiKeyAuthFilterTest {
         val prefix = "pk_abcd1234"
         val hash = encoder.encode(secret)
         whenever(lookup.findByPrefix(prefix)).thenReturn(
-            Optional.of(ApiKeyLookupService.ApiKeyAuthRow(KEY_ID_7, TENANT_A, hash, null, null)),
+            ApiKeyLookupService.ApiKeyAuthRow(KEY_ID_7, TENANT_A, hash, null, null),
         )
         // mapped scope 경로 + 키가 해당 scope 보유 → fail-closed 통과(이 테스트는 인증/테넌트 컨텍스트 검증 목적).
         whenever(scopeRepo.findScopeValuesByApiKeyId(KEY_ID_7)).thenReturn(setOf("registration"))
@@ -132,12 +131,10 @@ class ApiKeyAuthFilterTest {
         val secret = "SECRET"
         val prefix = "pk_revoked0"
         whenever(lookup.findByPrefix(prefix)).thenReturn(
-            Optional.of(
-                ApiKeyLookupService.ApiKeyAuthRow(
-                    KEY_ID_99, TENANT_A, encoder.encode(secret),
-                    expiresAt = null,
-                    revokedAt = Instant.now().minusSeconds(60),
-                ),
+            ApiKeyLookupService.ApiKeyAuthRow(
+                KEY_ID_99, TENANT_A, encoder.encode(secret),
+                expiresAt = null,
+                revokedAt = Instant.now().minusSeconds(60),
             ),
         )
 
@@ -155,12 +152,10 @@ class ApiKeyAuthFilterTest {
         val secret = "SECRET"
         val prefix = "pk_expired0"
         whenever(lookup.findByPrefix(prefix)).thenReturn(
-            Optional.of(
-                ApiKeyLookupService.ApiKeyAuthRow(
-                    KEY_ID_100, TENANT_A, encoder.encode(secret),
-                    expiresAt = Instant.now().minusSeconds(60),
-                    revokedAt = null,
-                ),
+            ApiKeyLookupService.ApiKeyAuthRow(
+                KEY_ID_100, TENANT_A, encoder.encode(secret),
+                expiresAt = Instant.now().minusSeconds(60),
+                revokedAt = null,
             ),
         )
 

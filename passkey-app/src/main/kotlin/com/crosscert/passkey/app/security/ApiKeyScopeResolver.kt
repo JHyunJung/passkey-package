@@ -1,7 +1,6 @@
 package com.crosscert.passkey.app.security
 
 import org.springframework.stereotype.Component
-import java.util.Optional
 
 /** 어떤 키도 보유할 수 없는 sentinel scope — /api/v1/rp 하위 미매핑 경로를 fail-closed 로 만든다. */
 private const val UNMAPPED_RP_SCOPE = "__unmapped_rp__"
@@ -11,7 +10,7 @@ private const val UNMAPPED_RP_SCOPE = "__unmapped_rp__"
  *
  * scope 값은 api_key_scope 테이블의 enum(registration/authentication/admin)과
  * 일치. 이 resolver 는 현재 registration/authentication 만 매핑(admin 은 RP-facing
- * 아님). `/api/v1/rp/` 밖의 경로는 scope 불요(Optional.empty) — 인증만 통과하면 된다.
+ * 아님). `/api/v1/rp/` 밖의 경로는 scope 불요(null) — 인증만 통과하면 된다.
  * `/api/v1/rp/` 하위인데 매핑 안 된 경로는 fail-closed: 어떤 키도 보유 불가능한
  * sentinel scope 를 요구해 필터가 403(새 RP 엔드포인트가 scope 매핑 없이 추가돼도 open 되지 않음).
  * 매핑을 단일 컴포넌트에 응집해 ApiKeyAuthFilter 가 분기 로직을 갖지 않게 한다.
@@ -19,7 +18,7 @@ private const val UNMAPPED_RP_SCOPE = "__unmapped_rp__"
 @Component
 class ApiKeyScopeResolver {
 
-    fun requiredScope(path: String?): Optional<String> = Optional.ofNullable(
+    fun requiredScope(path: String?): String? =
         when {
             path == null -> null
             path.isUnder("/api/v1/rp/registration") -> "registration"
@@ -34,8 +33,7 @@ class ApiKeyScopeResolver {
             // 실수로 open 되지 않는다(매핑을 명시적으로 추가해야 동작).
             path.isUnder("/api/v1/rp") -> UNMAPPED_RP_SCOPE
             else -> null
-        },
-    )
+        }
 }
 
 /** prefix 가 경로 세그먼트 경계에서 매칭될 때만 true (registration 이 registrationXYZ 를 잡지 않게). */

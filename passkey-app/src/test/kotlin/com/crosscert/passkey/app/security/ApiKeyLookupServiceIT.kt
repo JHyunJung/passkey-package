@@ -192,10 +192,7 @@ class ApiKeyLookupServiceIT @Autowired constructor(
 
         val row = service.findByPrefix(KEY_PREFIX)
 
-        assertThat(row)
-            .`as`("native lookup must return the row even with no tenant context")
-            .isPresent()
-        val found = row.get()
+        val found = checkNotNull(row) { "native lookup must return the row even with no tenant context" }
         assertThat(found.id)
             .`as`("id must round-trip from RAW(16)")
             .isEqualTo(API_KEY_ID)
@@ -217,8 +214,8 @@ class ApiKeyLookupServiceIT @Autowired constructor(
         val row = service.findByPrefix("pk_doesnotexist")
 
         assertThat(row)
-            .`as`("an unknown prefix must resolve to Optional.empty()")
-            .isEmpty()
+            .`as`("an unknown prefix must resolve to null")
+            .isNull()
     }
 
     // ── Test 3: touchLastUsed isolates by explicit tenant_id ─────────────────

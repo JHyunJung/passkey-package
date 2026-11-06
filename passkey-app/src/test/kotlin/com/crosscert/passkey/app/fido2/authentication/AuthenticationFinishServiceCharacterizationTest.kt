@@ -141,18 +141,6 @@ class AuthenticationFinishServiceCharacterizationTest {
         appender.list.filter { it.level == level }.map { it.formattedMessage }
 
     @Test
-    fun nullRequest_npeInsideMeasuredBlock_failureMetricCounted() {
-        // 원 Java: try 안 첫 문장(req.getAuthenticationToken())에서 NPE → 실패 메트릭 1 → 재던짐.
-        stubChallenge(USER)
-
-        assertThatThrownBy { svc().finish(null) }
-            .isExactlyInstanceOf(NullPointerException::class.java)
-        assertThat(count("failure")).isEqualTo(1.0)
-        assertThat(count("success")).isEqualTo(0.0)
-        verifyNoInteractions(store, tenants, credentials, ceremonyEvents, authEvents)
-    }
-
-    @Test
     fun nullToken_illegalArgumentInsideMeasuredBlock_failureMetricCounted() {
         // 브랜치 기준 Java: null 토큰 → "challenge:auth:null" 조회가 빈 값 → 토큰 누락과 같은 IAE·메시지,
         // 측정 블록 안이라 실패 메트릭 1. Kotlin 은 같은 결과를 Redis 조회 없이 낸다(외부 관찰 불가 차이).

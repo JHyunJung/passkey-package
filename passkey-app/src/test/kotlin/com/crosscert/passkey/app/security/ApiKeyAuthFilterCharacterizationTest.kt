@@ -39,7 +39,6 @@ import org.springframework.test.util.ReflectionTestUtils
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
-import java.util.Optional
 import java.util.UUID
 
 private const val DUMMY_HASH = "\$2a\$12\$KIXxA7B0NQI8YzCq0RZ.7eN5lUucl0wH0G3jWvSEqcD9QYxIqUyqK"
@@ -102,7 +101,7 @@ class ApiKeyAuthFilterCharacterizationTest {
 
     private fun stubRow(expiresAt: Instant?, revokedAt: Instant?) {
         whenever(lookup.findByPrefix(PREFIX)).thenReturn(
-            Optional.of(ApiKeyLookupService.ApiKeyAuthRow(KEY_ID, TENANT, ROW_HASH, expiresAt, revokedAt)),
+            ApiKeyLookupService.ApiKeyAuthRow(KEY_ID, TENANT, ROW_HASH, expiresAt, revokedAt),
         )
     }
 
@@ -207,7 +206,7 @@ class ApiKeyAuthFilterCharacterizationTest {
 
     @Test
     fun header_one_char_past_prefix_splits_prefix_and_secret() {
-        whenever(lookup.findByPrefix(any<String>())).thenReturn(Optional.empty())
+        whenever(lookup.findByPrefix(any<String>())).thenReturn(null)
         filter.doFilter(req(REG_PATH, "pk_abcd1234X"), MockHttpServletResponse(), mock())
 
         verify(lookup).findByPrefix("pk_abcd1234")
@@ -225,7 +224,7 @@ class ApiKeyAuthFilterCharacterizationTest {
 
     @Test
     fun unknown_prefix_runs_dummy_bcrypt_counts_and_logs_without_secret() {
-        whenever(lookup.findByPrefix(PREFIX)).thenReturn(Optional.empty())
+        whenever(lookup.findByPrefix(PREFIX)).thenReturn(null)
         val res = MockHttpServletResponse()
         val chain: FilterChain = mock()
 
@@ -258,7 +257,7 @@ class ApiKeyAuthFilterCharacterizationTest {
         assertThat(count("expired")).isZero()
         assertThat(messages()).containsExactly("api-key auth failed: reason=revoked prefix=pk_abcd1234")
         verifyNoInteractions(events, scopeRepo)
-        verify(lookup, never()).touchLastUsed(anyOrNull(), anyOrNull(), anyOrNull())
+        verify(lookup, never()).touchLastUsed(any(), any(), any())
     }
 
     @Test
@@ -334,7 +333,7 @@ class ApiKeyAuthFilterCharacterizationTest {
             ),
         )
         verifyNoInteractions(scopeRepo)
-        verify(lookup, never()).touchLastUsed(anyOrNull(), anyOrNull(), anyOrNull())
+        verify(lookup, never()).touchLastUsed(any(), any(), any())
         assertThat(TenantContextHolder.get()).isNull()
     }
 
@@ -355,7 +354,7 @@ class ApiKeyAuthFilterCharacterizationTest {
         assertThat(messages()).containsExactly(
             "api-key scope denied: prefix=pk_abcd1234 required=registration held=[authentication]",
         )
-        verify(lookup, never()).touchLastUsed(anyOrNull(), anyOrNull(), anyOrNull())
+        verify(lookup, never()).touchLastUsed(any(), any(), any())
         assertThat(count("success")).isZero()
         assertThat(MDC.get("apiKeyPrefix")).isNull()
         assertThat(TenantContextHolder.get()).isNull()
@@ -463,7 +462,7 @@ class ApiKeyAuthFilterCharacterizationTest {
             Clock.fixed(NOW, ZoneOffset.UTC),
         )
         whenever(lookup.findByPrefix(PREFIX)).thenReturn(
-            Optional.of(ApiKeyLookupService.ApiKeyAuthRow(KEY_ID, TENANT, null, null, null)),
+            ApiKeyLookupService.ApiKeyAuthRow(KEY_ID, TENANT, null, null, null),
         )
         val res = MockHttpServletResponse()
         val chain: FilterChain = mock()

@@ -15,25 +15,22 @@ private val log = LoggerFactory.getLogger(CredentialSelfService::class.java)
 
 /**
  * P0-4: end-user self-service credential 관리. tenant 격리는 앱 레벨 @Filter 가 담당.
- *
- * 파라미터는 원 Java 와 같은 입력을 받도록 nullable: null 은 그대로 리포지토리 쿼리 바인딩으로
- * 넘어가 매칭 0건(→ 빈 목록 / ENTITY_NOT_FOUND)이 된다. 컨트롤러는 항상 디코드된 값을 넘긴다.
  */
 @Service
 class CredentialSelfService(private val creds: CredentialRepository) {
 
     @Transactional(readOnly = true)
-    fun list(userHandle: ByteArray?): List<CredentialView> =
+    fun list(userHandle: ByteArray): List<CredentialView> =
         creds.findByUserHandle(userHandle).map(::toView)
 
     @Transactional
-    fun rename(userHandle: ByteArray?, credentialId: ByteArray?, label: String?) {
+    fun rename(userHandle: ByteArray, credentialId: ByteArray, label: String?) {
         val c = findOwnedForUpdate(userHandle, credentialId)
         c.label = label
     }
 
     @Transactional
-    fun delete(userHandle: ByteArray?, credentialId: ByteArray?) {
+    fun delete(userHandle: ByteArray, credentialId: ByteArray) {
         val c = findOwnedForUpdate(userHandle, credentialId)
         creds.delete(c)
         // Self-service delete is destructive. passkey-app has no audit-chain
@@ -46,7 +43,7 @@ class CredentialSelfService(private val creds: CredentialRepository) {
         )
     }
 
-    private fun findOwnedForUpdate(userHandle: ByteArray?, credentialId: ByteArray?): Credential =
+    private fun findOwnedForUpdate(userHandle: ByteArray, credentialId: ByteArray): Credential =
         creds.findOwnedForUpdate(credentialId, userHandle)
             .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND, "credential not found or not owned") }
 

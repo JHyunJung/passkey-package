@@ -85,7 +85,7 @@ class ApiKeyLookupServiceTest {
 
         val row = service.findByPrefix("pk_abcd1234")
 
-        assertThat(row).isEmpty()
+        assertThat(row).isNull()
         verify(con).prepareStatement(
             "SELECT id, tenant_id, key_hash, expires_at, revoked_at FROM SCH.api_key WHERE key_prefix = ?",
         )
@@ -101,7 +101,7 @@ class ApiKeyLookupServiceTest {
         whenever(rs.getTimestamp("expires_at")).thenReturn(Timestamp.from(exp))
         whenever(rs.getTimestamp("revoked_at")).thenReturn(Timestamp.from(rev))
 
-        val row = service.findByPrefix("pk_abcd1234").orElseThrow()
+        val row = service.findByPrefix("pk_abcd1234")
 
         assertThat(row).isEqualTo(ApiKeyLookupService.ApiKeyAuthRow(ID, TENANT, "HASH", exp, rev))
     }
@@ -111,7 +111,7 @@ class ApiKeyLookupServiceTest {
         stubRow(ID_BYTES, TENANT_BYTES)
         whenever(rs.getString("key_hash")).thenReturn("HASH")
 
-        val row = service.findByPrefix("pk_abcd1234").orElseThrow()
+        val row = service.findByPrefix("pk_abcd1234")
 
         assertThat(row).isEqualTo(ApiKeyLookupService.ApiKeyAuthRow(ID, TENANT, "HASH", null, null))
     }
@@ -183,55 +183,16 @@ class ApiKeyLookupServiceTest {
         assertThat(appender.list).isEmpty()
     }
 
-    // ── null inputs (원 Java 가 받던 입력 그대로) ──────────────────────────────
-
-    @Test
-    fun findByPrefix_null_prefix_binds_sql_null_and_returns_empty() {
-        whenever(rs.next()).thenReturn(false)
-
-        assertThat(service.findByPrefix(null)).isEmpty()
-        verify(ps).setString(1, null)
-    }
+    // ── null DB 값 ─────────────────────────────────────────────────────────
 
     @Test
     fun findByPrefix_null_key_hash_maps_to_row_with_null_hash() {
         stubRow(ID_BYTES, TENANT_BYTES)
         whenever(rs.getString("key_hash")).thenReturn(null)
 
-        val row = service.findByPrefix("pk_abcd1234").orElseThrow()
+        val row = service.findByPrefix("pk_abcd1234")
 
         assertThat(row).isEqualTo(ApiKeyLookupService.ApiKeyAuthRow(ID, TENANT, null, null, null))
     }
 
-    @Test
-    fun touchLastUsed_null_ids_bind_sql_null_without_exception() {
-        val now = Instant.parse("2026-11-06T01:02:03Z")
-        whenever(ps.executeUpdate()).thenReturn(0)
-
-        service.touchLastUsed(null, null, now)
-
-        inOrder(ps) {
-            verify(ps).setTimestamp(1, Timestamp.from(now))
-            verify(ps).setBytes(2, null)
-            verify(ps).setBytes(3, null)
-            verify(ps).executeUpdate()
-        }
-        assertThat(appender.list).isEmpty()
-    }
-
-    @Test
-    fun touchLastUsed_null_now_throws_npe_after_connection() {
-        assertThatThrownBy { service.touchLastUsed(ID, TENANT, null) }
-            .isInstanceOf(NullPointerException::class.java)
-        verify(dataSource).connection
-    }
-
-    @Test
-    fun touchLastUsed_null_now_with_connection_failure_is_swallowed() {
-        whenever(dataSource.connection).thenThrow(SQLException("down"))
-
-        service.touchLastUsed(ID, TENANT, null)
-
-        assertThat(appender.list).hasSize(1)
-    }
 }

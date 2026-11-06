@@ -18,7 +18,6 @@ import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.crypto.password.PasswordEncoder
 import java.time.Clock
-import java.util.Optional
 import java.util.UUID
 
 private const val HASH = "HASH"
@@ -47,7 +46,7 @@ class ApiKeyAuthFilterScopeTest {
     @BeforeEach
     fun setUp() {
         whenever(lookup.findByPrefix(prefix)).thenReturn(
-            Optional.of(ApiKeyLookupService.ApiKeyAuthRow(keyId, tenantId, HASH, null, null)),
+            ApiKeyLookupService.ApiKeyAuthRow(keyId, tenantId, HASH, null, null),
         )
         whenever(encoder.matches(secret, HASH)).thenReturn(true)
     }

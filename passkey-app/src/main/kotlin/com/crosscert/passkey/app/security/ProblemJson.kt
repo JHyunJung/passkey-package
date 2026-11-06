@@ -15,8 +15,6 @@ import jakarta.servlet.http.HttpServletResponse
  */
 internal object ProblemJson {
 
-    @JvmStatic
-    @JvmOverloads
     fun write(res: HttpServletResponse, status: Int, title: String, error: String? = null) {
         res.status = status
         res.contentType = "application/problem+json"

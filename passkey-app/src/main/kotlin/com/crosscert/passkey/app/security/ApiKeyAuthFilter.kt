@@ -16,7 +16,6 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import java.time.Clock
-import kotlin.jvm.optionals.getOrNull
 
 private val log = LoggerFactory.getLogger(ApiKeyAuthFilter::class.java)
 
@@ -111,7 +110,7 @@ class ApiKeyAuthFilter(
         val prefix = header.substring(0, PREFIX_LEN)
         val secret = header.substring(PREFIX_LEN)
 
-        val row = lookup.findByPrefix(prefix).getOrNull()
+        val row = lookup.findByPrefix(prefix)
         if (row == null) {
             // Run BCrypt anyway so the timing of unknown-prefix matches
             // the timing of known-prefix-wrong-secret.
@@ -154,7 +153,7 @@ class ApiKeyAuthFilter(
             // 검사는 TenantContextHolder 가 설정된 상태에서 수행 — 앱 레벨 @Filter 조회가
             // 해당 키의 테넌트를 본다. getServletPath() 는 shouldNotFilter 의 인증
             // 게이트와 동일 기준이라 context-path 우회 위험이 없다.
-            val required = scopeResolver.requiredScope(req.servletPath).getOrNull()
+            val required = scopeResolver.requiredScope(req.servletPath)
             if (required != null) {
                 // scope 쿼리 예외는 fail-closed(전파→접근 거부)가 의도 —
                 // touchLastUsed 와 달리 swallow 금지. 바깥 finally 가 context clear 보장.

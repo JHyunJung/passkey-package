@@ -51,15 +51,12 @@ class AuthenticationFinishService(
     private val authEvents: CredentialAuthEventRecorder,
 ) {
 
-    // req 는 nullable: 원 Java 는 null 요청을 try 안 첫 역참조에서 NPE 로 거부해 실패 메트릭을 남겼다.
-    // non-null 파라미터면 진입 시점(try 밖) NPE 가 되어 메트릭이 빠지므로 아래 `req!!` 로 같은 지점을 유지한다.
     @Transactional
-    fun finish(req: AuthenticationFinishRequest?): AuthenticationFinishResponse {
+    fun finish(req: AuthenticationFinishRequest): AuthenticationFinishResponse {
         try {
             // 토큰 null(컨트롤러는 @NotBlank 로 거른다 — 서비스 직접 호출만 해당)은 토큰 만료와 같은 결과:
             // 같은 IllegalArgumentException·메시지, 측정 블록 안이라 실패 메트릭도 남는다.
-            // req!!: 원 Java 의 첫 역참조 지점 — 측정 블록 안 NPE.
-            val ch = req!!.authenticationToken?.let(store::takeAuthentication)?.getOrNull()
+            val ch = req.authenticationToken?.let(store::takeAuthentication)?.getOrNull()
                 ?: throw IllegalArgumentException("authentication token missing or expired")
 
             // F19 방어심화: challenge freshness 를 앱-레벨에서도 확인한다.

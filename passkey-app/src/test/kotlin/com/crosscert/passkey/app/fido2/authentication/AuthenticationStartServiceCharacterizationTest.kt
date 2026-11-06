@@ -94,19 +94,6 @@ class AuthenticationStartServiceCharacterizationTest {
         appender.list.filter { it.level == Level.INFO }.map { it.formattedMessage }
 
     @Test
-    fun nullRequest_npeInsideMeasuredBlock_failureMetricCounted() {
-        // 원 Java: try 안 첫 문장(entry 로그 인자 req.getUserHandle())에서 NPE → 실패 메트릭 1 → 재던짐.
-        TenantContextHolder.set(TENANT)
-
-        assertThatThrownBy { svc().start(null) }
-            .isExactlyInstanceOf(NullPointerException::class.java)
-        assertThat(count("failure")).isEqualTo(1.0)
-        assertThat(count("success")).isEqualTo(0.0)
-        assertThat(infos()).isEmpty()
-        verifyNoInteractions(tenants, store, ceremonyEvents)
-    }
-
-    @Test
     fun noTenantContext_illegalState() {
         assertThatThrownBy { svc().start(AuthenticationStartRequest(null)) }
             .isExactlyInstanceOf(IllegalStateException::class.java)
