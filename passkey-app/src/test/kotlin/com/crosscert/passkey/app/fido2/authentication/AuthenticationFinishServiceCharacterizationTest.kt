@@ -43,7 +43,6 @@ import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.test.util.ReflectionTestUtils
 import tools.jackson.databind.ObjectMapper
 import java.time.Clock
@@ -154,19 +153,15 @@ class AuthenticationFinishServiceCharacterizationTest {
     }
 
     @Test
-    fun nullToken_npeInsideMeasuredBlock_failureMetricCounted() {
-        // 원 Java: null 토큰이 (실제) Kotlin ChallengeStore 파라미터 검사에서 NPE(try 안) → 실패 메트릭 1.
-        // 목 ChallengeStore 는 Kotlin 파라미터 검사를 건너뛰므로 운영과 같은 실제 인스턴스를 쓴다.
-        val redis: StringRedisTemplate = mock()
-        val real = AuthenticationFinishService(
-            ChallengeStore(redis, mapper), verifier, tenants, credentials, idTokens,
-            mapper, clock, CeremonyMetrics(meters), events, ceremonyEvents, authEvents,
-        )
-
-        assertThatThrownBy { real.finish(AuthenticationFinishRequest(null, null)) }
-            .isExactlyInstanceOf(NullPointerException::class.java)
+    fun nullToken_illegalArgumentInsideMeasuredBlock_failureMetricCounted() {
+        // 브랜치 기준 Java: null 토큰 → "challenge:auth:null" 조회가 빈 값 → 토큰 누락과 같은 IAE·메시지,
+        // 측정 블록 안이라 실패 메트릭 1. Kotlin 은 같은 결과를 Redis 조회 없이 낸다(외부 관찰 불가 차이).
+        assertThatThrownBy { svc().finish(AuthenticationFinishRequest(null, null)) }
+            .isExactlyInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("authentication token missing or expired")
         assertThat(count("failure")).isEqualTo(1.0)
-        verifyNoInteractions(redis, tenants, credentials)
+        assertThat(count("success")).isEqualTo(0.0)
+        verifyNoInteractions(store, tenants, credentials)
     }
 
     @Test

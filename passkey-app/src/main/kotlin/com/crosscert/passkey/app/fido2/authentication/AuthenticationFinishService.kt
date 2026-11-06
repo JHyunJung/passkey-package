@@ -29,6 +29,7 @@ import java.time.Clock
 import java.time.OffsetDateTime
 import java.util.Base64
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 private val log = LoggerFactory.getLogger(AuthenticationFinishService::class.java)
 
@@ -55,11 +56,11 @@ class AuthenticationFinishService(
     @Transactional
     fun finish(req: AuthenticationFinishRequest?): AuthenticationFinishResponse {
         try {
-            // req!!: 원 Java 의 첫 역참조(req.getAuthenticationToken()) 지점 — 측정 블록 안 NPE.
-            // authenticationToken!!: @NotBlank 로 컨트롤러에서 걸러지며, 서비스 직접 호출로 null 이 오면
-            // 원 Java 도 이 지점(try 안)에서 ChallengeStore 의 Kotlin 파라미터 null 검사로 NPE 였다 — 같은 위치·타입.
-            val ch = store.takeAuthentication(req!!.authenticationToken!!)
-                .orElseThrow { IllegalArgumentException("authentication token missing or expired") }
+            // 토큰 null(컨트롤러는 @NotBlank 로 거른다 — 서비스 직접 호출만 해당)은 토큰 만료와 같은 결과:
+            // 같은 IllegalArgumentException·메시지, 측정 블록 안이라 실패 메트릭도 남는다.
+            // req!!: 원 Java 의 첫 역참조 지점 — 측정 블록 안 NPE.
+            val ch = req!!.authenticationToken?.let(store::takeAuthentication)?.getOrNull()
+                ?: throw IllegalArgumentException("authentication token missing or expired")
 
             // F19 방어심화: challenge freshness 를 앱-레벨에서도 확인한다.
             // 평시에는 Redis TTL 이 만료 challenge 를 먼저 제거하므로 이 가드가
