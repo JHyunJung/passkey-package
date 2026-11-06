@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -68,5 +69,24 @@ class ChallengeStoreTest {
     void takeMissingReturnsEmpty() {
         when(ops.getAndDelete(anyString())).thenReturn(null);
         assertThat(store.takeRegistration("missing")).isEmpty();
+    }
+
+    /**
+     * 저장값이 JSON 리터럴 {@code null} 이면 역직렬화 결과가 null 이고, 원 Java 구현에서는
+     * try/catch 밖의 {@code Optional.of(null)} 이 NPE 를 던졌다 — IllegalStateException 으로
+     * 감싸지 않는 이 예외 흐름을 고정한다.
+     */
+    @Test
+    void takeRegistration_storedJsonNull_throwsBareNpe() {
+        when(ops.getAndDelete("challenge:reg:tok_null")).thenReturn("null");
+        assertThatThrownBy(() -> store.takeRegistration("tok_null"))
+                .isExactlyInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void takeAuthentication_storedJsonNull_throwsBareNpe() {
+        when(ops.getAndDelete("challenge:auth:tok_null")).thenReturn("null");
+        assertThatThrownBy(() -> store.takeAuthentication("tok_null"))
+                .isExactlyInstanceOf(NullPointerException.class);
     }
 }

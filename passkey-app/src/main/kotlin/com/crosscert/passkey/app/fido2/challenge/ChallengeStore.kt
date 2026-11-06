@@ -45,7 +45,9 @@ class ChallengeStore(
             throw IllegalStateException("ChallengeStore JSON serialize failed", e)
         }
 
-    private inline fun <reified T : Any> deserialize(json: String): T =
+    // 결과는 nullable: JSON 리터럴 `null` 이면 null 을 돌려주고, 호출부 Optional.of 가 try 밖에서
+    // NPE 로 거부한다(원 Java 와 같은 예외 흐름 — IllegalStateException 으로 감싸지 않는다).
+    private inline fun <reified T : Any> deserialize(json: String): T? =
         try {
             mapper.readValue(json, T::class.java)
         } catch (e: Exception) {
