@@ -509,7 +509,7 @@ class Fido2EndToEndIT {
         ResponseEntity<String> res = http.exchange(
                 url("/api/v1/rp/registration/start"),
                 HttpMethod.POST, new HttpEntity<>(body, h), String.class);
-        assertThat(res.getStatusCodeValue()).isEqualTo(401);
+        assertThat(res.getStatusCode().value()).isEqualTo(401);
     }
 
     // ------------------------------------------------------------
@@ -527,7 +527,7 @@ class Fido2EndToEndIT {
         ResponseEntity<String> res = http.exchange(
                 url("/api/v1/rp/registration/start"),
                 HttpMethod.POST, new HttpEntity<>(body, h), String.class);
-        assertThat(res.getStatusCodeValue()).isEqualTo(401);
+        assertThat(res.getStatusCode().value()).isEqualTo(401);
     }
 
     // ------------------------------------------------------------
@@ -564,7 +564,7 @@ class Fido2EndToEndIT {
         // Spring's default exception handler returns 400 for
         // IllegalArgumentException, which is what
         // RegistrationFinishService throws on missing/expired token.
-        assertThat(res.getStatusCodeValue()).isEqualTo(400);
+        assertThat(res.getStatusCode().value()).isEqualTo(400);
     }
 
     // ------------------------------------------------------------
@@ -614,7 +614,7 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(finishBody),
                         authHeaders(PREFIX_A, SECRET_A)),
                 String.class);
-        assertThat(res.getStatusCodeValue())
+        assertThat(res.getStatusCode().value())
                 .as("Strict-monotonic check must reject when stored counter > new counter")
                 .isEqualTo(400);
     }
@@ -655,7 +655,7 @@ class Fido2EndToEndIT {
                     ResponseEntity<String> res = http.exchange(
                             url("/api/v1/rp/authentication/start"),
                             HttpMethod.POST, request, String.class);
-                    if (res.getStatusCodeValue() == 429) {
+                    if (res.getStatusCode().value() == 429) {
                         rejected.incrementAndGet();
                     } else {
                         accepted.incrementAndGet();
@@ -718,9 +718,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "registration/start failed status=" + res.getStatusCodeValue()
+                    "registration/start failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -737,9 +737,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "registration/finish failed status=" + res.getStatusCodeValue()
+                    "registration/finish failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -757,9 +757,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "authentication/start failed status=" + res.getStatusCodeValue()
+                    "authentication/start failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -776,9 +776,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "authentication/finish failed status=" + res.getStatusCodeValue()
+                    "authentication/finish failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -788,8 +788,8 @@ class Fido2EndToEndIT {
         ResponseEntity<String> res = http.exchange(
                 url("/.well-known/jwks.json"),
                 HttpMethod.GET, HttpEntity.EMPTY, String.class);
-        if (res.getStatusCodeValue() != 200) {
-            throw new IllegalStateException("jwks fetch failed status=" + res.getStatusCodeValue());
+        if (res.getStatusCode().value() != 200) {
+            throw new IllegalStateException("jwks fetch failed status=" + res.getStatusCode().value());
         }
         return mapper.readTree(res.getBody());
     }
