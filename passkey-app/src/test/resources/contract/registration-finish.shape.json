@@ -1,0 +1,13 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.aaguid" : "string",
+  "$.data.attestationFormat" : "string",
+  "$.data.createdAt" : "iso-offset(Z)",
+  "$.data.credentialId" : "b64url",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string"
+}

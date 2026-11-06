@@ -34,7 +34,7 @@ class SecurityIncidentServiceTest {
     ApplicationEventPublisher events;
     TenantRepository tenants;
     Clock clock;
-    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    tools.jackson.databind.ObjectMapper objectMapper;
     SecurityIncidentService svc;
 
     final UUID TENANT = UUID.randomUUID();
@@ -49,7 +49,7 @@ class SecurityIncidentServiceTest {
         events = mock(ApplicationEventPublisher.class);
         tenants = mock(TenantRepository.class);
         clock = Clock.fixed(Instant.parse("2026-06-21T00:00:00Z"), ZoneOffset.ofHours(9));
-        objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        objectMapper = new tools.jackson.databind.ObjectMapper();
         svc = new SecurityIncidentService(repo, verifier, audit, events, tenants, clock, objectMapper);
 
         Tenant t = mock(Tenant.class);

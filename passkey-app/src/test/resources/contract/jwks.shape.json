@@ -1,0 +1,11 @@
+{
+  "$" : "object",
+  "$.keys" : "array<object>",
+  "$.keys[]" : "object",
+  "$.keys[].alg" : "string",
+  "$.keys[].e" : "string",
+  "$.keys[].kid" : "b64url",
+  "$.keys[].kty" : "string",
+  "$.keys[].n" : "b64url",
+  "$.keys[].use" : "string"
+}

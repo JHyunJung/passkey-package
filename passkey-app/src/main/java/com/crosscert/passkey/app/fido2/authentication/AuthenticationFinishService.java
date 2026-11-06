@@ -22,7 +22,7 @@ import com.crosscert.passkey.webauthn.verifier.AuthenticationResult;
 import com.crosscert.passkey.webauthn.verifier.StoredCredential;
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException;
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerifier;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -124,7 +124,8 @@ public class AuthenticationFinishService {
             // depth), so a mismatch is rejected there as well.
             byte[] credentialId;
             try {
-                String rawIdB64 = req.publicKeyCredential().get("rawId").asText();
+                // asString("") — Jackson 2 asText() 처럼 객체/배열을 예외 대신 "" 로 강제(→ 미등록 처리).
+                String rawIdB64 = req.publicKeyCredential().get("rawId").asString("");
                 credentialId = Base64.getUrlDecoder().decode(rawIdB64);
             } catch (Exception e) {
                 throw new IllegalArgumentException("assertion rawId invalid");

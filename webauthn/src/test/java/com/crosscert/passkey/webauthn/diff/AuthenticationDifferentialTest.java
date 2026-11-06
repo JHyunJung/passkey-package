@@ -4,7 +4,7 @@ import com.crosscert.passkey.webauthn.verifier.AuthenticationInput;
 import com.crosscert.passkey.webauthn.verifier.AuthenticationResult;
 import com.crosscert.passkey.webauthn.verifier.NativeWebAuthnVerifier;
 import com.crosscert.passkey.webauthn.verifier.StoredCredential;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -46,11 +46,11 @@ class AuthenticationDifferentialTest {
                 "reg".getBytes(StandardCharsets.UTF_8), authChallenge, new byte[]{1});
 
         // tamper the signature in the assertion JSON
-        com.fasterxml.jackson.databind.node.ObjectNode root =
-                (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(af.credentialJson());
-        com.fasterxml.jackson.databind.node.ObjectNode resp =
-                (com.fasterxml.jackson.databind.node.ObjectNode) root.get("response");
-        byte[] sig = java.util.Base64.getUrlDecoder().decode(resp.get("signature").asText());
+        tools.jackson.databind.node.ObjectNode root =
+                (tools.jackson.databind.node.ObjectNode) mapper.readTree(af.credentialJson());
+        tools.jackson.databind.node.ObjectNode resp =
+                (tools.jackson.databind.node.ObjectNode) root.get("response");
+        byte[] sig = java.util.Base64.getUrlDecoder().decode(resp.get("signature").asString());
         sig[sig.length - 1] ^= 0x01;
         resp.put("signature", java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(sig));
 

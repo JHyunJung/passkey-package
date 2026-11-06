@@ -4,10 +4,12 @@ plugins {
 
 dependencies {
     api("org.springframework.boot:spring-boot-starter")
-    api("org.springframework.boot:spring-boot-starter-web")
+    // Boot 4 모듈화 스타터: -web → -webmvc, Spring Session 은 Boot 측 자동설정 모듈
+    // (spring-boot-session-data-redis) 을 끌어오는 전용 스타터로 교체.
+    api("org.springframework.boot:spring-boot-starter-webmvc")
     api("org.springframework.boot:spring-boot-starter-data-jpa")
     api("org.springframework.boot:spring-boot-starter-data-redis")
-    api("org.springframework.session:spring-session-data-redis")
+    api("org.springframework.boot:spring-boot-starter-session-data-redis")
     // Required at RUNTIME by Lettuce pooling (application-common.yml enables it).
     // spring-boot-starter-data-redis bundles Lettuce but NOT commons-pool2.
     // implementation (not api) — app code does not compile against pool2 types.
@@ -16,9 +18,12 @@ dependencies {
     api("io.micrometer:micrometer-registry-prometheus")
     api("org.springframework.boot:spring-boot-starter-validation")
     api("org.springframework.boot:spring-boot-starter-mail")
-    implementation("org.springframework.boot:spring-boot-starter-aop")
+    // Boot 4: spring-boot-starter-aop → spring-boot-starter-aspectj
+    implementation("org.springframework.boot:spring-boot-starter-aspectj")
 
     api(rootProject.libs.oracle.jdbc)
+    // Boot 4 는 flyway-core 만으로 Flyway 자동설정이 켜지지 않는다 — 전용 스타터 필요.
+    api("org.springframework.boot:spring-boot-starter-flyway")
     api(rootProject.libs.flyway.core)
     api(rootProject.libs.flyway.oracle)
 
@@ -31,6 +36,10 @@ dependencies {
     api(rootProject.libs.bucket4j.core)
     api(rootProject.libs.bucket4j.redis)
     api(rootProject.libs.logstash.logback.encoder)
+    // 앱 코드는 Jackson 3(tools.jackson) 이지만, logstash-logback-encoder 의 JsonProvider API 가
+    // Jackson 2 JsonGenerator 를 쓰므로 RedactingMessageJsonProvider 만 Jackson 2 에 의존한다.
+    // logstash 의 전이 의존에 기대지 않고 명시 선언(버전은 Boot BOM 의 jackson-2-bom).
+    implementation("com.fasterxml.jackson.core:jackson-core")
     runtimeOnly("org.codehaus.janino:janino:3.1.12")
 
     testImplementation(rootProject.libs.testcontainers.oracle)

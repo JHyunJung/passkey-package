@@ -1,0 +1,10 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.error" : "object",
+  "$.error.errorCode" : "string",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string"
+}

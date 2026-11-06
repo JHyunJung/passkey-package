@@ -4,8 +4,8 @@ import com.crosscert.passkey.webauthn.JsonMappers;
 import com.crosscert.passkey.webauthn.authdata.AuthenticatorData;
 import com.crosscert.passkey.webauthn.cbor.CborValue;
 import com.crosscert.passkey.webauthn.cbor.CborValue.*;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -197,10 +197,10 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             List<X509Certificate> chain = new ArrayList<>();
             for (JsonNode entry : x5c) {
-                if (!entry.isTextual()) {
+                if (!entry.isString()) {
                     throw new AttestationException("android-safetynet x5c entry not a string");
                 }
-                byte[] der = B64STD.decode(entry.textValue()); // x5c는 base64 STANDARD
+                byte[] der = B64STD.decode(entry.stringValue()); // x5c는 base64 STANDARD
                 chain.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(der)));
             }
             return chain;
@@ -221,10 +221,10 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
 
     private static String textField(JsonNode node, String field, String what) {
         JsonNode v = node.get(field);
-        if (v == null || !v.isTextual()) {
+        if (v == null || !v.isString()) {
             throw new AttestationException("android-safetynet missing text field: " + what);
         }
-        return v.textValue();
+        return v.stringValue();
     }
 
     private static byte[] decodeStdBase64(String s) {

@@ -23,6 +23,9 @@ dependencies {
     testImplementation(rootProject.libs.webauthn4j.core)
     testImplementation(rootProject.libs.webauthn4j.test)
     testImplementation(rootProject.libs.nimbus.jose.jwt)
+    // SdkClientEndToEndIT: 실제 sdk-java PasskeyClient 를 랜덤 포트의 passkey-app 에 붙여
+    // 등록→인증→verifyIdToken 전 구간을 검증한다(Boot 4 업그레이드 계약 안전망).
+    testImplementation(project(":sdk-java"))
 }
 
 springBoot {
@@ -40,6 +43,9 @@ tasks.named<Test>("test") {
     // comment). Required so Testcontainers' shaded docker-java does not
     // fall back to v1.32 and get HTTP 400 from Docker Engine v25+.
     systemProperty("api.version", "1.43")
+    // 계약 스냅샷/픽스처 기록 모드: ./gradlew :passkey-app:test -Pcontract.record=true
+    // 기본값 false = 비교만 하고 없거나 다르면 실패(ApiContractIT, ChallengeStoreFormatCompatTest).
+    systemProperty("contract.record", providers.gradleProperty("contract.record").getOrElse("false"))
 }
 
 // Copy scripts/bootstrap-schema.sql onto the test classpath so

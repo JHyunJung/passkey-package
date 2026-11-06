@@ -21,7 +21,11 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
     /** stage attempt/success 카운터: tenant + action 의 since 이후 행 수. */
     long countByTenantIdAndActionAndCreatedAtAfter(UUID tenantId, String action, OffsetDateTime since);
 
-    /** 일별 series. 반환 행: [day TIMESTAMP, action VARCHAR, count NUMBER]. */
+    /**
+     * 일별 series. 반환 행: [day, action VARCHAR, count NUMBER].
+     * day 는 KST 세션의 TRUNC(created_at)(Oracle DATE) — Hibernate 7 은 {@code LocalDateTime} 으로 돌려준다.
+     * {@code KstTime.dbDay} 로 KST 날짜로 바꿔 쓴다.
+     */
     @Query(value = "SELECT TRUNC(created_at), action, COUNT(*) "
                  + "FROM {h-schema}ceremony_event "
                  + "WHERE tenant_id = :tenantId AND action IN (:actions) AND created_at >= :since "

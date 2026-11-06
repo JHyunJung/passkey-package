@@ -1,11 +1,12 @@
 package com.crosscert.passkey.admin.funnel;
 
 import com.crosscert.passkey.core.ceremony.CeremonyAction;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -46,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Self-contained Testcontainers scaffolding mirroring {@code TenantKpiIT}.
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
@@ -136,7 +138,7 @@ class FunnelIT {
         assertThat(series.isArray()).isTrue();
         assertThat(series.size()).as("series length must equal windowDays").isEqualTo(7);
         for (JsonNode point : series) {
-            assertThat(point.get("day").isTextual()).as("series[].day non-null text").isTrue();
+            assertThat(point.get("day").isString()).as("series[].day non-null text").isTrue();
             assertThat(point.get("attempts").isNumber()).as("series[].attempts numeric").isTrue();
             assertThat(point.get("success").isNumber()).as("series[].success numeric").isTrue();
         }
@@ -147,7 +149,7 @@ class FunnelIT {
         // byEventType may be empty when no ceremony events exist; if any element
         // is present its shape must still be {type:string, n:number}.
         for (JsonNode evt : byEventType) {
-            assertThat(evt.get("type").isTextual()).as("byEventType[].type non-null text").isTrue();
+            assertThat(evt.get("type").isString()).as("byEventType[].type non-null text").isTrue();
             assertThat(evt.get("n").isNumber()).as("byEventType[].n numeric").isTrue();
         }
     }
@@ -214,7 +216,7 @@ class FunnelIT {
         assertThat(envelope).isNotNull();
         JsonNode data = envelope.get("data");
         assertThat(data).as("create tenant ApiResponse.data").isNotNull();
-        return data.get("id").asText();
+        return data.get("id").asString();
     }
 
     /** GET the funnel for a tenant and assert 200; returns the FunnelDto.View body (no envelope). */

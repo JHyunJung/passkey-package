@@ -1,7 +1,8 @@
 package com.crosscert.passkey.admin.web.format;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.crosscert.passkey.admin.web.support.StandaloneJson;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -22,16 +23,19 @@ public class ViewHelpers {
     private final Clock clock;
     private final ObjectMapper json;
 
-    /** 스프링이 구성한 ObjectMapper(JavaTimeModule 등 포함)를 쓴다. */
+    /** 스프링이 구성한 ObjectMapper(java.time 지원 포함)를 쓴다. */
     @Autowired
     public ViewHelpers(Clock clock, ObjectMapper json) {
         this.clock = clock;
         this.json = json;
     }
 
-    /** 스프링 컨텍스트 없는 단위 테스트용. */
+    /**
+     * 스프링 컨텍스트 없는 단위 테스트용. Jackson 2 시절 {@code new ObjectMapper().findAndRegisterModules()} 와 같은 의미 —
+     * Jackson 3 는 java.time 지원이 내장이고, {@code configureForJackson2()} 가 날짜를 timestamp 로 쓰는 Jackson 2 기본값을 되돌린다.
+     */
     public ViewHelpers(Clock clock) {
-        this(clock, new ObjectMapper().findAndRegisterModules());
+        this(clock, StandaloneJson.jackson2Like().build());
     }
 
     // ── 라벨 ──
@@ -146,7 +150,7 @@ public class ViewHelpers {
     public String json(Object value) {
         try {
             return json.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("JSON 직렬화 실패", e);
         }
     }

@@ -13,11 +13,11 @@ import com.crosscert.passkey.admin.web.support.ExportLimit;
 import com.crosscert.passkey.admin.web.support.Toasts;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.NullNode;
+import tools.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -289,7 +289,7 @@ public class AuditTabController {
         try {
             JsonNode n = json.readTree(s);
             return n == null || n instanceof NullNode ? null : n;
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             ObjectNode o = json.createObjectNode();
             o.put("raw", s);
             return o;

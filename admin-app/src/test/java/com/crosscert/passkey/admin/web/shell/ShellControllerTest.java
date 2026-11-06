@@ -16,7 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -77,9 +77,9 @@ class ShellControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final UUID T1 = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
     static final UUID T2 = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
@@ -493,10 +493,10 @@ class ShellControllerTest {
         assertThat(r.getResponse().getContentAsString()).isEmpty();
         String trigger = r.getResponse().getHeader("HX-Trigger");
         assertThat(trigger).contains("\"kind\":\"error\"");
-        com.fasterxml.jackson.databind.JsonNode toast = new com.fasterxml.jackson.databind.ObjectMapper().readTree(trigger).get("toast");
-        assertThat(toast.get("title").asText()).isEqualTo("RP를 전환하지 못했습니다");
-        assertThat(toast.get("message").asText()).isEqualTo("서버가 잠시 응답하지 않습니다. 지금 보고 있는 RP(Acme)는 그대로입니다.");
-        assertThat(toast.get("detail").asText()).startsWith("HTTP 503");
+        tools.jackson.databind.JsonNode toast = new tools.jackson.databind.ObjectMapper().readTree(trigger).get("toast");
+        assertThat(toast.get("title").asString()).isEqualTo("RP를 전환하지 못했습니다");
+        assertThat(toast.get("message").asString()).isEqualTo("서버가 잠시 응답하지 않습니다. 지금 보고 있는 RP(Acme)는 그대로입니다.");
+        assertThat(toast.get("detail").asString()).startsWith("HTTP 503");
     }
 
     @Test
@@ -507,8 +507,8 @@ class ShellControllerTest {
         MvcResult r = mvc.perform(post("/admin/_/active-tenant").param("tenantId", T2.toString())
                         .header("HX-Request", "true").with(authentication(rp())).with(csrf())).andReturn();
         assertThat(r.getResponse().getStatus()).isEqualTo(403);
-        com.fasterxml.jackson.databind.JsonNode toast = new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).get("toast");
-        assertThat(toast.get("message").asText()).isEqualTo("권한이 없습니다. 지금 보고 있는 RP(Acme)는 그대로입니다.");
+        tools.jackson.databind.JsonNode toast = new tools.jackson.databind.ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).get("toast");
+        assertThat(toast.get("message").asString()).isEqualTo("권한이 없습니다. 지금 보고 있는 RP(Acme)는 그대로입니다.");
     }
 
     // ── 라이선스 배너 (LicenseBanner.test.tsx) ─────────────

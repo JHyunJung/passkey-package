@@ -1,10 +1,10 @@
 package com.crosscert.passkey.app.fido2;
 
+import com.crosscert.passkey.app.support.PasskeyAppItSupport;
 import com.crosscert.passkey.core.tenant.TenantContextHolder;
-import com.zaxxer.hikari.HikariDataSource;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -31,11 +31,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestTemplate;
-import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.MountableFile;
 
 import java.nio.ByteBuffer;
 import java.util.Base64;
@@ -76,55 +74,19 @@ class Fido2EndToEndIT {
     // Containers
     // ------------------------------------------------------------
 
-    private static final String ORACLE_IMAGE = "gvenzl/oracle-xe:21-slim-faststart";
-    // OracleContainer.configure() copies the single password field into
-    // BOTH ORACLE_PASSWORD (SYS/SYSTEM) and APP_USER_PASSWORD (PSK_APP_OWNER).
-    // We reuse the same secret here so sqlplus can connect as SYS-AS-SYSDBA.
-    private static final String SYS_PASSWORD = "app_owner_pw";
+    // 컨테이너 설정·부트스트랩·프로퍼티 등록 절차는 PasskeyAppItSupport 공용
+    // (bootstrap-schema.sql 을 SYS 로 실행 → 런타임 DataSource 는 PSK_APP_RUNTIME_USER,
+    // Flyway 는 application-test.yml 의 spring.flyway.user=PSK_APP_OWNER).
+    // 컨테이너 인스턴스와 수명주기는 이 클래스가 소유한다.
+    @org.testcontainers.junit.jupiter.Container
+    static final OracleContainer ORACLE = PasskeyAppItSupport.oracleContainer();
 
     @org.testcontainers.junit.jupiter.Container
-    static final OracleContainer ORACLE = new OracleContainer(ORACLE_IMAGE)
-            .withUsername("PSK_APP_OWNER")
-            .withPassword(SYS_PASSWORD)
-            .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                    "/tmp/bootstrap-schema.sql");
-
-    // Redis 7 with the same pinned tag as docker-compose.yml so dev and CI
-    // exercise the same engine. exposedPorts wires Spring's Lettuce
-    // connection factory through @DynamicPropertySource below.
-    @org.testcontainers.junit.jupiter.Container
-    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
-            .withExposedPorts(6379);
+    static final GenericContainer<?> REDIS = PasskeyAppItSupport.redisContainer();
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
-        // Run scripts/bootstrap-schema.sql before Spring opens its first
-        // pool connection — PSK_APP_ADMIN_USER must exist before Hikari
-        // tries to authenticate. Same pattern as :core's AppLevelIsolationIT.
-        Container.ExecResult exec = ORACLE.execInContainer(
-                "bash", "-c",
-                "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
-        if (exec.getExitCode() != 0) {
-            throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
-                            + "STDOUT:\n" + exec.getStdout() + "\n"
-                            + "STDERR:\n" + exec.getStderr());
-        }
-        // Runtime DataSource → PSK_APP_RUNTIME_USER, the production-realistic
-        // least-privilege runtime user (SELECT-only on tenant; see V1).
-        // Cross-tenant isolation on the request path is enforced by the
-        // app-level Hibernate @Filter (TenantFilterAspect), not the DB user.
-        // Flyway runs as PSK_APP_OWNER (the schema owner) via spring.flyway.user
-        // in application-test.yml, so migrations run independently of the
-        // runtime pool.
-        reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
-        reg.add("spring.datasource.username", () -> "PSK_APP_RUNTIME_USER");
-        reg.add("spring.datasource.password", () -> "runtime_pw");
-
-        reg.add("spring.data.redis.host", REDIS::getHost);
-        reg.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        PasskeyAppItSupport.bootstrapAndRegister(reg, ORACLE, REDIS);
     }
 
     // ------------------------------------------------------------
@@ -140,16 +102,12 @@ class Fido2EndToEndIT {
     @Autowired RedisConnectionFactory redisFactory;
 
     /**
-     * Independent PSK_APP_ADMIN_USER pool used ONLY by seed and cleanup.
-     * The primary Spring DataSource logs in as PSK_APP_RUNTIME_USER, the
-     * production-realistic least-privilege runtime user, so the request
-     * path exercises the same isolation the app enforces in production
-     * (the app-level Hibernate @Filter). But PSK_APP_RUNTIME lacks
-     * INSERT/UPDATE/DELETE grants on the {@code tenant} table (V1 grants
-     * only SELECT to PSK_APP_RUNTIME), so seeding uses PSK_APP_ADMIN, which holds
-     * full DML on the platform-scoped tables.
+     * Independent PSK_APP_ADMIN_USER pool used ONLY by seed, cleanup and
+     * verification queries (PasskeyAppItSupport.TenantSeeder). The primary
+     * Spring DataSource logs in as PSK_APP_RUNTIME_USER (SELECT-only on
+     * {@code tenant}), so seeding needs PSK_APP_ADMIN's full DML.
      */
-    private static HikariDataSource adminPool;
+    private static PasskeyAppItSupport.TenantSeeder seeder;
     private static JdbcTemplate adminJdbc;
 
     private RestTemplate http;
@@ -194,30 +152,18 @@ class Fido2EndToEndIT {
     @BeforeEach
     void seed() {
         TenantContextHolder.clear();
-        ensureAdminPool();
+        if (seeder == null) {
+            seeder = new PasskeyAppItSupport.TenantSeeder(ORACLE, "fido2-it-admin-pool");
+            adminJdbc = seeder.jdbc();
+        }
 
         // Clear out any state lingering from a previous scenario before
-        // seeding anew. Order matters because of FK from api_key →
-        // tenant and credential → tenant.
-        // Child tables have ON DELETE CASCADE FKs, so deleting parents
-        // implicitly removes children; however explicit deletes are safer
-        // when testing concurrent seeds.
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.credential");
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
-        // ceremony_event 는 tenant FK 가 없는 append-only 카운트 테이블이라
-        // 별도 정리한다(다른 시나리오의 begin/finish 행이 happyPath 카운트 검증을
-        // 오염시키지 않도록). FK 가 없으므로 순서 제약은 없다.
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.ceremony_event");
-        // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant).
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
-        adminJdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-        adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
+        // seeding anew (FK-aware order, incl. ceremony_event and
+        // admin_user_tenant — see TenantSeeder.wipe()).
+        seeder.wipe();
 
-        seedTenant(TENANT_A_HEX, SLUG_A, "Tenant A", PREFIX_A, SECRET_A);
-        seedTenant(TENANT_B_HEX, SLUG_B, "Tenant B", PREFIX_B, SECRET_B);
+        seeder.seedTenant(TENANT_A_HEX, SLUG_A, "Tenant A", origin(), PREFIX_A, encoder.encode(SECRET_A));
+        seeder.seedTenant(TENANT_B_HEX, SLUG_B, "Tenant B", origin(), PREFIX_B, encoder.encode(SECRET_B));
 
         http = new RestTemplate();
         http.setErrorHandler(new org.springframework.web.client.DefaultResponseErrorHandler() {
@@ -234,9 +180,9 @@ class Fido2EndToEndIT {
     static void closeAdminPool() {
         // codex P2: close the static admin Hikari pool to avoid leaking
         // the test-only connection pool across JVMs in parallel CI runs.
-        if (adminPool != null) {
-            adminPool.close();
-            adminPool = null;
+        if (seeder != null) {
+            seeder.close();
+            seeder = null;
             adminJdbc = null;
         }
     }
@@ -244,114 +190,14 @@ class Fido2EndToEndIT {
     @AfterEach
     void cleanup() {
         TenantContextHolder.clear();
-        // Same FK-aware order on cleanup. Use the admin pool so the DELETEs
+        // Same FK-aware order on cleanup, via the admin pool so the DELETEs
         // run with full DML grants regardless of tenant context.
-        if (adminJdbc != null) {
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.credential");
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key_scope");
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.api_key");
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_allowed_origin");
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant_accepted_format");
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.ceremony_event");
-            // admin_user_tenant 매핑을 먼저 비운 뒤 tenant DELETE (FK admin_user_tenant.tenant_id → tenant).
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.admin_user_tenant");
-            adminJdbc.update("UPDATE PSK_APP_OWNER.admin_user SET role = 'PLATFORM_OPERATOR' WHERE role = 'RP_ADMIN'");
-            adminJdbc.update("DELETE FROM PSK_APP_OWNER.tenant");
+        if (seeder != null) {
+            seeder.wipe();
         }
         // Redis is shared across scenarios — flush all challenge tokens
         // and rate-limit buckets so the next test starts clean.
         redisFactory.getConnection().serverCommands().flushAll();
-    }
-
-    /**
-     * Lazy-init the PSK_APP_ADMIN_USER pool on first seed. The JDBC URL is
-     * the same one Spring's primary DataSource uses; we read it from
-     * the ORACLE container directly (no need to crack open the primary
-     * Hikari to copy it).
-     */
-    private void ensureAdminPool() {
-        if (adminPool != null) return;
-        adminPool = new HikariDataSource();
-        adminPool.setJdbcUrl(ORACLE.getJdbcUrl());
-        adminPool.setUsername("PSK_APP_ADMIN_USER");
-        adminPool.setPassword("admin_pw");
-        adminPool.setMaximumPoolSize(2);
-        adminPool.setMinimumIdle(1);
-        adminPool.setPoolName("fido2-it-admin-pool");
-        adminJdbc = new JdbcTemplate(adminPool);
-    }
-
-    /**
-     * Seeds one tenant + child config rows + one api_key + scope rows via the PSK_APP_ADMIN pool.
-     *
-     * <p>Phase 7: tenant no longer carries JSON CLOB columns. Origins and
-     * accepted formats live in the {@code tenant_allowed_origin} and
-     * {@code tenant_accepted_format} child tables. Similarly, api_key
-     * scopes moved to the {@code api_key_scope} child table.
-     *
-     * @param tenantHex  32-char hex string for the RAW(16) id column
-     * @param slug       short human-readable slug
-     * @param displayName tenant display name
-     * @param prefix     api_key key_prefix
-     * @param secret     api_key plaintext secret (bcrypt-hashed before INSERT)
-     */
-    private void seedTenant(String tenantHex, String slug, String displayName,
-                             String prefix, String secret) {
-        // INSERT via raw JDBC as PSK_APP_ADMIN — raw JDBC does not pass through
-        // the app-level Hibernate @Filter, and PSK_APP_ADMIN has full DML on
-        // tenant and api_key (V21 grants).
-        //
-        // Phase 6: id and tenant_id are RAW(16); HEXTORAW converts the
-        // 32-char hex literal. SYS_GUID() generates the api_key PK.
-        // Phase 7: flag columns require_user_verification + mds_required
-        // replace the attestation_policy CLOB. Origins and formats are in
-        // child tables.
-        adminJdbc.update(
-                "INSERT INTO PSK_APP_OWNER.tenant "
-                        + "(id, slug, display_name, status, rp_id, rp_name, "
-                        + " require_user_verification, mds_required, "
-                        + " created_at, updated_at) "
-                        + "VALUES (HEXTORAW(?), ?, ?, 'active', 'localhost', ?, "
-                        + "        'Y', 'N', SYSTIMESTAMP, SYSTIMESTAMP)",
-                tenantHex, slug, displayName, displayName);
-
-        // Seed allowed origin — must match origin() so WebAuthn4J accepts it.
-        adminJdbc.update(
-                "INSERT INTO PSK_APP_OWNER.tenant_allowed_origin "
-                        + "(id, tenant_id, origin, sort_order) "
-                        + "VALUES (SYS_GUID(), HEXTORAW(?), ?, 0)",
-                tenantHex, origin());
-
-        // Seed accepted formats (none + packed cover the test authenticator).
-        adminJdbc.update(
-                "INSERT INTO PSK_APP_OWNER.tenant_accepted_format "
-                        + "(id, tenant_id, format) "
-                        + "VALUES (SYS_GUID(), HEXTORAW(?), 'none')",
-                tenantHex);
-        adminJdbc.update(
-                "INSERT INTO PSK_APP_OWNER.tenant_accepted_format "
-                        + "(id, tenant_id, format) "
-                        + "VALUES (SYS_GUID(), HEXTORAW(?), 'packed')",
-                tenantHex);
-
-        // Seed api_key (no scopes CLOB in Phase 7).
-        adminJdbc.update(
-                "INSERT INTO PSK_APP_OWNER.api_key "
-                        + "(id, tenant_id, key_prefix, key_hash, name, created_at) "
-                        + "VALUES (SYS_GUID(), HEXTORAW(?), ?, ?, 'primary', SYSTIMESTAMP)",
-                tenantHex, prefix, encoder.encode(secret));
-
-        // Seed api_key_scope — re-fetch the api_key id we just inserted by prefix.
-        adminJdbc.update(
-                "INSERT INTO PSK_APP_OWNER.api_key_scope (id, api_key_id, scope) "
-                        + "SELECT SYS_GUID(), id, 'registration' FROM PSK_APP_OWNER.api_key "
-                        + "WHERE key_prefix = ?",
-                prefix);
-        adminJdbc.update(
-                "INSERT INTO PSK_APP_OWNER.api_key_scope (id, api_key_id, scope) "
-                        + "SELECT SYS_GUID(), id, 'authentication' FROM PSK_APP_OWNER.api_key "
-                        + "WHERE key_prefix = ?",
-                prefix);
     }
 
     // ------------------------------------------------------------
@@ -379,25 +225,25 @@ class Fido2EndToEndIT {
                 Origin.create(origin()), mapper);
 
         JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String regToken = regStart.get("registrationToken").asText();
+        String regToken = regStart.get("registrationToken").asString();
         JsonNode creationOptions = regStart.get("publicKeyCredentialCreationOptions");
 
         JsonNode attestationJson = authn.register(creationOptions);
         JsonNode regFinish = registerFinish(PREFIX_A, SECRET_A, regToken, attestationJson);
-        assertThat(regFinish.get("credentialId").asText()).isNotBlank();
+        assertThat(regFinish.get("credentialId").asString()).isNotBlank();
 
         // Authenticate against the same credential. Pass USER_HANDLE_A
         // so /start filters its allowCredentials to that one credential
         // (otherwise the usernameless path returns empty and ClientPlatform
         // has no descriptor to look up).
         JsonNode authStart = authenticationStart(PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String authToken = authStart.get("authenticationToken").asText();
+        String authToken = authStart.get("authenticationToken").asString();
         JsonNode requestOptions = authStart.get("publicKeyCredentialRequestOptions");
 
         JsonNode assertionJson = authn.authenticate(requestOptions);
         JsonNode authFinish = authenticationFinish(PREFIX_A, SECRET_A, authToken, assertionJson);
 
-        String idToken = authFinish.get("idToken").asText();
+        String idToken = authFinish.get("idToken").asString();
         assertThat(idToken).isNotBlank();
 
         // Verify JWT signature against the JWKS endpoint — this proves
@@ -480,7 +326,7 @@ class Fido2EndToEndIT {
         JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
         JsonNode attestationJson = authn.register(
                 regStart.get("publicKeyCredentialCreationOptions"));
-        registerFinish(PREFIX_A, SECRET_A, regStart.get("registrationToken").asText(),
+        registerFinish(PREFIX_A, SECRET_A, regStart.get("registrationToken").asString(),
                 attestationJson);
 
         // Now call /authentication/start from T_B with T_A's userHandle.
@@ -509,7 +355,7 @@ class Fido2EndToEndIT {
         ResponseEntity<String> res = http.exchange(
                 url("/api/v1/rp/registration/start"),
                 HttpMethod.POST, new HttpEntity<>(body, h), String.class);
-        assertThat(res.getStatusCodeValue()).isEqualTo(401);
+        assertThat(res.getStatusCode().value()).isEqualTo(401);
     }
 
     // ------------------------------------------------------------
@@ -527,7 +373,7 @@ class Fido2EndToEndIT {
         ResponseEntity<String> res = http.exchange(
                 url("/api/v1/rp/registration/start"),
                 HttpMethod.POST, new HttpEntity<>(body, h), String.class);
-        assertThat(res.getStatusCodeValue()).isEqualTo(401);
+        assertThat(res.getStatusCode().value()).isEqualTo(401);
     }
 
     // ------------------------------------------------------------
@@ -539,7 +385,7 @@ class Fido2EndToEndIT {
         Fido2TestAuthenticator authn = new Fido2TestAuthenticator(
                 Origin.create(origin()), mapper);
         JsonNode regStart = registerStart(SLUG_A, PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String token = regStart.get("registrationToken").asText();
+        String token = regStart.get("registrationToken").asString();
 
         // Simulate TTL expiry by deleting the Redis key directly. The
         // ChallengeStore key namespace is "challenge:reg:<token>" — see
@@ -564,7 +410,7 @@ class Fido2EndToEndIT {
         // Spring's default exception handler returns 400 for
         // IllegalArgumentException, which is what
         // RegistrationFinishService throws on missing/expired token.
-        assertThat(res.getStatusCodeValue()).isEqualTo(400);
+        assertThat(res.getStatusCode().value()).isEqualTo(400);
     }
 
     // ------------------------------------------------------------
@@ -588,7 +434,7 @@ class Fido2EndToEndIT {
         JsonNode attestationJson = authn.register(
                 regStart.get("publicKeyCredentialCreationOptions"));
         registerFinish(PREFIX_A, SECRET_A,
-                regStart.get("registrationToken").asText(), attestationJson);
+                regStart.get("registrationToken").asString(), attestationJson);
 
         // Inflate the stored signCount past any value the test
         // authenticator will return on the next assertion. The
@@ -601,7 +447,7 @@ class Fido2EndToEndIT {
         // well below the inflated stored value, so the strict-monotonic
         // branch (`newCounter <= storedCounter`) MUST reject with 400.
         JsonNode authStart = authenticationStart(PREFIX_A, SECRET_A, USER_HANDLE_A);
-        String authToken = authStart.get("authenticationToken").asText();
+        String authToken = authStart.get("authenticationToken").asString();
         JsonNode assertionJson = authn.authenticate(
                 authStart.get("publicKeyCredentialRequestOptions"));
         ObjectNode finishBody = mapper.createObjectNode();
@@ -614,7 +460,7 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(finishBody),
                         authHeaders(PREFIX_A, SECRET_A)),
                 String.class);
-        assertThat(res.getStatusCodeValue())
+        assertThat(res.getStatusCode().value())
                 .as("Strict-monotonic check must reject when stored counter > new counter")
                 .isEqualTo(400);
     }
@@ -655,7 +501,7 @@ class Fido2EndToEndIT {
                     ResponseEntity<String> res = http.exchange(
                             url("/api/v1/rp/authentication/start"),
                             HttpMethod.POST, request, String.class);
-                    if (res.getStatusCodeValue() == 429) {
+                    if (res.getStatusCode().value() == 429) {
                         rejected.incrementAndGet();
                     } else {
                         accepted.incrementAndGet();
@@ -685,9 +531,9 @@ class Fido2EndToEndIT {
         assertThat(keys.isArray()).isTrue();
         assertThat(keys.size()).isGreaterThanOrEqualTo(1);
         JsonNode jwk = keys.get(0);
-        assertThat(jwk.get("alg").asText()).isEqualTo("RS256");
-        assertThat(jwk.get("use").asText()).isEqualTo("sig");
-        assertThat(jwk.get("kid").asText()).isNotBlank();
+        assertThat(jwk.get("alg").asString()).isEqualTo("RS256");
+        assertThat(jwk.get("use").asString()).isEqualTo("sig");
+        assertThat(jwk.get("kid").asString()).isNotBlank();
     }
 
     // ------------------------------------------------------------
@@ -718,9 +564,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "registration/start failed status=" + res.getStatusCodeValue()
+                    "registration/start failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -737,9 +583,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "registration/finish failed status=" + res.getStatusCodeValue()
+                    "registration/finish failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -757,9 +603,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "authentication/start failed status=" + res.getStatusCodeValue()
+                    "authentication/start failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -776,9 +622,9 @@ class Fido2EndToEndIT {
                 new HttpEntity<>(mapper.writeValueAsString(body),
                         authHeaders(prefix, secret)),
                 String.class);
-        if (res.getStatusCodeValue() != 200) {
+        if (res.getStatusCode().value() != 200) {
             throw new IllegalStateException(
-                    "authentication/finish failed status=" + res.getStatusCodeValue()
+                    "authentication/finish failed status=" + res.getStatusCode().value()
                             + " body=" + res.getBody());
         }
         return unwrap(res.getBody());
@@ -788,8 +634,8 @@ class Fido2EndToEndIT {
         ResponseEntity<String> res = http.exchange(
                 url("/.well-known/jwks.json"),
                 HttpMethod.GET, HttpEntity.EMPTY, String.class);
-        if (res.getStatusCodeValue() != 200) {
-            throw new IllegalStateException("jwks fetch failed status=" + res.getStatusCodeValue());
+        if (res.getStatusCode().value() != 200) {
+            throw new IllegalStateException("jwks fetch failed status=" + res.getStatusCode().value());
         }
         return mapper.readTree(res.getBody());
     }

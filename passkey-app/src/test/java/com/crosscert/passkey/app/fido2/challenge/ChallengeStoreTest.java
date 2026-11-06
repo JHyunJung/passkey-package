@@ -1,7 +1,6 @@
 package com.crosscert.passkey.app.fido2.challenge;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -29,10 +28,9 @@ class ChallengeStoreTest {
         redis = mock(StringRedisTemplate.class);
         ops = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(ops);
-        // Mirror production: Spring's auto-configured ObjectMapper has
-        // JavaTimeModule installed by CoreJacksonConfig. The test uses
-        // an equivalent configuration so Instant fields round-trip.
-        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        // Jackson 3 는 java.time 지원이 내장이라 별도 모듈 없이 Instant 필드가 round-trip 된다.
+        // (운영 매퍼와 같은 직렬화 형식 고정은 ChallengeStoreFormatCompatTest 가 검증.)
+        ObjectMapper mapper = new ObjectMapper();
         store = new ChallengeStore(redis, mapper);
     }
 

@@ -14,6 +14,11 @@ Passkey2 RP(Relying Party) API 를 호출하는 순수 Java 클라이언트 라�
 - **요구 사항:** Java 17+, Spring Web(`RestClient`) 런타임. (transitive 로 spring-web,
   jackson-databind/jsr310, nimbus-jose-jwt, slf4j-api 를 끌어온다.)
 - **순수 Java:** Kotlin 런타임 의존성 없음.
+- **Spring 6 · 7 호환:** Spring Boot 3.5(Spring 6 · Jackson 2) BOM 으로 컴파일하지만 Spring Boot 4
+  (Spring 7 · Jackson 3 클래스패스) RP 에서도 그대로 동작한다. 요청 바디는 SDK 자체 Jackson 2
+  매퍼로 `byte[]` 직렬화해 `Content-Type: application/json` + 명시적 `Content-Length` 로 보내므로
+  RP 의 JSON 컨버터 구성과 무관하게 와이어 형식이 같고, 4xx/5xx → `PasskeyApiException` 매핑도
+  Spring 7 이 호출하는 3-인자 `handleError` 로 처리한다. (공개 API·SDK 버전 변경 없음)
 
 ### 토큰 플로우
 

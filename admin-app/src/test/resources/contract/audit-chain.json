@@ -1,0 +1,43 @@
+[ {
+  "id" : "10000000-0000-0000-0000-000000000001",
+  "actorId" : "a0000000-0000-0000-0000-000000000001",
+  "actorEmail" : "op@example.com",
+  "action" : "ADMIN_SIGNUP_APPROVE",
+  "targetType" : "ADMIN_USER",
+  "targetId" : "u-1",
+  "tenantId" : null,
+  "createdAt" : "2026-11-06T10:00:01.123456+09:00",
+  "payload" : "{\"approved\":true,\"role\":\"PLATFORM_OPERATOR\"}",
+  "prevHash" : null,
+  "hash" : "4302183b041990409d3e7a03b8af98880504b80ea450ff30a57a304f6c87b873",
+  "tenantPrevHash" : null,
+  "tenantHash" : "4302183b041990409d3e7a03b8af98880504b80ea450ff30a57a304f6c87b873"
+}, {
+  "id" : "10000000-0000-0000-0000-000000000002",
+  "actorId" : "a0000000-0000-0000-0000-000000000002",
+  "actorEmail" : "rp@example.com",
+  "action" : "API_KEY_ROTATE",
+  "targetType" : "API_KEY",
+  "targetId" : "k-1",
+  "tenantId" : "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+  "createdAt" : "2026-11-06T10:00:02.000001+09:00",
+  "payload" : "{\"bigLong\":9007199254740993,\"detail\":{\"a\":\"x\",\"z\":1},\"ratio\":1.5,\"revokedKeys\":3}",
+  "prevHash" : "4302183b041990409d3e7a03b8af98880504b80ea450ff30a57a304f6c87b873",
+  "hash" : "27952a388db55fce35caa914261bf3ca3d6295f9f82275be5c3894886b1dcf3e",
+  "tenantPrevHash" : null,
+  "tenantHash" : "552d724f218d3cfb9d4ca7bb735df0bf3b1d760fff3cb3962166e1b1ab51a567"
+}, {
+  "id" : "10000000-0000-0000-0000-000000000003",
+  "actorId" : null,
+  "actorEmail" : "(scheduler)",
+  "action" : "TENANT_ORIGINS_UPDATE",
+  "targetType" : null,
+  "targetId" : null,
+  "tenantId" : "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+  "createdAt" : "2026-11-06T10:00:03.654321+09:00",
+  "payload" : "{\"empty\":{},\"note\":\"한글 \\\"인용\\\" / 슬래시 \\\\ 역슬래시\\n개행 <tag>\",\"origins\":[\"https://b.example\",\"https://a.example\"]}",
+  "prevHash" : "27952a388db55fce35caa914261bf3ca3d6295f9f82275be5c3894886b1dcf3e",
+  "hash" : "98859878bae25012f9d1815d7705a1c3840fa564b5637191c6de4647935dd93c",
+  "tenantPrevHash" : "552d724f218d3cfb9d4ca7bb735df0bf3b1d760fff3cb3962166e1b1ab51a567",
+  "tenantHash" : "1db82ed404a6729e0f79fdabcb0d98063ac5c6b07cb6c1b21c1a720de8657c58"
+} ]

@@ -12,8 +12,8 @@ import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -95,14 +95,14 @@ class AuthenticationStartServiceSuspendTest {
         verify(credentials).findByUserHandle(eq(userHandle));
         JsonNode options = resp.publicKeyCredentialRequestOptions();
         assertThat(options.get("timeout").asInt()).isEqualTo(90000);
-        assertThat(options.get("userVerification").asText()).isEqualTo("preferred");
+        assertThat(options.get("userVerification").asString()).isEqualTo("preferred");
         JsonNode allow = options.get("allowCredentials");
         assertThat(allow).isNotNull();
         assertThat(allow.isArray()).isTrue();
         assertThat(allow).hasSize(1);
-        assertThat(allow.get(0).get("type").asText()).isEqualTo("public-key");
+        assertThat(allow.get(0).get("type").asString()).isEqualTo("public-key");
         String expectedId = Base64.getUrlEncoder().withoutPadding().encodeToString(credId);
-        assertThat(allow.get(0).get("id").asText()).isEqualTo(expectedId);
+        assertThat(allow.get(0).get("id").asString()).isEqualTo(expectedId);
     }
 
     @Test
@@ -134,6 +134,6 @@ class AuthenticationStartServiceSuspendTest {
 
         JsonNode options = resp.publicKeyCredentialRequestOptions();
         assertThat(options.get("timeout").asInt()).isEqualTo(90000);
-        assertThat(options.get("userVerification").asText()).isEqualTo("required");
+        assertThat(options.get("userVerification").asString()).isEqualTo("required");
     }
 }

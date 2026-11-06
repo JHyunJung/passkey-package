@@ -1,10 +1,11 @@
 package com.crosscert.passkey.admin.policy;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and {@code AaguidPolicyCeremonyIT} — no shared base class exists in this
  * module by design.
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
@@ -240,6 +242,6 @@ class SecurityPolicyIT {
         JsonNode cors = readback.getBody().get("corsAllowlist");
         assertThat(cors.isArray()).isTrue();
         assertThat(cors).hasSize(1);
-        assertThat(cors.get(0).asText()).isEqualTo("https://a.example.com");
+        assertThat(cors.get(0).asString()).isEqualTo("https://a.example.com");
     }
 }

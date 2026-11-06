@@ -15,8 +15,8 @@ import com.crosscert.passkey.admin.web.tenant.WebauthnTabController.Change;
 import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -25,7 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -64,11 +64,11 @@ class WebauthnTabControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean TenantAdminController tenants;
-    @MockBean ApiKeyAdminController apiKeys;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean ApiKeyAdminController apiKeys;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final ObjectMapper JSON = new ObjectMapper();
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
@@ -304,9 +304,9 @@ class WebauthnTabControllerTest {
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         JsonNode t = trigger(r);
         assertThat(t.has("saved")).isTrue();
-        assertThat(t.get("toast").get("kind").asText()).isEqualTo("success");
-        assertThat(t.get("toast").get("title").asText()).isEqualTo("WebAuthn 설정을 저장했습니다");
-        assertThat(t.get("toast").get("message").asText()).isEqualTo("1개 항목이 바뀌었습니다.");
+        assertThat(t.get("toast").get("kind").asString()).isEqualTo("success");
+        assertThat(t.get("toast").get("title").asString()).isEqualTo("WebAuthn 설정을 저장했습니다");
+        assertThat(t.get("toast").get("message").asString()).isEqualTo("1개 항목이 바뀌었습니다.");
         Document d = doc(r);
         assertThat(d.select("form#wa-form")).hasSize(1);
         assertThat(d.selectFirst("#wa-timeout").val()).isEqualTo("120000");
@@ -421,8 +421,8 @@ class WebauthnTabControllerTest {
         MvcResult r = mvc.perform(diffReq("60000")).andReturn();
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         JsonNode t = trigger(r);
-        assertThat(t.get("toast").get("kind").asText()).isEqualTo("warn");
-        assertThat(t.get("toast").get("title").asText()).isEqualTo("변경 사항이 없습니다.");
+        assertThat(t.get("toast").get("kind").asString()).isEqualTo("warn");
+        assertThat(t.get("toast").get("title").asString()).isEqualTo("변경 사항이 없습니다.");
         assertThat(doc(r).select("form#wa-confirm-form")).isEmpty();
         verify(tenants, never()).update(any(), any(), any());
     }
@@ -434,8 +434,8 @@ class WebauthnTabControllerTest {
         MvcResult r = mvc.perform(diffReq("120000")).andReturn();
         assertThat(r.getResponse().getStatus()).isEqualTo(500);
         JsonNode t = trigger(r);
-        assertThat(t.get("toast").get("kind").asText()).isEqualTo("error");
-        assertThat(t.get("toast").get("title").asText()).isEqualTo("변경 사항을 비교하지 못했습니다");
+        assertThat(t.get("toast").get("kind").asString()).isEqualTo("error");
+        assertThat(t.get("toast").get("title").asString()).isEqualTo("변경 사항을 비교하지 못했습니다");
         assertThat(r.getResponse().getHeader("HX-Trigger")).doesNotContain("secret");
         assertThat(r.getResponse().getContentAsString()).isEmpty();
     }

@@ -9,8 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.security.SecurityProperties;
-import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.SecurityProperties;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,7 +41,7 @@ class GeneratedSecurityPasswordAbsentTest {
 
     /** UserDetailsServiceAutoConfiguration 이 생성 비밀번호를 찍는 로거. */
     private static final String PASSWORD_LOGGER =
-            "org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration";
+            "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration";
 
     private static final String GENERATED_PASSWORD_MESSAGE = "Using generated security password";
 

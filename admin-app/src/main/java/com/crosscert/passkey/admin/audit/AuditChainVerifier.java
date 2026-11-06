@@ -2,8 +2,8 @@ package com.crosscert.passkey.admin.audit;
 
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -41,8 +41,9 @@ public class AuditChainVerifier {
 
     public AuditChainVerifier(AuditLogRepository repo, ObjectMapper baseMapper) {
         this.repo = repo;
-        this.canonical = baseMapper.copy()
-                .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+        this.canonical = baseMapper.rebuild()
+                .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                .build();
     }
 
     /**
@@ -77,7 +78,7 @@ public class AuditChainVerifier {
             // We do NOT re-serialize — we pass row.getPayload() directly to
             // computeHash, which is the exact string that was hashed on append.
             Map<String, Object> payload = canonical.readValue(
-                    row.getPayload(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                    row.getPayload(), new tools.jackson.core.type.TypeReference<>() {});
             AuditAppendRequest req = new AuditAppendRequest(
                     row.getActorId(), row.getActorEmail(), row.getAction(),
                     row.getTargetType(), row.getTargetId(),
@@ -131,7 +132,7 @@ public class AuditChainVerifier {
     private byte[] recomputeTenantHash(AuditLog row) {
         try {
             Map<String, Object> payload = canonical.readValue(
-                    row.getPayload(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                    row.getPayload(), new tools.jackson.core.type.TypeReference<>() {});
             AuditAppendRequest req = new AuditAppendRequest(
                     row.getActorId(), row.getActorEmail(), row.getAction(),
                     row.getTargetType(), row.getTargetId(),

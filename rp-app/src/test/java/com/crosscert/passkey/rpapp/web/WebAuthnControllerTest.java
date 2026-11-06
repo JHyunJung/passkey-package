@@ -16,9 +16,9 @@ import com.crosscert.passkey.sdk.relay.RegistrationRelayCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -51,7 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * </ul>
  *
  * 실제 {@link WebSecurityConfig}(STATELESS + CSRF disable + CORS 화이트리스트)를 함께
- * 띄워 쿠키 부재를 충실히 검증한다. 컨트롤러 협력자 4개는 @MockBean 으로 stub.
+ * 띄워 쿠키 부재를 충실히 검증한다. 컨트롤러 협력자 4개는 @MockitoBean 으로 stub.
  */
 @WebMvcTest(WebAuthnController.class)
 @Import(WebSecurityConfig.class)
@@ -62,13 +62,13 @@ class WebAuthnControllerTest {
     @Autowired
     ObjectMapper json;
 
-    @MockBean
+    @MockitoBean
     PasskeyClient passkey;
-    @MockBean
+    @MockitoBean
     InMemoryUserStore users;
-    @MockBean
+    @MockitoBean
     PasskeyProperties props;
-    @MockBean
+    @MockitoBean
     RegistrationRelayCodec relay;
 
     @TestConfiguration

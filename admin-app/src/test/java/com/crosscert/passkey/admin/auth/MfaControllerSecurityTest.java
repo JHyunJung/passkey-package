@@ -8,8 +8,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
@@ -78,14 +78,18 @@ class MfaControllerSecurityTest {
     // New collaborators introduced by the recovery-code / secret-seal wiring.
     // secretCipher.open(...) is stubbed as identity in @BeforeEach so these tests
     // (which store PLAINTEXT secrets) keep exercising validCode exactly as before.
-    @MockBean MfaSecretCipher secretCipher;
-    @MockBean RecoveryCodeService recoveryCodes;
-    @MockBean AdminUserRepository admins;
+    @MockitoBean MfaSecretCipher secretCipher;
+    @MockitoBean RecoveryCodeService recoveryCodes;
+    @MockitoBean AdminUserRepository admins;
     // AdminSecurityConfig collaborators that are not otherwise supplied by the slice.
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
+    @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
+    @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    // AdminSecurityConfig 협력 빈(adminLoginSuccessHandler 의 SecurityPolicyService, adminFilterChain 의 TenantBoundary).
+    // 이 클래스는 자체 SliceConfig(실제 TotpService·고정 Clock)를 쓰므로 AdminWebSliceTest 묶음(Clock mock 포함) 대신 개별로 둔다.
+    @MockitoBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockitoBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
+    @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static AdminUser adminUserWithUuid() {
         var u = new AdminUser("alice@example.com", "x", "ADMIN");

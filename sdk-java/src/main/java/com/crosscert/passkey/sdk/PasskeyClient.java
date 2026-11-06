@@ -16,6 +16,7 @@ import com.crosscert.passkey.sdk.idtoken.JwksCache;
 import com.crosscert.passkey.sdk.internal.PasskeyResponseErrorHandler;
 import com.crosscert.passkey.sdk.internal.RedactingRequestInterceptor;
 import com.crosscert.passkey.sdk.internal.TraceIdPropagationInterceptor;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -24,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
@@ -106,11 +108,24 @@ public class PasskeyClient {
 
     private <T> T post(String path, Object body, TypeReference<ApiResponseEnvelope<T>> typeRef) {
         Instant started = Instant.now();
+        // 요청/응답 모두 SDK 자체 Jackson 2 매퍼로 (역)직렬화하고 RestClient 에는 byte[] 만 넘긴다.
+        // RestClient 의 기본 JSON 컨버터 선택에 맡기면 Spring 7 + Jackson 3 클래스패스(Boot 4 RP)
+        // 에서 Jackson 3 컨버터가 뽑혀 Jackson 2 JsonNode 필드(publicKeyCredential)를 bean 속성
+        // ({"nodeType":"OBJECT",...})으로 직렬화한다 — byte[] 는 ByteArrayHttpMessageConverter 가
+        // 그대로 실어 보내므로 와이어 형식이 클래스패스와 무관해진다.
+        byte[] requestBytes;
+        try {
+            requestBytes = objectMapper.writeValueAsBytes(body);
+        } catch (JsonProcessingException e) {
+            // Spring 6 의 MappingJackson2HttpMessageConverter 가 직렬화 실패 시 던지던 것과 같은 예외.
+            throw new HttpMessageNotWritableException("Could not write JSON: " + e.getOriginalMessage(), e);
+        }
         byte[] bytes;
         try {
             bytes = http.post()
                     .uri(path)
-                    .body(body)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBytes)
                     .retrieve()
                     .body(byte[].class);
         } catch (PasskeyApiException e) {

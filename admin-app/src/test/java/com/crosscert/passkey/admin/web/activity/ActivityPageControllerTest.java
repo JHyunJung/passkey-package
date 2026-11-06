@@ -22,7 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -60,11 +60,11 @@ class ActivityPageControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean ActivityController activity;
-    @MockBean TenantAdminController tenants;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean ActivityController activity;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final Instant NOW = Instant.parse("2026-10-11T03:00:00Z"); // KST 2026-10-11 12:00
     static final UUID RP1 = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
@@ -545,7 +545,7 @@ class ActivityPageControllerTest {
         when(activity.activity(any(), any(), any(), any(), any())).thenThrow(new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
         MvcResult r = frag("/admin/_/activity/more?before=2026-10-08T01:00:00Z&beforeId=" + E3);
         assertThat(r.getResponse().getStatus()).isGreaterThanOrEqualTo(500);
-        assertThat(new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).at("/toast/title").asText()).isEqualTo("이전 기록을 불러오지 못했습니다");
+        assertThat(new tools.jackson.databind.ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).at("/toast/title").asString()).isEqualTo("이전 기록을 불러오지 못했습니다");
         assertThat(body(r).strip()).isEmpty();
     }
 

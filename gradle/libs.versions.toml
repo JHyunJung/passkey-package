@@ -1,9 +1,10 @@
 [versions]
-spring-boot = "3.5.14"
-spring-dep-mgmt = "1.1.6"
-oracle-jdbc = "23.4.0.24.05"
-testcontainers = "1.20.4"
-flyway = "10.20.1"
+# Boot 4 모듈(core·webauthn·passkey-app·admin-app·rp-app) 의 BOM + Gradle 플러그인 버전.
+spring-boot = "4.1.2"
+# sdk-java 전용 BOM — 외부 RP 배포 라이브러리라 Spring 6 / Jackson 2 로 컴파일한다.
+spring-boot-sdk = "3.5.16"
+# Spring Boot 4.1.2 Gradle 플러그인이 runtime 의존하는 버전과 일치.
+spring-dep-mgmt = "1.1.7"
 webauthn4j = "0.31.5.RELEASE"
 nimbus-jose-jwt = "9.40"
 tink = "1.13.0"
@@ -15,14 +16,15 @@ kotlin = "2.0.21"
 
 [libraries]
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
-oracle-jdbc = { module = "com.oracle.database.jdbc:ojdbc11", version.ref = "oracle-jdbc" }
-# NLS(National Language Support) — Oracle 문자셋/날짜·언어 변환 등에 필요. ojdbc 와 동일 버전 사용.
-oracle-nls = { module = "com.oracle.database.nls:orai18n", version.ref = "oracle-jdbc" }
-flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
-flyway-oracle = { module = "org.flywaydb:flyway-database-oracle", version.ref = "flyway" }
-testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
-testcontainers-oracle = { module = "org.testcontainers:oracle-xe" }
-testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
+oracle-jdbc = { module = "com.oracle.database.jdbc:ojdbc11" }
+# NLS(National Language Support) — Oracle 문자셋/날짜·언어 변환 등에 필요. ojdbc 와 동일 버전(Boot BOM oracle-database.version).
+oracle-nls = { module = "com.oracle.database.nls:orai18n" }
+# Flyway·Oracle JDBC·Testcontainers 는 Spring Boot BOM 이 버전 관리(4.1.2: flyway 12.4.0, oracle-database 23.26.3.0.0, testcontainers 2.0.5).
+flyway-core = { module = "org.flywaydb:flyway-core" }
+flyway-oracle = { module = "org.flywaydb:flyway-database-oracle" }
+# Testcontainers 2.x 아티팩트명(testcontainers- 접두사).
+testcontainers-oracle = { module = "org.testcontainers:testcontainers-oracle-xe" }
+testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 webauthn4j-core = { module = "com.webauthn4j:webauthn4j-core", version.ref = "webauthn4j" }
 webauthn4j-test = { module = "com.webauthn4j:webauthn4j-test", version.ref = "webauthn4j" }
 webauthn4j-metadata = { module = "com.webauthn4j:webauthn4j-metadata", version.ref = "webauthn4j" }

@@ -9,7 +9,7 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
-import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
@@ -37,7 +37,7 @@ import java.time.Duration;
 public class RateLimitConfig {
 
     @Bean(destroyMethod = "shutdown")
-    public RedisClient bucket4jRedisClient(RedisProperties props) {
+    public RedisClient bucket4jRedisClient(DataRedisProperties props) {
         // Prefer the full spring.data.redis.url if set — covers
         // username/password/database/SSL/timeout that host+port alone
         // can't express. Falls back to host+port for the Phase 0
@@ -48,7 +48,7 @@ public class RateLimitConfig {
         return RedisClient.create(uri);
     }
 
-    private static RedisURI buildUriFromHostPort(RedisProperties props) {
+    private static RedisURI buildUriFromHostPort(DataRedisProperties props) {
         RedisURI.Builder b = RedisURI.builder()
                 .withHost(props.getHost())
                 .withPort(props.getPort())

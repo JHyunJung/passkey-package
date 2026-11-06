@@ -15,7 +15,8 @@ java {
 }
 
 dependencies {
-    // Spring Boot 3.5 BOM (root subprojects 에서 import) 이 spring-web 6.2.x,
+    // Spring Boot 3.5 BOM (root subprojects 가 sdk-java 에만 카탈로그 spring-boot-sdk 버전으로
+    // import — 다른 모듈은 Boot 4) 이 spring-web 6.2.x,
     // jackson-databind, jackson-jsr310, slf4j-api 를 모두 관리.
     api("org.springframework:spring-web")
     api("com.fasterxml.jackson.core:jackson-databind")

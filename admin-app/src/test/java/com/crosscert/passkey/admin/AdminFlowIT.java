@@ -1,15 +1,16 @@
 package com.crosscert.passkey.admin;
 
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -67,6 +68,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *       /verify to ok=false with brokenAt populated.</li>
  * </ol>
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
@@ -251,8 +253,8 @@ class AdminFlowIT {
         }
         if (!env.path("success").asBoolean()) {
             throw new AssertionError("API call failed (status=" + res.getStatusCode() +
-                                     ", code=" + env.path("code").asText() +
-                                     ", message=" + env.path("message").asText() + ")");
+                                     ", code=" + env.path("code").asString() +
+                                     ", message=" + env.path("message").asString() + ")");
         }
         return env.path("data");
     }
@@ -406,7 +408,7 @@ class AdminFlowIT {
                 .as("create tenant: %s body=%s", createT.getStatusCode(), createT.getBody())
                 .isEqualTo(201);
         // Phase 6: tenant UUID is in the response data; use it when issuing the API key.
-        String tenantId = unwrap(createT).get("id").asText();
+        String tenantId = unwrap(createT).get("id").asString();
 
         // ④ Alice issues an API Key.
         String keyBody = "{\"tenantId\":\"" + tenantId + "\",\"name\":\"primary\",\"scopes\":[\"registration\",\"authentication\"]}";
@@ -417,9 +419,9 @@ class AdminFlowIT {
                 .as("issue API key: %s body=%s", issue.getStatusCode(), issue.getBody())
                 .isEqualTo(201);
         JsonNode issueData = unwrap(issue);
-        String fullKey = issueData.get("plainText").asText();
-        String keyId = issueData.get("id").asText();   // UUID string (Phase 6)
-        String prefix = issueData.get("prefix").asText();
+        String fullKey = issueData.get("plainText").asString();
+        String keyId = issueData.get("id").asString();   // UUID string (Phase 6)
+        String prefix = issueData.get("prefix").asString();
         assertThat(fullKey).startsWith(prefix);
 
         // ⑤ The issued prefix is registered (durable admin write).
@@ -474,10 +476,10 @@ class AdminFlowIT {
         assertThat(bobList.getStatusCode().value()).isEqualTo(200);
 
         // bob は RP_ADMIN(demo-rp) — alice が step ③ で作った acme は見えず demo-rp だけ見える
-        com.fasterxml.jackson.databind.JsonNode bobListData = mapper.readTree(bobList.getBody()).get("data");
+        tools.jackson.databind.JsonNode bobListData = mapper.readTree(bobList.getBody()).get("data");
         java.util.List<String> bobSlugs = java.util.stream.StreamSupport
                 .stream(bobListData.spliterator(), false)
-                .map(n -> n.get("slug").asText())
+                .map(n -> n.get("slug").asString())
                 .toList();
         assertThat(bobSlugs)
                 .as("bob (RP_ADMIN) sees only own tenant — actual: %s", bobSlugs)
@@ -620,7 +622,7 @@ class AdminFlowIT {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < arr.size(); i++) {
             if (i > 0) sb.append(',');
-            sb.append(arr.get(i).get("action").asText());
+            sb.append(arr.get(i).get("action").asString());
         }
         return sb.append(']').toString();
     }

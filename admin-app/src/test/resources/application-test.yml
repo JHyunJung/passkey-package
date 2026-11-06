@@ -25,8 +25,10 @@ spring:
     driver-class-name: oracle.jdbc.OracleDriver
   session:
     timeout: PT30M
-    redis:
-      namespace: spring:session
+    # Boot 4: spring.session.redis.* → spring.session.data.redis.* (옛 키는 무시된다).
+    data:
+      redis:
+        namespace: spring:session
 
 passkey:
   key-envelope:

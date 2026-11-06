@@ -1,15 +1,16 @@
 package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -45,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Testcontainers + loginAs inline 패턴은 T13 RpAdminBoundaryIT 에서 복사.
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(MultiTenantOperatorIT 참고).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -281,7 +283,7 @@ class PlatformOperatorUnrestrictedIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return res.getBody().get("data").get("id").asText();
+        return res.getBody().get("data").get("id").asString();
     }
 
     // ----------------------------------------------------------------
@@ -295,7 +297,7 @@ class PlatformOperatorUnrestrictedIT {
         // 1. GET /me → PLATFORM_OPERATOR, tenantId=null
         ResponseEntity<JsonNode> me = http.exchange(
                 url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
-        assertThat(me.getBody().get("data").get("role").asText()).isEqualTo("PLATFORM_OPERATOR");
+        assertThat(me.getBody().get("data").get("role").asString()).isEqualTo("PLATFORM_OPERATOR");
         // PLATFORM_OPERATOR 는 매핑 0개 → tenantIds 빈 배열(전체 접근 의미). (N:M: 단수 tenantId → 배열)
         JsonNode tenantIdsNode = me.getBody().get("data").path("tenantIds");
         assertThat(tenantIdsNode.isMissingNode()
@@ -310,7 +312,7 @@ class PlatformOperatorUnrestrictedIT {
                 url("/admin/api/tenants"), HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
         List<String> slugs = StreamSupport
                 .stream(tList.getBody().get("data").spliterator(), false)
-                .map(n -> n.get("slug").asText()).toList();
+                .map(n -> n.get("slug").asString()).toList();
         assertThat(slugs).contains("demo-rp", "platform-it-a");
 
         // 4. PUT /tenants/{tenant_A} → 200
@@ -333,9 +335,9 @@ class PlatformOperatorUnrestrictedIT {
         // 5. PUT /tenants/{demo-rp} → 200 (RP 의 tenant 도 자유)
         String demoRpId = StreamSupport
                 .stream(tList.getBody().get("data").spliterator(), false)
-                .filter(n -> "demo-rp".equals(n.get("slug").asText()))
+                .filter(n -> "demo-rp".equals(n.get("slug").asString()))
                 .findFirst().orElseThrow()
-                .get("id").asText();
+                .get("id").asString();
         Map<String, Object> updateDemo = Map.of(
                 "displayName", "Demo RP (updated by alice)",
                 "rpId", "localhost",

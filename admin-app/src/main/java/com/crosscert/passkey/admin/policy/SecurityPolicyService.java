@@ -2,9 +2,9 @@ package com.crosscert.passkey.admin.policy;
 
 import com.crosscert.passkey.core.entity.SecurityPolicy;
 import com.crosscert.passkey.core.repository.SecurityPolicyRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,7 +68,7 @@ public class SecurityPolicyService {
     private String serialize(List<String> list) {
         try {
             return objectMapper.writeValueAsString(list == null ? List.of() : list);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("serialize cors_allowlist failed", e);
         }
     }
@@ -77,7 +77,7 @@ public class SecurityPolicyService {
         if (json == null || json.isBlank()) return List.of();
         try {
             return objectMapper.readValue(json, new TypeReference<List<String>>() {});
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("deserialize cors_allowlist failed (corrupt JSON: " + json + ")", e);
         }
     }

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
@@ -42,7 +42,7 @@ class PasswordPagesControllerTest {
     private static final String GOOD_PW = "correct horse battery";
 
     @Autowired MockMvc mvc;
-    @MockBean PasswordResetController reset;
+    @MockitoBean PasswordResetController reset;
 
     private void okRequest() {
         doReturn(ResponseEntity.ok(Map.of("ok", true))).when(reset).request(any());

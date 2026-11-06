@@ -1,8 +1,8 @@
 package com.crosscert.passkey.webauthn.mds;
 
 import com.crosscert.passkey.webauthn.JsonMappers;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -76,10 +76,10 @@ public final class MdsJws {
             throw new MdsException(MdsException.Reason.MALFORMED_JWS, "JWS header not JSON", e);
         }
         JsonNode algNode = header.get("alg");
-        if (algNode == null || !algNode.isTextual()) {
+        if (algNode == null || !algNode.isString()) {
             throw new MdsException(MdsException.Reason.MALFORMED_JWS, "JWS header missing alg");
         }
-        String alg = algNode.asText();
+        String alg = algNode.asString();
         if (!"RS256".equals(alg) && !"ES256".equals(alg)) {
             throw new MdsException(MdsException.Reason.MALFORMED_JWS, "unsupported JWS alg: " + alg);
         }
@@ -88,11 +88,11 @@ public final class MdsJws {
         JsonNode x5cNode = header.get("x5c");
         if (x5cNode != null && x5cNode.isArray()) {
             for (JsonNode c : x5cNode) {
-                if (!c.isTextual()) {
+                if (!c.isString()) {
                     throw new MdsException(MdsException.Reason.MALFORMED_JWS, "x5c entry not text");
                 }
                 try {
-                    x5c.add(B64STD.decode(c.asText()));
+                    x5c.add(B64STD.decode(c.asString()));
                 } catch (RuntimeException e) {
                     throw new MdsException(MdsException.Reason.MALFORMED_JWS, "x5c entry not base64", e);
                 }

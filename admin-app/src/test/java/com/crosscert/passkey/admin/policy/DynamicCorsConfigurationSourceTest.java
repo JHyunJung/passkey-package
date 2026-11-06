@@ -2,7 +2,7 @@ package com.crosscert.passkey.admin.policy;
 
 import com.crosscert.passkey.core.entity.SecurityPolicy;
 import com.crosscert.passkey.core.repository.SecurityPolicyRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.cors.CorsConfiguration;
 

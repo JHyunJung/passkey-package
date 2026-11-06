@@ -13,17 +13,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * API Key 빈 배선의 경량 컨텍스트 로드 테스트.
  *
- * <p>유일한 @SpringBootTest 인 {@link com.crosscert.passkey.rpapp.RpAppSmokeIT} 는
- * docker compose + passkey-app + admin-app 풀 인프라를 요구해 @Disabled 라,
- * {@link PasskeyClientConfiguration} 의 {@code apiKeySupplier}/{@code passkeyClient}
- * 빈 배선이 컴파일로만 검증되던 갭이 있었다. 본 IT 는 외부 인프라 없이 컨텍스트를
+ * <p>rp-app 에는 풀 인프라 E2E 가 없어(SDK → passkey-app 전 구간은 passkey-app 의
+ * {@code SdkClientEndToEndIT} 가 담당) {@link PasskeyClientConfiguration} 의
+ * {@code apiKeySupplier}/{@code passkeyClient} 빈 배선이 컴파일로만 검증되던 갭이 있었다. 본 IT 는 외부 인프라 없이 컨텍스트를
  * 띄워 두 빈의 존재 + apiKeySupplier 가 env(api-key)로 주입한 값을 그대로 공급함을 실증한다.
  *
  * <p>webEnvironment 가 NONE 이 아닌 RANDOM_PORT 인 이유: {@code WebSecurityConfig.chain}
  * 빈이 {@code HttpSecurity} 를 주입받는데, 이는 servlet 웹 컨텍스트에서만 자동 구성된다
  * (Spring Security 의 HttpSecurityConfiguration 은 @ConditionalOnWebApplication(SERVLET)).
- * NONE 이면 HttpSecurity 빈 부재로 컨텍스트 로드가 실패하므로 RpAppSmokeIT 와 동일하게
- * RANDOM_PORT 를 쓴다. 서블릿 컨테이너만 뜰 뿐 외부 호출은 없다(PasskeyClient.of 는
+ * NONE 이면 HttpSecurity 빈 부재로 컨텍스트 로드가 실패하므로 RANDOM_PORT 를 쓴다. 서블릿 컨테이너만 뜰 뿐 외부 호출은 없다(PasskeyClient.of 는
  * RestClient/JwksCache 만 구성, 기동 시 네트워크 I/O 없음).
  *
  * <p>properties: api-key 를 명시 값으로 세팅해 apiKeySupplier 가 그 값을 그대로 반환함을

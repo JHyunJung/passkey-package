@@ -1,15 +1,10 @@
 package com.crosscert.passkey.admin.audit;
 
 import com.crosscert.passkey.core.repository.AuditLogRepository;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.metamodel.Metamodel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
+import com.crosscert.passkey.admin.web.AdminWebSliceTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,67 +16,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-    controllers = AuditLogController.class,
-    excludeAutoConfiguration = {
-        org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.web.SpringDataWebAutoConfiguration.class
-    }
-)
-@Import({
-    com.crosscert.passkey.admin.config.AdminSecurityConfig.class,
-    AuditLogControllerSecurityTest.JpaStubs.class
-})
+@AdminWebSliceTest(controllers = AuditLogController.class)
 class AuditLogControllerSecurityTest {
 
-    /**
-     * AdminApplication carries @EnableJpaRepositories which registers
-     * jpaSharedEM_entityManagerFactory even in @WebMvcTest slices.
-     * We provide a stub EMF with a real (empty) Metamodel so the
-     * JPA wiring succeeds without a real DataSource.
-     */
-    @TestConfiguration
-    static class JpaStubs {
-        @Bean
-        EntityManagerFactory entityManagerFactory() {
-            Metamodel metamodel = mock(Metamodel.class);
-            when(metamodel.getEntities()).thenReturn(Set.of());
-            when(metamodel.getManagedTypes()).thenReturn(Set.of());
-            when(metamodel.getEmbeddables()).thenReturn(Set.of());
-
-            EntityManagerFactory emf = mock(EntityManagerFactory.class);
-            when(emf.getMetamodel()).thenReturn(metamodel);
-            return emf;
-        }
-    }
-
     @Autowired MockMvc mvc;
-    @MockBean AuditLogRepository repo;
-    @MockBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
-    @MockBean AuditChainVerifier verifier;
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockBean java.time.Clock clock;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
-    @MockBean com.crosscert.passkey.core.repository.TenantRepository tenants;
-    @MockBean com.crosscert.passkey.core.repository.CredentialRepository creds;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeys;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
-    @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
-    @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
-    @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
-    @MockBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
-    // AdminSecurityConfig now wires a DynamicCorsConfigurationSource constructor param.
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    @MockitoBean AuditChainVerifier verifier;
+    @Autowired com.crosscert.passkey.admin.audit.AuditLogService audit;
 
     @Test
     void anonymousGetListIsUnauthorized() throws Exception {

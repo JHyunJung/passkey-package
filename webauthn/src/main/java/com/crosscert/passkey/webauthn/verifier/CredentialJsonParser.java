@@ -1,7 +1,7 @@
 package com.crosscert.passkey.webauthn.verifier;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Base64;
 import java.util.LinkedHashSet;
@@ -30,7 +30,7 @@ public final class CredentialJsonParser {
         Set<String> transports = new LinkedHashSet<>();
         JsonNode tr = resp.get("transports");
         if (tr != null && tr.isArray()) {
-            for (JsonNode t : tr) if (t.isTextual()) transports.add(t.asText());
+            for (JsonNode t : tr) if (t.isString()) transports.add(t.asString());
         }
         return new ParsedRegistration(
                 decode(requireText(root, "rawId")),
@@ -45,11 +45,11 @@ public final class CredentialJsonParser {
         JsonNode uh = resp.get("userHandle");
         byte[] userHandle = null;
         if (uh != null && !uh.isNull()) {
-            if (!uh.isTextual()) {
+            if (!uh.isString()) {
                 throw new IllegalArgumentException("credential JSON userHandle must be a string");
             }
-            if (!uh.asText().isEmpty()) {
-                userHandle = decode(uh.asText());
+            if (!uh.asString().isEmpty()) {
+                userHandle = decode(uh.asString());
             }
         }
         return new ParsedAuthentication(
@@ -85,10 +85,10 @@ public final class CredentialJsonParser {
     /** 필수 텍스트(base64url) 필드 — 미존재/null/비-문자열이면 거부 (coercion 차단). */
     private static String requireText(JsonNode node, String field) {
         JsonNode n = node.get(field);
-        if (n == null || n.isNull() || !n.isTextual()) {
+        if (n == null || n.isNull() || !n.isString()) {
             throw new IllegalArgumentException("credential JSON missing/non-string field: " + field);
         }
-        return n.asText();
+        return n.asString();
     }
 
     private static byte[] decode(String b64url) {

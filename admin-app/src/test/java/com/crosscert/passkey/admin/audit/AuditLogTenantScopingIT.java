@@ -1,15 +1,16 @@
 package com.crosscert.passkey.admin.audit;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -60,6 +61,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>Testcontainers + loginAs inline 패턴은 RpAdminBoundaryIT 에서 복사.
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -303,7 +305,7 @@ class AuditLogTenantScopingIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return res.getBody().get("data").get("id").asText();
+        return res.getBody().get("data").get("id").asString();
     }
 
     private String lookupTenantIdBySlug(HttpHeaders auth, String slug) {
@@ -315,8 +317,8 @@ class AuditLogTenantScopingIT {
                 .isTrue();
         return StreamSupport
                 .stream(res.getBody().get("data").spliterator(), false)
-                .filter(n -> slug.equals(n.get("slug").asText()))
-                .map(n -> n.get("id").asText())
+                .filter(n -> slug.equals(n.get("slug").asString()))
+                .map(n -> n.get("id").asString())
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("tenant slug=" + slug + " not found"));
     }
@@ -385,7 +387,7 @@ class AuditLogTenantScopingIT {
             assertThat(tidNode.isMissingNode() || tidNode.isNull())
                     .as("tenantId must be present (RP_ADMIN scope query excludes NULL): %s", row)
                     .isFalse();
-            assertThat(tidNode.asText())
+            assertThat(tidNode.asString())
                     .as("every row must have tenantId == demoRp (no cross-tenant leak): %s", row)
                     .isEqualTo(demoRp);
         }
@@ -406,7 +408,7 @@ class AuditLogTenantScopingIT {
             assertThat(tidNode.isMissingNode() || tidNode.isNull())
                     .as("auto-scope must enforce tenant_id = demoRp (NULL excluded): %s", row)
                     .isFalse();
-            assertThat(tidNode.asText())
+            assertThat(tidNode.asString())
                     .as("auto-scope: every row must be demoRp (no tenant_A leak): %s", row)
                     .isEqualTo(demoRp);
         }

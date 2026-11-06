@@ -28,7 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -83,15 +83,15 @@ class TenantDetailPageControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean TenantAdminController tenants;
-    @MockBean FunnelController funnel;
-    @MockBean ActivityController activity;
-    @MockBean AuditLogController audit;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ApiKeyAdminController apiKeys;
-    @MockBean AaguidPolicyController aaguid;
-    @MockBean LicenseController license;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean FunnelController funnel;
+    @MockitoBean ActivityController activity;
+    @MockitoBean AuditLogController audit;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ApiKeyAdminController apiKeys;
+    @MockitoBean AaguidPolicyController aaguid;
+    @MockitoBean LicenseController license;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
     static final UUID T1 = UUID.fromString("00000000-0000-0000-0000-000000000001");

@@ -32,7 +32,8 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 
 ## 기술 스택
 
-- **JVM**: Java 17, Spring Boot 3.x, JPA/Hibernate 6
+- **JVM**: Java 17, Spring Boot 4.1 (Spring Framework 7 · Spring Security 7), JPA/Hibernate 7, Jackson 3 — 단 `rp-app` 은 Jackson 2, `sdk-java` 는 외부 RP 배포용이라 Spring Boot 3.5 BOM(Spring 6 · Jackson 2)으로 컴파일하며 Spring 6·7 양쪽에서 동작
+- **Build**: Gradle 9 (wrapper 9.7.0, Kotlin DSL)
 - **DB**: Oracle — 로컬 dev 는 XE 21 컨테이너, 운영은 외부 Oracle. Flyway 마이그레이션 `V1__baseline_schema.sql`(squash baseline) + 증분 V2~ (`core/src/main/resources/db/migration`). 테넌트 격리는 앱 레벨 Hibernate `@Filter`
 - **Cache**: Redis 7 (rate limit, ceremony state, 관리자 세션 — Spring Session)
 - **Auth**:

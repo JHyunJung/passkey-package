@@ -1,15 +1,16 @@
 package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -59,6 +60,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 // classes 명시: auth 패키지에 MfaController*Test$SliceConfig(@SpringBootConfiguration) 2개가
 // 있어 config 자동탐색이 "multiple @SpringBootConfiguration" 으로 깨진다(단독 실행 시). 메인 앱
 // 클래스를 직접 지정해 자동탐색을 끈다(AdminFlowIT 은 root 패키지라 자동탐색이 바로 AdminApplication 을 찾음).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -398,14 +400,14 @@ class MultiTenantOperatorIT {
 
         List<String> allowedIds = StreamSupport
                 .stream(view.get("allowedTenantIds").spliterator(), false)
-                .map(JsonNode::asText)
+                .map(JsonNode::asString)
                 .toList();
         assertThat(allowedIds)
                 .as("bob 의 allowedTenantIds 는 2개여야 함: %s", allowedIds)
                 .hasSize(2);
 
         // ── 3. 초기 activeTenantId == demo-rp (정렬 첫 번째) ────────────
-        String initialActive = view.get("activeTenantId").asText();
+        String initialActive = view.get("activeTenantId").asString();
         assertThat(UUID.fromString(initialActive))
                 .as("초기 activeTenantId 는 정렬 첫 번째 UUID (demo-rp) 여야 함")
                 .isEqualTo(expectedDefault);
@@ -420,7 +422,7 @@ class MultiTenantOperatorIT {
                         switchRes.getStatusCode(), switchRes.getBody())
                 .isTrue();
         JsonNode switchView = switchRes.getBody();
-        assertThat(UUID.fromString(switchView.get("activeTenantId").asText()))
+        assertThat(UUID.fromString(switchView.get("activeTenantId").asString()))
                 .as("전환 후 activeTenantId 는 second-rp 여야 함")
                 .isEqualTo(SECOND_RP_ID);
 
@@ -436,7 +438,7 @@ class MultiTenantOperatorIT {
         JsonNode listData = listRes.getBody().get("data");
         List<String> slugs = StreamSupport
                 .stream(listData.spliterator(), false)
-                .map(n -> n.get("slug").asText())
+                .map(n -> n.get("slug").asString())
                 .toList();
         assertThat(slugs)
                 .as("second-rp 활성 중 tenant 목록은 second-rp 만 포함해야 함 — 실제: %s", slugs)
@@ -480,7 +482,7 @@ class MultiTenantOperatorIT {
                 .as("alice 가 외부 테넌트 생성 → 201: %s body=%s",
                         createExternal.getStatusCode(), createExternal.getBody())
                 .isTrue();
-        String externalTenantId = createExternal.getBody().get("data").get("id").asText();
+        String externalTenantId = createExternal.getBody().get("data").get("id").asString();
 
         // bob 세션은 유지 — second-rp 가 여전히 활성 상태.
         // external-rp 는 bob 의 allowedTenantIds 에 없으므로 assertCanAccessTenant → 403.

@@ -2,14 +2,10 @@ package com.crosscert.passkey.admin.audit;
 
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.entity.SecurityIncident;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.metamodel.Metamodel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
+import com.crosscert.passkey.admin.web.AdminWebSliceTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,70 +33,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * AuditLogControllerSecurityTest / TenantAdminControllerSecurityTest 와 동일하게 복제한다
  * (AdminSecurityConfig 새 빈 누락 시 컨텍스트 로드 실패 회귀를 피하기 위해).
  */
-@WebMvcTest(
-    controllers = AuditChainMonitorController.class,
-    excludeAutoConfiguration = {
-        org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.web.SpringDataWebAutoConfiguration.class
-    }
-)
+@AdminWebSliceTest(controllers = AuditChainMonitorController.class)
 @Import({
-    com.crosscert.passkey.admin.config.AdminSecurityConfig.class,
-    com.crosscert.passkey.core.api.GlobalExceptionHandler.class,
-    IncidentControllerSecurityTest.JpaStubs.class
+    com.crosscert.passkey.core.api.GlobalExceptionHandler.class
 })
 class IncidentControllerSecurityTest {
-
-    @TestConfiguration
-    static class JpaStubs {
-        @Bean
-        EntityManagerFactory entityManagerFactory() {
-            Metamodel metamodel = mock(Metamodel.class);
-            when(metamodel.getEntities()).thenReturn(Set.of());
-            when(metamodel.getManagedTypes()).thenReturn(Set.of());
-            when(metamodel.getEmbeddables()).thenReturn(Set.of());
-
-            EntityManagerFactory emf = mock(EntityManagerFactory.class);
-            when(emf.getMetamodel()).thenReturn(metamodel);
-            return emf;
-        }
-    }
 
     @Autowired MockMvc mvc;
 
     // Controller collaborators
-    @MockBean AuditChainVerifier verifier;
-    @MockBean AuditChainBackfillService backfillService;
-    @MockBean SecurityIncidentService incidents;
-    @MockBean java.time.Clock clock;
+    @MockitoBean AuditChainVerifier verifier;
+    @MockitoBean AuditChainBackfillService backfillService;
+    @MockitoBean SecurityIncidentService incidents;
 
     // Security config + JPA wiring stubs (mirrors AuditLogControllerSecurityTest)
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
-    @MockBean com.crosscert.passkey.core.repository.TenantRepository tenants;
-    @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditRepo;
-    @MockBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
-    @MockBean com.crosscert.passkey.core.repository.CredentialRepository creds;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeys;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
-    @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
-    @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
-    @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
-    @MockBean com.crosscert.passkey.core.repository.SecurityIncidentRepository securityIncidentRepository;
-    @MockBean com.crosscert.passkey.core.repository.CredentialAuthEventRepository credentialAuthEventRepository;
-    @MockBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
-    @MockBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    @Autowired com.crosscert.passkey.admin.audit.AuditLogService audit;
+    @Autowired com.crosscert.passkey.core.repository.AdminUserRepository admins;
 
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID ENTRY = UUID.randomUUID();

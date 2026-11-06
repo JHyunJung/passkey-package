@@ -61,6 +61,124 @@
 - 시스템 시간이 `lastVerifiedAt` 보다 과거로 돌아가면 자동으로 DEAD 상태 진입 (rollback 공격 보호)
 - 잘못된 시계로 인한 false DEAD 시 운영자가 NTP 복구 후 서비스 재시작 필요
 
+## 업그레이드 배포 — Spring Boot 4.1 로 처음 교체할 때 (1회): admin 세션 정리 → 전원 재로그인
+
+Spring Boot 4.1(Spring Framework 7 · Spring Security 7) 빌드는 admin-app 의 Spring Session
+(Redis 에 JDK 직렬화로 저장) 형식이 이전(Spring Boot 3.5) 빌드와 **호환되지 않는다**. 이전 빌드가
+남긴 세션을 새 admin-app 이 읽지 못하므로, 교체 시 **한 번** admin 세션 키를 지운다.
+**admin 콘솔 사용자는 전원 다시 로그인**해야 한다. passkey-app(등록·인증 API)·rp-app 은 영향 없다.
+
+1. **모든 호스트의 이전 버전 admin-app 인스턴스를 전부 중지**한다(`--scale` 복제본 포함).
+   하나라도 살아 있으면 키를 지운 뒤에도 그 인스턴스가 옛 형식 세션을 다시 써 넣는다.
+   passkey-app 은 계속 돌아도 된다.
+2. Redis 에서 admin 세션 네임스페이스 `spring:session:*` 키만 삭제하고, 남은 키가 0 인지 확인한다
+   (`admin-app` 의 `spring.session.data.redis.namespace` 기본값. 바꿔 운영 중이면 그 값으로).
+   아래 명령이 마지막에 `OK:` 를 출력하고 exit 0 으로 끝난 경우에만 3단계로 간다.
+   `중단:` 이 나오면(접속·인증 실패, 키 잔존) 원인을 고치기 전까지 새 admin-app 을 띄우지 않는다.
+3. 새 버전 admin-app 기동
+
+삭제 대상은 `spring:session:*` 뿐이다. passkey-app 의 챌린지(`challenge:*`)·rate limit 키가 같은
+Redis 에 있으므로 **`FLUSHALL`/`FLUSHDB` 는 쓰지 않는다**.
+
+먼저 앱이 쓰는 Redis 접속 값(`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`)을 셸에 올린다.
+compose 로 배포했다면 `deploy/.env` 를 읽는다(그 외 배포는 같은 세 변수를 직접 `export`):
+
+```bash
+cd deploy
+set -a; . ./.env; set +a          # 값의 따옴표를 셸이 벗겨준다
+```
+
+그다음 아래 블록을 통째로 붙여 넣는다. `bash -euo pipefail` 로 따로 실행하므로 어느 단계든
+실패하면 그 자리에서 0 이 아닌 코드로 끝나고, 로그인 셸(zsh 포함)은 영향받지 않는다.
+`REDIS_PASSWORD` 가 비어 있으면(requirepass 없는 Redis) 인증 없이 접속한다.
+`redis-cli` 는 Redis 가 오류로 응답해도(`NOAUTH`, 읽기 전용 replica 의 `READONLY` 등) 종료코드 0 을
+내므로, 블록은 종료코드와 함께 응답 내용(조회 결과는 `spring:session:` 키만, 삭제 결과는 숫자만)도
+확인한다. 조회·삭제·검증 중 하나라도 실패하면 `중단:` 을 출력하고 exit 1 로 끝난다.
+
+```bash
+bash -euo pipefail <<'EOF'
+# REDIS_HOST / REDIS_PORT / REDIS_PASSWORD 는 위에서 셸에 올린 값을 쓴다
+: "${REDIS_HOST:?REDIS_HOST 가 비어 있음}"
+if [ -n "${REDIS_PASSWORD:-}" ]; then export REDISCLI_AUTH="$REDIS_PASSWORD"; fi
+rc() { redis-cli -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" "$@"; }
+fail() { echo "중단: $*" >&2; exit 1; }
+# redis-cli 는 Redis 오류 응답(NOAUTH·READONLY 등)에도 종료코드 0 을 낸다 → 출력 내용까지 확인한다
+
+# 1) 접속·인증 확인 — PONG 이 아니면 중단
+pong=$(rc ping 2>&1) || true
+[ "$pong" = PONG ] || fail "Redis 접속/인증 실패 ($pong)"
+
+# 2) 대상 조회 — 실패하거나 spring:session: 이 아닌 줄(오류 응답)이 섞이면 중단
+keys=$(rc --scan --pattern 'spring:session:*' 2>&1) || fail "키 조회 실패"
+bad=$(printf '%s\n' "$keys" | grep -v '^spring:session:' | grep . | head -n 1 || true)
+[ -z "$bad" ] || fail "키 조회 실패 ($bad)"
+n=0; [ -z "$keys" ] || n=$(printf '%s\n' "$keys" | wc -l | tr -d ' ')
+echo "삭제 대상: $n 개"
+
+# 3) 삭제 — 종료코드와 응답(삭제 개수 숫자만 와야 한다)을 모두 확인
+if [ -n "$keys" ]; then
+  out=$(printf '%s\n' "$keys" \
+    | xargs -n 100 redis-cli -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" unlink 2>&1) \
+    || fail "삭제 실패 (종료코드 $?)"
+  bad=$(printf '%s\n' "$out" | grep -v '^[0-9][0-9]*$' | grep . | head -n 1 || true)
+  [ -z "$bad" ] || fail "삭제 실패 ($bad)"
+fi
+
+# 4) 검증 — 남은 키가 하나라도 있으면 중단
+left=$(rc --scan --pattern 'spring:session:*' 2>&1) || fail "검증 조회 실패"
+[ -z "$left" ] || fail "spring:session 키가 남아 있음 ($(printf '%s\n' "$left" | head -n 1))"
+echo "OK: admin 세션 키 0 — 새 admin-app 을 기동해도 된다"
+EOF
+```
+
+비밀번호는 `REDISCLI_AUTH` 로 넘기므로 명령줄·`ps` 에 드러나지 않는다.
+
+Redis 를 `deploy/docker-compose.redis.yml` 컨테이너로 운영한다면 호스트에 `redis-cli` 가 없어도
+컨테이너 안에서 같은 확인·삭제·검증을 할 수 있다. 위처럼 `deploy/` 에서 `.env` 를 읽은 셸에서
+실행한다(compose 파일이 `REDIS_BIND_ADDR` 를 요구한다). 컨테이너의 sh(busybox)에는 `pipefail`
+이 없으므로 조회 결과를 먼저 변수에 받아 종료코드를 확인한 뒤 삭제하고, 삭제는 xargs 종료코드와
+응답 내용을 각각 확인한다(위 블록과 같은 판정):
+
+```bash
+export REDIS_BIND_ADDR=${REDIS_BIND_ADDR:-$REDIS_HOST}   # 0.0.0.0 금지
+docker compose -f docker-compose.redis.yml exec -T redis sh -c '
+  export REDISCLI_AUTH="$REDIS_PASSWORD"
+  fail() { echo "중단: $*" >&2; exit 1; }
+  pong=$(redis-cli ping 2>&1)
+  [ "$pong" = PONG ] || fail "Redis 접속/인증 실패 ($pong)"
+  keys=$(redis-cli --scan --pattern "spring:session:*" 2>&1) || fail "키 조회 실패"
+  bad=$(printf "%s\n" "$keys" | grep -v "^spring:session:" | grep . | head -n 1)
+  [ -z "$bad" ] || fail "키 조회 실패 ($bad)"
+  n=0; [ -z "$keys" ] || n=$(printf "%s\n" "$keys" | wc -l)
+  echo "삭제 대상: $n 개"
+  if [ -n "$keys" ]; then
+    out=$(printf "%s\n" "$keys" | xargs -n 100 redis-cli unlink 2>&1) || fail "삭제 실패 (종료코드 $?)"
+    bad=$(printf "%s\n" "$out" | grep -v "^[0-9][0-9]*\$" | grep . | head -n 1)
+    [ -z "$bad" ] || fail "삭제 실패 ($bad)"
+  fi
+  left=$(redis-cli --scan --pattern "spring:session:*" 2>&1) || fail "검증 조회 실패"
+  [ -z "$left" ] || fail "spring:session 키가 남아 있음 ($(printf "%s\n" "$left" | head -n 1))"
+  echo "OK: admin 세션 키 0"
+'
+```
+
+`sh -c '…'` 의 작은따옴표는 그대로 둔다 — `$REDIS_PASSWORD` 는 서버 셸이 아니라 컨테이너
+안의 같은 이름 환경변수로 풀린다. Redis 컨테이너가 멈춰 있으면 `exec` 자체가 실패한다(exit ≠ 0).
+
+이후 같은 4.1 계열 빌드끼리의 재배포에는 이 단계가 필요 없다.
+
+### 롤백 — Spring Boot 3.5 빌드로 되돌릴 때
+
+호환되지 않는 것은 양방향이다. 4.1 admin-app 이 쓴 세션은 3.5 admin-app 도 읽지 못하며, 이 경우
+로그아웃이 아니라 **HTTP 500** 으로 나타난다. 그래서 되돌릴 때도 같은 세 단계를 밟는다:
+**모든 호스트의 4.1 admin-app 을 전부 중지 → 위 정리 블록을 그대로 실행(`OK:` 확인) → 3.5 빌드 기동**.
+admin 콘솔 사용자는 이때도 전원 다시 로그인한다.
+
+그 밖에는 되돌려도 문제가 없다. 이 업그레이드에는 DB 스키마 변경(Flyway 마이그레이션)이 없고,
+passkey-app 이 Redis 에 쓰는 챌린지 JSON 형식은 두 버전이 서로 읽을 수 있다
+(업그레이드 전 기록한 픽스처를 신버전이 읽고·같은 바이트로 쓰는지 `ChallengeStoreFormatCompatTest` 가 고정).
+passkey-app·rp-app 은 별도 절차 없이 이전 이미지로 교체하면 된다.
+
 ## 부팅 실패 트러블슈팅
 
 | 오류 메시지 (stderr) | 원인 | 조치 |

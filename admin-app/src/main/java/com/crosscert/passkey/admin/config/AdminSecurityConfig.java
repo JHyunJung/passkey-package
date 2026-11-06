@@ -15,7 +15,7 @@ import com.crosscert.passkey.core.alert.SecurityAlertEvent;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
@@ -70,8 +70,8 @@ public class AdminSecurityConfig {
     @Bean
     public DaoAuthenticationProvider adminAuthProvider(AdminUserDetailsService uds,
                                                        PasswordEncoder encoder) {
-        DaoAuthenticationProvider p = new DaoAuthenticationProvider();
-        p.setUserDetailsService(uds);
+        // Security 7: UserDetailsService 는 생성자 인자로만 받는다(setUserDetailsService 제거).
+        DaoAuthenticationProvider p = new DaoAuthenticationProvider(uds);
         p.setPasswordEncoder(encoder);
         // Surface UsernameNotFoundException to the failure handler so we
         // can classify unknown-user vs bad-password in audit + log. The

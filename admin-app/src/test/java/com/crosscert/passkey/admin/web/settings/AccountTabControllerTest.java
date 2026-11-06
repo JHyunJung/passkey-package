@@ -12,8 +12,8 @@ import com.crosscert.passkey.admin.web.AdminWebSliceTest;
 import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpSession;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -23,7 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -65,12 +65,12 @@ class AccountTabControllerTest {
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
     @Autowired AdminUserRepository users;
-    @MockBean MfaController mfa;
-    @MockBean SignupRequestController signups;
-    @MockBean SystemInfoController systemInfo;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean MfaController mfa;
+    @MockitoBean SignupRequestController signups;
+    @MockitoBean SystemInfoController systemInfo;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final ObjectMapper JSON = new ObjectMapper();
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
@@ -284,9 +284,9 @@ class AccountTabControllerTest {
         MvcResult r = enroll();
         assertThat(r.getResponse().getStatus()).isEqualTo(403);
         JsonNode t = trigger(r).get("toast");
-        assertThat(t.get("kind").asText()).isEqualTo("error");
-        assertThat(t.get("title").asText()).isEqualTo("2단계 인증을 시작하지 못했습니다");
-        assertThat(t.get("message").asText()).isEqualTo("권한이 없습니다. 이 작업을 할 권한이 없습니다. 운영자에게 문의하세요.");
+        assertThat(t.get("kind").asString()).isEqualTo("error");
+        assertThat(t.get("title").asString()).isEqualTo("2단계 인증을 시작하지 못했습니다");
+        assertThat(t.get("message").asString()).isEqualTo("권한이 없습니다. 이 작업을 할 권한이 없습니다. 운영자에게 문의하세요.");
         assertThat(body(r).trim()).isEmpty();
 
         when(mfa.enroll(any(), any())).thenThrow(new IllegalStateException("db secret leaked"));
@@ -338,8 +338,8 @@ class AccountTabControllerTest {
         assertThat(oob.attr("hx-swap-oob")).isEqualTo("true");
         assertThat(oob.selectFirst(".badge").text()).isEqualTo("켜짐");
         JsonNode t = trigger(r).get("toast");
-        assertThat(t.get("kind").asText()).isEqualTo("success");
-        assertThat(t.get("title").asText()).isEqualTo("2단계 인증이 켜졌습니다.");
+        assertThat(t.get("kind").asString()).isEqualTo("success");
+        assertThat(t.get("title").asString()).isEqualTo("2단계 인증이 켜졌습니다.");
         assertThat(r.getResponse().getHeader("Cache-Control")).contains("no-store");
     }
 
@@ -380,9 +380,9 @@ class AccountTabControllerTest {
         assertThat(Jsoup.parse(d.selectFirst("template").html()).select("[data-rc-code]").eachText()).contains("AAAA-BBBB");
         assertThat(d.selectFirst("#mfa-account")).isNull();
         JsonNode t = trigger(r).get("toast");
-        assertThat(t.get("kind").asText()).isEqualTo("warn");
-        assertThat(t.get("title").asText()).isEqualTo("계정 정보를 새로고침하지 못했습니다.");
-        assertThat(t.get("message").asText()).isEqualTo("페이지를 새로고침해 주세요.");
+        assertThat(t.get("kind").asString()).isEqualTo("warn");
+        assertThat(t.get("title").asString()).isEqualTo("계정 정보를 새로고침하지 못했습니다.");
+        assertThat(t.get("message").asString()).isEqualTo("페이지를 새로고침해 주세요.");
         assertThat(trigger(r).toString()).doesNotContain("2단계 인증 확인 실패");
     }
 
@@ -433,8 +433,8 @@ class AccountTabControllerTest {
         assertThat(card.selectFirst(".badge").text()).isEqualTo("꺼짐");
         assertThat(card.text()).contains("2단계 인증 켜기");
         JsonNode t = trigger(r).get("toast");
-        assertThat(t.get("kind").asText()).isEqualTo("warn");
-        assertThat(t.get("title").asText()).isEqualTo("2단계 인증이 꺼졌습니다.");
+        assertThat(t.get("kind").asString()).isEqualTo("warn");
+        assertThat(t.get("title").asString()).isEqualTo("2단계 인증이 꺼졌습니다.");
     }
 
     @Test
@@ -460,7 +460,7 @@ class AccountTabControllerTest {
         MvcResult r = disable("123456");
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
-        assertThat(trigger(r).get("toast").get("title").asText()).isEqualTo("계정 정보를 새로고침하지 못했습니다.");
+        assertThat(trigger(r).get("toast").get("title").asString()).isEqualTo("계정 정보를 새로고침하지 못했습니다.");
     }
 
     @Test

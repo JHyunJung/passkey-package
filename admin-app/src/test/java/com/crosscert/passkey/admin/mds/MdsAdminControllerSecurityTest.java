@@ -1,14 +1,9 @@
 package com.crosscert.passkey.admin.mds;
 
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.metamodel.Metamodel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
+import com.crosscert.passkey.admin.web.AdminWebSliceTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,70 +18,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-        controllers = MdsAdminController.class,
-        excludeAutoConfiguration = {
-                org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.data.web.SpringDataWebAutoConfiguration.class
-        }
-)
-@Import({
-        com.crosscert.passkey.admin.config.AdminSecurityConfig.class,
-        MdsAdminControllerSecurityTest.JpaStubs.class
-})
+@AdminWebSliceTest(controllers = MdsAdminController.class)
+// MdsAdminController 가 raw SQL 스키마 prefix 로 쓰는 실제 빈(passkey.db.schema 는 application-common.yml).
+@org.springframework.context.annotation.Import(com.crosscert.passkey.core.config.DbSchemaProperties.class)
 class MdsAdminControllerSecurityTest {
 
-    /**
-     * AdminApplication carries @EnableJpaRepositories which registers
-     * jpaSharedEM_entityManagerFactory even in @WebMvcTest slices.
-     * We provide a stub EMF with a real (empty) Metamodel so the
-     * JPA wiring succeeds without a real DataSource.
-     */
-    @TestConfiguration
-    static class JpaStubs {
-        @Bean
-        EntityManagerFactory entityManagerFactory() {
-            Metamodel metamodel = mock(Metamodel.class);
-            org.mockito.Mockito.when(metamodel.getEntities()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getManagedTypes()).thenReturn(Set.of());
-            org.mockito.Mockito.when(metamodel.getEmbeddables()).thenReturn(Set.of());
-
-            EntityManagerFactory emf = mock(EntityManagerFactory.class);
-            org.mockito.Mockito.when(emf.getMetamodel()).thenReturn(metamodel);
-            return emf;
-        }
-    }
-
     @Autowired MockMvc mvc;
-    @MockBean JdbcTemplate jdbc;
-    @MockBean MdsSchedulerService scheduler;
-    @MockBean MdsHistoryService historyService;
-    @MockBean org.springframework.data.redis.core.StringRedisTemplate redis;
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRepository admins;
-    @MockBean java.time.Clock clock;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    // AdminSecurityConfig now wires a DynamicCorsConfigurationSource constructor param.
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
-    // Prevent @EnableJpaRepositories from wiring real Spring Data repos
-    @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
-    @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
-    @MockBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
-    @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
-    @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeys;
-    @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
-    @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
+    @MockitoBean JdbcTemplate jdbc;
+    @MockitoBean MdsSchedulerService scheduler;
+    @MockitoBean MdsHistoryService historyService;
+    @MockitoBean org.springframework.data.redis.core.StringRedisTemplate redis;
 
     @Test
     void anonymousGetStatusIsUnauthorized() throws Exception {

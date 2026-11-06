@@ -1,15 +1,16 @@
 package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -49,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 으로 reset) 그대로 사용.
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(MultiTenantOperatorIT 참고).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -302,7 +304,7 @@ class RpAdminBoundaryIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return res.getBody().get("data").get("id").asText();
+        return res.getBody().get("data").get("id").asString();
     }
 
     /**
@@ -335,7 +337,7 @@ class RpAdminBoundaryIT {
                 url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
         assertThat(me.getStatusCode().is2xxSuccessful()).isTrue();
         JsonNode meData = me.getBody().get("data");
-        assertThat(meData.get("role").asText())
+        assertThat(meData.get("role").asString())
                 .as("bob must have role RP_ADMIN")
                 .isEqualTo("RP_ADMIN");
         JsonNode tenantIds = meData.get("tenantIds");
@@ -343,7 +345,7 @@ class RpAdminBoundaryIT {
                 .as("bob (RP_ADMIN) must have at least one mapped tenant: %s", tenantIds)
                 .isTrue();
         // demo-rp 단일 매핑 — 활성/유일 RP id 로 사용.
-        String myTenantId = tenantIds.get(0).asText();
+        String myTenantId = tenantIds.get(0).asString();
         assertThat(myTenantId).as("bob must have a tenantId").isNotBlank();
 
         // ── 2. GET /tenants — demo-rp 만 포함, boundary-it-a 미포함 ───────────
@@ -352,7 +354,7 @@ class RpAdminBoundaryIT {
         assertThat(tList.getStatusCode().is2xxSuccessful()).isTrue();
         List<String> slugs = StreamSupport
                 .stream(tList.getBody().get("data").spliterator(), false)
-                .map(n -> n.get("slug").asText())
+                .map(n -> n.get("slug").asString())
                 .toList();
         assertThat(slugs)
                 .as("bob sees only own tenant — actual slugs: %s", slugs)

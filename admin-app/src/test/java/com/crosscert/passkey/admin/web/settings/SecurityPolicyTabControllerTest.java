@@ -18,7 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -51,13 +51,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class SecurityPolicyTabControllerTest {
 
     @Autowired MockMvc mvc;
-    @MockBean SecurityPolicyController policy;
-    @MockBean MfaController mfa;
-    @MockBean SignupRequestController signups;
-    @MockBean SystemInfoController systemInfo;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean SecurityPolicyController policy;
+    @MockitoBean MfaController mfa;
+    @MockitoBean SignupRequestController signups;
+    @MockitoBean SystemInfoController systemInfo;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final String CONSOLE = "http://localhost";
     static final String SAVE = SecurityPolicyTabController.SAVE_PATH;
@@ -99,7 +99,7 @@ class SecurityPolicyTabControllerTest {
 
     private static String trigger(MvcResult r) throws Exception {
         String h = r.getResponse().getHeader("HX-Trigger");
-        return h == null ? null : new com.fasterxml.jackson.databind.ObjectMapper().readValue(h, Map.class).toString();
+        return h == null ? null : new tools.jackson.databind.ObjectMapper().readValue(h, Map.class).toString();
     }
 
     private Document tab() throws Exception {

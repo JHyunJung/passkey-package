@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Mirrors {@link MfaControllerSecurityTest}'s slice setup exactly (nested
  * {@code @SpringBootConfiguration}, real {@link TotpService} + fixed {@link Clock},
  * same security imports + MockBeans) so the security/CSRF/principal wiring is
- * identical. Here {@link TotpService} is replaced by a mock via {@code @MockBean}
+ * identical. Here {@link TotpService} is replaced by a mock via {@code @MockitoBean}
  * to deterministically force TOTP success/failure, and {@link MfaSecretCipher} /
  * {@link RecoveryCodeService} are mocked.
  */
@@ -60,15 +60,19 @@ class MfaControllerRecoveryTest {
 
     @Autowired MockMvc mvc;
 
-    @MockBean TotpService totp;
-    @MockBean MfaSecretCipher secretCipher;
-    @MockBean RecoveryCodeService recoveryCodes;
-    @MockBean AdminUserRepository admins;
+    @MockitoBean TotpService totp;
+    @MockitoBean MfaSecretCipher secretCipher;
+    @MockitoBean RecoveryCodeService recoveryCodes;
+    @MockitoBean AdminUserRepository admins;
     // AdminSecurityConfig collaborators that are not otherwise supplied by the slice.
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
+    @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
+    @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    // AdminSecurityConfig 협력 빈(adminLoginSuccessHandler 의 SecurityPolicyService, adminFilterChain 의 TenantBoundary).
+    // 이 클래스는 자체 SliceConfig(실제 TotpService·고정 Clock)를 쓰므로 AdminWebSliceTest 묶음(Clock mock 포함) 대신 개별로 둔다.
+    @MockitoBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockitoBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
+    @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static AdminUser adminUserWithUuid() {
         var u = new AdminUser("alice@example.com", "x", "ADMIN");
@@ -87,7 +91,9 @@ class MfaControllerRecoveryTest {
         u.setMfaSecret("enc:v1:stored");
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
         when(secretCipher.open("enc:v1:stored")).thenReturn("PLAINSECRET");
-        when(totp.verifyAt(eq("PLAINSECRET"), anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
+        // MfaController.validCode 는 F02(재사용 방지) 이후 matchedCounter 로 매칭된 time-step 을 받는다.
+        when(totp.matchedCounter(eq("PLAINSECRET"), anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.OptionalLong.of(56_666_666L));
         when(recoveryCodes.generate(u.getId()))
                 .thenReturn(List.of("AAAA-BBBB", "CCCC-DDDD"));
 
@@ -111,7 +117,8 @@ class MfaControllerRecoveryTest {
         when(admins.findByEmail(anyString())).thenReturn(Optional.of(u));
         when(secretCipher.open("enc:v1:stored")).thenReturn("PLAINSECRET");
         // TOTP fails for any code → controller must try recovery consume.
-        when(totp.verifyAt(anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(false);
+        when(totp.matchedCounter(anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.OptionalLong.empty());
         when(recoveryCodes.consume(eq(u.getId()), anyString())).thenReturn(true);
         when(recoveryCodes.remaining(u.getId())).thenReturn(9L);
 

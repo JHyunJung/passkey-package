@@ -5,9 +5,9 @@ import com.crosscert.passkey.admin.config.MeController;
 import com.crosscert.passkey.admin.config.ProfileController;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.Metamodel;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.AliasFor;
@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  * {@link ProfileController}(ViewModelAdvice 의 협력 빈)를 실제 빈으로 둔다.
  *
  * <p>사용법: {@code @AdminWebSliceTest(controllers = XxxPageController.class)}. 화면 컨트롤러가
- * 부르는 그 밖의 REST 컨트롤러 빈은 테스트 클래스에서 {@code @MockBean} 으로 둔다.
+ * 부르는 그 밖의 REST 컨트롤러 빈은 테스트 클래스에서 {@code @MockitoBean} 으로 둔다.
  * {@code controllers} 를 비우면 화면 컨트롤러 없이 보안 체인·정적 리소스만 올라간다.
  * 묶음의 mock(예: {@code AdminUserRepository}, {@code AuditLogService}) 은 테스트에서
  * {@code @Autowired} 로 받아 스텁·검증한다.
@@ -39,10 +39,10 @@ import static org.mockito.Mockito.when;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @WebMvcTest(excludeAutoConfiguration = {
-        org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.web.SpringDataWebAutoConfiguration.class
+        org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration.class,
+        org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration.class,
+        org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class,
+        org.springframework.boot.data.autoconfigure.web.DataWebAutoConfiguration.class
 })
 @Import({
         AdminSecurityConfig.class,
@@ -53,7 +53,7 @@ import static org.mockito.Mockito.when;
         com.crosscert.passkey.admin.web.support.UiDialect.class,
         AdminWebSliceTest.JpaStubs.class
 })
-@MockBean({
+@MockitoBean(types = {
         com.crosscert.passkey.core.repository.AdminUserRepository.class,
         com.crosscert.passkey.admin.audit.AuditLogService.class,
         com.crosscert.passkey.admin.auth.AdminUserDetailsService.class,

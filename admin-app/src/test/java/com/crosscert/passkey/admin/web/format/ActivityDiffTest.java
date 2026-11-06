@@ -2,8 +2,8 @@ package com.crosscert.passkey.admin.web.format;
 
 import com.crosscert.passkey.admin.web.format.ActivityDiff.ArrayChange;
 import com.crosscert.passkey.admin.web.format.ActivityDiff.DiffRow;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

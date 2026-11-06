@@ -1,10 +1,27 @@
 spring:
+  # Boot 4 / Jackson 3 자동설정. 직렬화 계약은 Boot 3(Jackson 2) 와 동일하게 유지한다.
   jackson:
-    serialization:
-      write-dates-as-timestamps: false
+    # Boot 4.1: Jackson 3 를 Boot 가 예전 Jackson 2 에 쓰던 기본값으로 구성
+    # (MapperBuilder.configureForJackson2() — 프로퍼티 알파벳 정렬 끔, null→primitive 허용,
+    # 후행 토큰 허용, enum toString 미사용 등 — + 날짜/기간 timestamp 끔 등 Boot 2/3 기본값).
+    # 덮지 않는 나머지 차이는 CoreJacksonConfig 가 명시.
+    use-jackson2-defaults: true
+    datatype:
+      datetime:
+        # Jackson 3 에서 WRITE_DATES_AS_TIMESTAMPS 는 SerializationFeature → DateTimeFeature 로 이동.
+        write-dates-as-timestamps: false
     deserialization:
       fail-on-unknown-properties: true
     default-property-inclusion: non_null
+    # 파서/제너레이터 상한을 Jackson 2(2.21) 기본값으로 되돌린다 — Boot 4 기본은 중첩 500·문자열 100MB.
+    # passkey-app 은 PasskeyAppJacksonConfig 가 이보다 좁힌다(중첩 64·문자열 256KB·문서 1MB).
+    factory:
+      constraints:
+        read:
+          max-nesting-depth: 1000
+          max-string-length: 20000000
+        write:
+          max-nesting-depth: 1000
   jpa:
     open-in-view: false
     properties:

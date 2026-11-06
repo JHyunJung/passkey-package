@@ -1,15 +1,16 @@
 package com.crosscert.passkey.admin.tenant;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -49,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   5. PUT 동일 body 재호출 → audit row 추가 안 됨 (no-op)
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -276,8 +278,8 @@ class TenantAdminControllerUpdateIT {
         }
         if (!env.path("success").asBoolean()) {
             throw new AssertionError("API call failed (status=" + res.getStatusCode() +
-                    ", code=" + env.path("code").asText() +
-                    ", message=" + env.path("message").asText() + ")");
+                    ", code=" + env.path("code").asString() +
+                    ", message=" + env.path("message").asString() + ")");
         }
         return env.path("data");
     }
@@ -308,7 +310,7 @@ class TenantAdminControllerUpdateIT {
         assertThat(createRes.getStatusCode().is2xxSuccessful())
                 .as("create tenant: %s body=%s", createRes.getStatusCode(), createRes.getBody())
                 .isTrue();
-        String tenantId = unwrap(createRes).get("id").asText();
+        String tenantId = unwrap(createRes).get("id").asString();
 
         // 2. PUT — displayName + allowedOrigins 변경
         String updateBody = """
@@ -328,7 +330,7 @@ class TenantAdminControllerUpdateIT {
         assertThat(putRes.getStatusCode().is2xxSuccessful())
                 .as("PUT tenant: %s body=%s", putRes.getStatusCode(), putRes.getBody())
                 .isTrue();
-        assertThat(unwrap(putRes).get("displayName").asText()).isEqualTo("Updated Name");
+        assertThat(unwrap(putRes).get("displayName").asString()).isEqualTo("Updated Name");
 
         // 3. GET 확인
         ResponseEntity<JsonNode> getRes = rest.exchange(
@@ -337,9 +339,9 @@ class TenantAdminControllerUpdateIT {
                 new HttpEntity<>(auth),
                 JsonNode.class);
         JsonNode getData = unwrap(getRes);
-        assertThat(getData.get("displayName").asText()).isEqualTo("Updated Name");
+        assertThat(getData.get("displayName").asString()).isEqualTo("Updated Name");
         assertThat(StreamSupport.stream(getData.get("allowedOrigins").spliterator(), false))
-                .anyMatch(n -> n.asText().equals("http://localhost:9091"));
+                .anyMatch(n -> n.asString().equals("http://localhost:9091"));
 
         // 4. audit row 검증 — TENANT_UPDATE filter
         ResponseEntity<JsonNode> auditRes = rest.exchange(
@@ -355,16 +357,16 @@ class TenantAdminControllerUpdateIT {
 
         // 이 tenant 의 row 찾기
         JsonNode matchingRow = StreamSupport.stream(rows.spliterator(), false)
-                .filter(r -> tenantId.equals(r.get("targetId").asText()))
+                .filter(r -> tenantId.equals(r.get("targetId").asString()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(
                         "TENANT_UPDATE row for tenant " + tenantId + " not found in " + rows));
-        assertThat(matchingRow.get("action").asText()).isEqualTo("TENANT_UPDATE");
+        assertThat(matchingRow.get("action").asString()).isEqualTo("TENANT_UPDATE");
 
         // payload 는 String (AuditLogView.payload 가 String) — JSON 파싱
         JsonNode payloadNode = matchingRow.get("payload");
-        JsonNode payload = payloadNode.isTextual()
-                ? om.readTree(payloadNode.asText())
+        JsonNode payload = payloadNode.isString()
+                ? om.readTree(payloadNode.asString())
                 : payloadNode;
 
         JsonNode changedFields = payload.get("changedFields");
@@ -372,7 +374,7 @@ class TenantAdminControllerUpdateIT {
                 .as("payload.changedFields must be present: %s", payload)
                 .isNotNull();
         List<String> changedList = StreamSupport.stream(changedFields.spliterator(), false)
-                .map(JsonNode::asText)
+                .map(JsonNode::asString)
                 .toList();
         assertThat(changedList).contains("displayName", "allowedOrigins");
 

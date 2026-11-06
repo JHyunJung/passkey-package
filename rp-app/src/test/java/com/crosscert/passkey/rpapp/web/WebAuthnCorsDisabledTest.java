@@ -10,9 +10,9 @@ import com.crosscert.passkey.sdk.relay.RegistrationRelayCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Spring Security 의 CorsFilter 가 preflight 를 거부한다. 암묵적 동작이라 회귀해도
  * 조용히 넘어갈 수 있어(예: 나중에 누가 반사 허용으로 "고치는" 경우) 테스트로 못박는다.
  *
- * <p>{@link WebAuthnControllerTest} 와 같은 슬라이스·같은 @MockBean 구성이며
+ * <p>{@link WebAuthnControllerTest} 와 같은 슬라이스·같은 @MockitoBean 구성이며
  * 차이는 FixtureConfig 의 CorsProperties 가 <b>빈 목록</b>이라는 점 하나다.
  */
 @WebMvcTest(WebAuthnController.class)
@@ -48,13 +48,13 @@ class WebAuthnCorsDisabledTest {
     @Autowired
     ObjectMapper json;
 
-    @MockBean
+    @MockitoBean
     PasskeyClient passkey;
-    @MockBean
+    @MockitoBean
     InMemoryUserStore users;
-    @MockBean
+    @MockitoBean
     PasskeyProperties props;
-    @MockBean
+    @MockitoBean
     RegistrationRelayCodec relay;
 
     @TestConfiguration

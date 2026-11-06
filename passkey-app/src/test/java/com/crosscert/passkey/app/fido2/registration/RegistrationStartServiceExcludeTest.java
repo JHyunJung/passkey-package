@@ -10,8 +10,8 @@ import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.tenant.TenantContextHolder;
 import com.crosscert.passkey.app.fido2.CeremonyMetrics;
 import com.crosscert.passkey.core.ceremony.CeremonyEventRecorder;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -80,9 +80,9 @@ class RegistrationStartServiceExcludeTest {
         assertThat(exclude).isNotNull();
         assertThat(exclude.isArray()).isTrue();
         assertThat(exclude).hasSize(1);
-        assertThat(exclude.get(0).get("type").asText()).isEqualTo("public-key");
+        assertThat(exclude.get(0).get("type").asString()).isEqualTo("public-key");
         String expectedId = Base64.getUrlEncoder().withoutPadding().encodeToString(existing);
-        assertThat(exclude.get(0).get("id").asText()).isEqualTo(expectedId);
+        assertThat(exclude.get(0).get("id").asString()).isEqualTo(expectedId);
 
         double success = reg.find("passkey_ceremony_total")
                 .tags("type", "registration", "phase", "start", "result", "success")
@@ -122,10 +122,10 @@ class RegistrationStartServiceExcludeTest {
         assertThat(exclude.isArray()).isTrue();
         assertThat(exclude).hasSize(2);
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
-        assertThat(exclude.get(0).get("type").asText()).isEqualTo("public-key");
-        assertThat(exclude.get(0).get("id").asText()).isEqualTo(enc.encodeToString(first));
-        assertThat(exclude.get(1).get("type").asText()).isEqualTo("public-key");
-        assertThat(exclude.get(1).get("id").asText()).isEqualTo(enc.encodeToString(second));
+        assertThat(exclude.get(0).get("type").asString()).isEqualTo("public-key");
+        assertThat(exclude.get(0).get("id").asString()).isEqualTo(enc.encodeToString(first));
+        assertThat(exclude.get(1).get("type").asString()).isEqualTo("public-key");
+        assertThat(exclude.get(1).get("id").asString()).isEqualTo(enc.encodeToString(second));
     }
 
     @Test

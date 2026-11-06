@@ -17,8 +17,8 @@ import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -27,7 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -65,12 +65,12 @@ class AaguidTabControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean TenantAdminController tenants;
-    @MockBean AaguidPolicyController aaguid;
-    @MockBean ApiKeyAdminController apiKeys;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean AaguidPolicyController aaguid;
+    @MockitoBean ApiKeyAdminController apiKeys;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final ObjectMapper JSON = new ObjectMapper();
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
@@ -410,7 +410,7 @@ class AaguidTabControllerTest {
     void previewNoChangeAndInvalid() throws Exception {
         MvcResult none = mvc.perform(previewReq("ALLOWLIST", "true", YUBI.toString(), UNKNOWN.toString())).andReturn();
         assertThat(none.getResponse().getStatus()).isEqualTo(200);
-        assertThat(trigger(none).get("toast").get("kind").asText()).isEqualTo("warn");
+        assertThat(trigger(none).get("toast").get("kind").asString()).isEqualTo("warn");
         assertThat(doc(none).select("form#ag-confirm-form")).isEmpty();
 
         MvcResult bad = mvc.perform(previewReq("EVERYTHING", "true", "not-a-uuid")).andReturn();
@@ -443,8 +443,8 @@ class AaguidTabControllerTest {
         assertThat(u.entries()).extracting(AaguidPolicyDto.EntryInput::note).containsExactly("내 키", null, null);
         JsonNode t = trigger(r);
         assertThat(t.has("saved")).isTrue();
-        assertThat(t.get("toast").get("kind").asText()).isEqualTo("success");
-        assertThat(t.get("toast").get("title").asText()).isEqualTo("AAGUID 정책 저장 완료");
+        assertThat(t.get("toast").get("kind").asString()).isEqualTo("success");
+        assertThat(t.get("toast").get("title").asString()).isEqualTo("AAGUID 정책 저장 완료");
         Document d = doc(r);
         assertThat(d.select("form#ag-form")).hasSize(1);
         assertThat(d.select("template[x-for]").first().parent().select("[x-data^=chipInput]")).isNotNull();
