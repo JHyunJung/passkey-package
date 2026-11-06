@@ -138,7 +138,7 @@ class Fido2TestAuthenticator(origin: Origin, private val mapper: ObjectMapper) {
         // preference is informational and does not affect verification.
         val att = AttestationConveyancePreference.DIRECT
 
-        // Use the "lean" constructor that omits everything we
+        // Use the 9-arg "lean" constructor that omits everything we
         // don't model (excludeCredentials, extensions, hints), to keep
         // the typed options minimal and avoid wandering into nullable
         // overloads with mismatched arg counts.

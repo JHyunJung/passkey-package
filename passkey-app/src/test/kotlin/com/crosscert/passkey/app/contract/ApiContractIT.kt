@@ -39,9 +39,13 @@ import tools.jackson.databind.node.ObjectNode
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Base64
+import java.util.regex.Pattern
 
 private val RECORD = java.lang.Boolean.getBoolean("contract.record")
 private val SNAPSHOT_DIR: Path = Path.of("src/test/resources/contract")
+
+/** JWT 세그먼트 구분자 — Java String.split("\\.") 와 같은 의미(Pattern.split, limit 0). */
+private val DOT: Pattern = Pattern.compile("\\.")
 
 private const val TENANT_HEX = "cccccccccccccccccccccccccccccccc"
 private const val PREFIX = "pk_cccccccc"
@@ -169,7 +173,8 @@ class ApiContractIT @Autowired constructor(
         c.register()
         val idToken = data(c.authenticationFinishRaw()).get("idToken").asString()
 
-        val parts = idToken.split('.')
+        // Java String.split("\\.") 와 같은 규칙(정규식, 끝 빈 세그먼트 제거, 구분자 없으면 원문 1개) — Kotlin split('.') 은 빈 꼬리를 남긴다.
+        val parts = DOT.split(idToken)
         assertThat(parts).hasSize(3)
         val decoded = mapper.createObjectNode()
         decoded.set("header", mapper.readTree(Base64.getUrlDecoder().decode(parts[0])))
@@ -332,7 +337,8 @@ class ApiContractIT @Autowired constructor(
         http.exchange(url(path), HttpMethod.POST, HttpEntity(body, authHeaders()), String::class.java)
 
     private fun get(path: String): ResponseEntity<String> =
-        http.exchange(url(path), HttpMethod.GET, HttpEntity<Any>(authHeaders()), String::class.java)
+        // 바디 없는 GET — HttpEntity(headers) 생성자를 명시적으로 고른다.
+        http.exchange(url(path), HttpMethod.GET, HttpEntity<Unit>(authHeaders()), String::class.java)
 
     private fun data(res: ResponseEntity<String>): JsonNode {
         assertOkJson(res)
