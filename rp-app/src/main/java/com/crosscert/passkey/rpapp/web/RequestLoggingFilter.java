@@ -50,7 +50,8 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             return;
         }
         boolean debugBody = payloadLog.isDebugEnabled();
-        HttpServletRequest wrappedReq = debugBody ? new ContentCachingRequestWrapper(req) : req;
+        // Spring 7 은 1-인자 생성자를 제거했다. cacheLimit 0 이하 = 상한 없음(Spring 6 의 1-인자와 동일 동작).
+        HttpServletRequest wrappedReq = debugBody ? new ContentCachingRequestWrapper(req, 0) : req;
         HttpServletResponse wrappedRes = debugBody ? new ContentCachingResponseWrapper(res) : res;
 
         long startNs = System.nanoTime();
