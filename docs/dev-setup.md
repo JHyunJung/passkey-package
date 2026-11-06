@@ -4,7 +4,7 @@
 **local 또는 dev profile** 로 띄우면 admin 콘솔과 RP 측 API 가 모두 동작하고,
 프로필별 시드 tenant 1개 + API key 1개로 즉시 호출할 수 있다.
 
-최종 갱신: 2026-09-13
+최종 갱신: 2026-11-06
 관련:
 - [백로그](backlog.md) — Activity 관련 미해소 항목은 §1 기능 개발 참조
 - Activity 페이지 spec·monorepo 통합 spec 은 저장소에서 정리됨 (git 이력의 `docs/superpowers/` 참조)
@@ -20,6 +20,7 @@
 | Docker | recent | Oracle XE + Redis 컨테이너 |
 | JDK | 17 | passkey-app / admin-app / sdk-java / rp-app |
 | Gradle | 9.7.0 (wrapper) | `./gradlew` 가 자동으로 받는다 — 별도 설치 불필요. Gradle 9 는 JDK 17+ 에서만 실행된다 |
+| Kotlin | 2.4.21 (Gradle 플러그인) | passkey-app 전용. 컴파일러는 Gradle 이 받으므로 별도 설치 불필요. IDE 는 IntelliJ IDEA 기본 번들 Kotlin 플러그인이면 충분 |
 
 ### 1.2 저장소 구조 (monorepo)
 
@@ -28,7 +29,7 @@
 └── Passkey2/        # 모든 코드 (단일 저장소)
     ├── core/        # JPA entity + repository + 테넌트 격리(Hibernate @Filter) + Flyway
     ├── webauthn/    # WebAuthn 검증 코어 (attestation 포맷 + MDS) — 자체 구현
-    ├── passkey-app/ # FIDO2 server (port 8080)
+    ├── passkey-app/ # FIDO2 server (port 8080) — Kotlin
     ├── admin-app/   # 운영 콘솔 (Thymeleaf 서버 렌더링, port 8081)
     ├── sdk-java/    # 패스키 SDK (Java) — rp-app 가 의존
     ├── rp-app/      # 데모 RP 앱 (port 9090)
@@ -338,6 +339,6 @@ SPRING_PROFILES_ACTIVE=local ./gradlew :admin-app:bootRun   # 또는 dev
 - 시드 SQL (local): [`core/src/main/resources/db/local/R__seed_local_tenant.sql`](../core/src/main/resources/db/local/R__seed_local_tenant.sql)
 - 시드 SQL (dev): [`core/src/main/resources/db/dev/R__seed_dev_tenant.sql`](../core/src/main/resources/db/dev/R__seed_dev_tenant.sql)
 - 공통 운영자 시드: [`core/src/main/resources/db/seed-common/R__seed_operators.sql`](../core/src/main/resources/db/seed-common/R__seed_operators.sql)
-- ApiKey 인증 필터: `passkey-app/src/main/java/com/crosscert/passkey/app/security/ApiKeyAuthFilter.java`
+- ApiKey 인증 필터: `passkey-app/src/main/kotlin/com/crosscert/passkey/app/security/ApiKeyAuthFilter.kt`
 - SDK 모듈: [`sdk-java/`](../sdk-java/) — `project(":sdk-java")` 로 직접 의존
 - 데모 RP: [`rp-app/`](../rp-app/) — `./gradlew :rp-app:bootRun`

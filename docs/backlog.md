@@ -14,7 +14,7 @@
       스트립하지 않으면 감사 IP 스푸핑·Secure 쿠키 오판·rate-limit IP 우회가 동시에 성립한다. [zero-base 2026-07-04]
 - [ ] **actuator `health.show-details: always` 미인증 노출** — `core/src/main/resources/application-common.yml:46`.
       prod/qa 오버라이드 없음. 노출 엔드포인트는 `:51` 에서 `health,info` 로 제한돼 있다. [master-backlog 2026-05-31]
-- [ ] **passkey-app SecurityFilterChain 부재** — `passkey-app/src/main/java` 전체에 `SecurityFilterChain` 0건.
+- [ ] **passkey-app SecurityFilterChain 부재** — `passkey-app/src/main/kotlin` 전체에 `SecurityFilterChain` 0건.
       actuator 가 완전 미인증이고 nosniff/frame-options 등 기본 보안헤더도 적용되지 않는다. [master-backlog 2026-05-31]
 - [ ] **HSTS/CSP 미설정** — `contentSecurityPolicy`/`httpStrictTransportSecurity`/`Strict-Transport-Security`/`Content-Security-Policy`
       가 admin-app·passkey-app·core·deploy·nginx 어디에도 0건. 앱과 프록시 중 어디서 넣을지 결정 필요. [master-backlog 2026-05-31]
@@ -35,9 +35,9 @@
       들어가 있다. 외부 RP 배포 전에 패치 버전(예: `1.0.1`)으로 올리고 변경 이력을 남긴다 — 동작 차이로
       요청이 이제 명시적 `Content-Length` 로 나간다(이전엔 chunked 가능). 현재 별도 CHANGELOG 파일은 없다
       (`sdk-java/README.md` "Spring 6 · 7 호환" 항목만). [boot4-upgrade 2026-11-06]
-- [ ] **Kotlin 전환(2단계) 착수 전 Kotlin 카탈로그 버전 상향** — `gradle/libs.versions.toml` 의 `kotlin = "2.0.21"`
-      (root `build.gradle.kts` 에 `apply false` 로만 선언, 현재 적용 모듈 없음)은 Boot 4.x 기준(Kotlin 2.2+)에 못 미친다. 2단계 시작 전에 spec
-      (`docs/superpowers/specs/2026-11-06-spring-boot-4-kotlin-design.md`) 대로 올린다. [boot4-upgrade 2026-11-06]
+- [x] ~~**Kotlin 전환(2단계) 착수 전 Kotlin 카탈로그 버전 상향**~~ — **해소** (passkey-app-kotlin 2026-11-06):
+      카탈로그 `kotlin = "2.4.21"` 로 올리고 passkey-app 에 적용, Boot BOM `kotlin.version` 도 루트 `build.gradle.kts` 에서
+      같은 값으로 덮어쓴다. passkey-app 은 본 코드·테스트 모두 Kotlin. [boot4-upgrade 2026-11-06]
 
 ## 1. 기능 개발 (별도 spec 필요)
 
@@ -65,7 +65,7 @@
       `%compactMdc` 는 거치지 않으므로, 메시지 본문은 `maskEmail` 로 가려도 MDC 칸에는 평문이 남는다(16자 절단).
       prod JSON 로그의 `includeMdcKeyName` 에도 그대로 실린다. 마스킹 위치를 MDC put 지점으로 옮길지 결정 필요.
       [2026-09-13 문서 감사에서 발견]
-- [ ] **credential DELETE 가 registration scope 를 공유** — `passkey-app/.../security/ApiKeyScopeResolver.java:24-27`.
+- [ ] **credential DELETE 가 registration scope 를 공유** — `passkey-app/.../security/ApiKeyScopeResolver.kt:28-31`.
       파괴적 작업의 scope 분리는 정책 결정 사항. 같은 파일의 `admin` scope 가 dead scope 인 것도 함께. [config-enforcement-B 2026-05-31, master-backlog 2026-05-31]
 - [ ] **CORS allowlist origin 형식 검증** — `SecurityPolicyDto.java:29` 에 `@NotBlank @Size(max=256)` 는 있으나
       `^https?://[^/]+$` 형식·`*` 금지 검증은 없다. [master-backlog 2026-05-31]
