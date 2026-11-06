@@ -57,6 +57,9 @@ tasks.named<Test>("test") {
     // does not fall back to v1.32 and get HTTP 400 from Docker Engine
     // v25+.
     systemProperty("api.version", "1.43")
+    // 계약 픽스처 기록 모드: ./gradlew :admin-app:test -Pcontract.record=true
+    // 기본값 false = 비교만 하고 없거나 다르면 실패(AuditChainJacksonCompatTest).
+    systemProperty("contract.record", providers.gradleProperty("contract.record").getOrElse("false"))
 }
 
 // Copy scripts/bootstrap-schema.sql onto the test classpath so

@@ -1,0 +1,6 @@
+{
+  "$" : "object",
+  "$.status" : "number",
+  "$.title" : "string",
+  "$.type" : "string"
+}

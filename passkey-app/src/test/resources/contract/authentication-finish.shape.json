@@ -1,0 +1,12 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.expiresIn" : "number",
+  "$.data.idToken" : "jwt",
+  "$.data.tokenType" : "string",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string"
+}

@@ -53,7 +53,7 @@ import java.util.List;
  *       check in {@code RegistrationFinishService}.</li>
  * </ul>
  */
-final class Fido2TestAuthenticator {
+public final class Fido2TestAuthenticator {
 
     private static final Base64.Decoder B64URL_DEC = Base64.getUrlDecoder();
     private static final Base64.Encoder B64URL_ENC = Base64.getUrlEncoder().withoutPadding();
@@ -61,7 +61,7 @@ final class Fido2TestAuthenticator {
     private final ClientPlatform clientPlatform;
     private final ObjectMapper mapper;
 
-    Fido2TestAuthenticator(Origin origin, ObjectMapper mapper) {
+    public Fido2TestAuthenticator(Origin origin, ObjectMapper mapper) {
         // EmulatorUtil only ships a (no-arg → https://localhost) factory
         // and an (AuthenticatorAdaptor) overload — neither lets us pin
         // the origin to whatever the tenant config advertises. The
@@ -85,7 +85,7 @@ final class Fido2TestAuthenticator {
      * client must POST to /registration/finish under
      * {@code publicKeyCredential}.
      */
-    JsonNode register(JsonNode serverCreationOptions) {
+    public JsonNode register(JsonNode serverCreationOptions) {
         PublicKeyCredentialCreationOptions options = parseCreationOptions(serverCreationOptions);
         PublicKeyCredential<AuthenticatorAttestationResponse, ?> credential =
                 clientPlatform.create(options);
@@ -99,7 +99,7 @@ final class Fido2TestAuthenticator {
      * client must POST to /authentication/finish under
      * {@code publicKeyCredential}.
      */
-    JsonNode authenticate(JsonNode serverRequestOptions) {
+    public JsonNode authenticate(JsonNode serverRequestOptions) {
         PublicKeyCredentialRequestOptions options = parseRequestOptions(serverRequestOptions);
         PublicKeyCredential<AuthenticatorAssertionResponse, ?> credential =
                 clientPlatform.get(options);

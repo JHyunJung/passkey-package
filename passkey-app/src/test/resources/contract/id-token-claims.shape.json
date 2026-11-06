@@ -1,0 +1,16 @@
+{
+  "$" : "object",
+  "$.header" : "object",
+  "$.header.alg" : "string",
+  "$.header.kid" : "b64url",
+  "$.payload" : "object",
+  "$.payload.aaguid" : "string",
+  "$.payload.amr" : "array<string>",
+  "$.payload.amr[]" : "string",
+  "$.payload.aud" : "uuid",
+  "$.payload.cred_id" : "b64url",
+  "$.payload.exp" : "number",
+  "$.payload.iat" : "number",
+  "$.payload.iss" : "string",
+  "$.payload.sub" : "b64url"
+}
