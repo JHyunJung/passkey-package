@@ -12,7 +12,11 @@ bucket4j = "8.18.0"
 wiremock = "3.10.0"
 archunit = "1.3.0"
 lombok = "1.18.34"
-kotlin = "2.0.21"
+# passkey-app 만 Kotlin. Boot 4 BOM 의 kotlin.version(4.1.2: 2.3.21)을 루트 build.gradle.kts 에서
+# 이 값으로 덮어써 kotlin-stdlib/kotlin-reflect 를 컴파일러와 같은 버전으로 맞춘다.
+kotlin = "2.4.21"
+# Maven Central 최신 6.x(2026-11 기준 6.4.0) — mockito-core 5.23.0 의존 = Boot 4.1.2 BOM mockito.version 과 일치.
+mockito-kotlin = "6.4.0"
 
 [libraries]
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
@@ -39,6 +43,11 @@ spring-security-test = { module = "org.springframework.security:spring-security-
 wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version = "8.0" }
+# Kotlin(passkey-app). jackson-module-kotlin 은 Jackson 3 좌표 — 버전은 Boot BOM(jackson-bom) 관리.
+# kotlin-reflect 버전은 Boot BOM kotlin.version(루트에서 2.4.21 로 덮어씀) 관리.
+jackson-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
+mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version.ref = "mockito-kotlin" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

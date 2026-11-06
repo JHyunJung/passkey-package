@@ -1,0 +1,21 @@
+{
+  "status" : 200,
+  "code" : "OK",
+  "message" : "Success",
+  "shape" : {
+    "$" : "object",
+    "$.code" : "string",
+    "$.data" : "object",
+    "$.data.authenticationToken" : "b64url",
+    "$.data.publicKeyCredentialRequestOptions" : "object",
+    "$.data.publicKeyCredentialRequestOptions.allowCredentials" : "array<>",
+    "$.data.publicKeyCredentialRequestOptions.challenge" : "b64url",
+    "$.data.publicKeyCredentialRequestOptions.rpId" : "string",
+    "$.data.publicKeyCredentialRequestOptions.timeout" : "number",
+    "$.data.publicKeyCredentialRequestOptions.userVerification" : "string",
+    "$.message" : "string",
+    "$.success" : "boolean",
+    "$.timestamp" : "iso-offset(Z)",
+    "$.traceId" : "string"
+  }
+}
