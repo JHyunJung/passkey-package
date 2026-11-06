@@ -1,8 +1,8 @@
 package com.crosscert.passkey.admin.audit;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +24,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -118,7 +117,7 @@ class AuditLogTenantScopingIT {
     @Autowired RedisConnectionFactory redisFactory;
 
     /** Plain RestTemplate so 4xx throws HttpClientErrorException (not swallowed). */
-    private final RestTemplate http = Jackson2RestTemplates.create();
+    private final RestTemplate http = new RestTemplate();
 
     JdbcTemplate jdbc;
 
@@ -306,7 +305,7 @@ class AuditLogTenantScopingIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return res.getBody().get("data").get("id").asText();
+        return res.getBody().get("data").get("id").asString();
     }
 
     private String lookupTenantIdBySlug(HttpHeaders auth, String slug) {
@@ -318,8 +317,8 @@ class AuditLogTenantScopingIT {
                 .isTrue();
         return StreamSupport
                 .stream(res.getBody().get("data").spliterator(), false)
-                .filter(n -> slug.equals(n.get("slug").asText()))
-                .map(n -> n.get("id").asText())
+                .filter(n -> slug.equals(n.get("slug").asString()))
+                .map(n -> n.get("id").asString())
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("tenant slug=" + slug + " not found"));
     }
@@ -388,7 +387,7 @@ class AuditLogTenantScopingIT {
             assertThat(tidNode.isMissingNode() || tidNode.isNull())
                     .as("tenantId must be present (RP_ADMIN scope query excludes NULL): %s", row)
                     .isFalse();
-            assertThat(tidNode.asText())
+            assertThat(tidNode.asString())
                     .as("every row must have tenantId == demoRp (no cross-tenant leak): %s", row)
                     .isEqualTo(demoRp);
         }
@@ -409,7 +408,7 @@ class AuditLogTenantScopingIT {
             assertThat(tidNode.isMissingNode() || tidNode.isNull())
                     .as("auto-scope must enforce tenant_id = demoRp (NULL excluded): %s", row)
                     .isFalse();
-            assertThat(tidNode.asText())
+            assertThat(tidNode.asString())
                     .as("auto-scope: every row must be demoRp (no tenant_A leak): %s", row)
                     .isEqualTo(demoRp);
         }

@@ -1,8 +1,8 @@
 package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +24,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -107,7 +106,7 @@ class RpAdminBoundaryIT {
     @Autowired RedisConnectionFactory redisFactory;
 
     /** Plain RestTemplate so 4xx throws HttpClientErrorException (not swallowed). */
-    private final RestTemplate http = Jackson2RestTemplates.create();
+    private final RestTemplate http = new RestTemplate();
 
     JdbcTemplate jdbc;
 
@@ -305,7 +304,7 @@ class RpAdminBoundaryIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return res.getBody().get("data").get("id").asText();
+        return res.getBody().get("data").get("id").asString();
     }
 
     /**
@@ -338,7 +337,7 @@ class RpAdminBoundaryIT {
                 url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(bobAuth), JsonNode.class);
         assertThat(me.getStatusCode().is2xxSuccessful()).isTrue();
         JsonNode meData = me.getBody().get("data");
-        assertThat(meData.get("role").asText())
+        assertThat(meData.get("role").asString())
                 .as("bob must have role RP_ADMIN")
                 .isEqualTo("RP_ADMIN");
         JsonNode tenantIds = meData.get("tenantIds");
@@ -346,7 +345,7 @@ class RpAdminBoundaryIT {
                 .as("bob (RP_ADMIN) must have at least one mapped tenant: %s", tenantIds)
                 .isTrue();
         // demo-rp 단일 매핑 — 활성/유일 RP id 로 사용.
-        String myTenantId = tenantIds.get(0).asText();
+        String myTenantId = tenantIds.get(0).asString();
         assertThat(myTenantId).as("bob must have a tenantId").isNotBlank();
 
         // ── 2. GET /tenants — demo-rp 만 포함, boundary-it-a 미포함 ───────────
@@ -355,7 +354,7 @@ class RpAdminBoundaryIT {
         assertThat(tList.getStatusCode().is2xxSuccessful()).isTrue();
         List<String> slugs = StreamSupport
                 .stream(tList.getBody().get("data").spliterator(), false)
-                .map(n -> n.get("slug").asText())
+                .map(n -> n.get("slug").asString())
                 .toList();
         assertThat(slugs)
                 .as("bob sees only own tenant — actual slugs: %s", slugs)

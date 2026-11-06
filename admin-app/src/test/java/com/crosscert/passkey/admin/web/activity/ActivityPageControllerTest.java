@@ -545,7 +545,7 @@ class ActivityPageControllerTest {
         when(activity.activity(any(), any(), any(), any(), any())).thenThrow(new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
         MvcResult r = frag("/admin/_/activity/more?before=2026-10-08T01:00:00Z&beforeId=" + E3);
         assertThat(r.getResponse().getStatus()).isGreaterThanOrEqualTo(500);
-        assertThat(new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).at("/toast/title").asText()).isEqualTo("이전 기록을 불러오지 못했습니다");
+        assertThat(new tools.jackson.databind.ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).at("/toast/title").asString()).isEqualTo("이전 기록을 불러오지 못했습니다");
         assertThat(body(r).strip()).isEmpty();
     }
 

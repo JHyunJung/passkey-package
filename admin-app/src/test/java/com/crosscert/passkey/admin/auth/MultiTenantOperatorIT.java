@@ -1,8 +1,8 @@
 package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +24,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -289,7 +288,7 @@ class MultiTenantOperatorIT {
     private String url(String path) { return "http://localhost:" + port + path; }
 
     /** TestRestTemplate 은 4xx 를 삼킨다 — 403 단언에는 plain RestTemplate 사용. */
-    private final RestTemplate http = Jackson2RestTemplates.create();
+    private final RestTemplate http = new RestTemplate();
 
     private HttpHeaders loginAs(String email, String password) {
         Map<String, String> jar = new LinkedHashMap<>();
@@ -401,14 +400,14 @@ class MultiTenantOperatorIT {
 
         List<String> allowedIds = StreamSupport
                 .stream(view.get("allowedTenantIds").spliterator(), false)
-                .map(JsonNode::asText)
+                .map(JsonNode::asString)
                 .toList();
         assertThat(allowedIds)
                 .as("bob 의 allowedTenantIds 는 2개여야 함: %s", allowedIds)
                 .hasSize(2);
 
         // ── 3. 초기 activeTenantId == demo-rp (정렬 첫 번째) ────────────
-        String initialActive = view.get("activeTenantId").asText();
+        String initialActive = view.get("activeTenantId").asString();
         assertThat(UUID.fromString(initialActive))
                 .as("초기 activeTenantId 는 정렬 첫 번째 UUID (demo-rp) 여야 함")
                 .isEqualTo(expectedDefault);
@@ -423,7 +422,7 @@ class MultiTenantOperatorIT {
                         switchRes.getStatusCode(), switchRes.getBody())
                 .isTrue();
         JsonNode switchView = switchRes.getBody();
-        assertThat(UUID.fromString(switchView.get("activeTenantId").asText()))
+        assertThat(UUID.fromString(switchView.get("activeTenantId").asString()))
                 .as("전환 후 activeTenantId 는 second-rp 여야 함")
                 .isEqualTo(SECOND_RP_ID);
 
@@ -439,7 +438,7 @@ class MultiTenantOperatorIT {
         JsonNode listData = listRes.getBody().get("data");
         List<String> slugs = StreamSupport
                 .stream(listData.spliterator(), false)
-                .map(n -> n.get("slug").asText())
+                .map(n -> n.get("slug").asString())
                 .toList();
         assertThat(slugs)
                 .as("second-rp 활성 중 tenant 목록은 second-rp 만 포함해야 함 — 실제: %s", slugs)
@@ -483,7 +482,7 @@ class MultiTenantOperatorIT {
                 .as("alice 가 외부 테넌트 생성 → 201: %s body=%s",
                         createExternal.getStatusCode(), createExternal.getBody())
                 .isTrue();
-        String externalTenantId = createExternal.getBody().get("data").get("id").asText();
+        String externalTenantId = createExternal.getBody().get("data").get("id").asString();
 
         // bob 세션은 유지 — second-rp 가 여전히 활성 상태.
         // external-rp 는 bob 의 allowedTenantIds 에 없으므로 assertCanAccessTenant → 403.

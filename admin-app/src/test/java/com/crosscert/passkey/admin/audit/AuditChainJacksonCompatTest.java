@@ -5,17 +5,18 @@ import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.config.KstTime;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -122,7 +123,7 @@ class AuditChainJacksonCompatTest {
         AtomicReference<ObjectMapper> ref = new AtomicReference<>();
         new ApplicationContextRunner()
                 .withInitializer(new ConfigDataApplicationContextInitializer())
-                .withConfiguration(AutoConfigurations.of(Jackson2AutoConfiguration.class))
+                .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class))
                 .withUserConfiguration(CoreJacksonConfig.class)
                 .run(ctx -> ref.set(ctx.getBean(ObjectMapper.class)));
         baseMapper = ref.get();
@@ -199,8 +200,9 @@ class AuditChainJacksonCompatTest {
     // Fixture I/O
     // ------------------------------------------------------------
 
-    private static final ObjectMapper FIXTURE_MAPPER = new ObjectMapper()
-            .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ObjectMapper FIXTURE_MAPPER = JsonMapper.builder()
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .build();
 
     private void record(List<AuditLog> rows) throws IOException {
         ArrayNode arr = FIXTURE_MAPPER.createArrayNode();
@@ -236,27 +238,27 @@ class AuditChainJacksonCompatTest {
         for (JsonNode n : arr) {
             AuditLog row = new AuditLog(
                     unhex(n.get("prevHash")), unhex(n.get("hash")),
-                    uuid(n.get("actorId")), n.get("actorEmail").asText(), n.get("action").asText(),
+                    uuid(n.get("actorId")), n.get("actorEmail").asString(), n.get("action").asString(),
                     text(n.get("targetType")), text(n.get("targetId")),
                     uuid(n.get("tenantId")),
                     unhex(n.get("tenantPrevHash")), unhex(n.get("tenantHash")),
-                    n.get("payload").asText(), OffsetDateTime.parse(n.get("createdAt").asText()));
-            setId(row, UUID.fromString(n.get("id").asText()));
+                    n.get("payload").asString(), OffsetDateTime.parse(n.get("createdAt").asString()));
+            setId(row, UUID.fromString(n.get("id").asString()));
             rows.add(row);
         }
         return rows;
     }
 
     private static String text(JsonNode n) {
-        return n == null || n.isNull() ? null : n.asText();
+        return n == null || n.isNull() ? null : n.asString();
     }
 
     private static UUID uuid(JsonNode n) {
-        return n == null || n.isNull() ? null : UUID.fromString(n.asText());
+        return n == null || n.isNull() ? null : UUID.fromString(n.asString());
     }
 
     private static byte[] unhex(JsonNode n) {
-        return n == null || n.isNull() ? null : HEX.parseHex(n.asText());
+        return n == null || n.isNull() ? null : HEX.parseHex(n.asString());
     }
 
     private static String hex(byte[] b) {

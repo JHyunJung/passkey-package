@@ -17,8 +17,8 @@ import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -410,7 +410,7 @@ class AaguidTabControllerTest {
     void previewNoChangeAndInvalid() throws Exception {
         MvcResult none = mvc.perform(previewReq("ALLOWLIST", "true", YUBI.toString(), UNKNOWN.toString())).andReturn();
         assertThat(none.getResponse().getStatus()).isEqualTo(200);
-        assertThat(trigger(none).get("toast").get("kind").asText()).isEqualTo("warn");
+        assertThat(trigger(none).get("toast").get("kind").asString()).isEqualTo("warn");
         assertThat(doc(none).select("form#ag-confirm-form")).isEmpty();
 
         MvcResult bad = mvc.perform(previewReq("EVERYTHING", "true", "not-a-uuid")).andReturn();
@@ -443,8 +443,8 @@ class AaguidTabControllerTest {
         assertThat(u.entries()).extracting(AaguidPolicyDto.EntryInput::note).containsExactly("내 키", null, null);
         JsonNode t = trigger(r);
         assertThat(t.has("saved")).isTrue();
-        assertThat(t.get("toast").get("kind").asText()).isEqualTo("success");
-        assertThat(t.get("toast").get("title").asText()).isEqualTo("AAGUID 정책 저장 완료");
+        assertThat(t.get("toast").get("kind").asString()).isEqualTo("success");
+        assertThat(t.get("toast").get("title").asString()).isEqualTo("AAGUID 정책 저장 완료");
         Document d = doc(r);
         assertThat(d.select("form#ag-form")).hasSize(1);
         assertThat(d.select("template[x-for]").first().parent().select("[x-data^=chipInput]")).isNotNull();

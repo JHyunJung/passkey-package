@@ -6,8 +6,8 @@ import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,10 +88,10 @@ class WebExceptionAdviceTest {
             .andExpect(content().string(""))
             .andReturn();
         JsonNode toast = new ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).get("toast");
-        assertThat(toast.get("message").asText()).isEqualTo("찾을 수 없습니다. 삭제되었거나 주소가 바뀌었을 수 있습니다.");
+        assertThat(toast.get("message").asString()).isEqualTo("찾을 수 없습니다. 삭제되었거나 주소가 바뀌었을 수 있습니다.");
         // 원문은 본문 메시지가 아니라 detail("자세히")로만 간다(errorToast.ts).
-        assertThat(toast.get("message").asText()).doesNotContain("HTTP");
-        assertThat(toast.get("detail").asText()).startsWith("HTTP 404 · [").contains(ErrorCode.TENANT_NOT_FOUND.getCode());
+        assertThat(toast.get("message").asString()).doesNotContain("HTTP");
+        assertThat(toast.get("detail").asString()).startsWith("HTTP 404 · [").contains(ErrorCode.TENANT_NOT_FOUND.getCode());
     }
 
     @Test
@@ -101,7 +101,7 @@ class WebExceptionAdviceTest {
             .andExpect(content().string(""))
             .andReturn();
         JsonNode toast = new ObjectMapper().readTree(r.getResponse().getHeader("HX-Trigger")).get("toast");
-        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 500");
+        assertThat(toast.get("detail").asString()).isEqualTo("HTTP 500");
         assertThat(r.getResponse().getHeader("HX-Trigger")).doesNotContain("boom");
     }
 
@@ -148,7 +148,7 @@ class WebExceptionAdviceTest {
             .andReturn();
         String trig = r.getResponse().getHeader("HX-Trigger");
         JsonNode toast = new ObjectMapper().readTree(trig).get("toast");
-        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 400");
+        assertThat(toast.get("detail").asString()).isEqualTo("HTTP 400");
         assertThat(trig).doesNotContain("convert").doesNotContain("UUID").doesNotContain("not-a-uuid");
         String page = mvc.perform(get("/admin/_/test/uuid/not-a-uuid").with(authentication(operator())))
             .andExpect(status().isBadRequest())
@@ -162,11 +162,11 @@ class WebExceptionAdviceTest {
         // 권한 거부의 원문(내부 사유)은 싣지 않는다
         MvcResult d = mvc.perform(get("/admin/_/test/denied").header("HX-Request", "true").with(authentication(operator())))
             .andExpect(status().isForbidden()).andReturn();
-        assertThat(new ObjectMapper().readTree(d.getResponse().getHeader("HX-Trigger")).get("toast").get("detail").asText()).isEqualTo("HTTP 403");
+        assertThat(new ObjectMapper().readTree(d.getResponse().getHeader("HX-Trigger")).get("toast").get("detail").asString()).isEqualTo("HTTP 403");
         // 4xx ResponseStatusException 은 reason 만(“409 CONFLICT \"…\"” 원문 아님)
         MvcResult c = mvc.perform(get("/admin/_/test/conflict").header("HX-Request", "true").with(authentication(operator())))
             .andExpect(status().isConflict()).andReturn();
-        assertThat(new ObjectMapper().readTree(c.getResponse().getHeader("HX-Trigger")).get("toast").get("detail").asText())
+        assertThat(new ObjectMapper().readTree(c.getResponse().getHeader("HX-Trigger")).get("toast").get("detail").asString())
             .isEqualTo("HTTP 409 이미 처리된 요청입니다");
     }
 }

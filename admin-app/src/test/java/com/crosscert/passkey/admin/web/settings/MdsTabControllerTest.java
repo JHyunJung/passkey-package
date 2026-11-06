@@ -108,7 +108,7 @@ class MdsTabControllerTest {
 
     private static String trigger(MvcResult r) throws Exception {
         String h = r.getResponse().getHeader("HX-Trigger");
-        return h == null ? null : new com.fasterxml.jackson.databind.ObjectMapper().readValue(h, Map.class).toString();
+        return h == null ? null : new tools.jackson.databind.ObjectMapper().readValue(h, Map.class).toString();
     }
 
     private static Element kpi(Document d, String label) {

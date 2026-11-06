@@ -1,8 +1,8 @@
 package com.crosscert.passkey.admin.auth;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +23,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestTemplate;
-import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -103,7 +102,7 @@ class PlatformOperatorUnrestrictedIT {
     @Autowired RedisConnectionFactory redisFactory;
 
     /** Plain RestTemplate so 4xx throws HttpClientErrorException (not swallowed). */
-    private final RestTemplate http = Jackson2RestTemplates.create();
+    private final RestTemplate http = new RestTemplate();
 
     JdbcTemplate jdbc;
 
@@ -284,7 +283,7 @@ class PlatformOperatorUnrestrictedIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return res.getBody().get("data").get("id").asText();
+        return res.getBody().get("data").get("id").asString();
     }
 
     // ----------------------------------------------------------------
@@ -298,7 +297,7 @@ class PlatformOperatorUnrestrictedIT {
         // 1. GET /me → PLATFORM_OPERATOR, tenantId=null
         ResponseEntity<JsonNode> me = http.exchange(
                 url("/admin/api/me"), HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
-        assertThat(me.getBody().get("data").get("role").asText()).isEqualTo("PLATFORM_OPERATOR");
+        assertThat(me.getBody().get("data").get("role").asString()).isEqualTo("PLATFORM_OPERATOR");
         // PLATFORM_OPERATOR 는 매핑 0개 → tenantIds 빈 배열(전체 접근 의미). (N:M: 단수 tenantId → 배열)
         JsonNode tenantIdsNode = me.getBody().get("data").path("tenantIds");
         assertThat(tenantIdsNode.isMissingNode()
@@ -313,7 +312,7 @@ class PlatformOperatorUnrestrictedIT {
                 url("/admin/api/tenants"), HttpMethod.GET, new HttpEntity<>(auth), JsonNode.class);
         List<String> slugs = StreamSupport
                 .stream(tList.getBody().get("data").spliterator(), false)
-                .map(n -> n.get("slug").asText()).toList();
+                .map(n -> n.get("slug").asString()).toList();
         assertThat(slugs).contains("demo-rp", "platform-it-a");
 
         // 4. PUT /tenants/{tenant_A} → 200
@@ -336,9 +335,9 @@ class PlatformOperatorUnrestrictedIT {
         // 5. PUT /tenants/{demo-rp} → 200 (RP 의 tenant 도 자유)
         String demoRpId = StreamSupport
                 .stream(tList.getBody().get("data").spliterator(), false)
-                .filter(n -> "demo-rp".equals(n.get("slug").asText()))
+                .filter(n -> "demo-rp".equals(n.get("slug").asString()))
                 .findFirst().orElseThrow()
-                .get("id").asText();
+                .get("id").asString();
         Map<String, Object> updateDemo = Map.of(
                 "displayName", "Demo RP (updated by alice)",
                 "rpId", "localhost",

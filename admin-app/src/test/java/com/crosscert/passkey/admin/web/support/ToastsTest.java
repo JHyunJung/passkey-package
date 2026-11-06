@@ -1,7 +1,7 @@
 package com.crosscert.passkey.admin.web.support;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -21,8 +21,8 @@ class ToastsTest {
         // HTTP 헤더는 Latin-1 — 한글은 \\uXXXX 로 이스케이프돼야 한다.
         assertThat(header).matches("\\A\\p{ASCII}*\\z");
         JsonNode toast = new ObjectMapper().readTree(header).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("error");
-        assertThat(toast.get("message").asText()).isEqualTo("저장 실패 \"x\"");
+        assertThat(toast.get("kind").asString()).isEqualTo("error");
+        assertThat(toast.get("message").asString()).isEqualTo("저장 실패 \"x\"");
     }
 
     @Test
@@ -30,9 +30,9 @@ class ToastsTest {
         MockHttpServletResponse res = new MockHttpServletResponse();
         Toasts.error(res, "요청을 처리하지 못했습니다", "HTTP 409 · [T001] 중복", "abc123");
         JsonNode toast = new ObjectMapper().readTree(res.getHeader("HX-Trigger")).get("toast");
-        assertThat(toast.get("message").asText()).isEqualTo("요청을 처리하지 못했습니다");
-        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 409 · [T001] 중복");
-        assertThat(toast.get("traceId").asText()).isEqualTo("abc123");
+        assertThat(toast.get("message").asString()).isEqualTo("요청을 처리하지 못했습니다");
+        assertThat(toast.get("detail").asString()).isEqualTo("HTTP 409 · [T001] 중복");
+        assertThat(toast.get("traceId").asString()).isEqualTo("abc123");
 
         MockHttpServletResponse plain = new MockHttpServletResponse();
         Toasts.error(plain, "x");
@@ -46,7 +46,7 @@ class ToastsTest {
         MockHttpServletResponse res = new MockHttpServletResponse();
         Toasts.error(res, "실패", "HTTP 500");
         JsonNode toast = new ObjectMapper().readTree(res.getHeader("HX-Trigger")).get("toast");
-        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 500");
+        assertThat(toast.get("detail").asString()).isEqualTo("HTTP 500");
         assertThat(toast.has("traceId")).isFalse();
     }
 
@@ -55,11 +55,11 @@ class ToastsTest {
         MockHttpServletResponse res = new MockHttpServletResponse();
         Toasts.errorTitled(res, "RP를 전환하지 못했습니다", "서버가 잠시 응답하지 않습니다.", "HTTP 503", "tr-1");
         JsonNode toast = new ObjectMapper().readTree(res.getHeader("HX-Trigger")).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("error");
-        assertThat(toast.get("title").asText()).isEqualTo("RP를 전환하지 못했습니다");
-        assertThat(toast.get("message").asText()).isEqualTo("서버가 잠시 응답하지 않습니다.");
-        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 503");
-        assertThat(toast.get("traceId").asText()).isEqualTo("tr-1");
+        assertThat(toast.get("kind").asString()).isEqualTo("error");
+        assertThat(toast.get("title").asString()).isEqualTo("RP를 전환하지 못했습니다");
+        assertThat(toast.get("message").asString()).isEqualTo("서버가 잠시 응답하지 않습니다.");
+        assertThat(toast.get("detail").asString()).isEqualTo("HTTP 503");
+        assertThat(toast.get("traceId").asString()).isEqualTo("tr-1");
         MockHttpServletResponse plain = new MockHttpServletResponse();
         Toasts.error(plain, "실패");
         assertThat(new ObjectMapper().readTree(plain.getHeader("HX-Trigger")).get("toast").has("title")).isFalse();

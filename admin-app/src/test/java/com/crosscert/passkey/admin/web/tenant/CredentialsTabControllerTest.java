@@ -16,8 +16,8 @@ import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.api.PageView;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -655,9 +655,9 @@ class CredentialsTabControllerTest {
         verify(credentials).revoke(eq(T1), eq(CA), any(Authentication.class));
         JsonNode t = trigger(r);
         JsonNode toast = t.get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("success");
-        assertThat(toast.get("title").asText()).isEqualTo("Credential을 회수했습니다.");
-        assertThat(toast.get("message").asText()).isEqualTo(CA.substring(CA.length() - 12) + " · user-a");
+        assertThat(toast.get("kind").asString()).isEqualTo("success");
+        assertThat(toast.get("title").asString()).isEqualTo("Credential을 회수했습니다.");
+        assertThat(toast.get("message").asString()).isEqualTo(CA.substring(CA.length() - 12) + " · user-a");
         Document d = doc(r);
         Element res = d.selectFirst("#cred-results");
         assertThat(res.hasAttr("hx-swap-oob")).isFalse(); // 본 대상(outerHTML)
@@ -675,7 +675,7 @@ class CredentialsTabControllerTest {
         });
         MvcResult r = mvc.perform(confirm(delete(URI.create(BASE + "/credentials/" + CA)), platform())).andReturn();
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
-        assertThat(trigger(r).get("toast").get("title").asText()).isEqualTo("Credential을 회수했습니다.");
+        assertThat(trigger(r).get("toast").get("title").asString()).isEqualTo("Credential을 회수했습니다.");
         assertThat(doc(r).select("#cred-results [role=alert] .empty__title").text()).isEqualTo("Credential 목록을 불러오지 못했습니다");
     }
 
@@ -732,8 +732,8 @@ class CredentialsTabControllerTest {
         OffsetDateTime t = OffsetDateTime.parse("2026-10-10T23:45:00Z");
         stubList(List.of(new CredentialView(CA, "user-a", null, null, null, "packed", "usb", 1, t, t)));
         String csv = mvc.perform(htmx(get(URI.create(BASE + "/credentials.csv")), platform())).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        String expected = JSON.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).convertValue(t, String.class);
+        String expected = tools.jackson.databind.json.JsonMapper.builder()
+                .disable(tools.jackson.databind.cfg.DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS).build().convertValue(t, String.class);
         assertThat(expected).isEqualTo("2026-10-10T23:45:00Z");
         assertThat(csv).contains(",2026-10-10T23:45:00Z,2026-10-10T23:45:00Z");
     }

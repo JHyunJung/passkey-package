@@ -132,7 +132,7 @@ class AdminUsersTabControllerTest {
     /** HX-Trigger 헤더(JSON, 한글은 \\u 이스케이프)를 풀어 문자열로. 없으면 null. */
     private static String trigger(MvcResult r) throws Exception {
         String h = r.getResponse().getHeader("HX-Trigger");
-        return h == null ? null : new com.fasterxml.jackson.databind.ObjectMapper().readValue(h, java.util.Map.class).toString();
+        return h == null ? null : new tools.jackson.databind.ObjectMapper().readValue(h, java.util.Map.class).toString();
     }
 
     private static Element row(Document d, String email) {

@@ -1,6 +1,6 @@
 package com.crosscert.passkey.admin.policy;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -242,6 +242,6 @@ class SecurityPolicyIT {
         JsonNode cors = readback.getBody().get("corsAllowlist");
         assertThat(cors.isArray()).isTrue();
         assertThat(cors).hasSize(1);
-        assertThat(cors.get(0).asText()).isEqualTo("https://a.example.com");
+        assertThat(cors.get(0).asString()).isEqualTo("https://a.example.com");
     }
 }

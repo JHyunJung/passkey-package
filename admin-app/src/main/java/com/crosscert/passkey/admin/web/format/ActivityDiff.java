@@ -1,9 +1,11 @@
 package com.crosscert.passkey.admin.web.format;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.crosscert.passkey.admin.web.support.StandaloneJson;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.NullNode;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -23,7 +25,9 @@ public final class ActivityDiff {
     public record ArrayChange(List<String> added, List<String> removed) {}
 
     /** JSON.parse 와 같이 뒤따르는 쓰레기 토큰을 거부한다. */
-    private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+    private static final ObjectMapper JSON = StandaloneJson.jackson2Like()
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .build();
 
     private ActivityDiff() {}
 
@@ -44,12 +48,12 @@ public final class ActivityDiff {
     private record Parsed(boolean ok, JsonNode node) {}
 
     private static Parsed parse(String raw) {
-        if (raw == null) return new Parsed(true, com.fasterxml.jackson.databind.node.NullNode.getInstance()); // JSON.parse(null) → null
+        if (raw == null) return new Parsed(true, NullNode.getInstance()); // JSON.parse(null) → null
         if (raw.isBlank()) return new Parsed(false, null);
         try {
             JsonNode n = JSON.readTree(raw);
             return n == null || n.isMissingNode() ? new Parsed(false, null) : new Parsed(true, n);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return new Parsed(false, null);
         }
     }
@@ -71,13 +75,13 @@ public final class ActivityDiff {
         List<String> fields = new ArrayList<>();
         JsonNode cf = get(p, "changedFields");
         boolean allStrings = cf != null && cf.isArray();
-        if (allStrings) for (JsonNode f : cf) if (!f.isTextual()) { allStrings = false; break; }
+        if (allStrings) for (JsonNode f : cf) if (!f.isString()) { allStrings = false; break; }
         if (allStrings) {
-            for (JsonNode f : cf) fields.add(f.asText());
+            for (JsonNode f : cf) fields.add(f.asString());
         } else {
             Set<String> keys = new LinkedHashSet<>();
-            before.fieldNames().forEachRemaining(keys::add);
-            after.fieldNames().forEachRemaining(keys::add);
+            keys.addAll(before.propertyNames());
+            keys.addAll(after.propertyNames());
             for (String k : keys) if (!Objects.equals(stringify(get(before, k)), stringify(get(after, k)))) fields.add(k);
         }
         List<DiffRow> rows = new ArrayList<>();
@@ -102,14 +106,14 @@ public final class ActivityDiff {
     /** ActivityPage 의 fmtVal: undefined·null → —, 문자열은 그대로, 그 밖은 JSON.stringify. */
     public static String fmtVal(JsonNode v) {
         if (v == null || v.isNull()) return "—";
-        return v.isTextual() ? v.asText() : v.toString();
+        return v.isString() ? v.asString() : v.toString();
     }
 
     /** JS {@code String(x)}. */
     static String jsString(JsonNode n) {
         if (n == null) return "undefined";
         if (n.isNull()) return "null";
-        if (n.isTextual()) return n.asText();
+        if (n.isString()) return n.asString();
         if (n.isBoolean()) return n.asBoolean() ? "true" : "false";
         if (n.isNumber()) {
             if (n.isIntegralNumber()) return n.bigIntegerValue().toString();

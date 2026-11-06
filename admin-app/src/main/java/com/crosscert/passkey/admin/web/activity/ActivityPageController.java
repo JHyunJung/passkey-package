@@ -18,8 +18,8 @@ import com.crosscert.passkey.admin.web.support.Toasts;
 import com.crosscert.passkey.admin.web.tenant.AuditHelpers;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -566,7 +566,7 @@ public class ActivityPageController {
         try {
             JsonNode n = json.readTree(raw);
             if (n == null || n.isMissingNode() || n.isNull()) return raw;
-            if ((n.isNumber() && n.decimalValue().signum() == 0) || (n.isBoolean() && !n.asBoolean()) || (n.isTextual() && n.asText().isEmpty())) return raw;
+            if ((n.isNumber() && n.decimalValue().signum() == 0) || (n.isBoolean() && !n.asBoolean()) || (n.isString() && n.asString().isEmpty())) return raw;
             return AuditHelpers.pretty(n);
         } catch (Exception e) {
             return raw;

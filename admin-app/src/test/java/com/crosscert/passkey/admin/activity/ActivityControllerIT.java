@@ -1,8 +1,8 @@
 package com.crosscert.passkey.admin.activity;
 
 import com.crosscert.passkey.admin.AdminApplication;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -315,7 +315,7 @@ class ActivityControllerIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return res.getBody().get("data").get("id").asText();
+        return res.getBody().get("data").get("id").asString();
     }
 
     private void issueApiKey(HttpHeaders auth, String tenantId, String name) throws Exception {
@@ -390,7 +390,7 @@ class ActivityControllerIT {
             assertThat(tidNode.isMissingNode() || tidNode.isNull())
                     .as("top5 must not contain NULL-tenant rows: %s", t)
                     .isFalse();
-            if (tenantAId.equals(tidNode.asText())) {
+            if (tenantAId.equals(tidNode.asString())) {
                 tenantAFound = true;
             }
         }
@@ -404,8 +404,8 @@ class ActivityControllerIT {
                 .as("feed must have at least 5 rows: %s", feed)
                 .isGreaterThanOrEqualTo(5);
         for (int i = 1; i < feed.size(); i++) {
-            String prev = feed.get(i - 1).get("createdAt").asText();
-            String curr = feed.get(i).get("createdAt").asText();
+            String prev = feed.get(i - 1).get("createdAt").asString();
+            String curr = feed.get(i).get("createdAt").asString();
             assertThat(prev.compareTo(curr))
                     .as("feed[%d].createdAt=%s should be >= feed[%d].createdAt=%s",
                             i - 1, prev, i, curr)
@@ -413,7 +413,7 @@ class ActivityControllerIT {
         }
 
         // ─── 3. Polling with sinceId={feed[0].id} → empty feed ──────────────
-        String firstId = feed.get(0).get("id").asText();
+        String firstId = feed.get(0).get("id").asString();
         ResponseEntity<JsonNode> resp2 = rest.exchange(
                 url("/admin/api/activity?sinceId=" + firstId), HttpMethod.GET,
                 new HttpEntity<>(aliceAuth), JsonNode.class);
@@ -471,7 +471,7 @@ class ActivityControllerIT {
         JsonNode feed = resp.getBody().get("data").get("feed");
         JsonNode deadEvent = null;
         for (JsonNode e : feed) {
-            if ("00000000-0000-0000-0000-00000000dead".equals(e.path("tenantId").asText())) {
+            if ("00000000-0000-0000-0000-00000000dead".equals(e.path("tenantId").asString())) {
                 deadEvent = e;
                 break;
             }
@@ -479,7 +479,7 @@ class ActivityControllerIT {
         assertThat(deadEvent)
                 .as("feed must contain the row referencing the deleted tenant (...DEAD): %s", feed)
                 .isNotNull();
-        assertThat(deadEvent.get("tenantSlug").asText())
+        assertThat(deadEvent.get("tenantSlug").asString())
                 .as("deleted-tenant feed row must keep the \"(deleted)\" slug fallback after findAllById batch: %s",
                         deadEvent)
                 .isEqualTo("(deleted)");
@@ -511,9 +511,9 @@ class ActivityControllerIT {
 
         assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
         JsonNode body = readActivityJson(resp.getBody());
-        assertThat(body.get("action").asText()).isEqualTo("WEBAUTHN_CONFIG_UPDATED");
-        assertThat(body.get("payload").asText()).contains("\"after\"");
-        assertThat(body.get("tenantSlug").asText()).isEqualTo("demo-rp");
+        assertThat(body.get("action").asString()).isEqualTo("WEBAUTHN_CONFIG_UPDATED");
+        assertThat(body.get("payload").asString()).contains("\"after\"");
+        assertThat(body.get("tenantSlug").asString()).isEqualTo("demo-rp");
     }
 
     @Test

@@ -1,6 +1,6 @@
 package com.crosscert.passkey.admin.tenant;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -228,7 +228,7 @@ class TenantKpiIT {
         assertThat(first.has("attestationConveyance")).as("attestationConveyance field").isTrue();
         assertThat(first.has("webauthnTimeoutMs")).as("webauthnTimeoutMs field").isTrue();
         if (first.has("lastEventAt")) {
-            assertThat(first.get("lastEventAt").isTextual() || first.get("lastEventAt").isNull())
+            assertThat(first.get("lastEventAt").isString() || first.get("lastEventAt").isNull())
                     .as("lastEventAt — when present, must be Instant string or null")
                     .isTrue();
         }
@@ -238,7 +238,7 @@ class TenantKpiIT {
         assertThat(first.get("apiKeys").isNumber()).isTrue();
 
         // Webauthn fields carry the V33 defaults for seeded tenants.
-        assertThat(first.get("attestationConveyance").asText()).isEqualTo("NONE");
+        assertThat(first.get("attestationConveyance").asString()).isEqualTo("NONE");
         assertThat(first.get("webauthnTimeoutMs").asInt()).isEqualTo(60000);
     }
 }

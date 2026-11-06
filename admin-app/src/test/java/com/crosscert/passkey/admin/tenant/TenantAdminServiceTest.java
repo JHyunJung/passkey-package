@@ -9,7 +9,7 @@ import com.crosscert.passkey.admin.auth.TenantBoundary;
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
 import com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

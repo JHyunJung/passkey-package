@@ -3,8 +3,8 @@ package com.crosscert.passkey.admin.audit;
 import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,8 +37,9 @@ public class AuditChainBackfillService {
         this.repo = repo;
         this.em = em;
         this.schema = dbSchema.schema();
-        this.canonical = baseMapper.copy()
-                .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+        this.canonical = baseMapper.rebuild()
+                .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                .build();
     }
 
     public record Summary(int tenantsProcessed, int rowsUpdated, int rowsSkipped) {}
@@ -71,7 +72,7 @@ public class AuditChainBackfillService {
                 Map<String, Object> payload;
                 try {
                     payload = canonical.readValue(row.getPayload(),
-                            new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                            new tools.jackson.core.type.TypeReference<>() {});
                 } catch (Exception e) {
                     payload = new HashMap<>();
                 }

@@ -15,8 +15,8 @@ import com.crosscert.passkey.admin.web.AdminWebSliceTest;
 import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.BusinessException;
 import com.crosscert.passkey.core.api.ErrorCode;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -382,9 +382,9 @@ class AuditChainPageControllerTest {
         MvcResult r = getFrag(AuditChainPageController.VERIFY_PATH + "?tenantId=" + T1, platform());
         assertThat(status(r)).isEqualTo(200);
         JsonNode toast = trigger(r).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("success");
-        assertThat(toast.get("title").asText()).isEqualTo("검증 완료");
-        assertThat(toast.get("message").asText()).isEqualTo("chain 이 정상입니다.");
+        assertThat(toast.get("kind").asString()).isEqualTo("success");
+        assertThat(toast.get("title").asString()).isEqualTo("검증 완료");
+        assertThat(toast.get("message").asString()).isEqualTo("chain 이 정상입니다.");
         verify(chain).verifyTenant(T1.toString());
         verify(chain).overview(24);
         assertThat(doc(r).selectFirst("#chain-root")).isNotNull();
@@ -395,9 +395,9 @@ class AuditChainPageControllerTest {
     void verifyTenantTampered() throws Exception {
         when(chain.verifyTenant(T2.toString())).thenReturn(new AuditChainMonitorController.TenantVerifyResponse(T2, false, ENTRY, NOW));
         JsonNode toast = trigger(getFrag(AuditChainPageController.VERIFY_PATH + "?tenantId=" + T2, platform())).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("error");
-        assertThat(toast.get("title").asText()).isEqualTo("위변조 의심");
-        assertThat(toast.get("message").asText()).isEqualTo("불일치 entry " + ENTRY);
+        assertThat(toast.get("kind").asString()).isEqualTo("error");
+        assertThat(toast.get("title").asString()).isEqualTo("위변조 의심");
+        assertThat(toast.get("message").asString()).isEqualTo("불일치 entry " + ENTRY);
     }
 
     @Test
@@ -408,9 +408,9 @@ class AuditChainPageControllerTest {
         assertThat(status(r)).isEqualTo(500);
         assertThat(body(r)).isEmpty();
         JsonNode toast = trigger(r).get("toast");
-        assertThat(toast.get("title").asText()).isEqualTo("검증하지 못했습니다");
-        assertThat(toast.get("message").asText()).doesNotContain("secret");
-        assertThat(toast.get("detail").asText()).isEqualTo("HTTP 500");
+        assertThat(toast.get("title").asString()).isEqualTo("검증하지 못했습니다");
+        assertThat(toast.get("message").asString()).doesNotContain("secret");
+        assertThat(toast.get("detail").asString()).isEqualTo("HTTP 500");
         verify(chain, never()).overview(anyInt());
     }
 
@@ -460,7 +460,7 @@ class AuditChainPageControllerTest {
         verify(chain, never()).backfill();
         JsonNode t = trigger(r);
         assertThat(t.has("toast")).isFalse();
-        assertThat(t.get("confirmError").get("message").asText()).isEqualTo("위변조 의심 tenant가 있으면 쓸 수 없습니다. 먼저 조사·해결하세요.");
+        assertThat(t.get("confirmError").get("message").asString()).isEqualTo("위변조 의심 tenant가 있으면 쓸 수 없습니다. 먼저 조사·해결하세요.");
     }
 
     @Test
@@ -470,7 +470,7 @@ class AuditChainPageControllerTest {
         MvcResult r = backfill(true);
         assertThat(status(r)).isEqualTo(409);
         verify(chain, never()).backfill();
-        assertThat(trigger(r).get("confirmError").get("message").asText()).isEqualTo("최근 검증에 실패했습니다. 다시 검증해 정상임을 확인한 뒤 쓸 수 있습니다.");
+        assertThat(trigger(r).get("confirmError").get("message").asString()).isEqualTo("최근 검증에 실패했습니다. 다시 검증해 정상임을 확인한 뒤 쓸 수 있습니다.");
     }
 
     @Test
@@ -491,8 +491,8 @@ class AuditChainPageControllerTest {
         assertThat(status(first)).isEqualTo(200);
         verify(chain, times(1)).backfill();
         JsonNode toast = trigger(first).get("toast");
-        assertThat(toast.get("title").asText()).isEqualTo("백필 완료");
-        assertThat(toast.get("message").asText()).isEqualTo("tenant 2개 처리 · 행 1,234개 갱신");
+        assertThat(toast.get("title").asString()).isEqualTo("백필 완료");
+        assertThat(toast.get("message").asString()).isEqualTo("tenant 2개 처리 · 행 1,234개 갱신");
         // 성공 후 reverify: 가드용 1회 + 재검증 1회
         verify(chain, times(2)).overview(24);
         assertThat(doc(first).selectFirst("#chain-root")).isNotNull();
@@ -510,7 +510,7 @@ class AuditChainPageControllerTest {
         assertThat(status(r)).isEqualTo(500);
         JsonNode t = trigger(r);
         assertThat(t.has("toast")).isFalse();
-        assertThat(t.get("confirmError").get("message").asText()).doesNotContain("secret");
+        assertThat(t.get("confirmError").get("message").asString()).doesNotContain("secret");
     }
 
     // ── Incident ────────────────────────────────────────────
@@ -542,9 +542,9 @@ class AuditChainPageControllerTest {
         verify(chain).createIncident(cap.capture(), any(Authentication.class));
         assertThat(cap.getValue().tenantId()).isEqualTo(T2.toString());
         JsonNode toast = trigger(r).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("success");
-        assertThat(toast.get("title").asText()).isEqualTo("Incident 생성됨");
-        assertThat(toast.get("message").asText()).isEqualTo("보안팀 대응 incident 가 등록되었습니다.");
+        assertThat(toast.get("kind").asString()).isEqualTo("success");
+        assertThat(toast.get("title").asString()).isEqualTo("Incident 생성됨");
+        assertThat(toast.get("message").asString()).isEqualTo("보안팀 대응 incident 가 등록되었습니다.");
         verify(chain).overview(24);
         assertThat(doc(r).selectFirst("#chain-root")).isNotNull();
     }
@@ -557,9 +557,9 @@ class AuditChainPageControllerTest {
         MvcResult r = postFrag(INCIDENTS + "?tenantId=" + T2, platform());
         assertThat(status(r)).isEqualTo(200);
         JsonNode toast = trigger(r).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("warn");
-        assertThat(toast.get("title").asText()).isEqualTo("이미 진행 중");
-        assertThat(toast.get("message").asText()).isEqualTo("해당 tenant 에 OPEN 상태 incident 가 이미 있습니다.");
+        assertThat(toast.get("kind").asString()).isEqualTo("warn");
+        assertThat(toast.get("title").asString()).isEqualTo("이미 진행 중");
+        assertThat(toast.get("message").asString()).isEqualTo("해당 tenant 에 OPEN 상태 incident 가 이미 있습니다.");
         // 목록만 다시 읽는다(원본 refreshIncidents) — 개요 재검증 없음, 본문은 OOB(swap none), 배너 배지도 갱신
         verify(chain).listIncidents();
         verify(chain, never()).overview(anyInt());
@@ -610,8 +610,8 @@ class AuditChainPageControllerTest {
         verify(chain).resolveIncident(eq(INC1.toString()), cap.capture(), any(Authentication.class));
         assertThat(cap.getValue().note()).isEqualTo("조치 완료");
         JsonNode toast = trigger(r).get("toast");
-        assertThat(toast.get("title").asText()).isEqualTo("해결됨");
-        assertThat(toast.get("message").asText()).isEqualTo("incident 가 RESOLVED 로 표시되었습니다.");
+        assertThat(toast.get("title").asString()).isEqualTo("해결됨");
+        assertThat(toast.get("message").asString()).isEqualTo("incident 가 RESOLVED 로 표시되었습니다.");
         verify(chain).overview(24);
     }
 
@@ -634,9 +634,9 @@ class AuditChainPageControllerTest {
         MvcResult r = mvc.perform(htmx(post(URI.create(RESOLVE)), platform()).param("id", INC1.toString()).param("note", "x")).andReturn();
         assertThat(status(r)).isEqualTo(200);
         JsonNode toast = trigger(r).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("warn");
-        assertThat(toast.get("title").asText()).isEqualTo("이미 해결됨");
-        assertThat(toast.get("message").asText()).isEqualTo("해당 incident 는 이미 RESOLVED 상태입니다.");
+        assertThat(toast.get("kind").asString()).isEqualTo("warn");
+        assertThat(toast.get("title").asString()).isEqualTo("이미 해결됨");
+        assertThat(toast.get("message").asString()).isEqualTo("해당 incident 는 이미 RESOLVED 상태입니다.");
         verify(chain, never()).overview(anyInt());
         assertThat(r.getResponse().getHeader("HX-Reswap")).isEqualTo("none");
         assertThat(doc(r).selectFirst("#chain-incidents[hx-swap-oob]")).isNotNull();
@@ -779,7 +779,7 @@ class AuditChainPageControllerTest {
         assertThat(d.select(".banner__title").text()).isEqualTo("다시 검증하지 못했습니다");
         assertThat(d.selectFirst("#chain-incidents[hx-swap-oob]").text()).contains("Globex");
         assertThat(d.selectFirst("#chain-act-" + T2 + "[hx-swap-oob]").text()).contains("Incident 처리 중");
-        assertThat(trigger(r).get("toast").get("title").asText()).isEqualTo("Incident 생성됨");
+        assertThat(trigger(r).get("toast").get("title").asString()).isEqualTo("Incident 생성됨");
     }
 
     @Test

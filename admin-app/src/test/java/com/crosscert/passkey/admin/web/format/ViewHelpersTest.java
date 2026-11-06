@@ -53,11 +53,11 @@ class ViewHelpersTest {
     }
 
     @Test
-    @DisplayName("json 은 주입된 ObjectMapper(JavaTimeModule)로 날짜를 직렬화한다")
+    @DisplayName("json 은 주입된 ObjectMapper(java.time 내장)로 날짜를 직렬화한다")
     void jsonUsesInjectedMapper() {
-        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper()
-                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder()
+                .disable(tools.jackson.databind.cfg.DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
         ViewHelpers f = new ViewHelpers(Clock.systemUTC(), om);
         assertThat(f.json(java.util.Map.of("t", java.time.LocalDate.of(2026, 1, 2)))).isEqualTo("{\"t\":\"2026-01-02\"}");
         assertThat(fmt.json(java.util.Map.of("t", java.time.LocalDate.of(2026, 1, 2)))).contains("2026");

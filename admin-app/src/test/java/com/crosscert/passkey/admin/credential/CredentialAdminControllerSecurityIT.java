@@ -3,8 +3,8 @@ package com.crosscert.passkey.admin.credential;
 import com.crosscert.passkey.admin.AdminApplication;
 import com.crosscert.passkey.core.entity.Credential;
 import com.crosscert.passkey.core.repository.CredentialRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +43,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 
 /**
  * Cross-tenant boundary 회귀 채널. VPD 제거됨 — admin-app 은 cross-tenant 조회를
@@ -119,7 +118,7 @@ class CredentialAdminControllerSecurityIT {
     JdbcTemplate jdbc;
     private final SecureRandom rng = new SecureRandom();
     // Separate plain RestTemplate (not TestRestTemplate) for error response inspection
-    private final RestTemplate http = Jackson2RestTemplates.create();
+    private final RestTemplate http = new RestTemplate();
 
     /** PSK_APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
     private static HikariDataSource ownerPool;
@@ -292,8 +291,8 @@ class CredentialAdminControllerSecurityIT {
         }
         if (!env.path("success").asBoolean()) {
             throw new AssertionError("API call failed (status=" + res.getStatusCode() +
-                    ", code=" + env.path("code").asText() +
-                    ", message=" + env.path("message").asText() + ")");
+                    ", code=" + env.path("code").asString() +
+                    ", message=" + env.path("message").asString() + ")");
         }
         return env.path("data");
     }
@@ -322,7 +321,7 @@ class CredentialAdminControllerSecurityIT {
         assertThat(res.getStatusCode().is2xxSuccessful())
                 .as("create tenant slug=%s: %s body=%s", slug, res.getStatusCode(), res.getBody())
                 .isTrue();
-        return unwrap(res).get("id").asText();
+        return unwrap(res).get("id").asString();
     }
 
     /**
@@ -377,7 +376,7 @@ class CredentialAdminControllerSecurityIT {
                 .isTrue();
         boolean foundInA = StreamSupport.stream(
                         unwrap(listA).get("content").spliterator(), false)
-                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asText()));
+                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asString()));
         assertThat(foundInA)
                 .as("credential must appear in tenant_A list")
                 .isTrue();
@@ -391,7 +390,7 @@ class CredentialAdminControllerSecurityIT {
         assertThat(listB.getStatusCode().is2xxSuccessful()).isTrue();
         boolean foundInB = StreamSupport.stream(
                         unwrap(listB).get("content").spliterator(), false)
-                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asText()));
+                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asString()));
         assertThat(foundInB)
                 .as("tenant_A credential must NOT appear in tenant_B list")
                 .isFalse();
@@ -420,7 +419,7 @@ class CredentialAdminControllerSecurityIT {
                     assertThat(errorBody.get("success").asBoolean())
                             .as("success must be false for access denied")
                             .isFalse();
-                    assertThat(errorBody.get("code").asText())
+                    assertThat(errorBody.get("code").asString())
                             .as("error code must be A002 (ACCESS_DENIED)")
                             .isEqualTo("A002");
                 });
@@ -433,7 +432,7 @@ class CredentialAdminControllerSecurityIT {
                 JsonNode.class);
         boolean stillInA = StreamSupport.stream(
                         unwrap(listAAfter).get("content").spliterator(), false)
-                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asText()));
+                .anyMatch(n -> credentialIdB64.equals(n.get("credentialId").asString()));
         assertThat(stillInA)
                 .as("credential must still exist in tenant_A after rejected cross-tenant DELETE")
                 .isTrue();

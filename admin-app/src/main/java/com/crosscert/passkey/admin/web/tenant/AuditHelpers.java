@@ -1,6 +1,6 @@
 package com.crosscert.passkey.admin.web.tenant;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -132,8 +132,8 @@ public final class AuditHelpers {
         JsonNode after = get(payload, "after");
         if (isObj(before) && isObj(after)) {
             Set<String> keys = new LinkedHashSet<>();
-            before.fieldNames().forEachRemaining(keys::add);
-            after.fieldNames().forEachRemaining(keys::add);
+            keys.addAll(before.propertyNames());
+            keys.addAll(after.propertyNames());
             for (String k : keys) {
                 JsonNode b = get(before, k);
                 JsonNode a = get(after, k);
@@ -153,7 +153,7 @@ public final class AuditHelpers {
     /** undefined → —, 문자열은 그대로, 그 밖은 JSON. */
     public static String diffValue(JsonNode v) {
         if (v == null) return "—";
-        return v.isTextual() ? v.asText() : v.toString();
+        return v.isString() ? v.asString() : v.toString();
     }
 
     // ── JSON.stringify(v, null, 2) ───────────────────────────
@@ -174,7 +174,7 @@ public final class AuditHelpers {
             while (it.hasNext()) {
                 Map.Entry<String, JsonNode> e = it.next();
                 indent(sb, depth + 1);
-                sb.append(new com.fasterxml.jackson.databind.node.TextNode(e.getKey()).toString()).append(": ");
+                sb.append(new tools.jackson.databind.node.StringNode(e.getKey()).toString()).append(": ");
                 write(sb, e.getValue(), depth + 1);
                 if (it.hasNext()) sb.append(',');
                 sb.append('\n');

@@ -1,9 +1,8 @@
 package com.crosscert.passkey.admin.web.support;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.json.JsonWriteFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.json.JsonWriteFeature;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.Map;
@@ -19,7 +18,7 @@ public final class Toasts {
 
     public static final String HX_TRIGGER = "HX-Trigger";
 
-    private static final ObjectMapper JSON = JsonMapper.builder()
+    private static final ObjectMapper JSON = StandaloneJson.jackson2Like()
             .enable(JsonWriteFeature.ESCAPE_NON_ASCII)
             .build();
 
@@ -65,7 +64,7 @@ public final class Toasts {
             if (detail != null && !detail.isEmpty()) m.put("detail", detail);
             if (traceId != null && !traceId.isEmpty()) m.put("traceId", traceId);
             res.setHeader(HX_TRIGGER, JSON.writeValueAsString(Map.of("confirmError", m)));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("confirmError header serialization failed", e);
         }
     }
@@ -96,7 +95,7 @@ public final class Toasts {
             events.put("saved", true);
             events.put("toast", toast);
             res.setHeader(HX_TRIGGER, JSON.writeValueAsString(events));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("saved toast header serialization failed", e);
         }
     }
@@ -117,7 +116,7 @@ public final class Toasts {
             toast.put("message", message == null ? "" : message);
             toast.put("action", action);
             res.setHeader(HX_TRIGGER, JSON.writeValueAsString(Map.of("toast", toast)));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("action toast header serialization failed", e);
         }
     }
@@ -144,7 +143,7 @@ public final class Toasts {
             if (detail != null && !detail.isEmpty()) toast.put("detail", detail);
             if (traceId != null && !traceId.isEmpty()) toast.put("traceId", traceId);
             res.setHeader(HX_TRIGGER, JSON.writeValueAsString(Map.of("toast", toast)));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("toast header serialization failed", e);
         }
     }

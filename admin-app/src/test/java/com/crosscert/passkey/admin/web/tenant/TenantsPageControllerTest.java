@@ -633,10 +633,10 @@ class TenantsPageControllerTest {
         assertThat(res.getContentAsString()).isEmpty();
         String trigger = res.getHeader("HX-Trigger");
         assertThat(trigger).matches("\\A\\p{ASCII}*\\z"); // 헤더는 ASCII(한글은 \\uXXXX)
-        com.fasterxml.jackson.databind.JsonNode toast = new com.fasterxml.jackson.databind.ObjectMapper().readTree(trigger).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("success");
-        assertThat(toast.get("title").asText()).isEqualTo("Tenant 생성 완료");
-        assertThat(toast.get("message").asText()).isEqualTo("Acme · WebAuthn 설정으로 이동합니다");
+        tools.jackson.databind.JsonNode toast = new tools.jackson.databind.ObjectMapper().readTree(trigger).get("toast");
+        assertThat(toast.get("kind").asString()).isEqualTo("success");
+        assertThat(toast.get("title").asString()).isEqualTo("Tenant 생성 완료");
+        assertThat(toast.get("message").asString()).isEqualTo("Acme · WebAuthn 설정으로 이동합니다");
         verify(tenants).create(eq(expected("Acme", "acme", "passkey.acme.com")), any());
     }
 

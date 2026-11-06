@@ -5,7 +5,7 @@ import com.crosscert.passkey.admin.policy.SecurityPolicyDto;
 import com.crosscert.passkey.admin.policy.SecurityPolicyService;
 import com.crosscert.passkey.core.entity.AdminUser;
 import com.crosscert.passkey.core.repository.AdminUserRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;

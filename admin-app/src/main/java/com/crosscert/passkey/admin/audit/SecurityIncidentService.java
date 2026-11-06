@@ -5,7 +5,8 @@ import com.crosscert.passkey.core.entity.SecurityIncident;
 import com.crosscert.passkey.core.entity.Tenant;
 import com.crosscert.passkey.core.repository.SecurityIncidentRepository;
 import com.crosscert.passkey.core.repository.TenantRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -169,7 +170,7 @@ public class SecurityIncidentService {
                 "tamperedEntryId", tamperedEntryId == null ? "" : tamperedEntryId.toString());
         try {
             return objectMapper.writeValueAsString(detailMap);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("incident detail serialization failed; falling back to empty object", e);
             return "{}";
         }

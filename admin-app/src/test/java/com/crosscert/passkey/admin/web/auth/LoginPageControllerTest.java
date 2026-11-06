@@ -6,8 +6,8 @@ import com.crosscert.passkey.admin.auth.MfaPendingFilter;
 import com.crosscert.passkey.admin.config.ProfileController;
 import com.crosscert.passkey.admin.web.AdminWebSliceTest;
 import com.crosscert.passkey.core.api.ApiResponse;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -272,9 +272,9 @@ class LoginPageControllerTest {
         MvcResult r = submit("AB3F-2K7M", "recovery", pendingSession());
         assertThat(r.getResponse().getHeader("HX-Redirect")).isEqualTo("/admin");
         JsonNode toast = json.readTree(r.getResponse().getHeader("HX-Trigger")).get("toast");
-        assertThat(toast.get("kind").asText()).isEqualTo("warn");
-        assertThat(toast.get("title").asText()).isEqualTo("복구 코드를 사용했습니다.");
-        assertThat(toast.get("message").asText()).isEqualTo("남은 복구 코드: 3개");
+        assertThat(toast.get("kind").asString()).isEqualTo("warn");
+        assertThat(toast.get("title").asString()).isEqualTo("복구 코드를 사용했습니다.");
+        assertThat(toast.get("message").asString()).isEqualTo("남은 복구 코드: 3개");
         verify(mfa).verify(argThat(b -> "AB3F-2K7M".equals(b.code())), any(), any());
     }
 

@@ -4,8 +4,8 @@ import com.crosscert.passkey.core.config.DbSchemaProperties;
 import com.crosscert.passkey.core.entity.AuditLog;
 import com.crosscert.passkey.core.repository.AuditLogRepository;
 import com.crosscert.passkey.core.util.CryptoUtils;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,8 +92,9 @@ public class AuditLogService {
         // Defensive copy so the global Jackson mapper's settings are
         // untouched. ORDER_MAP_ENTRIES_BY_KEYS makes the serialized
         // form deterministic, which is what makes the hash reproducible.
-        this.canonical = baseMapper.copy()
-                .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+        this.canonical = baseMapper.rebuild()
+                .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                .build();
         this.clock = clock;
     }
 
