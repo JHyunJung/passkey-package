@@ -84,7 +84,14 @@ public final class PasskeyAppItSupport {
             jdbc = new JdbcTemplate(pool);
         }
 
+        /** 시드 외의 검증 쿼리·상태 조작용(PSK_APP_ADMIN_USER 권한). */
+        public JdbcTemplate jdbc() {
+            return jdbc;
+        }
+
         /**
+         * 테넌트 여러 개가 필요한 시나리오는 테넌트마다 한 번씩 호출한다(prefix 는 테넌트별로 달라야 함).
+         *
          * @param tenantHex   32자 hex (RAW(16) id)
          * @param keyHash     api_key.key_hash (호출측 PasswordEncoder 로 인코딩한 값)
          */
