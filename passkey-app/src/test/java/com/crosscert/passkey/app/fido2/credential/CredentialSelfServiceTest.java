@@ -29,7 +29,7 @@ class CredentialSelfServiceTest {
         var views = svc.list(uh);
 
         assertThat(views).hasSize(1);
-        assertThat(views.get(0).label()).isEqualTo("MacBook");
+        assertThat(views.get(0).getLabel()).isEqualTo("MacBook");
     }
 
     @Test

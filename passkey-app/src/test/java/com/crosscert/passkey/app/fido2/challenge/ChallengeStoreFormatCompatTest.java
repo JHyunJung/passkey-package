@@ -90,12 +90,12 @@ class ChallengeStoreFormatCompatTest {
 
         RegistrationChallenge read = store.takeRegistration("t").orElseThrow();
 
-        assertThat(read.tenantId()).isEqualTo(REGISTRATION.tenantId());
-        assertThat(read.challenge()).isEqualTo(REGISTRATION.challenge());
-        assertThat(read.userHandle()).isEqualTo(REGISTRATION.userHandle());
-        assertThat(read.displayName()).isEqualTo(REGISTRATION.displayName());
-        assertThat(read.username()).isEqualTo(REGISTRATION.username());
-        assertThat(read.issuedAt()).isEqualTo(REGISTRATION.issuedAt());
+        assertThat(read.getTenantId()).isEqualTo(REGISTRATION.getTenantId());
+        assertThat(read.getChallenge()).isEqualTo(REGISTRATION.getChallenge());
+        assertThat(read.getUserHandle()).isEqualTo(REGISTRATION.getUserHandle());
+        assertThat(read.getDisplayName()).isEqualTo(REGISTRATION.getDisplayName());
+        assertThat(read.getUsername()).isEqualTo(REGISTRATION.getUsername());
+        assertThat(read.getIssuedAt()).isEqualTo(REGISTRATION.getIssuedAt());
     }
 
     @Test
@@ -104,10 +104,10 @@ class ChallengeStoreFormatCompatTest {
 
         AuthenticationChallenge read = store.takeAuthentication("t").orElseThrow();
 
-        assertThat(read.tenantId()).isEqualTo(AUTHENTICATION.tenantId());
-        assertThat(read.challenge()).isEqualTo(AUTHENTICATION.challenge());
-        assertThat(read.userHandle()).isEqualTo(AUTHENTICATION.userHandle());
-        assertThat(read.issuedAt()).isEqualTo(AUTHENTICATION.issuedAt());
+        assertThat(read.getTenantId()).isEqualTo(AUTHENTICATION.getTenantId());
+        assertThat(read.getChallenge()).isEqualTo(AUTHENTICATION.getChallenge());
+        assertThat(read.getUserHandle()).isEqualTo(AUTHENTICATION.getUserHandle());
+        assertThat(read.getIssuedAt()).isEqualTo(AUTHENTICATION.getIssuedAt());
     }
 
     @Test

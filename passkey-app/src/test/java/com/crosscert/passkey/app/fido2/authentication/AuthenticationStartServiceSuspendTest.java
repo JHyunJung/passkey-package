@@ -93,7 +93,7 @@ class AuthenticationStartServiceSuspendTest {
         var resp = svc.start(req);
 
         verify(credentials).findByUserHandle(eq(userHandle));
-        JsonNode options = resp.publicKeyCredentialRequestOptions();
+        JsonNode options = resp.getPublicKeyCredentialRequestOptions();
         assertThat(options.get("timeout").asInt()).isEqualTo(90000);
         assertThat(options.get("userVerification").asString()).isEqualTo("preferred");
         JsonNode allow = options.get("allowCredentials");
@@ -132,7 +132,7 @@ class AuthenticationStartServiceSuspendTest {
 
         var resp = svc.start(req);
 
-        JsonNode options = resp.publicKeyCredentialRequestOptions();
+        JsonNode options = resp.getPublicKeyCredentialRequestOptions();
         assertThat(options.get("timeout").asInt()).isEqualTo(90000);
         assertThat(options.get("userVerification").asString()).isEqualTo("required");
     }

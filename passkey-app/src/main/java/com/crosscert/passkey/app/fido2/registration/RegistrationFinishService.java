@@ -55,7 +55,7 @@ public class RegistrationFinishService {
     @Transactional
     public RegistrationFinishResponse finish(RegistrationFinishRequest req) {
         try {
-            RegistrationChallenge ch = store.takeRegistration(req.registrationToken())
+            RegistrationChallenge ch = store.takeRegistration(req.getRegistrationToken())
                     .orElseThrow(() -> new IllegalArgumentException(
                             "registration token missing or expired"));
 
@@ -63,9 +63,9 @@ public class RegistrationFinishService {
             // 평시에는 Redis TTL 이 만료 challenge 를 먼저 제거하므로 이 가드가
             // 추가로 거부하는 정상 요청은 없다(이중 방어). Redis 가 만료를 놓친
             // 경계 상황(시계 차이·키 잔존 등)에서만 issuedAt 기준으로 거부한다.
-            if (clock.instant().minus(ChallengeStore.TTL).isAfter(ch.issuedAt())) {
+            if (clock.instant().minus(ChallengeStore.TTL).isAfter(ch.getIssuedAt())) {
                 log.warn("stale registration challenge rejected: issuedAt={} ttl={}",
-                        ch.issuedAt(), ChallengeStore.TTL);
+                        ch.getIssuedAt(), ChallengeStore.TTL);
                 throw new BusinessException(ErrorCode.CHALLENGE_INVALID, "challenge expired");
             }
 
@@ -74,19 +74,19 @@ public class RegistrationFinishService {
             // the app-level @Filter. Mirrors AuthenticationFinishService.
             UUID ctxTenantUuid = TenantContextHolder.get();
             String ctxTenant = ctxTenantUuid == null ? null : ctxTenantUuid.toString();
-            if (ctxTenant == null || !ctxTenant.equals(ch.tenantId())) {
+            if (ctxTenant == null || !ctxTenant.equals(ch.getTenantId())) {
                 log.warn("tenant mismatch on registration/finish: ctx={} ch={}",
-                        ctxTenant, ch.tenantId());
+                        ctxTenant, ch.getTenantId());
                 throw new IllegalArgumentException("tenant mismatch");
             }
 
-            Tenant tenant = tenants.findById(UUID.fromString(ch.tenantId()))
+            Tenant tenant = tenants.findById(UUID.fromString(ch.getTenantId()))
                     .orElseThrow(() -> new IllegalStateException(
-                            "tenant " + ch.tenantId() + " missing"));
+                            "tenant " + ch.getTenantId() + " missing"));
 
             String publicKeyCredentialJson;
             try {
-                publicKeyCredentialJson = mapper.writeValueAsString(req.publicKeyCredential());
+                publicKeyCredentialJson = mapper.writeValueAsString(req.getPublicKeyCredential());
             } catch (Exception e) {
                 throw new IllegalArgumentException("publicKeyCredential JSON invalid");
             }
@@ -99,7 +99,7 @@ public class RegistrationFinishService {
 
             RegistrationInput input = new RegistrationInput(
                     publicKeyCredentialJson,
-                    ch.challenge(),
+                    ch.getChallenge(),
                     origins,
                     tenant.getRpId(),
                     tenant.isRequireUserVerification(),
@@ -112,7 +112,7 @@ public class RegistrationFinishService {
                 result = verifier.verifyRegistration(input);
             } catch (WebAuthnVerificationException e) {
                 log.warn("attestation verify failed for tenant {}: {} ({})",
-                        ch.tenantId(), e.getMessage(), e.reason());
+                        ch.getTenantId(), e.getMessage(), e.reason());
                 throw new IllegalArgumentException("attestation verify failed");
             }
 
@@ -133,8 +133,8 @@ public class RegistrationFinishService {
 
             byte[] credentialId = result.credentialId();
             Credential cred = new Credential(
-                    UUID.fromString(ch.tenantId()),
-                    ch.userHandle(),
+                    UUID.fromString(ch.getTenantId()),
+                    ch.getUserHandle(),
                     credentialId,
                     result.cosePublicKey(),
                     aaguid);
@@ -149,7 +149,7 @@ public class RegistrationFinishService {
                 credentials.saveAndFlush(cred);
             } catch (DataIntegrityViolationException e) {
                 log.warn("registration/finish rejected: duplicate credential for tenant {}",
-                        ch.tenantId());
+                        ch.getTenantId());
                 throw new BusinessException(ErrorCode.CREDENTIAL_DUPLICATE,
                         "credential already registered");
             }
@@ -163,7 +163,7 @@ public class RegistrationFinishService {
                     aaguid == null ? null : HexFormat.of().formatHex(aaguid),
                     fmt,
                     clock.instant());
-            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId()), CeremonyAction.REGISTRATION_SUCCESS);
+            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.getTenantId()), CeremonyAction.REGISTRATION_SUCCESS);
             ceremonyMetrics.recordSuccess("registration", "finish");
             return response;
         } catch (RuntimeException e) {

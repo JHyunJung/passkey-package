@@ -76,7 +76,7 @@ class RegistrationStartServiceExcludeTest {
         RegistrationStartResponse resp = svc.start(req);
 
         verify(credentials).findCredentialIdsByUserHandle(eq(userHandle));
-        JsonNode exclude = resp.publicKeyCredentialCreationOptions().get("excludeCredentials");
+        JsonNode exclude = resp.getPublicKeyCredentialCreationOptions().get("excludeCredentials");
         assertThat(exclude).isNotNull();
         assertThat(exclude.isArray()).isTrue();
         assertThat(exclude).hasSize(1);
@@ -117,7 +117,7 @@ class RegistrationStartServiceExcludeTest {
         RegistrationStartResponse resp = svc.start(req);
 
         verify(credentials).findCredentialIdsByUserHandle(eq(userHandle));
-        JsonNode exclude = resp.publicKeyCredentialCreationOptions().get("excludeCredentials");
+        JsonNode exclude = resp.getPublicKeyCredentialCreationOptions().get("excludeCredentials");
         assertThat(exclude).isNotNull();
         assertThat(exclude.isArray()).isTrue();
         assertThat(exclude).hasSize(2);
@@ -150,7 +150,7 @@ class RegistrationStartServiceExcludeTest {
 
         RegistrationStartResponse resp = svc.start(req);
         verify(credentials).findCredentialIdsByUserHandle(eq(userHandle));
-        JsonNode exclude = resp.publicKeyCredentialCreationOptions().get("excludeCredentials");
+        JsonNode exclude = resp.getPublicKeyCredentialCreationOptions().get("excludeCredentials");
         assertThat(exclude).isNotNull();
         assertThat(exclude.isArray()).isTrue();
         assertThat(exclude).isEmpty();

@@ -56,8 +56,8 @@ public class RegistrationStartService {
     public RegistrationStartResponse start(RegistrationStartRequest req) {
         try {
             log.info("registration/start entry: usernamePresent={} displayNameLen={}",
-                    req.username() != null,
-                    req.displayName() == null ? 0 : req.displayName().length());
+                    req.getUsername() != null,
+                    req.getDisplayName() == null ? 0 : req.getDisplayName().length());
             UUID tenantUuid = TenantContextHolder.get();
             if (tenantUuid == null) {
                 throw new IllegalStateException(
@@ -72,12 +72,12 @@ public class RegistrationStartService {
                 throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
             }
 
-            byte[] userHandle = decodeAndValidateUserHandle(req.userHandle());
+            byte[] userHandle = decodeAndValidateUserHandle(req.getUserHandle());
             byte[] challenge = challenges.newChallengeBytes();
             String token = challenges.newToken();
 
             store.putRegistration(token, new RegistrationChallenge(
-                    tenantId, challenge, userHandle, req.displayName(), req.username(),
+                    tenantId, challenge, userHandle, req.getDisplayName(), req.getUsername(),
                     clock.instant()));
 
             ObjectNode options = mapper.createObjectNode();
@@ -86,9 +86,9 @@ public class RegistrationStartService {
             rp.put("id", tenant.getRpId());
             rp.put("name", tenant.getRpName());
             ObjectNode user = options.putObject("user");
-            user.put("id", req.userHandle());
-            user.put("displayName", req.displayName());
-            user.put("name", req.username());
+            user.put("id", req.getUserHandle());
+            user.put("displayName", req.getDisplayName());
+            user.put("name", req.getUsername());
             ArrayNode params = options.putArray("pubKeyCredParams");
             params.addObject().put("type", "public-key").put("alg", -7);    // ES256
             params.addObject().put("type", "public-key").put("alg", -257);  // RS256

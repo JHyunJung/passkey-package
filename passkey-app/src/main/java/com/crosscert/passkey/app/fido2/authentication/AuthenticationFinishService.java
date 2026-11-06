@@ -82,7 +82,7 @@ public class AuthenticationFinishService {
     @Transactional
     public AuthenticationFinishResponse finish(AuthenticationFinishRequest req) {
         try {
-            AuthenticationChallenge ch = store.takeAuthentication(req.authenticationToken())
+            AuthenticationChallenge ch = store.takeAuthentication(req.getAuthenticationToken())
                     .orElseThrow(() -> new IllegalArgumentException(
                             "authentication token missing or expired"));
 
@@ -90,9 +90,9 @@ public class AuthenticationFinishService {
             // 평시에는 Redis TTL 이 만료 challenge 를 먼저 제거하므로 이 가드가
             // 추가로 거부하는 정상 요청은 없다(이중 방어). Redis 가 만료를 놓친
             // 경계 상황(시계 차이·키 잔존 등)에서만 issuedAt 기준으로 거부한다.
-            if (clock.instant().minus(ChallengeStore.TTL).isAfter(ch.issuedAt())) {
+            if (clock.instant().minus(ChallengeStore.TTL).isAfter(ch.getIssuedAt())) {
                 log.warn("stale authentication challenge rejected: issuedAt={} ttl={}",
-                        ch.issuedAt(), ChallengeStore.TTL);
+                        ch.getIssuedAt(), ChallengeStore.TTL);
                 throw new BusinessException(ErrorCode.CHALLENGE_INVALID, "challenge expired");
             }
 
@@ -100,19 +100,19 @@ public class AuthenticationFinishService {
             // touching tenant config — defense-in-depth on top of the app-level @Filter.
             UUID ctxTenantUuid = TenantContextHolder.get();
             String ctxTenant = ctxTenantUuid == null ? null : ctxTenantUuid.toString();
-            if (ctxTenant == null || !ctxTenant.equals(ch.tenantId())) {
+            if (ctxTenant == null || !ctxTenant.equals(ch.getTenantId())) {
                 log.warn("tenant mismatch on authentication/finish: ctx={} ch={}",
-                        ctxTenant, ch.tenantId());
+                        ctxTenant, ch.getTenantId());
                 throw new IllegalArgumentException("tenant mismatch");
             }
 
-            Tenant tenant = tenants.findById(UUID.fromString(ch.tenantId()))
+            Tenant tenant = tenants.findById(UUID.fromString(ch.getTenantId()))
                     .orElseThrow(() -> new IllegalStateException(
-                            "tenant " + ch.tenantId() + " missing"));
+                            "tenant " + ch.getTenantId() + " missing"));
 
             String publicKeyCredentialJson;
             try {
-                publicKeyCredentialJson = mapper.writeValueAsString(req.publicKeyCredential());
+                publicKeyCredentialJson = mapper.writeValueAsString(req.getPublicKeyCredential());
             } catch (Exception e) {
                 throw new IllegalArgumentException("publicKeyCredential JSON invalid");
             }
@@ -125,7 +125,7 @@ public class AuthenticationFinishService {
             byte[] credentialId;
             try {
                 // asString("") — Jackson 2 asText() 처럼 객체/배열을 예외 대신 "" 로 강제(→ 미등록 처리).
-                String rawIdB64 = req.publicKeyCredential().get("rawId").asString("");
+                String rawIdB64 = req.getPublicKeyCredential().get("rawId").asString("");
                 credentialId = Base64.getUrlDecoder().decode(rawIdB64);
             } catch (Exception e) {
                 throw new IllegalArgumentException("assertion rawId invalid");
@@ -141,8 +141,8 @@ public class AuthenticationFinishService {
             // challenge's userHandle. Without this, server-side allowCredentials
             // is tautological (any same-tenant credential matching the
             // asserted ID would be accepted).
-            if (ch.userHandle() != null && !Arrays.equals(ch.userHandle(), cred.getUserHandle())) {
-                log.warn("userHandle mismatch on authentication/finish for tenant {}", ch.tenantId());
+            if (ch.getUserHandle() != null && !Arrays.equals(ch.getUserHandle(), cred.getUserHandle())) {
+                log.warn("userHandle mismatch on authentication/finish for tenant {}", ch.getTenantId());
                 throw new IllegalArgumentException("credential not registered");
             }
 
@@ -159,7 +159,7 @@ public class AuthenticationFinishService {
 
             AuthenticationInput input = new AuthenticationInput(
                     publicKeyCredentialJson,
-                    ch.challenge(),
+                    ch.getChallenge(),
                     origins,
                     tenant.getRpId(),
                     tenant.isRequireUserVerification(),
@@ -170,12 +170,12 @@ public class AuthenticationFinishService {
                 result = verifier.verifyAuthentication(input);
             } catch (WebAuthnVerificationException e) {
                 log.warn("assertion verify failed for tenant {}: {} ({})",
-                        ch.tenantId(), e.getMessage(), e.reason());
+                        ch.getTenantId(), e.getMessage(), e.reason());
                 // spec §6.1: credential 식별 이후의 검증 실패도 기록한다. newCounter 는
                 // 아직 검증 전이라 보존된 cred.getSignCount() 를 signCount 로 남긴다.
                 // recordAfterRollback: cred 는 PESSIMISTIC_WRITE 로 락된 행이라 즉시
                 // REQUIRES_NEW INSERT 하면 FK 락 경합이 난다. outer 롤백 완료(락 해제) 후 기록.
-                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.tenantId()),
+                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.getTenantId()),
                         CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGNATURE_INVALID,
                         cred.getSignCount());
                 throw new IllegalArgumentException("assertion verify failed");
@@ -191,17 +191,17 @@ public class AuthenticationFinishService {
             boolean counterless = (newCounter == 0 && storedCounter == 0);
             if (!counterless && newCounter <= storedCounter) {
                 log.warn("signCount did not advance for credential {} on tenant {} (was {}, got {})",
-                        cred.getId(), ch.tenantId(), storedCounter, newCounter);
+                        cred.getId(), ch.getTenantId(), storedCounter, newCounter);
                 eventPublisher.publishEvent(new SecurityAlertEvent(
                         SecurityAlertEvent.AlertType.COUNTER_REGRESSION,
                         SecurityAlertEvent.Severity.HIGH,
                         "signCount did not advance (possible cloned authenticator)",
                         Map.of(
                                 "credentialId", String.valueOf(cred.getId()),
-                                "tenantId", String.valueOf(ch.tenantId()))));
+                                "tenantId", String.valueOf(ch.getTenantId()))));
                 // recordAfterRollback: 위 verify 실패와 동일한 이유(락된 cred 행과의 FK
                 // 락 경합 회피) — outer 롤백 완료 후 기록한다.
-                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.tenantId()),
+                authEvents.recordAfterRollback(cred.getId(), UUID.fromString(ch.getTenantId()),
                         CredentialAuthResult.FAILED, CredentialAuthFailureReason.SIGN_COUNT_REPLAY,
                         newCounter);
                 throw new IllegalArgumentException("signCount replay detected");
@@ -215,7 +215,7 @@ public class AuthenticationFinishService {
             // this read-check-update sequence safe under concurrency.
             cred.recordAuthentication(newCounter, OffsetDateTime.now(clock));
             credentials.saveAndFlush(cred);
-            authEvents.recordAfterCommit(cred.getId(), UUID.fromString(ch.tenantId()),
+            authEvents.recordAfterCommit(cred.getId(), UUID.fromString(ch.getTenantId()),
                     CredentialAuthResult.SUCCESS, null, newCounter);
 
             String credentialIdB64 = b64url(credentialId);
@@ -223,17 +223,17 @@ public class AuthenticationFinishService {
                     idTail(credentialIdB64), newCounter);
 
             String jwt = idTokens.issue(
-                    ch.tenantId(),
+                    ch.getTenantId(),
                     cred.getUserHandle(),
                     cred.getId(),
                     cred.getAaguid());
             // id-token claims meta only — never the JWT body itself
             String subTail = idTail(b64url(cred.getUserHandle()));
             log.info("id-token issued: subTail={} aud={} ttlSec={}",
-                    subTail, ch.tenantId(), 900);
+                    subTail, ch.getTenantId(), 900);
 
             AuthenticationFinishResponse response = new AuthenticationFinishResponse(jwt, "Bearer", 900);
-            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId()), CeremonyAction.AUTHENTICATION_SUCCESS);
+            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.getTenantId()), CeremonyAction.AUTHENTICATION_SUCCESS);
             ceremonyMetrics.recordSuccess("authentication", "finish");
             return response;
         } catch (RuntimeException e) {

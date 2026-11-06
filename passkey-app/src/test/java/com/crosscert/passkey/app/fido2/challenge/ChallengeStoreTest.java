@@ -56,8 +56,8 @@ class ChallengeStoreTest {
         when(ops.getAndDelete("challenge:reg:tok_x")).thenReturn(json);
 
         RegistrationChallenge taken = store.takeRegistration("tok_x").orElseThrow();
-        assertThat(taken.tenantId()).isEqualTo("T_A");
-        assertThat(taken.username()).isEqualTo("alice@example");
+        assertThat(taken.getTenantId()).isEqualTo("T_A");
+        assertThat(taken.getUsername()).isEqualTo("alice@example");
         verify(ops).getAndDelete("challenge:reg:tok_x");
         // Critical: no separate delete call — atomicity is delivered by
         // the single getAndDelete invocation.

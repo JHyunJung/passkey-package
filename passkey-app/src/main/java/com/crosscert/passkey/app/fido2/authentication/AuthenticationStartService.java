@@ -56,7 +56,7 @@ public class AuthenticationStartService {
     public AuthenticationStartResponse start(AuthenticationStartRequest req) {
         try {
             log.info("authentication/start entry: userHandlePresent={}",
-                    req.userHandle() != null);
+                    req.getUserHandle() != null);
             UUID tenantUuid = TenantContextHolder.get();
             if (tenantUuid == null) {
                 throw new IllegalStateException(
@@ -70,9 +70,9 @@ public class AuthenticationStartService {
                 throw new BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: " + tenantId);
             }
 
-            byte[] userHandle = (req.userHandle() == null)
+            byte[] userHandle = (req.getUserHandle() == null)
                     ? null
-                    : Base64.getUrlDecoder().decode(req.userHandle());
+                    : Base64.getUrlDecoder().decode(req.getUserHandle());
 
             // The app-level @Filter scopes to this tenant; derived query avoids the findAll scan.
             // Usernameless flow (userHandle == null): server cannot know which
