@@ -5,6 +5,8 @@ import com.crosscert.passkey.app.api.v1.rp.dto.RegistrationFinishResponse
 import com.crosscert.passkey.app.fido2.CeremonyMetrics
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore
 import com.crosscert.passkey.app.fido2.mds.MdsVerifier
+import com.crosscert.passkey.app.fido2.support.idTail
+import com.crosscert.passkey.app.fido2.support.toBase64Url
 import com.crosscert.passkey.core.api.BusinessException
 import com.crosscert.passkey.core.api.ErrorCode
 import com.crosscert.passkey.core.ceremony.CeremonyAction
@@ -21,12 +23,12 @@ import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerifier
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
 import java.nio.ByteBuffer
 import java.time.Clock
-import java.util.Base64
 import java.util.HexFormat
 import java.util.UUID
 import kotlin.jvm.optionals.getOrNull
@@ -73,8 +75,8 @@ class RegistrationFinishService(
                 throw IllegalArgumentException("tenant mismatch")
             }
 
-            val tenant = tenants.findById(UUID.fromString(ch.tenantId))
-                .orElseThrow { IllegalStateException("tenant ${ch.tenantId} missing") }
+            val tenant = tenants.findByIdOrNull(UUID.fromString(ch.tenantId))
+                ?: throw IllegalStateException("tenant ${ch.tenantId} missing")
 
             val publicKeyCredentialJson = try {
                 mapper.writeValueAsString(req.publicKeyCredential)
@@ -137,10 +139,10 @@ class RegistrationFinishService(
                 throw BusinessException(ErrorCode.CREDENTIAL_DUPLICATE, "credential already registered")
             }
 
-            val credentialIdB64 = b64url(credentialId)
+            val credentialIdB64 = credentialId.toBase64Url()
             log.info(
                 "registration/finish ok: credentialIdTail={} aaguid={} format={}",
-                idTail(credentialIdB64),
+                credentialIdB64.idTail(),
                 aaguidUuid,
                 fmt,
             )
@@ -160,14 +162,6 @@ class RegistrationFinishService(
         }
     }
 }
-
-/**
- * Last 12 chars of a base64url id for correlation — never the full credential id.
- * Short ids (≤12 chars) are masked to "***" so the full value is never logged.
- */
-private fun idTail(id: String): String = if (id.length <= 12) "***" else "..." + id.takeLast(12)
-
-private fun b64url(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)
 
 /**
  * 16-byte 원시 AAGUID 를 [UUID] 로 변환.

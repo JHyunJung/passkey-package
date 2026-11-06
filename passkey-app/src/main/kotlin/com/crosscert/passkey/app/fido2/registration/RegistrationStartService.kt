@@ -6,6 +6,8 @@ import com.crosscert.passkey.app.fido2.CeremonyMetrics
 import com.crosscert.passkey.app.fido2.challenge.ChallengeIssuer
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore
 import com.crosscert.passkey.app.fido2.challenge.RegistrationChallenge
+import com.crosscert.passkey.app.fido2.support.toBase64Url
+import com.crosscert.passkey.app.fido2.support.tokenTail
 import com.crosscert.passkey.core.api.BusinessException
 import com.crosscert.passkey.core.api.ErrorCode
 import com.crosscert.passkey.core.ceremony.CeremonyAction
@@ -14,6 +16,7 @@ import com.crosscert.passkey.core.repository.CredentialRepository
 import com.crosscert.passkey.core.repository.TenantRepository
 import com.crosscert.passkey.core.tenant.TenantContextHolder
 import org.slf4j.LoggerFactory
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
@@ -59,8 +62,8 @@ class RegistrationStartService(
                     "registration/start invoked without tenant context — ApiKeyAuthFilter must have set it",
                 )
             val tenantId = tenantUuid.toString()
-            val tenant = tenants.findById(tenantUuid)
-                .orElseThrow { IllegalStateException("tenant $tenantId not found") }
+            val tenant = tenants.findByIdOrNull(tenantUuid)
+                ?: throw IllegalStateException("tenant $tenantId not found")
             if (tenant.isSuspended) {
                 throw BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: $tenantId")
             }
@@ -76,7 +79,7 @@ class RegistrationStartService(
 
             // 키 삽입 순서가 곧 응답 JSON 필드 순서다 — 순서를 바꾸지 않는다.
             val options = mapper.createObjectNode()
-            options.put("challenge", b64url(challenge))
+            options.put("challenge", challenge.toBase64Url())
             options.putObject("rp").apply {
                 put("id", tenant.rpId)
                 put("name", tenant.rpName)
@@ -96,7 +99,7 @@ class RegistrationStartService(
             for (existingId in credentials.findCredentialIdsByUserHandle(userHandle)) {
                 excludeArr.addObject().apply {
                     put("type", "public-key")
-                    put("id", b64url(existingId))
+                    put("id", existingId.toBase64Url())
                 }
             }
             options.putObject("authenticatorSelection").apply {
@@ -106,7 +109,7 @@ class RegistrationStartService(
 
             log.info(
                 "registration/start issued: tokenTail={} timeoutMs={}",
-                tokenTail(token),
+                token.tokenTail(),
                 tenant.webauthnTimeoutMs,
             )
             val response = RegistrationStartResponse(token, options)
@@ -149,8 +152,3 @@ private fun decodeAndValidateUserHandle(userHandleB64: String?): ByteArray {
     }
     return userHandle
 }
-
-/** Returns the last 8 chars of the token for correlation only — never the full secret. */
-private fun tokenTail(token: String): String = if (token.length <= 8) "***" else token.takeLast(8)
-
-private fun b64url(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)

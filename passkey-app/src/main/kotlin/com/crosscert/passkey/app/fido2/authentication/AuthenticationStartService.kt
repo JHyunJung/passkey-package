@@ -6,6 +6,8 @@ import com.crosscert.passkey.app.fido2.CeremonyMetrics
 import com.crosscert.passkey.app.fido2.challenge.AuthenticationChallenge
 import com.crosscert.passkey.app.fido2.challenge.ChallengeIssuer
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore
+import com.crosscert.passkey.app.fido2.support.toBase64Url
+import com.crosscert.passkey.app.fido2.support.tokenTail
 import com.crosscert.passkey.core.api.BusinessException
 import com.crosscert.passkey.core.api.ErrorCode
 import com.crosscert.passkey.core.ceremony.CeremonyAction
@@ -14,6 +16,7 @@ import com.crosscert.passkey.core.repository.CredentialRepository
 import com.crosscert.passkey.core.repository.TenantRepository
 import com.crosscert.passkey.core.tenant.TenantContextHolder
 import org.slf4j.LoggerFactory
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
@@ -51,8 +54,8 @@ class AuthenticationStartService(
             val tenantUuid = TenantContextHolder.get()
                 ?: throw IllegalStateException("authentication/start invoked without tenant context")
             val tenantId = tenantUuid.toString()
-            val tenant = tenants.findById(tenantUuid)
-                .orElseThrow { IllegalStateException("tenant $tenantId not found") }
+            val tenant = tenants.findByIdOrNull(tenantUuid)
+                ?: throw IllegalStateException("tenant $tenantId not found")
             if (tenant.isSuspended) {
                 throw BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: $tenantId")
             }
@@ -71,7 +74,7 @@ class AuthenticationStartService(
 
             // 키 삽입 순서가 곧 응답 JSON 필드 순서다 — 순서를 바꾸지 않는다.
             val options = mapper.createObjectNode()
-            options.put("challenge", b64url(challenge))
+            options.put("challenge", challenge.toBase64Url())
             options.put("rpId", tenant.rpId)
             options.put("timeout", tenant.webauthnTimeoutMs)
             options.put("userVerification", if (tenant.isRequireUserVerification) "required" else "preferred")
@@ -79,12 +82,12 @@ class AuthenticationStartService(
             for (c in userCreds) {
                 allow.addObject().apply {
                     put("type", "public-key")
-                    put("id", b64url(c.credentialId))
+                    put("id", c.credentialId.toBase64Url())
                 }
             }
             log.info(
                 "authentication/start issued: tokenTail={} allowCount={} timeoutMs={}",
-                tokenTail(token),
+                token.tokenTail(),
                 userCreds.size,
                 tenant.webauthnTimeoutMs,
             )
@@ -98,8 +101,3 @@ class AuthenticationStartService(
         }
     }
 }
-
-private fun b64url(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)
-
-/** Returns the last 8 chars of the token for correlation only — never the full secret. */
-private fun tokenTail(token: String): String = if (token.length <= 8) "***" else token.takeLast(8)

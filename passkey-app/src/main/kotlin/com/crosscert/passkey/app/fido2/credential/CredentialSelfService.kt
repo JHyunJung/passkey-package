@@ -1,6 +1,8 @@
 package com.crosscert.passkey.app.fido2.credential
 
 import com.crosscert.passkey.app.api.v1.rp.dto.CredentialView
+import com.crosscert.passkey.app.fido2.support.idTail
+import com.crosscert.passkey.app.fido2.support.toBase64Url
 import com.crosscert.passkey.core.api.BusinessException
 import com.crosscert.passkey.core.api.ErrorCode
 import com.crosscert.passkey.core.entity.Credential
@@ -8,7 +10,6 @@ import com.crosscert.passkey.core.repository.CredentialRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.util.Base64
 import java.util.HexFormat
 
 private val log = LoggerFactory.getLogger(CredentialSelfService::class.java)
@@ -39,7 +40,7 @@ class CredentialSelfService(private val creds: CredentialRepository) {
         // CredentialAdminService.revoke — never log the full credentialId.
         log.warn(
             "self-service credential deleted: id={} reason=rp-self-service",
-            idTail(Base64.getUrlEncoder().withoutPadding().encodeToString(credentialId)),
+            credentialId.toBase64Url().idTail(),
         )
     }
 
@@ -49,12 +50,9 @@ class CredentialSelfService(private val creds: CredentialRepository) {
 
     private fun toView(c: Credential): CredentialView =
         CredentialView(
-            Base64.getUrlEncoder().withoutPadding().encodeToString(c.credentialId),
+            c.credentialId.toBase64Url(),
             c.label,
             c.aaguid?.let { HexFormat.of().formatHex(it) },
             c.lastUsedAt,
         )
 }
-
-/** Last 12 chars of a base64url id — never the full id. Short ids masked. */
-private fun idTail(id: String): String = if (id.length <= 12) "***" else "..." + id.takeLast(12)

@@ -5,6 +5,11 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import tools.jackson.core.StreamReadConstraints
 
+/** 등록/인증 JSON 바디가 정상적으로 이 상한을 넘을 일은 없다(공개키·속성 포함 수십 KB 수준). */
+private const val MAX_NESTING_DEPTH = 64
+private const val MAX_STRING_LENGTH = 256 * 1024 // 256KB
+private const val MAX_DOCUMENT_LENGTH = 1024L * 1024 // 1MB
+
 /**
  * G02 방어심화: /registration/finish 등의 `publicKeyCredential` 은 컨트롤러
  * 진입 전 Jackson 이 `JsonNode` 트리로 완전 파싱한다. RegistrationFinishService
@@ -32,12 +37,5 @@ class PasskeyAppJacksonConfig {
             .maxDocumentLength(MAX_DOCUMENT_LENGTH)
             .build()
         return JsonFactoryBuilderCustomizer { builder -> builder.streamReadConstraints(constraints) }
-    }
-
-    private companion object {
-        /** 등록/인증 JSON 바디가 정상적으로 이 상한을 넘을 일은 없다(공개키·속성 포함 수십 KB 수준). */
-        const val MAX_NESTING_DEPTH = 64
-        const val MAX_STRING_LENGTH = 256 * 1024 // 256KB
-        const val MAX_DOCUMENT_LENGTH = 1024L * 1024 // 1MB
     }
 }

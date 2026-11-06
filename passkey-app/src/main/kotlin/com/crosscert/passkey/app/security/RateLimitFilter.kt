@@ -15,10 +15,6 @@ import java.time.Duration
 
 private val log = LoggerFactory.getLogger(RateLimitFilter::class.java)
 
-/** `"pk_"` + 8 base64url chars — matches [ApiKeyAuthFilter]. */
-private const val PREFIX_LEN = 11
-private const val KEY_PREFIX = "pk_"
-
 /**
  * P0-4: self-service credential endpoints live under path variables
  * (`/credentials/{credentialId}...`), so exact-match [LIMITS]
@@ -140,8 +136,8 @@ class RateLimitFilter(private val proxy: ProxyManager<String>) : OncePerRequestF
         // share the IP-anchored anon bucket so attackers can't bypass
         // by varying the header shape.
         val header: String? = req.getHeader("X-API-Key")
-        val keyPart = if (header != null && header.length >= PREFIX_LEN && header.startsWith(KEY_PREFIX)) {
-            header.substring(0, PREFIX_LEN)
+        val keyPart = if (header != null && header.length >= API_KEY_PREFIX_LEN && header.startsWith(API_KEY_PREFIX)) {
+            header.substring(0, API_KEY_PREFIX_LEN)
         } else {
             "anon-${req.remoteAddr}"
         }

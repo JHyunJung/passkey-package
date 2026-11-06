@@ -20,8 +20,6 @@ import java.time.Clock
 private val log = LoggerFactory.getLogger(ApiKeyAuthFilter::class.java)
 
 private const val HEADER = "X-API-Key"
-private const val KEY_PREFIX = "pk_"
-private const val PREFIX_LEN = 11 // "pk_" + 8 base64url chars
 
 private const val MDC_API_KEY_PREFIX = "apiKeyPrefix"
 private const val MDC_TENANT_ID = "tenantId"
@@ -102,13 +100,13 @@ class ApiKeyAuthFilter(
         TenantContextHolder.clear()
 
         val header: String? = req.getHeader(HEADER)
-        if (header == null || header.length <= PREFIX_LEN || !header.startsWith(KEY_PREFIX)) {
+        if (header == null || header.length <= API_KEY_PREFIX_LEN || !header.startsWith(API_KEY_PREFIX)) {
             unauthorized(res)
             return
         }
 
-        val prefix = header.substring(0, PREFIX_LEN)
-        val secret = header.substring(PREFIX_LEN)
+        val prefix = header.substring(0, API_KEY_PREFIX_LEN)
+        val secret = header.substring(API_KEY_PREFIX_LEN)
 
         val row = lookup.findByPrefix(prefix)
         if (row == null) {

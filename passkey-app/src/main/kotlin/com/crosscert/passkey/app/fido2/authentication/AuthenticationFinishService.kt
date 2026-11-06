@@ -4,6 +4,8 @@ import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationFinishRequest
 import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationFinishResponse
 import com.crosscert.passkey.app.fido2.CeremonyMetrics
 import com.crosscert.passkey.app.fido2.challenge.ChallengeStore
+import com.crosscert.passkey.app.fido2.support.idTail
+import com.crosscert.passkey.app.fido2.support.toBase64Url
 import com.crosscert.passkey.core.alert.SecurityAlertEvent
 import com.crosscert.passkey.core.api.BusinessException
 import com.crosscert.passkey.core.api.ErrorCode
@@ -22,6 +24,7 @@ import com.crosscert.passkey.webauthn.verifier.WebAuthnVerificationException
 import com.crosscert.passkey.webauthn.verifier.WebAuthnVerifier
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
@@ -76,8 +79,8 @@ class AuthenticationFinishService(
                 throw IllegalArgumentException("tenant mismatch")
             }
 
-            val tenant = tenants.findById(UUID.fromString(ch.tenantId))
-                .orElseThrow { IllegalStateException("tenant ${ch.tenantId} missing") }
+            val tenant = tenants.findByIdOrNull(UUID.fromString(ch.tenantId))
+                ?: throw IllegalStateException("tenant ${ch.tenantId} missing")
 
             val publicKeyCredentialJson = try {
                 mapper.writeValueAsString(req.publicKeyCredential)
@@ -203,12 +206,12 @@ class AuthenticationFinishService(
                 newCounter,
             )
 
-            val credentialIdB64 = b64url(credentialId)
-            log.info("authentication/finish ok: credentialIdTail={} counter={}", idTail(credentialIdB64), newCounter)
+            val credentialIdB64 = credentialId.toBase64Url()
+            log.info("authentication/finish ok: credentialIdTail={} counter={}", credentialIdB64.idTail(), newCounter)
 
             val jwt = idTokens.issue(ch.tenantId, cred.userHandle, cred.id, cred.aaguid)
             // id-token claims meta only — never the JWT body itself
-            val subTail = idTail(b64url(cred.userHandle))
+            val subTail = cred.userHandle.toBase64Url().idTail()
             log.info("id-token issued: subTail={} aud={} ttlSec={}", subTail, ch.tenantId, ID_TOKEN_TTL_SEC)
 
             val response = AuthenticationFinishResponse(jwt, "Bearer", ID_TOKEN_TTL_SEC)
@@ -221,11 +224,3 @@ class AuthenticationFinishService(
         }
     }
 }
-
-private fun b64url(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)
-
-/**
- * Last 12 chars of a base64url id for correlation — never the full id.
- * Short ids (≤12 chars) are masked to "***" so the full value is never logged.
- */
-private fun idTail(id: String): String = if (id.length <= 12) "***" else "..." + id.takeLast(12)
