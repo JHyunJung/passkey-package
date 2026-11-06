@@ -32,13 +32,24 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.ObjectMapper;
 
+import com.crosscert.passkey.app.api.v1.rp.dto.AuthenticationFinishRequest;
+import com.crosscert.passkey.app.fido2.challenge.AuthenticationChallenge;
+import com.crosscert.passkey.core.entity.Tenant;
+import com.crosscert.passkey.core.tenant.TenantContextHolder;
+import tools.jackson.databind.JsonNode;
+
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -86,6 +97,8 @@ class KotlinProxyWiringTest {
     @Autowired CredentialSelfService credentialSelf;
     @Autowired MdsVerifier mdsVerifier;
     @Autowired CredentialRepository credentialRepository;
+    @Autowired TenantRepository tenantRepository;
+    @Autowired ChallengeStore challengeStore;
 
     @Test
     void transactionalServices_areCglibProxies() {
@@ -114,5 +127,37 @@ class KotlinProxyWiringTest {
         assertThat(active).isTrue();
         assertThat(readOnly).isTrue();
         assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+    }
+
+    @Test
+    void authenticationFinish_lockAcquiredInsideActualReadWriteTransaction() {
+        UUID tenantId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        TenantContextHolder.set(tenantId);
+        try {
+            when(challengeStore.takeAuthentication("tok")).thenReturn(Optional.of(
+                    new AuthenticationChallenge(tenantId.toString(), new byte[]{7}, null, Instant.now())));
+            Tenant tenant = mock(Tenant.class);
+            when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+
+            AtomicBoolean active = new AtomicBoolean();
+            AtomicBoolean readOnly = new AtomicBoolean(true);
+            when(credentialRepository.findByCredentialIdForUpdate(any())).thenAnswer(inv -> {
+                active.set(TransactionSynchronizationManager.isActualTransactionActive());
+                readOnly.set(TransactionSynchronizationManager.isCurrentTransactionReadOnly());
+                return Optional.empty();
+            });
+
+            JsonNode pkc = new ObjectMapper().readTree("{\"rawId\":\"AQID\"}");
+            assertThatThrownBy(() -> authenticationFinish.finish(new AuthenticationFinishRequest("tok", pkc)))
+                    .isExactlyInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("credential not registered");
+
+            verify(credentialRepository).findByCredentialIdForUpdate(any());
+            assertThat(active).isTrue();
+            assertThat(readOnly).isFalse();
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 }

@@ -35,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -152,6 +153,33 @@ class AuthenticationFinishServiceCharacterizationTest {
     private List<String> messages(Level level) {
         return appender.list.stream().filter(e -> e.getLevel() == level)
                 .map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    @Test
+    void nullRequest_npeInsideMeasuredBlock_failureMetricCounted() {
+        // 원 Java: try 안 첫 문장(req.getAuthenticationToken())에서 NPE → 실패 메트릭 1 → 재던짐.
+        stubChallenge(USER);
+
+        assertThatThrownBy(() -> svc().finish(null))
+                .isExactlyInstanceOf(NullPointerException.class);
+        assertThat(count("failure")).isEqualTo(1.0);
+        assertThat(count("success")).isEqualTo(0.0);
+        verifyNoInteractions(store, tenants, credentials, ceremonyEvents, authEvents);
+    }
+
+    @Test
+    void nullToken_npeInsideMeasuredBlock_failureMetricCounted() {
+        // 원 Java: null 토큰이 (실제) Kotlin ChallengeStore 파라미터 검사에서 NPE(try 안) → 실패 메트릭 1.
+        // 목 ChallengeStore 는 Kotlin 파라미터 검사를 건너뛰므로 운영과 같은 실제 인스턴스를 쓴다.
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        AuthenticationFinishService real = new AuthenticationFinishService(
+                new ChallengeStore(redis, mapper), verifier, tenants, credentials, idTokens,
+                mapper, clock, new CeremonyMetrics(meters), events, ceremonyEvents, authEvents);
+
+        assertThatThrownBy(() -> real.finish(new AuthenticationFinishRequest(null, null)))
+                .isExactlyInstanceOf(NullPointerException.class);
+        assertThat(count("failure")).isEqualTo(1.0);
+        verifyNoInteractions(redis, tenants, credentials);
     }
 
     @Test

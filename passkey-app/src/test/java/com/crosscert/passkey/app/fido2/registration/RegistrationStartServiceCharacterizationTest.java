@@ -106,6 +106,19 @@ class RegistrationStartServiceCharacterizationTest {
     }
 
     @Test
+    void nullRequest_npeInsideMeasuredBlock_failureMetricCounted() {
+        // 원 Java: try 안 첫 문장(entry 로그 인자 req.getUsername())에서 NPE → 실패 메트릭 1 → 재던짐.
+        TenantContextHolder.set(TENANT);
+
+        assertThatThrownBy(() -> svc().start(null))
+                .isExactlyInstanceOf(NullPointerException.class);
+        assertThat(count("failure")).isEqualTo(1.0);
+        assertThat(count("success")).isEqualTo(0.0);
+        assertThat(infos()).isEmpty();
+        verifyNoInteractions(tenants, store, ceremonyEvents);
+    }
+
+    @Test
     void noTenantContext_illegalState() {
         assertThatThrownBy(() -> svc().start(new RegistrationStartRequest("CQk", "Disp", "alice")))
                 .isExactlyInstanceOf(IllegalStateException.class)

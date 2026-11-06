@@ -44,10 +44,13 @@ class AuthenticationStartService(
     private val ceremonyEvents: CeremonyEventRecorder,
 ) {
 
+    // req 는 nullable: 원 Java 는 null 요청을 try 안 첫 역참조에서 NPE 로 거부해 실패 메트릭을 남겼다.
+    // non-null 파라미터면 진입 시점(try 밖) NPE 가 되어 메트릭이 빠지므로 아래 `req!!` 로 같은 지점을 유지한다.
     @Transactional(readOnly = true)
-    fun start(req: AuthenticationStartRequest): AuthenticationStartResponse {
+    fun start(req: AuthenticationStartRequest?): AuthenticationStartResponse {
         try {
-            log.info("authentication/start entry: userHandlePresent={}", req.userHandle != null)
+            // 원 Java 의 첫 역참조(req.getUserHandle()) 지점 — 측정 블록 안 NPE
+            log.info("authentication/start entry: userHandlePresent={}", req!!.userHandle != null)
             val tenantUuid = TenantContextHolder.get()
                 ?: throw IllegalStateException("authentication/start invoked without tenant context")
             val tenantId = tenantUuid.toString()

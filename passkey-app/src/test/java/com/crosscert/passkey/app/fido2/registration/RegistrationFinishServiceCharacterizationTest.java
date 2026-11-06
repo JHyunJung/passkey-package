@@ -35,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
@@ -138,6 +139,33 @@ class RegistrationFinishServiceCharacterizationTest {
     private List<String> messages(Level level) {
         return appender.list.stream().filter(e -> e.getLevel() == level)
                 .map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    @Test
+    void nullRequest_npeInsideMeasuredBlock_failureMetricCounted() {
+        // 원 Java: try 안 첫 문장(req.getRegistrationToken())에서 NPE → 실패 메트릭 1 → 재던짐.
+        stubChallenge();
+
+        assertThatThrownBy(() -> svc().finish(null))
+                .isExactlyInstanceOf(NullPointerException.class);
+        assertThat(count("failure")).isEqualTo(1.0);
+        assertThat(count("success")).isEqualTo(0.0);
+        verifyNoInteractions(store, tenants, ceremonyEvents);
+    }
+
+    @Test
+    void nullToken_npeInsideMeasuredBlock_failureMetricCounted() {
+        // 원 Java: null 토큰이 (실제) Kotlin ChallengeStore 파라미터 검사에서 NPE(try 안) → 실패 메트릭 1.
+        // 목 ChallengeStore 는 Kotlin 파라미터 검사를 건너뛰므로 운영과 같은 실제 인스턴스를 쓴다.
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        RegistrationFinishService real = new RegistrationFinishService(
+                new ChallengeStore(redis, new ObjectMapper()), verifier, tenants, credentials, mds, policy,
+                new ObjectMapper(), clock, new CeremonyMetrics(meters), ceremonyEvents);
+
+        assertThatThrownBy(() -> real.finish(new RegistrationFinishRequest(null, null)))
+                .isExactlyInstanceOf(NullPointerException.class);
+        assertThat(count("failure")).isEqualTo(1.0);
+        verifyNoInteractions(redis, tenants);
     }
 
     @Test

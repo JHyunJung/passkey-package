@@ -46,12 +46,14 @@ class RegistrationStartService(
      * `store.putRegistration(...)`은 Redis 쓰기(JPA 트랜잭션 밖)이므로
      * `readOnly = true`로 둔다. `AuthenticationStartService.start()`와 동일.
      */
+    // req 는 nullable: 원 Java 는 null 요청을 try 안 첫 역참조에서 NPE 로 거부해 실패 메트릭을 남겼다.
+    // non-null 파라미터면 진입 시점(try 밖) NPE 가 되어 메트릭이 빠지므로 아래 `req!!` 로 같은 지점을 유지한다.
     @Transactional(readOnly = true)
-    fun start(req: RegistrationStartRequest): RegistrationStartResponse {
+    fun start(req: RegistrationStartRequest?): RegistrationStartResponse {
         try {
             log.info(
                 "registration/start entry: usernamePresent={} displayNameLen={}",
-                req.username != null,
+                req!!.username != null, // 원 Java 의 첫 역참조(req.getUsername()) 지점 — 측정 블록 안 NPE
                 req.displayName?.length ?: 0,
             )
             val tenantUuid = TenantContextHolder.get()
