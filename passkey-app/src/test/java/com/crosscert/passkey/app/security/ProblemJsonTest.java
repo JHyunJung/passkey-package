@@ -36,4 +36,12 @@ class ProblemJsonTest {
         assertThat(res.getContentAsString())
                 .isEqualTo("{\"type\":\"about:blank\",\"status\":429,\"title\":\"Too Many Requests\"}");
     }
+
+    @Test
+    void explicitNullErrorEqualsThreeArgOverload() throws Exception {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        ProblemJson.write(res, 401, "Unauthorized", null);
+        assertThat(res.getContentAsString())
+                .isEqualTo("{\"type\":\"about:blank\",\"status\":401,\"title\":\"Unauthorized\"}");
+    }
 }

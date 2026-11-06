@@ -52,4 +52,17 @@ class ApiKeyScopeResolverTest {
         assertThat(resolver.requiredScope("/api/v1/rp/authentication-config"))
                 .hasValue("__unmapped_rp__");
     }
+
+    @Test
+    void base_paths_and_boundaries() {
+        // 특성: 세그먼트 base 자체도 매칭, /api/v1/rp 자체와 trailing slash 는 sentinel,
+        // /api/v1/rp 경계 밖(rpx)·빈 문자열은 scope 불요.
+        assertThat(resolver.requiredScope("/api/v1/rp/registration")).hasValue("registration");
+        assertThat(resolver.requiredScope("/api/v1/rp/authentication")).hasValue("authentication");
+        assertThat(resolver.requiredScope("/api/v1/rp/credentials/")).hasValue("registration");
+        assertThat(resolver.requiredScope("/api/v1/rp")).hasValue("__unmapped_rp__");
+        assertThat(resolver.requiredScope("/api/v1/rp/")).hasValue("__unmapped_rp__");
+        assertThat(resolver.requiredScope("/api/v1/rpx")).isEmpty();
+        assertThat(resolver.requiredScope("")).isEmpty();
+    }
 }
