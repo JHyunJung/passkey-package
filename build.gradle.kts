@@ -39,7 +39,15 @@ subprojects {
             rootProject.libs.versions.spring.boot.asProvider().get()
         }
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:$bootVersion")
+            if (project.name == "sdk-java") {
+                mavenBom("org.springframework.boot:spring-boot-dependencies:$bootVersion")
+            } else {
+                // Boot 4 BOM 의 kotlin.version 을 Kotlin 컴파일러(카탈로그 kotlin)와 같게 덮어써
+                // kotlin-stdlib/kotlin-reflect 가 컴파일러보다 낮은 버전으로 내려가지 않게 한다.
+                mavenBom("org.springframework.boot:spring-boot-dependencies:$bootVersion") {
+                    bomProperty("kotlin.version", rootProject.libs.versions.kotlin.get())
+                }
+            }
         }
     }
 
