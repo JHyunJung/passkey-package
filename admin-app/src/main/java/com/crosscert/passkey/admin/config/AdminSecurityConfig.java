@@ -70,8 +70,8 @@ public class AdminSecurityConfig {
     @Bean
     public DaoAuthenticationProvider adminAuthProvider(AdminUserDetailsService uds,
                                                        PasswordEncoder encoder) {
-        DaoAuthenticationProvider p = new DaoAuthenticationProvider();
-        p.setUserDetailsService(uds);
+        // Security 7: UserDetailsService 는 생성자 인자로만 받는다(setUserDetailsService 제거).
+        DaoAuthenticationProvider p = new DaoAuthenticationProvider(uds);
         p.setPasswordEncoder(encoder);
         // Surface UsernameNotFoundException to the failure handler so we
         // can classify unknown-user vs bad-password in audit + log. The

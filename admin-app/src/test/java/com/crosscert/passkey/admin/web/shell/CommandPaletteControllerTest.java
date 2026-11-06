@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,8 +41,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class CommandPaletteControllerTest {
 
     @Autowired MockMvc mvc;
-    @MockBean TenantAdminController tenants;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final UUID T1 = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
     static final UUID T2 = UUID.fromString("00000000-0000-0000-0000-0000000000b2");

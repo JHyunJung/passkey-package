@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -45,14 +45,14 @@ class PasswordResetControllerTest {
     }
 
     @Autowired MockMvc mvc;
-    @MockBean PasswordResetService service;
+    @MockitoBean PasswordResetService service;
 
     // AdminSecurityConfig collaborators that are not otherwise supplied by the slice.
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRepository users;
+    @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
+    @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
+    @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    @MockitoBean com.crosscert.passkey.core.repository.AdminUserRepository users;
 
     @Test
     void request_always_200_even_for_unknown() throws Exception {

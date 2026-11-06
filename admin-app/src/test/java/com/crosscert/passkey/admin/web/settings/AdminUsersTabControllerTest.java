@@ -21,7 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -59,14 +59,14 @@ class AdminUsersTabControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean AdminUserController users;
-    @MockBean SignupRequestController signups;
-    @MockBean TenantAdminController tenants;
-    @MockBean MfaController mfa;
-    @MockBean SystemInfoController systemInfo;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean AdminUserController users;
+    @MockitoBean SignupRequestController signups;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean MfaController mfa;
+    @MockitoBean SystemInfoController systemInfo;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
     static final String BASE = "/admin/_/settings";

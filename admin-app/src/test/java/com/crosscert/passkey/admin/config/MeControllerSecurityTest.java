@@ -8,9 +8,9 @@ import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.Metamodel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,10 +32,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(
     controllers = MeController.class,
     excludeAutoConfiguration = {
-        org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.web.SpringDataWebAutoConfiguration.class
+        org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration.class,
+        org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration.class,
+        org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class,
+        org.springframework.boot.data.autoconfigure.web.DataWebAutoConfiguration.class
     }
 )
 @Import({
@@ -61,37 +61,37 @@ class MeControllerSecurityTest {
     }
 
     @Autowired MockMvc mvc;
-    @MockBean AdminUserRepository users;
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean java.time.Clock clock;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
-    @MockBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
-    @MockBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
-    @MockBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
-    @MockBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
-    @MockBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
-    @MockBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
-    @MockBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
-    @MockBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
-    @MockBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
+    @MockitoBean AdminUserRepository users;
+    @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
+    @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
+    @MockitoBean java.time.Clock clock;
+    @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    @MockitoBean com.crosscert.passkey.core.repository.TenantRepository tenantRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.AuditLogRepository auditLogRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.CeremonyEventRepository ceremonyEventRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.ApiKeyRepository apiKeyRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.ApiKeyScopeRepository apiKeyScopeRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.CredentialRepository credentialRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.SigningKeyRepository signingKeyRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.SchedulerLeaseRepository schedulerLeaseRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.ActivityRepository activityRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.AdminSignupRequestRepository adminSignupRequestRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository adminPasswordResetTokenRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository adminUserRecoveryCodeRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository tenantAaguidPolicyRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.SecurityPolicyRepository securityPolicyRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.TenantWebauthnSnapshotRepository tenantWebauthnSnapshotRepository;
     // 형제 *SecurityTest 들과 동일 — 이 mock 이 없으면 @EnableJpaRepositories 가
     // 실제 JPA 리포지토리를 만들려다 스텁 Metamodel 에서 엔티티를 찾지 못해
     // 컨텍스트 로드가 실패한다(JpaMetamodelEntityInformation).
-    @MockBean com.crosscert.passkey.core.repository.CredentialAuthEventRepository credentialAuthEventRepository;
-    @MockBean com.crosscert.passkey.core.repository.AdminUserTenantRepository adminUserTenantRepository;
-    @MockBean com.crosscert.passkey.core.repository.SecurityIncidentRepository securityIncidentRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.CredentialAuthEventRepository credentialAuthEventRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.AdminUserTenantRepository adminUserTenantRepository;
+    @MockitoBean com.crosscert.passkey.core.repository.SecurityIncidentRepository securityIncidentRepository;
     // AdminSecurityConfig 의 adminLoginSuccessHandler / adminFilterChain 가 요구하는 협력 빈
     // (세션 정책 적용·테넌트 경계 필터 추가 시 도입됨) — 슬라이스 컨텍스트 로드를 위해 mock 등록.
-    @MockBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
-    @MockBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
+    @MockitoBean com.crosscert.passkey.admin.policy.SecurityPolicyService securityPolicyService;
+    @MockitoBean com.crosscert.passkey.admin.auth.TenantBoundary tenantBoundary;
 
     private Authentication operator() {
         AdminUserDetails principal = new AdminUserDetails(

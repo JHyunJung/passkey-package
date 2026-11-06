@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,13 +53,13 @@ class MdsTabControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean MdsAdminController mds;
-    @MockBean MfaController mfa;
-    @MockBean SignupRequestController signups;
-    @MockBean SystemInfoController systemInfo;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean MdsAdminController mds;
+    @MockitoBean MfaController mfa;
+    @MockitoBean SignupRequestController signups;
+    @MockitoBean SystemInfoController systemInfo;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
 

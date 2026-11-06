@@ -24,7 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -66,12 +66,12 @@ class AuditTabControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean TenantAdminController tenants;
-    @MockBean AuditLogController audit;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean AaguidPolicyController aaguid;
-    @MockBean LicenseController license;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean AuditLogController audit;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean AaguidPolicyController aaguid;
+    @MockitoBean LicenseController license;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final ObjectMapper JSON = new ObjectMapper();
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");

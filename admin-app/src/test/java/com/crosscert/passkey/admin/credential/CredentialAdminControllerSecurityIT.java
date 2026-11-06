@@ -11,7 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -42,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 
 /**
  * Cross-tenant boundary 회귀 채널. VPD 제거됨 — admin-app 은 cross-tenant 조회를
@@ -58,6 +60,7 @@ import org.springframework.web.client.RestTemplate;
  * T6 의 TenantAdminControllerUpdateIT 와 동일한 Testcontainers + 로그인 inline 패턴 사용.
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -116,7 +119,7 @@ class CredentialAdminControllerSecurityIT {
     JdbcTemplate jdbc;
     private final SecureRandom rng = new SecureRandom();
     // Separate plain RestTemplate (not TestRestTemplate) for error response inspection
-    private final RestTemplate http = new RestTemplate();
+    private final RestTemplate http = Jackson2RestTemplates.create();
 
     /** PSK_APP_OWNER (schema owner) pool — used only for owner-only table cleanup in resetState(). */
     private static HikariDataSource ownerPool;

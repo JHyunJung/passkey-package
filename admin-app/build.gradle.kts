@@ -19,7 +19,14 @@ dependencies {
     implementation("com.openhtmltopdf:openhtmltopdf-core:1.0.10")
     implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
 
-    testImplementation("org.springframework.security:spring-security-test")
+    // Boot 4 모듈화 테스트 스타터: security-test 는 spring-security-test + Boot 의 MockMvc 보안
+    // 연동(spring-boot-security-test), webmvc-test 는 @WebMvcTest·@AutoConfigureMockMvc
+    // (spring-boot-webmvc-test) + TestRestTemplate(spring-boot-resttestclient).
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    // TestRestTemplate 자동설정(@AutoConfigureTestRestTemplate)이 RestTemplateBuilder 를 요구 —
+    // Boot 4 는 RestTemplate 지원이 별도 모듈(spring-boot-restclient)이다.
+    testImplementation("org.springframework.boot:spring-boot-restclient")
     // 화면 HTML 응답 파싱용.
     testImplementation("org.jsoup:jsoup:1.18.1")
     // T24 AdminFlowIT (Phase 2 acceptance gate) brings up a Testcontainers

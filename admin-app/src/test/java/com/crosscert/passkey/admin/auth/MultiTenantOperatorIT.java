@@ -9,7 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -23,6 +24,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -59,6 +61,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 // classes 명시: auth 패키지에 MfaController*Test$SliceConfig(@SpringBootConfiguration) 2개가
 // 있어 config 자동탐색이 "multiple @SpringBootConfiguration" 으로 깨진다(단독 실행 시). 메인 앱
 // 클래스를 직접 지정해 자동탐색을 끈다(AdminFlowIT 은 root 패키지라 자동탐색이 바로 AdminApplication 을 찾음).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -286,7 +289,7 @@ class MultiTenantOperatorIT {
     private String url(String path) { return "http://localhost:" + port + path; }
 
     /** TestRestTemplate 은 4xx 를 삼킨다 — 403 단언에는 plain RestTemplate 사용. */
-    private final RestTemplate http = new RestTemplate();
+    private final RestTemplate http = Jackson2RestTemplates.create();
 
     private HttpHeaders loginAs(String email, String password) {
         Map<String, String> jar = new LinkedHashMap<>();

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.ResponseEntity;
@@ -55,8 +55,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class LoginPageControllerTest {
 
     @Autowired MockMvc mvc;
-    @MockBean MfaController mfa;
-    @MockBean ProfileController profiles;
+    @MockitoBean MfaController mfa;
+    @MockitoBean ProfileController profiles;
 
     private final ObjectMapper json = new ObjectMapper();
 

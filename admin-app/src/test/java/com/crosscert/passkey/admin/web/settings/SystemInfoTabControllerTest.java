@@ -16,7 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,10 +40,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class SystemInfoTabControllerTest {
 
     @Autowired MockMvc mvc;
-    @MockBean SystemInfoController systemInfo;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean SystemInfoController systemInfo;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final SystemInfoView SAMPLE = new SystemInfoView("1.2.3", "2026-05-31T09:00+09:00", 4L, new SystemInfoView.Host("prod,oracle"),
             List.of(new Component("admin-app", "1.2.3", "OK", "Spring Boot"), new Component("MDS sync scheduler", "1.2.3", "OK", "매 6시간")));

@@ -9,7 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -44,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Testcontainers + loginAs inline 패턴은 RpAdminBoundaryIT 에서 복사.
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(단독실행 가능).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")

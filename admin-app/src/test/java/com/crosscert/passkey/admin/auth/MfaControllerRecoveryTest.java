@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Mirrors {@link MfaControllerSecurityTest}'s slice setup exactly (nested
  * {@code @SpringBootConfiguration}, real {@link TotpService} + fixed {@link Clock},
  * same security imports + MockBeans) so the security/CSRF/principal wiring is
- * identical. Here {@link TotpService} is replaced by a mock via {@code @MockBean}
+ * identical. Here {@link TotpService} is replaced by a mock via {@code @MockitoBean}
  * to deterministically force TOTP success/failure, and {@link MfaSecretCipher} /
  * {@link RecoveryCodeService} are mocked.
  */
@@ -60,15 +60,15 @@ class MfaControllerRecoveryTest {
 
     @Autowired MockMvc mvc;
 
-    @MockBean TotpService totp;
-    @MockBean MfaSecretCipher secretCipher;
-    @MockBean RecoveryCodeService recoveryCodes;
-    @MockBean AdminUserRepository admins;
+    @MockitoBean TotpService totp;
+    @MockitoBean MfaSecretCipher secretCipher;
+    @MockitoBean RecoveryCodeService recoveryCodes;
+    @MockitoBean AdminUserRepository admins;
     // AdminSecurityConfig collaborators that are not otherwise supplied by the slice.
-    @MockBean com.crosscert.passkey.admin.audit.AuditLogService audit;
-    @MockBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
-    @MockBean org.springframework.security.crypto.password.PasswordEncoder encoder;
-    @MockBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
+    @MockitoBean com.crosscert.passkey.admin.audit.AuditLogService audit;
+    @MockitoBean com.crosscert.passkey.admin.auth.AdminUserDetailsService uds;
+    @MockitoBean org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @MockitoBean com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource corsSource;
 
     private static AdminUser adminUserWithUuid() {
         var u = new AdminUser("alice@example.com", "x", "ADMIN");

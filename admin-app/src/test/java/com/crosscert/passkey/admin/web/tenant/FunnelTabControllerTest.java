@@ -21,7 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,13 +57,13 @@ class FunnelTabControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean TenantAdminController tenants;
-    @MockBean FunnelController funnel;
-    @MockBean com.crosscert.passkey.admin.funnel.AdoptionController adoption;
-    @MockBean AaguidPolicyController aaguid;
-    @MockBean LicenseController license;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean TenantAdminController tenants;
+    @MockitoBean FunnelController funnel;
+    @MockitoBean com.crosscert.passkey.admin.funnel.AdoptionController adoption;
+    @MockitoBean AaguidPolicyController aaguid;
+    @MockitoBean LicenseController license;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
     static final UUID T1 = UUID.fromString("00000000-0000-0000-0000-000000000001");

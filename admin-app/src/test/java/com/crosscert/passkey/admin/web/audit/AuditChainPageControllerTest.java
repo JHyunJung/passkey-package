@@ -25,7 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -66,9 +66,9 @@ class AuditChainPageControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
-    @MockBean AuditChainMonitorController chain;
-    @MockBean LicenseController license;
-    @MockBean ActiveTenantController activeTenants;
+    @MockitoBean AuditChainMonitorController chain;
+    @MockitoBean LicenseController license;
+    @MockitoBean ActiveTenantController activeTenants;
 
     static final Instant NOW = Instant.parse("2026-10-11T03:00:00Z"); // KST 2026-10-11 12:00
     static final UUID RP1 = UUID.fromString("00000000-0000-0000-0000-0000000000a1");

@@ -9,7 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpEntity;
@@ -22,6 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestTemplate;
+import com.crosscert.passkey.admin.testsupport.Jackson2RestTemplates;
 import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.OracleContainer;
@@ -45,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Testcontainers + loginAs inline 패턴은 T13 RpAdminBoundaryIT 에서 복사.
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(MultiTenantOperatorIT 참고).
+@AutoConfigureTestRestTemplate
 @SpringBootTest(classes = AdminApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -100,7 +103,7 @@ class PlatformOperatorUnrestrictedIT {
     @Autowired RedisConnectionFactory redisFactory;
 
     /** Plain RestTemplate so 4xx throws HttpClientErrorException (not swallowed). */
-    private final RestTemplate http = new RestTemplate();
+    private final RestTemplate http = Jackson2RestTemplates.create();
 
     JdbcTemplate jdbc;
 
