@@ -204,15 +204,15 @@ class ApiKeyLookupServiceIT {
         assertThat(row)
                 .as("native lookup must return the row even with no tenant context")
                 .isPresent();
-        assertThat(row.get().id())
+        assertThat(row.get().getId())
                 .as("id must round-trip from RAW(16)")
                 .isEqualTo(API_KEY_ID);
-        assertThat(row.get().tenantId())
+        assertThat(row.get().getTenantId())
                 .as("tenant_id must round-trip from RAW(16)")
                 .isEqualTo(TENANT_ID);
-        assertThat(row.get().keyHash()).isEqualTo(KEY_HASH);
-        assertThat(row.get().expiresAt()).isNull();
-        assertThat(row.get().revokedAt()).isNull();
+        assertThat(row.get().getKeyHash()).isEqualTo(KEY_HASH);
+        assertThat(row.get().getExpiresAt()).isNull();
+        assertThat(row.get().getRevokedAt()).isNull();
     }
 
     // ── Test 2: unknown prefix → empty ───────────────────────────────────────
