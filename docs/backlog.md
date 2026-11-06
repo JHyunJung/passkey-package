@@ -26,6 +26,18 @@
 - [ ] **시드 평문 비번이 prod 에 실리지 않는지 확인** — `core/src/main/resources/db/seed-common/R__seed_operators.sql:4-5`
       에 "prod 는 이 디렉터리를 `flyway.locations` 에 포함하지 않는다" 로 명시돼 있다. 배포 전 실제 locations 로 재확인.
       (bob 은 더 이상 이 파일에서 시드하지 않는다 — alice 만.) [prod-hardening 2026-05-25]
+- [ ] **(릴리스 차단) QA 번들 이미지가 아직 Spring Boot 3.5 빌드** — `qa-bundle/images/*.tar.gz` 와
+      `qa-bundle/images/SHA256SUMS` 는 Boot 4.1 업그레이드 이전 이미지 기준이다. 번들을 반출하기 전에
+      `scripts/build-images.sh` 를 **`NO_SAVE` 없이** 실행해 amd64 이미지 tar 를 다시 만들고, 새 `SHA256SUMS` 를
+      커밋한다(번들 README §6-1 의 세션 정리 절차는 새 이미지 전제). [boot4-upgrade 2026-11-06]
+- [ ] **sdk-java 패치 릴리스 + 변경 이력** — Spring 7 호환 수정(커밋 `2cd29539`: 요청 바디를 SDK 자체 Jackson 2
+      매퍼로 `byte[]` 직렬화 + `Content-Type: application/json`, 3-인자 `handleError` 구현)이 SDK 버전 `1.0.0` 그대로
+      들어가 있다. 외부 RP 배포 전에 패치 버전(예: `1.0.1`)으로 올리고 변경 이력을 남긴다 — 동작 차이로
+      요청이 이제 명시적 `Content-Length` 로 나간다(이전엔 chunked 가능). 현재 별도 CHANGELOG 파일은 없다
+      (`sdk-java/README.md` "Spring 6 · 7 호환" 항목만). [boot4-upgrade 2026-11-06]
+- [ ] **Kotlin 전환(2단계) 착수 전 Kotlin 카탈로그 버전 상향** — `gradle/libs.versions.toml` 의 `kotlin = "2.0.21"`
+      (root `build.gradle.kts` 에 `apply false` 로만 선언, 현재 적용 모듈 없음)은 Boot 4.x 기준(Kotlin 2.2+)에 못 미친다. 2단계 시작 전에 spec
+      (`docs/superpowers/specs/2026-11-06-spring-boot-4-kotlin-design.md`) 대로 올린다. [boot4-upgrade 2026-11-06]
 
 ## 1. 기능 개발 (별도 spec 필요)
 

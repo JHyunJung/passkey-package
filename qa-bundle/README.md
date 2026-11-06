@@ -286,6 +286,13 @@ docker compose -f docker-compose.redis.yml exec -T redis sh -c '
 컨테이너 안의 같은 이름 환경변수로 풀린다. 이후 같은 4.1 계열 이미지끼리의 재배포에서는 이
 단계가 필요 없다.
 
+**롤백(Spring Boot 3.5 이미지로 되돌릴 때)** — 호환되지 않는 것은 양방향이다. 4.1 admin-app 이
+쓴 세션은 3.5 admin-app 도 읽지 못하고, 로그아웃이 아니라 **HTTP 500** 으로 나타난다. 그래서 되돌릴
+때도 같은 세 단계를 밟는다: 이전 이미지 적재 → **admin-app 을 전부 중지**(`./start.sh --stop`, 다른
+호스트 포함) → 위 정리 명령을 그대로 실행해 `OK:` 확인 → 이전 이미지로 기동. 그 밖에는 되돌려도
+문제가 없다 — DB 스키마 변경이 없고, passkey-app 이 Redis 에 쓰는 챌린지 형식은 두 버전이 서로
+읽을 수 있다(`ChallengeStoreFormatCompatTest` 가 업그레이드 전 픽스처로 고정).
+
 ### 7. (참고) compose 직접 실행
 
 `start.sh` 없이 손으로 띄운다면 아래가 최소 절차다. 프로파일과 두 export 를

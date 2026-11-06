@@ -167,6 +167,18 @@ docker compose -f docker-compose.redis.yml exec -T redis sh -c '
 
 이후 같은 4.1 계열 빌드끼리의 재배포에는 이 단계가 필요 없다.
 
+### 롤백 — Spring Boot 3.5 빌드로 되돌릴 때
+
+호환되지 않는 것은 양방향이다. 4.1 admin-app 이 쓴 세션은 3.5 admin-app 도 읽지 못하며, 이 경우
+로그아웃이 아니라 **HTTP 500** 으로 나타난다. 그래서 되돌릴 때도 같은 세 단계를 밟는다:
+**모든 호스트의 4.1 admin-app 을 전부 중지 → 위 정리 블록을 그대로 실행(`OK:` 확인) → 3.5 빌드 기동**.
+admin 콘솔 사용자는 이때도 전원 다시 로그인한다.
+
+그 밖에는 되돌려도 문제가 없다. 이 업그레이드에는 DB 스키마 변경(Flyway 마이그레이션)이 없고,
+passkey-app 이 Redis 에 쓰는 챌린지 JSON 형식은 두 버전이 서로 읽을 수 있다
+(업그레이드 전 기록한 픽스처를 신버전이 읽고·같은 바이트로 쓰는지 `ChallengeStoreFormatCompatTest` 가 고정).
+passkey-app·rp-app 은 별도 절차 없이 이전 이미지로 교체하면 된다.
+
 ## 부팅 실패 트러블슈팅
 
 | 오류 메시지 (stderr) | 원인 | 조치 |

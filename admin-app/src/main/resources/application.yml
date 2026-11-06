@@ -33,7 +33,9 @@ spring:
 
   session:
     timeout: PT30M
-    # Boot 4: spring.session.redis.* → spring.session.data.redis.* (옛 키는 무시된다).
+    # Boot 4: spring.session.redis.* → spring.session.data.redis.*. 옛 키는 4.0.0 부터 deprecated
+    # (메타데이터 level=error) 이고 별칭이 아니다 — SessionDataRedisProperties 는 새 접두사만 바인딩하므로
+    # 옛 키로 쓰면 값이 조용히 적용되지 않는다(spring-boot-properties-migrator 가 있을 때만 재매핑+경고).
     data:
       redis:
         namespace: spring:session
