@@ -209,6 +209,92 @@ class RequestDtoMissingFieldContractIT {
     }
 
     // ------------------------------------------------------------
+    // Coercion / format cases: blank, @Size 초과, JSON 타입 불일치, 빈 바디, 깨진 JSON.
+    // jackson-module-kotlin + Kotlin DTO 가 이 강제변환·역직렬화 실패 경로를 바꾸는지 판정한다.
+    // 스냅샷: contract/coercion-<케이스>.shape.json
+    // ------------------------------------------------------------
+
+    static Stream<Arguments> coercionCases() {
+        String uh = "\"" + USER_HANDLE + "\"";
+        String over88 = "\"" + "A".repeat(89) + "\"";
+        String over128 = "\"" + "a".repeat(129) + "\"";
+        String over256 = "\"" + "a".repeat(257) + "\"";
+        return Stream.of(
+                // RegistrationStartRequest
+                arguments("registration-start-blank-userHandle", REG_START,
+                        "{\"userHandle\":\"\",\"displayName\":\"Coerce User\",\"username\":\"coerce-user\"}"),
+                arguments("registration-start-blank-displayName", REG_START,
+                        "{\"userHandle\":" + uh + ",\"displayName\":\"\",\"username\":\"coerce-user\"}"),
+                arguments("registration-start-blank-username", REG_START,
+                        "{\"userHandle\":" + uh + ",\"displayName\":\"Coerce User\",\"username\":\"\"}"),
+                arguments("registration-start-oversize-userHandle", REG_START,
+                        "{\"userHandle\":" + over88 + ",\"displayName\":\"Coerce User\",\"username\":\"coerce-user\"}"),
+                arguments("registration-start-oversize-displayName", REG_START,
+                        "{\"userHandle\":" + uh + ",\"displayName\":" + over256 + ",\"username\":\"coerce-user\"}"),
+                arguments("registration-start-oversize-username", REG_START,
+                        "{\"userHandle\":" + uh + ",\"displayName\":\"Coerce User\",\"username\":" + over256 + "}"),
+                arguments("registration-start-number-displayName", REG_START,
+                        "{\"userHandle\":" + uh + ",\"displayName\":12345,\"username\":\"coerce-user\"}"),
+                arguments("registration-start-array-username", REG_START,
+                        "{\"userHandle\":" + uh + ",\"displayName\":\"Coerce User\",\"username\":[\"coerce-user\"]}"),
+                arguments("registration-start-empty-body", REG_START, ""),
+                arguments("registration-start-null-body", REG_START, "null"),
+                arguments("registration-start-malformed", REG_START, "{\"userHandle\":"),
+
+                // RegistrationFinishRequest
+                arguments("registration-finish-blank-registrationToken", REG_FINISH,
+                        "{\"registrationToken\":\"\",\"publicKeyCredential\":{}}"),
+                arguments("registration-finish-number-registrationToken", REG_FINISH,
+                        "{\"registrationToken\":12345,\"publicKeyCredential\":{}}"),
+                arguments("registration-finish-number-publicKeyCredential", REG_FINISH,
+                        "{\"registrationToken\":\"no-such-token\",\"publicKeyCredential\":12345}"),
+                arguments("registration-finish-array-publicKeyCredential", REG_FINISH,
+                        "{\"registrationToken\":\"no-such-token\",\"publicKeyCredential\":[1,2]}"),
+                arguments("registration-finish-empty-body", REG_FINISH, ""),
+                arguments("registration-finish-null-body", REG_FINISH, "null"),
+                arguments("registration-finish-malformed", REG_FINISH, "{\"registrationToken\":"),
+
+                // AuthenticationStartRequest (검증 애너테이션 없음)
+                arguments("authentication-start-number-userHandle", AUTH_START, "{\"userHandle\":12345}"),
+                arguments("authentication-start-array-userHandle", AUTH_START, "{\"userHandle\":[\"x\"]}"),
+                arguments("authentication-start-empty-body", AUTH_START, ""),
+                arguments("authentication-start-null-body", AUTH_START, "null"),
+                arguments("authentication-start-malformed", AUTH_START, "{\"userHandle\":"),
+
+                // AuthenticationFinishRequest
+                arguments("authentication-finish-blank-authenticationToken", AUTH_FINISH,
+                        "{\"authenticationToken\":\"\",\"publicKeyCredential\":{}}"),
+                arguments("authentication-finish-number-authenticationToken", AUTH_FINISH,
+                        "{\"authenticationToken\":12345,\"publicKeyCredential\":{}}"),
+                arguments("authentication-finish-number-publicKeyCredential", AUTH_FINISH,
+                        "{\"authenticationToken\":\"no-such-token\",\"publicKeyCredential\":12345}"),
+                arguments("authentication-finish-array-publicKeyCredential", AUTH_FINISH,
+                        "{\"authenticationToken\":\"no-such-token\",\"publicKeyCredential\":[1,2]}"),
+                arguments("authentication-finish-empty-body", AUTH_FINISH, ""),
+                arguments("authentication-finish-null-body", AUTH_FINISH, "null"),
+                arguments("authentication-finish-malformed", AUTH_FINISH, "{\"authenticationToken\":"),
+
+                // CredentialSelfServiceController.RenameRequest
+                arguments("rename-blank-userHandle", RENAME, "{\"userHandle\":\"\",\"label\":\"coerce key\"}"),
+                arguments("rename-blank-label", RENAME, "{\"userHandle\":" + uh + ",\"label\":\"\"}"),
+                arguments("rename-oversize-label", RENAME, "{\"userHandle\":" + uh + ",\"label\":" + over128 + "}"),
+                arguments("rename-number-label", RENAME, "{\"userHandle\":" + uh + ",\"label\":12345}"),
+                arguments("rename-array-userHandle", RENAME, "{\"userHandle\":[" + uh + "],\"label\":\"coerce key\"}"),
+                arguments("rename-empty-body", RENAME, ""),
+                arguments("rename-null-body", RENAME, "null"),
+                arguments("rename-malformed", RENAME, "{\"userHandle\":")
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("coercionCases")
+    void coercionOrFormatError_responseContract(String name, String path, String body) throws IOException {
+        ResponseEntity<String> res = http.exchange(url(path), HttpMethod.POST,
+                new HttpEntity<>(body, authHeaders()), String.class);
+        assertMatchesSnapshot("coercion-" + name, res);
+    }
+
+    // ------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------
 
