@@ -1,10 +1,9 @@
 plugins {
     java
     alias(libs.plugins.spring.boot)
-    alias(libs.plugins.spring.dep.mgmt)
 }
 
-// group / version / toolchain / repositories 모두 root allprojects + subprojects 가 처리.
+// group / version / toolchain / repositories / dependency-management(BOM) 모두 root allprojects + subprojects 가 처리.
 
 dependencies {
     implementation(project(":sdk-java"))

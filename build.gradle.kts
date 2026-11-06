@@ -28,19 +28,18 @@ subprojects {
     }
 
     extensions.configure<DependencyManagementExtension> {
-        imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.boot.get()}")
-            mavenBom("org.testcontainers:testcontainers-bom:${rootProject.libs.versions.testcontainers.get()}")
+        // sdk-java 는 외부 RP 에 배포되는 라이브러리라 Spring Boot 3.5 BOM(Spring 6 / Jackson 2)
+        // 을 유지한다. 나머지 모듈은 Spring Boot 4 BOM — Testcontainers(2.x)·Flyway·Oracle JDBC·
+        // Jackson(2.21.x + 3.x) 버전까지 이 BOM 이 관리하므로 별도 BOM import 나 버전 강제가 없다.
+        // (구 jackson-annotations:2.21 강제는 webauthn4j 의 Jackson 3 가 2.20+ 어노테이션을
+        //  요구해서였는데, Boot 4 BOM 의 jackson-bom 2.21.x 가 이미 2.21 을 관리한다.)
+        val bootVersion = if (project.name == "sdk-java") {
+            rootProject.libs.versions.spring.boot.sdk.get()
+        } else {
+            rootProject.libs.versions.spring.boot.asProvider().get()
         }
-        // webauthn4j 0.31.5 pulls in tools.jackson.core:jackson-databind:3.1.2
-        // (the new Jackson 3 lineage). That JAR references annotations such
-        // as JsonSerializeAs that only exist in jackson-annotations 2.20+.
-        // Spring Boot's BOM pins 2.19.x, which causes a
-        // NoClassDefFoundError at WebAuthnManager construction time.
-        // Override the Boot-managed version forward; 2.x annotations
-        // are backwards-compatible.
-        dependencies {
-            dependency("com.fasterxml.jackson.core:jackson-annotations:2.21")
+        imports {
+            mavenBom("org.springframework.boot:spring-boot-dependencies:$bootVersion")
         }
     }
 
@@ -54,9 +53,9 @@ subprojects {
         "testAnnotationProcessor"(rootProject.libs.lombok)
 
         "testImplementation"("org.springframework.boot:spring-boot-starter-test")
-        // Align junit-platform-launcher with junit-platform-engine 1.12.x (Spring Boot 3.5 BOM).
-        // Gradle 8.10 bundles an older launcher, causing
-        // "OutputDirectoryProvider not available" at test discovery time.
+        // Align junit-platform-launcher with the BOM-managed junit-platform-engine
+        // (Boot 4.1 BOM: JUnit 6.0.x, sdk-java 의 Boot 3.5 BOM: 1.12.x). Gradle 9 는 테스트
+        // 런타임에 launcher 를 자동 주입하지 않으므로 명시 선언이 필수이며, 버전은 BOM 이 맞춘다.
         "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     }
 
