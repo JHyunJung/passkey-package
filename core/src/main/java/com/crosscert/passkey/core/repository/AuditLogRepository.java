@@ -127,8 +127,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
     /**
      * Phase F3 — FunnelService daily series.
-     * Native query: groups by TRUNC(created_at) (day bucket, UTC server tz) and action.
-     * Returns [day TIMESTAMP, action VARCHAR, count NUMBER] rows.
+     * Native query: groups by TRUNC(created_at) (day bucket in the DB session time zone, KST) and action.
+     * Returns [day, action VARCHAR, count NUMBER] rows; day is an Oracle DATE that Hibernate 7 returns
+     * as {@code LocalDateTime} — convert with {@code KstTime.dbDay}.
      * Native because JPQL has no portable TRUNC(date) and Oracle dialect varies.
      * Hibernate's @JdbcTypeCode(SqlTypes.UUID) on AuditLog.tenantId handles RAW(16) ↔ UUID binding.
      */
