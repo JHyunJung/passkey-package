@@ -1,0 +1,23 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "array<object>",
+  "$.data[]" : "object",
+  "$.data[].action" : "string",
+  "$.data[].actorEmail" : "string",
+  "$.data[].actorId" : "uuid",
+  "$.data[].createdAt" : "iso-offset(+09:00)",
+  "$.data[].id" : "uuid",
+  "$.data[].payload" : "string",
+  "$.data[].targetId" : "string",
+  "$.data[].targetType" : "string",
+  "$.data[].tenantId" : "uuid",
+  "$.data[]{}" : "id,actorId,actorEmail,action,targetType,targetId,tenantId,payload,createdAt",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

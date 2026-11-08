@@ -1,0 +1,8 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="audit-acme-2026-10-11.csv"
+
+﻿ts,eventType,actorType,actorId,subjectType,subjectId,payload
+2026-10-10T09:15:30.123456+09:00,API_KEY_ISSUED,ADMIN,alice@example.com,api_key,"Acme, Inc.","{""name"":""가나다 한글 테넌트"",""scopes"":[""a"",""b""],""n"":1.5}"
+2026-10-01T00:00:00+09:00,CREDENTIAL_REVOKED,SYSTEM,,credential,"Say ""hi""","{""raw"":""not json, \""raw\""\nline""}"
+2026-10-01T00:00:00+09:00,AUTH_FAILED,ADMIN,'=cmd@example.com,,,{}

@@ -1,0 +1,9 @@
+{
+  "$" : "object",
+  "$.confirmError" : "object",
+  "$.confirmError.detail" : "string",
+  "$.confirmError.message" : "string",
+  "$.confirmError.traceId" : "string",
+  "@body" : "empty",
+  "@status" : "404"
+}

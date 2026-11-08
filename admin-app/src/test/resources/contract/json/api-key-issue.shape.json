@@ -1,0 +1,19 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.expiresAt" : "iso-offset(+09:00)",
+  "$.data.id" : "uuid",
+  "$.data.plainText" : "string",
+  "$.data.prefix" : "string",
+  "$.data.scopes" : "array<string>",
+  "$.data.scopes[]" : "string",
+  "$.data{}" : "id,plainText,prefix,scopes,expiresAt",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "201"
+}

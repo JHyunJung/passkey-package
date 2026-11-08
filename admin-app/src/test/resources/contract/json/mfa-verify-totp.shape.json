@@ -1,0 +1,7 @@
+{
+  "$" : "object",
+  "$.verified" : "boolean",
+  "${}" : "verified",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

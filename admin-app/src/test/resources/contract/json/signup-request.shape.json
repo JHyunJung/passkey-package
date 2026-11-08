@@ -1,0 +1,7 @@
+{
+  "$" : "object",
+  "$.accepted" : "boolean",
+  "$.activated" : "boolean",
+  "@contentType" : "application/json",
+  "@status" : "202"
+}

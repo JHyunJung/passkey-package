@@ -1,0 +1,11 @@
+{
+  "$" : "array<object>",
+  "$[]" : "object",
+  "$[].email" : "string",
+  "$[].id" : "uuid",
+  "$[].reason" : "string",
+  "$[].requestedAt" : "iso-offset(+09:00)",
+  "$[]{}" : "id,email,reason,requestedAt",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

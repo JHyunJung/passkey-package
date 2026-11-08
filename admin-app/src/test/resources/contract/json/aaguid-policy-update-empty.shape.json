@@ -1,0 +1,17 @@
+{
+  "$" : "object",
+  "$.entries" : "array<object>",
+  "$.entries[]" : "object",
+  "$.entries[].aaguid" : "uuid",
+  "$.entries[].mdsName" : "string",
+  "$.entries[].note" : "string",
+  "$.entries[]{}" : "aaguid,note,mdsName",
+  "$.mdsStrict" : "boolean",
+  "$.mode" : "string",
+  "$.tenantId" : "uuid",
+  "$.updatedAt" : "iso-offset(+09:00)",
+  "$.updatedBy" : "string",
+  "${}" : "tenantId,mode,mdsStrict,entries,updatedAt,updatedBy",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

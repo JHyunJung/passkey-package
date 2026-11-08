@@ -1,0 +1,22 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "array<object>",
+  "$.data[]" : "object",
+  "$.data[].changeSummary" : "string",
+  "$.data[].durationMs" : "number",
+  "$.data[].errorMessage" : "string",
+  "$.data[].finishedAt" : "string",
+  "$.data[].id" : "number",
+  "$.data[].startedAt" : "string",
+  "$.data[].status" : "string",
+  "$.data[].version" : "number",
+  "$.data[]{}" : "id,startedAt,finishedAt,version,status,changeSummary,durationMs,errorMessage",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

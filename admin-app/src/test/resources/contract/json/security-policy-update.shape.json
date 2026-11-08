@@ -1,0 +1,12 @@
+{
+  "$" : "object",
+  "$.corsAllowlist" : "array<string>",
+  "$.corsAllowlist[]" : "string",
+  "$.mfaRequired" : "boolean",
+  "$.sessionIdleTimeoutMinutes" : "number",
+  "$.updatedAt" : "iso-offset(+09:00)",
+  "$.updatedBy" : "string",
+  "${}" : "sessionIdleTimeoutMinutes,mfaRequired,corsAllowlist,updatedAt,updatedBy",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

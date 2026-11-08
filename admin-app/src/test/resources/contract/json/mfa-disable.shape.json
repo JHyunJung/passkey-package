@@ -1,0 +1,7 @@
+{
+  "$" : "object",
+  "$.disabled" : "boolean",
+  "${}" : "disabled",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

@@ -1,0 +1,8 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="auth-failures-acme-30d-2026-10-11.csv"
+
+﻿reason,label,n
+SIGNATURE_INVALID,서명 검증 실패,2
+,원인 미기록,1
+"CUSTOM, ""odd""","CUSTOM, ""odd""",4

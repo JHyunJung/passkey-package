@@ -1,0 +1,9 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="activity-2026-10-11.csv"
+
+﻿timestamp,tenant,type,category,actor,subject
+2026-10-10T09:15:30.123456+09:00,acme,TENANT_CREATED,ops,alice@example.com,"Acme, Inc."
+2026-10-01T00:00:00+09:00,,ADMIN_LOGIN_FAILED,security,'-bob@example.com,—
+2026-10-01T00:00:00+09:00,00000000-0000-0000-0000-0000000000a2,MDS_SYNC,system,,"가나다 한글 테넌트
+Say ""hi"""

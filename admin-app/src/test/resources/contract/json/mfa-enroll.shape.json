@@ -1,0 +1,7 @@
+{
+  "$" : "object",
+  "$.otpauthUri" : "string",
+  "$.secret" : "string",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

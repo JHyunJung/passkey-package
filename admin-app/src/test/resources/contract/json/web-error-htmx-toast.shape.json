@@ -1,0 +1,10 @@
+{
+  "$" : "object",
+  "$.toast" : "object",
+  "$.toast.detail" : "string",
+  "$.toast.kind" : "string",
+  "$.toast.message" : "string",
+  "$.toast.traceId" : "string",
+  "@body" : "empty",
+  "@status" : "404"
+}

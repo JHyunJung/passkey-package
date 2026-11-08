@@ -1,0 +1,7 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="platform-monthly-usage-2026-10-11.csv"
+
+﻿month,inProgress,authSuccess,activeUsers,newPasskeys
+2026-09,N,10,4,2
+2026-10,Y,5,3,1
