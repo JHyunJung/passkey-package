@@ -35,8 +35,6 @@ import com.crosscert.passkey.core.api.ApiResponse;
 import com.crosscert.passkey.core.api.PageView;
 import com.crosscert.passkey.core.ceremony.CredentialAuthFailureReason;
 import com.crosscert.passkey.core.config.CoreJacksonConfig;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,19 +47,22 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import org.xml.sax.SAXParseException;
+
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -78,8 +79,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * {@link InsightsPageController}(4종), {@link ActivityPageController}, {@link FunnelTabController}(6종))의 다운로드 응답을
  * 상태줄·{@code Content-Type}·{@code Content-Disposition} 헤더와 본문 전체 바이트(BOM 포함)로 고정한다
  * ({@code contract/export/*.http}). 데이터에는 쉼표·따옴표·줄바꿈(LF·CRLF)·한글·수식 접두({@code = + - @ TAB})를 넣는다.
- * 월간 감사 체인 PDF({@link MonthlyReportService} 실제 구현 + {@link MonthlyReportController})는 헤더와
- * PDFBox 추출 텍스트 전체({@code Generated at} 시각만 치환)로 고정한다.
+ * 월간 감사 체인 PDF({@link MonthlyReportService} 실제 구현 + {@link MonthlyReportController})는 base 에서 <b>항상 500</b> 이다
+ * (buildHtml 의 닫히지 않은 {@code <meta>} → openhtmltopdf {@code SAXParseException}, 알려진 결함 — 수정은 백로그). 그래서
+ * PDF 텍스트 대신 (1) 500 응답 형태, (2) 원인 예외가 그 결함({@code XRRuntimeException} ← {@code SAXParseException} "meta")임,
+ * (3) 렌더러에 들어가는 보고서 HTML 전체({@code Generated at} 시각만 치환, {@code contract/export/monthly-report.html})를 고정한다.
+ * 결함이 고쳐지면 (1)(2) 가 실패하므로 그때 PDF 텍스트 스냅샷을 새로 추가한다.
  *
  * <p>기록: {@code ./gradlew :admin-app:test --tests '*ExportCharacterizationTest' -Pcontract.record=true}
  */
@@ -107,6 +111,7 @@ class ExportCharacterizationTest {
 
     @Autowired MockMvc mvc;
     @Autowired Clock clock;
+    @Autowired MonthlyReportService reportService;
     @MockitoBean TenantAdminController tenants;
     @MockitoBean ApiKeyAdminController apiKeys;
     @MockitoBean CredentialAdminController credentials;
@@ -272,33 +277,35 @@ class ExportCharacterizationTest {
                         .param("from", "2026-10-01").param("to", "2026-10-31")
                         .with(authentication(platform())))
                 .andReturn().getResponse();
-        if (res.getStatus() != 200) {
-            // 현재(Java base) 동작: MonthlyReportService.buildHtml 이 닫히지 않은 <meta charset='utf-8'> 를 써서
-            // openhtmltopdf 의 XML 파서가 SAXParseException 을 내고, GlobalExceptionHandler 가 500 봉투로 바꾼다
-            // (데이터와 무관하게 항상). 전환은 이 동작을 바꾸지 않아야 하므로 응답 그대로 고정한다 — 고치는 것은 별도 작업.
-            java.util.TreeMap<String, String> meta = new java.util.TreeMap<>();
-            meta.put("@status", String.valueOf(res.getStatus()));
-            meta.put("@contentType", String.valueOf(res.getContentType()));
-            meta.put("@contentDisposition", String.valueOf(res.getHeader(HttpHeaders.CONTENT_DISPOSITION)));
-            ContractSnapshot.assertMatches("export/monthly-report.response.shape.json",
-                    AdminJsonShape.of(res.getContentAsString(StandardCharsets.UTF_8), true, meta));
-            return;
-        }
-        byte[] pdf = res.getContentAsByteArray();
-        assertThat(new String(Arrays.copyOf(pdf, 5), StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+        // 현재(Java base) 동작: MonthlyReportService.buildHtml 이 닫히지 않은 <meta charset='utf-8'> 를 써서
+        // openhtmltopdf 의 XML 파서가 SAXParseException 을 내고, GlobalExceptionHandler 가 500 봉투로 바꾼다
+        // (데이터와 무관하게 항상). 전환은 이 동작을 바꾸지 않아야 하므로 그대로 고정한다 — 고치는 것은 별도 작업(백로그).
+        assertThat(res.getStatus()).as("월간 PDF 는 base 에서 항상 500 (알려진 결함)").isEqualTo(500);
+        java.util.TreeMap<String, String> meta = new java.util.TreeMap<>();
+        meta.put("@status", String.valueOf(res.getStatus()));
+        meta.put("@contentType", String.valueOf(res.getContentType()));
+        meta.put("@contentDisposition", String.valueOf(res.getHeader(HttpHeaders.CONTENT_DISPOSITION)));
+        ContractSnapshot.assertMatches("export/monthly-report.response.shape.json",
+                AdminJsonShape.of(res.getContentAsString(StandardCharsets.UTF_8), true, meta));
 
-        String text;
-        try (PDDocument doc = PDDocument.load(pdf)) {
-            text = new PDFTextStripper().getText(doc);
-        }
-        // 생성 시각(Instant.now())만 치환 — 나머지 추출 텍스트는 그대로.
-        String normalized = text.replaceAll("Generated at: \\S+", "Generated at: <now>");
+        // (a) 500 의 원인이 바로 그 알려진 결함인지 — 다른 예외로 바뀌면 여기서 드러난다.
+        assertThatThrownBy(() -> reportService.generate(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31")))
+                .isInstanceOf(com.openhtmltopdf.util.XRRuntimeException.class)
+                .satisfies(e -> {
+                    Throwable root = e;
+                    while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+                    assertThat(root).isInstanceOf(SAXParseException.class);
+                    assertThat(root.getMessage()).as("닫히지 않은 meta 요소").contains("meta");
+                });
+
+        // (b) PDF 렌더러로 들어가는 보고서 본문(HTML) 고정 — 이스케이프(<&>"')·한글·null tenantId·위변조 행.
+        // buildHtml 은 private 이라 reflection 으로 부른다(main 무수정). 생성 시각(Instant.now())만 치환.
+        Method build = MonthlyReportService.class.getDeclaredMethod("buildHtml",
+                LocalDate.class, LocalDate.class, AuditChainOverview.class);
+        build.setAccessible(true);
+        String html = (String) build.invoke(reportService, LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31"), overview);
+        String normalized = html.replaceAll("Generated at: [^<]+", "Generated at: <now>");
         assertThat(normalized).contains("Generated at: <now>");
-        List<String> head = new ArrayList<>();
-        head.add("HTTP " + res.getStatus());
-        head.add("Content-Type: " + res.getContentType());
-        head.add("Content-Disposition: " + res.getHeader(HttpHeaders.CONTENT_DISPOSITION));
-        ContractSnapshot.assertMatches("export/monthly-report.pdf.txt",
-                String.join("\n", head) + "\n\n" + normalized);
+        ContractSnapshot.assertMatches("export/monthly-report.html", normalized + "\n");
     }
 }

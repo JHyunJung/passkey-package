@@ -12,21 +12,34 @@ import static org.assertj.core.api.Assertions.fail;
  * 계약 스냅샷 기록·비교. 파일은 {@code src/test/resources/contract/} 아래에 둔다.
  *
  * <p>기본(비교) 모드: 파일이 없거나 내용이 다르면 실패한다. 기록 모드
- * ({@code ./gradlew :admin-app:test --tests '<cls>' -Pcontract.record=true})에서는 파일을 새로 쓴다.
+ * ({@code ./gradlew :admin-app:test --tests '<cls>' -Pcontract.record=true})에서는 <b>없는</b> 파일만 새로 쓰고
+ * 있는 파일은 그대로 비교한다(동결 보호 — 덮어쓰기는 {@link #OVERWRITE} 를 명시).
  * 기록한 파일은 커밋 전에 사람이 검토하고, 그 뒤로는 수정하지 않는다(새 스냅샷 추가만 허용).
  */
 final class ContractSnapshot {
 
     static final boolean RECORD = Boolean.getBoolean("contract.record");
+    /**
+     * 기록 모드에서 <b>이미 있는</b> 파일까지 덮어쓸지. 기본은 끔 — 기록 모드는 없는 파일만 새로 쓰고, 있는 파일(동결)은
+     * 비교한다. 의도적 갱신만 {@code CONTRACT_OVERWRITE=true ./gradlew ... -Pcontract.record=true}(환경변수 — 빌드 파일이
+     * 테스트 JVM 에 넘기는 시스템 속성은 contract.record 뿐이라) 또는 시스템 속성 {@code contract.overwrite=true} 로 켠다.
+     */
+    static final boolean OVERWRITE = Boolean.getBoolean("contract.overwrite")
+            || "true".equalsIgnoreCase(System.getenv("CONTRACT_OVERWRITE"));
     private static final Path ROOT = Path.of("src/test/resources/contract");
 
     private ContractSnapshot() {}
+
+    /** 기록 모드에서 이 파일을 쓸지 — 없는 파일이거나 덮어쓰기를 명시했을 때만. */
+    private static boolean shouldWrite(Path file) {
+        return RECORD && (OVERWRITE || !Files.exists(file));
+    }
 
     /** 텍스트 스냅샷(UTF-8). */
     static void assertMatches(String relativePath, String actual) {
         Path file = ROOT.resolve(relativePath);
         try {
-            if (RECORD) {
+            if (shouldWrite(file)) {
                 Files.createDirectories(file.getParent());
                 Files.writeString(file, actual);
                 return;
@@ -44,7 +57,7 @@ final class ContractSnapshot {
     static void assertBytesMatch(String relativePath, byte[] actual) {
         Path file = ROOT.resolve(relativePath);
         try {
-            if (RECORD) {
+            if (shouldWrite(file)) {
                 Files.createDirectories(file.getParent());
                 Files.write(file, actual);
                 return;

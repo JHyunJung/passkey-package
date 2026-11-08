@@ -1,0 +1,18 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "array<object>",
+  "$.data[]" : "object",
+  "$.data[].action" : "string",
+  "$.data[].createdAt" : "iso-offset(+09:00)",
+  "$.data[].id" : "uuid",
+  "$.data[].tenantId" : "uuid",
+  "$.data[]{}" : "id,action,tenantId,createdAt",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

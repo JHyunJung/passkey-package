@@ -229,6 +229,8 @@ class AdminJsonShapeContractTest {
     @Autowired TotpService totp;
     @Autowired SecurityIncidentService incidents;
     @Autowired PasswordResetService passwordReset;
+    @Autowired CredentialAdminService credentialService;
+    @Autowired ActivityService activityService;
 
     // 이 슬라이스에서만 필요한 인프라 mock
     @MockitoBean LicenseStateMachine licenseStateMachine;
@@ -564,6 +566,38 @@ class AdminJsonShapeContractTest {
         shape("security-policy-update-empty", asOp(json(put("/admin/api/security-policy"), "{}")));
         shape("security-policy-update", asOp(json(put("/admin/api/security-policy"),
                 "{\"sessionIdleTimeoutMinutes\":30,\"mfaRequired\":true,\"corsAllowlist\":[\"https://a.example\"]}")));
+    }
+
+    /**
+     * null 이 든 응답 — Fill 은 모든 필드를 채우므로 이 경우를 따로 고정한다. 전역 {@code non_null} 이라 null 필드는 키가
+     * <b>빠진다</b>(값 null 로 나오지 않는다). Kotlin 전환에서 nullable 처리·포함 규칙이 바뀌면 여기서 드러난다.
+     */
+    @Test
+    void nullBearingResponses() throws Exception {
+        // 감사 로그: 시스템 행(actorId·actorEmail null) + 대상 없음(targetType·targetId null) + payload null.
+        AuditLog systemRow = mock(AuditLog.class, Fill.ANSWER);
+        when(systemRow.getActorId()).thenReturn(null);
+        when(systemRow.getActorEmail()).thenReturn(null);
+        when(systemRow.getTargetType()).thenReturn(null);
+        when(systemRow.getTargetId()).thenReturn(null);
+        when(systemRow.getPayload()).thenReturn(null);
+        when(auditRepo.search(any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of(systemRow)));
+        shape("audit-list-nulls", asOp(get("/admin/api/audit")));
+
+        // credential: 선택 시각(lastUsedAt)·별칭·AAGUID·인증기 이름 null.
+        when(credentialService.list(any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(), any()))
+                .thenReturn(new com.crosscert.passkey.core.api.PageView<>(List.of(
+                        new com.crosscert.passkey.admin.credential.CredentialAdminDto.CredentialView(
+                                "AAAAAAAAAAAAAAAAAAAAAA", "dXNlci0x", null, null, null, "none", null, 0, null, Fill.ODT)),
+                        0, 50, 1, false));
+        shape("credential-list-nulls", asOp(get(TENANT_PATH + "/credentials")));
+
+        // activity: kpi.p95Ms(Long, 문서상 nullable) null, 이벤트의 tenant·actor null.
+        when(activityService.snapshot(any(), any(), any(), any(), any())).thenReturn(new com.crosscert.passkey.admin.activity.ActivityView(
+                new com.crosscert.passkey.admin.activity.ActivityView.Kpi(1, 0, 0, null), List.of(),
+                List.of(new com.crosscert.passkey.admin.activity.ActivityView.Event(
+                        Fill.ID, "MDS_SYNC", null, null, null, null, null, Fill.ODT, "system"))));
+        shape("activity-get-nulls", asOp(get("/admin/api/activity")));
     }
 
     @Test
