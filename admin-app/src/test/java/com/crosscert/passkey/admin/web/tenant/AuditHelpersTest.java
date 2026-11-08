@@ -24,11 +24,11 @@ class AuditHelpersTest {
     @DisplayName("windowRange: now 기준 hours 시간 전 ~ now (밀리초 ISO)")
     void windowRange() {
         Instant now = Instant.parse("2026-10-11T03:00:00Z");
-        assertThat(AuditHelpers.windowRange(AuditHelpers.window("24h").hours(), now))
+        assertThat(AuditHelpers.windowRange(AuditHelpers.window("24h").getHours(), now))
                 .isEqualTo(new AuditHelpers.Range("2026-10-10T03:00:00.000Z", "2026-10-11T03:00:00.000Z"));
-        assertThat(AuditHelpers.window("7d").hours()).isEqualTo(168);
-        assertThat(AuditHelpers.window("30d").hours()).isEqualTo(720);
-        assertThat(AuditHelpers.window("nope").key()).isEqualTo("24h");
+        assertThat(AuditHelpers.window("7d").getHours()).isEqualTo(168);
+        assertThat(AuditHelpers.window("30d").getHours()).isEqualTo(720);
+        assertThat(AuditHelpers.window("nope").getKey()).isEqualTo("24h");
         assertThat(AuditHelpers.iso(Instant.parse("2026-10-11T03:00:00.120Z"))).isEqualTo("2026-10-11T03:00:00.120Z");
         assertThat(AuditHelpers.iso(Instant.parse("2026-10-11T03:00:00.100Z"))).isEqualTo("2026-10-11T03:00:00.100Z");
     }
@@ -59,16 +59,16 @@ class AuditHelpersTest {
     void payloadDiff() throws Exception {
         List<AuditHelpers.DiffEntry> a = AuditHelpers.payloadDiff(j("{\"timeoutMs\":{\"from\":60000,\"to\":120000},\"note\":\"x\"}"));
         assertThat(a).hasSize(1);
-        assertThat(a.get(0).field()).isEqualTo("timeoutMs");
-        assertThat(a.get(0).from().asInt()).isEqualTo(60000);
-        assertThat(a.get(0).to().asInt()).isEqualTo(120000);
+        assertThat(a.get(0).getField()).isEqualTo("timeoutMs");
+        assertThat(a.get(0).getFrom().asInt()).isEqualTo(60000);
+        assertThat(a.get(0).getTo().asInt()).isEqualTo(120000);
 
         List<AuditHelpers.DiffEntry> b = AuditHelpers.payloadDiff(j("{\"before\":{\"a\":1,\"b\":2},\"after\":{\"a\":1,\"b\":3,\"c\":true}}"));
-        assertThat(b).extracting(AuditHelpers.DiffEntry::field).containsExactly("b", "c");
-        assertThat(b.get(0).from().asInt()).isEqualTo(2);
-        assertThat(b.get(0).to().asInt()).isEqualTo(3);
-        assertThat(b.get(1).from()).isNull(); // undefined
-        assertThat(b.get(1).to().asBoolean()).isTrue();
+        assertThat(b).extracting(AuditHelpers.DiffEntry::getField).containsExactly("b", "c");
+        assertThat(b.get(0).getFrom().asInt()).isEqualTo(2);
+        assertThat(b.get(0).getTo().asInt()).isEqualTo(3);
+        assertThat(b.get(1).getFrom()).isNull(); // undefined
+        assertThat(b.get(1).getTo().asBoolean()).isTrue();
 
         assertThat(AuditHelpers.payloadDiff(j("{\"reason\":\"x\"}"))).isEmpty();
         assertThat(AuditHelpers.payloadDiff(null)).isEmpty();
@@ -110,7 +110,7 @@ class AuditHelpersTest {
         assertThat(AuditHelpers.eventGroup("CREDENTIAL_REVOKE")).isEqualTo("keys");
         assertThat(AuditHelpers.eventGroup("CREDENTIAL_REVOKED")).isEqualTo("keys");
         assertThat(AuditHelpers.eventGroup("MDS_BLOB_SYNC")).isEqualTo("other");
-        assertThat(AuditHelpers.EVENT_GROUPS).extracting(AuditHelpers.EventGroup::label).containsExactly("인증", "등록", "설정 변경", "키 관리", "기타");
+        assertThat(AuditHelpers.EVENT_GROUPS).extracting(AuditHelpers.EventGroup::getLabel).containsExactly("인증", "등록", "설정 변경", "키 관리", "기타");
     }
 
     @Test

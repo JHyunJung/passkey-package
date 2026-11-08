@@ -359,10 +359,10 @@ class TenantsPageControllerTest {
                 new TenantRow("1", "Acme", "acme-x", "a.com", "ACTIVE", 0, 0, null, null),
                 new TenantRow("2", "", "zzz", "b.com", "SUSPENDED", 0, 0, null, null));
         assertThat(TenantsPageController.filter(rows, "", "ALL")).hasSize(2);
-        assertThat(TenantsPageController.filter(rows, "ACME", "ALL")).extracting(TenantRow::id).containsExactly("1");
-        assertThat(TenantsPageController.filter(rows, "X", "ALL")).extracting(TenantRow::id).containsExactly("1");
-        assertThat(TenantsPageController.filter(rows, "Z", "ALL")).extracting(TenantRow::id).containsExactly("2");
-        assertThat(TenantsPageController.filter(rows, "", "SUSPENDED")).extracting(TenantRow::id).containsExactly("2");
+        assertThat(TenantsPageController.filter(rows, "ACME", "ALL")).extracting(TenantRow::getId).containsExactly("1");
+        assertThat(TenantsPageController.filter(rows, "X", "ALL")).extracting(TenantRow::getId).containsExactly("1");
+        assertThat(TenantsPageController.filter(rows, "Z", "ALL")).extracting(TenantRow::getId).containsExactly("2");
+        assertThat(TenantsPageController.filter(rows, "", "SUSPENDED")).extracting(TenantRow::getId).containsExactly("2");
         assertThat(TenantsPageController.filter(rows, " ", "ALL")).isEmpty();
         assertThat(TenantsPageController.normStatus("active")).isEqualTo("ALL");
         assertThat(TenantsPageController.normSize(100)).isEqualTo(100);

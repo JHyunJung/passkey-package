@@ -219,15 +219,15 @@ class ApiKeysTabControllerTest {
     @DisplayName("만료 배지 = apiKeyHelpers.expiryBadge (무기한·정상·만료 임박 N일·만료됨·해당 없음) + 표의 배지 클래스")
     void expiryBadgeMatchesHelper() throws Exception {
         assertThat(ApiKeysTabController.expiryBadge("ACTIVE", null, NOW)).isEqualTo(new ExpiryBadge("neutral", "무기한", "만료일 없음"));
-        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(100), NOW)).extracting(ExpiryBadge::tone, ExpiryBadge::label).containsExactly("ok", "정상");
-        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(10), NOW)).extracting(ExpiryBadge::tone, ExpiryBadge::label).containsExactly("warn", "만료 임박 · 10일 남음");
-        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(9.2), NOW).label()).isEqualTo("만료 임박 · 10일 남음"); // daysLeft 올림
-        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(30), NOW).tone()).isEqualTo("warn");
-        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(31), NOW).tone()).isEqualTo("ok");
-        assertThat(ApiKeysTabController.expiryBadge("EXPIRED", at(-1), NOW)).extracting(ExpiryBadge::tone, ExpiryBadge::label).containsExactly("bad", "만료됨");
-        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(-1), NOW)).extracting(ExpiryBadge::tone, ExpiryBadge::label).containsExactly("bad", "만료됨");
-        assertThat(ApiKeysTabController.expiryBadge("REVOKED", at(10), NOW)).extracting(ExpiryBadge::tone, ExpiryBadge::label).containsExactly("neutral", "해당 없음");
-        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", OffsetDateTime.parse("2028-10-10T16:00:00Z"), NOW).sub()).isEqualTo("2028-10-11"); // KST 날짜
+        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(100), NOW)).extracting(ExpiryBadge::getTone, ExpiryBadge::getLabel).containsExactly("ok", "정상");
+        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(10), NOW)).extracting(ExpiryBadge::getTone, ExpiryBadge::getLabel).containsExactly("warn", "만료 임박 · 10일 남음");
+        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(9.2), NOW).getLabel()).isEqualTo("만료 임박 · 10일 남음"); // daysLeft 올림
+        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(30), NOW).getTone()).isEqualTo("warn");
+        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(31), NOW).getTone()).isEqualTo("ok");
+        assertThat(ApiKeysTabController.expiryBadge("EXPIRED", at(-1), NOW)).extracting(ExpiryBadge::getTone, ExpiryBadge::getLabel).containsExactly("bad", "만료됨");
+        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", at(-1), NOW)).extracting(ExpiryBadge::getTone, ExpiryBadge::getLabel).containsExactly("bad", "만료됨");
+        assertThat(ApiKeysTabController.expiryBadge("REVOKED", at(10), NOW)).extracting(ExpiryBadge::getTone, ExpiryBadge::getLabel).containsExactly("neutral", "해당 없음");
+        assertThat(ApiKeysTabController.expiryBadge("ACTIVE", OffsetDateTime.parse("2028-10-10T16:00:00Z"), NOW).getSub()).isEqualTo("2028-10-11"); // KST 날짜
 
         // rotationOverdueCount: ACTIVE 이고 생성 후 90일 초과만(정확히 90일은 아님), 회수·만료 제외
         List<ApiKeyAdminDto.ApiKeyView> keys = List.of(

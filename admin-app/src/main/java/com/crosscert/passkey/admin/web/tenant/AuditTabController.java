@@ -104,14 +104,14 @@ public class AuditTabController {
                     t = now;
                 }
             }
-            return new Span(AuditHelpers.window(win).key(), t);
+            return new Span(AuditHelpers.window(win).getKey(), t);
         }
 
         OffsetDateTime[] range() {
-            AuditHelpers.Range r = AuditHelpers.windowRange(AuditHelpers.window(win).hours(), to);
+            AuditHelpers.Range r = AuditHelpers.windowRange(AuditHelpers.window(win).getHours(), to);
             return new OffsetDateTime[] {
-                    OffsetDateTime.ofInstant(Instant.parse(r.from()), ZoneOffset.UTC),
-                    OffsetDateTime.ofInstant(Instant.parse(r.to()), ZoneOffset.UTC)};
+                    OffsetDateTime.ofInstant(Instant.parse(r.getFrom()), ZoneOffset.UTC),
+                    OffsetDateTime.ofInstant(Instant.parse(r.getTo()), ZoneOffset.UTC)};
         }
 
         String toIso() { return AuditHelpers.iso(to); }
@@ -147,7 +147,7 @@ public class AuditTabController {
         model.addAttribute("tenantName", v.getDisplayName() == null ? "" : v.getDisplayName());
         model.addAttribute("chainResult", null);
         fillChainAttrs(model, v.getId());
-        fillCard(model, v.getId(), new Span(AuditHelpers.window(win).key(), now), now);
+        fillCard(model, v.getId(), new Span(AuditHelpers.window(win).getKey(), now), now);
         return TAB_VIEW;
     }
 
@@ -159,7 +159,7 @@ public class AuditTabController {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         Instant now = clock.instant();
         model.addAttribute("tid", v.getId().toString());
-        fillCard(model, v.getId(), new Span(AuditHelpers.window(win).key(), now), now);
+        fillCard(model, v.getId(), new Span(AuditHelpers.window(win).getKey(), now), now);
         return CARD_VIEW;
     }
 
@@ -246,7 +246,7 @@ public class AuditTabController {
         if (n > ExportLimit.MAX_PAGES) return ExportLimit.tooLarge();
         List<String> groups = new ArrayList<>();
         if (g != null) {
-            for (AuditHelpers.EventGroup eg : AuditHelpers.EVENT_GROUPS) if (g.contains(eg.id())) groups.add(eg.id()); // 알려진 그룹만
+            for (AuditHelpers.EventGroup eg : AuditHelpers.EVENT_GROUPS) if (g.contains(eg.getId())) groups.add(eg.getId()); // 알려진 그룹만
         }
         boolean onlyFailures = "true".equals(failures);
         List<Item> items = new ArrayList<>();
@@ -350,16 +350,16 @@ public class AuditTabController {
         model.addAttribute("lastDay", evs.isEmpty() ? "" : evs.get(evs.size() - 1).dayKey());
 
         List<Chip> chips = new ArrayList<>();
-        for (AuditHelpers.EventGroup eg : AuditHelpers.EVENT_GROUPS) chips.add(new Chip(eg.id(), eg.label(), eg.codes()));
+        for (AuditHelpers.EventGroup eg : AuditHelpers.EVENT_GROUPS) chips.add(new Chip(eg.getId(), eg.getLabel(), eg.getCodes()));
         model.addAttribute("chips", chips);
         List<Map<String, Object>> windows = new ArrayList<>();
         for (AuditHelpers.Window w : AuditHelpers.WINDOWS) {
             Map<String, Object> o = new LinkedHashMap<>();
-            o.put("value", w.key());
-            o.put("label", w.label());
+            o.put("value", w.getKey());
+            o.put("label", w.getLabel());
             o.put("title", null);
             // 기간을 바꾸면 구간 끝(to)을 새로 잡고 첫 쪽부터(필터는 카드 밖 Alpine 상태라 그대로).
-            o.put("attrs", get(base + "?win=" + w.key()));
+            o.put("attrs", get(base + "?win=" + w.getKey()));
             windows.add(o);
         }
         model.addAttribute("windows", windows);
@@ -398,7 +398,7 @@ public class AuditTabController {
         String actorId = a.getActorEmail();
         String actorType = actorId != null ? "ADMIN" : "SYSTEM";
         List<Diff> diff = AuditHelpers.payloadDiff(p).stream()
-                .map(d -> new Diff(d.field(), AuditHelpers.diffValue(d.from()), AuditHelpers.diffValue(d.to()))).toList();
+                .map(d -> new Diff(d.getField(), AuditHelpers.diffValue(d.getFrom()), AuditHelpers.diffValue(d.getTo()))).toList();
         return new Ev(String.valueOf(a.getId()), type, AuditHelpers.eventTone(type, null),
                 kst.length() > 11 ? kst.substring(11) : kst, KstFormat.timeAgo(at, now), actorType, actorId, actorId == null ? null : "…" + tail(actorId, 10),
                 a.getTargetType() == null ? "—" : a.getTargetType(), a.getTargetId(), a.getTargetId() == null ? null : "…" + tail(a.getTargetId(), 12),
