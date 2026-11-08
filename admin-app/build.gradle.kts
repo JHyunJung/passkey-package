@@ -1,10 +1,29 @@
 plugins {
     alias(libs.plugins.spring.boot)
+    alias(libs.plugins.kotlin.jvm)
+    // @Component/@Configuration/@Transactional 등 Spring 애너테이션 클래스를 open 으로(프록시 가능).
+    alias(libs.plugins.kotlin.spring)
+}
+
+kotlin {
+    jvmToolchain(17)
+    compilerOptions {
+        // Spring/Jakarta 의 JSR-305 null 애너테이션을 Kotlin 타입 시스템에 엄격 반영.
+        freeCompilerArgs.add("-Xjsr305=strict")
+        // 생성자/메서드 파라미터 이름을 바이트코드에 남긴다(Java 쪽 -parameters 와 동일 효과).
+        javaParameters = true
+    }
 }
 
 dependencies {
     implementation(project(":core"))
     implementation(project(":webauthn"))
+
+    // Kotlin 지원: data class 역직렬화(Jackson 3 Kotlin 모듈 — Boot 자동 등록)와 Kotlin 리플렉션.
+    implementation(rootProject.libs.jackson.module.kotlin)
+    implementation(rootProject.libs.kotlin.reflect)
+    testImplementation(rootProject.libs.mockito.kotlin)
+
     implementation("org.springframework.boot:spring-boot-starter-security")
     // admin 화면(Thymeleaf + htmx + Alpine.js) — 서버 렌더링.
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
