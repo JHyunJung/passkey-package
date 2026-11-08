@@ -1,0 +1,509 @@
+package com.crosscert.passkey.admin.config
+
+import com.crosscert.passkey.admin.audit.AuditAppendRequest
+import com.crosscert.passkey.admin.audit.AuditLogService
+import com.crosscert.passkey.admin.auth.AdminUserDetailsService
+import com.crosscert.passkey.admin.auth.MfaPendingFilter
+import com.crosscert.passkey.admin.auth.TenantBoundary
+import com.crosscert.passkey.admin.auth.TenantContextAdminFilter
+import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource
+import com.crosscert.passkey.admin.policy.SecurityPolicyService
+import com.crosscert.passkey.admin.web.support.ErrorPage
+import com.crosscert.passkey.admin.web.support.Htmx
+import com.crosscert.passkey.admin.web.support.Toasts
+import com.crosscert.passkey.core.alert.SecurityAlertEvent
+import com.crosscert.passkey.core.entity.AdminUser
+import com.crosscert.passkey.core.license.LicenseGuardFilter
+import com.crosscert.passkey.core.repository.AdminUserRepository
+import com.crosscert.passkey.core.util.CryptoUtils
+import jakarta.servlet.DispatcherType
+import jakarta.servlet.RequestDispatcher
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.ObjectProvider
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
+import org.springframework.security.access.AccessDeniedException
+import org.springframework.security.authentication.BadCredentialsException
+import org.springframework.security.authentication.DisabledException
+import org.springframework.security.authentication.LockedException
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
+import org.springframework.security.config.annotation.web.builders.HttpSecurity
+import org.springframework.security.core.Authentication
+import org.springframework.security.core.AuthenticationException
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.core.userdetails.UsernameNotFoundException
+import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.security.web.AuthenticationEntryPoint
+import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.security.web.access.intercept.AuthorizationFilter
+import org.springframework.security.web.authentication.AuthenticationFailureHandler
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler
+import org.springframework.security.web.context.SecurityContextHolderFilter
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
+import org.springframework.security.web.util.matcher.RequestMatcher
+import org.springframework.web.servlet.ViewResolver
+import tools.jackson.databind.ObjectMapper
+import java.time.Clock
+import java.time.Duration
+import java.time.OffsetDateTime
+import java.util.Optional
+
+private val log = LoggerFactory.getLogger(AdminSecurityConfig::class.java)
+
+/** Maximum email length that the ACTOR_EMAIL column (VARCHAR2 255) accepts. */
+private const val MAX_EMAIL_LEN = 255
+
+@Configuration
+@EnableMethodSecurity
+class AdminSecurityConfig {
+
+    @Bean
+    fun adminAuthProvider(uds: AdminUserDetailsService, encoder: PasswordEncoder): DaoAuthenticationProvider {
+        // Security 7: UserDetailsService 는 생성자 인자로만 받는다(setUserDetailsService 제거).
+        val p = DaoAuthenticationProvider(uds)
+        p.setPasswordEncoder(encoder)
+        // Surface UsernameNotFoundException to the failure handler so we
+        // can classify unknown-user vs bad-password in audit + log. The
+        // default behavior wraps UNF in BadCredentialsException to avoid
+        // user enumeration via timing; we already perform credential-spray
+        // rate limiting upstream, and admin-app is an internal surface
+        // where operators need this distinction for incident response.
+        p.setHideUserNotFoundExceptions(false)
+        return p
+    }
+
+    @Bean
+    fun adminFilterChain(
+        http: HttpSecurity,
+        ok: AuthenticationSuccessHandler,
+        fail: AuthenticationFailureHandler,
+        logoutOk: LogoutSuccessHandler,
+        accessDenied: AccessDeniedHandler,
+        corsSource: DynamicCorsConfigurationSource,
+        licenseGuard: Optional<LicenseGuardFilter>,
+        tenantBoundary: TenantBoundary,
+    ): SecurityFilterChain {
+        val csrfRepo = buildCsrfTokenRepository()
+        val csrfHandler = CsrfTokenRequestAttributeHandler()
+        csrfHandler.setCsrfRequestAttributeName(null) // emit token on every response
+
+        http
+            // P0-6: security_policy.cors_allowlist 를 동적으로 적용. allowlist 가 비어
+            // 있으면 corsSource 가 null 을 반환 → CORS 헤더 미발급(same-origin 만 허용).
+            .cors { cors -> cors.configurationSource(corsSource) }
+            .authorizeHttpRequests { authz ->
+                authz
+                    // 화면 경로(/admin 아래)에서 난 컨테이너 오류 디스패치(/error)는 원래 상태의 오류 화면을 그리게 둔다(아래 denyAll 이
+                    // 막으면 404·500 이 "권한이 없습니다" 403 이 된다). 원래 주소가 /admin/api/** 이거나 /admin 밖이면 그대로 둔다.
+                    // 클라이언트가 직접 부르는 GET /error 는 REQUEST 디스패치라 여기 해당하지 않는다(denyAll).
+                    .requestMatchers(RequestMatcher { req -> isScreenErrorDispatch(req) }).permitAll()
+                    .requestMatchers("/admin/login", "/admin/logout").permitAll()
+                    // 미인증 화면(Thymeleaf): 비밀번호 찾기·재설정, 가입 요청. GET 화면과 POST 제출 모두.
+                    .requestMatchers("/admin/forgot-password", "/admin/reset-password", "/admin/signup").permitAll()
+                    // 재설정 메일 링크(base-url + /reset-password?token=…)를 /admin/reset-password 로 넘기는 리다이렉트(화면 계층, PasswordPagesController).
+                    .requestMatchers(HttpMethod.GET, "/reset-password").permitAll()
+                    // 화면 정적 에셋(로그인 화면에서도 쓰므로 미인증 허용).
+                    .requestMatchers("/admin/css/**", "/admin/js/**", "/admin/fonts/**", "/admin/img/**", "/favicon.ico").permitAll()
+                    // 서버가 그리는 화면은 인증 필수. /admin/_/** 는 htmx 조각 전용 경로 접두사.
+                    // /admin/login/mfa 는 MFA 단계 제출(비밀번호 인증을 마친 세션) — MfaPendingFilter 가 대기 중 허용.
+                    .requestMatchers(
+                        "/", "/admin", "/admin/", "/admin/tenants/**", "/admin/activity",
+                        "/admin/audit-chain/**", "/admin/settings/**", "/admin/license",
+                        "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
+                        "/admin/_/**", "/admin/login/mfa",
+                    ).authenticated()
+                    .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                    // /admin/api/profile 은 active profile 만 노출. (React 시절 로그인 화면) 이 미인증 상태에서
+                    // local 여부를 알아 데모 계정 표시를 결정하는 데 쓰던 경로다. 지금 로그인 화면은 서버가 직접 판단한다.
+                    // /admin/api/license 는 DEAD 상태에서도 운영자가 라이선스 진단에 접근할 수 있어야 한다.
+                    .requestMatchers("/admin/api/profile", "/admin/api/license").permitAll()
+                    // 가입 요청(POST)만 미인증 허용 — 요청자는 아직 계정이 없다.
+                    // GET 목록과 /{id}/approve·reject 는 아래 /admin/api/** authenticated 에
+                    // 걸리고, 컨트롤러 @PreAuthorize 가 PLATFORM_OPERATOR 를 강제한다.
+                    .requestMatchers(HttpMethod.POST, "/admin/api/signup-requests").permitAll()
+                    // Self-service password reset (request + confirm) is unauthenticated —
+                    // the operator has no session (they forgot their password).
+                    .requestMatchers("/admin/api/password-reset/**").permitAll()
+                    .requestMatchers("/admin/api/**").authenticated()
+                    // 위 규칙에 없는 /admin 아래 GET(주소를 잘못 친 화면 경로 등)은 로그인한 운영자에게 403 "권한이 없습니다" 대신
+                    // 404 화면(ScreenNotFoundAdvice)을 보이도록 인증만 요구한다. 화면 컨트롤러는 각자 역할을 검사한다(PLATFORM 전용 화면·조각).
+                    // GET 밖의 메서드와 /admin 밖은 그대로 denyAll.
+                    .requestMatchers(HttpMethod.GET, "/admin/**").authenticated()
+                    .anyRequest().denyAll()
+            }
+            .formLogin { form ->
+                form
+                    .loginProcessingUrl("/admin/login")
+                    .usernameParameter("email")
+                    .passwordParameter("password")
+                    .successHandler(ok)
+                    .failureHandler(fail)
+            }
+            .logout { logout ->
+                logout
+                    .logoutUrl("/admin/logout")
+                    .logoutSuccessHandler(logoutOk)
+                    .deleteCookies("SPRING_SESSION", "XSRF-TOKEN")
+            }
+            .csrf { csrf ->
+                csrf
+                    .csrfTokenRepository(csrfRepo)
+                    .csrfTokenRequestHandler(csrfHandler)
+                    // 가입 요청 POST 와 비밀번호 재설정은 세션·XSRF-TOKEN 쿠키가 없는
+                    // 미인증 컨텍스트의 1회성 호출이라 CSRF 를 면제한다. 가입 요청은
+                    // 정확히 POST 한 건만 — 하위 경로(approve/reject)는 보호 유지.
+                    .ignoringRequestMatchers(
+                        PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/admin/api/signup-requests"),
+                        PathPatternRequestMatcher.withDefaults().matcher("/admin/api/password-reset/**"),
+                    )
+            }
+
+        // onprem 모드에서만 존재하는 빈 — Optional 주입으로 SaaS 모드에서 absent.
+        // SecurityContextHolderFilter 전에 삽입해 인증 처리 이전에 라이선스를 검사한다.
+        licenseGuard.ifPresent { filter ->
+            http.addFilterBefore(filter, SecurityContextHolderFilter::class.java)
+        }
+
+        http.sessionManagement { s ->
+            s.maximumSessions(5) // 5 parallel browsers per operator
+        }
+            // Return 401 JSON for unauthenticated API requests instead of
+            // redirecting to the login page (default Spring behavior with
+            // form login). API (XHR/fetch) clients expect a 401 to know
+            // they must navigate to the login page; screen requests are redirected (see the entry point).
+            .exceptionHandling { ex ->
+                ex
+                    .authenticationEntryPoint(spaEntryPoint())
+                    .accessDeniedHandler(accessDenied)
+            }
+            // Stash the authenticated principal name onto a request
+            // attribute inside the Spring Security chain. The outermost
+            // RequestLoggingFilter (in core) reads that attribute in its
+            // finally block — by then SecurityContextHolder is already
+            // cleared, but the request attribute survives. addFilterAfter
+            // (AuthorizationFilter) runs once the security chain has
+            // fully populated SecurityContextHolder.
+            .addFilterAfter(AdminMdcFilter(), AuthorizationFilter::class.java)
+            // Second-factor gate. Runs AFTER AuthorizationFilter so the
+            // SecurityContext is populated and the session is resolved; blocks
+            // MFA-pending sessions from every /admin/api/** path except the
+            // MFA endpoints + logout. The pending state is held server-side in
+            // the HttpSession (set by adminLoginSuccessHandler), so it cannot
+            // be spoofed by a client header.
+            .addFilterAfter(MfaPendingFilter(), AuthorizationFilter::class.java)
+            // Defense-in-depth: for RP_ADMIN requests, set TenantContextHolder
+            // so the Hibernate @Filter (activated by TenantFilterAspect) also
+            // enforces tenant isolation at the ORM layer. PLATFORM_OPERATOR
+            // scope is empty → no set → cross-tenant queries work as intended.
+            // Placed AFTER MfaPendingFilter (which itself runs after
+            // AuthorizationFilter) so it executes only once the SecurityContext
+            // is populated AND the MFA gate has passed; cleared unconditionally
+            // in finally to prevent thread-pool context leakage.
+            .addFilterAfter(TenantContextAdminFilter(tenantBoundary), MfaPendingFilter::class.java)
+        return http.build()
+    }
+
+    /**
+     * 미인증 요청 처리:
+     *   - /admin/api/\*\* (XHR/fetch) → 401 JSON. 클라이언트(JS)가 이 401 을 받아 로그인 화면으로
+     *     이동한다(클라이언트 측 처리).
+     *   - htmx 요청 → 401 + `HX-Redirect: /admin/login`. htmx 가 전체 페이지를 로그인 화면으로 옮긴다.
+     *   - 그 외(화면 직접 접근) → /admin/login 으로 302 리다이렉트.
+     *     페이지 요청에 401 JSON 을 주면 빈 화면이 되므로 리다이렉트가 맞다.
+     */
+    private fun spaEntryPoint(): AuthenticationEntryPoint =
+        AuthenticationEntryPoint { req: HttpServletRequest, res: HttpServletResponse, _: AuthenticationException ->
+            val uri: String? = req.requestURI
+            val isApi = uri != null && uri.startsWith("/admin/api/")
+            // fetch/XHR 은 Accept 가 application/json 인 경우가 많아 보조 판별로도 씀.
+            val accept: String? = req.getHeader("Accept")
+            val wantsJson = accept != null && accept.contains("application/json")
+            if (isApi || wantsJson) {
+                res.status = HttpServletResponse.SC_UNAUTHORIZED
+                res.contentType = "application/json"
+                res.writer.write("{\"error\":\"unauthorized\"}")
+            } else if (Htmx.isHtmx(req)) {
+                res.status = HttpServletResponse.SC_UNAUTHORIZED
+                res.setHeader(Htmx.HX_REDIRECT, "/admin/login")
+            } else {
+                res.sendRedirect("/admin/login")
+            }
+        }
+
+    @Bean
+    fun adminLoginSuccessHandler(
+        audit: AuditLogService,
+        users: AdminUserRepository,
+        policy: SecurityPolicyService,
+        clock: Clock,
+        mapper: ObjectMapper,
+    ): AuthenticationSuccessHandler =
+        AuthenticationSuccessHandler { req: HttpServletRequest, res: HttpServletResponse, auth: Authentication ->
+            val email = auth.name
+            val u: AdminUser = users.findByEmail(email).orElseThrow()
+            u.recordLogin(OffsetDateTime.now(clock))
+            u.recordSuccessfulLogin()
+            users.save(u)
+            audit.append(
+                AuditAppendRequest(
+                    u.id, email, "ADMIN_LOGIN",
+                    null, null,
+                    null,
+                    java.util.Map.of(
+                        "ip", req.remoteAddr,
+                        "ua", if (req.getHeader("User-Agent") == null) "" else req.getHeader("User-Agent"),
+                    ),
+                ),
+            )
+            // Snapshot the operator-configured idle timeout onto this session.
+            // application.yml's session.timeout (PT30M) is only the pre-login
+            // default; from here on the session honors the SecurityPolicy value
+            // so the settings label and the front-end warning modal are truthful.
+            // Defensive: if the policy row is missing or holds a non-positive
+            // value (DB corruption), fall back to the 30-minute default rather
+            // than failing login or setting an unbounded (negative) timeout.
+            var idleMinutes = DEFAULT_IDLE_MINUTES
+            try {
+                val configured = policy.get().sessionIdleTimeoutMinutes
+                if (configured >= 1) {
+                    idleMinutes = configured
+                } else {
+                    log.warn(
+                        "security policy sessionIdleTimeoutMinutes={} is non-positive; using default {}min",
+                        configured, DEFAULT_IDLE_MINUTES,
+                    )
+                }
+            } catch (ex: RuntimeException) {
+                log.warn(
+                    "could not read security policy for session timeout; using default {}min: {}",
+                    DEFAULT_IDLE_MINUTES, ex.toString(),
+                )
+            }
+            req.session.maxInactiveInterval = idleMinutes * 60
+
+            // For MFA-enabled operators, stamp the session as second-factor
+            // pending. MfaPendingFilter then blocks /admin/api/** (except the
+            // MFA endpoints + logout) until /admin/api/mfa/verify clears it.
+            // Operators without MFA are unaffected — behavior is unchanged.
+            val mfaRequired = u.isMfaEnabled
+            if (mfaRequired) {
+                req.session.setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, java.lang.Boolean.TRUE)
+            }
+            log.info(
+                "admin login success: email={} role={} mfaRequired={}",
+                CryptoUtils.maskEmail(email), u.role, mfaRequired,
+            )
+            if (isPageLogin(req)) {
+                // Thymeleaf 로그인 화면: MFA 대기면 로그인 화면(MFA 단계)으로, 아니면 홈으로.
+                Htmx.redirect(req, res, if (mfaRequired) "/admin/login" else "/admin")
+                return@AuthenticationSuccessHandler
+            }
+            res.status = HttpServletResponse.SC_OK
+            res.contentType = "application/json"
+            // Use Jackson to avoid malformed JSON if email ever contains quotes/backslashes.
+            res.writer.write(
+                mapper.writeValueAsString(
+                    java.util.Map.of("email", email, "role", u.role, "mfaRequired", mfaRequired),
+                ),
+            )
+        }
+
+    @Bean
+    fun adminLoginFailureHandler(
+        audit: AuditLogService,
+        users: AdminUserRepository,
+        clock: Clock,
+        events: ApplicationEventPublisher,
+        @Value("\${passkey.admin.lockout.max-attempts:5}") maxAttempts: Int,
+        @Value("\${passkey.admin.lockout.duration:PT15M}") lockDuration: Duration,
+    ): AuthenticationFailureHandler =
+        AuthenticationFailureHandler { req: HttpServletRequest, res: HttpServletResponse, ex: AuthenticationException ->
+            val raw: String? = req.getParameter("email")
+            // Truncate to column limit (VARCHAR2 255) to prevent audit insert failures
+            // when an attacker submits an oversized email in a credential spray.
+            val email: String = if (raw == null) {
+                "(unknown)"
+            } else if (raw.length > MAX_EMAIL_LEN) {
+                raw.substring(0, MAX_EMAIL_LEN)
+            } else {
+                raw
+            }
+            val reason = when (ex) {
+                is BadCredentialsException -> "bad-password"
+                is DisabledException -> "user-disabled"
+                is LockedException -> "user-locked"
+                is UsernameNotFoundException -> "unknown-user"
+                else -> "other"
+            }
+            // Count consecutive bad-password failures toward the lockout
+            // threshold. recordFailedLogin auto-locks (and resets the counter)
+            // once maxAttempts is reached; on the next attempt the
+            // DaoAuthenticationProvider throws LockedException (audited as
+            // "user-locked") without any extra wiring here.
+            if (ex is BadCredentialsException && raw != null) {
+                users.findByEmail(raw).ifPresent { u ->
+                    u.recordFailedLogin(OffsetDateTime.now(clock), maxAttempts, lockDuration)
+                    users.save(u)
+                }
+            }
+            audit.append(
+                AuditAppendRequest(
+                    null, email,
+                    "ADMIN_LOGIN_FAILED", null, null,
+                    null,
+                    java.util.Map.of(
+                        "ip", req.remoteAddr,
+                        "reason", reason,
+                    ),
+                ),
+            )
+            log.warn("admin login failed: email={} reason={}", CryptoUtils.maskEmail(email), reason)
+            events.publishEvent(
+                SecurityAlertEvent(
+                    SecurityAlertEvent.AlertType.ADMIN_LOGIN_FAILURE,
+                    SecurityAlertEvent.Severity.MEDIUM,
+                    "admin login failed",
+                    java.util.Map.of("email", CryptoUtils.maskEmail(email), "reason", reason),
+                ),
+            )
+            if (isPageLogin(req)) {
+                // 필터 단계라 템플릿을 그리지 않고, 로그인 화면이 error 파라미터로 오류 문구를 보여준다.
+                Htmx.redirect(req, res, "/admin/login?error")
+                return@AuthenticationFailureHandler
+            }
+            res.status = HttpServletResponse.SC_UNAUTHORIZED
+            res.contentType = "application/json"
+            res.writer.write("{\"error\":\"unauthorized\"}")
+        }
+
+    @Bean
+    fun adminLogoutSuccessHandler(): LogoutSuccessHandler =
+        LogoutSuccessHandler { _: HttpServletRequest, res: HttpServletResponse, auth: Authentication? ->
+            // /admin/logout is permitAll, so an unauthenticated request can
+            // reach here with auth == null. Log either way so operators
+            // see logout activity (including stray probes / replay attempts).
+            val emailMasked = if (auth == null) "anonymous" else CryptoUtils.maskEmail(auth.name)
+            log.info("admin logout: email={}", emailMasked)
+            // Preserve prior default: redirect to /admin/login on logout success.
+            res.status = HttpServletResponse.SC_OK
+            res.sendRedirect("/admin/login")
+        }
+
+    /**
+     * 접근 거부(권한 부족, CSRF 토큰 누락·불일치):
+     *   - /admin/api/\*\* → 기존 403 JSON.
+     *   - 그 밖의 경로(화면) → Accept 헤더와 관계없이 admin/error 템플릿을 403 으로 렌더링.
+     *     htmx 요청이면 오류 토스트(HX-Trigger)도 함께 보낸다.
+     * ViewResolver 는 지연 조회한다(Thymeleaf 가 없거나 렌더링에 실패하면 JSON 으로 돌아간다).
+     */
+    @Bean
+    fun adminAccessDeniedHandler(
+        @Qualifier("thymeleafViewResolver") viewResolver: ObjectProvider<ViewResolver>,
+    ): AccessDeniedHandler =
+        AccessDeniedHandler { req: HttpServletRequest, res: HttpServletResponse, ex: AccessDeniedException ->
+            val auth = SecurityContextHolder.getContext().authentication
+            val emailMasked = if (auth == null) "anonymous" else CryptoUtils.maskEmail(auth.name)
+            log.warn(
+                "admin access denied: email={} method={} path={} cause={}",
+                emailMasked, req.method, req.requestURI, ex.javaClass.simpleName,
+            )
+            val uri: String? = req.requestURI
+            val isApi = uri != null && uri.startsWith("/admin/api/")
+            if (!isApi) {
+                if (Htmx.isHtmx(req)) {
+                    Toasts.error(res, FORBIDDEN_MESSAGE)
+                }
+                val resolver: ViewResolver? = viewResolver.getIfAvailable()
+                if (resolver != null) {
+                    try {
+                        if (ErrorPage.render(
+                                resolver, req, res, HttpServletResponse.SC_FORBIDDEN,
+                                FORBIDDEN_TITLE, FORBIDDEN_MESSAGE,
+                            )
+                        ) {
+                            return@AccessDeniedHandler
+                        }
+                    } catch (renderEx: Exception) {
+                        log.warn("could not render admin error page; falling back to JSON: {}", renderEx.toString())
+                        if (res.isCommitted) return@AccessDeniedHandler
+                        res.resetBuffer()
+                    }
+                }
+            }
+            res.status = HttpServletResponse.SC_FORBIDDEN
+            res.contentType = "application/json"
+            res.writer.write("{\"error\":\"forbidden\"}")
+        }
+
+    companion object {
+        /** Fallback idle timeout (minutes) when the policy is unreadable or invalid — matches application.yml PT30M. Also used by MeController as the no-session fallback. */
+        internal const val DEFAULT_IDLE_MINUTES = 30
+
+        /** describeError.ts 의 403 문구. */
+        internal const val FORBIDDEN_TITLE = "권한이 없습니다"
+        internal const val FORBIDDEN_MESSAGE = "이 작업을 할 권한이 없습니다. 운영자에게 문의하세요."
+
+        /**
+         * XSRF-TOKEN 쿠키 저장소. `withHttpOnlyFalse()` 로 화면의 JS(htmx·fetch)가
+         * `document.cookie` 로 읽어 `X-XSRF-TOKEN` 헤더로 echo 하게 하고,
+         * `Path=/admin` 으로 쿠키를 스코프한다.
+         *
+         * **F-cookieSecure**: `Secure` 플래그는 명시적으로 세팅하지 않는다
+         * (기본값 `null` → [CookieCsrfTokenRepository]
+         * 가 매 요청마다 `request.isSecure()` 로 자동 판정). 이게 프로필별
+         * 하드코딩보다 root-cause: `server.forward-headers-strategy=framework`
+         * (G13 이 함께 적용) 가 켜지면 LB 뒤 TLS 종단 요청은 `X-Forwarded-Proto`
+         * 로 `isSecure()=true` 가 정확히 반영되어 Secure 쿠키가 자동 발급되고,
+         * dev/local 처럼 헤더가 없는 순수 http 환경은 `isSecure()=false` 라 로그인이
+         * 깨지지 않는다. `SameSite=Lax` 는 `cookieCustomizer` 로 명시 설정
+         * (spring-security-web 6.5 에는 `setSameSite` 가 없다) — Spring Session 의
+         * `DefaultCookieSerializer` 는 기본값이 이미 Lax 이지만 이 저장소는
+         * 명시하지 않으면 SameSite 속성 자체가 빠진다(세션 쿠키와의 일관성 확보).
+         * customizer 는 `.secure(...)` 를 건드리지 않으므로 위 자동판정은 그대로 유지된다.
+         *
+         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트
+         * (AdminSecurityConfigCsrfCookieTest)가 `AdminSecurityConfig.buildCsrfTokenRepository()` 로 부른다.
+         * Kotlin 에 package-private 이 없고 internal 함수는 JVM 이름이 바뀌어 Java 에서 못 부른다.
+         */
+        @JvmStatic
+        fun buildCsrfTokenRepository(): CookieCsrfTokenRepository {
+            val repo = CookieCsrfTokenRepository.withHttpOnlyFalse()
+            repo.setCookiePath("/admin")
+            repo.setCookieCustomizer { cookie -> cookie.sameSite("Lax") }
+            return repo
+        }
+    }
+}
+
+/**
+ * 컨테이너 오류 디스패치이고, 오류가 난 원래 주소가 화면 경로(`/admin` 아래, `/admin/api/\*\*` 제외)인지.
+ * 원래 주소 속성(`ERROR_REQUEST_URI`)이 없으면 일부러 화면 경로로 본다 — 이때 닿는 것은 고정 문구의
+ * `admin/error` 화면뿐이라(데이터·서버 메시지 없음) 허용해도 드러나는 것이 없다.
+ */
+private fun isScreenErrorDispatch(req: HttpServletRequest): Boolean {
+    if (req.dispatcherType != DispatcherType.ERROR) return false
+    val uri: Any = req.getAttribute(RequestDispatcher.ERROR_REQUEST_URI) ?: return true
+    val u = uri.toString()
+    val admin = u == "/admin" || u.startsWith("/admin/")
+    val api = u == "/admin/api" || u.startsWith("/admin/api/")
+    return admin && !api
+}
+
+/**
+ * 로그인 요청이 Thymeleaf 화면에서 왔는지. htmx 요청이거나 CSRF 토큰이 `_csrf`
+ * **파라미터**로 온 경우(th:action 폼)다. JSON API 클라이언트·기존 통합 테스트는 form-urlencoded 본문에
+ * `X-XSRF-TOKEN` 헤더를 붙여 보내고 JSON 응답을 기대하므로 이 기준으로 나눈다.
+ */
+private fun isPageLogin(req: HttpServletRequest): Boolean =
+    Htmx.isHtmx(req) || req.getParameter("_csrf") != null

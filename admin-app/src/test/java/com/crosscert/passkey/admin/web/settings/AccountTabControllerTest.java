@@ -306,7 +306,7 @@ class AccountTabControllerTest {
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         ArgumentCaptor<MfaController.VerifyRequest> req = ArgumentCaptor.forClass(MfaController.VerifyRequest.class);
         verify(mfa).confirm(req.capture(), any(), any());
-        assertThat(req.getValue().code()).isEqualTo("123456");
+        assertThat(req.getValue().getCode()).isEqualTo("123456");
 
         Document d = doc(r);
         assertThat(d.selectFirst("[x-init]").attr("x-init")).contains("mfa-enroll-done");
@@ -426,7 +426,7 @@ class AccountTabControllerTest {
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         ArgumentCaptor<MfaController.VerifyRequest> req = ArgumentCaptor.forClass(MfaController.VerifyRequest.class);
         verify(mfa).disable(req.capture(), any(), any());
-        assertThat(req.getValue().code()).isEqualTo("123456");
+        assertThat(req.getValue().getCode()).isEqualTo("123456");
         Document d = doc(r);
         Element card = d.selectFirst("#mfa-account");
         assertThat(card.hasAttr("hx-swap-oob")).isFalse();

@@ -16,8 +16,8 @@ public record CurrentAdmin(String email, String role, List<UUID> tenantIds,
     public static final String PLATFORM_OPERATOR = "PLATFORM_OPERATOR";
 
     public static CurrentAdmin from(MeView v) {
-        return new CurrentAdmin(v.email(), v.role(), v.tenantIds(),
-                v.mfaEnabled(), v.mfaRequired(), v.sessionIdleTimeoutMinutes(),
-                PLATFORM_OPERATOR.equals(v.role()));
+        return new CurrentAdmin(v.getEmail(), v.getRole(), v.getTenantIds(),
+                v.getMfaEnabled(), v.getMfaRequired(), v.getSessionIdleTimeoutMinutes(),
+                PLATFORM_OPERATOR.equals(v.getRole()));
     }
 }

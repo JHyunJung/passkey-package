@@ -127,8 +127,8 @@ public class LoginPageController {
     /** LoginPage.tsx: {@code p.active?.includes('dev') || p.active?.includes('local') || p.local}. */
     static boolean showDemoAccount(ProfileController.ProfileView p) {
         if (p == null) return false;
-        java.util.List<String> active = p.active();
-        return p.local() || (active != null && (active.contains("dev") || active.contains("local")));
+        java.util.List<String> active = p.getActive();
+        return p.getLocal() || (active != null && (active.contains("dev") || active.contains("local")));
     }
 
     /** {@code ?error} 처럼 값 없는 쿼리 파라미터도 있는 것으로 본다(컨테이너에 따라 getParameter 가 null 일 수 있다). */

@@ -262,7 +262,7 @@ class LoginPageControllerTest {
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         assertThat(r.getResponse().getHeader("HX-Redirect")).isEqualTo("/admin");
         assertThat(r.getResponse().getHeader("HX-Trigger")).isNull();
-        verify(mfa).verify(argThat(b -> "123456".equals(b.code())), any(Authentication.class), any(HttpServletRequest.class));
+        verify(mfa).verify(argThat(b -> "123456".equals(b.getCode())), any(Authentication.class), any(HttpServletRequest.class));
     }
 
     @Test
@@ -275,7 +275,7 @@ class LoginPageControllerTest {
         assertThat(toast.get("kind").asString()).isEqualTo("warn");
         assertThat(toast.get("title").asString()).isEqualTo("복구 코드를 사용했습니다.");
         assertThat(toast.get("message").asString()).isEqualTo("남은 복구 코드: 3개");
-        verify(mfa).verify(argThat(b -> "AB3F-2K7M".equals(b.code())), any(), any());
+        verify(mfa).verify(argThat(b -> "AB3F-2K7M".equals(b.getCode())), any(), any());
     }
 
     @Test

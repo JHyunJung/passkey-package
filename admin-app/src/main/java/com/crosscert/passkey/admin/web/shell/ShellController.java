@@ -122,10 +122,10 @@ public class ShellController {
         } catch (RuntimeException e) {
             return NONE;
         }
-        if (view == null || view.allowedTenantIds() == null || view.allowedTenantIds().size() < 2) return NONE;
+        if (view == null || view.getAllowedTenantIds() == null || view.getAllowedTenantIds().size() < 2) return NONE;
         Map<UUID, String> names = names(view);
-        List<SwitcherItem> items = view.allowedTenantIds().stream()
-                .map(id -> new SwitcherItem(id, names.getOrDefault(id, shortId(id)), id.equals(view.activeTenantId())))
+        List<SwitcherItem> items = view.getAllowedTenantIds().stream()
+                .map(id -> new SwitcherItem(id, names.getOrDefault(id, shortId(id)), id.equals(view.getActiveTenantId())))
                 .toList();
         model.addAttribute("switcher", new Switcher(label(view, names), items));
         return "admin/fragments/shell/tenant-switcher :: switcher";
@@ -187,14 +187,14 @@ public class ShellController {
     }
 
     private static Map<UUID, String> names(ActiveTenantController.ActiveTenantView view) {
-        if (view.allowedTenants() == null) return Map.of();
-        return view.allowedTenants().stream().collect(Collectors.toMap(
-                ActiveTenantController.TenantRef::id, ActiveTenantController.TenantRef::name, (a, b) -> a));
+        if (view.getAllowedTenants() == null) return Map.of();
+        return view.getAllowedTenants().stream().collect(Collectors.toMap(
+                ActiveTenantController.TenantRef::getId, ActiveTenantController.TenantRef::getName, (a, b) -> a));
     }
 
     /** 현재 RP 이름. 이름이 없으면 id 끝 8자, 활성 RP 가 없으면 "—". */
     private static String label(ActiveTenantController.ActiveTenantView view, Map<UUID, String> names) {
-        UUID id = view.activeTenantId();
+        UUID id = view.getActiveTenantId();
         return id == null ? "—" : names.getOrDefault(id, shortId(id));
     }
 

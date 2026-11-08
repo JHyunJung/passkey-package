@@ -135,7 +135,7 @@ public class SignupPageController {
     private boolean selfSignupAvailable() {
         try {
             var p = profiles.profile();
-            return p != null && p.data() != null && p.data().platformOperatorSelfSignup();
+            return p != null && p.data() != null && p.data().getPlatformOperatorSelfSignup();
         } catch (RuntimeException e) {
             return false; // 조회 실패 — 기본(승인 필요) 화면
         }

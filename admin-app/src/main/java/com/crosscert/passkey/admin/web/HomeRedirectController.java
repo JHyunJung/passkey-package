@@ -38,7 +38,7 @@ public class HomeRedirectController {
 
     /** rpTenantId(me) ? /admin/tenants/{id} : /admin/tenants */
     public static String homePath(MeView v) {
-        return homePath(v.role(), v.tenantIds());
+        return homePath(v.getRole(), v.getTenantIds());
     }
 
     /** 화면 모델의 {@code me}(CurrentAdmin)용. 같은 규칙이다 — RequirePlatform 이 쓴다. */

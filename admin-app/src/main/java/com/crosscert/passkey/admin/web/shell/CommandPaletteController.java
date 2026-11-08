@@ -172,13 +172,13 @@ public class CommandPaletteController {
     private ActiveTenant activeTenant() {
         try {
             ActiveTenantController.ActiveTenantView v = activeTenants.current();
-            if (v == null || v.activeTenantId() == null) return new ActiveTenant(false, null, null);
+            if (v == null || v.getActiveTenantId() == null) return new ActiveTenant(false, null, null);
             String name = null;
-            if (v.allowedTenants() != null) {
-                name = v.allowedTenants().stream().filter(t -> v.activeTenantId().equals(t.id()))
-                        .map(ActiveTenantController.TenantRef::name).findFirst().orElse(null);
+            if (v.getAllowedTenants() != null) {
+                name = v.getAllowedTenants().stream().filter(t -> v.getActiveTenantId().equals(t.getId()))
+                        .map(ActiveTenantController.TenantRef::getName).findFirst().orElse(null);
             }
-            return new ActiveTenant(true, v.activeTenantId().toString(), name);
+            return new ActiveTenant(true, v.getActiveTenantId().toString(), name);
         } catch (RuntimeException e) {
             return new ActiveTenant(false, null, null);
         }
