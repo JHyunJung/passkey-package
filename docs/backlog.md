@@ -78,7 +78,7 @@
       (core 전체에 두 애너테이션 0건). 락 없이 로드·수정·flush 하면 동시 `/authentication/finish` 의 `signCount` 갱신을 되돌린다.
       F22(rename 비잠금 전환)가 이 이유로 롤백됐다 — **락 제거형 성능개선은 항상 이걸 먼저 의심한다.** [zero-base 2026-07-04]
 - [ ] **G02 rp-app `StreamReadConstraints` 미설정** — rp-app 에 0건. passkey-app 만
-      `PasskeyAppJacksonConfig.java:31-37` 로 설정돼 있다. [zero-base 2026-07-04]
+      `PasskeyAppJacksonConfig.kt:33-40` 로 설정돼 있다. [zero-base 2026-07-04]
 - [ ] **G10 rp-app issuer-base localhost 폴백** — `rp-app/src/main/resources/application.yml:32`
       = `${PASSKEY_ISSUER_BASE:http://localhost:8080}`. 환경변수 누락 시 조용히 localhost 로 떨어진다. [zero-base 2026-07-04]
 - [ ] **F30 `NativeWebAuthnVerifier` BE/BS 플래그 검사 · F35 `CborDecoder` non-minimal int 거부** [zero-base 2026-07-04]
@@ -152,7 +152,7 @@
 - [ ] **이벤트 타입 분류/색상이 ActivityPage vs AuditTab 로 이원화** [master-backlog 2026-05-31, activity-page 2026-05-28]
 - [ ] **`uuidToBytes`/`uuidFromBytes` 를 `CryptoUtils` 로** — `IdTokenIssuer.java:91`, `DefaultAaguidPolicyChecker.java:100` 의
       private 중복. `sha256Hex`/`hex`/`maskEmail`/`randomToken` 은 이미 통합됐다. [master-backlog 2026-05-31]
-- [ ] **JWT TTL 900 하드코딩** — `AuthenticationFinishService.java:232,234` 리터럴 2곳. [master-backlog 2026-05-31]
+- [ ] **JWT TTL 900 하드코딩** — `AuthenticationFinishService.kt:40` 의 `private const val ID_TOKEN_TTL_SEC = 900L`(사용처 215,217) — 설정으로 외부화되지 않음. [master-backlog 2026-05-31]
 - [ ] **`MfaPendingFilter` 가 `getRequestURI()`** — 다른 필터는 `getServletPath()`. `:74`(및 `:71` javadoc). [master-backlog 2026-05-31]
 - [ ] **(superseded: React 제거로 해당 없음) `TweaksPanel` 이 prod 에서도 무조건 렌더 + `as any`** — `:125` 에 `as any` 잔존, `import.meta.env.DEV` 가드 0건.
       `App.tsx` 의 `handleSwitchRole` stub·잔여 `as any` 도 함께. [master-backlog 2026-05-31, rp-admin-role-gating 2026-05-31]
