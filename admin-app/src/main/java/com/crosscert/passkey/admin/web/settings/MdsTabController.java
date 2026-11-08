@@ -86,9 +86,9 @@ public class MdsTabController {
         } catch (RuntimeException e) {
             return SettingsSupport.fail(res, "MDS 갱신 실패", e, false); // 오류 상태 + 토스트, 본문 없음(탭은 그대로)
         }
-        if ("SYNCED".equals(r.status())) {
-            Toasts.successTitled(res, "MDS 즉시 갱신 완료", "버전 " + r.version());
-        } else if ("SKIPPED".equals(r.status())) {
+        if ("SYNCED".equals(r.getStatus())) {
+            Toasts.successTitled(res, "MDS 즉시 갱신 완료", "버전 " + r.getVersion());
+        } else if ("SKIPPED".equals(r.getStatus())) {
             Toasts.warnTitled(res, "MDS 갱신 건너뜀", "다른 인스턴스가 동기화 중입니다.");
         } else {
             // 서버 원문(r.error())은 화면에 싣지 않는다.
@@ -148,28 +148,28 @@ public class MdsTabController {
     static View view(MdsStatusView s, List<MdsHistoryView> history, Instant now) {
         boolean historyOk = history != null;
         List<MdsHistoryView> h = history == null ? List.of() : history;
-        boolean neverSynced = s.version() == 0 || isSeedTime(s.fetchedAt());
-        String nextUpdate = s.nextUpdate() != null && !isSeedDate(s.nextUpdate()) ? s.nextUpdate() : null;
-        String versionText = !neverSynced ? "#" + s.version() : "—";
+        boolean neverSynced = s.getVersion() == 0 || isSeedTime(s.getFetchedAt());
+        String nextUpdate = s.getNextUpdate() != null && !isSeedDate(s.getNextUpdate()) ? s.getNextUpdate() : null;
+        String versionText = !neverSynced ? "#" + s.getVersion() : "—";
         MdsHistoryView latest = h.isEmpty() ? null : h.get(0);
         // 헤드라인의 기준은 상태. 시드뿐이거나 이력을 못 읽었으면 중립, 아니면 가장 최근 실행이 실패일 때만 실패로 표시한다.
-        String tone = neverSynced || !historyOk ? "neutral" : latest != null && "FAILED".equals(latest.status()) ? "bad" : "ok";
+        String tone = neverSynced || !historyOk ? "neutral" : latest != null && "FAILED".equals(latest.getStatus()) ? "bad" : "ok";
         String title = "bad".equals(tone) ? "동기화 실패 · BLOB " + versionText
                 : "neutral".equals(tone) ? (!historyOk && !neverSynced ? "이력 확인 불가 · BLOB " + versionText : "동기화 이력 없음")
                 : "정상 · BLOB " + versionText;
         String sub = "FIDO MDS3 BLOB 을 매일 03:00 KST 에 갱신합니다" + (nextUpdate != null ? " · 다음 갱신 " + nextUpdate + " 03:00 KST" : "");
-        MdsStatusView.SuccessRate sr = s.successRate30d();
-        Rate rate = sr != null && sr.total() > 0
-                ? new Rate(Math.round(sr.ok() * 100.0 / sr.total()) + "%", sr.ok() + " / " + sr.total()) : null;
+        MdsStatusView.SuccessRate sr = s.getSuccessRate30d();
+        Rate rate = sr != null && sr.getTotal() > 0
+                ? new Rate(Math.round(sr.getOk() * 100.0 / sr.getTotal()) + "%", sr.getOk() + " / " + sr.getTotal()) : null;
         List<Run> runs = new ArrayList<>();
         List<Boolean> strip = new ArrayList<>();
         long fail = 0;
         for (MdsHistoryView r : h.subList(0, Math.min(h.size(), TABLE_ROWS))) runs.add(run(r));
-        for (int i = h.size() - 1; i >= 0; i--) strip.add(stripValue(h.get(i).status()));
-        for (MdsHistoryView r : h) if ("FAILED".equals(r.status())) fail++;
+        for (int i = h.size() - 1; i >= 0; i--) strip.add(stripValue(h.get(i).getStatus()));
+        for (MdsHistoryView r : h) if ("FAILED".equals(r.getStatus())) fail++;
         String stripLabel = "최근 " + h.size() + "회 동기화 결과 · 실패 " + fail + "회";
-        return new View(tone, title, sub, versionText, String.valueOf(s.trustAnchorCount()),
-                neverSynced ? "—" : timeAgo(s.fetchedAt(), now), nextUpdate, rate, trust(s.trustMode()), historyOk, runs, strip, stripLabel);
+        return new View(tone, title, sub, versionText, String.valueOf(s.getTrustAnchorCount()),
+                neverSynced ? "—" : timeAgo(s.getFetchedAt(), now), nextUpdate, rate, trust(s.getTrustMode()), historyOk, runs, strip, stripLabel);
     }
 
     static Boolean stripValue(String status) {
@@ -181,13 +181,13 @@ public class MdsTabController {
     }
 
     static Run run(MdsHistoryView r) {
-        String status = r.status() == null ? "" : r.status();
+        String status = r.getStatus() == null ? "" : r.getStatus();
         String tone = switch (status) { case "SYNCED" -> "ok"; case "FAILED" -> "bad"; default -> "neutral"; };
         String label = switch (status) { case "SYNCED" -> "동기화됨"; case "SKIPPED" -> "건너뜀"; case "FAILED" -> "실패"; default -> status; };
-        boolean failed = "FAILED".equals(status) && r.errorMessage() != null && !r.errorMessage().isBlank();
-        String change = failed ? failureReason(r.errorMessage()) : r.changeSummary() != null ? r.changeSummary() : "—";
-        return new Run(r.startedAt() == null ? "—" : KstFormat.kstDateTimeMin(r.startedAt()), r.version() != null ? "#" + r.version() : "—",
-                failed, change, failed ? flat(r.errorMessage()) : null, tone, label, r.durationMs() != null ? r.durationMs() + "ms" : "—");
+        boolean failed = "FAILED".equals(status) && r.getErrorMessage() != null && !r.getErrorMessage().isBlank();
+        String change = failed ? failureReason(r.getErrorMessage()) : r.getChangeSummary() != null ? r.getChangeSummary() : "—";
+        return new Run(r.getStartedAt() == null ? "—" : KstFormat.kstDateTimeMin(r.getStartedAt()), r.getVersion() != null ? "#" + r.getVersion() : "—",
+                failed, change, failed ? flat(r.getErrorMessage()) : null, tone, label, r.getDurationMs() != null ? r.getDurationMs() + "ms" : "—");
     }
 
     /** 실패 사유(서버 errorMessage)를 한 줄 평문으로. 길면 줄이고(80자) 전체는 title 툴팁(템플릿). */

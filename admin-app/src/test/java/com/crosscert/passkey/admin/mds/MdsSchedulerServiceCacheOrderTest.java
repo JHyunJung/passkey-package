@@ -89,7 +89,7 @@ class MdsSchedulerServiceCacheOrderTest {
 
         MdsSchedulerService.SyncResult result = scheduler.runOnce();
 
-        assertThat(result.status()).isEqualTo("SYNCED");
+        assertThat(result.getStatus()).isEqualTo("SYNCED");
 
         InOrder inOrder = inOrder(valueOps, redis);
         // Fresh SET for the surviving AAGUID must be issued first...
@@ -115,7 +115,7 @@ class MdsSchedulerServiceCacheOrderTest {
 
         MdsSchedulerService.SyncResult result = scheduler.runOnce();
 
-        assertThat(result.status()).isEqualTo("SYNCED");
+        assertThat(result.getStatus()).isEqualTo("SYNCED");
         verify(valueOps).set(eq(key), anyString(), any(Duration.class));
         // Nothing left to clean up — delete must not be called with a non-empty set.
         verify(redis, never()).delete(argThat((Set<String> deleted) -> !deleted.isEmpty()));

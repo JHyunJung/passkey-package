@@ -97,8 +97,8 @@ class KeyRotationServiceTest {
         assertThat(auditCap.getValue().payload()).containsKey("oldKid");
         assertThat(auditCap.getValue().payload()).containsKey("newKid");
 
-        assertThat(result.oldKid()).isEqualTo("old-kid");
-        assertThat(result.newKid()).isEqualTo(newRow.getKid());
+        assertThat(result.getOldKid()).isEqualTo("old-kid");
+        assertThat(result.getNewKid()).isEqualTo(newRow.getKid());
     }
 
     @Test

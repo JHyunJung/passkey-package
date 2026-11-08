@@ -379,9 +379,9 @@ public class TenantDetailPageController {
     private Kpi rateKpi(FunnelDto.View f, Exception error, boolean registration) {
         String none = registration ? "최근 7일 등록 시도 없음" : "최근 7일 인증 시도 없음";
         if (error != null) return new Kpi("—", "불러오지 못했습니다", "warn");
-        FunnelDto.Stage s = registration ? f.registration() : f.authentication();
-        if (s.attempts() > 0) {
-            return new Kpi(String.format(Locale.ROOT, "%.1f%%", s.ratio() * 100), fmt(s.success()) + " / " + fmt(s.attempts()) + " 시도", "default");
+        FunnelDto.Stage s = registration ? f.getRegistration() : f.getAuthentication();
+        if (s.getAttempts() > 0) {
+            return new Kpi(String.format(Locale.ROOT, "%.1f%%", s.getRatio() * 100), fmt(s.getSuccess()) + " / " + fmt(s.getAttempts()) + " 시도", "default");
         }
         return new Kpi("—", none, "default");
     }
@@ -397,9 +397,9 @@ public class TenantDetailPageController {
         try {
             if (me.platform()) {
                 ActivityView view = activity.activity(null, null, null, null, tid).data();
-                for (ActivityView.Event e : view.feed()) {
-                    if (!tid.equals(e.tenantId())) continue;
-                    out.add(event(e.action(), e.targetId(), e.createdAt(), now));
+                for (ActivityView.Event e : view.getFeed()) {
+                    if (!tid.equals(e.getTenantId())) continue;
+                    out.add(event(e.getAction(), e.getTargetId(), e.getCreatedAt(), now));
                     if (out.size() == 5) break;
                 }
             } else {

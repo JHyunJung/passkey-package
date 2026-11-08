@@ -49,13 +49,13 @@ class FunnelServiceSplitTest {
         FunnelDto.View v = service.compute(tenant, 7);
 
         String label = today.toString().substring(5);
-        assertThat(v.registrationSeries()).hasSize(7);
-        assertThat(v.authenticationSeries()).hasSize(7);
-        assertThat(v.registrationSeries().get(6)).isEqualTo(new FunnelDto.DailyPoint(label, 4, 3));
-        assertThat(v.authenticationSeries().get(6)).isEqualTo(new FunnelDto.DailyPoint(label, 10, 9));
+        assertThat(v.getRegistrationSeries()).hasSize(7);
+        assertThat(v.getAuthenticationSeries()).hasSize(7);
+        assertThat(v.getRegistrationSeries().get(6)).isEqualTo(new FunnelDto.DailyPoint(label, 4, 3));
+        assertThat(v.getAuthenticationSeries().get(6)).isEqualTo(new FunnelDto.DailyPoint(label, 10, 9));
         // 기존 JSON 의 series 는 합계 그대로
-        assertThat(v.series().get(6)).isEqualTo(new FunnelDto.DailyPoint(label, 14, 12));
-        assertThat(v.registrationSeries().get(0).attempts()).isZero();
-        assertThat(v.authFailures()).containsExactly(new FunnelDto.FailureCount("SIGNATURE_INVALID", 5), new FunnelDto.FailureCount(null, 1));
+        assertThat(v.getSeries().get(6)).isEqualTo(new FunnelDto.DailyPoint(label, 14, 12));
+        assertThat(v.getRegistrationSeries().get(0).getAttempts()).isZero();
+        assertThat(v.getAuthFailures()).containsExactly(new FunnelDto.FailureCount("SIGNATURE_INVALID", 5), new FunnelDto.FailureCount(null, 1));
     }
 }

@@ -69,24 +69,24 @@ public class SystemInfoTabController {
     }
 
     static Info toInfo(SystemInfoView v) {
-        List<SystemInfoView.Component> raw = v.components() == null ? List.of() : v.components();
+        List<SystemInfoView.Component> raw = v.getComponents() == null ? List.of() : v.getComponents();
         List<Comp> comps = new ArrayList<>();
         long ok = 0;
         boolean down = false, degraded = false;
         for (SystemInfoView.Component c : raw) {
-            if ("OK".equals(c.status())) ok++;
-            if ("DOWN".equals(c.status())) down = true;
-            if ("DEGRADED".equals(c.status())) degraded = true;
-            comps.add(new Comp(c.name(), c.version(), c.note() == null || c.note().isEmpty() ? null : c.note(), Status.of(c.status())));
+            if ("OK".equals(c.getStatus())) ok++;
+            if ("DOWN".equals(c.getStatus())) down = true;
+            if ("DEGRADED".equals(c.getStatus())) degraded = true;
+            comps.add(new Comp(c.getName(), c.getVersion(), c.getNote() == null || c.getNote().isEmpty() ? null : c.getNote(), Status.of(c.getStatus())));
         }
         // 전체 상태 = 가장 나쁜 컴포넌트 상태.
         Status overall = Status.of(down ? "DOWN" : degraded ? "DEGRADED" : "OK");
-        String deployed = deployedKst(v.deployedAt());
-        String env = v.host() == null || v.host().environment() == null ? "" : v.host().environment();
+        String deployed = deployedKst(v.getDeployedAt());
+        String env = v.getHost() == null || v.getHost().getEnvironment() == null ? "" : v.getHost().getEnvironment();
         List<String> profiles = Arrays.stream(env.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
-        return new Info(overall, "컴포넌트 " + ok + " / " + raw.size(), v.serverVersion(),
+        return new Info(overall, "컴포넌트 " + ok + " / " + raw.size(), v.getServerVersion(),
                 deployed != null ? deployed + " 배포" : "배포 시각 정보 없음", deployed,
-                v.uptimeDays() != null ? v.uptimeDays() + "일" : "—", comps, env, profiles);
+                v.getUptimeDays() != null ? v.getUptimeDays() + "일" : "—", comps, env, profiles);
     }
 
     /** 해석 가능한 시각만 KST 로. 없거나 깨진 값은 null. */

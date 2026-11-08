@@ -179,9 +179,9 @@ class MdsSchedulerIT {
         MdsSchedulerService.SyncResult result = scheduler.runOnce();
 
         // ── status ──────────────────────────────────────────────────
-        assertThat(result.status()).isEqualTo("SYNCED");
-        assertThat(result.version()).isEqualTo(42L);
-        assertThat(result.error()).isNull();
+        assertThat(result.getStatus()).isEqualTo("SYNCED");
+        assertThat(result.getVersion()).isEqualTo(42L);
+        assertThat(result.getError()).isNull();
 
         // ── DB: version updated in sentinel row ──────────────────────
         Long version = jdbc.queryForObject(
@@ -219,9 +219,9 @@ class MdsSchedulerIT {
 
         MdsSchedulerService.SyncResult result = scheduler.runOnce();
 
-        assertThat(result.status()).isEqualTo("SKIPPED");
-        assertThat(result.version()).isNull();
-        assertThat(result.error()).isNull();
+        assertThat(result.getStatus()).isEqualTo("SKIPPED");
+        assertThat(result.getVersion()).isNull();
+        assertThat(result.getError()).isNull();
     }
 
     // ----------------------------------------------------------------
@@ -234,9 +234,9 @@ class MdsSchedulerIT {
 
         MdsSchedulerService.SyncResult result = scheduler.runOnce();
 
-        assertThat(result.status()).isEqualTo("FAILED");
-        assertThat(result.version()).isNull();
-        assertThat(result.error()).contains("MDS fetch failed");
+        assertThat(result.getStatus()).isEqualTo("FAILED");
+        assertThat(result.getVersion()).isNull();
+        assertThat(result.getError()).contains("MDS fetch failed");
     }
 
     // ----------------------------------------------------------------

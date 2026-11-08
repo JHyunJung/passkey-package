@@ -67,7 +67,7 @@ public class ShellAdvice {
         LicenseController c = license.getIfAvailable();
         if (c == null) return "saas";
         try {
-            return c.get().data().deploymentMode();
+            return c.get().data().getDeploymentMode();
         } catch (RuntimeException e) {
             return "saas";
         }

@@ -68,7 +68,7 @@ class SystemInfoServiceTest {
     void environmentIsDefaultWhenNoProfileIsActive() {
         SystemInfoView view = newService(null).get();
 
-        assertThat(view.host().environment()).isEqualTo("default");
+        assertThat(view.getHost().getEnvironment()).isEqualTo("default");
     }
 
     @Test
@@ -77,7 +77,7 @@ class SystemInfoServiceTest {
 
         SystemInfoView view = newService(null).get();
 
-        assertThat(view.host().environment()).isEqualTo("prod,oracle");
+        assertThat(view.getHost().getEnvironment()).isEqualTo("prod,oracle");
     }
 
     // ── #73 deployedAt / version ─────────────────────────────────────────────
@@ -86,8 +86,8 @@ class SystemInfoServiceTest {
     void deployedAtIsNullAndVersionIsDevWithoutBuildProperties() {
         SystemInfoView view = newService(null).get();
 
-        assertThat(view.deployedAt()).isNull();
-        assertThat(view.serverVersion()).isEqualTo("dev");
+        assertThat(view.getDeployedAt()).isNull();
+        assertThat(view.getServerVersion()).isEqualTo("dev");
     }
 
     @Test
@@ -98,13 +98,13 @@ class SystemInfoServiceTest {
 
         SystemInfoView view = newService(build).get();
 
-        assertThat(view.serverVersion()).isEqualTo("1.2.3");
-        assertThat(view.deployedAt())
+        assertThat(view.getServerVersion()).isEqualTo("1.2.3");
+        assertThat(view.getDeployedAt())
                 .isEqualTo(OffsetDateTime.ofInstant(built, ZoneOffset.ofHours(9)).toString())
                 .startsWith("2026-05-31T09:00")
                 .endsWith("+09:00");
         // UI 는 slice(0,10) 으로 날짜만 취한다 — KST 문자열에서도 앞 10자가 날짜다.
-        assertThat(view.deployedAt().substring(0, 10)).isEqualTo("2026-05-31");
+        assertThat(view.getDeployedAt().substring(0, 10)).isEqualTo("2026-05-31");
     }
 
     // ── #71/#72 DB 배너 + 상태 판정 ─────────────────────────────────────────────
@@ -183,7 +183,7 @@ class SystemInfoServiceTest {
     void componentsAreAdminAppOracleDbAndMdsSchedulerOnly() {
         SystemInfoView view = newService(null).get();
 
-        assertThat(view.components().stream().map(SystemInfoView.Component::name))
+        assertThat(view.getComponents().stream().map(SystemInfoView.Component::getName))
                 .containsExactly("admin-app", "Oracle DB", "MDS sync scheduler");
     }
 
@@ -381,20 +381,20 @@ class SystemInfoServiceTest {
     }
 
     private static String bannerOf(SystemInfoView view) {
-        return view.components().stream()
-                .filter(c -> "Oracle DB".equals(c.name()))
-                .findFirst().orElseThrow().version();
+        return view.getComponents().stream()
+                .filter(c -> "Oracle DB".equals(c.getName()))
+                .findFirst().orElseThrow().getVersion();
     }
 
     private static String statusOf(SystemInfoView view, String name) {
-        return view.components().stream()
-                .filter(c -> name.equals(c.name()))
-                .findFirst().orElseThrow().status();
+        return view.getComponents().stream()
+                .filter(c -> name.equals(c.getName()))
+                .findFirst().orElseThrow().getStatus();
     }
 
     private static String noteOf(SystemInfoView view, String name) {
-        return view.components().stream()
-                .filter(c -> name.equals(c.name()))
-                .findFirst().orElseThrow().note();
+        return view.getComponents().stream()
+                .filter(c -> name.equals(c.getName()))
+                .findFirst().orElseThrow().getNote();
     }
 }

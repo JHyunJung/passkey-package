@@ -171,8 +171,8 @@ class KeyRotationIT {
         SignedJWT oldSigned = signJwt(oldKey, "old-token");
 
         KeyRotationService.RotateResult result = rotation.rotate(null, "(test)");
-        assertThat(result.oldKid()).isEqualTo(oldKid);
-        assertThat(result.newKid()).isNotEqualTo(oldKid);
+        assertThat(result.getOldKid()).isEqualTo(oldKid);
+        assertThat(result.getNewKid()).isNotEqualTo(oldKid);
 
         // DB has exactly 2 rows; old kid is ROTATED.
         assertThat(repo.findAll()).hasSize(2);

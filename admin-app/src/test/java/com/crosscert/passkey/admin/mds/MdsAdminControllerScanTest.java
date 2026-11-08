@@ -110,7 +110,7 @@ class MdsAdminControllerScanTest {
 
         var response = ctrl.status();
 
-        assertThat(response.data().trustAnchorCount()).isEqualTo(3);
+        assertThat(response.data().getTrustAnchorCount()).isEqualTo(3);
         // The whole point of G16: status() must never issue a blocking KEYS scan.
         verify(spiedRedis, never()).keys(org.mockito.ArgumentMatchers.anyString());
     }

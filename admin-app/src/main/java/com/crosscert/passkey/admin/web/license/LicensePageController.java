@@ -106,28 +106,28 @@ public class LicensePageController {
     }
 
     static View toView(LicenseView v, Instant now) {
-        boolean onprem = "onprem".equals(v.deploymentMode());
+        boolean onprem = "onprem".equals(v.getDeploymentMode());
         if (!onprem) return new View(false, null, null, null, null, null, null, null, List.of());
-        String state = v.state();
+        String state = v.getState();
         Badge badge = badge(state);
         List<String> hb = new ArrayList<>();
-        if (v.lastVerifiedAt() != null) hb.add("마지막 확인 " + KstFormat.relative(v.lastVerifiedAt(), now));
-        if (v.nextHeartbeatAt() != null) hb.add("다음 확인 " + KstFormat.relative(v.nextHeartbeatAt(), now));
+        if (v.getLastVerifiedAt() != null) hb.add("마지막 확인 " + KstFormat.relative(v.getLastVerifiedAt(), now));
+        if (v.getNextHeartbeatAt() != null) hb.add("다음 확인 " + KstFormat.relative(v.getNextHeartbeatAt(), now));
         String daysColor = "WARNING".equals(state) ? "var(--warn)" : "DEAD".equals(state) ? "var(--bad)" : null;
-        String expires = v.expiresAt() == null ? null : "만료일 " + KstFormat.formatDateTime(v.expiresAt());
+        String expires = v.getExpiresAt() == null ? null : "만료일 " + KstFormat.formatDateTime(v.getExpiresAt());
 
         List<Row> rows = new ArrayList<>();
-        rows.add(new Row("고객사", v.sub() == null ? "—" : v.sub(), false, null, null));
-        rows.add(new Row("라이선스 ID", v.jti() == null ? "—" : v.jti(), v.jti() != null, v.jti(), null));
-        rows.add(new Row("만료일", v.expiresAt() == null ? "—" : KstFormat.formatDateTime(v.expiresAt()), false, null, null));
-        rows.add(new Row("남은 일수", String.valueOf(v.daysUntilExpiry()), false, null, null));
-        List<String> features = v.features() == null ? List.of() : v.features();
+        rows.add(new Row("고객사", v.getSub() == null ? "—" : v.getSub(), false, null, null));
+        rows.add(new Row("라이선스 ID", v.getJti() == null ? "—" : v.getJti(), v.getJti() != null, v.getJti(), null));
+        rows.add(new Row("만료일", v.getExpiresAt() == null ? "—" : KstFormat.formatDateTime(v.getExpiresAt()), false, null, null));
+        rows.add(new Row("남은 일수", String.valueOf(v.getDaysUntilExpiry()), false, null, null));
+        List<String> features = v.getFeatures() == null ? List.of() : v.getFeatures();
         rows.add(new Row("사용 가능한 기능", features.isEmpty() ? "—" : null, false, null, features.isEmpty() ? null : features));
-        rows.add(new Row("마지막 확인", v.lastVerifiedAt() == null ? "—" : KstFormat.formatDateTime(v.lastVerifiedAt()), false, null, null));
-        rows.add(new Row("다음 확인 예정", v.nextHeartbeatAt() == null ? "—" : KstFormat.formatDateTime(v.nextHeartbeatAt()), false, null, null));
-        if (v.graceRemainingHours() != null) rows.add(new Row("유예 기간 남은 시간", v.graceRemainingHours() + "시간", false, null, null));
+        rows.add(new Row("마지막 확인", v.getLastVerifiedAt() == null ? "—" : KstFormat.formatDateTime(v.getLastVerifiedAt()), false, null, null));
+        rows.add(new Row("다음 확인 예정", v.getNextHeartbeatAt() == null ? "—" : KstFormat.formatDateTime(v.getNextHeartbeatAt()), false, null, null));
+        if (v.getGraceRemainingHours() != null) rows.add(new Row("유예 기간 남은 시간", v.getGraceRemainingHours() + "시간", false, null, null));
 
-        return new View(true, state, badge, String.join(" · ", hb), v.daysUntilExpiry() + "일", daysColor, expires, action(v), rows);
+        return new View(true, state, badge, String.join(" · ", hb), v.getDaysUntilExpiry() + "일", daysColor, expires, action(v), rows);
     }
 
     static Badge badge(String state) {
@@ -143,14 +143,14 @@ public class LicensePageController {
 
     /** 상태만 알리지 않고 다음 행동을 함께 보인다. VALID 는 할 일이 없으므로 카드 없음. */
     static Action action(LicenseView v) {
-        String s = v.state();
+        String s = v.getState();
         if ("WARNING".equals(s)) {
             return new Action("지금 해야 할 일 — 라이선스 갱신",
-                    "라이선스가 " + v.daysUntilExpiry() + "일 후 만료됩니다. 만료되면 패스키 등록·인증이 중단됩니다.",
+                    "라이선스가 " + v.getDaysUntilExpiry() + "일 후 만료됩니다. 만료되면 패스키 등록·인증이 중단됩니다.",
                     List.of(REQUEST_STEP, APPLY_STEP, RECHECK_STEP));
         }
         if ("NETWORK_GRACE".equals(s)) {
-            String left = v.graceRemainingHours() != null ? v.graceRemainingHours() + "시간 안에" : "곧";
+            String left = v.getGraceRemainingHours() != null ? v.getGraceRemainingHours() + "시간 안에" : "곧";
             return new Action("지금 해야 할 일 — 라이선스 서버 연결 복구",
                     "라이선스 서버에 연결할 수 없습니다. " + left + " 연결되지 않으면 서비스가 중단됩니다.",
                     List.of("방화벽에서 라이선스 서버(443 포트)로 나가는 연결을 허용했는지 확인합니다.",

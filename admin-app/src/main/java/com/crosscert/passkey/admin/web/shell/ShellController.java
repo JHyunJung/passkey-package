@@ -73,7 +73,7 @@ public class ShellController {
             res.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return NONE;
         }
-        if (view == null || !"onprem".equals(view.deploymentMode()) || view.state() == null || "VALID".equals(view.state())) {
+        if (view == null || !"onprem".equals(view.getDeploymentMode()) || view.getState() == null || "VALID".equals(view.getState())) {
             return NONE;
         }
         CurrentAdmin me = (CurrentAdmin) model.getAttribute("me");

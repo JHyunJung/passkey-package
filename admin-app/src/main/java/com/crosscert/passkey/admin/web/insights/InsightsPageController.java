@@ -125,48 +125,48 @@ public class InsightsPageController {
         String period = PERIOD_LABEL.get(w);
         model.addAttribute("period", period);
 
-        PlatformInsightsDto.Totals t = v.totals();
-        Double authRate = FunnelHelpers.rate(t.authSuccess(), t.authAttempts());
-        Double regRate = FunnelHelpers.rate(t.regSuccess(), t.regAttempts());
-        Double single = t.users() > 0 ? (double) t.singlePasskeyUsers() / t.users() : null;
+        PlatformInsightsDto.Totals t = v.getTotals();
+        Double authRate = FunnelHelpers.rate(t.getAuthSuccess(), t.getAuthAttempts());
+        Double regRate = FunnelHelpers.rate(t.getRegSuccess(), t.getRegAttempts());
+        Double single = t.getUsers() > 0 ? (double) t.getSinglePasskeyUsers() / t.getUsers() : null;
         model.addAttribute("kpis", List.of(
-                new FunnelTabController.AdoptKpi("활성 테넌트", num(t.activeTenants()) + "개", "전체 " + num(t.tenants()) + "개", false),
-                new FunnelTabController.AdoptKpi("활성 사용자", num(t.activeUsers()) + "명", period + " 인증 성공 사용자", false),
-                new FunnelTabController.AdoptKpi("인증 성공", num(t.authSuccess()) + "건", "시도 " + num(t.authAttempts()) + "건", false),
+                new FunnelTabController.AdoptKpi("활성 테넌트", num(t.getActiveTenants()) + "개", "전체 " + num(t.getTenants()) + "개", false),
+                new FunnelTabController.AdoptKpi("활성 사용자", num(t.getActiveUsers()) + "명", period + " 인증 성공 사용자", false),
+                new FunnelTabController.AdoptKpi("인증 성공", num(t.getAuthSuccess()) + "건", "시도 " + num(t.getAuthAttempts()) + "건", false),
                 new FunnelTabController.AdoptKpi("인증 성공률", FunnelHelpers.fmtPct(authRate),
                         "등록 성공률 " + FunnelHelpers.fmtPct(regRate), false),
-                new FunnelTabController.AdoptKpi("차단된 위험 인증", num(t.risk()) + "건", t.risk() == 0 ? "위험 인증 없음" : period + " 검증 단계에서 거절", t.risk() > 0),
-                new FunnelTabController.AdoptKpi("누적 패스키", num(t.credentials()) + "개",
-                        "사용자 " + num(t.users()) + "명 · 1개뿐 " + FunnelHelpers.fmtPct(single), false)));
+                new FunnelTabController.AdoptKpi("차단된 위험 인증", num(t.getRisk()) + "건", t.getRisk() == 0 ? "위험 인증 없음" : period + " 검증 단계에서 거절", t.getRisk() > 0),
+                new FunnelTabController.AdoptKpi("누적 패스키", num(t.getCredentials()) + "개",
+                        "사용자 " + num(t.getUsers()) + "명 · 1개뿐 " + FunnelHelpers.fmtPct(single), false)));
 
         List<AlertView> alerts = new ArrayList<>();
-        for (PlatformInsightsDto.Alert a : v.alerts()) {
-            String[] k = switch (a.kind()) {
+        for (PlatformInsightsDto.Alert a : v.getAlerts()) {
+            String[] k = switch (a.getKind()) {
                 case "RISK" -> new String[] {"위험 인증", "badge--danger"};
                 case "RATE_DROP" -> new String[] {"성공률 하락", "badge--warning"};
                 default -> new String[] {"패스키 1개뿐", "badge--info"};
             };
-            alerts.add(new AlertView(k[0], k[1], a.name(), tenantHref(a.tenantId().toString()), a.message()));
+            alerts.add(new AlertView(k[0], k[1], a.getName(), tenantHref(a.getTenantId().toString()), a.getMessage()));
         }
         model.addAttribute("alerts", alerts);
-        PlatformInsightsDto.Thresholds th = v.thresholds();
+        PlatformInsightsDto.Thresholds th = v.getThresholds();
         model.addAttribute("thresholdText", String.format(Locale.ROOT,
                 "기준(최근 7일): 위험 인증 %d건 이상 · 인증 성공률 %s%%p 이상 하락(시도 %d건 이상) · 패스키 1개뿐 %s%% 이상(사용자 %d명 이상)",
-                th.riskMin(), trim(th.rateDropPp()), th.rateDropMinAttempts(), trim(th.singleRatio() * 100), th.singleMinUsers()));
+                th.getRiskMin(), trim(th.getRateDropPp()), th.getRateDropMinAttempts(), trim(th.getSingleRatio() * 100), th.getSingleMinUsers()));
 
-        List<PlatformInsightsDto.TenantRow> rows = new ArrayList<>(v.tenants());
+        List<PlatformInsightsDto.TenantRow> rows = new ArrayList<>(v.getTenants());
         rows.sort(comparator(sort));
         List<TenantView> tenants = new ArrayList<>();
         for (PlatformInsightsDto.TenantRow r : rows) {
-            boolean active = "active".equalsIgnoreCase(r.status());
-            tenants.add(new TenantView(r.name(), r.slug(), tenantHref(r.tenantId().toString()),
-                    active ? "활성" : ("suspended".equalsIgnoreCase(r.status()) ? "정지" : String.valueOf(r.status())),
+            boolean active = "active".equalsIgnoreCase(r.getStatus());
+            tenants.add(new TenantView(r.getName(), r.getSlug(), tenantHref(r.getTenantId().toString()),
+                    active ? "활성" : ("suspended".equalsIgnoreCase(r.getStatus()) ? "정지" : String.valueOf(r.getStatus())),
                     active ? "badge--success" : "badge--warning",
-                    num(r.activeUsers()), num(r.authSuccess()),
-                    FunnelHelpers.fmtPct(FunnelHelpers.rate(r.authSuccess(), r.authAttempts())),
-                    FunnelHelpers.fmtPct(FunnelHelpers.rate(r.regSuccess(), r.regAttempts())),
-                    num(r.risk()), r.risk() > 0, num(r.credentials()),
-                    FunnelHelpers.fmtPct(r.users() > 0 ? (double) r.singlePasskeyUsers() / r.users() : null)));
+                    num(r.getActiveUsers()), num(r.getAuthSuccess()),
+                    FunnelHelpers.fmtPct(FunnelHelpers.rate(r.getAuthSuccess(), r.getAuthAttempts())),
+                    FunnelHelpers.fmtPct(FunnelHelpers.rate(r.getRegSuccess(), r.getRegAttempts())),
+                    num(r.getRisk()), r.getRisk() > 0, num(r.getCredentials()),
+                    FunnelHelpers.fmtPct(r.getUsers() > 0 ? (double) r.getSinglePasskeyUsers() / r.getUsers() : null)));
         }
         model.addAttribute("tenants", tenants);
         List<SortHeader> headers = new ArrayList<>();
@@ -174,11 +174,11 @@ public class InsightsPageController {
         model.addAttribute("sortHeaders", headers);
 
         String q = "?win=" + w;
-        model.addAttribute("seriesCard", FunnelTabController.seriesCard("auth", "플랫폼 일별 인증 시도와 성공", v.authSeries(), CSV_PATH + q + "&kind=daily"));
+        model.addAttribute("seriesCard", FunnelTabController.seriesCard("auth", "플랫폼 일별 인증 시도와 성공", v.getAuthSeries(), CSV_PATH + q + "&kind=daily"));
         model.addAttribute("seriesColumns", FunnelTabController.SERIES_COLUMNS);
-        model.addAttribute("months", FunnelTabController.monthViews(v.months()));
+        model.addAttribute("months", FunnelTabController.monthViews(v.getMonths()));
         model.addAttribute("monthColumns", FunnelTabController.MONTH_COLUMNS);
-        model.addAttribute("devices", FunnelTabController.deviceViews(v.devices()));
+        model.addAttribute("devices", FunnelTabController.deviceViews(v.getDevices()));
         model.addAttribute("csvTenants", CSV_PATH + q + "&kind=tenants");
         model.addAttribute("csvMonthly", CSV_PATH + q + "&kind=monthly");
         model.addAttribute("csvDevices", CSV_PATH + q + "&kind=devices");
@@ -197,32 +197,32 @@ public class InsightsPageController {
         String filename;
         switch (kind) {
             case "tenants" -> {
-                for (PlatformInsightsDto.TenantRow r : v.tenants()) {
-                    rows.add(List.of(r.slug(), String.valueOf(r.name()), String.valueOf(r.status()), String.valueOf(r.activeUsers()),
-                            String.valueOf(r.authAttempts()), String.valueOf(r.authSuccess()), rate4(r.authSuccess(), r.authAttempts()),
-                            String.valueOf(r.regAttempts()), String.valueOf(r.regSuccess()), rate4(r.regSuccess(), r.regAttempts()),
-                            String.valueOf(r.risk()), String.valueOf(r.credentials()), String.valueOf(r.users()), String.valueOf(r.singlePasskeyUsers())));
+                for (PlatformInsightsDto.TenantRow r : v.getTenants()) {
+                    rows.add(List.of(r.getSlug(), String.valueOf(r.getName()), String.valueOf(r.getStatus()), String.valueOf(r.getActiveUsers()),
+                            String.valueOf(r.getAuthAttempts()), String.valueOf(r.getAuthSuccess()), rate4(r.getAuthSuccess(), r.getAuthAttempts()),
+                            String.valueOf(r.getRegAttempts()), String.valueOf(r.getRegSuccess()), rate4(r.getRegSuccess(), r.getRegAttempts()),
+                            String.valueOf(r.getRisk()), String.valueOf(r.getCredentials()), String.valueOf(r.getUsers()), String.valueOf(r.getSinglePasskeyUsers())));
                 }
                 csv = CsvWriter.write(List.of("slug", "name", "status", "activeUsers", "authAttempts", "authSuccess", "authSuccessRate",
                         "regAttempts", "regSuccess", "regSuccessRate", "riskBlocked", "passkeys", "users", "singlePasskeyUsers"), rows);
                 filename = "platform-tenants-" + w + "d-" + today + ".csv";
             }
             case "daily" -> {
-                for (FunnelDto.DailyPoint p : v.authSeries()) {
-                    rows.add(List.of(p.day(), String.valueOf(p.attempts()), String.valueOf(p.success()), rate4(p.success(), p.attempts())));
+                for (FunnelDto.DailyPoint p : v.getAuthSeries()) {
+                    rows.add(List.of(p.getDay(), String.valueOf(p.getAttempts()), String.valueOf(p.getSuccess()), rate4(p.getSuccess(), p.getAttempts())));
                 }
                 csv = CsvWriter.write(List.of("day", "attempts", "success", "successRate"), rows);
                 filename = "platform-auth-daily-" + w + "d-" + today + ".csv";
             }
             case "monthly" -> {
-                for (AdoptionDto.Month m : v.months()) {
-                    rows.add(List.of(m.month(), m.current() ? "Y" : "N", String.valueOf(m.authSuccess()), String.valueOf(m.activeUsers()), String.valueOf(m.newCredentials())));
+                for (AdoptionDto.Month m : v.getMonths()) {
+                    rows.add(List.of(m.getMonth(), m.getCurrent() ? "Y" : "N", String.valueOf(m.getAuthSuccess()), String.valueOf(m.getActiveUsers()), String.valueOf(m.getNewCredentials())));
                 }
                 csv = CsvWriter.write(List.of("month", "inProgress", "authSuccess", "activeUsers", "newPasskeys"), rows);
                 filename = "platform-monthly-usage-" + today + ".csv";
             }
             case "devices" -> {
-                for (AdoptionDto.Device d : v.devices()) rows.add(List.of(d.name(), String.valueOf(d.credentials()), String.valueOf(d.authSuccess())));
+                for (AdoptionDto.Device d : v.getDevices()) rows.add(List.of(d.getName(), String.valueOf(d.getCredentials()), String.valueOf(d.getAuthSuccess())));
                 csv = CsvWriter.write(List.of("authenticator", "passkeys", "authSuccessInWindow"), rows);
                 filename = "platform-devices-" + w + "d-" + today + ".csv";
             }
@@ -252,15 +252,15 @@ public class InsightsPageController {
     /** 고른 값이 큰 순, 같으면 이름 순. 비율이 없는(시도·사용자 0) 테넌트는 뒤로. */
     static Comparator<PlatformInsightsDto.TenantRow> comparator(String sort) {
         ToDoubleFunction<PlatformInsightsDto.TenantRow> key = switch (sort) {
-            case "auth" -> r -> r.authSuccess();
-            case "rate" -> r -> r.authAttempts() > 0 ? (double) r.authSuccess() / r.authAttempts() : -1;
-            case "reg" -> r -> r.regAttempts() > 0 ? (double) r.regSuccess() / r.regAttempts() : -1;
-            case "risk" -> r -> r.risk();
-            case "creds" -> r -> r.credentials();
-            case "single" -> r -> r.users() > 0 ? (double) r.singlePasskeyUsers() / r.users() : -1;
-            default -> r -> r.activeUsers();
+            case "auth" -> r -> r.getAuthSuccess();
+            case "rate" -> r -> r.getAuthAttempts() > 0 ? (double) r.getAuthSuccess() / r.getAuthAttempts() : -1;
+            case "reg" -> r -> r.getRegAttempts() > 0 ? (double) r.getRegSuccess() / r.getRegAttempts() : -1;
+            case "risk" -> r -> r.getRisk();
+            case "creds" -> r -> r.getCredentials();
+            case "single" -> r -> r.getUsers() > 0 ? (double) r.getSinglePasskeyUsers() / r.getUsers() : -1;
+            default -> r -> r.getActiveUsers();
         };
-        return Comparator.comparingDouble(key).reversed().thenComparing(r -> r.name() == null ? "" : r.name());
+        return Comparator.comparingDouble(key).reversed().thenComparing(r -> r.getName() == null ? "" : r.getName());
     }
 
     private static String rate4(long success, long attempts) {

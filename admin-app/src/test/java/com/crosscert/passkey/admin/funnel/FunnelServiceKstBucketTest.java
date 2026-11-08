@@ -73,14 +73,14 @@ class FunnelServiceKstBucketTest {
         FunnelDto.View view = service.compute(tenant, 7);
 
         String todayLabel = todayKst.toString().substring(5);
-        FunnelDto.DailyPoint todayPoint = view.series().stream()
-                .filter(p -> p.day().equals(todayLabel))
+        FunnelDto.DailyPoint todayPoint = view.getSeries().stream()
+                .filter(p -> p.getDay().equals(todayLabel))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(
                         "series window did not include today's KST label " + todayLabel
-                                + " — series=" + view.series()));
+                                + " — series=" + view.getSeries()));
 
-        assertThat(todayPoint.attempts())
+        assertThat(todayPoint.getAttempts())
                 .as("today's KST REGISTRATION_BEGIN count must be bucketed under today's KST date, "
                         + "not shifted to yesterday by a UTC reinterpretation of TRUNC(created_at)")
                 .isEqualTo(7L);

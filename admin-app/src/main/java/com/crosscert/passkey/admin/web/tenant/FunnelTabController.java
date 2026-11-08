@@ -168,25 +168,25 @@ public class FunnelTabController {
         if (w == 7) {
             try {
                 FunnelDto.View d30 = funnel.get(tid, 30);
-                regDelta = FunnelHelpers.priorPeriodDelta(orEmpty(d30.registrationSeries()), 7);
-                authDelta = FunnelHelpers.priorPeriodDelta(orEmpty(d30.authenticationSeries()), 7);
+                regDelta = FunnelHelpers.priorPeriodDelta(orEmpty(d30.getRegistrationSeries()), 7);
+                authDelta = FunnelHelpers.priorPeriodDelta(orEmpty(d30.getAuthenticationSeries()), 7);
             } catch (RuntimeException e) {
                 if (denied(e)) throw e;
                 log.debug("[funnel-tab] 30d comparison skipped: {}", e.getClass().getSimpleName());
             }
         }
         model.addAttribute("rateKpis", List.of(
-                rateKpi("등록 성공률", data.registration(), regDelta),
-                rateKpi("인증 성공률", data.authentication(), authDelta)));
+                rateKpi("등록 성공률", data.getRegistration(), regDelta),
+                rateKpi("인증 성공률", data.getAuthentication(), authDelta)));
 
-        List<FunnelDto.FailureCount> fails = orEmpty(data.authFailures());
+        List<FunnelDto.FailureCount> fails = orEmpty(data.getAuthFailures());
         long failTotal = 0;
-        for (FunnelDto.FailureCount f : fails) failTotal += f.n();
+        for (FunnelDto.FailureCount f : fails) failTotal += f.getN();
         List<FailureView> failures = new ArrayList<>();
         List<String> failParts = new ArrayList<>();
         for (FunnelDto.FailureCount f : fails) {
-            failures.add(new FailureView(f.reason() == null ? "" : f.reason(), failureLabel(f.reason()), failureMeaning(f.reason()), num(f.n())));
-            failParts.add(failureLabel(f.reason()) + " " + num(f.n()));
+            failures.add(new FailureView(f.getReason() == null ? "" : f.getReason(), failureLabel(f.getReason()), failureMeaning(f.getReason()), num(f.getN())));
+            failParts.add(failureLabel(f.getReason()) + " " + num(f.getN()));
         }
         model.addAttribute("failTotal", num(failTotal) + "건");
         model.addAttribute("failHint", failTotal == 0 ? "실패 없음" : String.join(" · ", failParts));
@@ -200,8 +200,8 @@ public class FunnelTabController {
 
         String q = "?win=" + w;
         model.addAttribute("seriesCards", List.of(
-                seriesCard("auth", "일별 인증 시도와 성공", orEmpty(data.authenticationSeries()), PAGE + tid + "/funnel.csv" + q + "&kind=auth"),
-                seriesCard("reg", "일별 등록 시도와 성공", orEmpty(data.registrationSeries()), PAGE + tid + "/funnel.csv" + q + "&kind=reg")));
+                seriesCard("auth", "일별 인증 시도와 성공", orEmpty(data.getAuthenticationSeries()), PAGE + tid + "/funnel.csv" + q + "&kind=auth"),
+                seriesCard("reg", "일별 등록 시도와 성공", orEmpty(data.getRegistrationSeries()), PAGE + tid + "/funnel.csv" + q + "&kind=reg")));
         model.addAttribute("seriesColumns", SERIES_COLUMNS);
         model.addAttribute("csvSummary", PAGE + tid + "/funnel.csv" + q + "&kind=summary");
         model.addAttribute("csvFailures", PAGE + tid + "/funnel.csv" + q + "&kind=failures");
@@ -221,18 +221,18 @@ public class FunnelTabController {
             return;
         }
         model.addAttribute("adoptError", null);
-        Double single = a.totalUsers() > 0 ? (double) a.singlePasskeyUsers() / a.totalUsers() : null;
+        Double single = a.getTotalUsers() > 0 ? (double) a.getSinglePasskeyUsers() / a.getTotalUsers() : null;
         model.addAttribute("adoptKpis", List.of(
-                new AdoptKpi("활성 사용자", num(a.activeUsers()) + "명", "기간 중 인증 성공 · 사용된 패스키 " + num(a.activeCredentials()) + "개", false),
-                new AdoptKpi("신규 패스키", num(a.newCredentials()) + "개", "기간 중 새로 등록", false),
-                new AdoptKpi("누적 패스키", num(a.totalCredentials()) + "개", "사용자 " + num(a.totalUsers()) + "명", false),
+                new AdoptKpi("활성 사용자", num(a.getActiveUsers()) + "명", "기간 중 인증 성공 · 사용된 패스키 " + num(a.getActiveCredentials()) + "개", false),
+                new AdoptKpi("신규 패스키", num(a.getNewCredentials()) + "개", "기간 중 새로 등록", false),
+                new AdoptKpi("누적 패스키", num(a.getTotalCredentials()) + "개", "사용자 " + num(a.getTotalUsers()) + "명", false),
                 new AdoptKpi("패스키 1개뿐인 사용자", FunnelHelpers.fmtPct(single),
-                        a.totalUsers() == 0 ? "사용자 없음" : num(a.singlePasskeyUsers()) + "명 / " + num(a.totalUsers()) + "명 · 기기를 잃으면 로그인할 수 없어요",
+                        a.getTotalUsers() == 0 ? "사용자 없음" : num(a.getSinglePasskeyUsers()) + "명 / " + num(a.getTotalUsers()) + "명 · 기기를 잃으면 로그인할 수 없어요",
                         single != null && single >= 0.5)));
 
-        model.addAttribute("months", monthViews(a.months()));
+        model.addAttribute("months", monthViews(a.getMonths()));
         model.addAttribute("monthColumns", MONTH_COLUMNS);
-        model.addAttribute("devices", deviceViews(a.devices()));
+        model.addAttribute("devices", deviceViews(a.getDevices()));
         model.addAttribute("csvMonthly", csvBase + "&kind=monthly");
         model.addAttribute("csvDevices", csvBase + "&kind=devices");
     }
@@ -241,7 +241,7 @@ public class FunnelTabController {
     public static List<MonthView> monthViews(List<AdoptionDto.Month> list) {
         List<MonthView> months = new ArrayList<>();
         for (AdoptionDto.Month m : orEmpty(list)) {
-            months.add(new MonthView(monthLabel(m), num(m.authSuccess()), num(m.activeUsers()) + "명", num(m.newCredentials())));
+            months.add(new MonthView(monthLabel(m), num(m.getAuthSuccess()), num(m.getActiveUsers()) + "명", num(m.getNewCredentials())));
         }
         return months;
     }
@@ -250,39 +250,39 @@ public class FunnelTabController {
     public static List<DeviceView> deviceViews(List<AdoptionDto.Device> list) {
         List<DeviceView> devices = new ArrayList<>();
         long total = 0;
-        for (AdoptionDto.Device d : orEmpty(list)) total += d.credentials();
+        for (AdoptionDto.Device d : orEmpty(list)) total += d.getCredentials();
         for (AdoptionDto.Device d : orEmpty(list)) {
-            Double share = total > 0 ? (double) d.credentials() / total : null;
-            devices.add(new DeviceView(d.name(), num(d.credentials()) + "개", FunnelHelpers.fmtPct(share),
-                    pct(share == null ? 0 : share * 100), "기간 인증 " + num(d.authSuccess()) + "건"));
+            Double share = total > 0 ? (double) d.getCredentials() / total : null;
+            devices.add(new DeviceView(d.getName(), num(d.getCredentials()) + "개", FunnelHelpers.fmtPct(share),
+                    pct(share == null ? 0 : share * 100), "기간 인증 " + num(d.getAuthSuccess()) + "건"));
         }
         return devices;
     }
 
     /** "2026-11" → "2026년 11월", 이번 달은 "(진행 중)". */
     public static String monthLabel(AdoptionDto.Month m) {
-        String s = m.month();
+        String s = m.getMonth();
         String label = s != null && s.matches("\\d{4}-\\d{2}")
                 ? s.substring(0, 4) + "년 " + Integer.parseInt(s.substring(5)) + "월" : String.valueOf(s);
-        return m.current() ? label + " (진행 중)" : label;
+        return m.getCurrent() ? label + " (진행 중)" : label;
     }
 
     private static RateKpi rateKpi(String label, FunnelDto.Stage s, Double delta) {
-        if (s.attempts() == 0) return new RateKpi(label, "—", "시도 없음");
-        String hint = "성공 " + num(s.success()) + " / 시도 " + num(s.attempts());
+        if (s.getAttempts() == 0) return new RateKpi(label, "—", "시도 없음");
+        String hint = "성공 " + num(s.getSuccess()) + " / 시도 " + num(s.getAttempts());
         if (delta != null) hint += " · 직전 7일 대비 " + FunnelHelpers.fmtDeltaPp(delta);
-        return new RateKpi(label, FunnelHelpers.fmtPct(FunnelHelpers.rate(s.success(), s.attempts())), hint);
+        return new RateKpi(label, FunnelHelpers.fmtPct(FunnelHelpers.rate(s.getSuccess(), s.getAttempts())), hint);
     }
 
     public static SeriesCard seriesCard(String key, String title, List<FunnelDto.DailyPoint> series, String csv) {
         long smax = 1;
-        for (FunnelDto.DailyPoint p : series) smax = Math.max(smax, Math.max(p.attempts(), p.success()));
+        for (FunnelDto.DailyPoint p : series) smax = Math.max(smax, Math.max(p.getAttempts(), p.getSuccess()));
         List<DayView> days = new ArrayList<>();
         for (FunnelDto.DailyPoint p : series) {
-            String rate = FunnelHelpers.fmtPct(FunnelHelpers.rate(p.success(), p.attempts()));
-            days.add(new DayView(p.day(), p.attempts(), p.success(), num(p.attempts()), num(p.success()), rate,
-                    pct((double) p.attempts() / smax * 100), pct((double) p.success() / smax * 100),
-                    dateText(p.day()), "시도 " + num(p.attempts()) + " · 성공 " + num(p.success()) + " · " + rate));
+            String rate = FunnelHelpers.fmtPct(FunnelHelpers.rate(p.getSuccess(), p.getAttempts()));
+            days.add(new DayView(p.getDay(), p.getAttempts(), p.getSuccess(), num(p.getAttempts()), num(p.getSuccess()), rate,
+                    pct((double) p.getAttempts() / smax * 100), pct((double) p.getSuccess() / smax * 100),
+                    dateText(p.getDay()), "시도 " + num(p.getAttempts()) + " · 성공 " + num(p.getSuccess()) + " · " + rate));
         }
         return new SeriesCard(key, title, days, axisLabels(series), series.size() > 14,
                 title + " 막대 차트, " + series.size() + "일", csv);
@@ -313,24 +313,24 @@ public class FunnelTabController {
         switch (kind) {
             case "summary" -> {
                 List<List<String>> rows = new ArrayList<>();
-                rows.add(summaryRow("registration", "등록", data.registration()));
-                rows.add(summaryRow("authentication", "인증", data.authentication()));
+                rows.add(summaryRow("registration", "등록", data.getRegistration()));
+                rows.add(summaryRow("authentication", "인증", data.getAuthentication()));
                 csv = CsvWriter.write(List.of("ceremony", "label", "attempts", "success", "successRate"), rows);
                 filename = "auth-status-" + v.slug() + "-" + w + "d-" + today + ".csv";
             }
             case "auth", "reg" -> {
                 List<List<String>> rows = new ArrayList<>();
-                for (FunnelDto.DailyPoint p : orEmpty("auth".equals(kind) ? data.authenticationSeries() : data.registrationSeries())) {
-                    Double r = FunnelHelpers.rate(p.success(), p.attempts());
-                    rows.add(List.of(p.day(), String.valueOf(p.attempts()), String.valueOf(p.success()), r == null ? "" : FunnelHelpers.toFixed(r, 4)));
+                for (FunnelDto.DailyPoint p : orEmpty("auth".equals(kind) ? data.getAuthenticationSeries() : data.getRegistrationSeries())) {
+                    Double r = FunnelHelpers.rate(p.getSuccess(), p.getAttempts());
+                    rows.add(List.of(p.getDay(), String.valueOf(p.getAttempts()), String.valueOf(p.getSuccess()), r == null ? "" : FunnelHelpers.toFixed(r, 4)));
                 }
                 csv = CsvWriter.write(List.of("day", "attempts", "success", "successRate"), rows);
                 filename = ("auth".equals(kind) ? "auth-daily-" : "registration-daily-") + v.slug() + "-" + w + "d-" + today + ".csv";
             }
             case "failures" -> {
                 List<List<String>> rows = new ArrayList<>();
-                for (FunnelDto.FailureCount f : orEmpty(data.authFailures())) {
-                    rows.add(List.of(f.reason() == null ? "" : f.reason(), failureLabel(f.reason()), String.valueOf(f.n())));
+                for (FunnelDto.FailureCount f : orEmpty(data.getAuthFailures())) {
+                    rows.add(List.of(f.getReason() == null ? "" : f.getReason(), failureLabel(f.getReason()), String.valueOf(f.getN())));
                 }
                 csv = CsvWriter.write(List.of("reason", "label", "n"), rows);
                 filename = "auth-failures-" + v.slug() + "-" + w + "d-" + today + ".csv";
@@ -350,14 +350,14 @@ public class FunnelTabController {
         byte[] csv;
         String filename;
         if ("monthly".equals(kind)) {
-            for (AdoptionDto.Month m : orEmpty(a.months())) {
-                rows.add(List.of(m.month(), m.current() ? "Y" : "N", String.valueOf(m.authSuccess()), String.valueOf(m.activeUsers()), String.valueOf(m.newCredentials())));
+            for (AdoptionDto.Month m : orEmpty(a.getMonths())) {
+                rows.add(List.of(m.getMonth(), m.getCurrent() ? "Y" : "N", String.valueOf(m.getAuthSuccess()), String.valueOf(m.getActiveUsers()), String.valueOf(m.getNewCredentials())));
             }
             csv = CsvWriter.write(List.of("month", "inProgress", "authSuccess", "activeUsers", "newPasskeys"), rows);
             filename = "monthly-usage-" + v.slug() + "-" + today + ".csv";
         } else {
-            for (AdoptionDto.Device d : orEmpty(a.devices())) {
-                rows.add(List.of(d.name(), String.valueOf(d.credentials()), String.valueOf(d.authSuccess())));
+            for (AdoptionDto.Device d : orEmpty(a.getDevices())) {
+                rows.add(List.of(d.getName(), String.valueOf(d.getCredentials()), String.valueOf(d.getAuthSuccess())));
             }
             csv = CsvWriter.write(List.of("authenticator", "passkeys", "authSuccessInWindow"), rows);
             filename = "devices-" + v.slug() + "-" + w + "d-" + today + ".csv";
@@ -369,8 +369,8 @@ public class FunnelTabController {
     }
 
     private static List<String> summaryRow(String code, String label, FunnelDto.Stage s) {
-        Double r = FunnelHelpers.rate(s.success(), s.attempts());
-        return List.of(code, label, String.valueOf(s.attempts()), String.valueOf(s.success()), r == null ? "" : FunnelHelpers.toFixed(r, 4));
+        Double r = FunnelHelpers.rate(s.getSuccess(), s.getAttempts());
+        return List.of(code, label, String.valueOf(s.getAttempts()), String.valueOf(s.getSuccess()), r == null ? "" : FunnelHelpers.toFixed(r, 4));
     }
 
     // ── 도우미 ──────────────────────────────────────────────
@@ -388,8 +388,8 @@ public class FunnelTabController {
     static List<String> axisLabels(List<FunnelDto.DailyPoint> s) {
         if (s.isEmpty()) return List.of();
         if (s.size() == 1) return List.of("오늘");
-        if (s.size() == 2) return List.of(s.get(0).day(), "오늘");
-        return List.of(s.get(0).day(), s.get((s.size() - 1) / 2).day(), "오늘");
+        if (s.size() == 2) return List.of(s.get(0).getDay(), "오늘");
+        return List.of(s.get(0).getDay(), s.get((s.size() - 1) / 2).getDay(), "오늘");
     }
 
     /** CSS 에 쓰는 퍼센트 숫자(소수 둘째 자리, 지수 표기 없음). */

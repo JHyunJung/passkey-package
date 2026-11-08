@@ -23,8 +23,8 @@ public final class FunnelHelpers {
         long attempts = 0;
         long success = 0;
         for (FunnelDto.DailyPoint d : s) {
-            attempts += d.attempts();
-            success += d.success();
+            attempts += d.getAttempts();
+            success += d.getSuccess();
         }
         return rate(success, attempts);
     }

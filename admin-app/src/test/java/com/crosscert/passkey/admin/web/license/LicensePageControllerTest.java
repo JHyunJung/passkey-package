@@ -120,7 +120,7 @@ class LicensePageControllerTest {
     void daysKeepFontSize() throws Exception {
         Element strong = page().select("main strong").stream().filter(e -> e.text().equals("200일")).findFirst().orElseThrow();
         assertThat(strong.attr("style")).isEqualTo("font-size: 13px");
-        stub(new LicenseView("onprem", "WARNING", "acme-bank", "lic_1", BASE.expiresAt(), 30, List.of(), null, null, null));
+        stub(new LicenseView("onprem", "WARNING", "acme-bank", "lic_1", BASE.getExpiresAt(), 30, List.of(), null, null, null));
         Element warn = page().select("main strong").stream().filter(e -> e.text().equals("30일")).findFirst().orElseThrow();
         assertThat(warn.attr("style")).isEqualTo("font-size: 13px; color: var(--warn)");
     }
@@ -143,7 +143,7 @@ class LicensePageControllerTest {
     @Test
     @DisplayName("NETWORK_GRACE: 경고 배지, 유예 'N시간', 연결 복구 조치 카드(3단계)")
     void networkGrace() throws Exception {
-        stub(new LicenseView("onprem", "NETWORK_GRACE", "acme-bank", "lic_1", BASE.expiresAt(), 200, List.of(), BASE.lastVerifiedAt(), 12L, BASE.nextHeartbeatAt()));
+        stub(new LicenseView("onprem", "NETWORK_GRACE", "acme-bank", "lic_1", BASE.getExpiresAt(), 200, List.of(), BASE.getLastVerifiedAt(), 12L, BASE.getNextHeartbeatAt()));
         Document d = page();
         assertThat(d.select("main .badge").stream().filter(b -> b.text().equals("서버 연결 불가")).findFirst().orElseThrow().hasClass("badge--warning")).isTrue();
         assertThat(dd(d, "유예 기간 남은 시간").text()).isEqualTo("12시간");
@@ -156,7 +156,7 @@ class LicensePageControllerTest {
     @Test
     @DisplayName("값이 없으면 '—', 상대 시간 줄·복사 버튼 숨김, DEAD 면 새 라이선스 적용 카드")
     void deadWithNulls() throws Exception {
-        stub(new LicenseView("onprem", "DEAD", "acme-bank", null, BASE.expiresAt(), 0, List.of(), null, null, null));
+        stub(new LicenseView("onprem", "DEAD", "acme-bank", null, BASE.getExpiresAt(), 0, List.of(), null, null, null));
         Document d = page();
         assertThat(d.select("main .badge").stream().filter(b -> b.text().equals("만료")).findFirst().orElseThrow().hasClass("badge--danger")).isTrue();
         assertThat(d.selectFirst("main").text()).doesNotContainPattern("마지막 확인 .* 전").doesNotContain("(never)").doesNotContain("(none scheduled)");
@@ -168,7 +168,7 @@ class LicensePageControllerTest {
     @Test
     @DisplayName("WARNING: 갱신 조치 카드(3단계), VALID 는 조치 카드 없음")
     void warningAndValid() throws Exception {
-        stub(new LicenseView("onprem", "WARNING", "acme-bank", "lic_1", BASE.expiresAt(), 30, List.of(), null, null, null));
+        stub(new LicenseView("onprem", "WARNING", "acme-bank", "lic_1", BASE.getExpiresAt(), 30, List.of(), null, null, null));
         Element card = page().selectFirst("section[aria-label=지금 해야 할 일 — 라이선스 갱신]");
         assertThat(card.text()).contains("라이선스가 30일 후 만료됩니다");
         assertThat(card.select("li")).hasSize(3);
@@ -235,7 +235,7 @@ class LicensePageControllerTest {
     @Test
     @DisplayName("고객사·기능 값은 이스케이프")
     void escapes() throws Exception {
-        stub(new LicenseView("onprem", "VALID", "<b>x</b>", "lic\"1", BASE.expiresAt(), 200, List.of("<i>f</i>"), null, null, null));
+        stub(new LicenseView("onprem", "VALID", "<b>x</b>", "lic\"1", BASE.getExpiresAt(), 200, List.of("<i>f</i>"), null, null, null));
         String html = mvc.perform(get("/admin/license").with(authentication(platform()))).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(html).doesNotContain("<b>x</b>").doesNotContain("<i>f</i>").contains("&lt;b&gt;x&lt;/b&gt;");
     }

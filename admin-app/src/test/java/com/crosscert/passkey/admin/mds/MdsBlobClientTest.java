@@ -47,8 +47,8 @@ class MdsBlobClientTest {
                 "https://mds3.fidoalliance.org/", FIXED_CLOCK);
 
         MdsBlobClient.FetchResult result = client.fetch();
-        assertThat(result.rawJwt()).isEqualTo("the.raw.jwt");
-        assertThat(result.blob().no()).isEqualTo(7);
+        assertThat(result.getRawJwt()).isEqualTo("the.raw.jwt");
+        assertThat(result.getBlob().no()).isEqualTo(7);
     }
 
     @Test

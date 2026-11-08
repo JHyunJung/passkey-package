@@ -147,7 +147,7 @@ class InsightsPageControllerTest {
     @DisplayName("확인 필요 없음: 빈 문구")
     void noAlerts() throws Exception {
         PlatformInsightsDto.View v = view(7);
-        when(insights.get(7)).thenReturn(new PlatformInsightsDto.View(7, v.totals(), v.tenants(), List.of(), v.authSeries(), v.months(), v.devices(), v.thresholds()));
+        when(insights.get(7)).thenReturn(new PlatformInsightsDto.View(7, v.getTotals(), v.getTenants(), List.of(), v.getAuthSeries(), v.getMonths(), v.getDevices(), v.getThresholds()));
         assertThat(page("/admin/insights").selectFirst("section[data-alerts]").text()).contains("확인이 필요한 테넌트가 없어요.");
     }
 

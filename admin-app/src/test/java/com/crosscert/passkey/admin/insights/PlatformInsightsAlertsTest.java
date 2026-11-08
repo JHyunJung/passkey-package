@@ -25,8 +25,8 @@ class PlatformInsightsAlertsTest {
     @Test
     void rateDropNeedsBothDropAndMinimumAttempts() {
         // 95% → 85% (10%p), 시도 100 → 하락
-        assertThat(service.alerts(List.of(row("a", 100, 85, 100, 95, 0, 0, 0)))).extracting(PlatformInsightsDto.Alert::kind).containsExactly("RATE_DROP");
-        assertThat(service.alerts(List.of(row("a", 100, 85, 100, 95, 0, 0, 0))).get(0).message()).isEqualTo("인증 성공률 95.0% → 85.0% (10.0%p 하락, 최근 7일)");
+        assertThat(service.alerts(List.of(row("a", 100, 85, 100, 95, 0, 0, 0)))).extracting(PlatformInsightsDto.Alert::getKind).containsExactly("RATE_DROP");
+        assertThat(service.alerts(List.of(row("a", 100, 85, 100, 95, 0, 0, 0))).get(0).getMessage()).isEqualTo("인증 성공률 95.0% → 85.0% (10.0%p 하락, 최근 7일)");
         // 정확히 5%p 도 포함
         assertThat(service.alerts(List.of(row("a", 100, 90, 100, 95, 0, 0, 0)))).hasSize(1);
         // 4%p 는 아님, 시도 29건(작은 테넌트)도 아님, 직전 7일 시도 0 도 아님
@@ -41,9 +41,9 @@ class PlatformInsightsAlertsTest {
                 row("single", 0, 0, 0, 0, 0, 10, 5),       // 50%, 10명 → 포함
                 row("small", 0, 0, 0, 0, 0, 9, 9),         // 사용자 9명 → 제외
                 row("risk", 100, 80, 100, 99, 2, 0, 0)));  // 위험 2건 + 19%p 하락
-        assertThat(a).extracting(PlatformInsightsDto.Alert::kind).containsExactly("RISK", "RATE_DROP", "SINGLE_PASSKEY");
-        assertThat(a).extracting(PlatformInsightsDto.Alert::name).containsExactly("risk", "risk", "single");
-        assertThat(a.get(0).message()).isEqualTo("최근 7일 차단된 위험 인증 2건");
-        assertThat(a.get(2).message()).isEqualTo("패스키 1개뿐인 사용자 50.0% (5명 / 10명)");
+        assertThat(a).extracting(PlatformInsightsDto.Alert::getKind).containsExactly("RISK", "RATE_DROP", "SINGLE_PASSKEY");
+        assertThat(a).extracting(PlatformInsightsDto.Alert::getName).containsExactly("risk", "risk", "single");
+        assertThat(a.get(0).getMessage()).isEqualTo("최근 7일 차단된 위험 인증 2건");
+        assertThat(a.get(2).getMessage()).isEqualTo("패스키 1개뿐인 사용자 50.0% (5명 / 10명)");
     }
 }

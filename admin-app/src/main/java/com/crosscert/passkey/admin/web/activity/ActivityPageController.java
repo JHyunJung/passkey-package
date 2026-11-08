@@ -226,7 +226,7 @@ public class ActivityPageController {
         splitDays(model, days, day, "fresh");
         model.addAttribute("hasFresh", !fresh.isEmpty());
         model.addAttribute("clearEmpty", wasEmpty && !fresh.isEmpty());
-        model.addAttribute("topId", fresh.isEmpty() ? null : feed.get(0).id().toString());
+        model.addAttribute("topId", fresh.isEmpty() ? null : feed.get(0).getId().toString());
         model.addAttribute("topDay", fresh.isEmpty() ? null : dayKey(feed.get(0)));
         // 비어 있던 목록이 처음 채워지면 더 보기·CSV 가 쓸 아래쪽 커서도 정한다.
         model.addAttribute("bottomState", wasEmpty && !feed.isEmpty());
@@ -341,13 +341,13 @@ public class ActivityPageController {
             // 경계 행을 찾지 못한 채 끝에 닿았다(행이 사라짐) — 실패
             if (page.size() < FEED_PAGE) throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
             ActivityView.Event last = page.get(page.size() - 1);
-            cursor = last.createdAt();
-            cursorId = last.id();
+            cursor = last.getCreatedAt();
+            cursorId = last.getId();
         }
         List<List<String>> body = new ArrayList<>();
         for (ActivityView.Event e : all) {
-            String tenant = e.tenantSlug() != null ? e.tenantSlug() : (e.tenantId() != null ? e.tenantId().toString() : "");
-            body.add(List.of(rawTs(e), tenant, nz(e.action()), nz(e.category()), nz(e.actorEmail()), e.targetId() != null ? e.targetId() : "—"));
+            String tenant = e.getTenantSlug() != null ? e.getTenantSlug() : (e.getTenantId() != null ? e.getTenantId().toString() : "");
+            body.add(List.of(rawTs(e), tenant, nz(e.getAction()), nz(e.getCategory()), nz(e.getActorEmail()), e.getTargetId() != null ? e.getTargetId() : "—"));
         }
         byte[] csv = CsvWriter.write(List.of("timestamp", "tenant", "type", "category", "actor", "subject"), body);
         String filename = "activity-" + KstFormat.kstToday(clock.instant()) + ".csv";
@@ -376,7 +376,7 @@ public class ActivityPageController {
         model.addAttribute("topChanged", true);
 
         // 숨은 상태: 가장 새 행·아래쪽 커서·날짜 머리글(이후 폴링·더 보기가 이어 받는다)
-        model.addAttribute("topId", feed.isEmpty() ? "" : feed.get(0).id().toString());
+        model.addAttribute("topId", feed.isEmpty() ? "" : feed.get(0).getId().toString());
         model.addAttribute("topDay", feed.isEmpty() ? "" : dayKey(feed.get(0)));
         model.addAttribute("bottomState", true);
         fillBottomState(model, feed);
@@ -406,7 +406,7 @@ public class ActivityPageController {
         String slug = null;
         if (f.tenantId() != null) {
             for (TenantAdminDto.TenantView t : tenantList) if (t.id().equals(f.tenantId())) slug = t.slug();
-            if (slug == null && loaded) for (ActivityView.TopTenant t : view.top5()) if (f.tenantId().equals(t.tenantId())) slug = t.slug();
+            if (slug == null && loaded) for (ActivityView.TopTenant t : view.getTop5()) if (f.tenantId().equals(t.getTenantId())) slug = t.getSlug();
             if (slug == null) slug = f.tenantId().toString();
         }
         model.addAttribute("tenantSlug", slug);
@@ -426,19 +426,19 @@ public class ActivityPageController {
     private void fillBottomState(Model model, List<ActivityView.Event> rawFeed) {
         ActivityView.Event last = rawFeed.isEmpty() ? null : rawFeed.get(rawFeed.size() - 1);
         model.addAttribute("beforeIso", last == null ? "" : iso(last));
-        model.addAttribute("beforeId", last == null ? "" : last.id().toString());
+        model.addAttribute("beforeId", last == null ? "" : last.getId().toString());
         model.addAttribute("lastDay", last == null ? "" : dayKey(last));
     }
 
     private void fillKpis(Model model, ActivityView view, boolean oob) {
         boolean loaded = view != null;
-        ActivityView.Kpi k = loaded ? view.kpi() : null;
-        model.addAttribute("kpiEvents", loaded ? fmt(k.events24h()) : "—");
-        model.addAttribute("kpiOps", loaded ? fmt(k.ops24h()) : "—");
-        model.addAttribute("kpiSecurity", loaded ? fmt(k.security24h()) : "—");
-        model.addAttribute("kpiSecurityBad", loaded && k.security24h() > 0);
+        ActivityView.Kpi k = loaded ? view.getKpi() : null;
+        model.addAttribute("kpiEvents", loaded ? fmt(k.getEvents24h()) : "—");
+        model.addAttribute("kpiOps", loaded ? fmt(k.getOps24h()) : "—");
+        model.addAttribute("kpiSecurity", loaded ? fmt(k.getSecurity24h()) : "—");
+        model.addAttribute("kpiSecurityBad", loaded && k.getSecurity24h() > 0);
         // §6: 서버가 p95Ms 를 주지 않으면(현재 항상 null) KPI 를 그리지 않는다.
-        Long p95 = loaded ? k.p95Ms() : null;
+        Long p95 = loaded ? k.getP95Ms() : null;
         model.addAttribute("kpiP95", p95 == null ? null : p95 + "ms");
         model.addAttribute("kpiP95Hint", p95 == null ? null : "p95 " + p95 + "ms");
         model.addAttribute("kpiOob", oob);
@@ -447,11 +447,11 @@ public class ActivityPageController {
     // ── 피드 → 화면 값 ───────────────────────────────────────
 
     private static List<ActivityView.Event> feedOf(ActivityView v) {
-        return v == null || v.feed() == null ? List.of() : v.feed();
+        return v == null || v.getFeed() == null ? List.of() : v.getFeed();
     }
 
     private static int indexOfId(List<ActivityView.Event> feed, String id) {
-        for (int i = 0; i < feed.size(); i++) if (feed.get(i).id().toString().equals(id)) return i;
+        for (int i = 0; i < feed.size(); i++) if (feed.get(i).getId().toString().equals(id)) return i;
         return -1;
     }
 
@@ -485,21 +485,21 @@ public class ActivityPageController {
     }
 
     private Ev ev(ActivityView.Event e) {
-        String type = nz(e.action());
-        String tenantName = e.tenantSlug() != null ? e.tenantSlug() : (e.tenantId() != null ? e.tenantId().toString() : "—"); // adaptFeedItems
-        String actor = e.actorEmail();
-        String subject = e.targetId() != null ? e.targetId() : "—";
-        String sentence = ActivityLabels.eventSentence(new ActivityLabels.EventSentenceInput(type, actor == null ? "" : actor, e.tenantSlug(), null, subject));
+        String type = nz(e.getAction());
+        String tenantName = e.getTenantSlug() != null ? e.getTenantSlug() : (e.getTenantId() != null ? e.getTenantId().toString() : "—"); // adaptFeedItems
+        String actor = e.getActorEmail();
+        String subject = e.getTargetId() != null ? e.getTargetId() : "—";
+        String sentence = ActivityLabels.eventSentence(new ActivityLabels.EventSentenceInput(type, actor == null ? "" : actor, e.getTenantSlug(), null, subject));
         Map<String, Object> attrs = new LinkedHashMap<>();
-        attrs.put("hx-get", DETAIL_BASE + e.id());
+        attrs.put("hx-get", DETAIL_BASE + e.getId());
         attrs.put("hx-target", "#activity-detail");
         attrs.put("hx-swap", "innerHTML");
         // 마지막으로 연 상세만 반영(A→B 순서로 열고 A 가 늦게 와도 무시). 닫기·다시 열기가 같은 요소로 중단한다.
         attrs.put("hx-sync", "#activity-detail:replace");
         attrs.put("data-quiet", true); // 네트워크 실패는 패널 안에서 알린다(전역 토스트 없음)
-        return new Ev(e.id().toString(), type, type.toUpperCase(Locale.ROOT), ActivityLabels.actionLabel(type), TONE_VAR.get(eventTone(type, nz(e.category()))),
-                KstFormat.kstTime(e.createdAt()), iso(e), e.tenantId() == null ? null : e.tenantId().toString(), tenantName,
-                e.tenantId() == null ? null : "/admin/tenants/" + e.tenantId(), sentence, attrs);
+        return new Ev(e.getId().toString(), type, type.toUpperCase(Locale.ROOT), ActivityLabels.actionLabel(type), TONE_VAR.get(eventTone(type, nz(e.getCategory()))),
+                KstFormat.kstTime(e.getCreatedAt()), iso(e), e.getTenantId() == null ? null : e.getTenantId().toString(), tenantName,
+                e.getTenantId() == null ? null : "/admin/tenants/" + e.getTenantId(), sentence, attrs);
     }
 
     /** eventTone(type, category). */
@@ -511,15 +511,15 @@ public class ActivityPageController {
     }
 
     private List<TopRow> topRows(ActivityView view, Filter f) {
-        List<ActivityView.TopTenant> top = view.top5() == null ? List.of() : view.top5();
+        List<ActivityView.TopTenant> top = view.getTop5() == null ? List.of() : view.getTop5();
         long max = 1;
-        for (ActivityView.TopTenant t : top) max = Math.max(max, t.count());
+        for (ActivityView.TopTenant t : top) max = Math.max(max, t.getCount());
         List<TopRow> rows = new ArrayList<>();
         for (ActivityView.TopTenant t : top) {
-            String slug = t.slug() == null ? "" : t.slug();
-            Map<String, Object> attrs = rowsReq(ROWS_PATH + "?tenantId=" + t.tenantId() + "&reset=tenant", "#activity-cat");
-            rows.add(new TopRow(t.tenantId().toString(), slug, slug, slug.isEmpty() ? "" : slug.substring(0, 1).toUpperCase(Locale.ROOT),
-                    fmt(t.count()), (int) Math.round(t.count() * 100.0 / max), t.tenantId().equals(f.tenantId()), attrs));
+            String slug = t.getSlug() == null ? "" : t.getSlug();
+            Map<String, Object> attrs = rowsReq(ROWS_PATH + "?tenantId=" + t.getTenantId() + "&reset=tenant", "#activity-cat");
+            rows.add(new TopRow(t.getTenantId().toString(), slug, slug, slug.isEmpty() ? "" : slug.substring(0, 1).toUpperCase(Locale.ROOT),
+                    fmt(t.getCount()), (int) Math.round(t.getCount() * 100.0 / max), t.getTenantId().equals(f.tenantId()), attrs));
         }
         return rows;
     }
@@ -540,24 +540,24 @@ public class ActivityPageController {
                            List<DiffLine> diff, String json) {}
 
     private DetailVm detailModel(ActivityDetailView d) {
-        String iso = d.createdAt() == null ? "" : d.createdAt().toInstant().toString();
-        String actor = d.actorEmail() == null || d.actorEmail().isEmpty() ? "system" : d.actorEmail();
+        String iso = d.getCreatedAt() == null ? "" : d.getCreatedAt().toInstant().toString();
+        String actor = d.getActorEmail() == null || d.getActorEmail().isEmpty() ? "system" : d.getActorEmail();
         List<DiffLine> lines = new ArrayList<>();
-        for (ActivityDiff.DiffRow r : ActivityDiff.buildDiffRows(null, d.payload())) {
+        for (ActivityDiff.DiffRow r : ActivityDiff.buildDiffRows(null, d.getPayload())) {
             ActivityDiff.ArrayChange ac = ActivityDiff.arrayChange(r.from(), r.to());
             String from = ActivityDiff.fmtVal(r.from());
             String to = ActivityDiff.fmtVal(r.to());
             lines.add(new DiffLine(r.field(), ac != null, ac == null ? List.of() : ac.removed(), ac == null ? List.of() : ac.added(),
                     from, to, r.field() + ": " + from + " 에서 " + to + " 로 변경"));
         }
-        String target = d.targetId();
-        return new DetailVm(nz(d.action()), ActivityLabels.actionLabel(nz(d.action())), KstFormat.kstDateTime(iso), KstFormat.utcIso(iso) + " UTC",
-                actor, actor.substring(0, 1).toUpperCase(Locale.ROOT), d.tenantId() == null ? null : d.tenantId().toString(),
-                d.tenantSlug() != null ? d.tenantSlug() : (d.tenantId() == null ? null : d.tenantId().toString()),
-                d.tenantId() == null ? null : "/admin/tenants/" + d.tenantId(),
-                d.targetType() == null ? "—" : d.targetType(),
+        String target = d.getTargetId();
+        return new DetailVm(nz(d.getAction()), ActivityLabels.actionLabel(nz(d.getAction())), KstFormat.kstDateTime(iso), KstFormat.utcIso(iso) + " UTC",
+                actor, actor.substring(0, 1).toUpperCase(Locale.ROOT), d.getTenantId() == null ? null : d.getTenantId().toString(),
+                d.getTenantSlug() != null ? d.getTenantSlug() : (d.getTenantId() == null ? null : d.getTenantId().toString()),
+                d.getTenantId() == null ? null : "/admin/tenants/" + d.getTenantId(),
+                d.getTargetType() == null ? "—" : d.getTargetType(),
                 target == null || target.isEmpty() ? null : "…" + (target.length() <= 8 ? target : target.substring(target.length() - 8)),
-                target, lines, prettyPayload(d.payload()));
+                target, lines, prettyPayload(d.getPayload()));
     }
 
     /** parsePayload(raw) ? JSON.stringify(payload, null, 2) : raw. JS 의 falsy(null·0·false·"")는 원문 그대로. */
@@ -656,17 +656,17 @@ public class ActivityPageController {
 
     /** 원본 CSV 의 timestamp: 서버가 직렬화한 createdAt 문자열 그대로(앱 ObjectMapper). */
     private String rawTs(ActivityView.Event e) {
-        if (e.createdAt() == null) return "";
+        if (e.getCreatedAt() == null) return "";
         try {
-            String v = json.convertValue(e.createdAt(), String.class);
-            return v == null ? e.createdAt().toString() : v;
+            String v = json.convertValue(e.getCreatedAt(), String.class);
+            return v == null ? e.getCreatedAt().toString() : v;
         } catch (RuntimeException ex) {
-            return e.createdAt().toString();
+            return e.getCreatedAt().toString();
         }
     }
 
     private static String iso(ActivityView.Event e) {
-        return e.createdAt() == null ? "" : e.createdAt().toInstant().toString();
+        return e.getCreatedAt() == null ? "" : e.getCreatedAt().toInstant().toString();
     }
 
     private static String fmt(long n) {
