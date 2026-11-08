@@ -141,6 +141,7 @@ abstract class HtmlContractSupport {
 
         @Override
         public void postProcessBeanFactory(ConfigurableListableBeanFactory bf) {
+            ALL.clear(); // 컨텍스트를 다시 만들면 이전 컨텍스트의 mock 이 쌓이지 않게
             for (Class<?> t : TYPES) {
                 Object m = Mockito.mock(t, ANSWER);
                 ALL.add(m);
@@ -218,7 +219,24 @@ abstract class HtmlContractSupport {
     }
 
     static Authentication rpAdmin() {
-        return auth(RP_ID, RP_EMAIL, "RP_ADMIN", Set.of(TID, TID2));
+        return auth(RP_ID, RP_EMAIL, "RP_ADMIN", RP_TENANTS);
+    }
+
+    /**
+     * RP_ADMIN 의 허용 tenant 10개(f111 이 최소값). {@code AdminUserDetails} 는 {@code Set.copyOf} 로 담아 순회 순서가 JVM 마다
+     * 다르다. 화면에서 이 순서가 드러나는 곳은 RP 의 홈 경로({@code HomeRedirectController.homePath} = {@code tenantIds.get(0)})
+     * 로 가는 리다이렉트 {@code Location} 이며, 스냅샷에는 정렬 뒤 첫 값 f111 이 고정된다. {@code MeController} 의
+     * {@code tenantIds.sort} 가 빠지면 첫 값이 f111 일 확률은 1/10 이므로 실행 한 번에 약 90% 로 잡힌다(2개였을 때는 50%).
+     * {@code Set.copyOf} 의 순회 순서는 JVM 마다 무작위라 완전한 결정성은 불가능하다 — 확률적 안전망이다.
+     */
+    static final Set<UUID> RP_TENANTS = rpTenants();
+
+    private static Set<UUID> rpTenants() {
+        Set<UUID> s = new java.util.LinkedHashSet<>(List.of(TID, TID2));
+        for (String d : List.of("3", "4", "5", "6", "7", "8", "9", "a")) {
+            s.add(UUID.fromString("00000000-0000-0000-0000-00000000f" + d + d + d)); // f333 … faaa, 모두 f111 보다 큼
+        }
+        return Set.copyOf(s);
     }
 
     static Authentication auth(UUID id, String email, String role, Set<UUID> tenants) {

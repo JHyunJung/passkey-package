@@ -86,6 +86,10 @@ class RenderedHtmlSettingsContractTest extends HtmlContractSupport {
         snap("settings/page.admins.platform.html", page("/admin/settings?tab=admins", operator()));
         snap("settings/page.account.rp-admin.html", page("/admin/settings?tab=admins", rpAdmin()));
         snap("settings/tab.unknown.frag.html", frag("/admin/_/settings/tab/nope", operator()));
+        // 각 탭을 주소로 연 전체 페이지(선택된 탭 표시 + 지연 로드 속성 — 탭 본문은 페이지가 조각으로 불러온다)
+        for (String tab : List.of("mds", "security", "system")) {
+            snap("settings/page." + tab + ".platform.html", page("/admin/settings?tab=" + tab, operator()));
+        }
     }
 
     // ── AccountTabController ───────────────────────────────
@@ -153,6 +157,7 @@ class RenderedHtmlSettingsContractTest extends HtmlContractSupport {
     @Test
     void mdsTab() throws Exception {
         snap("settings/mds.tab.frag.html", frag("/admin/_/settings/tab/mds", operator()));
+        snap("settings/mds.tab.frag.rp-admin-denied.html", frag("/admin/_/settings/tab/mds", rpAdmin()));
         when(mds.sync()).thenReturn(ApiResponse.ok(new MdsSchedulerService.SyncResult("SYNCED", 43L, null)));
         snap("settings/mds.sync.ok.html", write(post("/admin/_/settings/mds/sync"), operator()));
         when(mds.sync()).thenReturn(ApiResponse.ok(new MdsSchedulerService.SyncResult("FAILED", null, "timeout")));
@@ -167,6 +172,7 @@ class RenderedHtmlSettingsContractTest extends HtmlContractSupport {
     @Test
     void securityTab() throws Exception {
         snap("settings/security.tab.frag.html", frag("/admin/_/settings/tab/security", operator()));
+        snap("settings/security.tab.frag.rp-admin-denied.html", frag("/admin/_/settings/tab/security", rpAdmin()));
         when(securityPolicy.get()).thenReturn(new SecurityPolicyDto.View(15, true, List.of(), null, null));
         snap("settings/security.tab.frag.mfa-required.html", frag("/admin/_/settings/tab/security?revert=1", operator()));
         snap("settings/security.origin-check.bad.html", frag("/admin/_/settings/security/origin-check?value=not-a-url", operator()));
