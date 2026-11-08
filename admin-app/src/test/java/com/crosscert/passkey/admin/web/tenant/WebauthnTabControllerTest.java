@@ -197,11 +197,11 @@ class WebauthnTabControllerTest {
         Document w = tab();
         assertThat(w.selectFirst("#wa-timeout-hint").text()).startsWith("= 30초 — 권장(60초)보다 짧습니다");
         assertThat(w.selectFirst("#wa-timeout-hint").attr("style")).contains("var(--warn)");
-        assertThat(WebauthnTabController.timeoutGuide(120000).text()).isEqualTo("= 120초 (2분) — 권장 범위(60–120초) 안입니다.");
-        assertThat(WebauthnTabController.timeoutGuide(90000).text()).startsWith("= 90초 (1분 30초)");
-        assertThat(WebauthnTabController.timeoutGuide(0).text()).isEqualTo("0보다 큰 값을 입력하세요. 권장 60000–120000ms(60–120초).");
-        assertThat(WebauthnTabController.timeoutGuide(null).tone()).isEqualTo("warn");
-        assertThat(WebauthnTabController.timeoutGuide(150000).text()).contains("권장(120초)보다 깁니다");
+        assertThat(WebauthnTabController.timeoutGuide(120000).getText()).isEqualTo("= 120초 (2분) — 권장 범위(60–120초) 안입니다.");
+        assertThat(WebauthnTabController.timeoutGuide(90000).getText()).startsWith("= 90초 (1분 30초)");
+        assertThat(WebauthnTabController.timeoutGuide(0).getText()).isEqualTo("0보다 큰 값을 입력하세요. 권장 60000–120000ms(60–120초).");
+        assertThat(WebauthnTabController.timeoutGuide(null).getTone()).isEqualTo("warn");
+        assertThat(WebauthnTabController.timeoutGuide(150000).getText()).contains("권장(120초)보다 깁니다");
     }
 
     @Test
@@ -572,7 +572,7 @@ class WebauthnTabControllerTest {
     void mergeAndOrder() {
         List<Change> server = List.of(new Change("requireUserVerification", true, false), new Change("origins", List.of(), List.of("a")));
         List<Change> local = List.of(new Change("timeoutMs", 60000, 90000), new Change("userVerification", "REQUIRED", "PREFERRED"), new Change("attestationConveyance", "NONE", "DIRECT"));
-        assertThat(WebauthnTabController.mergeChanges(server, local).stream().map(Change::key).toList())
+        assertThat(WebauthnTabController.mergeChanges(server, local).stream().map(Change::getKey).toList())
                 .containsExactly("timeoutMs", "origins", "requireUserVerification", "attestationConveyance");
         assertThat(WebauthnTabController.changedFieldNames(List.of("origins", "timeoutMs"))).containsExactly("timeoutMs", "origins");
         assertThat(WebauthnTabController.showValue("timeoutMs", 90500)).isEqualTo("90.5초");
