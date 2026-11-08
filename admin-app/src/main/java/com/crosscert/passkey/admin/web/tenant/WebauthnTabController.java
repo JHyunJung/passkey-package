@@ -139,9 +139,9 @@ public class WebauthnTabController {
                                               @RequestParam(name = "existing", required = false) List<String> existing) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         OriginValidation.Result r = OriginValidation.validate(value, v.getRpId());
-        if (!r.ok()) return text(r.error(), null);
-        if (existing != null && existing.contains(r.value())) return text("'" + r.value() + "' 는 이미 추가되어 있습니다.", null);
-        return text("", r.value());
+        if (!r.getOk()) return text(r.getError(), null);
+        if (existing != null && existing.contains(r.getValue())) return text("'" + r.getValue() + "' 는 이미 추가되어 있습니다.", null);
+        return text("", r.getValue());
     }
 
     /** Android 앱 키(SHA-256 지문 → apk-key-hash origin). 본문 = 오류 문구(비면 통과), X-Normalized-Value = origin. */
@@ -150,9 +150,9 @@ public class WebauthnTabController {
                                          @RequestParam(name = "existing", required = false) List<String> existing) {
         TenantTabs.load(tenants, id);
         ApkKeyHash.Result r = ApkKeyHash.fromFingerprint(value);
-        if (!r.ok()) return text(r.error(), null);
-        if (existing != null && existing.contains(r.value())) return text("이미 추가된 Android 키입니다.", null);
-        return text("", r.value());
+        if (!r.getOk()) return text(r.getError(), null);
+        if (existing != null && existing.contains(r.getValue())) return text("이미 추가된 Android 키입니다.", null);
+        return text("", r.getValue());
     }
 
     /**
@@ -188,7 +188,7 @@ public class WebauthnTabController {
         } catch (RuntimeException e) {
             log.warn("[webauthn-tab] diff failed: {}", e.toString());
             ErrorMessages.Info info = ErrorMessages.describe(e);
-            int status = info.httpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.httpStatus();
+            int status = info.getHttpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.getHttpStatus();
             Toasts.errorTitled(res, "변경 사항을 비교하지 못했습니다", info.toastMessage(), "HTTP " + status, MDC.get("traceId"));
             res.setStatus(status);
             return EMPTY_VIEW;

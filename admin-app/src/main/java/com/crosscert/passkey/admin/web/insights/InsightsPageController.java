@@ -82,7 +82,7 @@ public class InsightsPageController {
                        @RequestParam(name = "sort", defaultValue = "users") String sort, Model model) {
         CurrentAdmin me = me(model);
         model.addAttribute("breadcrumbs", Crumbs.insights());
-        if (!me.platform()) return "redirect:" + HomeRedirectController.homePath(me);
+        if (!me.getPlatform()) return "redirect:" + HomeRedirectController.homePath(me);
         populate(model, window(win), sort(sort));
         return PAGE_VIEW;
     }
@@ -90,7 +90,7 @@ public class InsightsPageController {
     @GetMapping(FRAG_PATH)
     public String root(@RequestParam(name = "win", defaultValue = "7") String win,
                        @RequestParam(name = "sort", defaultValue = "users") String sort, Model model) {
-        if (!me(model).platform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
+        if (!me(model).getPlatform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
         populate(model, window(win), sort(sort));
         return ROOT_VIEW;
     }
@@ -188,7 +188,7 @@ public class InsightsPageController {
     @GetMapping(CSV_PATH)
     public ResponseEntity<byte[]> export(@RequestParam(name = "win", defaultValue = "7") String win,
                                          @RequestParam(name = "kind", defaultValue = "tenants") String kind, Model model) {
-        if (!me(model).platform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
+        if (!me(model).getPlatform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
         int w = window(win);
         PlatformInsightsDto.View v = insights.get(w);
         String today = KstFormat.kstToday(clock.instant());

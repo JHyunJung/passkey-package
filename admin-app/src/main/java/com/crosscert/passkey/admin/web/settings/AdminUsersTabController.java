@@ -141,7 +141,7 @@ public class AdminUsersTabController {
         if (row == null || !"ACTIVE".equals(row.getStatus())) {
             return SettingsSupport.blocked(res, "운영자 상태가 바뀌었습니다. " + STALE_REASON, Toasts.isConfirm(req));
         }
-        String why = suspendBlock(row, list, me.email());
+        String why = suspendBlock(row, list, me.getEmail());
         if (why != null) return SettingsSupport.blocked(res, why, Toasts.isConfirm(req));
         users.suspend(id, auth);
         Map<String, Object> undo = new LinkedHashMap<>();
@@ -177,7 +177,7 @@ public class AdminUsersTabController {
             if (!isUndo) return SettingsSupport.fail(res, "활성화하지 못했습니다", e, Toasts.isConfirm(req));
             // 되돌리기 실패(사전 확인·활성화): 원본은 실패 뒤에도 목록을 다시 읽는다 → 오류 토스트 + 갱신된 카드(200)
             ErrorMessages.Info info = ErrorMessages.describe(e);
-            Toasts.errorTitled(res, "정지를 되돌리지 못했습니다", info.title() + ". 목록에서 “활성화”를 눌러 다시 시도하세요.",
+            Toasts.errorTitled(res, "정지를 되돌리지 못했습니다", info.getTitle() + ". 목록에서 “활성화”를 눌러 다시 시도하세요.",
                     "HTTP " + SettingsSupport.statusOf(e), org.slf4j.MDC.get("traceId"));
             return usersResult(model, res, me);
         }
@@ -369,7 +369,7 @@ public class AdminUsersTabController {
             Instant now = Instant.now(clock);
             List<OpRow> rows = new ArrayList<>();
             long active = list.stream().filter(u -> "ACTIVE".equals(u.getStatus())).count();
-            for (AdminUserDto.View u : list) rows.add(opRow(u, list, me.email(), names, now));
+            for (AdminUserDto.View u : list) rows.add(opRow(u, list, me.getEmail(), names, now));
             model.addAttribute("ops", rows);
             model.addAttribute("opsSummary", list.size() + "명 · 활성 " + active + "명");
             model.addAttribute("roleOptions", List.of(opt("all", "전체"), opt("PLATFORM", "PLATFORM"), opt("RP_ADMIN", "RP_ADMIN"), opt("SUSPENDED", "정지")));

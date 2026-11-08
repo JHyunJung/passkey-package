@@ -73,8 +73,8 @@ class ActivityDiffTest {
     @DisplayName("arrayChange: 추가/제거 원소")
     void arrayChangeAddedRemoved() {
         ArrayChange c = ActivityDiff.arrayChange(j("[\"a\",\"b\"]"), j("[\"b\",\"c\"]"));
-        assertThat(c.added()).containsExactly("c");
-        assertThat(c.removed()).containsExactly("a");
+        assertThat(c.getAdded()).containsExactly("c");
+        assertThat(c.getRemoved()).containsExactly("a");
     }
 
     @Test
@@ -92,6 +92,6 @@ class ActivityDiffTest {
         assertThat(ActivityDiff.fmtVal(j("\"x\""))).isEqualTo("x");
         assertThat(ActivityDiff.fmtVal(j("60000"))).isEqualTo("60000");
         assertThat(ActivityDiff.fmtVal(j("{\"a\":[1]}"))).isEqualTo("{\"a\":[1]}");
-        assertThat(ActivityDiff.arrayChange(j("[1,null,{\"a\":1}]"), j("[]")).removed()).containsExactly("1", "null", "[object Object]");
+        assertThat(ActivityDiff.arrayChange(j("[1,null,{\"a\":1}]"), j("[]")).getRemoved()).containsExactly("1", "null", "[object Object]");
     }
 }

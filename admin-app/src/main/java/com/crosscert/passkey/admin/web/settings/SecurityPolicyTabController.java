@@ -183,7 +183,7 @@ public class SecurityPolicyTabController {
             if (confirm) {
                 Toasts.confirmError(res, SAVE_FAILED_TITLE + ". " + info.toastMessage(), "HTTP " + status, MDC.get("traceId"));
             } else {
-                Toasts.errorTitled(res, SAVE_FAILED_TITLE, info.title() + ". 입력한 내용은 그대로 있습니다.", "HTTP " + status, MDC.get("traceId"));
+                Toasts.errorTitled(res, SAVE_FAILED_TITLE, info.getTitle() + ". 입력한 내용은 그대로 있습니다.", "HTTP " + status, MDC.get("traceId"));
             }
             res.setStatus(status);
             return SettingsSupport.EMPTY_VIEW;

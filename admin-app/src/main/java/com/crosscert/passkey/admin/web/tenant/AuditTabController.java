@@ -143,7 +143,7 @@ public class AuditTabController {
         CurrentAdmin me = me(model);
         Instant now = clock.instant();
         model.addAttribute("tid", v.getId().toString());
-        model.addAttribute("platform", me.platform());
+        model.addAttribute("platform", me.getPlatform());
         model.addAttribute("tenantName", v.getDisplayName() == null ? "" : v.getDisplayName());
         model.addAttribute("chainResult", null);
         fillChainAttrs(model, v.getId());
@@ -185,7 +185,7 @@ public class AuditTabController {
             if (denied(e)) throw e;
             log.warn("[audit-tab] more failed (page {}): {}", p, e.getClass().getSimpleName());
             ErrorMessages.Info info = ErrorMessages.describe(e);
-            int status = info.httpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.httpStatus();
+            int status = info.getHttpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.getHttpStatus();
             Toasts.errorTitled(res, "감사 로그를 더 불러오지 못했습니다", info.toastMessage(), "HTTP " + status, MDC.get("traceId"));
             res.setStatus(status);
             return EMPTY_VIEW;
@@ -207,7 +207,7 @@ public class AuditTabController {
     public String verify(@PathVariable String id, HttpServletResponse res, Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         CurrentAdmin me = me(model);
-        if (!me.platform()) throw new AccessDeniedException("platform operator only");
+        if (!me.getPlatform()) throw new AccessDeniedException("platform operator only");
         try {
             AuditChainMonitorController.TenantVerifyResponse r = chain.verifyTenant(v.getId().toString());
             int tampered = r.getTamperedEntryId() == null ? 0 : 1;
@@ -216,7 +216,7 @@ public class AuditTabController {
             if (denied(e)) throw e;
             log.warn("[audit-tab] chain verify failed: {}", e.getClass().getSimpleName());
             ErrorMessages.Info info = ErrorMessages.describe(e);
-            int status = info.httpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.httpStatus();
+            int status = info.getHttpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.getHttpStatus();
             Toasts.errorTitled(res, "체인 검증에 실패했습니다", info.toastMessage(), "HTTP " + status, MDC.get("traceId"));
             res.setStatus(status);
             return EMPTY_VIEW;

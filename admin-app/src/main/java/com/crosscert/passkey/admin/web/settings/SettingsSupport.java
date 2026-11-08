@@ -19,13 +19,13 @@ final class SettingsSupport {
     /** PLATFORM 이 아니면 AccessDeniedException(403). REST 는 부르지 않는다. */
     static CurrentAdmin platform(Model model) {
         CurrentAdmin me = AccountTabController.me(model);
-        if (!me.platform()) throw new AccessDeniedException("platform only");
+        if (!me.getPlatform()) throw new AccessDeniedException("platform only");
         return me;
     }
 
     /** 예외의 HTTP 상태. 모르는 예외는 500. */
     static int statusOf(RuntimeException e) {
-        Integer s = ErrorMessages.describe(e).httpStatus();
+        Integer s = ErrorMessages.describe(e).getHttpStatus();
         return s == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : s;
     }
 

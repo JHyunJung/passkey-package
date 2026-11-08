@@ -187,7 +187,7 @@ public class TenantDetailPageController {
         CurrentAdmin me = me(model);
         String requested = tab == null || tab.isEmpty() ? "overview" : tab;
         String active = knownTab(requested) ? requested : "overview";
-        model.addAttribute("platform", me.platform());
+        model.addAttribute("platform", me.getPlatform());
         model.addAttribute("notFound", false);
         model.addAttribute("loadError", null);
         model.addAttribute("t", null);
@@ -197,7 +197,7 @@ public class TenantDetailPageController {
             t = load(idOrSlug);
         } catch (BusinessException e) {
             if (e.getErrorCode() == ErrorCode.TENANT_NOT_FOUND) {
-                model.addAttribute("breadcrumbs", Crumbs.tenant(me.platform(), idOrSlug, null, active));
+                model.addAttribute("breadcrumbs", Crumbs.tenant(me.getPlatform(), idOrSlug, null, active));
                 model.addAttribute("notFound", true);
                 res.setStatus(Htmx.isHtmx(req) ? HttpServletResponse.SC_OK : HttpServletResponse.SC_NOT_FOUND);
                 return PAGE_VIEW;
@@ -208,7 +208,7 @@ public class TenantDetailPageController {
         }
 
         model.addAttribute("t", t);
-        model.addAttribute("breadcrumbs", Crumbs.tenant(me.platform(), t.id(), t.name(), active));
+        model.addAttribute("breadcrumbs", Crumbs.tenant(me.getPlatform(), t.id(), t.name(), active));
         model.addAttribute("activeTab", active);
         model.addAttribute("tabUrl", FRAG_BASE + t.id() + "/tab/" + active);
         model.addAttribute("tabAttrsLoad", Map.of(
@@ -221,7 +221,7 @@ public class TenantDetailPageController {
         Integer expiring = expiringKeys(tid);
         Integer unverified = unverifiedAaguid(tid);
         model.addAttribute("tabs", tabItems(t.id(), unverified, expiring));
-        if (me.platform()) {
+        if (me.getPlatform()) {
             model.addAttribute("suspendAttrs", Map.of("hx-post", FRAG_BASE + t.id() + "/suspend", "hx-swap", "none"));
             model.addAttribute("activateAttrs", Map.of("hx-post", FRAG_BASE + t.id() + "/activate", "hx-swap", "none"));
             model.addAttribute("menuSuspend", List.of(menuItem("테넌트 정지", "suspend-tenant", true)));
@@ -239,9 +239,9 @@ public class TenantDetailPageController {
     private String loadFailed(RuntimeException e, String idOrSlug, String tab, String active, CurrentAdmin me,
                               HttpServletRequest req, HttpServletResponse res, Model model) {
         log.warn("[tenant-detail] load failed: {}", e.toString());
-        Integer status = ErrorMessages.describe(e).httpStatus();
+        Integer status = ErrorMessages.describe(e).getHttpStatus();
         if (status != null && status == HttpServletResponse.SC_FORBIDDEN && !Htmx.isHtmx(req)) res.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        model.addAttribute("breadcrumbs", Crumbs.tenant(me.platform(), idOrSlug, null, active));
+        model.addAttribute("breadcrumbs", Crumbs.tenant(me.getPlatform(), idOrSlug, null, active));
         model.addAttribute("loadError", e);
         String url = PAGE_BASE + UriUtils.encodePathSegment(idOrSlug, StandardCharsets.UTF_8) + (tab == null ? "" : "?tab=" + active);
         Map<String, Object> retry = new LinkedHashMap<>();
@@ -261,7 +261,7 @@ public class TenantDetailPageController {
     public String tab(@PathVariable String id, @PathVariable String tab, Model model) {
         CurrentAdmin me = me(model);
         TenantDetail t = load(id);
-        model.addAttribute("platform", me.platform());
+        model.addAttribute("platform", me.getPlatform());
         populateOverview(model, t, me, expiringKeys(UUID.fromString(t.id())));
         return OVERVIEW_VIEW;
     }
@@ -293,12 +293,12 @@ public class TenantDetailPageController {
             log.warn("[tenant-detail] chain verify failed (manual={}): {}", isManual, e.toString());
             ErrorMessages.Info info = ErrorMessages.describe(e);
             if (isManual) {
-                int status = info.httpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.httpStatus();
+                int status = info.getHttpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.getHttpStatus();
                 Toasts.errorTitled(res, "수동 검증 실패", info.toastMessage(), "HTTP " + status, MDC.get("traceId"));
                 res.setStatus(status);
                 return EMPTY_VIEW;
             }
-            model.addAttribute("chainView", ChainView.unavailable(info.title() + "."));
+            model.addAttribute("chainView", ChainView.unavailable(info.getTitle() + "."));
         }
         populateChainModel(model, t);
         return CHAIN_VIEW;
@@ -335,7 +335,7 @@ public class TenantDetailPageController {
     private void populateOverview(Model model, TenantDetail t, CurrentAdmin me, Integer expiring) {
         UUID tid = UUID.fromString(t.id());
         model.addAttribute("t", t);
-        model.addAttribute("platform", me.platform());
+        model.addAttribute("platform", me.getPlatform());
         model.addAttribute("credKpi", new Kpi(fmt(t.credentials()), null, null));
         // 7일 증감(credentialsDelta7d)은 서버 TenantView 에 없어 원본도 항상 미표시다.
         model.addAttribute("keysKpi", new Kpi(String.valueOf(t.apiKeys()),
@@ -359,10 +359,10 @@ public class TenantDetailPageController {
         model.addAttribute("funnelRetry", retry);
 
         model.addAttribute("events", recentEvents(tid, me));
-        model.addAttribute("allEventsUrl", me.platform() ? "/admin/activity?tenantId=" + t.id() : PAGE_BASE + t.id() + "?tab=audit");
+        model.addAttribute("allEventsUrl", me.getPlatform() ? "/admin/activity?tenantId=" + t.id() : PAGE_BASE + t.id() + "?tab=audit");
         model.addAttribute("webauthnUrl", PAGE_BASE + t.id() + "?tab=webauthn");
         model.addAttribute("auditUrl", PAGE_BASE + t.id() + "?tab=audit");
-        if (me.platform()) {
+        if (me.getPlatform()) {
             // 첫 화면은 "확인 중" 카드 + load 트리거(검증은 느릴 수 있다). 실제 검증은 chainCard 가 한다.
             model.addAttribute("chainView", ChainView.checking());
             populateChainModel(model, t);
@@ -395,7 +395,7 @@ public class TenantDetailPageController {
         Instant now = clock.instant();
         List<RecentEvent> out = new ArrayList<>();
         try {
-            if (me.platform()) {
+            if (me.getPlatform()) {
                 ActivityView view = activity.activity(null, null, null, null, tid).data();
                 for (ActivityView.Event e : view.getFeed()) {
                     if (!tid.equals(e.getTenantId())) continue;
@@ -526,7 +526,7 @@ public class TenantDetailPageController {
     }
 
     private static void requirePlatform(CurrentAdmin me) {
-        if (!me.platform()) throw new AccessDeniedException("platform operator only");
+        if (!me.getPlatform()) throw new AccessDeniedException("platform operator only");
     }
 
     private static CurrentAdmin me(Model model) {

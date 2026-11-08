@@ -47,7 +47,7 @@ class ViewHelpersTest {
     @Test
     @DisplayName("pager: pageSize 0 이하여도 0 나눗셈 없이 동작, 범위 보정")
     void pagerGuardsPageSize() {
-        assertThat(fmt.pager(1, 0, 5).last()).isEqualTo(5);
+        assertThat(fmt.pager(1, 0, 5).getLast()).isEqualTo(5);
         assertThat(fmt.pager(1, -3, 0)).isEqualTo(new ViewHelpers.Pager(1, 1, 0, 0));
         assertThat(fmt.pager(9, 50, 120)).isEqualTo(new ViewHelpers.Pager(3, 3, 101, 120));
     }

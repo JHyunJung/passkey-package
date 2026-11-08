@@ -204,7 +204,7 @@ public class MdsTabController {
     static Trust trust(String mode) {
         if (mode == null || mode.isEmpty()) return null;
         Labels.MdsTrustMode known = Labels.MDS_TRUST_MODES.get(mode);
-        return known != null ? new Trust(mode, known.label(), known.description()) : new Trust(mode, mode, null);
+        return known != null ? new Trust(mode, known.getLabel(), known.getDescription()) : new Trust(mode, mode, null);
     }
 
     static boolean isSeedTime(String iso) {

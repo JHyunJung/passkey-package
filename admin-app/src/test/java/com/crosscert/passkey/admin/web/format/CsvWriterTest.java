@@ -48,7 +48,7 @@ class CsvWriterTest {
     @Test
     @DisplayName("BOM 은 소스에서도 \\uFEFF 이스케이프로 쓴다(보이지 않는 문자 방지)")
     void bomIsWrittenAsEscapeInSource() throws Exception {
-        String src = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/crosscert/passkey/admin/web/format/CsvWriter.java"));
+        String src = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/kotlin/com/crosscert/passkey/admin/web/format/CsvWriter.kt"));
         assertThat(src).contains("\\uFEFF").doesNotContain("\uFEFF".equals("") ? "" : new String(new char[]{(char) 0xFEFF}));
     }
 

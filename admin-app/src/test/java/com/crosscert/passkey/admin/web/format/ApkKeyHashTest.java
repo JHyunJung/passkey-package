@@ -30,7 +30,7 @@ class ApkKeyHashTest {
     void allowsUpperAndLowerCaseHex() {
         ApkKeyHash.Result upper = ApkKeyHash.fromFingerprint("AB".repeat(32));
         ApkKeyHash.Result lower = ApkKeyHash.fromFingerprint("ab".repeat(32));
-        assertThat(upper.ok()).isTrue();
+        assertThat(upper.getOk()).isTrue();
         assertThat(upper).isEqualTo(lower);
     }
 
@@ -38,27 +38,27 @@ class ApkKeyHashTest {
     @DisplayName("변환 결과는 항상 43자 base64url 이다")
     void resultIsAlways43CharBase64Url() {
         ApkKeyHash.Result r = ApkKeyHash.fromFingerprint("1F".repeat(32));
-        assertThat(r.ok()).isTrue();
-        assertThat(r.value().substring(APK_KEY_HASH_PREFIX.length())).matches("[A-Za-z0-9_-]{43}");
+        assertThat(r.getOk()).isTrue();
+        assertThat(r.getValue().substring(APK_KEY_HASH_PREFIX.length())).matches("[A-Za-z0-9_-]{43}");
     }
 
     @Test
     @DisplayName("hex 길이가 64 가 아니면 거부한다")
     void rejectsWrongLength() {
-        assertThat(ApkKeyHash.fromFingerprint("00".repeat(20)).ok()).isFalse(); // 40 hex
-        assertThat(ApkKeyHash.fromFingerprint("00".repeat(40)).ok()).isFalse(); // 80 hex
+        assertThat(ApkKeyHash.fromFingerprint("00".repeat(20)).getOk()).isFalse(); // 40 hex
+        assertThat(ApkKeyHash.fromFingerprint("00".repeat(40)).getOk()).isFalse(); // 80 hex
     }
 
     @Test
     @DisplayName("hex 가 아닌 문자가 있으면 거부한다")
     void rejectsNonHex() {
-        assertThat(ApkKeyHash.fromFingerprint("ZZ".repeat(32)).ok()).isFalse();
+        assertThat(ApkKeyHash.fromFingerprint("ZZ".repeat(32)).getOk()).isFalse();
     }
 
     @Test
     @DisplayName("빈 입력은 거부한다")
     void rejectsBlank() {
-        assertThat(ApkKeyHash.fromFingerprint("   ").ok()).isFalse();
+        assertThat(ApkKeyHash.fromFingerprint("   ").getOk()).isFalse();
     }
 
     @Test

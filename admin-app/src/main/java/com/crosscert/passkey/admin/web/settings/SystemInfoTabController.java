@@ -50,7 +50,7 @@ public class SystemInfoTabController {
     @GetMapping(TAB_PATH)
     public String tab(Model model) {
         CurrentAdmin me = AccountTabController.me(model);
-        if (!me.platform()) throw new AccessDeniedException("platform only");
+        if (!me.getPlatform()) throw new AccessDeniedException("platform only");
         model.addAttribute("retryAttrs", SettingsPageController.tabRequesterAttrs(TAB_PATH));
         SystemInfoView v;
         try {

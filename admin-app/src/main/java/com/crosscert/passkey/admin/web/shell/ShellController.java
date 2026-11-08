@@ -78,7 +78,7 @@ public class ShellController {
         }
         CurrentAdmin me = (CurrentAdmin) model.getAttribute("me");
         model.addAttribute("license", view);
-        model.addAttribute("showLink", me != null && me.platform());
+        model.addAttribute("showLink", me != null && me.getPlatform());
         return "admin/fragments/shell/license-banner :: banner";
     }
 
@@ -172,7 +172,7 @@ public class ShellController {
 
     private void failSwitch(RuntimeException e, HttpServletResponse res) {
         ErrorMessages.Info info = ErrorMessages.describe(e);
-        int status = info.httpStatus() != null ? info.httpStatus() : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
+        int status = info.getHttpStatus() != null ? info.getHttpStatus() : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
         log.warn("[shell] active tenant switch failed: status={} cause={}", status, e.toString());
         String current = "";
         try {
@@ -181,7 +181,7 @@ public class ShellController {
         } catch (RuntimeException ignored) {
             // 현재 RP 이름을 못 구해도 오류 안내는 한다.
         }
-        String message = info.title() + ". 지금 보고 있는 RP(" + current + ")는 그대로입니다.";
+        String message = info.getTitle() + ". 지금 보고 있는 RP(" + current + ")는 그대로입니다.";
         Toasts.errorTitled(res, "RP를 전환하지 못했습니다", message, ErrorMessages.rawDetail(e, status, info), MDC.get("traceId"));
         res.setStatus(status);
     }

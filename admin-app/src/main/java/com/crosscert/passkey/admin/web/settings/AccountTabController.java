@@ -79,7 +79,7 @@ public class AccountTabController {
     /** 계정 카드 모델. enrolledAt 은 서버(MeView)가 아직 내려주지 않아 늘 null — 원본처럼 그 줄을 그리지 않는다. */
     public record AccountView(String email, boolean mfaEnabled, String enrolledAt) {
         static AccountView of(CurrentAdmin me) {
-            return new AccountView(me.email(), me.mfaEnabled(), null);
+            return new AccountView(me.getEmail(), me.getMfaEnabled(), null);
         }
     }
 
@@ -117,7 +117,7 @@ public class AccountTabController {
         } catch (RuntimeException e) {
             log.warn("[settings] mfa enroll failed: {}", e.getClass().getSimpleName());
             ErrorMessages.Info info = ErrorMessages.describe(e);
-            int status = info.httpStatus() == null ? 500 : info.httpStatus();
+            int status = info.getHttpStatus() == null ? 500 : info.getHttpStatus();
             return enrollFailed(res, status, info);
         }
         int status = r.getStatusCode().value();
@@ -161,7 +161,7 @@ public class AccountTabController {
             for (Object c : list) codes.add(new Code(String.format("%02d", codes.size() + 1), String.valueOf(c)));
         }
         model.addAttribute("codes", codes);
-        model.addAttribute("rcFilename", RecoveryCodeFilename.of(me.email(), KstFormat.kstTodayDate(clock.instant())));
+        model.addAttribute("rcFilename", RecoveryCodeFilename.of(me.getEmail(), KstFormat.kstTodayDate(clock.instant())));
         // 복구 코드는 계정 정보 새로고침의 성공 여부와 무관하게 먼저 보여 준다.
         CurrentAdmin fresh = reloadMe(auth, req);
         if (fresh != null) {
@@ -220,8 +220,8 @@ public class AccountTabController {
     }
 
     private static String join(ErrorMessages.Info info) {
-        String d = info.detail();
-        return d == null || d.isEmpty() ? info.title() + "." : info.title() + ". " + d;
+        String d = info.getDetail();
+        return d == null || d.isEmpty() ? info.getTitle() + "." : info.getTitle() + ". " + d;
     }
 
     /** 실패 문구를 입력칸 아래 자리(slotId)에 422 로 넣는다. 토스트 없음(원본: 입력칸 아래에만). */

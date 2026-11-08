@@ -181,7 +181,7 @@ public class TenantsPageController {
                        Model model) {
         CurrentAdmin me = me(model);
         model.addAttribute("breadcrumbs", Crumbs.tenants());
-        if (!me.platform()) {
+        if (!me.getPlatform()) {
             String home = HomeRedirectController.homePath(me);
             if (!PAGE_PATH.equals(home)) return "redirect:" + home;
             model.addAttribute("configError", true);
@@ -324,7 +324,7 @@ public class TenantsPageController {
             throw e;
         } catch (RuntimeException e) {
             ErrorMessages.Info info = ErrorMessages.describe(e);
-            log.warn("[tenants] create failed: status={} cause={}", info.httpStatus(), e.toString());
+            log.warn("[tenants] create failed: status={} cause={}", info.getHttpStatus(), e.toString());
             return invalid(res, model, new NewTenantForm(name, slugV, rpIdV, null, null, null, failure(e, info)));
         }
         Toasts.successTitled(res, "Tenant 생성 완료", created.getDisplayName() + " · WebAuthn 설정으로 이동합니다");
@@ -348,10 +348,10 @@ public class TenantsPageController {
     }
 
     private static Failure failure(RuntimeException e, ErrorMessages.Info info) {
-        String detail = info.detail() == null ? "" : info.detail();
-        String text = info.title() + ". " + detail + " 입력한 내용은 그대로 있습니다.";
+        String detail = info.getDetail() == null ? "" : info.getDetail();
+        String text = info.getTitle() + ". " + detail + " 입력한 내용은 그대로 있습니다.";
         List<String> meta = new ArrayList<>();
-        if (info.httpStatus() != null) meta.add("HTTP " + info.httpStatus());
+        if (info.getHttpStatus() != null) meta.add("HTTP " + info.getHttpStatus());
         String trace = MDC.get("traceId");
         if (trace != null && !trace.isEmpty()) meta.add("trace " + trace);
         return new Failure(text, String.join(" · ", meta));
@@ -520,6 +520,6 @@ public class TenantsPageController {
 
     /** 조각·변경 엔드포인트는 PLATFORM 전용(원본은 RequirePlatform 이 화면째 막았다). 보안 경계는 REST 의 @PreAuthorize 도 함께. */
     private static void requirePlatform(Model model) {
-        if (!me(model).platform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
+        if (!me(model).getPlatform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
     }
 }

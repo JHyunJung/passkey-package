@@ -79,8 +79,8 @@ class KstFormatTest {
                 new Item("c", "2026-10-10T09:00:00Z"),
                 new Item("d", "2026-10-08T01:00:00Z"));
         List<KstFormat.DayGroup<Item>> g = KstFormat.groupByDay(items, Item::ts, now);
-        assertThat(g.stream().map(KstFormat.DayGroup::label)).containsExactly("오늘", "어제", "2026-10-08");
-        assertThat(g.get(0).items().stream().map(Item::id)).containsExactly("a", "b");
+        assertThat(g.stream().map(KstFormat.DayGroup::getLabel)).containsExactly("오늘", "어제", "2026-10-08");
+        assertThat(g.get(0).getItems().stream().map(Item::id)).containsExactly("a", "b");
     }
 
     @Test

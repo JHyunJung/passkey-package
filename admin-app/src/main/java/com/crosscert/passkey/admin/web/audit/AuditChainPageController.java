@@ -113,7 +113,7 @@ public class AuditChainPageController {
     public String page(Model model) {
         CurrentAdmin me = me(model);
         model.addAttribute("breadcrumbs", Crumbs.auditChain());
-        if (!me.platform()) return "redirect:" + HomeRedirectController.homePath(me);
+        if (!me.getPlatform()) return "redirect:" + HomeRedirectController.homePath(me);
         model.addAttribute("loadAttrs", rootReq("hx-get", OVERVIEW_PATH + "?first=1", true, false));
         return PAGE_VIEW;
     }
@@ -319,7 +319,7 @@ public class AuditChainPageController {
             // 앞선 변경은 성공했다 — 목록은 개요와 독립으로 다시 읽어 낡은 목록·열린 상태를 남기지 않는다(원본 refreshIncidents).
             model.addAttribute("incidentsOob", mutated);
             if (mutated) fillIncidentsOob(model);
-            model.addAttribute("warnTitle", info.title());
+            model.addAttribute("warnTitle", info.getTitle());
             Map<String, Object> retry = disabledSelf(rootReq("hx-get", OVERVIEW_PATH, false));
             retry.put("data-chain-verify", true);
             retry.put("data-chain-reverify", true);
@@ -411,8 +411,8 @@ public class AuditChainPageController {
 
         // 월간 보고서
         KstFormat.DateRange range = KstFormat.kstPrevMonthRange(now);
-        model.addAttribute("reportFrom", range.from());
-        model.addAttribute("reportTo", range.to());
+        model.addAttribute("reportFrom", range.getFrom());
+        model.addAttribute("reportTo", range.getTo());
         model.addAttribute("reportHref", REPORT_API);
         model.addAttribute("reportOpts", Map.of("wide", true));
         List<ReportTenant> rt = new ArrayList<>();
@@ -528,7 +528,7 @@ public class AuditChainPageController {
     }
 
     private static int status(ErrorMessages.Info info) {
-        return info.httpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.httpStatus();
+        return info.getHttpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.getHttpStatus();
     }
 
     private static UUID parseUuid(String s) {
@@ -550,6 +550,6 @@ public class AuditChainPageController {
     }
 
     private static void requirePlatform(Model model) {
-        if (!me(model).platform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
+        if (!me(model).getPlatform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
     }
 }

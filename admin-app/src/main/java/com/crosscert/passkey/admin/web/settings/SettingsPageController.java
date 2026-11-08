@@ -83,9 +83,9 @@ public class SettingsPageController {
     @GetMapping(PAGE_PATH)
     public String page(@RequestParam(name = "tab", required = false) String tab, Model model) {
         CurrentAdmin me = AccountTabController.me(model);
-        String active = resolveTab(tab, me.platform());
+        String active = resolveTab(tab, me.getPlatform());
         model.addAttribute("breadcrumbs", Crumbs.settings());
-        model.addAttribute("tabs", tabItems(me.platform(), me.platform() ? pendingSignups() : null));
+        model.addAttribute("tabs", tabItems(me.getPlatform(), me.getPlatform() ? pendingSignups() : null));
         model.addAttribute("activeTab", active);
         boolean lazy = !"account".equals(active);
         model.addAttribute("tabLazy", lazy);
@@ -107,7 +107,7 @@ public class SettingsPageController {
     @GetMapping(FRAG_BASE + "{tab}")
     public String tab(@PathVariable String tab, Model model) {
         CurrentAdmin me = AccountTabController.me(model);
-        if (!"account".equals(resolveTab(tab, me.platform()))) {
+        if (!"account".equals(resolveTab(tab, me.getPlatform()))) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "settings tab not available");
         }
         account.populate(model, me);

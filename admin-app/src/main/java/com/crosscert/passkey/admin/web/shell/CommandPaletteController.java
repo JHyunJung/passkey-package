@@ -87,7 +87,7 @@ public class CommandPaletteController {
     // ── 항목 구성 ───────────────────────────────────────────
 
     List<Item> filtered(String q, CurrentAdmin me) {
-        boolean platform = me != null && me.platform();
+        boolean platform = me != null && me.getPlatform();
         List<Item> all = commands(me, platform);
         List<Item> base;
         if (q.isEmpty()) {
@@ -99,9 +99,9 @@ public class CommandPaletteController {
         List<Item> out = new ArrayList<>(base);
         if (platform && !q.isBlank()) {
             for (Search.Result r : searchTenants(q)) {
-                String last8 = r.id().length() > 8 ? r.id().substring(r.id().length() - 8) : r.id();
-                String hint = r.sub() != null && !r.sub().isEmpty() ? r.sub() + " · " + last8 : last8;
-                out.add(new Item(0, "Tenant", "building", r.label(), hint, null, r.href(), null, false, false, null));
+                String last8 = r.getId().length() > 8 ? r.getId().substring(r.getId().length() - 8) : r.getId();
+                String hint = r.getSub() != null && !r.getSub().isEmpty() ? r.getSub() + " · " + last8 : last8;
+                out.add(new Item(0, "Tenant", "building", r.getLabel(), hint, null, r.getHref(), null, false, false, null));
             }
         }
         List<Item> indexed = new ArrayList<>(out.size());
@@ -128,7 +128,7 @@ public class CommandPaletteController {
             items.add(nav("이동", "hash", "감사 체인 모니터", "전 tenant 무결성 보드", "플랫폼", "/admin/audit-chain"));
             items.add(nav("이동", "cog", "설정", "Admin · MDS · 시스템", "관리", "/admin/settings"));
         }
-        boolean hasIds = me != null && me.tenantIds() != null && !me.tenantIds().isEmpty();
+        boolean hasIds = me != null && me.getTenantIds() != null && !me.getTenantIds().isEmpty();
         if (!platform) {
             ActiveTenant at = activeTenant();
             // 활성 tenant 가 확인되면 hasTenants 와 무관하게 보인다(TSX: tenantIds.length > 0 || status === 'ok').

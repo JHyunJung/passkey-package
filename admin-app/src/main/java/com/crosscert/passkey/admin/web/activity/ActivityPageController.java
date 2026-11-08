@@ -133,7 +133,7 @@ public class ActivityPageController {
                        Model model) {
         CurrentAdmin me = me(model);
         model.addAttribute("breadcrumbs", Crumbs.activity());
-        if (!me.platform()) return "redirect:" + HomeRedirectController.homePath(me);
+        if (!me.getPlatform()) return "redirect:" + HomeRedirectController.homePath(me);
         Filter f = filter(category, tenantId);
         Instant now = clock.instant();
         ActivityView view = null;
@@ -262,8 +262,8 @@ public class ActivityPageController {
             log.warn("[activity] more failed: {}", e.toString());
             ErrorMessages.Info info = ErrorMessages.describe(e);
             Toasts.errorTitled(res, "이전 기록을 불러오지 못했습니다", info.toastMessage(),
-                    info.httpStatus() == null ? null : "HTTP " + info.httpStatus(), MDC.get("traceId"));
-            res.setStatus(info.httpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.httpStatus());
+                    info.getHttpStatus() == null ? null : "HTTP " + info.getHttpStatus(), MDC.get("traceId"));
+            res.setStatus(info.getHttpStatus() == null ? HttpServletResponse.SC_INTERNAL_SERVER_ERROR : info.getHttpStatus());
             return EMPTY_VIEW;
         }
         List<ActivityView.Event> feed = feedOf(view);
@@ -461,7 +461,7 @@ public class ActivityPageController {
         for (ActivityView.Event e : feed) evs.add(ev(e));
         List<Day> out = new ArrayList<>();
         for (KstFormat.DayGroup<Ev> g : KstFormat.groupByDay(evs, Ev::iso, now)) {
-            out.add(new Day(g.label(), KstFormat.kstDate(g.items().get(0).iso()), g.items()));
+            out.add(new Day(g.getLabel(), KstFormat.kstDate(g.getItems().get(0).iso()), g.getItems()));
         }
         return out;
     }
@@ -544,11 +544,11 @@ public class ActivityPageController {
         String actor = d.getActorEmail() == null || d.getActorEmail().isEmpty() ? "system" : d.getActorEmail();
         List<DiffLine> lines = new ArrayList<>();
         for (ActivityDiff.DiffRow r : ActivityDiff.buildDiffRows(null, d.getPayload())) {
-            ActivityDiff.ArrayChange ac = ActivityDiff.arrayChange(r.from(), r.to());
-            String from = ActivityDiff.fmtVal(r.from());
-            String to = ActivityDiff.fmtVal(r.to());
-            lines.add(new DiffLine(r.field(), ac != null, ac == null ? List.of() : ac.removed(), ac == null ? List.of() : ac.added(),
-                    from, to, r.field() + ": " + from + " 에서 " + to + " 로 변경"));
+            ActivityDiff.ArrayChange ac = ActivityDiff.arrayChange(r.getFrom(), r.getTo());
+            String from = ActivityDiff.fmtVal(r.getFrom());
+            String to = ActivityDiff.fmtVal(r.getTo());
+            lines.add(new DiffLine(r.getField(), ac != null, ac == null ? List.of() : ac.getRemoved(), ac == null ? List.of() : ac.getAdded(),
+                    from, to, r.getField() + ": " + from + " 에서 " + to + " 로 변경"));
         }
         String target = d.getTargetId();
         return new DetailVm(nz(d.getAction()), ActivityLabels.actionLabel(nz(d.getAction())), KstFormat.kstDateTime(iso), KstFormat.utcIso(iso) + " UTC",
@@ -702,6 +702,6 @@ public class ActivityPageController {
     }
 
     private static void requirePlatform(Model model) {
-        if (!me(model).platform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
+        if (!me(model).getPlatform()) throw new AccessDeniedException("PLATFORM_OPERATOR only");
     }
 }

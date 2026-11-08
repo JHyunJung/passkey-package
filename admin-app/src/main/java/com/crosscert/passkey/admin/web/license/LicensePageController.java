@@ -64,7 +64,7 @@ public class LicensePageController {
     public String page(Model model) {
         CurrentAdmin me = me(model);
         model.addAttribute("breadcrumbs", Crumbs.license());
-        if (!me.platform()) return "redirect:" + HomeRedirectController.homePath(me);
+        if (!me.getPlatform()) return "redirect:" + HomeRedirectController.homePath(me);
         model.addAttribute("retryAttrs", Map.of("hx-get", PAGE_PATH, "hx-target", "body", "hx-swap", "innerHTML", "hx-push-url", "false"));
         model.addAttribute("recheckAttrs", recheckAttrs());
         try {
@@ -80,7 +80,7 @@ public class LicensePageController {
 
     @GetMapping(RECHECK_PATH)
     public String recheck(HttpServletResponse res, Model model) {
-        if (!me(model).platform()) throw new AccessDeniedException("platform only");
+        if (!me(model).getPlatform()) throw new AccessDeniedException("platform only");
         model.addAttribute("recheckAttrs", recheckAttrs());
         LicenseView v;
         try {
@@ -89,7 +89,7 @@ public class LicensePageController {
             log.warn("[license] recheck failed: {}", e.getClass().getSimpleName());
             res.setHeader("HX-Retarget", "#license-recheck-alert");
             res.setHeader("HX-Reswap", "innerHTML");
-            model.addAttribute("recheckError", ErrorMessages.describe(e).title() + ". 아래는 마지막으로 확인한 정보입니다.");
+            model.addAttribute("recheckError", ErrorMessages.describe(e).getTitle() + ". 아래는 마지막으로 확인한 정보입니다.");
             return ALERT_VIEW;
         }
         model.addAttribute("view", toView(v, clock.instant()));

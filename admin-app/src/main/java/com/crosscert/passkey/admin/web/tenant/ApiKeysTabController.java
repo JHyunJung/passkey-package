@@ -166,7 +166,7 @@ public class ApiKeysTabController {
             if (denied(e)) throw e;
             log.warn("[apikeys-tab] issue failed: {}", e.getClass().getSimpleName());
             ErrorMessages.Info info = ErrorMessages.describe(e);
-            return issueError(res, model, info.title(), info.detail());
+            return issueError(res, model, info.getTitle(), info.getDetail());
         }
         model.addAttribute("issued", new Issued(String.valueOf(created.getId()), name, created.getPrefix(),
                 created.getExpiresAt() == null ? "무기한" : KstFormat.kstDate(created.getExpiresAt()), created.getPlainText(), null));

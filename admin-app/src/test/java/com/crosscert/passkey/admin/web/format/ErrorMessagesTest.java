@@ -28,38 +28,38 @@ class ErrorMessagesTest {
     @DisplayName("5xx 는 서버 일시 오류")
     void fiveXxIsTransientServerError() {
         ErrorMessages.Info i = ErrorMessages.describe(status(503));
-        assertThat(i.title()).isEqualTo("서버가 잠시 응답하지 않습니다");
-        assertThat(i.httpStatus()).isEqualTo(503);
+        assertThat(i.getTitle()).isEqualTo("서버가 잠시 응답하지 않습니다");
+        assertThat(i.getHttpStatus()).isEqualTo(503);
     }
 
     @Test
     @DisplayName("fetch 실패(TypeError)는 네트워크 오류")
     void fetchFailureIsNetworkError() {
-        assertThat(ErrorMessages.describe(new ConnectException("Failed to fetch")).title()).isEqualTo("네트워크에 연결할 수 없습니다");
+        assertThat(ErrorMessages.describe(new ConnectException("Failed to fetch")).getTitle()).isEqualTo("네트워크에 연결할 수 없습니다");
     }
 
     @Test
     @DisplayName("403 은 권한 없음, 404 는 찾을 수 없음")
     void forbiddenAndNotFound() {
-        assertThat(ErrorMessages.describe(status(403)).title()).isEqualTo("권한이 없습니다");
-        assertThat(ErrorMessages.describe(status(404)).title()).isEqualTo("찾을 수 없습니다");
+        assertThat(ErrorMessages.describe(status(403)).getTitle()).isEqualTo("권한이 없습니다");
+        assertThat(ErrorMessages.describe(status(404)).getTitle()).isEqualTo("찾을 수 없습니다");
     }
 
     @Test
     @DisplayName("429 는 요청 과다 — 잠시 후 다시 시도")
     void tooManyRequests() {
         ErrorMessages.Info i = ErrorMessages.describe(status(429));
-        assertThat(i.title()).isEqualTo("요청이 너무 많습니다");
-        assertThat(i.detail()).isEqualTo("잠시 후 다시 시도하세요.");
+        assertThat(i.getTitle()).isEqualTo("요청이 너무 많습니다");
+        assertThat(i.getDetail()).isEqualTo("잠시 후 다시 시도하세요.");
     }
 
     @Test
     @DisplayName("그 밖의 ApiError 는 서버 메시지를 detail 로")
     void otherErrorsUseServerMessageAsDetail() {
         ErrorMessages.Info i = ErrorMessages.describe(new BusinessException(ErrorCode.INVALID_INPUT, "slug 형식이 올바르지 않습니다"));
-        assertThat(i.title()).isEqualTo("요청을 처리하지 못했습니다");
-        assertThat(i.detail()).isEqualTo("slug 형식이 올바르지 않습니다");
-        assertThat(i.code()).isEqualTo(ErrorCode.INVALID_INPUT.getCode());
+        assertThat(i.getTitle()).isEqualTo("요청을 처리하지 못했습니다");
+        assertThat(i.getDetail()).isEqualTo("slug 형식이 올바르지 않습니다");
+        assertThat(i.getCode()).isEqualTo(ErrorCode.INVALID_INPUT.getCode());
     }
 
     // ── ActionBlockedError ──
@@ -67,9 +67,9 @@ class ErrorMessagesTest {
     @DisplayName("지금 실행하지 않은 이유를 쉬운 문구 그대로 옮긴다(알 수 없는 오류가 아니다)")
     void actionBlockedCarriesTheReasonAsIs() {
         ErrorMessages.Info i = ErrorMessages.describe(new ActionBlockedException("목록을 새로 고친 뒤 다시 시도하세요."));
-        assertThat(i.title()).isEqualTo("지금은 실행할 수 없습니다");
-        assertThat(i.detail()).isEqualTo("목록을 새로 고친 뒤 다시 시도하세요.");
-        assertThat(i.httpStatus()).isNull();
+        assertThat(i.getTitle()).isEqualTo("지금은 실행할 수 없습니다");
+        assertThat(i.getDetail()).isEqualTo("목록을 새로 고친 뒤 다시 시도하세요.");
+        assertThat(i.getHttpStatus()).isNull();
     }
 
     // ── josa (describeError.test.ts 안의 describe) ──
@@ -112,10 +112,10 @@ class ErrorMessagesTest {
     void unknownExceptionNeverExposesMessage() {
         for (Throwable t : new Throwable[] {new RuntimeException(), new IllegalStateException("SELECT secret FROM users"), new NullPointerException("x.y")}) {
             ErrorMessages.Info i = ErrorMessages.describe(t);
-            assertThat(i.title()).isEqualTo("서버가 잠시 응답하지 않습니다");
-            assertThat(i.httpStatus()).isEqualTo(500);
-            assertThat(i.detail()).doesNotContain("secret").doesNotContain("x.y");
-            assertThat(i.detailIsRaw()).isFalse();
+            assertThat(i.getTitle()).isEqualTo("서버가 잠시 응답하지 않습니다");
+            assertThat(i.getHttpStatus()).isEqualTo(500);
+            assertThat(i.getDetail()).doesNotContain("secret").doesNotContain("x.y");
+            assertThat(i.getDetailIsRaw()).isFalse();
         }
     }
 
@@ -134,7 +134,7 @@ class ErrorMessagesTest {
         var mismatch = new org.springframework.web.method.annotation.MethodArgumentTypeMismatchException("x", java.util.UUID.class, "id", null,
                 new IllegalArgumentException("Invalid UUID string: x"));
         assertThat(ErrorMessages.rawDetail(mismatch, 400, ErrorMessages.describe(mismatch, 400))).isEqualTo("HTTP 400");
-        assertThat(ErrorMessages.describe(mismatch, 400).detail()).isNull(); // 오류 화면 설명에도 원문 없음
+        assertThat(ErrorMessages.describe(mismatch, 400).getDetail()).isNull(); // 오류 화면 설명에도 원문 없음
         var iae = new IllegalArgumentException("Invalid UUID string: x");
         assertThat(ErrorMessages.rawDetail(iae, 400, ErrorMessages.describe(iae, 400))).isEqualTo("HTTP 400");
         var denied = new org.springframework.security.access.AccessDeniedException("platform operator only");
