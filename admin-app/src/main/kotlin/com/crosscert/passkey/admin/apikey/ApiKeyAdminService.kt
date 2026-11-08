@@ -79,9 +79,9 @@ class ApiKeyAdminService(
         // P0-2 seam: suspended 테넌트엔 어떤 경로로도 새 키가 살아남으면 안 됨.
         // suspend() 가 기존 키를 일괄 revoke 하고 ceremony start 가 거부하더라도,
         // 운영자가 정지 상태에서 새 키를 발급하면 그 키로 finish/self-service 가 동작한다.
-        // Spring Data findById 는 non-null id 계약(JSpecify) — tenantId 는 컨트롤러 @NotNull 검증을 거쳐 항상 non-null.
-        // null 이 직접 넘어오는 경로에서만 원 Java(SimpleJpaRepository 의 IllegalArgumentException)와 달리 NPE.
-        val tenant = tenants.findById(req.tenantId!!)
+        // Spring Data findById 는 non-null id 계약(JSpecify). null 이 직접 넘어오면 원 Java 가
+        // tenants.findById(null) 에서 받던 SimpleJpaRepository 의 IllegalArgumentException(같은 문구)을 그대로 던진다.
+        val tenant = tenants.findById(req.tenantId ?: throw IllegalArgumentException("The given id must not be null"))
             .orElseThrow { BusinessException(ErrorCode.TENANT_NOT_FOUND) }
         if (tenant.isSuspended) {
             throw BusinessException(
