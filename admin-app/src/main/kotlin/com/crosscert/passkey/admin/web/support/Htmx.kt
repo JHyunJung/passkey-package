@@ -20,7 +20,7 @@ object Htmx {
      * 화면 컨트롤러용. 요청이 바인딩되지 않은 곳(보안 필터 핸들러 등)은 요청을 직접 넘기는 쪽을 쓴다.
      */
     @Throws(IOException::class)
-    fun redirect(res: HttpServletResponse, path: String?) {
+    fun redirect(res: HttpServletResponse, path: String) {
         val attrs = RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes
             ?: throw IllegalStateException("no current request bound; use redirect(req, res, path)")
         redirect(attrs.request, res, path)
@@ -31,7 +31,7 @@ object Htmx {
      * 아니면 302 리다이렉트.
      */
     @Throws(IOException::class)
-    fun redirect(req: HttpServletRequest, res: HttpServletResponse, path: String?) {
+    fun redirect(req: HttpServletRequest, res: HttpServletResponse, path: String) {
         if (isHtmx(req)) {
             res.status = HttpServletResponse.SC_OK
             res.setHeader(HX_REDIRECT, path)

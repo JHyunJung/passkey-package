@@ -22,7 +22,7 @@ internal object BaseUrlValidation {
 
     const val LOCALHOST_DEFAULT = "http://localhost:5173"
 
-    fun assertNotLocalhostFallbackInProd(env: Environment, baseUrl: String?, propertyName: String?) {
+    fun assertNotLocalhostFallbackInProd(env: Environment, baseUrl: String?, propertyName: String) {
         var isProd = false
         for (p in env.activeProfiles) {
             if ("prod" == p) {
