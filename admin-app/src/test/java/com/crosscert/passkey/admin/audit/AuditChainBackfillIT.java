@@ -202,10 +202,10 @@ class AuditChainBackfillIT {
         // Row 3: its stored tenantPrevHash equals row2's hash computed *at append time*.
         // After backfill recomputes row2's hash, it matches row3's tenantPrevHash
         // (same algorithm, same inputs) so row3 satisfies the skip condition.
-        assertThat(summary.rowsUpdated())
+        assertThat(summary.getRowsUpdated())
                 .as("backfill should update at least the 2 NULLed rows: summary=%s", summary)
                 .isGreaterThanOrEqualTo(2);
-        assertThat(summary.rowsSkipped())
+        assertThat(summary.getRowsSkipped())
                 .as("backfill should skip at least the 1 already-valid row: summary=%s", summary)
                 .isGreaterThanOrEqualTo(1);
 
@@ -213,9 +213,9 @@ class AuditChainBackfillIT {
         List<AuditChainVerifier.TenantResult> results = verifier.verifyAllTenants();
         assertThat(results).as("verifyAllTenants should return at least one result").isNotEmpty();
         for (AuditChainVerifier.TenantResult r : results) {
-            assertThat(r.ok())
+            assertThat(r.getOk())
                     .as("tenant=%s chain should verify ok after backfill: brokenAt=%s",
-                            r.tenantId(), r.brokenAt())
+                            r.getTenantId(), r.getBrokenAt())
                     .isTrue();
         }
     }

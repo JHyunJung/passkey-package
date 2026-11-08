@@ -206,8 +206,8 @@ class SecurityIncidentIT {
 
         // Sanity: chain is now genuinely broken at the tampered row.
         AuditChainVerifier.TenantResult r = verifier.verifyTenant(tenantId);
-        assertThat(r.ok()).as("tenant chain must be broken after payload tamper").isFalse();
-        assertThat(r.brokenAt()).as("brokenAt should point to the tampered row").isEqualTo(tamperTargetId);
+        assertThat(r.getOk()).as("tenant chain must be broken after payload tamper").isFalse();
+        assertThat(r.getBrokenAt()).as("brokenAt should point to the tampered row").isEqualTo(tamperTargetId);
         return tamperTargetId;
     }
 
@@ -220,7 +220,7 @@ class SecurityIncidentIT {
                 ACTOR_ID, ACTOR_EMAIL, "TENANT_UPDATE",
                 "TENANT", tenantId.toString(), tenantId, Map.of("seq", 2)));
         AuditChainVerifier.TenantResult r = verifier.verifyTenant(tenantId);
-        assertThat(r.ok()).as("intact tenant chain must verify ok").isTrue();
+        assertThat(r.getOk()).as("intact tenant chain must verify ok").isTrue();
     }
 
     // ----------------------------------------------------------------

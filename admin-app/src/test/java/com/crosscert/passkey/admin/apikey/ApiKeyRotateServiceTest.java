@@ -107,20 +107,20 @@ class ApiKeyRotateServiceTest {
                 service.rotate(old.getId(), ACTOR_UUID, "alice@example.com");
 
         // (a) new key plaintext returned once with copied scopes
-        assertThat(resp.plaintextKey()).startsWith("pk_");
-        assertThat(resp.prefix()).hasSize(11);
-        assertThat(resp.scopes()).containsExactlyInAnyOrder("registration", "authentication");
+        assertThat(resp.getPlaintextKey()).startsWith("pk_");
+        assertThat(resp.getPrefix()).hasSize(11);
+        assertThat(resp.getScopes()).containsExactlyInAnyOrder("registration", "authentication");
 
         // old key grace-expired at now + grace
         assertThat(old.getExpiresAt()).isEqualTo(OffsetDateTime.now(clock).plus(grace));
-        assertThat(resp.oldKeyExpiresAt()).isEqualTo(OffsetDateTime.now(clock).plus(grace));
+        assertThat(resp.getOldKeyExpiresAt()).isEqualTo(OffsetDateTime.now(clock).plus(grace));
 
         // the new key persisted via saveAndFlush carries the copied scopes + a hash matching the secret
         ArgumentCaptor<ApiKey> savedCaptor = ArgumentCaptor.forClass(ApiKey.class);
         verify(repo).saveAndFlush(savedCaptor.capture());
         ApiKey fresh = savedCaptor.getValue();
         assertThat(fresh.getScopeValues()).containsExactlyInAnyOrder("registration", "authentication");
-        String secret = resp.plaintextKey().substring(resp.prefix().length());
+        String secret = resp.getPlaintextKey().substring(resp.getPrefix().length());
         assertThat(encoder.matches(secret, fresh.getKeyHash())).isTrue();
         assertThat(fresh.getName()).isEqualTo("primary");
     }
@@ -136,10 +136,10 @@ class ApiKeyRotateServiceTest {
         ArgumentCaptor<AuditAppendRequest> auditCaptor = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());
         AuditAppendRequest aud = auditCaptor.getValue();
-        assertThat(aud.action()).isEqualTo("API_KEY_ROTATED");
-        assertThat(aud.payload()).containsKeys("oldPrefix", "newPrefix", "tenantId", "oldKeyExpiresAt");
-        assertThat(aud.payload().get("oldPrefix")).isEqualTo("pk_old12345");
-        assertThat(aud.payload().values()).doesNotContain(resp.plaintextKey());
+        assertThat(aud.getAction()).isEqualTo("API_KEY_ROTATED");
+        assertThat(aud.getPayload()).containsKeys("oldPrefix", "newPrefix", "tenantId", "oldKeyExpiresAt");
+        assertThat(aud.getPayload().get("oldPrefix")).isEqualTo("pk_old12345");
+        assertThat(aud.getPayload().values()).doesNotContain(resp.getPlaintextKey());
     }
 
     @Test

@@ -95,12 +95,12 @@ public class ShellController {
             res.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return NONE;
         }
-        if (overview == null || overview.totals() == null) {
+        if (overview == null || overview.getTotals() == null) {
             res.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return NONE;
         }
         model.addAttribute("overview", overview);
-        model.addAttribute("ago", timeAgo(overview.verifiedAt(), clock.instant()));
+        model.addAttribute("ago", timeAgo(overview.getVerifiedAt(), clock.instant()));
         return "admin/fragments/shell/chain-card :: card";
     }
 

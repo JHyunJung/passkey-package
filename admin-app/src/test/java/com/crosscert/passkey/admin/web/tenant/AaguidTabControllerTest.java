@@ -437,10 +437,10 @@ class AaguidTabControllerTest {
         ArgumentCaptor<AaguidPolicyDto.UpdateRequest> cap = ArgumentCaptor.forClass(AaguidPolicyDto.UpdateRequest.class);
         verify(aaguid).update(eq(T1), cap.capture(), any());
         AaguidPolicyDto.UpdateRequest u = cap.getValue();
-        assertThat(u.mode()).isEqualTo(TenantAaguidPolicy.Mode.ALLOWLIST);
-        assertThat(u.mdsStrict()).isTrue();
-        assertThat(u.entries()).extracting(AaguidPolicyDto.EntryInput::aaguid).containsExactly(YUBI, UNKNOWN, UUID.fromString(added));
-        assertThat(u.entries()).extracting(AaguidPolicyDto.EntryInput::note).containsExactly("내 키", null, null);
+        assertThat(u.getMode()).isEqualTo(TenantAaguidPolicy.Mode.ALLOWLIST);
+        assertThat(u.getMdsStrict()).isTrue();
+        assertThat(u.getEntries()).extracting(AaguidPolicyDto.EntryInput::getAaguid).containsExactly(YUBI, UNKNOWN, UUID.fromString(added));
+        assertThat(u.getEntries()).extracting(AaguidPolicyDto.EntryInput::getNote).containsExactly("내 키", null, null);
         JsonNode t = trigger(r);
         assertThat(t.has("saved")).isTrue();
         assertThat(t.get("toast").get("kind").asString()).isEqualTo("success");

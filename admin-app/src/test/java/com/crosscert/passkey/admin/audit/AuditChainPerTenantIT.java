@@ -212,19 +212,19 @@ class AuditChainPerTenantIT {
 
         // ── 3. Both tenant chains should be valid before tampering ─────
         AuditChainVerifier.TenantResult resultA = verifier.verifyTenant(TENANT_A_ID);
-        assertThat(resultA.ok())
-                .as("tenantA chain should be intact before tampering: brokenAt=%s", resultA.brokenAt())
+        assertThat(resultA.getOk())
+                .as("tenantA chain should be intact before tampering: brokenAt=%s", resultA.getBrokenAt())
                 .isTrue();
 
         AuditChainVerifier.TenantResult resultB = verifier.verifyTenant(TENANT_B_ID);
-        assertThat(resultB.ok())
-                .as("tenantB chain should be intact before tampering: brokenAt=%s", resultB.brokenAt())
+        assertThat(resultB.getOk())
+                .as("tenantB chain should be intact before tampering: brokenAt=%s", resultB.getBrokenAt())
                 .isTrue();
 
         // Global chain should also be intact
         AuditChainVerifier.Result globalBefore = verifier.verify();
-        assertThat(globalBefore.ok())
-                .as("global chain should be intact before tampering: brokenAt=%s", globalBefore.brokenAt())
+        assertThat(globalBefore.getOk())
+                .as("global chain should be intact before tampering: brokenAt=%s", globalBefore.getBrokenAt())
                 .isTrue();
 
         // ── 4. Tamper tenantA's 2nd row payload ───────────────────────
@@ -237,22 +237,22 @@ class AuditChainPerTenantIT {
 
         // ── 5. TenantA chain is now broken ────────────────────────────
         AuditChainVerifier.TenantResult resultAAfter = verifier.verifyTenant(TENANT_A_ID);
-        assertThat(resultAAfter.ok())
+        assertThat(resultAAfter.getOk())
                 .as("tenantA chain should be broken after payload tamper")
                 .isFalse();
-        assertThat(resultAAfter.brokenAt())
+        assertThat(resultAAfter.getBrokenAt())
                 .as("brokenAt should point to the tampered row")
                 .isEqualTo(tamperTargetId);
 
         // ── 6. TenantB chain is still intact (isolation) ──────────────
         AuditChainVerifier.TenantResult resultBAfter = verifier.verifyTenant(TENANT_B_ID);
-        assertThat(resultBAfter.ok())
+        assertThat(resultBAfter.getOk())
                 .as("tenantB chain must remain intact — tamper in tenantA must not cross tenant boundary")
                 .isTrue();
 
         // ── 7. Global chain is also broken (reflects tampered row) ────
         AuditChainVerifier.Result globalAfter = verifier.verify();
-        assertThat(globalAfter.ok())
+        assertThat(globalAfter.getOk())
                 .as("global chain should be broken because the tampered row is in the global chain too")
                 .isFalse();
     }

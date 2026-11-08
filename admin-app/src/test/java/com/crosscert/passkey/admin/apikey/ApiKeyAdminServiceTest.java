@@ -80,16 +80,16 @@ class ApiKeyAdminServiceTest {
         ApiKeyAdminDto.ApiKeyCreateResponse resp =
                 service.issue(req, ACTOR_UUID, "alice@example.com");
 
-        assertThat(resp.plainText()).startsWith("pk_");
-        assertThat(resp.plainText()).hasSizeGreaterThan(20);
-        assertThat(resp.prefix()).hasSize(11); // pk_ + 8 chars
+        assertThat(resp.getPlainText()).startsWith("pk_");
+        assertThat(resp.getPlainText()).hasSizeGreaterThan(20);
+        assertThat(resp.getPrefix()).hasSize(11); // pk_ + 8 chars
 
         ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
         verify(repo).saveAndFlush(keyCaptor.capture());
         ApiKey saved = keyCaptor.getValue();
         // Verify the persisted hash actually matches the plaintext secret
         // (full plainText = prefix + secret; we know prefix == resp.prefix).
-        String secret = resp.plainText().substring(resp.prefix().length());
+        String secret = resp.getPlainText().substring(resp.getPrefix().length());
         assertThat(encoder.matches(secret, saved.getKeyHash())).isTrue();
     }
 
@@ -105,11 +105,11 @@ class ApiKeyAdminServiceTest {
                 ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());
         AuditAppendRequest aud = auditCaptor.getValue();
-        assertThat(aud.action()).isEqualTo("API_KEY_ISSUE");
+        assertThat(aud.getAction()).isEqualTo("API_KEY_ISSUE");
         // payload must contain prefix + tenantId + name but NOT plaintext.
-        assertThat(aud.payload()).containsKey("prefix");
-        assertThat(aud.payload()).doesNotContainKey("plainText");
-        assertThat(aud.payload()).doesNotContainKey("secret");
+        assertThat(aud.getPayload()).containsKey("prefix");
+        assertThat(aud.getPayload()).doesNotContainKey("plainText");
+        assertThat(aud.getPayload()).doesNotContainKey("secret");
     }
 
     @Test
@@ -124,7 +124,7 @@ class ApiKeyAdminServiceTest {
                 new ApiKeyAdminDto.ApiKeyCreateRequest(
                         TENANT_UUID, "primary", java.util.Set.of("registration"), null),
                 ACTOR_UUID, "alice@example.com");
-        assertThat(resp.prefix()).startsWith("pk_");
+        assertThat(resp.getPrefix()).startsWith("pk_");
     }
 
     @Test
@@ -137,7 +137,7 @@ class ApiKeyAdminServiceTest {
                 service.issue(req, ACTOR_UUID, "alice@example.com");
 
         // response reflects the normalized (lowercased) scopes
-        assertThat(resp.scopes()).containsExactlyInAnyOrder("registration", "authentication");
+        assertThat(resp.getScopes()).containsExactlyInAnyOrder("registration", "authentication");
 
         // persisted key carries the normalized scopes, not the verbatim request
         ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
@@ -193,7 +193,7 @@ class ApiKeyAdminServiceTest {
                         TENANT_UUID, "primary", java.util.Set.of("registration"), 24),
                 ACTOR_UUID, "alice@example.com");
 
-        assertThat(resp.expiresAt()).isEqualTo(OffsetDateTime.parse("2028-06-01T09:00:00+09:00"));
+        assertThat(resp.getExpiresAt()).isEqualTo(OffsetDateTime.parse("2028-06-01T09:00:00+09:00"));
 
         ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
         verify(repo).saveAndFlush(keyCaptor.capture());
@@ -209,7 +209,7 @@ class ApiKeyAdminServiceTest {
                         TENANT_UUID, "primary", java.util.Set.of("registration"), null),
                 ACTOR_UUID, "alice@example.com");
 
-        assertThat(resp.expiresAt()).isNull();
+        assertThat(resp.getExpiresAt()).isNull();
         ArgumentCaptor<ApiKey> keyCaptor = ArgumentCaptor.forClass(ApiKey.class);
         verify(repo).saveAndFlush(keyCaptor.capture());
         assertThat(keyCaptor.getValue().getExpiresAt()).isNull();
@@ -225,7 +225,7 @@ class ApiKeyAdminServiceTest {
 
         ArgumentCaptor<AuditAppendRequest> auditCaptor = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());
-        assertThat(auditCaptor.getValue().payload().get("expiresAt"))
+        assertThat(auditCaptor.getValue().getPayload().get("expiresAt"))
                 .isEqualTo("2026-12-01T09:00+09:00");
     }
 
@@ -262,7 +262,7 @@ class ApiKeyAdminServiceTest {
                 ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());
         AuditAppendRequest aud = auditCaptor.getValue();
-        assertThat(aud.action()).isEqualTo("API_KEY_REVOKE");
-        assertThat(aud.payload().get("prefix")).isEqualTo("pk_abcd1234");
+        assertThat(aud.getAction()).isEqualTo("API_KEY_REVOKE");
+        assertThat(aud.getPayload().get("prefix")).isEqualTo("pk_abcd1234");
     }
 }

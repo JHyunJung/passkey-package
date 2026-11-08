@@ -67,11 +67,11 @@ class RetentionPurgeJobTest {
         verify(service).purgeCredentialAuthEvents(any());
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
-        assertThat(cap.getValue().action()).isEqualTo("RETENTION_PURGE");
-        assertThat(cap.getValue().payload().get("signupRequestsPurged")).isEqualTo(2);
+        assertThat(cap.getValue().getAction()).isEqualTo("RETENTION_PURGE");
+        assertThat(cap.getValue().getPayload().get("signupRequestsPurged")).isEqualTo(2);
         // sentinel 제거: 실패한 테이블은 count 키 자체가 없다(합산 오염 방지).
-        assertThat(cap.getValue().payload()).doesNotContainKey("resetTokensPurged");
-        assertThat(cap.getValue().payload().get("failed").toString()).contains("resetTokens");
+        assertThat(cap.getValue().getPayload()).doesNotContainKey("resetTokensPurged");
+        assertThat(cap.getValue().getPayload().get("failed").toString()).contains("resetTokens");
         // lease 는 정상·예외 어느 경로든 즉시 반환.
         verify(leases).release(anyString(), anyString());
     }
@@ -91,7 +91,7 @@ class RetentionPurgeJobTest {
 
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
-        var payload = cap.getValue().payload();
+        var payload = cap.getValue().getPayload();
         assertThat(payload.get("signupRequestsPurged")).isEqualTo(5);
         assertThat(payload.get("resetTokensPurged")).isEqualTo(3);
         assertThat(payload.get("recoveryCodesPurged")).isEqualTo(0);
@@ -118,7 +118,7 @@ class RetentionPurgeJobTest {
 
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
-        var payload = cap.getValue().payload();
+        var payload = cap.getValue().getPayload();
         assertThat(payload.get("signupRequestsPurged")).isEqualTo(0);
         assertThat(payload.get("resetTokensPurged")).isEqualTo(0);
         assertThat(payload.get("recoveryCodesPurged")).isEqualTo(0);

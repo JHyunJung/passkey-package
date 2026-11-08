@@ -301,7 +301,7 @@ public class AdminSecurityConfig {
             // than failing login or setting an unbounded (negative) timeout.
             int idleMinutes = DEFAULT_IDLE_MINUTES;
             try {
-                int configured = policy.get().sessionIdleTimeoutMinutes();
+                int configured = policy.get().getSessionIdleTimeoutMinutes();
                 if (configured >= 1) {
                     idleMinutes = configured;
                 } else {

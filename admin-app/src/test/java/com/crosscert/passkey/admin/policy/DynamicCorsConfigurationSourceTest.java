@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.entity.SecurityPolicy;
 import com.crosscert.passkey.core.repository.SecurityPolicyRepository;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.Optional;
@@ -30,21 +31,21 @@ class DynamicCorsConfigurationSourceTest {
     @Test
     void absentPolicy_returnsNull() {
         when(repo.findById(1L)).thenReturn(Optional.empty());
-        assertThat(source.getCorsConfiguration(null)).isNull();
+        assertThat(source.getCorsConfiguration(new MockHttpServletRequest())).isNull();
     }
 
     @Test
     void emptyAllowlist_returnsNull() {
         SecurityPolicy p = policyWithCors("[]");
         when(repo.findById(1L)).thenReturn(Optional.of(p));
-        assertThat(source.getCorsConfiguration(null)).isNull();
+        assertThat(source.getCorsConfiguration(new MockHttpServletRequest())).isNull();
     }
 
     @Test
     void blankAllowlist_returnsNull() {
         SecurityPolicy p = policyWithCors("");
         when(repo.findById(1L)).thenReturn(Optional.of(p));
-        assertThat(source.getCorsConfiguration(null)).isNull();
+        assertThat(source.getCorsConfiguration(new MockHttpServletRequest())).isNull();
     }
 
     @Test
@@ -52,7 +53,7 @@ class DynamicCorsConfigurationSourceTest {
         SecurityPolicy p = policyWithCors("[\"https://app.example.com\"]");
         when(repo.findById(1L)).thenReturn(Optional.of(p));
 
-        CorsConfiguration cfg = source.getCorsConfiguration(null);
+        CorsConfiguration cfg = source.getCorsConfiguration(new MockHttpServletRequest());
 
         assertThat(cfg).isNotNull();
         assertThat(cfg.getAllowedOrigins()).contains("https://app.example.com");
@@ -63,7 +64,7 @@ class DynamicCorsConfigurationSourceTest {
     void malformedJson_returnsNull_noCrash() {
         SecurityPolicy p = policyWithCors("not-json");
         when(repo.findById(1L)).thenReturn(Optional.of(p));
-        assertThat(source.getCorsConfiguration(null)).isNull();
+        assertThat(source.getCorsConfiguration(new MockHttpServletRequest())).isNull();
     }
 
     @Test
@@ -74,7 +75,7 @@ class DynamicCorsConfigurationSourceTest {
         // Many calls (CorsFilter fires on every request) inside the 10s TTL window
         // must collapse to a single DB read.
         for (int i = 0; i < 50; i++) {
-            CorsConfiguration cfg = source.getCorsConfiguration(null);
+            CorsConfiguration cfg = source.getCorsConfiguration(new MockHttpServletRequest());
             assertThat(cfg).isNotNull();
             assertThat(cfg.getAllowedOrigins()).contains("https://app.example.com");
         }

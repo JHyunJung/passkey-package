@@ -63,10 +63,10 @@ class CredentialAdminServiceListTest {
         PageView<CredentialAdminDto.CredentialView> page = svc.list(tenant, 0, 200, null);
 
         assertThat(page.content()).hasSize(4);
-        assertThat(page.content().get(0).authenticatorName()).isEqualTo("FIDO_CERTIFIED_L1");
-        assertThat(page.content().get(1).authenticatorName()).isEqualTo("FIDO_CERTIFIED_L1,REVOKED");
-        assertThat(page.content().get(2).authenticatorName()).isEqualTo("FIDO_CERTIFIED_L1");
-        assertThat(page.content().get(3).authenticatorName()).isNull();
+        assertThat(page.content().get(0).getAuthenticatorName()).isEqualTo("FIDO_CERTIFIED_L1");
+        assertThat(page.content().get(1).getAuthenticatorName()).isEqualTo("FIDO_CERTIFIED_L1,REVOKED");
+        assertThat(page.content().get(2).getAuthenticatorName()).isEqualTo("FIDO_CERTIFIED_L1");
+        assertThat(page.content().get(3).getAuthenticatorName()).isNull();
 
         // The whole point of G15: exactly one batched call regardless of row count,
         // and the old per-row lookup() must never be invoked.
@@ -85,7 +85,7 @@ class CredentialAdminServiceListTest {
         PageView<CredentialAdminDto.CredentialView> page = svc.list(tenant, 0, 200, null);
 
         assertThat(page.content()).hasSize(2);
-        assertThat(page.content()).allMatch(v -> v.authenticatorName() == null);
+        assertThat(page.content()).allMatch(v -> v.getAuthenticatorName() == null);
         verify(mds, never()).multiLookup(anyList());
         verify(mds, never()).lookup(any());
     }

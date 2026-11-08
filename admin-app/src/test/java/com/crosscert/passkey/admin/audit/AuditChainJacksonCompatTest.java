@@ -141,9 +141,9 @@ class AuditChainJacksonCompatTest {
 
         AuditChainVerifier verifier = new AuditChainVerifier(repo, baseMapper);
 
-        assertThat(verifier.verify().ok()).isTrue();
-        assertThat(verifier.verifyTenant(null).ok()).isTrue();
-        assertThat(verifier.verifyTenant(TENANT).ok()).isTrue();
+        assertThat(verifier.verify().getOk()).isTrue();
+        assertThat(verifier.verifyTenant(null).getOk()).isTrue();
+        assertThat(verifier.verifyTenant(TENANT).getOk()).isTrue();
     }
 
     @Test

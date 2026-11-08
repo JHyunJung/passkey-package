@@ -189,10 +189,10 @@ class SignupRequestServiceTest {
 
         ArgumentCaptor<AuditAppendRequest> auditCap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCap.capture());
-        assertThat(auditCap.getValue().action()).isEqualTo("ADMIN_SIGNUP_APPROVE");
-        assertThat(auditCap.getValue().targetType()).isEqualTo("ADMIN_USER");
-        assertThat(auditCap.getValue().targetId()).isEqualTo(newUserId.toString());
-        assertThat(auditCap.getValue().payload()).containsEntry("role", "RP_ADMIN").containsEntry("tenantCount", 1);
+        assertThat(auditCap.getValue().getAction()).isEqualTo("ADMIN_SIGNUP_APPROVE");
+        assertThat(auditCap.getValue().getTargetType()).isEqualTo("ADMIN_USER");
+        assertThat(auditCap.getValue().getTargetId()).isEqualTo(newUserId.toString());
+        assertThat(auditCap.getValue().getPayload()).containsEntry("role", "RP_ADMIN").containsEntry("tenantCount", 1);
 
         verify(mail).send(eq("new@x.com"), anyString(), anyString());
         assertThat(view.tenantIds()).containsExactly(tenantId);
@@ -330,9 +330,9 @@ class SignupRequestServiceTest {
 
         ArgumentCaptor<AuditAppendRequest> cap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(cap.capture());
-        assertThat(cap.getValue().action()).isEqualTo("ADMIN_SIGNUP_REJECT");
-        assertThat(cap.getValue().targetType()).isEqualTo("ADMIN_SIGNUP_REQUEST");
-        assertThat(cap.getValue().targetId()).isEqualTo(reqId.toString());
+        assertThat(cap.getValue().getAction()).isEqualTo("ADMIN_SIGNUP_REJECT");
+        assertThat(cap.getValue().getTargetType()).isEqualTo("ADMIN_SIGNUP_REQUEST");
+        assertThat(cap.getValue().getTargetId()).isEqualTo(reqId.toString());
         verify(mail).send(eq("no@x.com"), anyString(), anyString());
     }
 
@@ -404,7 +404,7 @@ class SignupRequestServiceTest {
         verify(requests, never()).save(any());
         ArgumentCaptor<AuditAppendRequest> auditCap = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCap.capture());
-        assertThat(auditCap.getValue().action()).isEqualTo("ADMIN_SIGNUP_SELF_APPROVE");
+        assertThat(auditCap.getValue().getAction()).isEqualTo("ADMIN_SIGNUP_SELF_APPROVE");
     }
 
     @Test

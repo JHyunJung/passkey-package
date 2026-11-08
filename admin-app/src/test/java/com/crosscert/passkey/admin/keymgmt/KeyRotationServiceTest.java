@@ -93,9 +93,9 @@ class KeyRotationServiceTest {
         ArgumentCaptor<AuditAppendRequest> auditCap =
                 ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCap.capture());
-        assertThat(auditCap.getValue().action()).isEqualTo("SIGNING_KEY_ROTATE");
-        assertThat(auditCap.getValue().payload()).containsKey("oldKid");
-        assertThat(auditCap.getValue().payload()).containsKey("newKid");
+        assertThat(auditCap.getValue().getAction()).isEqualTo("SIGNING_KEY_ROTATE");
+        assertThat(auditCap.getValue().getPayload()).containsKey("oldKid");
+        assertThat(auditCap.getValue().getPayload()).containsKey("newKid");
 
         assertThat(result.getOldKid()).isEqualTo("old-kid");
         assertThat(result.getNewKid()).isEqualTo(newRow.getKid());

@@ -210,8 +210,8 @@ public class AuditTabController {
         if (!me.platform()) throw new AccessDeniedException("platform operator only");
         try {
             AuditChainMonitorController.TenantVerifyResponse r = chain.verifyTenant(v.id().toString());
-            int tampered = r.tamperedEntryId() == null ? 0 : 1;
-            model.addAttribute("chainResult", new ChainResult(r.intact(), tampered, r.verifiedAt() == null ? "—" : KstFormat.kstDateTimeMin(r.verifiedAt())));
+            int tampered = r.getTamperedEntryId() == null ? 0 : 1;
+            model.addAttribute("chainResult", new ChainResult(r.getIntact(), tampered, r.getVerifiedAt() == null ? "—" : KstFormat.kstDateTimeMin(r.getVerifiedAt())));
         } catch (RuntimeException e) {
             if (denied(e)) throw e;
             log.warn("[audit-tab] chain verify failed: {}", e.getClass().getSimpleName());
@@ -258,11 +258,11 @@ public class AuditTabController {
         List<List<String>> body = new ArrayList<>();
         for (Item it : items) {
             AuditLogView a = it.view();
-            String type = a.action() == null ? "" : a.action();
+            String type = a.getAction() == null ? "" : a.getAction();
             if (!groups.isEmpty() && !groups.contains(AuditHelpers.eventGroup(type))) continue;
             if (onlyFailures && !AuditHelpers.isFailure(type, null)) continue;
-            body.add(List.of(isoOf(a.createdAt()), nz(a.action()), a.actorEmail() != null ? "ADMIN" : "SYSTEM", nz(a.actorEmail()),
-                    nz(a.targetType()), nz(a.targetId()), payloadCompact(it.payload(), true)));
+            body.add(List.of(isoOf(a.getCreatedAt()), nz(a.getAction()), a.getActorEmail() != null ? "ADMIN" : "SYSTEM", nz(a.getActorEmail()),
+                    nz(a.getTargetType()), nz(a.getTargetId()), payloadCompact(it.payload(), true)));
         }
         byte[] csv = CsvWriter.write(List.of("ts", "eventType", "actorType", "actorId", "subjectType", "subjectId", "payload"), body);
         String filename = "audit-" + v.slug() + "-" + KstFormat.kstToday(now) + ".csv";
@@ -279,7 +279,7 @@ public class AuditTabController {
         OffsetDateTime[] r = span.range();
         List<AuditLogView> rows = audit.list(null, null, tid, r[0], r[1], page, PAGE_SIZE).data();
         List<Item> items = new ArrayList<>();
-        if (rows != null) for (AuditLogView a : rows) items.add(new Item(a, parsePayload(a.payload())));
+        if (rows != null) for (AuditLogView a : rows) items.add(new Item(a, parsePayload(a.getPayload())));
         return items;
     }
 
@@ -391,17 +391,17 @@ public class AuditTabController {
 
     private Ev ev(Item it, Instant now) {
         AuditLogView a = it.view();
-        String type = a.action() == null ? "" : a.action();
+        String type = a.getAction() == null ? "" : a.getAction();
         JsonNode p = it.payload();
-        Instant at = a.createdAt() == null ? null : a.createdAt().toInstant();
+        Instant at = a.getCreatedAt() == null ? null : a.getCreatedAt().toInstant();
         String kst = KstFormat.kstDateTime(at);
-        String actorId = a.actorEmail();
+        String actorId = a.getActorEmail();
         String actorType = actorId != null ? "ADMIN" : "SYSTEM";
         List<Diff> diff = AuditHelpers.payloadDiff(p).stream()
                 .map(d -> new Diff(d.field(), AuditHelpers.diffValue(d.from()), AuditHelpers.diffValue(d.to()))).toList();
-        return new Ev(String.valueOf(a.id()), type, AuditHelpers.eventTone(type, null),
+        return new Ev(String.valueOf(a.getId()), type, AuditHelpers.eventTone(type, null),
                 kst.length() > 11 ? kst.substring(11) : kst, KstFormat.timeAgo(at, now), actorType, actorId, actorId == null ? null : "…" + tail(actorId, 10),
-                a.targetType() == null ? "—" : a.targetType(), a.targetId(), a.targetId() == null ? null : "…" + tail(a.targetId(), 12),
+                a.getTargetType() == null ? "—" : a.getTargetType(), a.getTargetId(), a.getTargetId() == null ? null : "…" + tail(a.getTargetId(), 12),
                 payloadCompact(p, false), diff, AuditHelpers.pretty(p == null ? json.createObjectNode() : p), kst,
                 at == null ? "" : AuditHelpers.iso(at), AuditHelpers.eventGroup(type), AuditHelpers.isFailure(type, null),
                 at == null ? "" : KstFormat.kstDate(at));

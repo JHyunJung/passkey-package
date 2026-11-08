@@ -53,8 +53,8 @@ class CredentialAdminServiceAuthEventsTest {
         PageView<CredentialAdminDto.AuthEventView> page = svc.listAuthEvents(tenant, credB64, 0, 50);
 
         assertThat(page.content()).hasSize(1);
-        assertThat(page.content().get(0).result()).isEqualTo(CredentialAuthResult.SUCCESS);
-        assertThat(page.content().get(0).signCount()).isEqualTo(3);
+        assertThat(page.content().get(0).getResult()).isEqualTo(CredentialAuthResult.SUCCESS);
+        assertThat(page.content().get(0).getSignCount()).isEqualTo(3);
         verify(tenantBoundary).assertCanAccessTenant(tenant);
         // defense-in-depth: 조회 술어에 tenant_id 가 포함됐는지 검증(오염 행 cross-tenant 누출 방지).
         verify(authEvents).findByTenantIdAndCredentialIdOrderByCreatedAtDesc(eq(tenant), eq(credPk), any());

@@ -198,20 +198,20 @@ public class CredentialsTabController {
         CredentialView c = f.view();
         model.addAttribute("tid", tid.toString());
         model.addAttribute("c", row(tid, c, st));
-        model.addAttribute("createdAt", KstFormat.kstDateTimeMin(c.createdAt()));
-        model.addAttribute("lastUsedAt", c.lastUsedAt() == null ? "—" : KstFormat.timeAgo(c.lastUsedAt().toInstant(), clock.instant()));
-        model.addAttribute("transportsRaw", transports(c.transports()).stream().map(Transport::value).toList());
-        model.addAttribute("attestation", c.attestationFormat());
+        model.addAttribute("createdAt", KstFormat.kstDateTimeMin(c.getCreatedAt()));
+        model.addAttribute("lastUsedAt", c.getLastUsedAt() == null ? "—" : KstFormat.timeAgo(c.getLastUsedAt().toInstant(), clock.instant()));
+        model.addAttribute("transportsRaw", transports(c.getTransports()).stream().map(Transport::value).toList());
+        model.addAttribute("attestation", c.getAttestationFormat());
         model.addAttribute("nav", f.window() == null ? null : nav(tid, cid, st, f));
         model.addAttribute("revokeGetAttrs", revokeConfirmAttrs(tid, cid, st));
         model.addAttribute("detailRetryAttrs", detailAttrs(tid, cid, st, false, false));
-        model.addAttribute("authName", c.authenticatorName());
+        model.addAttribute("authName", c.getAuthenticatorName());
         try {
             PageView<AuthEventView> ev = credentials.authEvents(tid, cid, 0, EVENTS_SIZE).data();
             List<Event> events = new ArrayList<>();
             for (AuthEventView e : ev.content()) {
-                events.add(new Event(KstFormat.kstDateTimeMin(e.createdAt()), "SUCCESS".equals(e.result()) ? "SUCCESS" : "FAILED",
-                        e.failureReason(), e.signCount()));
+                events.add(new Event(KstFormat.kstDateTimeMin(e.getCreatedAt()), "SUCCESS".equals(e.getResult()) ? "SUCCESS" : "FAILED",
+                        e.getFailureReason(), e.getSignCount()));
             }
             model.addAttribute("events", events);
             model.addAttribute("eventsError", null);
@@ -272,7 +272,7 @@ public class CredentialsTabController {
         St st = St.of(page, size, q, aaguid, status);
         CredentialView c = find(v.id(), cid, st).view();
         credentials.revoke(v.id(), cid, auth);
-        Toasts.successTitled(res, "Credential을 회수했습니다.", tail(c.credentialId(), 12) + " · " + c.userHandle());
+        Toasts.successTitled(res, "Credential을 회수했습니다.", tail(c.getCredentialId(), 12) + " · " + c.getUserHandle());
         model.addAttribute("tid", v.id().toString());
         fillList(model, v.id(), st, false, null); // 회수는 이미 성공했다 — 목록 새로고침 실패는 목록 자리의 LoadError 로
         return LIST_VIEW;
@@ -291,9 +291,9 @@ public class CredentialsTabController {
         Loaded l = load(v.id(), st);
         List<List<String>> body = new ArrayList<>();
         for (CredentialView c : applyClientFilter(l.pv().content(), l.st())) {
-            body.add(List.of(c.credentialId(), c.userHandle(), nz(c.label()), nz(c.authenticatorName()), ACTIVE, nz(c.aaguidHex()),
-                    String.join("|", transports(c.transports()).stream().map(Transport::value).toList()), String.valueOf(c.signCount()),
-                    iso(c.lastUsedAt()), iso(c.createdAt())));
+            body.add(List.of(c.getCredentialId(), c.getUserHandle(), nz(c.getLabel()), nz(c.getAuthenticatorName()), ACTIVE, nz(c.getAaguidHex()),
+                    String.join("|", transports(c.getTransports()).stream().map(Transport::value).toList()), String.valueOf(c.getSignCount()),
+                    iso(c.getLastUsedAt()), iso(c.getCreatedAt())));
         }
         byte[] csv = CsvWriter.write(List.of("credentialId", "externalUserId", "label", "authenticatorName", "status", "aaguid", "transports",
                 "signatureCounter", "lastUsedAt", "createdAt"), body);
@@ -334,10 +334,10 @@ public class CredentialsTabController {
         if (!B64URL.matcher(cid).matches()) throw new BusinessException(ErrorCode.ENTITY_NOT_FOUND, "credential 없음");
         Loaded w = load(tid, st);
         for (CredentialView c : w.pv().content()) {
-            if (cid.equals(c.credentialId())) return new Found(c, w);
+            if (cid.equals(c.getCredentialId())) return new Found(c, w);
         }
         for (CredentialView c : fetch(tid, 1, PAGE_SIZES.get(0), cid).content()) {
-            if (cid.equals(c.credentialId())) return new Found(c, null);
+            if (cid.equals(c.getCredentialId())) return new Found(c, null);
         }
         throw new BusinessException(ErrorCode.ENTITY_NOT_FOUND, "credential 없음");
     }
@@ -433,13 +433,13 @@ public class CredentialsTabController {
     }
 
     private Row row(UUID tid, CredentialView c, St st) {
-        String cid = c.credentialId();
+        String cid = c.getCredentialId();
         String tail8 = tail(cid, 8);
-        boolean named = c.authenticatorName() != null && !c.authenticatorName().isEmpty();
-        long cnt = c.signCount();
-        String kind = cnt > 0 ? "value" : c.lastUsedAt() != null ? "na" : "zero";
-        String lastUsed = c.lastUsedAt() == null ? "—" : KstFormat.timeAgo(c.lastUsedAt().toInstant(), clock.instant());
-        return new Row(cid, tail8, c.userHandle(), c.label(), c.aaguidHex(), authenticatorLabel(c), named, transports(c.transports()), kind, cnt, lastUsed,
+        boolean named = c.getAuthenticatorName() != null && !c.getAuthenticatorName().isEmpty();
+        long cnt = c.getSignCount();
+        String kind = cnt > 0 ? "value" : c.getLastUsedAt() != null ? "na" : "zero";
+        String lastUsed = c.getLastUsedAt() == null ? "—" : KstFormat.timeAgo(c.getLastUsedAt().toInstant(), clock.instant());
+        return new Row(cid, tail8, c.getUserHandle(), c.getLabel(), c.getAaguidHex(), authenticatorLabel(c), named, transports(c.getTransports()), kind, cnt, lastUsed,
                 detailAttrs(tid, cid, st, false, true), revokeConfirmAttrs(tid, cid, st), "회수 · …" + tail8);
     }
 
@@ -467,7 +467,7 @@ public class CredentialsTabController {
         List<CredentialView> visible = applyClientFilter(f.window().pv().content(), f.window().st());
         St cur = f.window().st();
         int idx = -1;
-        for (int i = 0; i < visible.size(); i++) if (cid.equals(visible.get(i).credentialId())) idx = i;
+        for (int i = 0; i < visible.size(); i++) if (cid.equals(visible.get(i).getCredentialId())) idx = i;
         if (idx < 0) return null;
         long total = f.window().pv().totalElements();
         int lastPage = (int) Math.max(1, (total + cur.size() - 1) / cur.size());
@@ -477,18 +477,18 @@ public class CredentialsTabController {
         Map<String, Object> prev = null;
         Map<String, Object> next = null;
         if (idx > 0) {
-            prev = detailAttrs(tid, visible.get(idx - 1).credentialId(), cur, false, false);
+            prev = detailAttrs(tid, visible.get(idx - 1).getCredentialId(), cur, false, false);
         } else if (!cf && cur.page() > 1) {
             St p = cur.withPage(cur.page() - 1);
             List<CredentialView> items = fetchQuiet(tid, p);
-            if (!items.isEmpty()) prev = detailAttrs(tid, items.get(items.size() - 1).credentialId(), p, true, false);
+            if (!items.isEmpty()) prev = detailAttrs(tid, items.get(items.size() - 1).getCredentialId(), p, true, false);
         }
         if (idx < visible.size() - 1) {
-            next = detailAttrs(tid, visible.get(idx + 1).credentialId(), cur, false, false);
+            next = detailAttrs(tid, visible.get(idx + 1).getCredentialId(), cur, false, false);
         } else if (!cf && cur.page() < lastPage) {
             St p = cur.withPage(cur.page() + 1);
             List<CredentialView> items = fetchQuiet(tid, p);
-            if (!items.isEmpty()) next = detailAttrs(tid, items.get(0).credentialId(), p, true, false);
+            if (!items.isEmpty()) next = detailAttrs(tid, items.get(0).getCredentialId(), p, true, false);
         }
         return new Nav(pos, prev, next);
     }
@@ -516,7 +516,7 @@ public class CredentialsTabController {
         List<CredentialView> out = new ArrayList<>();
         for (CredentialView c : items) {
             boolean statusOk = ALL.equals(f.status()) || ACTIVE.equals(f.status());
-            boolean aaguidOk = a.isEmpty() || (c.aaguidHex() != null && norm(c.aaguidHex()).contains(a));
+            boolean aaguidOk = a.isEmpty() || (c.getAaguidHex() != null && norm(c.getAaguidHex()).contains(a));
             if (statusOk && aaguidOk) out.add(c);
         }
         return out;
@@ -524,9 +524,9 @@ public class CredentialsTabController {
 
     /** MDS 이름 → aaguid 끝 8자 → unknown. */
     static String authenticatorLabel(CredentialView c) {
-        if (c.authenticatorName() != null && !c.authenticatorName().isEmpty()) return c.authenticatorName();
-        if (c.aaguidHex() != null && !c.aaguidHex().isEmpty()) {
-            String n = norm(c.aaguidHex());
+        if (c.getAuthenticatorName() != null && !c.getAuthenticatorName().isEmpty()) return c.getAuthenticatorName();
+        if (c.getAaguidHex() != null && !c.getAaguidHex().isEmpty()) {
+            String n = norm(c.getAaguidHex());
             return n.length() <= 8 ? n : n.substring(n.length() - 8);
         }
         return "unknown";

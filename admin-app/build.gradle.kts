@@ -10,6 +10,9 @@ kotlin {
     compilerOptions {
         // Spring/Jakarta 의 JSR-305 null 애너테이션을 Kotlin 타입 시스템에 엄격 반영.
         freeCompilerArgs.add("-Xjsr305=strict")
+        // 타입 인자 위 TYPE_USE 애너테이션(예: Set<@NotBlank String>)을 바이트코드에 남긴다 — 없으면
+        // Hibernate Validator 의 컨테이너 요소 제약(원 Java record 와 동일 검증)이 사라진다.
+        freeCompilerArgs.add("-Xemit-jvm-type-annotations")
         // 생성자/메서드 파라미터 이름을 바이트코드에 남긴다(Java 쪽 -parameters 와 동일 효과).
         javaParameters = true
     }

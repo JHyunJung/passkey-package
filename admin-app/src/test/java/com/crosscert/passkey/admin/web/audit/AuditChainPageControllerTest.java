@@ -103,9 +103,9 @@ class AuditChainPageControllerTest {
     }
 
     static AuditChainOverview ov(List<AuditChainTenantOverview> tenants) {
-        int bad = (int) tenants.stream().filter(t -> !t.intact()).count();
+        int bad = (int) tenants.stream().filter(t -> !t.getIntact()).count();
         return new AuditChainOverview(NOW.minusSeconds(180), 24, 60,
-                new AuditChainOverview.Totals(tenants.size() - bad, tenants.size(), bad, tenants.stream().mapToLong(AuditChainTenantOverview::verifiedRows).sum(), 42), tenants);
+                new AuditChainOverview.Totals(tenants.size() - bad, tenants.size(), bad, tenants.stream().mapToLong(AuditChainTenantOverview::getVerifiedRows).sum(), 42), tenants);
     }
 
     static AuditChainOverview intact() {
@@ -540,7 +540,7 @@ class AuditChainPageControllerTest {
         assertThat(status(r)).isEqualTo(200);
         ArgumentCaptor<IncidentDto.CreateRequest> cap = ArgumentCaptor.forClass(IncidentDto.CreateRequest.class);
         verify(chain).createIncident(cap.capture(), any(Authentication.class));
-        assertThat(cap.getValue().tenantId()).isEqualTo(T2.toString());
+        assertThat(cap.getValue().getTenantId()).isEqualTo(T2.toString());
         JsonNode toast = trigger(r).get("toast");
         assertThat(toast.get("kind").asString()).isEqualTo("success");
         assertThat(toast.get("title").asString()).isEqualTo("Incident 생성됨");
@@ -608,7 +608,7 @@ class AuditChainPageControllerTest {
         assertThat(status(r)).isEqualTo(200);
         ArgumentCaptor<IncidentDto.ResolveRequest> cap = ArgumentCaptor.forClass(IncidentDto.ResolveRequest.class);
         verify(chain).resolveIncident(eq(INC1.toString()), cap.capture(), any(Authentication.class));
-        assertThat(cap.getValue().note()).isEqualTo("조치 완료");
+        assertThat(cap.getValue().getNote()).isEqualTo("조치 완료");
         JsonNode toast = trigger(r).get("toast");
         assertThat(toast.get("title").asString()).isEqualTo("해결됨");
         assertThat(toast.get("message").asString()).isEqualTo("incident 가 RESOLVED 로 표시되었습니다.");

@@ -70,8 +70,8 @@ class KeyExpirationJobTest {
         ArgumentCaptor<AuditAppendRequest> auditCap =
                 ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCap.capture());
-        assertThat(auditCap.getValue().action()).isEqualTo("SIGNING_KEY_REVOKE");
-        assertThat(auditCap.getValue().payload().get("kid")).isEqualTo("expired");
+        assertThat(auditCap.getValue().getAction()).isEqualTo("SIGNING_KEY_REVOKE");
+        assertThat(auditCap.getValue().getPayload().get("kid")).isEqualTo("expired");
     }
 
     @Test

@@ -279,12 +279,12 @@ public class TenantDetailPageController {
         boolean isManual = "1".equals(manual);
         try {
             AuditChainMonitorController.TenantVerifyResponse r = chain.verifyTenant(t.id());
-            Instant at = r.verifiedAt();
-            ChainView v = new ChainView("done", "", r.intact(), at == null ? "—" : KstFormat.timeAgo(at, clock.instant()),
-                    r.tamperedEntryId() == null ? null : tail(r.tamperedEntryId().toString(), 8));
+            Instant at = r.getVerifiedAt();
+            ChainView v = new ChainView("done", "", r.getIntact(), at == null ? "—" : KstFormat.timeAgo(at, clock.instant()),
+                    r.getTamperedEntryId() == null ? null : tail(r.getTamperedEntryId().toString(), 8));
             model.addAttribute("chainView", v);
             if (isManual) {
-                if (r.intact()) Toasts.successTitled(res, "수동 검증 완료", "체인 무결");
+                if (r.getIntact()) Toasts.successTitled(res, "수동 검증 완료", "체인 무결");
                 else Toasts.warnTitled(res, "수동 검증 완료", "위변조 감지");
             }
         } catch (AccessDeniedException e) {
@@ -404,7 +404,7 @@ public class TenantDetailPageController {
                 }
             } else {
                 for (AuditLogController.AuditLogView e : audit.list(null, null, tid, null, null, 0, 5).data()) {
-                    out.add(event(e.action(), e.targetId(), e.createdAt(), now));
+                    out.add(event(e.getAction(), e.getTargetId(), e.getCreatedAt(), now));
                     if (out.size() == 5) break;
                 }
             }
@@ -437,7 +437,7 @@ public class TenantDetailPageController {
         try {
             Instant now = clock.instant();
             List<ApiKeyAdminDto.ApiKeyView> keys = apiKeys.list(tid.toString()).data();
-            return (int) keys.stream().filter(k -> ApiKeyExpiry.isExpiringSoon(k.revokedAt(), k.expiresAt(), now)).count();
+            return (int) keys.stream().filter(k -> ApiKeyExpiry.isExpiringSoon(k.getRevokedAt(), k.getExpiresAt(), now)).count();
         } catch (RuntimeException e) {
             return null;
         }
@@ -447,8 +447,8 @@ public class TenantDetailPageController {
     private Integer unverifiedAaguid(UUID tid) {
         try {
             AaguidPolicyDto.View p = aaguid.get(tid);
-            if (p == null || p.mode() == null || "ANY".equals(p.mode().name())) return 0;
-            return (int) p.entries().stream().filter(e -> e.aaguid() != null && e.mdsName() == null).count();
+            if (p == null || p.getMode() == null || "ANY".equals(p.getMode().name())) return 0;
+            return (int) p.getEntries().stream().filter(e -> e.getAaguid() != null && e.getMdsName() == null).count();
         } catch (RuntimeException e) {
             return null;
         }

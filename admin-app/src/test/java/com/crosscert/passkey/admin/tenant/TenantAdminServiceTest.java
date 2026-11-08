@@ -85,8 +85,8 @@ class TenantAdminServiceTest {
 
         ArgumentCaptor<AuditAppendRequest> auditCaptor = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit).append(auditCaptor.capture());
-        assertThat(auditCaptor.getValue().action()).isEqualTo("TENANT_CREATE");
-        assertThat(auditCaptor.getValue().targetId()).isEqualTo("T_A");
+        assertThat(auditCaptor.getValue().getAction()).isEqualTo("TENANT_CREATE");
+        assertThat(auditCaptor.getValue().getTargetId()).isEqualTo("T_A");
     }
 
     @Test

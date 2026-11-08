@@ -341,10 +341,10 @@ class ApiKeysTabControllerTest {
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
         ArgumentCaptor<ApiKeyAdminDto.ApiKeyCreateRequest> cap = ArgumentCaptor.forClass(ApiKeyAdminDto.ApiKeyCreateRequest.class);
         verify(apiKeys).issue(cap.capture(), any(Authentication.class));
-        assertThat(cap.getValue().tenantId()).isEqualTo(T1);
-        assertThat(cap.getValue().name()).isEqualTo("staging");
-        assertThat(cap.getValue().scopes()).containsExactly("registration", "authentication");
-        assertThat(cap.getValue().expiresInMonths()).isEqualTo(24);
+        assertThat(cap.getValue().getTenantId()).isEqualTo(T1);
+        assertThat(cap.getValue().getName()).isEqualTo("staging");
+        assertThat(cap.getValue().getScopes()).containsExactly("registration", "authentication");
+        assertThat(cap.getValue().getExpiresInMonths()).isEqualTo(24);
 
         assertThat(r.getResponse().getHeader("Cache-Control")).contains("no-store");
         assertThat(r.getResponse().getHeader("HX-Trigger")).isNull();
@@ -455,8 +455,8 @@ class ApiKeysTabControllerTest {
         mvc.perform(issueReq("staging", "", "authentication")).andReturn();
         ArgumentCaptor<ApiKeyAdminDto.ApiKeyCreateRequest> cap = ArgumentCaptor.forClass(ApiKeyAdminDto.ApiKeyCreateRequest.class);
         verify(apiKeys).issue(cap.capture(), any());
-        assertThat(cap.getValue().expiresInMonths()).isNull();
-        assertThat(cap.getValue().scopes()).containsExactly("authentication");
+        assertThat(cap.getValue().getExpiresInMonths()).isNull();
+        assertThat(cap.getValue().getScopes()).containsExactly("authentication");
     }
 
     @Test

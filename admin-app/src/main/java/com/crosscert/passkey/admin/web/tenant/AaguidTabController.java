@@ -70,8 +70,8 @@ public class AaguidTabController {
     public record Policy(String mode, boolean mdsStrict, List<Entry> entries) {
         static Policy of(AaguidPolicyDto.View v) {
             List<Entry> es = new ArrayList<>();
-            for (AaguidPolicyDto.Entry e : v.entries()) es.add(new Entry(e.aaguid() == null ? "" : e.aaguid().toString(), e.note(), e.mdsName()));
-            return new Policy(v.mode().name(), v.mdsStrict(), es);
+            for (AaguidPolicyDto.Entry e : v.getEntries()) es.add(new Entry(e.getAaguid() == null ? "" : e.getAaguid().toString(), e.getNote(), e.getMdsName()));
+            return new Policy(v.getMode().name(), v.getMdsStrict(), es);
         }
     }
 

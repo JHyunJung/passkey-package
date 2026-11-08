@@ -168,8 +168,8 @@ public class ApiKeysTabController {
             ErrorMessages.Info info = ErrorMessages.describe(e);
             return issueError(res, model, info.title(), info.detail());
         }
-        model.addAttribute("issued", new Issued(String.valueOf(created.id()), name, created.prefix(),
-                created.expiresAt() == null ? "무기한" : KstFormat.kstDate(created.expiresAt()), created.plainText(), null));
+        model.addAttribute("issued", new Issued(String.valueOf(created.getId()), name, created.getPrefix(),
+                created.getExpiresAt() == null ? "무기한" : KstFormat.kstDate(created.getExpiresAt()), created.getPlainText(), null));
         refreshAfterChange(model, tid);
         model.addAttribute("resetForm", true); // 발급 성공만 새 키 발급 폼을 비운다(원본: 성공했을 때만 초기화)
         return ISSUED_VIEW;
@@ -188,11 +188,11 @@ public class ApiKeysTabController {
         String expiry = null;
         if (fresh != null) {
             for (ApiKeyAdminDto.ApiKeyView k : fresh) {
-                if (k.id() != null && k.id().equals(r.id())) expiry = k.expiresAt() == null ? "무기한" : KstFormat.kstDate(k.expiresAt());
+                if (k.getId() != null && k.getId().equals(r.getId())) expiry = k.getExpiresAt() == null ? "무기한" : KstFormat.kstDate(k.getExpiresAt());
             }
         }
-        model.addAttribute("issued", new Issued(String.valueOf(r.id()), o.key().name(), r.prefix(), expiry, r.plaintextKey(),
-                oldKeyNotice(r.oldKeyExpiresAt(), clock.instant())));
+        model.addAttribute("issued", new Issued(String.valueOf(r.getId()), o.key().getName(), r.getPrefix(), expiry, r.getPlaintextKey(),
+                oldKeyNotice(r.getOldKeyExpiresAt(), clock.instant())));
         return ISSUED_VIEW;
     }
 
@@ -203,8 +203,8 @@ public class ApiKeysTabController {
         requireConfirm(req);
         Owned o = owned(keyId, tenantId);
         apiKeys.revoke(keyId, auth);
-        String name = o.key().name() == null ? "" : o.key().name();
-        Toasts.successTitled(res, "API 키 “" + name + "”" + Josa.eulReul(name) + " 회수했습니다.", o.key().keyPrefix());
+        String name = o.key().getName() == null ? "" : o.key().getName();
+        Toasts.successTitled(res, "API 키 “" + name + "”" + Josa.eulReul(name) + " 회수했습니다.", o.key().getKeyPrefix());
         boolean ok = refreshAfterChange(model, o.tid()) != null;
         model.addAttribute("listOob", false); // 이 응답에서는 목록이 본 대상(#ak-list outerHTML)이다
         model.addAttribute("badgeOob", ok);
@@ -220,7 +220,7 @@ public class ApiKeysTabController {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, tenantId);
         String tid = v.id().toString();
         for (ApiKeyAdminDto.ApiKeyView k : apiKeys.list(tid).data()) {
-            if (keyId.equals(k.id()) && v.id().equals(k.tenantId())) return new Owned(tid, k);
+            if (keyId.equals(k.getId()) && v.id().equals(k.getTenantId())) return new Owned(tid, k);
         }
         throw new BusinessException(ErrorCode.API_KEY_NOT_FOUND);
     }
@@ -258,7 +258,7 @@ public class ApiKeysTabController {
         String path = vs.iterator().next().getPropertyPath().toString();
         for (ConstraintViolation<ApiKeyAdminDto.ApiKeyCreateRequest> cv : vs) {
             String p = cv.getPropertyPath().toString();
-            if (p.startsWith("name")) return req.name() == null || req.name().isBlank() ? "용도(이름)를 입력하세요" : "용도(이름)는 " + NAME_MAX + "자 이하로 입력하세요";
+            if (p.startsWith("name")) return req.getName() == null || req.getName().isBlank() ? "용도(이름)를 입력하세요" : "용도(이름)는 " + NAME_MAX + "자 이하로 입력하세요";
         }
         if (path.startsWith("scopes")) return "권한 범위를 하나 이상 선택하세요";
         if (path.startsWith("expiresInMonths")) return "만료 기간이 올바르지 않습니다";
@@ -333,24 +333,24 @@ public class ApiKeysTabController {
                 case "EXPIRED" -> expired++;
                 default -> revoked++;
             }
-            if (k.createdAt() != null && (latest == null || k.createdAt().isAfter(latest))) latest = k.createdAt();
+            if (k.getCreatedAt() != null && (latest == null || k.getCreatedAt().isAfter(latest))) latest = k.getCreatedAt();
             rows.add(row(tid, k, st, now));
         }
         int overdue = rotationOverdueCount(keys, now);
         model.addAttribute("rows", rows);
         model.addAttribute("kpis", new Kpis(String.valueOf(keys.size()), "활성 " + active + " · 만료 " + expired + " · 회수 " + revoked,
                 latest == null ? "—" : KstFormat.timeAgo(latest.toInstant(), now), "초과 키 " + overdue + "개", overdue > 0));
-        int expiring = (int) keys.stream().filter(k -> ApiKeyExpiry.isExpiringSoon(k.revokedAt(), k.expiresAt(), now)).count();
+        int expiring = (int) keys.stream().filter(k -> ApiKeyExpiry.isExpiringSoon(k.getRevokedAt(), k.getExpiresAt(), now)).count();
         model.addAttribute("badgeText", expiring > 0 ? "확인 필요 " + expiring : null);
         model.addAttribute("badgeReason", expiring > 0 ? "30일 안에 만료되는 키 " + expiring + "개" : null);
     }
 
     private Row row(String tid, ApiKeyAdminDto.ApiKeyView k, String st, Instant now) {
-        String name = k.name() == null ? "" : k.name();
-        String prefix = k.keyPrefix() == null ? "" : k.keyPrefix();
+        String name = k.getName() == null ? "" : k.getName();
+        String prefix = k.getKeyPrefix() == null ? "" : k.getKeyPrefix();
         List<Scope> scopes = new ArrayList<>();
-        if (k.scopes() != null) for (String s : k.scopes()) scopes.add(new Scope(s, SCOPE_LABEL.getOrDefault(s, s)));
-        String keyId = String.valueOf(k.id());
+        if (k.getScopes() != null) for (String s : k.getScopes()) scopes.add(new Scope(s, SCOPE_LABEL.getOrDefault(s, s)));
+        String keyId = String.valueOf(k.getId());
         String q = "?tenantId=" + tid;
         Map<String, Object> rotateAttrs = new LinkedHashMap<>();
         rotateAttrs.put("hx-post", KEY_FRAG + keyId + "/rotate" + q);
@@ -367,9 +367,9 @@ public class ApiKeysTabController {
                 menuItem("접두사 복사", "copy", false, Map.of("data-prefix", prefix, "x-on:click.capture", COPY_PREFIX)));
         List<Map<String, Object>> danger = List.of(
                 menuItem("회수", "trash", true, Map.of("data-dialog", "ak-revoke-" + keyId, "x-on:click.capture", OPEN_DIALOG)));
-        String lastUsed = k.lastUsedAt() == null ? null : KstFormat.timeAgo(k.lastUsedAt().toInstant(), now);
+        String lastUsed = k.getLastUsedAt() == null ? null : KstFormat.timeAgo(k.getLastUsedAt().toInstant(), now);
         return new Row(keyId, name, prefix, st, scopes, lastUsed == null ? "미사용" : lastUsed, lastUsed == null ? "사용 안 함" : lastUsed,
-                KstFormat.kstDate(k.createdAt()), expiryBadge(st, k.expiresAt(), now), rotateAttrs, revokeAttrs, items, danger);
+                KstFormat.kstDate(k.getCreatedAt()), expiryBadge(st, k.getExpiresAt(), now), rotateAttrs, revokeAttrs, items, danger);
     }
 
     /** 메뉴 항목이 여는 확인 다이얼로그(id 는 data-dialog). 템플릿 상수. */
@@ -392,8 +392,8 @@ public class ApiKeysTabController {
 
     /** api/apiKeys.ts adapt: revokedAt → REVOKED, 만료 시각이 지났으면 EXPIRED, 그 밖 ACTIVE. */
     static String status(ApiKeyAdminDto.ApiKeyView k, Instant now) {
-        if (k.revokedAt() != null) return "REVOKED";
-        if (k.expiresAt() != null && !k.expiresAt().toInstant().isAfter(now)) return "EXPIRED";
+        if (k.getRevokedAt() != null) return "REVOKED";
+        if (k.getExpiresAt() != null && !k.getExpiresAt().toInstant().isAfter(now)) return "EXPIRED";
         return "ACTIVE";
     }
 
@@ -426,8 +426,8 @@ public class ApiKeysTabController {
     static int rotationOverdueCount(List<ApiKeyAdminDto.ApiKeyView> keys, Instant now) {
         int n = 0;
         for (ApiKeyAdminDto.ApiKeyView k : keys) {
-            if (!"ACTIVE".equals(status(k, now)) || k.createdAt() == null) continue;
-            if (now.toEpochMilli() - k.createdAt().toInstant().toEpochMilli() > ROTATION_DAYS * DAY_MS) n++;
+            if (!"ACTIVE".equals(status(k, now)) || k.getCreatedAt() == null) continue;
+            if (now.toEpochMilli() - k.getCreatedAt().toInstant().toEpochMilli() > ROTATION_DAYS * DAY_MS) n++;
         }
         return n;
     }

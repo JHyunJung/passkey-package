@@ -125,8 +125,8 @@ public class SecurityPolicyTabController {
         }
 
         Map<String, String> errors = new LinkedHashMap<>();
-        boolean untouched = idleIn.equals(String.valueOf(saved.sessionIdleTimeoutMinutes()));
-        Integer idleMin = untouched ? Integer.valueOf(saved.sessionIdleTimeoutMinutes()) : null;
+        boolean untouched = idleIn.equals(String.valueOf(saved.getSessionIdleTimeoutMinutes()));
+        Integer idleMin = untouched ? Integer.valueOf(saved.getSessionIdleTimeoutMinutes()) : null;
         if (!untouched) {
             String e = PolicyValidation.timeoutError(idleIn);
             if (e != null) errors.put("sessionIdleTimeoutMinutes", e);
@@ -160,7 +160,7 @@ public class SecurityPolicyTabController {
         }
 
         String console = consoleOrigin(req);
-        if (removesConsole(saved.corsAllowlist(), cors, console) && !"1".equals(confirmLockout)) {
+        if (removesConsole(saved.getCorsAllowlist(), cors, console) && !"1".equals(confirmLockout)) {
             res.setStatus(422); // 저장이 아님 — 저장 바가 변경 표시를 지우지 않도록 2xx 를 쓰지 않는다.
             model.addAttribute("errors", Map.<String, String>of());
             model.addAttribute("dialog", true);
@@ -200,9 +200,9 @@ public class SecurityPolicyTabController {
 
     private void fill(Model model, SecurityPolicyDto.View v, String console) {
         String saved = null;
-        for (String o : v.corsAllowlist()) if (o.equalsIgnoreCase(console)) { saved = o; break; }
+        for (String o : v.getCorsAllowlist()) if (o.equalsIgnoreCase(console)) { saved = o; break; }
         model.addAttribute("loadError", null);
-        model.addAttribute("sp", new Form(String.valueOf(v.sessionIdleTimeoutMinutes()), v.mfaRequired(), v.corsAllowlist(), console, saved));
+        model.addAttribute("sp", new Form(String.valueOf(v.getSessionIdleTimeoutMinutes()), v.getMfaRequired(), v.getCorsAllowlist(), console, saved));
         model.addAttribute("savePath", SAVE_PATH);
         model.addAttribute("revertUrl", TAB_PATH + "?revert=1");
         model.addAttribute("originCheckUrl", ORIGIN_CHECK_PATH);

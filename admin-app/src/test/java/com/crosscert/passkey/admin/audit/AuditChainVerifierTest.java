@@ -40,8 +40,8 @@ class AuditChainVerifierTest {
     void emptyLogIsValid() {
         when(repo.findAllOrdered()).thenReturn(List.of());
         AuditChainVerifier.Result r = verifier.verify();
-        assertThat(r.ok()).isTrue();
-        assertThat(r.brokenAt()).isNull();
+        assertThat(r.getOk()).isTrue();
+        assertThat(r.getBrokenAt()).isNull();
     }
 
     @Test
@@ -49,7 +49,7 @@ class AuditChainVerifierTest {
         List<AuditLog> rows = buildValidChain(3);
         when(repo.findAllOrdered()).thenReturn(rows);
         AuditChainVerifier.Result r = verifier.verify();
-        assertThat(r.ok()).isTrue();
+        assertThat(r.getOk()).isTrue();
     }
 
     @Test
@@ -67,8 +67,8 @@ class AuditChainVerifierTest {
         when(repo.findAllOrdered()).thenReturn(rows);
 
         AuditChainVerifier.Result r = verifier.verify();
-        assertThat(r.ok()).isFalse();
-        assertThat(r.brokenAt()).isEqualTo(ROW_2_ID);
+        assertThat(r.getOk()).isFalse();
+        assertThat(r.getBrokenAt()).isEqualTo(ROW_2_ID);
     }
 
     @Test
@@ -86,8 +86,8 @@ class AuditChainVerifierTest {
         when(repo.findAllOrdered()).thenReturn(rows);
 
         AuditChainVerifier.Result r = verifier.verify();
-        assertThat(r.ok()).isFalse();
-        assertThat(r.brokenAt()).isEqualTo(ROW_2_ID);
+        assertThat(r.getOk()).isFalse();
+        assertThat(r.getBrokenAt()).isEqualTo(ROW_2_ID);
     }
 
     /** Build a valid chain by reusing AuditLogService.computeHash. */
@@ -106,8 +106,8 @@ class AuditChainVerifierTest {
             OffsetDateTime now = OffsetDateTime.now(clock);
             byte[] hash = AuditLogService.computeHash(prev, req, payload, now);
             AuditLog row = new AuditLog(
-                    prev, hash, req.actorId(), req.actorEmail(),
-                    req.action(), req.targetType(), req.targetId(),
+                    prev, hash, req.getActorId(), req.getActorEmail(),
+                    req.getAction(), req.getTargetType(), req.getTargetId(),
                     null, null, null,
                     payload, now);
             UUID rowId = UUID.fromString(

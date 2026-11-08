@@ -137,10 +137,10 @@ public class AuditChainPageController {
         if (tid == null) throw new IllegalArgumentException("invalid tenantId");
         try {
             AuditChainMonitorController.TenantVerifyResponse r = chain.verifyTenant(tid.toString());
-            if (r.intact()) {
+            if (r.getIntact()) {
                 Toasts.successTitled(res, "검증 완료", "chain 이 정상입니다.");
             } else {
-                Toasts.errorTitled(res, "위변조 의심", r.tamperedEntryId() != null ? "불일치 entry " + r.tamperedEntryId() : "hash 불일치", null, null);
+                Toasts.errorTitled(res, "위변조 의심", r.getTamperedEntryId() != null ? "불일치 entry " + r.getTamperedEntryId() : "hash 불일치", null, null);
             }
         } catch (RuntimeException e) {
             if (denied(e)) throw e;
@@ -173,7 +173,7 @@ public class AuditChainPageController {
         }
         if (hasTampering(ov)) return blocked(res, BLOCK_TAMPERED);
         AuditChainMonitorController.BackfillResponse r = chain.backfill(); // 실패는 WebExceptionAdvice 가 confirmError 로
-        Toasts.successTitled(res, "백필 완료", "tenant " + fmt(r.tenantsProcessed()) + "개 처리 · 행 " + fmt(r.rowsUpdated()) + "개 갱신");
+        Toasts.successTitled(res, "백필 완료", "tenant " + fmt(r.getTenantsProcessed()) + "개 처리 · 행 " + fmt(r.getRowsUpdated()) + "개 갱신");
         return renderRoot(model, res, view, false, true);
     }
 
@@ -289,7 +289,7 @@ public class AuditChainPageController {
         List<Tampered> acts = new ArrayList<>();
         if (list != null) {
             Map<String, Boolean> byTenant = new LinkedHashMap<>();
-            for (IncidentDto.IncidentView i : list) byTenant.merge(i.tenantId(), "OPEN".equals(i.status()), (a, b) -> a || b);
+            for (IncidentDto.IncidentView i : list) byTenant.merge(i.getTenantId(), "OPEN".equals(i.getStatus()), (a, b) -> a || b);
             byTenant.forEach((tid, open) -> acts.add(new Tampered(tid, null, null, null, open, true, "chain-ic-" + tid, null, null)));
         }
         model.addAttribute("actionsOob", acts);
@@ -340,29 +340,29 @@ public class AuditChainPageController {
 
     private void populate(Model model, AuditChainOverview ov, List<IncidentDto.IncidentView> incidents, String view) {
         Instant now = clock.instant();
-        AuditChainOverview.Totals t = ov.totals();
-        List<AuditChainTenantOverview> tenants = ov.tenants();
+        AuditChainOverview.Totals t = ov.getTotals();
+        List<AuditChainTenantOverview> tenants = ov.getTenants();
         boolean tampered = hasTampering(ov);
         Set<String> openTenants = new java.util.HashSet<>();
-        if (incidents != null) for (IncidentDto.IncidentView i : incidents) if ("OPEN".equals(i.status())) openTenants.add(i.tenantId());
+        if (incidents != null) for (IncidentDto.IncidentView i : incidents) if ("OPEN".equals(i.getStatus())) openTenants.add(i.getTenantId());
 
         List<Row> rows = new ArrayList<>();
         List<Tampered> tamperedRows = new ArrayList<>();
         for (AuditChainTenantOverview c : tenants) {
-            String tid = c.tenantId() == null ? null : c.tenantId().toString();
-            String name = c.tenantName() == null ? "" : c.tenantName();
+            String tid = c.getTenantId() == null ? null : c.getTenantId().toString();
+            String name = c.getTenantName() == null ? "" : c.getTenantName();
             Map<String, Object> vAttrs = null;
             if (tid != null) {
                 vAttrs = rootReq("hx-get", VERIFY_PATH + "?tenantId=" + tid, false);
                 vAttrs.put("data-chain-verify", true);
                 vAttrs.put("data-vid", tid);
             }
-            rows.add(new Row(tid, name, initial(name), c.intact(), fmt(c.verifiedRows()), tid == null ? null : "/admin/tenants/" + tid, vAttrs));
-            if (!c.intact()) {
+            rows.add(new Row(tid, name, initial(name), c.getIntact(), fmt(c.getVerifiedRows()), tid == null ? null : "/admin/tenants/" + tid, vAttrs));
+            if (!c.getIntact()) {
                 boolean hasOpen = tid != null && openTenants.contains(tid);
                 boolean known = incidents != null;
                 String title = tid == null ? "플랫폼 체인은 incident 대상이 아닙니다" : !known ? "Incident 목록을 확인한 뒤 생성할 수 있습니다" : null;
-                String entry = c.tamperedEntryId() == null ? null : tail8(c.tamperedEntryId().toString());
+                String entry = c.getTamperedEntryId() == null ? null : tail8(c.getTamperedEntryId().toString());
                 tamperedRows.add(new Tampered(tid, name, entry, tid == null ? null : "/admin/tenants/" + tid + "?tab=audit", hasOpen,
                         tid != null && known, tid == null ? null : "chain-ic-" + tid, title,
                         tid == null ? null : rootReq("hx-post", INCIDENTS_PATH + "?tenantId=" + tid, false)));
@@ -372,17 +372,17 @@ public class AuditChainPageController {
         model.addAttribute("rows", rows);
         model.addAttribute("tamperedRows", tamperedRows);
         model.addAttribute("tampered", tampered);
-        model.addAttribute("verifiedAtIso", ov.verifiedAt() == null ? "" : ov.verifiedAt().toString());
+        model.addAttribute("verifiedAtIso", ov.getVerifiedAt() == null ? "" : ov.getVerifiedAt().toString());
         model.addAttribute("headline", tampered
-                ? t.tenantsTampered() + "개 tenant 위변조 의심 · " + t.tenantsIntact() + " / " + t.tenantsTotal() + " 정상"
-                : "모든 tenant 정상 · " + t.tenantsIntact() + " / " + t.tenantsTotal());
-        String ago = KstFormat.timeAgo(ov.verifiedAt(), now);
+                ? t.getTenantsTampered() + "개 tenant 위변조 의심 · " + t.getTenantsIntact() + " / " + t.getTenantsTotal() + " 정상"
+                : "모든 tenant 정상 · " + t.getTenantsIntact() + " / " + t.getTenantsTotal());
+        String ago = KstFormat.timeAgo(ov.getVerifiedAt(), now);
         model.addAttribute("ago", ago);
         model.addAttribute("lastLine", "마지막 검증 " + ago);
         model.addAttribute("agoCap", ago + " 검증 기준");
-        model.addAttribute("kpiRatio", t.tenantsIntact() + " / " + t.tenantsTotal());
-        model.addAttribute("kpiRows", fmt(t.verifiedRows()));
-        model.addAttribute("kpiMs", fmt(t.verificationMs()) + "ms");
+        model.addAttribute("kpiRatio", t.getTenantsIntact() + " / " + t.getTenantsTotal());
+        model.addAttribute("kpiRows", fmt(t.getVerifiedRows()));
+        model.addAttribute("kpiMs", fmt(t.getVerificationMs()) + "ms");
         model.addAttribute("tenantCount", tenants.size());
         model.addAttribute("tamperedCount", tamperedRows.size());
         model.addAttribute("tamperedFlag", tampered ? "1" : "0");
@@ -416,7 +416,7 @@ public class AuditChainPageController {
         model.addAttribute("reportHref", REPORT_API);
         model.addAttribute("reportOpts", Map.of("wide", true));
         List<ReportTenant> rt = new ArrayList<>();
-        for (AuditChainTenantOverview c : tenants) rt.add(new ReportTenant(c.tenantName() == null ? "" : c.tenantName(), fmt(c.verifiedRows()) + " rows", c.intact()));
+        for (AuditChainTenantOverview c : tenants) rt.add(new ReportTenant(c.getTenantName() == null ? "" : c.getTenantName(), fmt(c.getVerifiedRows()) + " rows", c.getIntact()));
         model.addAttribute("reportTenants", rt);
 
         // 새로고침 요청 속성
@@ -434,12 +434,12 @@ public class AuditChainPageController {
         int open = 0;
         if (known) {
             for (IncidentDto.IncidentView i : list) {
-                boolean isOpen = "OPEN".equals(i.status());
+                boolean isOpen = "OPEN".equals(i.getStatus());
                 if (isOpen) open++;
-                String created = i.createdAt() == null ? "—" : KstFormat.kstDateTime(i.createdAt());
+                String created = i.getCreatedAt() == null ? "—" : KstFormat.kstDateTime(i.getCreatedAt());
                 if (created.length() > 16) created = created.substring(0, 16);
-                out.add(new Incident(i.id(), isOpen, Labels.statusLabel(i.status()), i.tenantName(), i.type(), created, i.createdByEmail(),
-                        i.tenantName() + " · " + i.type()));
+                out.add(new Incident(i.getId(), isOpen, Labels.statusLabel(i.getStatus()), i.getTenantName(), i.getType(), created, i.getCreatedByEmail(),
+                        i.getTenantName() + " · " + i.getType()));
             }
         }
         model.addAttribute("incidentColumns", List.of(col("status", "상태", null), col("tenant", "Tenant", null), col("type", "유형", null),
@@ -506,7 +506,7 @@ public class AuditChainPageController {
     // ── 도우미 ──────────────────────────────────────────────
 
     static boolean hasTampering(AuditChainOverview ov) {
-        return ov.totals().tenantsTampered() > 0 || ov.tenants().stream().anyMatch(c -> !c.intact());
+        return ov.getTotals().getTenantsTampered() > 0 || ov.getTenants().stream().anyMatch(c -> !c.getIntact());
     }
 
     /** 아바타 글자 — 첫 문자/숫자(예: "[platform]" → "P"). */

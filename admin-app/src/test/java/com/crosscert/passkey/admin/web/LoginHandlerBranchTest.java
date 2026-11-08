@@ -114,7 +114,7 @@ class LoginHandlerBranchTest {
 
         ArgumentCaptor<AuditAppendRequest> captor = ArgumentCaptor.forClass(AuditAppendRequest.class);
         verify(audit, atLeastOnce()).append(captor.capture());
-        assertThat(captor.getAllValues()).anyMatch(r -> "ADMIN_LOGIN_FAILED".equals(r.action()));
+        assertThat(captor.getAllValues()).anyMatch(r -> "ADMIN_LOGIN_FAILED".equals(r.getAction()));
     }
 
     @Test

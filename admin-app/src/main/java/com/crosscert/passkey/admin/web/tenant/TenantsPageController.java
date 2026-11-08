@@ -456,7 +456,7 @@ public class TenantsPageController {
         try {
             List<ApiKeyAdminDto.ApiKeyView> keys = apiKeys.list(null).data();
             java.time.Instant now = clock.instant();
-            return (int) keys.stream().filter(k -> ApiKeyExpiry.isExpiringSoon(k.revokedAt(), k.expiresAt(), now)).count();
+            return (int) keys.stream().filter(k -> ApiKeyExpiry.isExpiringSoon(k.getRevokedAt(), k.getExpiresAt(), now)).count();
         } catch (RuntimeException e) {
             log.warn("[tenants] api key list for expiry KPI failed: {}", e.toString());
             return null;

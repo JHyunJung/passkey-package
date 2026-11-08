@@ -75,9 +75,9 @@ public final class PolicyValidation {
      */
     public static Map<String, String> validate(SecurityPolicyDto.UpdateRequest req) {
         Map<String, String> errors = new LinkedHashMap<>();
-        String timeout = timeoutError(String.valueOf(req.sessionIdleTimeoutMinutes()));
+        String timeout = timeoutError(String.valueOf(req.getSessionIdleTimeoutMinutes()));
         if (timeout != null) errors.put("sessionIdleTimeoutMinutes", timeout);
-        List<String> list = req.corsAllowlist();
+        List<String> list = req.getCorsAllowlist();
         if (list != null) {
             if (list.size() > MAX_ORIGINS) {
                 errors.put("corsAllowlist", ORIGIN_COUNT_ERROR);
