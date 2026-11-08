@@ -46,7 +46,7 @@
       재발급 경로가 없다. [admin-ui-followup-screens 2026-05-31]
 - [ ] **NAV_RP dead code 해소** — (React 시절 `admin-ui/src/shell/Sidebar.tsx`; Thymeleaf 이식 후 위치는 `templates/admin/fragments/shell/sidebar.html`). RP_ADMIN 네비게이션이 정의돼 있으나
       호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. (Thymeleaf 포트에서 RP_ADMIN 은 [관리] 설정만 노출 — 재확인 후 종결 후보) [rp-admin-role-gating 2026-05-31]
-- [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.java:43` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
+- [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.kt:36` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
 - [ ] **p95 응답 metric** — Activity KPI 가 'N/A'. admin-app 에 p95 산출 0건. [activity-page 2026-05-28]
 - [ ] **Activity 실시간 갱신을 push 로** — (React 시절 `ActivityPage.tsx`; 현재 `templates/admin/activity/*.html` + `web/activity/ActivityPageController`) 가 5초 htmx 폴링이다.
       WebSocket/SSE 로 바꾸면 유휴 부하와 지연이 함께 줄어든다. 서버 측 이벤트 발행 설계가 선행돼야 한다.
@@ -60,14 +60,14 @@
 
 ## 2. 보안·정합성 (P2)
 
-- [ ] **MDC `actorEmail` 이 평문 email 로 로그에 남는다** — `AdminMdcFilter.kt:34` 가 `auth.name` 을 request attribute 로
+- [ ] **MDC `actorEmail` 이 평문 email 로 로그에 남는다** — `AdminMdcFilter.kt:34-37` 가 `auth.name` 을 request attribute 로
       넘기고 `RequestLoggingFilter.java:110` 이 그대로 MDC 에 넣는다. `SecretMaskingConverter` 는 `%msg` 에만 걸리고
       `%compactMdc` 는 거치지 않으므로, 메시지 본문은 `maskEmail` 로 가려도 MDC 칸에는 평문이 남는다(16자 절단).
       prod JSON 로그의 `includeMdcKeyName` 에도 그대로 실린다. 마스킹 위치를 MDC put 지점으로 옮길지 결정 필요.
       [2026-09-13 문서 감사에서 발견]
 - [ ] **credential DELETE 가 registration scope 를 공유** — `passkey-app/.../security/ApiKeyScopeResolver.kt:28-31`.
       파괴적 작업의 scope 분리는 정책 결정 사항. 같은 파일의 `admin` scope 가 dead scope 인 것도 함께. [config-enforcement-B 2026-05-31, master-backlog 2026-05-31]
-- [ ] **CORS allowlist origin 형식 검증** — `SecurityPolicyDto.java:29` 에 `@NotBlank @Size(max=256)` 는 있으나
+- [ ] **CORS allowlist origin 형식 검증** — `SecurityPolicyDto.kt:63` 에 `@NotBlank @Size(max = 256)` 는 있으나
       `^https?://[^/]+$` 형식·`*` 금지 검증은 없다. [master-backlog 2026-05-31]
 - [ ] **`IllegalArgumentException` 메시지를 클라이언트에 그대로 반환** — `core/.../api/GlobalExceptionHandler.java:114-118`
       = `ApiResponse.error(INVALID_INPUT, e.getMessage())`. 내부 메시지 노출. [master-backlog 2026-05-31]
@@ -96,8 +96,8 @@
 
 ## 3. 성능 (P2/P3)
 
-- [ ] **트랜잭션 안에서 동기 메일 발송** — `PasswordResetService.java:68-85`(`@Transactional` 메서드가 `mail.send`),
-      `SignupRequestService.java:206,232`(`sendQuietly` → `mail.send`). SMTP 지연이 DB 커넥션 점유 시간이 된다.
+- [ ] **트랜잭션 안에서 동기 메일 발송** — `PasswordResetService.kt:55-85`(`@Transactional` 메서드가 `mail.send`),
+      `SignupRequestService.kt:244,279,285-287`(`sendQuietly` → `mail.send`). SMTP 지연이 DB 커넥션 점유 시간이 된다.
       커밋 후 발송(`TransactionSynchronization`)이나 비동기 큐로 분리한다. [master-backlog 2026-05-31]
 
 - [ ] **API key BCrypt(cost 12) 를 매 요청 수행 + 전역 캐싱 인프라 부재** — `@EnableCaching`/Caffeine/`@Cacheable`
