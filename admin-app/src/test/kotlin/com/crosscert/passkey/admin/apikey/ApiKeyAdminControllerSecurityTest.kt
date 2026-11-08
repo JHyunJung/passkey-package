@@ -58,8 +58,8 @@ class ApiKeyAdminControllerSecurityTest {
     fun adminCanIssue() {
         whenever(admins.findByEmail(anyString()))
             .thenReturn(Optional.of(adminUserWithUuid()))
-        // actorId 는 Kotlin 시그니처상 UUID? — 원 Java any(UUID.class) → anyOrNull() (Task 14 규칙).
-        whenever(service.issue(anyOrNull(), anyOrNull(), anyString()))
+        // actorId: 원 Java any(UUID.class)(null 불일치) 의미 그대로 any<UUID>() — UUID? 파라미터에도 대입 가능.
+        whenever(service.issue(anyOrNull(), any<UUID>(), anyString()))
             .thenReturn(
                 ApiKeyAdminDto.ApiKeyCreateResponse(
                     UUID.randomUUID(), "pk_abcd1234SECRET", "pk_abcd1234",
@@ -93,7 +93,7 @@ class ApiKeyAdminControllerSecurityTest {
     fun adminCanRotate() {
         whenever(admins.findByEmail(anyString()))
             .thenReturn(Optional.of(adminUserWithUuid()))
-        whenever(service.rotate(any<UUID>(), anyOrNull(), anyString()))
+        whenever(service.rotate(any<UUID>(), any<UUID>(), anyString()))
             .thenReturn(
                 ApiKeyAdminDto.ApiKeyRotateResponse(
                     UUID.randomUUID(), "pk_new12345SECRET", "pk_new12345",
@@ -117,7 +117,7 @@ class ApiKeyAdminControllerSecurityTest {
         whenever(admins.findByEmail(anyString()))
             .thenReturn(Optional.of(adminUserWithUuid()))
         doThrow(BusinessException(ErrorCode.API_KEY_NOT_FOUND))
-            .whenever(service).revoke(eq(missingId), anyOrNull(), anyString())
+            .whenever(service).revoke(eq(missingId), any<UUID>(), anyString())
         mvc.perform(delete("/admin/api/api-keys/$missingId").with(csrf()))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.success").value(false))
