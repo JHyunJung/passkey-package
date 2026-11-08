@@ -223,20 +223,30 @@ abstract class HtmlContractSupport {
     }
 
     /**
-     * RP_ADMIN 의 허용 tenant 10개(f111 이 최소값). {@code AdminUserDetails} 는 {@code Set.copyOf} 로 담아 순회 순서가 JVM 마다
-     * 다르다. 화면에서 이 순서가 드러나는 곳은 RP 의 홈 경로({@code HomeRedirectController.homePath} = {@code tenantIds.get(0)})
-     * 로 가는 리다이렉트 {@code Location} 이며, 스냅샷에는 정렬 뒤 첫 값 f111 이 고정된다. {@code MeController} 의
-     * {@code tenantIds.sort} 가 빠지면 첫 값이 f111 일 확률은 1/10 이므로 실행 한 번에 약 90% 로 잡힌다(2개였을 때는 50%).
-     * {@code Set.copyOf} 의 순회 순서는 JVM 마다 무작위라 완전한 결정성은 불가능하다 — 확률적 안전망이다.
+     * RP_ADMIN 의 허용 tenant(최소값은 항상 f111 = {@link #TID}). 화면에서 이 순서가 드러나는 곳은 RP 의 홈 경로
+     * ({@code HomeRedirectController.homePath} = {@code tenantIds.get(0)})로 가는 리다이렉트 {@code Location} 이며, 스냅샷에는
+     * 정렬 뒤 첫 값 f111 이 고정된다.
+     *
+     * <p>{@code AdminUserDetails} 는 {@code Set.copyOf} 로 담고, 그 순회 순서는 JVM 마다 다르지만({@code ImmutableCollections.SALT})
+     * <b>한 JVM 안에서는 고정</b>이다. 그래서 클래스 초기화 때 후보 집합을 차례로 만들어 {@code Set.copyOf(후보)} 의 첫 원소가
+     * 최소값이 <b>아닌</b> 첫 후보를 고른다 — {@code MeController} 의 {@code tenantIds.sort} 가 빠지면 첫 값이 f111 이 아니게 되어
+     * RP 홈 리다이렉트 스냅샷이 반드시 깨진다. 전제는 {@code RpTenantOrderPreconditionTest} 가 단언한다.
      */
     static final Set<UUID> RP_TENANTS = rpTenants();
 
-    private static Set<UUID> rpTenants() {
-        Set<UUID> s = new java.util.LinkedHashSet<>(List.of(TID, TID2));
+    static Set<UUID> rpTenants() {
+        List<UUID> base = new ArrayList<>(List.of(TID, TID2));
         for (String d : List.of("3", "4", "5", "6", "7", "8", "9", "a")) {
-            s.add(UUID.fromString("00000000-0000-0000-0000-00000000f" + d + d + d)); // f333 … faaa, 모두 f111 보다 큼
+            base.add(UUID.fromString("00000000-0000-0000-0000-00000000f" + d + d + d)); // f333 … faaa, 모두 f111 보다 큼
         }
-        return Set.copyOf(s);
+        for (int k = 0; k < 256; k++) {
+            List<UUID> candidate = new ArrayList<>(base);
+            // 후보마다 f111 보다 큰 ID 를 k 개 더해 해시 배치를 바꾼다(최소값은 그대로 f111).
+            for (int j = 1; j <= k; j++) candidate.add(UUID.fromString(String.format("00000000-0000-0000-0000-0001%08x", j)));
+            Set<UUID> copy = Set.copyOf(candidate); // AdminUserDetails 와 같은 복사(이미 불변 Set 이면 그대로 쓰인다)
+            if (!copy.iterator().next().equals(TID)) return copy;
+        }
+        throw new IllegalStateException("RP_ADMIN tenant 집합: 첫 순회 원소가 최소값이 아닌 후보를 찾지 못했다");
     }
 
     static Authentication auth(UUID id, String email, String role, Set<UUID> tenants) {
