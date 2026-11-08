@@ -16,7 +16,6 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import tools.jackson.databind.ObjectMapper
@@ -86,9 +85,9 @@ class SecurityIncidentServiceTest {
         verify(events).publishEvent(any<SecurityAlertEvent>())
     }
 
-    // never() publishEvent 검증: 원 Java 의 bare any() 는 javac 가 publishEvent(ApplicationEvent) 오버로드로
-    // 바인딩했다(javap 확인). 의미 보존을 위해 같은 오버로드를 명시한다 — 서비스는 SecurityAlertEvent(record)를
-    // publishEvent(Object) 로 발행하므로 이 검증은 원래부터 공허하다(보고서에 기록).
+    // never() publishEvent 검증: 서비스는 SecurityAlertEvent(ApplicationEvent 가 아닌 record)를 publishEvent(Object)
+    // 오버로드로 발행한다. 원 Java 의 bare any() 는 javac 가 publishEvent(ApplicationEvent) 로 바인딩해 공허했으므로,
+    // 실제 발행 오버로드를 anyOrNull<Any>() 로 지정해 검증한다(뮤테이션으로 실효 확인).
 
     @Test
     fun create_whenAlreadyOpen_throwsConflict() {
@@ -98,7 +97,7 @@ class SecurityIncidentServiceTest {
         assertThatThrownBy { svc.create(TENANT, ACTOR, "alice@crosscert.com") }
             .isInstanceOf(IncidentConflictException::class.java)
         verify(repo, never()).saveAndFlush(anyOrNull())
-        verify(events, never()).publishEvent(anyOrNull<ApplicationEvent>())
+        verify(events, never()).publishEvent(anyOrNull<Any>())
     }
 
     @Test
@@ -179,7 +178,7 @@ class SecurityIncidentServiceTest {
             .isInstanceOf(IncidentConflictException::class.java)
 
         verify(audit, never()).append(anyOrNull())
-        verify(events, never()).publishEvent(anyOrNull<ApplicationEvent>())
+        verify(events, never()).publishEvent(anyOrNull<Any>())
     }
 
     @Test
@@ -189,7 +188,7 @@ class SecurityIncidentServiceTest {
             .isInstanceOf(NullPointerException::class.java)
         verify(repo, never()).saveAndFlush(anyOrNull())
         verify(audit, never()).append(anyOrNull())
-        verify(events, never()).publishEvent(anyOrNull<ApplicationEvent>())
+        verify(events, never()).publishEvent(anyOrNull<Any>())
     }
 
     @Test
