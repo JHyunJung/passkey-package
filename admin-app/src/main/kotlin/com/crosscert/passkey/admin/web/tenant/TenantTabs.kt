@@ -8,8 +8,6 @@ import com.crosscert.passkey.admin.tenant.TenantAdminDto
  *
  * 탭 조각은 `GET /admin/_/tenants/{id}/tab/<리터럴 탭 키>` 에 매핑하고(일반 `{tab}` 매핑보다 우선),
  * 데이터를 읽기 전에 반드시 [load] 로 접근 경계를 확인한다 — 일반 매핑의 보호는 리터럴 경로에 적용되지 않는다.
- *
- * 아직 Java 인 탭 컨트롤러가 정적 멤버로 부르므로 `const`/`@JvmStatic` 으로 정적 시그니처를 유지한다.
  */
 object TenantTabs {
 
@@ -24,14 +22,12 @@ object TenantTabs {
      * (BusinessException ACCESS_DENIED → WebExceptionAdvice 403, 404 는 TENANT_NOT_FOUND). 탭 컨트롤러는 이 호출 뒤에만 데이터를 읽는다.
      * 반환 id 는 canonical UUID 라 이후 REST 호출·링크에 쓴다.
      */
-    @JvmStatic
     fun load(tenants: TenantAdminController, idOrSlug: String): TenantAdminDto.TenantView = tenants.get(idOrSlug).data()
 
     /**
      * 탭 영역을 교체하는 요청(다시 시도 등)의 공통 속성: hx-get·hx-target·hx-swap·hx-sync·hx-push-url=false.
      * 요소는 반드시 이 속성을 쓰거나 최소한 [SYNC] 를 가져야 한다.
      */
-    @JvmStatic
     fun requesterAttrs(getUrl: String): MutableMap<String, Any?> {
         val m = LinkedHashMap<String, Any?>()
         m["hx-get"] = getUrl

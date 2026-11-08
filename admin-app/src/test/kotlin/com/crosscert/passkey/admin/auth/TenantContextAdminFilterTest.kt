@@ -16,7 +16,6 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
-import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
@@ -45,7 +44,7 @@ class TenantContextAdminFilterTest {
     fun rpAdmin_tenantIdIsSetDuringChain_thenClearedAfterwards() {
         val tenantId = UUID.randomUUID()
         val boundary: TenantBoundary = mock()
-        whenever(boundary.currentTenantScope()).thenReturn(Optional.of(tenantId))
+        whenever(boundary.currentTenantScope()).thenReturn(tenantId)
 
         val filter = TenantContextAdminFilter(boundary)
 
@@ -64,7 +63,7 @@ class TenantContextAdminFilterTest {
     fun rpAdmin_chainIsAlwaysInvoked() {
         val tenantId = UUID.randomUUID()
         val boundary: TenantBoundary = mock()
-        whenever(boundary.currentTenantScope()).thenReturn(Optional.of(tenantId))
+        whenever(boundary.currentTenantScope()).thenReturn(tenantId)
 
         val filter = TenantContextAdminFilter(boundary)
         val chain: FilterChain = mock()
@@ -81,7 +80,7 @@ class TenantContextAdminFilterTest {
     @Test
     fun platformOperator_emptyScope_holderNeverSet() {
         val boundary: TenantBoundary = mock()
-        whenever(boundary.currentTenantScope()).thenReturn(Optional.empty())
+        whenever(boundary.currentTenantScope()).thenReturn(null)
 
         val filter = TenantContextAdminFilter(boundary)
 
@@ -104,7 +103,7 @@ class TenantContextAdminFilterTest {
         TenantContextHolder.set(stale)
 
         val boundary: TenantBoundary = mock()
-        whenever(boundary.currentTenantScope()).thenReturn(Optional.empty())
+        whenever(boundary.currentTenantScope()).thenReturn(null)
 
         val filter = TenantContextAdminFilter(boundary)
 
@@ -124,7 +123,7 @@ class TenantContextAdminFilterTest {
     @Test
     fun platformOperator_chainIsAlwaysInvoked() {
         val boundary: TenantBoundary = mock()
-        whenever(boundary.currentTenantScope()).thenReturn(Optional.empty())
+        whenever(boundary.currentTenantScope()).thenReturn(null)
 
         val filter = TenantContextAdminFilter(boundary)
         val chain: FilterChain = mock()
@@ -243,7 +242,7 @@ class TenantContextAdminFilterTest {
     fun holderClearedEvenWhenChainThrows() {
         val tenantId = UUID.randomUUID()
         val boundary: TenantBoundary = mock()
-        whenever(boundary.currentTenantScope()).thenReturn(Optional.of(tenantId))
+        whenever(boundary.currentTenantScope()).thenReturn(tenantId)
 
         val filter = TenantContextAdminFilter(boundary)
         val chain = FilterChain { _, _ -> throw RuntimeException("downstream failure") }

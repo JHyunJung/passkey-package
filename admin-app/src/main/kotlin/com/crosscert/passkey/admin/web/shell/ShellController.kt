@@ -157,10 +157,9 @@ class ShellController(
     companion object {
         /**
          * Sidebar.tsx 의 timeAgo: "방금" / "N분 전" / "N시간 전"(일 단위 없음).
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(ShellControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ShellControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun timeAgo(t: Instant?, now: Instant): String {
+        internal fun timeAgo(t: Instant?, now: Instant): String {
             if (t == null) return "—"
             val mins = (now.toEpochMilli() - t.toEpochMilli()) / 60_000
             if (mins < 1) return "방금"

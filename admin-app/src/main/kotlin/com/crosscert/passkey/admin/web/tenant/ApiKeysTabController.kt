@@ -402,14 +402,12 @@ class ApiKeysTabController(
 
         /** 만료 프리셋(개월). null = 무기한. 기본 24개월. */
         private val EXPIRY_MONTHS: List<Int?> = java.util.Arrays.asList(6, 12, 24, 36, null)
-        internal const val DEFAULT_MONTHS = 24
-        internal const val ISSUE_FAIL_TITLE = "API 키를 발급하지 못했습니다."
 
         /** 메뉴 항목이 여는 확인 다이얼로그(id 는 data-dialog). 템플릿 상수. */
         const val OPEN_DIALOG = "\$dispatch('dialog:open', { id: \$el.dataset.dialog })"
 
-        /** 접두사 복사 + 토스트(원본 copyPrefix). 접두사는 data-prefix 로 넘긴다. 템플릿 상수. 같은 패키지 Java 테스트가 읽는다 — const 라 정적 필드로 남는다. */
-        const val COPY_PREFIX = "window.adminCopy(\$el.dataset.prefix).then((ok) => \$dispatch('toast', ok" +
+        /** 접두사 복사 + 토스트(원본 copyPrefix). 접두사는 data-prefix 로 넘긴다. 템플릿 상수. internal: 같은 모듈 테스트가 읽는다. */
+        internal const val COPY_PREFIX = "window.adminCopy(\$el.dataset.prefix).then((ok) => \$dispatch('toast', ok" +
             " ? { kind: 'success', title: '접두사를 복사했습니다.', message: \$el.dataset.prefix }" +
             " : { kind: 'warn', title: '복사 실패', message: '클립보드 복사에 실패했습니다.' }))"
 
@@ -429,10 +427,9 @@ class ApiKeysTabController(
 
         /**
          * `[title, detail.trim().replace(/[.。]$/, '')].filter(Boolean).join('. ') + '. 입력한 내용은 그대로 있습니다.'`
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(ApiKeysTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ApiKeysTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun issueErrorText(title: String?, detail: String?): String {
+        internal fun issueErrorText(title: String?, detail: String?): String {
             val parts = ArrayList<String>()
             if (title != null && title.isNotEmpty()) parts.add(title)
             val d = if (detail == null) "" else detail.javaTrim().replace(TRAILING_DOT, "")
@@ -475,7 +472,6 @@ class ApiKeysTabController(
             Math.ceil((expiresAt.toInstant().toEpochMilli() - now.toEpochMilli()) / DAY_MS.toDouble()).toLong()
 
         /** 만료 열 배지 — 색만이 아니라 글로 상태를 말한다(정상 · 만료 임박 N일 · 만료됨 · 무기한 · 해당 없음). */
-        @JvmStatic
         fun expiryBadge(status: String?, expiresAt: OffsetDateTime?, now: Instant): ExpiryBadge {
             if (expiresAt == null) return ExpiryBadge("neutral", "무기한", "만료일 없음")
             val sub = KstFormat.kstDate(expiresAt)
@@ -488,10 +484,9 @@ class ApiKeysTabController(
 
         /**
          * 권장 회전 주기(90일)를 넘긴 ACTIVE 키 수. createdAt 기준(정확히 90일은 초과 아님).
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(ApiKeysTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ApiKeysTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun rotationOverdueCount(keys: List<ApiKeyAdminDto.ApiKeyView>, now: Instant): Int {
+        internal fun rotationOverdueCount(keys: List<ApiKeyAdminDto.ApiKeyView>, now: Instant): Int {
             var n = 0
             for (k in keys) {
                 val created = k.createdAt
@@ -503,10 +498,9 @@ class ApiKeysTabController(
 
         /**
          * now + N개월의 KST 날짜(YYYY-MM-DD). 다음 달에 같은 일자가 없으면 그 달 말일(plusMonths 의 말일 보정).
-         * public `@JvmStatic`: 같은 패키지 Java 테스트(ApiKeysTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(ApiKeysTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun previewExpiry(months: Int, now: Instant): String = now.atZone(KstFormat.KST).plusMonths(months.toLong()).toLocalDate().toString()
+        internal fun previewExpiry(months: Int, now: Instant): String = now.atZone(KstFormat.KST).plusMonths(months.toLong()).toLocalDate().toString()
 
         /** 회전 뒤 이전 키 만료 안내. 시간은 반올림, 음수는 0. */
         private fun oldKeyNotice(oldKeyExpiresAt: OffsetDateTime?, now: Instant): String? {

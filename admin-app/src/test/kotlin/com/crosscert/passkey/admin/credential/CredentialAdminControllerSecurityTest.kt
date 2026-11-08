@@ -52,7 +52,6 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.Clock
-import java.util.Optional
 import java.util.UUID
 
 /**
@@ -189,14 +188,14 @@ class CredentialAdminControllerSecurityTest {
 
     /**
      * AdminSecurityConfig 가 설치하는 TenantContextAdminFilter 는 컨트롤러 진입 전
-     * tenantBoundary.currentTenantScope() 를 호출해 scope().ifPresent(...) 한다.
-     * Optional 반환이라 unstubbed mock 의 Mockito 기본값(ReturnsEmptyValues)이 이미
-     * Optional.empty() 라 NPE 는 안 나지만, 그 암묵적 기본값에 기대지 않도록 의도를
+     * tenantBoundary.currentTenantScope() 를 호출해 scope()?.let(...) 한다.
+     * unstubbed mock 의 Mockito 기본값(ReturnsEmptyValues)이 이미 null(= scope 없음)이라
+     * 문제는 없지만, 그 암묵적 기본값에 기대지 않도록 의도를
      * 명시 고정한다(테스트 견고성 — role-gate 검증이 필터 NPE 로 오염되지 않게).
      */
     @BeforeEach
     fun stubTenantBoundaryScope() {
-        whenever(tenantBoundary.currentTenantScope()).thenReturn(Optional.empty())
+        whenever(tenantBoundary.currentTenantScope()).thenReturn(null)
     }
 
     // ---------------------------------------------------------------

@@ -21,7 +21,6 @@ object StandaloneJson {
     internal const val JACKSON2_MAX_STRING_LENGTH = 20_000_000
 
     /** Jackson 2 `new ObjectMapper()` 와 같은 기본값을 가진 빌더. */
-    @JvmStatic
     fun jackson2Like(): JsonMapper.Builder {
         val factory = JsonFactory.builder()
             .streamReadConstraints(

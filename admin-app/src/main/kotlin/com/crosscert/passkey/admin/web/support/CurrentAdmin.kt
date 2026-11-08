@@ -19,7 +19,6 @@ data class CurrentAdmin(
     companion object {
         const val PLATFORM_OPERATOR = "PLATFORM_OPERATOR"
 
-        @JvmStatic
         fun from(v: MeView): CurrentAdmin = CurrentAdmin(
             v.email, v.role, v.tenantIds,
             v.mfaEnabled, v.mfaRequired, v.sessionIdleTimeoutMinutes,

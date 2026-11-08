@@ -58,7 +58,6 @@ class TenantAdminDto private constructor() {
         val updatedAt: OffsetDateTime?,
     ) {
         companion object {
-            @JvmStatic
             fun from(t: Tenant, credentials: Long, apiKeys: Long, lastEventAt: OffsetDateTime?): TenantView =
                 TenantView(
                     t.id, t.slug, t.displayName, t.status,

@@ -98,8 +98,8 @@ class LicensePageController(
     companion object {
         internal const val PAGE_PATH = "/admin/license"
 
-        /** 같은 패키지 Java 테스트(LicensePageControllerTest)가 읽는다 — const 라 정적 필드로 남는다. */
-        const val RECHECK_PATH = "/admin/_/license/recheck"
+        /** internal: 같은 모듈 테스트(LicensePageControllerTest)가 읽는다. */
+        internal const val RECHECK_PATH = "/admin/_/license/recheck"
 
         private fun recheckAttrs(): Map<String, Any?> {
             val m = LinkedHashMap<String, Any?>()

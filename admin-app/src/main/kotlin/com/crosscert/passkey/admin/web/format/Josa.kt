@@ -13,18 +13,15 @@ object Josa {
     }
 
     /** 목적격 조사. 한글이 아니면 '을'. */
-    @JvmStatic
     fun eulReul(w: String?): String = if (hasBatchim(w) == false) "를" else "을"
 
     /** 주격 조사. 한글이 아니면 '이'. */
-    @JvmStatic
     fun iGa(w: String?): String = if (hasBatchim(w) == false) "가" else "이"
 
     /**
      * 템플릿용 일반형. `pair` 는 "받침 있을 때/받침 없을 때"(예: "을/를", "이/가", "은/는").
      * 한글이 아니면 앞쪽을 쓴다.
      */
-    @JvmStatic
     fun pick(word: String?, pair: String): String {
         val i = pair.indexOf('/')
         if (i < 0) return pair

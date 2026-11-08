@@ -27,11 +27,9 @@ object PolicyValidation {
     const val MAX_ORIGINS = 64
 
     /** 저장용 정규형. 앞뒤 공백을 지우고 소문자로 맞춘다(origin 에는 경로가 없어 전체를 소문자로 바꿔도 같다). */
-    @JvmStatic
     fun normalizeOrigin(value: String): String = value.javaStrip().lowercase()
 
     /** CORS origin 검증. https://호스트[:포트] 만(경로·와일드카드·IPv6·유니코드 호스트 불가). http 는 로컬 개발 주소만. 통과하면 null. */
-    @JvmStatic
     fun validateOrigin(value: String, existing: List<String>): String? {
         val v = value.javaStrip()
         if (v.length > MAX_ORIGIN_LENGTH) return ORIGIN_LENGTH_ERROR
@@ -54,7 +52,6 @@ object PolicyValidation {
     }
 
     /** 세션 idle timeout(분) 검증. 정수 1–1440(최대 24시간)만 통과. */
-    @JvmStatic
     fun timeoutError(raw: String): String? {
         val v = raw.javaStrip()
         if (!DIGITS.matcher(v).matches()) return TIMEOUT_ERROR
@@ -66,7 +63,6 @@ object PolicyValidation {
      * 보안 정책 저장 요청 검증. 키는 필드명(sessionIdleTimeoutMinutes, corsAllowlist), 값은 오류 문구.
      * corsAllowlist 는 앞에서부터 하나씩 이미 통과한 항목들과 비교해 첫 오류만 담는다. 오류가 없으면 빈 맵.
      */
-    @JvmStatic
     fun validate(req: SecurityPolicyDto.UpdateRequest): Map<String, String> {
         val errors = LinkedHashMap<String, String>()
         val timeout = timeoutError(req.sessionIdleTimeoutMinutes.toString())

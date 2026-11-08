@@ -414,9 +414,9 @@ class AdminUsersTabController(
     }
 
     companion object {
-        /** 같은 패키지 Java 테스트(AdminUsersTabControllerTest)가 읽는다 — const 라 정적 필드로 남는다. */
-        const val TAB_PATH = "/admin/_/settings/tab/admins"
-        const val STALE_REASON = "목록을 새로 고친 뒤 다시 시도하세요"
+        /** internal: 같은 모듈 테스트(AdminUsersTabControllerTest)가 읽는다. */
+        internal const val TAB_PATH = "/admin/_/settings/tab/admins"
+        internal const val STALE_REASON = "목록을 새로 고친 뒤 다시 시도하세요"
 
         /** 역할 카드 속성(템플릿 상수만 — JS 평가 속성에 사용자 입력 없음). */
         private fun roleAttrs(role: String): Map<String, Any?> {
@@ -481,10 +481,9 @@ class AdminUsersTabController(
 
         /**
          * 원본 suspendBlock: 본인, 또는 마지막 활성 PLATFORM 운영자.
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(AdminUsersTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AdminUsersTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun suspendBlock(u: AdminUserDto.View, all: List<AdminUserDto.View>, meEmail: String?): String? {
+        internal fun suspendBlock(u: AdminUserDto.View, all: List<AdminUserDto.View>, meEmail: String?): String? {
             val email = u.email
             if (email != null && meEmail != null && email.equals(meEmail, ignoreCase = true)) return "본인 계정은 정지할 수 없음"
             val activePlatform = all.stream().filter { x -> PLATFORM_ROLE == x.role && "ACTIVE" == x.status }.count()
@@ -502,13 +501,11 @@ class AdminUsersTabController(
             return if (name != null) TenantCell("NAME", name, first, more) else TenantCell("ID", "…" + tail(first, 10), first, more)
         }
 
-        /** public `@JvmStatic`: 같은 패키지 Java 테스트(AdminUsersTabControllerTest)가 부른다. */
-        @JvmStatic
-        fun initial(email: String?): String =
+        /** internal: 같은 모듈 테스트(AdminUsersTabControllerTest)가 부른다. */
+        internal fun initial(email: String?): String =
             if (email == null || email.isEmpty()) "" else email.substring(0, 1).uppercase(Locale.ROOT)
 
-        /** public `@JvmStatic`: 같은 패키지 Java 테스트(AdminUsersTabControllerTest)가 부른다. */
-        @JvmStatic
-        fun tail(s: String, n: Int): String = if (s.length <= n) s else s.substring(s.length - n)
+        /** internal: 같은 모듈 테스트(AdminUsersTabControllerTest)가 부른다. */
+        internal fun tail(s: String, n: Int): String = if (s.length <= n) s else s.substring(s.length - n)
     }
 }

@@ -20,7 +20,6 @@ private val EDGE_DASHES = Regex("^-+|-+$")
  */
 object RecoveryCodeFilename {
 
-    @JvmStatic
     fun of(email: String?, kstDate: LocalDate): String {
         val stamp = String.format("%04d%02d%02d", kstDate.year, kstDate.monthValue, kstDate.dayOfMonth)
         val account = sanitizeAccount(email)

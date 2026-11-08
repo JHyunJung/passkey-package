@@ -60,10 +60,9 @@ class ShellAdvice(
     companion object {
         /**
          * 경로 → 사이드바 항목. 테넌트 상세는 Tenants. 그 밖(조각·오류)은 null.
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(ShellControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ShellControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun navActive(path: String?): String? {
+        internal fun navActive(path: String?): String? {
             if (path == null) return null
             for (id in arrayOf("tenants", "insights", "activity", "audit-chain", "settings", "license")) {
                 val base = "/admin/$id"

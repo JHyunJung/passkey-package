@@ -13,14 +13,12 @@ object Htmx {
     const val HX_REDIRECT = "HX-Redirect"
 
     /** htmx 가 보낸 요청이면 `HX-Request: true` 헤더가 붙는다. */
-    @JvmStatic
     fun isHtmx(req: HttpServletRequest): Boolean = "true".equals(req.getHeader(HX_REQUEST), ignoreCase = true)
 
     /**
      * 현재 요청(RequestContextHolder)을 기준으로 [redirect]`(req, res, path)`.
      * 화면 컨트롤러용. 요청이 바인딩되지 않은 곳(보안 필터 핸들러 등)은 요청을 직접 넘기는 쪽을 쓴다.
      */
-    @JvmStatic
     @Throws(IOException::class)
     fun redirect(res: HttpServletResponse, path: String?) {
         val attrs = RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes
@@ -32,7 +30,6 @@ object Htmx {
      * htmx 요청이면 `HX-Redirect` 헤더 + 200 (htmx 가 전체 페이지 이동을 한다),
      * 아니면 302 리다이렉트.
      */
-    @JvmStatic
     @Throws(IOException::class)
     fun redirect(req: HttpServletRequest, res: HttpServletResponse, path: String?) {
         if (isHtmx(req)) {

@@ -373,10 +373,9 @@ class WebauthnTabController(
 
         /**
          * L2 확인 목록 = 서버 diff + 로컬 diff 중 서버가 비교하지 않는 필드(timeoutMs·attestationConveyance). 화면 순서로 정렬(안정).
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(WebauthnTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun mergeChanges(server: List<Change>, local: List<Change>): List<Change> {
+        internal fun mergeChanges(server: List<Change>, local: List<Change>): List<Change> {
             val covered = LinkedHashSet<String?>()
             for (c in server) covered.add(norm(c.key))
             val merged = ArrayList(server)
@@ -396,10 +395,9 @@ class WebauthnTabController(
 
         /**
          * 저장 바 요약용: 바뀐 필드 이름을 화면 순서로.
-         * public `@JvmStatic`: 같은 패키지 Java 테스트(WebauthnTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun changedFieldNames(keys: List<String>): List<String> {
+        internal fun changedFieldNames(keys: List<String>): List<String> {
             val out = ArrayList<String>()
             for (k in FIELD_ORDER) if (keys.contains(k)) out.add(k)
             for (k in keys) if (!FIELD_ORDER.contains(k)) out.add(k)
@@ -427,9 +425,8 @@ class WebauthnTabController(
             )
         }
 
-        /** public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(WebauthnTabControllerTest)가 부른다. */
-        @JvmStatic
-        fun showValue(key: String?, v: Any?): String? {
+        /** internal: 원 Java 는 package-private static — 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다. */
+        internal fun showValue(key: String?, v: Any?): String? {
             if ("timeoutMs" == key && v is Number) {
                 return BigDecimal.valueOf(v.toDouble() / 1000.0).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "초"
             }
@@ -485,10 +482,9 @@ class WebauthnTabController(
 
         /**
          * timeoutGuide: 권장 범위 60000–120000ms. 벗어나면 warn 톤(ui.js timeoutHint 와 같은 문구).
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(WebauthnTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun timeoutGuide(msBox: Int?): Guide {
+        internal fun timeoutGuide(msBox: Int?): Guide {
             val ms = msBox ?: 0
             if (ms <= 0) return Guide("warn", "0보다 큰 값을 입력하세요. 권장 60000–120000ms(60–120초).")
             val totalSec = ms / 1000.0

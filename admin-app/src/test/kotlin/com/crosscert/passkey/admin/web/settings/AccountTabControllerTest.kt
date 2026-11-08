@@ -341,7 +341,7 @@ class AccountTabControllerTest {
         val s = r.request.getSession(false)
         if (s != null) {
             for (n in Collections.list(s.attributeNames)) {
-                val v = s.getAttribute(n).toString() // (Kotlin 전환) Any?.toString() 은 String.valueOf 처럼 null → "null"
+                val v = java.lang.String.valueOf(s.getAttribute(n)) // 원 Java 와 같이 null → "null"
                 for (c in CODES) assertThat(v).`as`("session attribute $n").doesNotContain(c)
             }
         }

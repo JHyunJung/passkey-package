@@ -45,10 +45,10 @@ class PasswordResetService(
     /**
      * G11 fail-fast — see [BaseUrlValidation]. SignupRequestService 도 같은
      * admin.invite.base-url 속성으로 승인 메일의 로그인 링크를 만든다.
-     * 원 Java 는 package-private — Kotlin 에 대응 가시성이 없어 public 으로 둔다.
+     * 원 Java 는 package-private — 호출자는 Spring(@PostConstruct)뿐이라 internal.
      */
     @PostConstruct
-    fun validateBaseUrlForProd() {
+    internal fun validateBaseUrlForProd() {
         BaseUrlValidation.assertNotLocalhostFallbackInProd(env, baseUrl, "admin.invite.base-url")
     }
 
@@ -107,6 +107,6 @@ class PasswordResetService(
         )
     }
 
-    /** 원 Java 는 package-private(같은 패키지 테스트 전용) — Kotlin 에 대응 가시성이 없어 public 으로 둔다. */
-    fun hashForTest(plaintext: String?): String = CryptoUtils.sha256Hex(plaintext)
+    /** 원 Java 는 package-private(같은 패키지 테스트 전용) — 같은 모듈 테스트만 부르므로 internal. */
+    internal fun hashForTest(plaintext: String?): String = CryptoUtils.sha256Hex(plaintext)
 }

@@ -28,8 +28,8 @@ import kotlin.reflect.KClass
  * 묶음의 mock(예: `AdminUserRepository`, `AuditLogService`) 은 테스트에서
  * `@Autowired` 로 받아 스텁·검증한다.
  *
- * (Kotlin 전환) 아직 Java 인 contract 패키지 테스트가 `@AdminWebSliceTest(controllers = ...)` 와
- * `getAnnotation(AdminWebSliceTest.class).controllers()` 로 쓴다 — 애너테이션 속성 이름·타입(`Class<?>[]`) 동일.
+ * contract 패키지 테스트(RenderedHtmlContractCoverage)가 `getAnnotation(AdminWebSliceTest::class.java).controllers`
+ * 로 읽는다 — 애너테이션 속성 이름·타입(`Class<?>[]`) 을 바꾸지 않는다.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)

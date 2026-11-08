@@ -217,10 +217,10 @@ class SecurityPolicyTabController(
     }
 
     companion object {
-        /** 같은 패키지 Java 테스트(SecurityPolicyTabControllerTest)가 읽는다 — const 라 정적 필드로 남는다. */
-        const val TAB_PATH = "/admin/_/settings/tab/security"
-        const val SAVE_PATH = "/admin/_/settings/security"
-        const val ORIGIN_CHECK_PATH = "/admin/_/settings/security/origin-check"
+        /** internal: 같은 모듈 테스트(SecurityPolicyTabControllerTest)가 읽는다. */
+        internal const val TAB_PATH = "/admin/_/settings/tab/security"
+        internal const val SAVE_PATH = "/admin/_/settings/security"
+        internal const val ORIGIN_CHECK_PATH = "/admin/_/settings/security/origin-check"
 
         /** 이 콘솔의 origin(scheme://host[:port]) — 원본 window.location.origin. */
         private fun consoleOrigin(req: HttpServletRequest): String =
@@ -231,10 +231,9 @@ class SecurityPolicyTabController(
 
         /**
          * 원본 removesConsole: 저장된 목록엔 콘솔 주소가 있고 새 목록엔 없다.
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(SecurityPolicyTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(SecurityPolicyTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun removesConsole(saved: List<String>, next: List<String>, console: String): Boolean =
+        internal fun removesConsole(saved: List<String>, next: List<String>, console: String): Boolean =
             hasConsole(saved, console) && !hasConsole(next, console)
 
         private fun saveAttrs(): Map<String, Any?> {

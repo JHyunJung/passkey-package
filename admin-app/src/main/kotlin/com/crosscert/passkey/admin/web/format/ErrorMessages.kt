@@ -31,7 +31,6 @@ object ErrorMessages {
     }
 
     /** 상태 코드와 서버 메시지로 문구를 정한다. */
-    @JvmStatic
     fun describe(status: Int, serverMessage: String?, code: String?): Info {
         if (status >= 500) return friendly("서버가 잠시 응답하지 않습니다", "저장된 데이터는 그대로 있습니다. 잠시 후 다시 시도하세요.", status, code)
         if (status == 403) return friendly("권한이 없습니다", "이 작업을 할 권한이 없습니다. 운영자에게 문의하세요.", status, code)
@@ -40,14 +39,12 @@ object ErrorMessages {
         return Info("요청을 처리하지 못했습니다", serverMessage, status, code, true)
     }
 
-    @JvmStatic
     fun describe(status: Int, serverMessage: String?): Info = describe(status, serverMessage, null)
 
     /**
      * 알려진 예외는 상태별 문구, 알 수 없는 예외(DataAccessException·NPE 등 서버 내부 예외)는 5xx 문구("서버가 잠시 응답하지 않습니다" + HTTP 500)다.
      * 내부 예외의 원문 메시지(SQL·클래스 이름 등)는 어떤 화면(LoadError·카드·복사 텍스트)에도 싣지 않는다.
      */
-    @JvmStatic
     fun describe(e: Throwable?): Info = known(e) ?: describe(500, null, null)
 
     /** 알려진 예외의 문구. 알 수 없는 예외는 null. */
@@ -74,7 +71,6 @@ object ErrorMessages {
      * 화면 예외 처리기용. 이미 정해진 응답 상태(예: 처리기에서 500 으로 정한 예기치 못한 예외)가 있으면
      * 그 상태로 문구를 정한다. 단 [ActionBlockedException] 은 자기 문구를 쓴다.
      */
-    @JvmStatic
     fun describe(e: Throwable?, status: Int): Info {
         if (e is ActionBlockedException) return describe(e)
         val code = if (e is BusinessException) e.errorCode.code else null
@@ -95,7 +91,6 @@ object ErrorMessages {
      * Spring MVC 표준 예외([ErrorResponse]·타입 변환 실패 등)·JDK 예외(IllegalArgumentException "Invalid UUID string" 등)·
      * 권한 거부·예기치 못한 5xx 의 원문은 싣지 않는다(상태와 코드만).
      */
-    @JvmStatic
     fun rawDetail(e: Throwable?, status: Int, info: Info?): String {
         val sb = StringBuilder("HTTP ").append(status)
         if (e is BusinessException && info != null && info.code != null) sb.append(" · [").append(info.code).append(']')
@@ -108,7 +103,6 @@ object ErrorMessages {
      * 네트워크 오류, 시간 초과 또는 5xx — 요청이 처리되지 않았을 수 있어 "잠시 후 다시 시도"로 안내할 실패.
      * 4xx 는 아니다.
      */
-    @JvmStatic
     fun isTransient(e: Throwable?): Boolean {
         if (e == null) return false
         if (e is IOException || e is UncheckedIOException || e is TimeoutException) return true

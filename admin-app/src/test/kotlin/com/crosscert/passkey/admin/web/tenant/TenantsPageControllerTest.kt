@@ -790,7 +790,7 @@ class TenantsPageControllerTest {
         assertThat(res.contentType).startsWith("text/csv")
         assertThat(res.getHeader(HttpHeaders.CONTENT_DISPOSITION)).isEqualTo("attachment; filename=\"tenants-2026-10-11.csv\"")
         val body = String(res.contentAsByteArray, StandardCharsets.UTF_8)
-        assertThat(body).startsWith("﻿name,slug,rpId,status,credentials,apiKeys,createdAt\n")
+        assertThat(body).startsWith("\uFEFFname,slug,rpId,status,credentials,apiKeys,createdAt\n")
         assertThat(NEWLINE.split(body)).hasSize(3)
         assertThat(body).contains("'=SUM(1),evil,t1.example.org,ACTIVE,10,2,2026-10-01T00:00:00Z")
             .contains("Gamma,gamma,t3.example.org,ACTIVE,10,2,2026-10-01T00:00:00Z").doesNotContain("Beta")

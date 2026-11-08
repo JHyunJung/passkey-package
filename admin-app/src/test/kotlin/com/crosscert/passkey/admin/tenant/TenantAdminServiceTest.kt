@@ -109,7 +109,7 @@ class TenantAdminServiceTest {
         // the batch aggregate row carries an OffsetDateTime that the view exposes as-is.
         val eventA = OffsetDateTime.parse("2026-05-01T09:00:00+09:00")
 
-        whenever(boundary.currentTenantScope()).thenReturn(Optional.empty())
+        whenever(boundary.currentTenantScope()).thenReturn(null)
         whenever(repo.findAll()).thenReturn(listOf(a, b))
 
         // batch aggregate stubs — Object[]{tenantId(UUID), count/maxCreatedAt}

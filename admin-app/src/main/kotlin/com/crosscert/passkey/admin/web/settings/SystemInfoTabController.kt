@@ -71,8 +71,8 @@ class SystemInfoTabController(private val systemInfo: SystemInfoController) {
     }
 
     companion object {
-        /** 같은 패키지 Java 테스트(SystemInfoTabControllerTest)가 읽는다 — const 라 정적 필드로 남는다. */
-        const val TAB_PATH = "/admin/_/settings/tab/system"
+        /** internal: 같은 모듈 테스트(SystemInfoTabControllerTest)가 읽는다. */
+        internal const val TAB_PATH = "/admin/_/settings/tab/system"
 
         private fun toInfo(v: SystemInfoView): Info {
             val raw: List<SystemInfoView.Component> = v.components ?: java.util.List.of()
@@ -102,10 +102,9 @@ class SystemInfoTabController(private val systemInfo: SystemInfoController) {
 
         /**
          * 해석 가능한 시각만 KST 로. 없거나 깨진 값은 null.
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(SystemInfoTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(SystemInfoTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun deployedKst(iso: String?): String? {
+        internal fun deployedKst(iso: String?): String? {
             if (iso == null || iso.isEmpty()) return null
             val t = KstFormat.parse(iso)
             return if (t == null) null else KstFormat.kstDateTimeMin(t) + " KST"

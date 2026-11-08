@@ -17,7 +17,6 @@ class PlatformInsightsAlertsTest {
     )
 
     companion object {
-        @JvmStatic
         fun row(name: String, recentA: Long, recentS: Long, priorA: Long, priorS: Long, recentRisk: Long, users: Long, single: Long): PlatformInsightsDto.TenantRow =
             PlatformInsightsDto.TenantRow(
                 UUID.randomUUID(), name, name, "active", 0, 0, 0, 0, 0, 0, 0, users, single,

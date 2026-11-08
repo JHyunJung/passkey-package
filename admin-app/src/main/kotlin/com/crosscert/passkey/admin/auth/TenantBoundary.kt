@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
-import java.util.Optional
 import java.util.UUID
 
 private val log = LoggerFactory.getLogger(TenantBoundary::class.java)
@@ -41,7 +40,7 @@ class TenantBoundary(
     }
 
     /**
-     * tenantId nullable: Java/Kotlin 호출자가 요청 데이터 그대로 넘긴다. RP_ADMIN 분기에서 null 이면
+     * tenantId nullable: 호출자가 요청 DTO·응답 DTO 의 nullable 필드를 그대로 넘긴다. RP_ADMIN 분기에서 null 이면
      * 원 Java 와 같이 불변 Set 의 contains(null) 이 NullPointerException 을 던진다
      * (Iterable.contains 확장 → java.util.Set.contains 위임). PLATFORM_OPERATOR 는 null 이어도 통과.
      */
@@ -82,11 +81,11 @@ class TenantBoundary(
     }
 
     /**
-     * list 분기 — PLATFORM_OPERATOR 는 empty (모든 tenant), RP_ADMIN 은 자기 tenantId.
+     * list 분기 — PLATFORM_OPERATOR 는 null (모든 tenant, 원 Java `Optional.empty()`), RP_ADMIN 은 자기 tenantId.
      */
-    fun currentTenantScope(): Optional<UUID> {
+    fun currentTenantScope(): UUID? {
         val me = currentPrincipal()
-        if (me.isPlatformOperator()) return Optional.empty()
+        if (me.isPlatformOperator()) return null
         if (me.isRpAdmin()) {
             val active = activeTenantResolver.resolve(me)
             // fail-closed: RP_ADMIN 의 active 가 null 이면(=allowedTenantIds 비어 매핑 0개)
@@ -108,7 +107,7 @@ class TenantBoundary(
                 )
                 throw BusinessException(ErrorCode.ACCESS_DENIED, "RP_ADMIN has no active tenant")
             }
-            return Optional.of(active)
+            return active
         }
         log.warn(
             "tenant boundary violation: actor={} role={} scope=list allowed=none",

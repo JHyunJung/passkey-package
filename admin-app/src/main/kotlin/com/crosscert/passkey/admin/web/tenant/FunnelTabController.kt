@@ -320,7 +320,6 @@ class FunnelTabController(
             return m
         }
 
-        @JvmField
         val SERIES_COLUMNS: List<Map<String, Any?>> = java.util.List.of(
             col("day", "날짜", false), col("a", "시도", true), col("s", "성공", true), col("r", "성공률", true),
         )
@@ -336,7 +335,6 @@ class FunnelTabController(
             arrayOf("서명 카운터 재사용", "인증기 카운터가 이전 값보다 작거나 같아요. 패스키 복제가 의심돼요."),
         )
 
-        @JvmField
         val MONTH_COLUMNS: List<Map<String, Any?>> = java.util.List.of(
             col("month", "월", false), col("auth", "인증 성공", true), col("mau", "활성 사용자", true), col("new", "신규 패스키", true),
         )
@@ -353,7 +351,6 @@ class FunnelTabController(
         }
 
         /** 월간 사용량 표의 줄(플랫폼 현황도 같은 모양으로 쓴다). */
-        @JvmStatic
         fun monthViews(list: List<AdoptionDto.Month>?): List<MonthView> {
             val months = ArrayList<MonthView>()
             for (m in orEmpty(list)) {
@@ -363,7 +360,6 @@ class FunnelTabController(
         }
 
         /** 기기 분포 줄: 비율은 전체 패스키 대비(플랫폼 현황도 같은 모양으로 쓴다). */
-        @JvmStatic
         fun deviceViews(list: List<AdoptionDto.Device>?): List<DeviceView> {
             val devices = ArrayList<DeviceView>()
             var total = 0L
@@ -381,7 +377,6 @@ class FunnelTabController(
         }
 
         /** "2026-11" → "2026년 11월", 이번 달은 "(진행 중)". */
-        @JvmStatic
         fun monthLabel(m: AdoptionDto.Month): String {
             val s = m.month
             val label = if (s != null && MONTH_RE.matcher(s).matches()) {
@@ -402,7 +397,6 @@ class FunnelTabController(
         }
 
         /** series: 플랫폼 현황(InsightsPageController)이 nullable DTO 값을 그대로 넘긴다. */
-        @JvmStatic
         fun seriesCard(key: String?, title: String?, series: List<FunnelDto.DailyPoint>?, csv: String?): SeriesCard {
             // !!: 원 Java 의 첫 순회(for (p : series)) NPE 와 같은 자리.
             val ss = series!!

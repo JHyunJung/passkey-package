@@ -18,7 +18,7 @@ import java.util.UUID
  * 정해지므로 원 Java 클래스와 똑같이 둔다. 원 Java 클래스에는 명시 serialVersionUID 가 없었다 — 그 기본
  * 계산값(JDK `serialver`)을 그대로 고정해 Java 빌드가 써 둔 세션도 이 클래스로 읽힌다.
  *
- * null 인자(Java 호출자): 원 Java 의 Objects.requireNonNull 과 같이 NullPointerException
+ * null 인자(core Java 엔티티의 플랫폼 타입 값 등): 원 Java 의 Objects.requireNonNull 과 같이 NullPointerException
  * (Kotlin non-null 파라미터 검사 — 메시지만 다르다). lockedUntil 만 nullable.
  */
 class AdminUserDetails(

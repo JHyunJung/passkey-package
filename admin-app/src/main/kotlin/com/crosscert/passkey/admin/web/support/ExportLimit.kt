@@ -19,7 +19,6 @@ object ExportLimit {
     const val MESSAGE = "내보낼 행이 너무 많습니다(최대 20,000건). 범위를 좁혀 다시 시도하세요."
 
     /** 상한을 넘었을 때의 응답(422 + JSON message). */
-    @JvmStatic
     fun tooLarge(): ResponseEntity<ByteArray> {
         val body = "{\"message\":\"$MESSAGE\"}"
         return ResponseEntity.unprocessableEntity()

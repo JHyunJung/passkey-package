@@ -75,15 +75,13 @@ class TenantAdminService(
 ) {
 
     @Transactional(readOnly = true)
-    fun list(): List<TenantAdminDto.TenantView> =
-        tenantBoundary.currentTenantScope()
-            .map { tid ->
-                tenants.findById(tid)
-                    .map { toView(it) }
-                    .map { java.util.List.of(it) }
-                    .orElseGet { java.util.List.of() }
-            }
-            .orElseGet { listAllWithBatchAggregates() }
+    fun list(): List<TenantAdminDto.TenantView> {
+        val tid = tenantBoundary.currentTenantScope() ?: return listAllWithBatchAggregates()
+        return tenants.findById(tid)
+            .map { toView(it) }
+            .map { java.util.List.of(it) }
+            .orElseGet { java.util.List.of() }
+    }
 
     /**
      * PLATFORM_OPERATOR cross-tenant 목록. KPI 3종(credentials/apiKeys/lastEventAt)을

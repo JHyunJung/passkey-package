@@ -118,9 +118,9 @@ class PlatformInsightsService(
     /**
      * 확인 필요 테넌트. 한 테넌트가 여러 기준에 걸리면 각각 한 줄. 순서: 위험 인증 → 성공률 하락 → 1개뿐 비율.
      *
-     * 원 Java 는 package-private(같은 패키지 테스트가 직접 호출) — Kotlin 에는 대응 가시성이 없어 public 으로 둔다.
+     * 원 Java 는 package-private(같은 패키지 테스트가 직접 호출) — 같은 모듈 테스트가 부르므로 internal.
      */
-    fun alerts(rows: List<PlatformInsightsDto.TenantRow>): List<PlatformInsightsDto.Alert> {
+    internal fun alerts(rows: List<PlatformInsightsDto.TenantRow>): List<PlatformInsightsDto.Alert> {
         val risk = ArrayList<PlatformInsightsDto.Alert>()
         val drop = ArrayList<PlatformInsightsDto.Alert>()
         val single = ArrayList<PlatformInsightsDto.Alert>()

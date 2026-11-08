@@ -13,7 +13,6 @@ private val NEEDS_QUOTE: Pattern = Pattern.compile("[\",\\r\\n]")
  */
 object CsvWriter {
 
-    @JvmStatic
     fun write(header: List<String?>, rows: List<List<String?>>): ByteArray {
         val lines = ArrayList<String>()
         lines.add(join(header))
@@ -27,9 +26,8 @@ object CsvWriter {
         return out.joinToString(",")
     }
 
-    /** 원 Java 는 패키지 전용 — 같은 패키지의 Java 테스트(CsvWriterTest)가 부르므로 public. */
-    @JvmStatic
-    fun escape(v: String?): String {
+    /** 원 Java 는 패키지 전용 — 같은 모듈 테스트(CsvWriterTest)가 부르므로 internal. */
+    internal fun escape(v: String?): String {
         if (v == null) return ""
         var s: String = v
         if (FORMULA_PREFIX.matcher(s).matches()) s = "'$s"

@@ -19,14 +19,14 @@ class CsvWriterTest {
         assertThat(out[0]).isEqualTo(0xEF.toByte())
         assertThat(out[1]).isEqualTo(0xBB.toByte())
         assertThat(out[2]).isEqualTo(0xBF.toByte())
-        assertThat(text(out)).isEqualTo("﻿이름,값\na,1\nb,2")
+        assertThat(text(out)).isEqualTo("\uFEFF이름,값\na,1\nb,2")
     }
 
     @Test
     @DisplayName("쉼표·따옴표·줄바꿈 필드는 따옴표로 감싸고 따옴표는 두 번")
     fun quotesFieldsThatNeedIt() {
         val out = CsvWriter.write(listOf("h"), listOf(listOf("a,b"), listOf("say \"hi\""), listOf("x\ny"), listOf("x\ry")))
-        assertThat(text(out)).isEqualTo("﻿h\n\"a,b\"\n\"say \"\"hi\"\"\"\n\"x\ny\"\n\"x\ry\"")
+        assertThat(text(out)).isEqualTo("\uFEFFh\n\"a,b\"\n\"say \"\"hi\"\"\"\n\"x\ny\"\n\"x\ry\"")
     }
 
     @Test
@@ -45,12 +45,12 @@ class CsvWriterTest {
     @DisplayName("BOM 은 소스에서도 \\uFEFF 이스케이프로 쓴다(보이지 않는 문자 방지)")
     fun bomIsWrittenAsEscapeInSource() {
         val src = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/kotlin/com/crosscert/passkey/admin/web/format/CsvWriter.kt"))
-        assertThat(src).contains("\\uFEFF").doesNotContain(if ("﻿" == "") "" else String(charArrayOf(0xFEFF.toChar())))
+        assertThat(src).contains("\\uFEFF").doesNotContain("\uFEFF")
     }
 
     @Test
     @DisplayName("null 은 빈 칸")
     fun nullIsEmpty() {
-        assertThat(text(CsvWriter.write(listOf("a", "b"), listOf(listOf(null, "x"))))).isEqualTo("﻿a,b\n,x")
+        assertThat(text(CsvWriter.write(listOf("a", "b"), listOf(listOf(null, "x"))))).isEqualTo("\uFEFFa,b\n,x")
     }
 }

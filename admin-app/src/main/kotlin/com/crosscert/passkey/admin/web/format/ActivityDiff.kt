@@ -48,7 +48,6 @@ object ActivityDiff {
      * 2) 아니면 payload 의 before/after 객체(현재 TENANT_UPDATE: { before, after, changedFields }).
      *    changedFields 가 문자열 배열이면 그 순서, 아니면 JSON 값이 다른 키만.
      */
-    @JvmStatic
     fun buildDiffRows(diff: List<DiffRow>?, payload: String?): List<DiffRow> {
         if (diff != null) return diff
         val parsed = parse(payload)
@@ -83,7 +82,6 @@ object ActivityDiff {
     }
 
     /** 두 값이 모두 배열이면 추가/제거 원소(문자열화), 아니면 null. */
-    @JvmStatic
     fun arrayChange(from: JsonNode?, to: JsonNode?): ArrayChange? {
         if (from == null || to == null || !from.isArray || !to.isArray) return null
         val f = ArrayList<String>()
@@ -98,7 +96,6 @@ object ActivityDiff {
     }
 
     /** ActivityPage 의 fmtVal: undefined·null → —, 문자열은 그대로, 그 밖은 JSON.stringify. */
-    @JvmStatic
     fun fmtVal(v: JsonNode?): String {
         if (v == null || v.isNull) return "—"
         return if (v.isString) v.asString() else v.toString()

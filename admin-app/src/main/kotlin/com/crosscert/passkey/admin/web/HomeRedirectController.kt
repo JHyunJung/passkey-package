@@ -31,11 +31,9 @@ class HomeRedirectController(private val me: MeController) {
 
     companion object {
         /** rpTenantId(me) ? /admin/tenants/{id} : /admin/tenants */
-        @JvmStatic
         fun homePath(v: MeView): String = homePath(v.role, v.tenantIds)
 
         /** 화면 모델의 `me`(CurrentAdmin)용. 같은 규칙이다 — RequirePlatform 이 쓴다. */
-        @JvmStatic
         fun homePath(v: CurrentAdmin): String = homePath(v.role, v.tenantIds)
 
         private fun homePath(role: String?, ids: List<UUID>?): String {

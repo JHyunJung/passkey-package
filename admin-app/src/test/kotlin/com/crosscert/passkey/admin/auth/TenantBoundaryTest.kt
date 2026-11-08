@@ -11,7 +11,6 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
 import java.time.Clock
-import java.util.Optional
 import java.util.UUID
 
 class TenantBoundaryTest {
@@ -60,7 +59,7 @@ class TenantBoundaryTest {
         val me = rpAdmin(setOf(a, b))
         login(me)
         whenever(activeTenant.resolve(me)).thenReturn(b)
-        assertThat(boundary.currentTenantScope()).isEqualTo(Optional.of(b))
+        assertThat(boundary.currentTenantScope()).isEqualTo(b)
     }
 
     @Test
@@ -81,6 +80,6 @@ class TenantBoundaryTest {
             "PLATFORM_OPERATOR", setOf(), true, null, Clock.systemUTC(),
         )
         login(me)
-        assertThat(boundary.currentTenantScope()).isEmpty()
+        assertThat(boundary.currentTenantScope()).isNull()
     }
 }

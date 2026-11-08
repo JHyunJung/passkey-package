@@ -4,10 +4,8 @@ package com.crosscert.passkey.admin.web.shell
 data class Crumb(val label: String?, val href: String?) {
 
     companion object {
-        @JvmStatic
         fun of(label: String?): Crumb = Crumb(label, null)
 
-        @JvmStatic
         fun link(label: String?, href: String?): Crumb = Crumb(label, href)
     }
 }

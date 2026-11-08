@@ -453,10 +453,9 @@ class TenantsPageController(
         /**
          * 원본 filtered: `!q || name.toLowerCase().includes(q.toLowerCase()) || slug.includes(q.toLowerCase())` 와
          * `status === 'ALL' || t.status === status`. q 는 trim 하지 않는다. 순서는 입력 그대로.
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(TenantsPageControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(TenantsPageControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun filter(tenants: List<TenantRow>, q: String, status: String?): List<TenantRow> {
+        internal fun filter(tenants: List<TenantRow>, q: String, status: String?): List<TenantRow> {
             val lower = q.lowercase(Locale.ROOT)
             val out = ArrayList<TenantRow>()
             for (t in tenants) {
@@ -469,9 +468,8 @@ class TenantsPageController(
             return out
         }
 
-        /** public `@JvmStatic`: 같은 패키지 Java 테스트(TenantsPageControllerTest)가 부른다. */
-        @JvmStatic
-        fun normStatus(s: String?): String = if (ACTIVE == s) ACTIVE else if (SUSPENDED == s) SUSPENDED else ALL
+        /** internal: 같은 모듈 테스트(TenantsPageControllerTest)가 부른다. */
+        internal fun normStatus(s: String?): String = if (ACTIVE == s) ACTIVE else if (SUSPENDED == s) SUSPENDED else ALL
 
         /** 숫자가 아닌 page/size 는 400 이 아니라 기본값(원본은 select·버튼으로만 바뀌어 잘못된 값이 없다). */
         private fun parseInt(v: String, def: Int): Int =
@@ -481,9 +479,8 @@ class TenantsPageController(
                 def
             }
 
-        /** public `@JvmStatic`: 같은 패키지 Java 테스트(TenantsPageControllerTest)가 부른다. */
-        @JvmStatic
-        fun normSize(size: Int): Int = if (PAGE_SIZES.contains(size)) size else PAGE_SIZES[0]
+        /** internal: 같은 모듈 테스트(TenantsPageControllerTest)가 부른다. */
+        internal fun normSize(size: Int): Int = if (PAGE_SIZES.contains(size)) size else PAGE_SIZES[0]
 
         // ── 주소·속성 ────────────────────────────────────────────
 

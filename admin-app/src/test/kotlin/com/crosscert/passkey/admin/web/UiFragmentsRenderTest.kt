@@ -29,6 +29,8 @@ import java.util.regex.Pattern
  * 공통 UI 조각(templates/admin/fragments)을 Thymeleaf 로 렌더링해, 원본 컴포넌트(admin-ui/src/ui 의 각 .test.tsx)가
  * 확인하던 클래스명·ARIA 속성이 같은 마크업으로 나오는지 본다. 브라우저에서 도는 Alpine 동작은 여기서 다루지 않고
  * 속성(x-data, x-on:…)이 붙었는지만 본다.
+ *
+ * `trim { it <= ' ' }` 는 Java `String.trim()` 과 같은 판정(U+0020 이하만 제거)을 유지한다.
  */
 class UiFragmentsRenderTest {
 
@@ -76,7 +78,7 @@ class UiFragmentsRenderTest {
             val res = MockHttpServletResponse()
             val ctx = WebContext(JakartaServletWebApplication.buildApplication(sc).buildExchange(req, res), Locale.KOREAN, java.util.HashMap(vars))
             ctx.setVariable(ThymeleafEvaluationContext.THYMELEAF_EVALUATION_CONTEXT_CONTEXT_VARIABLE_NAME, ThymeleafEvaluationContext(appCtx, null))
-            return engine.process("<div th:replace=\"" + fragmentExpr + "\"></div>", ctx).replace(Regex("\\s+"), " ").trim()
+            return engine.process("<div th:replace=\"" + fragmentExpr + "\"></div>", ctx).replace(Regex("\\s+"), " ").trim { it <= ' ' }
         }
 
         /** 첫 번째로 `<tag ...class="...">` 가 나오는 여는 태그 전체. */
@@ -115,7 +117,7 @@ class UiFragmentsRenderTest {
                 Locale.KOREAN, java.util.HashMap(vars),
             )
             ctx.setVariable(ThymeleafEvaluationContext.THYMELEAF_EVALUATION_CONTEXT_CONTEXT_VARIABLE_NAME, ThymeleafEvaluationContext(appCtx, null))
-            return engine.process("<div>" + hostHtml + "</div>", ctx).replace(Regex("\\s+"), " ").trim()
+            return engine.process("<div>" + hostHtml + "</div>", ctx).replace(Regex("\\s+"), " ").trim { it <= ' ' }
         }
     }
 

@@ -449,7 +449,7 @@ class CredentialsTabControllerTest {
         assertThat(r.response.status).isEqualTo(200)
         assertThat(r.response.getHeader("Content-Disposition")).isEqualTo("attachment; filename=\"credentials-acme-2026-10-11.csv\"")
         val csv = r.response.getContentAsString(StandardCharsets.UTF_8)
-        val lines = NEWLINE.split(csv.replace("﻿", ""))
+        val lines = NEWLINE.split(csv.replace("\uFEFF", ""))
         assertThat(lines[0]).isEqualTo("credentialId,externalUserId,label,authenticatorName,status,aaguid,transports,signatureCounter,lastUsedAt,createdAt")
         assertThat(lines).hasSize(2)
         assertThat(lines[1]).startsWith("$CA,user-a,내 폰,YubiKey 5,ACTIVE,$AAGUID_A,usb|nfc,5,")

@@ -512,10 +512,9 @@ class TenantDetailPageController(
 
         /**
          * 이벤트 유형 점 색. 유형 이름 태그가 함께 표시되므로 색만으로 의미를 전달하지 않는다.
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(TenantDetailPageControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(TenantDetailPageControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun eventColor(type: String): String {
+        internal fun eventColor(type: String): String {
             if (FAILURE_TYPE.matcher(type).find()) return "var(--bad)"
             if (type.startsWith("API_KEY") || type.endsWith("_UPDATED")) return "var(--warn-dot)"
             return "var(--brand-700)"
@@ -534,10 +533,9 @@ class TenantDetailPageController(
 
         /**
          * 다이얼로그를 연 화면의 탭(HX-Current-URL 의 tab). 모르는 값이면 개요.
-         * public `@JvmStatic`: 같은 패키지 Java 테스트(TenantDetailPageControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(TenantDetailPageControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun tabFrom(currentUrl: String?): String {
+        internal fun tabFrom(currentUrl: String?): String {
             if (currentUrl == null) return "overview"
             return try {
                 val tab: String? = UriComponentsBuilder.fromUriString(currentUrl).build().queryParams.getFirst("tab")

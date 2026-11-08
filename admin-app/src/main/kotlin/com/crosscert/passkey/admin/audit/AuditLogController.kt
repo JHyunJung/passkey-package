@@ -39,12 +39,12 @@ class AuditLogController(
     ): ApiResponse<List<AuditLogView>> {
         val scope = tenantBoundary.currentTenantScope()
         val effectiveTenantId: UUID?
-        if (scope.isPresent) {
+        if (scope != null) {
             // RP_ADMIN: forced to own tenant. Explicit mismatched tenantId param → 403.
-            if (tenantId != null && tenantId != scope.get()) {
+            if (tenantId != null && tenantId != scope) {
                 throw BusinessException(ErrorCode.ACCESS_DENIED, "RP_ADMIN cannot query audit for other tenant")
             }
-            effectiveTenantId = scope.get()
+            effectiveTenantId = scope
         } else {
             // PLATFORM_OPERATOR: tenantId param as-is (null = all tenants).
             effectiveTenantId = tenantId
@@ -69,7 +69,6 @@ class AuditLogController(
         val createdAt: OffsetDateTime?,
     ) {
         companion object {
-            @JvmStatic
             fun from(a: AuditLog): AuditLogView = AuditLogView(
                 a.id, a.actorId, a.actorEmail, a.action,
                 a.targetType, a.targetId, a.tenantId, a.payload, a.createdAt,

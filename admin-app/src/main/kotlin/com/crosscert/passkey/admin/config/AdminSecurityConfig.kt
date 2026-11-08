@@ -472,12 +472,10 @@ class AdminSecurityConfig {
          * 명시하지 않으면 SameSite 속성 자체가 빠진다(세션 쿠키와의 일관성 확보).
          * customizer 는 `.secure(...)` 를 건드리지 않으므로 위 자동판정은 그대로 유지된다.
          *
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트
          * (AdminSecurityConfigCsrfCookieTest)가 `AdminSecurityConfig.buildCsrfTokenRepository()` 로 부른다.
-         * Kotlin 에 package-private 이 없고 internal 함수는 JVM 이름이 바뀌어 Java 에서 못 부른다.
          */
-        @JvmStatic
-        fun buildCsrfTokenRepository(): CookieCsrfTokenRepository {
+        internal fun buildCsrfTokenRepository(): CookieCsrfTokenRepository {
             val repo = CookieCsrfTokenRepository.withHttpOnlyFalse()
             repo.setCookiePath("/admin")
             repo.setCookieCustomizer { cookie -> cookie.sameSite("Lax") }

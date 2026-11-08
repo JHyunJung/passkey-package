@@ -17,7 +17,6 @@ object OriginValidation {
     /** ok 이면 value, 아니면 error 가 채워진다. */
     data class Result(val ok: Boolean, val value: String?, val error: String?)
 
-    @JvmStatic
     fun validate(input: String?, rpId: String?): Result {
         val raw = input?.javaTrim() ?: ""
         if (raw.isEmpty()) return fail("origin 을 입력하세요.")

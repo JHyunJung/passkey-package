@@ -48,7 +48,6 @@ class ApiKeyAdminDto private constructor() {
         val lastUsedAt: OffsetDateTime?,
     ) {
         companion object {
-            @JvmStatic
             fun from(k: ApiKey): ApiKeyView = ApiKeyView(
                 k.id, k.tenantId, k.name, k.keyPrefix,
                 k.scopeValues,

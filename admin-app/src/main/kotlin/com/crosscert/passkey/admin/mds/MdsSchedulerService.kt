@@ -194,13 +194,10 @@ class MdsSchedulerService(
         override fun toString(): String = "SyncResult[status=$status, version=$version, error=$error]"
 
         companion object {
-            @JvmStatic
             fun synced(version: Long): SyncResult = SyncResult("SYNCED", version, null)
 
-            @JvmStatic
             fun skipped(): SyncResult = SyncResult("SKIPPED", null, null)
 
-            @JvmStatic
             fun failed(error: String?): SyncResult = SyncResult("FAILED", null, error)
         }
     }

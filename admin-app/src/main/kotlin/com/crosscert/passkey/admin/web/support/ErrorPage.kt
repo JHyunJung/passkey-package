@@ -15,17 +15,16 @@ object ErrorPage {
     /**
      * @return 렌더링했으면 true, 템플릿 뷰를 찾지 못했으면 false(호출자가 다른 응답을 쓴다).
      *
-     * title·message 가 null 이면 원 Java 처럼 상태를 정한 뒤 `Map.of` 에서 NPE 가 난다(그래서 nullable 로 받는다).
+     * title·message 는 non-null — 유일한 호출자(AdminSecurityConfig 의 AccessDeniedHandler)가 상수를 넘긴다.
      */
-    @JvmStatic
     @Throws(Exception::class)
     fun render(
         resolver: ViewResolver,
         req: HttpServletRequest,
         res: HttpServletResponse,
         status: Int,
-        title: String?,
-        message: String?,
+        title: String,
+        message: String,
     ): Boolean {
         val view = resolver.resolveViewName(VIEW, req.locale) ?: return false
         res.status = status

@@ -70,10 +70,10 @@ class SignupRequestService(
 
     /**
      * G11 fail-fast — prod 에서 localhost 기본값으로 뜨면 승인 메일 링크가 깨진다.
-     * 원 Java 는 package-private — Kotlin 에 대응 가시성이 없어 public 으로 둔다.
+     * 원 Java 는 package-private — 호출자는 Spring(@PostConstruct)뿐이라 internal.
      */
     @PostConstruct
-    fun validateBaseUrlForProd() {
+    internal fun validateBaseUrlForProd() {
         BaseUrlValidation.assertNotLocalhostFallbackInProd(env, baseUrl, "admin.invite.base-url")
         if (autoApprovePlatformOperator) {
             log.warn("admin.signup.auto-approve-platform-operator=true — PLATFORM_OPERATOR 가입 요청을 승인 없이 활성화한다(QA 전용)")
@@ -171,7 +171,7 @@ class SignupRequestService(
             throw IllegalArgumentException("Invalid role: " + body.role)
         }
         val tenantIds: List<UUID> = if (body.tenantIds == null) java.util.List.of() else body.tenantIds
-        // 원 Java 와 같이 Objects::isNull 로 판정(Java 호출자·JSON 이 null 원소를 넣을 수 있다).
+        // 원 Java 와 같이 Objects::isNull 로 판정(Jackson 역직렬화가 JSON null 원소를 넣을 수 있다).
         if (tenantIds.stream().anyMatch(Objects::isNull)) {
             throw IllegalArgumentException("tenantIds must not contain null")
         }

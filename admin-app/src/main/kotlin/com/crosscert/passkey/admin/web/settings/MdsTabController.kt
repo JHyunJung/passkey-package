@@ -160,9 +160,9 @@ class MdsTabController(
     }
 
     companion object {
-        /** 같은 패키지 Java 테스트(MdsTabControllerTest)가 읽는다 — const 라 정적 필드로 남는다. */
-        const val TAB_PATH = "/admin/_/settings/tab/mds"
-        const val SYNC_PATH = "/admin/_/settings/mds/sync"
+        /** internal: 같은 모듈 테스트(MdsTabControllerTest)가 읽는다. */
+        internal const val TAB_PATH = "/admin/_/settings/tab/mds"
+        internal const val SYNC_PATH = "/admin/_/settings/mds/sync"
 
         private fun syncAttrs(): Map<String, Any?> {
             val m = LinkedHashMap<String, Any?>()
@@ -244,10 +244,9 @@ class MdsTabController(
 
         /**
          * 실패 사유(서버 errorMessage)를 한 줄 평문으로. 길면 줄이고(80자) 전체는 title 툴팁(템플릿).
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(MdsTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(MdsTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun failureReason(message: String): String {
+        internal fun failureReason(message: String): String {
             val flat = WHITESPACE.matcher(message).replaceAll(" ").javaTrim()
             return if (flat.length > ERROR_PREVIEW_MAX) flat.substring(0, ERROR_PREVIEW_MAX - 1) + "…" else flat
         }
@@ -262,9 +261,8 @@ class MdsTabController(
             return if (known != null) Trust(mode, known.label, known.description) else Trust(mode, mode, null)
         }
 
-        /** public `@JvmStatic`: 같은 패키지 Java 테스트(MdsTabControllerTest)가 부른다. */
-        @JvmStatic
-        fun isSeedTime(iso: String?): Boolean {
+        /** internal: 같은 모듈 테스트(MdsTabControllerTest)가 부른다. */
+        internal fun isSeedTime(iso: String?): Boolean {
             if (iso == null || iso.isEmpty()) return true
             val t = KstFormat.parse(iso)
             return t == null || t.isBefore(SEED_CUTOFF)
@@ -280,10 +278,9 @@ class MdsTabController(
 
         /**
          * 원본 timeAgo(초 단위): n초 전 / n분 전 / n시간 전 / n일 전.
-         * public `@JvmStatic`: 같은 패키지 Java 테스트(MdsTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(MdsTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun timeAgo(iso: String?, now: Instant): String {
+        internal fun timeAgo(iso: String?, now: Instant): String {
             val t = KstFormat.parse(iso) ?: return "—"
             val s = Math.max(0L, (now.toEpochMilli() - t.toEpochMilli()) / 1000)
             if (s < 60) return s.toString() + "초 전"

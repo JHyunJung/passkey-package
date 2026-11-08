@@ -141,10 +141,8 @@ class AuditChainVerifier(
      */
     data class Result(val ok: Boolean, val brokenAt: UUID?) {
         companion object {
-            @JvmStatic
             fun valid(): Result = Result(true, null)
 
-            @JvmStatic
             fun broken(id: UUID?): Result = Result(false, id)
         }
     }
@@ -158,10 +156,8 @@ class AuditChainVerifier(
      */
     data class TenantResult(val tenantId: UUID?, val ok: Boolean, val brokenAt: UUID?) {
         companion object {
-            @JvmStatic
             fun valid(tenantId: UUID?): TenantResult = TenantResult(tenantId, true, null)
 
-            @JvmStatic
             fun broken(tenantId: UUID?, id: UUID?): TenantResult = TenantResult(tenantId, false, id)
         }
     }

@@ -17,13 +17,11 @@ import org.springframework.core.env.Environment
  * default is actually unsafe; dev/local/qa intentionally rely on it).
  *
  * 원 Java 는 package-private final 클래스 — Kotlin 에 package-private 이 없어 internal 로 둔다.
- * internal object 의 @JvmStatic 함수·const 는 JVM 이름이 바뀌지 않아 같은 패키지 Java 테스트가 그대로 부른다.
  */
 internal object BaseUrlValidation {
 
     const val LOCALHOST_DEFAULT = "http://localhost:5173"
 
-    @JvmStatic
     fun assertNotLocalhostFallbackInProd(env: Environment, baseUrl: String?, propertyName: String?) {
         var isProd = false
         for (p in env.activeProfiles) {

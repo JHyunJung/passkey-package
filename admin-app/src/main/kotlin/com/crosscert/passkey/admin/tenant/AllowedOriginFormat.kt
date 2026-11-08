@@ -17,7 +17,6 @@ private val ANDROID: Pattern =
  */
 object AllowedOriginFormat {
 
-    @JvmStatic
     fun isValid(origin: String?): Boolean {
         // Java String.isBlank 와 같은 판정(Character.isWhitespace) — Kotlin isBlank 는 NBSP 등도 공백으로 본다.
         if (origin == null || origin.all(Character::isWhitespace)) {

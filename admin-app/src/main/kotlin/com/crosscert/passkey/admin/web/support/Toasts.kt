@@ -21,18 +21,15 @@ object Toasts {
         .enable(JsonWriteFeature.ESCAPE_NON_ASCII)
         .build()
 
-    @JvmStatic
     fun success(res: HttpServletResponse, message: String?) {
         write(res, "success", message)
     }
 
-    @JvmStatic
     fun error(res: HttpServletResponse, message: String?) {
         write(res, "error", message, null, null)
     }
 
     /** [error] 에서 traceId 없이. */
-    @JvmStatic
     fun error(res: HttpServletResponse, message: String?, detail: String?) {
         error(res, message, detail, null)
     }
@@ -41,7 +38,6 @@ object Toasts {
      * 오류 토스트. `detail`(예: `HTTP 409 · [CODE] 서버 메시지`)과 `traceId` 는
      * 토스트의 접힌 "자세히" 안에만 보인다(errorToast.ts). 본문 `message` 에는 쉬운 문구만 둔다.
      */
-    @JvmStatic
     fun error(res: HttpServletResponse, message: String?, detail: String?, traceId: String?) {
         write(res, "error", message, detail, traceId)
     }
@@ -50,14 +46,12 @@ object Toasts {
     const val CONFIRM_HEADER = "X-Confirm"
 
     /** 확인 요청의 요청 헤더가 있는지. */
-    @JvmStatic
     fun isConfirm(req: HttpServletRequest): Boolean = "1" == req.getHeader(CONFIRM_HEADER)
 
     /**
      * 확인 요청의 실패 안내. `HX-Trigger: {"confirmError":{"message","detail","traceId"}}` — 토스트가 아니라 열려 있는
      * confirmDialog 안의 인라인 오류로만 보인다(토스트 중복 없음). message 는 쉬운 문구, detail·traceId 는 선택.
      */
-    @JvmStatic
     fun confirmError(res: HttpServletResponse, message: String?, detail: String?, traceId: String?) {
         try {
             val m = LinkedHashMap<String, Any?>()
@@ -73,13 +67,11 @@ object Toasts {
     /**
      * 제목이 있는 오류 토스트(errorToast.ts: title=무엇이 실패했는지, message=쉬운 문구). 토스트는 제목을 크게, message 를 작게 보인다.
      */
-    @JvmStatic
     fun errorTitled(res: HttpServletResponse, title: String?, message: String?, detail: String?, traceId: String?) {
         write(res, "error", title, message, detail, traceId)
     }
 
     /** 제목이 있는 성공 토스트(예: NewTenant 의 "Tenant 생성 완료" / "<이름> · WebAuthn 설정으로 이동합니다"). */
-    @JvmStatic
     fun successTitled(res: HttpServletResponse, title: String?, message: String?) {
         write(res, "success", title, message, null, null)
     }
@@ -88,7 +80,6 @@ object Toasts {
      * 저장 성공: 제목 있는 성공 토스트와 함께 `saved` 이벤트를 보낸다(`HX-Trigger: {"saved":true,"toast":{…}}`).
      * app.js 가 `saved` 로 저장 안 한 변경 표시(`$store.dirty`)를 지운다.
      */
-    @JvmStatic
     fun successSaved(res: HttpServletResponse, title: String?, message: String?) {
         try {
             val toast = LinkedHashMap<String, Any?>()
@@ -108,7 +99,6 @@ object Toasts {
      * 동작 버튼이 있는 성공 토스트(원본 toast({action:{label,onClick}})). 버튼을 누르면 toastHost 가 window 이벤트 `event`(detail = `detail`)를 올린다.
      * 이벤트를 듣는 쪽이 요청을 보낸다 — 서버가 준 주소만 쓰도록 듣는 쪽이 접두사를 확인해야 한다.
      */
-    @JvmStatic
     fun successTitledAction(
         res: HttpServletResponse,
         title: String?,
@@ -134,7 +124,6 @@ object Toasts {
     }
 
     /** 제목이 있는 경고 토스트(예: MfaChallenge 의 "복구 코드를 사용했습니다." / "남은 복구 코드: N개"). */
-    @JvmStatic
     fun warnTitled(res: HttpServletResponse, title: String?, message: String?) {
         write(res, "warn", title, message, null, null)
     }

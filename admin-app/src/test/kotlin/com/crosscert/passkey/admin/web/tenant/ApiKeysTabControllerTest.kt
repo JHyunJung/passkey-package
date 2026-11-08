@@ -144,7 +144,7 @@ class ApiKeysTabControllerTest {
             val s = r.request.getSession(false)
             if (s != null) {
                 for (n in Collections.list(s.attributeNames)) {
-                    assertThat(s.getAttribute(n).toString()).`as`("session attribute $n").doesNotContain(SECRET)
+                    assertThat(java.lang.String.valueOf(s.getAttribute(n))).`as`("session attribute $n").doesNotContain(SECRET)
                 }
             }
             assertThat(r.flashMap.isEmpty()).isTrue()

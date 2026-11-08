@@ -175,10 +175,9 @@ class AuditLogService(
          * latest 는 global chain 의 최신 row 이고, 어떤 tenant chain 의 최신 row 보다도 늦거나 같다.
          * 보정한 값도 candidate 의 offset(KST)으로 표현해 해시 입력 형태를 바꾸지 않는다.
          *
-         * 원 Java 는 package-private static — Java 테스트가 호출하므로 public(@JvmStatic).
+         * 원 Java 는 package-private static — 같은 모듈 테스트가 호출하므로 internal.
          */
-        @JvmStatic
-        fun nextChainTime(candidate: OffsetDateTime, latest: OffsetDateTime?): OffsetDateTime {
+        internal fun nextChainTime(candidate: OffsetDateTime, latest: OffsetDateTime?): OffsetDateTime {
             if (latest == null || candidate.isAfter(latest)) return candidate
             return latest.toInstant().plus(1, ChronoUnit.MICROS).atOffset(candidate.offset)
                 .truncatedTo(ChronoUnit.MICROS)
@@ -194,11 +193,10 @@ class AuditLogService(
          * cannot collide with a different field split. Action/targetType/targetId
          * are controlled strings (e.g. "TENANT_CREATE") that must not contain "|".
          *
-         * 원 Java 는 package-private static(hash verifier(T9)·Java 테스트 재사용) — public(@JvmStatic).
+         * 원 Java 는 package-private static(hash verifier(T9)·backfill·테스트 재사용) — 같은 모듈 안이라 internal.
          * action·payloadJson 이 null 이면 원 Java StringBuilder 처럼 "null" 이 들어간다.
          */
-        @JvmStatic
-        fun computeHash(
+        internal fun computeHash(
             prevHash: ByteArray?,
             req: AuditAppendRequest,
             payloadJson: String?,

@@ -99,7 +99,6 @@ class SettingsPageController(
         )
 
         /** `?tab=` 값을 탭으로. PLATFORM 전용 탭은 PLATFORM 일 때만 허용, 그 외는 항상 'account'. */
-        @JvmStatic
         fun resolveTab(raw: String?, platform: Boolean): String =
             if (platform && raw != null && PLATFORM_TABS.contains(raw)) raw else "account"
 
@@ -107,7 +106,6 @@ class SettingsPageController(
         private fun pageUrl(tab: String): String = if ("account" == tab) PAGE_PATH else "$PAGE_PATH?tab=$tab"
 
         /** 탭 영역(#settings-tab)을 이 주소의 조각으로 바꾸는 요청 속성(다시 시도 버튼 등). 탭 영역을 바꾸는 요청은 모두 같은 hx-sync 그룹이다. */
-        @JvmStatic
         fun tabRequesterAttrs(getUrl: String): Map<String, Any?> {
             val m = LinkedHashMap<String, Any?>()
             m["hx-get"] = getUrl

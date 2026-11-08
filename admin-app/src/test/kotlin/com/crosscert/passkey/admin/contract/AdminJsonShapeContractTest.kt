@@ -272,7 +272,7 @@ class AdminJsonShapeContractTest {
         whenever(clock.instant()).thenReturn(Fill.INSTANT)
         whenever(clock.millis()).thenReturn(Fill.INSTANT.toEpochMilli())
         whenever(clock.zone).thenReturn(ZoneOffset.UTC)
-        whenever(tenantBoundary.currentTenantScope()).thenReturn(Optional.empty())
+        whenever(tenantBoundary.currentTenantScope()).thenReturn(null)
         whenever(admins.findByEmail(anyString())).thenAnswer { inv ->
             Optional.of(AdminUser(inv.getArgument<String>(0), "x", "PLATFORM_OPERATOR"))
         }
@@ -384,7 +384,7 @@ class AdminJsonShapeContractTest {
                 .with(authentication(rpAdmin())).with(csrf()),
         )
         // RP_ADMIN 이 다른 tenant 의 감사 로그를 지정 — BusinessException(ACCESS_DENIED).
-        whenever(tenantBoundary.currentTenantScope()).thenReturn(Optional.of(Fill.ID))
+        whenever(tenantBoundary.currentTenantScope()).thenReturn(Fill.ID)
         shape(
             "error-business-403",
             get("/admin/api/audit").param("tenantId", OTHER_TENANT.toString())

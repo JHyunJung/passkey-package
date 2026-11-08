@@ -573,7 +573,7 @@ class AuditTabControllerTest {
         assertThat(raw[1].toInt() and 0xff).isEqualTo(0xBB)
         assertThat(raw[2].toInt() and 0xff).isEqualTo(0xBF)
         val csv = String(raw, StandardCharsets.UTF_8)
-        assertThat(csv).startsWith("﻿")
+        assertThat(csv).startsWith("\uFEFF")
         val lines = splitLines(csv.substring(1))
         assertThat(lines[0]).isEqualTo("ts,eventType,actorType,actorId,subjectType,subjectId,payload")
         assertThat(lines).hasSize(5)

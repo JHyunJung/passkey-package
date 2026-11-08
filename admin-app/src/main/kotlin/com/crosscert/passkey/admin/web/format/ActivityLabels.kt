@@ -33,7 +33,6 @@ object ActivityLabels {
         java.util.Map.entry("RETENTION_PURGE", "보존기간 정리"),
     )
 
-    @JvmStatic
     fun actionLabel(action: String?): String? {
         val l = if (action == null) null else ACTION_LABELS[action]
         return l ?: action
@@ -51,7 +50,6 @@ object ActivityLabels {
     private fun truthy(s: String?): Boolean = s != null && s.isNotEmpty()
 
     /** "{행위자} 님이 {테넌트} 테넌트에 {대상} {액션}" 형태의 한 줄 문장. */
-    @JvmStatic
     fun eventSentence(e: EventSentenceInput): String {
         val actorEmail = e.actorEmail
         val actor = if (actorEmail != null && truthy(actorEmail) && !actorEmail.javaIsBlank()) actorEmail else "system"

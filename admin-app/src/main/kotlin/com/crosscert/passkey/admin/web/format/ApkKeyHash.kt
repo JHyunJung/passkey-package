@@ -18,10 +18,8 @@ object ApkKeyHash {
     /** ok 이면 value, 아니면 error 가 채워진다. */
     data class Result(val ok: Boolean, val value: String?, val error: String?)
 
-    @JvmStatic
     fun isApkKeyHashOrigin(s: String): Boolean = s.startsWith(APK_KEY_HASH_PREFIX)
 
-    @JvmStatic
     fun fromFingerprint(input: String): Result {
         val hex = STRIP.matcher(input).replaceAll("")
         if (hex.isEmpty()) return fail("SHA-256 지문을 입력하세요.")

@@ -23,14 +23,12 @@ private const val MARGIN = 1
 object QrSvg {
 
     /** otpauth URI 를 sizePx × sizePx QR 이미지의 data URI 로. */
-    @JvmStatic
     fun render(otpauthUri: String?, sizePx: Int): String =
         "data:image/svg+xml;base64," +
             Base64.getEncoder().encodeToString(svg(otpauthUri, sizePx).toByteArray(StandardCharsets.UTF_8))
 
-    /** SVG 문서 문자열(테스트·진단용). 원 Java 는 패키지 전용 — 같은 패키지의 Java 테스트(QrSvgTest)가 부르므로 public. */
-    @JvmStatic
-    fun svg(text: String?, sizePx: Int): String {
+    /** SVG 문서 문자열(테스트·진단용). 원 Java 는 패키지 전용 — 같은 모듈 테스트(QrSvgTest)가 부르므로 internal. */
+    internal fun svg(text: String?, sizePx: Int): String {
         if (text == null || text.isEmpty()) throw IllegalArgumentException("empty QR content")
         if (sizePx <= 0) throw IllegalArgumentException("size must be positive")
         val m: BitMatrix = try {

@@ -37,7 +37,6 @@ data class TenantSnapshot(
     }
 
     companion object {
-        @JvmStatic
         fun of(t: Tenant): TenantSnapshot = TenantSnapshot(
             t.displayName,
             t.rpName,

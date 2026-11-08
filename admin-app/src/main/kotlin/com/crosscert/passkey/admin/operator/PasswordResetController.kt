@@ -20,7 +20,7 @@ class PasswordResetController(
 
     /**
      * body 는 non-null(@RequestBody required — nullable 이면 Spring 이 선택 본문으로 본다). 원 Java 의
-     * `body == null` 분기는 Spring 경로에서 도달 불가였고, 유일한 Java 호출자(PasswordPagesController)도 새 객체를 넘긴다.
+     * `body == null` 분기는 Spring 경로에서 도달 불가였고, 유일한 다른 호출자(PasswordPagesController)도 새 객체를 넘긴다.
      */
     @PostMapping("/request")
     fun request(@RequestBody body: RequestBodyDto): ResponseEntity<*> {

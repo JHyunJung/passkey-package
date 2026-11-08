@@ -31,7 +31,6 @@ object AuthenticatorNames {
         "73bb0cd4e50249b89c6fb59445bf720b" to "YubiKey 5 FIPS",
     )
 
-    @JvmStatic
     fun name(aaguid: ByteArray?): String {
         if (aaguid == null) return UNKNOWN
         if (aaguid.all { it.toInt() == 0 }) return UNKNOWN

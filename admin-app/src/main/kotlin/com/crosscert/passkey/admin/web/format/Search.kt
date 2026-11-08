@@ -16,7 +16,6 @@ object Search {
     data class TenantRef(val name: String?, val slug: String?, val id: String?)
 
     /** 빈·공백 질의는 빈 목록. 결과는 입력 순서를 유지한다. */
-    @JvmStatic
     fun tenants(query: String?, tenants: List<TenantRef>): List<Result> {
         if (query == null || query.javaIsBlank()) return java.util.List.of()
         val q = query.lowercase()
@@ -27,7 +26,6 @@ object Search {
             .toList()
     }
 
-    @JvmStatic
     fun <T> tenants(query: String?, tenants: List<T>, ref: Function<T, TenantRef>): List<Result> =
         tenants(query, tenants.stream().map(ref).toList())
 

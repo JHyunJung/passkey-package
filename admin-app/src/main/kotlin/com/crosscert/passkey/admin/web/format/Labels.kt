@@ -6,7 +6,6 @@ import java.util.Collections
 object Labels {
 
     /** 상태 배지 공용 라벨. */
-    @JvmField
     val STATUS_LABELS: Map<String, String> = ordered(
         "ACTIVE", "활성", "SUSPENDED", "정지", "REVOKED", "회수", "EXPIRED", "만료",
         "PENDING", "대기", "INTACT", "정상", "TAMPERED", "위변조", "OPEN", "처리중",
@@ -15,7 +14,6 @@ object Labels {
     )
 
     /** AAGUID 정책 모드 enum → 한국어. */
-    @JvmField
     val AAGUID_MODE_LABELS: Map<String, String> = ordered(
         "ANY", "전체 허용", "ALLOWLIST", "허용 목록", "DENYLIST", "차단 목록",
     )
@@ -23,7 +21,6 @@ object Labels {
     data class MdsTrustMode(val label: String?, val description: String?)
 
     /** MDS 신뢰 모드 enum → 사람이 읽는 라벨 + 설명. 모르는 값은 호출자가 원문 그대로 보인다. */
-    @JvmField
     val MDS_TRUST_MODES: Map<String, MdsTrustMode> = java.util.Map.of(
         "MDS_STRICT_OPTIONAL",
         MdsTrustMode(
@@ -33,10 +30,8 @@ object Labels {
     )
 
     /** 상태 enum 값을 한국어 표시 라벨로. 미매핑 값은 원본 그대로(안전한 fallback). */
-    @JvmStatic
     fun statusLabel(v: String?): String? = if (v == null) null else STATUS_LABELS.getOrDefault(v, v)
 
-    @JvmStatic
     fun aaguidMode(v: String?): String? = if (v == null) null else AAGUID_MODE_LABELS.getOrDefault(v, v)
 
     private fun ordered(vararg kv: String): Map<String, String> {

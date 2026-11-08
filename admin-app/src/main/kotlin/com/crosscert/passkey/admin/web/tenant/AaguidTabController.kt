@@ -273,7 +273,6 @@ class AaguidTabController(
         }
 
         /** 입력에서 16진수만 남기고(최대 32자) 8-4-4-4-12 위치에 하이픈을 넣는다(formatAaguid). */
-        @JvmStatic
         fun formatAaguid(raw: String?): String {
             var hex = if (raw == null) "" else raw.lowercase(Locale.ROOT).replace(NON_HEX, "")
             if (hex.length > 32) hex = hex.substring(0, 32)
@@ -291,7 +290,6 @@ class AaguidTabController(
         /**
          * 저장된 정책과 편집 중인 정책의 실제 차이. 백엔드는 entries 를 집합(AAGUID)으로 쓰므로 순서와 서버가 채우는 mdsName 은 변경이 아니다.
          */
-        @JvmStatic
         fun policyChanges(saved: Policy, draft: Policy): List<Change> {
             val out = ArrayList<Change>()
             if (saved.mode != draft.mode) out.add(ModeChange(saved.mode, draft.mode))
@@ -317,7 +315,6 @@ class AaguidTabController(
         }
 
         /** 저장 확인 등급. 빈 허용 목록 = L3 체크, MDS 엄격 켜기 = L2 영향 요약, 그 밖 = L2 변경 비교. */
-        @JvmStatic
         fun saveConfirmKind(saved: Policy, draft: Policy): ConfirmKind {
             if ("ALLOWLIST" == draft.mode && byId(draft).isEmpty()) return ConfirmKind.BLOCK_ALL
             if (!saved.mdsStrict && draft.mdsStrict) return ConfirmKind.MDS_STRICT
@@ -326,10 +323,9 @@ class AaguidTabController(
 
         /**
          * SaveBar 요약용 변경 필드 이름(저장 바의 필드 이름과 같은 키: mode / aaguid / mdsStrict).
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(AaguidTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AaguidTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun changedFields(saved: Policy, draft: Policy): List<String> {
+        internal fun changedFields(saved: Policy, draft: Policy): List<String> {
             val cs = policyChanges(saved, draft)
             val out = ArrayList<String>()
             if (cs.any { c -> c is ModeChange }) out.add("mode")
@@ -340,10 +336,9 @@ class AaguidTabController(
 
         /**
          * mode≠ANY 이고 mdsName==null 인 AAGUID 수(목록에 보이는 항목만).
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(AaguidTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AaguidTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun unverifiedCount(p: Policy): Int {
+        internal fun unverifiedCount(p: Policy): Int {
             if ("ANY" == p.mode) return 0
             return p.entries.count { e -> e.aaguid != null && e.aaguid.isNotEmpty() && e.mdsName == null }
         }

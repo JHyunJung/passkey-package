@@ -222,26 +222,24 @@ class AccountTabController(
     }
 
     companion object {
-        /** 같은 패키지 Java 테스트(AccountTabControllerTest)가 읽는다 — const 라 정적 필드로 남는다. */
-        const val TAB_PATH = "/admin/_/settings/tab/account"
-        const val ENROLL_PATH = "/admin/_/settings/mfa/enroll"
-        const val CONFIRM_PATH = "/admin/_/settings/mfa/confirm"
-        const val DISABLE_PATH = "/admin/_/settings/mfa/disable"
+        /** internal: 같은 모듈 테스트(AccountTabControllerTest)가 읽는다. */
+        internal const val TAB_PATH = "/admin/_/settings/tab/account"
+        internal const val ENROLL_PATH = "/admin/_/settings/mfa/enroll"
+        internal const val CONFIRM_PATH = "/admin/_/settings/mfa/confirm"
+        internal const val DISABLE_PATH = "/admin/_/settings/mfa/disable"
 
         internal const val CONTENT_VIEW = "admin/settings/account :: content"
 
         /**
          * 원본 codeErrorText: 서버의 코드 불일치 응답(401 {"error":"invalid_code"})만 코드 불일치, 그 밖(403 권한·429·5xx 등)은 describeError 의
          * `${title}. ${detail}`.
-         * public `@JvmStatic`: 원 Java 는 package-private static — 같은 패키지 Java 테스트(AccountTabControllerTest)가 부른다.
+         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AccountTabControllerTest)가 부른다.
          */
-        @JvmStatic
-        fun codeErrorText(status: Int, error: String?): String {
+        internal fun codeErrorText(status: Int, error: String?): String {
             if (status == 401 && "invalid_code" == error) return CODE_MISMATCH
             return join(ErrorMessages.describe(status, error, error))
         }
 
-        @JvmStatic
         fun codeErrorText(e: Throwable?): String = join(ErrorMessages.describe(e))
 
         private fun join(info: ErrorMessages.Info): String {
