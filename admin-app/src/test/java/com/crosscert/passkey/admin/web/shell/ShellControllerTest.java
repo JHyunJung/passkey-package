@@ -296,20 +296,20 @@ class ShellControllerTest {
     @DisplayName("Crumbs: Tenants › {이름} › {탭}(PLATFORM), 이름 조회 실패면 Tenants 만, RP 는 이름 › 탭")
     void crumbsBuilder() throws Exception {
         List<Crumb> p = Crumbs.tenant(true, "t1", "Demo RP", "apikeys");
-        assertThat(p).extracting(Crumb::label).containsExactly("Tenants", "Demo RP", "API 키");
-        assertThat(p).extracting(Crumb::href).containsExactly("/admin/tenants", "/admin/tenants/t1?tab=overview", null);
-        assertThat(Crumbs.tenant(true, "t1", null, "overview")).extracting(Crumb::label).containsExactly("Tenants");
-        assertThat(Crumbs.tenant(false, "t1", "Demo RP", "audit")).extracting(Crumb::label).containsExactly("Demo RP", "감사 로그");
+        assertThat(p).extracting(Crumb::getLabel).containsExactly("Tenants", "Demo RP", "API 키");
+        assertThat(p).extracting(Crumb::getHref).containsExactly("/admin/tenants", "/admin/tenants/t1?tab=overview", null);
+        assertThat(Crumbs.tenant(true, "t1", null, "overview")).extracting(Crumb::getLabel).containsExactly("Tenants");
+        assertThat(Crumbs.tenant(false, "t1", "Demo RP", "audit")).extracting(Crumb::getLabel).containsExactly("Demo RP", "감사 로그");
         assertThat(Crumbs.tenant(false, "t1", null, "overview")).isEmpty();
-        assertThat(Crumbs.tenant(true, "t1", "X", "zzz")).extracting(Crumb::label).last().isEqualTo("zzz");
+        assertThat(Crumbs.tenant(true, "t1", "X", "zzz")).extracting(Crumb::getLabel).last().isEqualTo("zzz");
         for (String[] kv : new String[][] {{"overview", "개요"}, {"webauthn", "WebAuthn"}, {"aaguid", "AAGUID 정책"}, {"credentials", "Credentials"}, {"funnel", "인증 현황"}}) {
-            assertThat(Crumbs.tenant(true, "t", "n", kv[0])).extracting(Crumb::label).last().isEqualTo(kv[1]);
+            assertThat(Crumbs.tenant(true, "t", "n", kv[0])).extracting(Crumb::getLabel).last().isEqualTo(kv[1]);
         }
-        assertThat(Crumbs.tenants()).extracting(Crumb::label).containsExactly("Tenants");
-        assertThat(Crumbs.activity()).extracting(Crumb::label).containsExactly("활동");
-        assertThat(Crumbs.auditChain()).extracting(Crumb::label).containsExactly("감사 체인 모니터");
-        assertThat(Crumbs.settings()).extracting(Crumb::label).containsExactly("설정");
-        assertThat(Crumbs.license()).extracting(Crumb::label).containsExactly("라이선스");
+        assertThat(Crumbs.tenants()).extracting(Crumb::getLabel).containsExactly("Tenants");
+        assertThat(Crumbs.activity()).extracting(Crumb::getLabel).containsExactly("활동");
+        assertThat(Crumbs.auditChain()).extracting(Crumb::getLabel).containsExactly("감사 체인 모니터");
+        assertThat(Crumbs.settings()).extracting(Crumb::getLabel).containsExactly("설정");
+        assertThat(Crumbs.license()).extracting(Crumb::getLabel).containsExactly("라이선스");
         // 테넌트 상세 경로의 브레드크럼이 템플릿으로도 그려진다
         Element nav = page("/admin/tenants/t1", platform()).selectFirst("nav.crumbs");
         assertThat(nav.select("a.crumbs__item").eachText()).containsExactly("Tenants", "Demo RP");
