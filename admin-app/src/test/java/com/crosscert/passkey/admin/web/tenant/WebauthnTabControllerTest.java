@@ -268,16 +268,16 @@ class WebauthnTabControllerTest {
         ArgumentCaptor<TenantAdminDto.TenantUpdateRequest> cap = ArgumentCaptor.forClass(TenantAdminDto.TenantUpdateRequest.class);
         verify(tenants).update(eq(T1.toString()), cap.capture(), any());
         TenantAdminDto.TenantUpdateRequest u = cap.getValue();
-        assertThat(u.mdsRequired()).isTrue();
-        assertThat(u.acceptedFormats()).isEqualTo(Set.of("none", "packed"));
-        assertThat(u.rpId()).isEqualTo("passkey.acme.com");
-        assertThat(u.displayName()).isEqualTo("Acme");
+        assertThat(u.getMdsRequired()).isTrue();
+        assertThat(u.getAcceptedFormats()).isEqualTo(Set.of("none", "packed"));
+        assertThat(u.getRpId()).isEqualTo("passkey.acme.com");
+        assertThat(u.getDisplayName()).isEqualTo("Acme");
         // 사용자가 바꾼 값
-        assertThat(u.webauthnTimeoutMs()).isEqualTo(120000);
-        assertThat(u.rpName()).isEqualTo("Acme Passkey");
-        assertThat(u.allowedOrigins()).containsExactly("https://passkey.acme.com");
-        assertThat(u.requireUserVerification()).isTrue();
-        assertThat(u.attestationConveyance()).isEqualTo("NONE");
+        assertThat(u.getWebauthnTimeoutMs()).isEqualTo(120000);
+        assertThat(u.getRpName()).isEqualTo("Acme Passkey");
+        assertThat(u.getAllowedOrigins()).containsExactly("https://passkey.acme.com");
+        assertThat(u.getRequireUserVerification()).isTrue();
+        assertThat(u.getAttestationConveyance()).isEqualTo("NONE");
     }
 
     @Test
@@ -288,9 +288,9 @@ class WebauthnTabControllerTest {
         mvc.perform(saveReq("Acme Passkey", "60000", "PREFERRED", "DIRECT", "https://passkey.acme.com")).andReturn();
         ArgumentCaptor<TenantAdminDto.TenantUpdateRequest> cap = ArgumentCaptor.forClass(TenantAdminDto.TenantUpdateRequest.class);
         verify(tenants).update(eq(T1.toString()), cap.capture(), any());
-        assertThat(cap.getValue().mdsRequired()).isFalse();
-        assertThat(cap.getValue().requireUserVerification()).isFalse();
-        assertThat(cap.getValue().attestationConveyance()).isEqualTo("DIRECT");
+        assertThat(cap.getValue().getMdsRequired()).isFalse();
+        assertThat(cap.getValue().getRequireUserVerification()).isFalse();
+        assertThat(cap.getValue().getAttestationConveyance()).isEqualTo("DIRECT");
     }
 
     @Test
@@ -365,12 +365,12 @@ class WebauthnTabControllerTest {
         ArgumentCaptor<WebauthnDiffRequest> cap = ArgumentCaptor.forClass(WebauthnDiffRequest.class);
         verify(tenants).diff(eq(T1.toString()), cap.capture());
         WebauthnDiffRequest q = cap.getValue();
-        assertThat(q.rpId()).isEqualTo("passkey.acme.com");
-        assertThat(q.rpName()).isEqualTo("Acme 2");
-        assertThat(q.allowedOrigins()).containsExactly("https://passkey.acme.com", "https://a.passkey.acme.com");
-        assertThat(q.acceptedFormats()).isEqualTo(Set.of("none", "packed"));
-        assertThat(q.requireUserVerification()).isFalse();
-        assertThat(q.mdsRequired()).isTrue();
+        assertThat(q.getRpId()).isEqualTo("passkey.acme.com");
+        assertThat(q.getRpName()).isEqualTo("Acme 2");
+        assertThat(q.getAllowedOrigins()).containsExactly("https://passkey.acme.com", "https://a.passkey.acme.com");
+        assertThat(q.getAcceptedFormats()).isEqualTo(Set.of("none", "packed"));
+        assertThat(q.getRequireUserVerification()).isFalse();
+        assertThat(q.getMdsRequired()).isTrue();
     }
 
     @Test

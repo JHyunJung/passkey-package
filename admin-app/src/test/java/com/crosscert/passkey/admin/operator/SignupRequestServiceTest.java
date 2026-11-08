@@ -195,7 +195,7 @@ class SignupRequestServiceTest {
         assertThat(auditCap.getValue().getPayload()).containsEntry("role", "RP_ADMIN").containsEntry("tenantCount", 1);
 
         verify(mail).send(eq("new@x.com"), anyString(), anyString());
-        assertThat(view.tenantIds()).containsExactly(tenantId);
+        assertThat(view.getTenantIds()).containsExactly(tenantId);
 
         // 경합 판정(deleteIfPresent) 은 반드시 계정 INSERT 보다 먼저 실행돼야
         // 한다 — clearAutomatically 가 영속성 컨텍스트를 비우는 지점이 이 순서에
@@ -369,9 +369,9 @@ class SignupRequestServiceTest {
         List<SignupRequestDto.View> views = service.list();
 
         assertThat(views).hasSize(1);
-        assertThat(views.get(0).id()).isEqualTo(id);
-        assertThat(views.get(0).email()).isEqualTo("l@x.com");
-        assertThat(views.get(0).reason()).isEqualTo("reason");
+        assertThat(views.get(0).getId()).isEqualTo(id);
+        assertThat(views.get(0).getEmail()).isEqualTo("l@x.com");
+        assertThat(views.get(0).getReason()).isEqualTo("reason");
     }
 
     // ── request: PLATFORM_OPERATOR 자동 승인(QA 전용 설정) ─────────────────

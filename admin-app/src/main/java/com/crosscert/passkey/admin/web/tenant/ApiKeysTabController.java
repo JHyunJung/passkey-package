@@ -112,7 +112,7 @@ public class ApiKeysTabController {
     @GetMapping(FRAG + "{id}/tab/apikeys")
     public String tab(@PathVariable String id, Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
-        String tid = v.id().toString();
+        String tid = v.getId().toString();
         fillForm(model, tid);
         try {
             fillList(model, tid, apiKeys.list(tid).data());
@@ -140,7 +140,7 @@ public class ApiKeysTabController {
                         @RequestParam(name = "expiresInMonths", defaultValue = "") String months,
                         Authentication auth, HttpServletResponse res, Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
-        String tid = v.id().toString();
+        String tid = v.getId().toString();
         noStore(res);
 
         Integer expiresInMonths = null;
@@ -155,7 +155,7 @@ public class ApiKeysTabController {
         Set<String> scopeSet = new LinkedHashSet<>();
         if (scopes != null) for (String s : scopes) if (s != null && !s.isBlank()) scopeSet.add(s.trim());
         if (error == null && !SCOPES.containsAll(scopeSet)) error = "권한 범위가 올바르지 않습니다";
-        ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(v.id(), name, scopeSet, expiresInMonths);
+        ApiKeyAdminDto.ApiKeyCreateRequest req = new ApiKeyAdminDto.ApiKeyCreateRequest(v.getId(), name, scopeSet, expiresInMonths);
         if (error == null) error = violation(req);
         if (error != null) return issueError(res, model, error, null);
 
@@ -218,9 +218,9 @@ public class ApiKeysTabController {
     /** 키가 속한 tenant 를 경계 확인한 뒤(RP 다른 tenant → 403) 그 tenant 의 목록에서 키를 찾는다. 없으면 404(API_KEY_NOT_FOUND). */
     private Owned owned(UUID keyId, String tenantId) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, tenantId);
-        String tid = v.id().toString();
+        String tid = v.getId().toString();
         for (ApiKeyAdminDto.ApiKeyView k : apiKeys.list(tid).data()) {
-            if (keyId.equals(k.getId()) && v.id().equals(k.getTenantId())) return new Owned(tid, k);
+            if (keyId.equals(k.getId()) && v.getId().equals(k.getTenantId())) return new Owned(tid, k);
         }
         throw new BusinessException(ErrorCode.API_KEY_NOT_FOUND);
     }
@@ -289,7 +289,7 @@ public class ApiKeysTabController {
     private void refreshKeyCount(Model model, String tid) {
         Long n = null;
         try {
-            n = TenantTabs.load(tenants, tid).apiKeys();
+            n = TenantTabs.load(tenants, tid).getApiKeys();
         } catch (RuntimeException e) {
             log.warn("[apikeys-tab] tenant reload failed: {}", e.getClass().getSimpleName());
         }

@@ -152,7 +152,7 @@ class PasswordPagesControllerTest {
     void forgotTrimsEmailAndCallsRestBean() throws Exception {
         okRequest();
         postForgot("  alice@example.com  ", true);
-        verify(reset).request(argThat(b -> "alice@example.com".equals(b.email())));
+        verify(reset).request(argThat(b -> "alice@example.com".equals(b.getEmail())));
     }
 
     @Test
@@ -254,7 +254,7 @@ class PasswordPagesControllerTest {
         assertThat(d.selectFirst("a.btn.btn--primary").attr("href")).isEqualTo("/admin");
         assertThat(d.select("form, input")).isEmpty();
         assertThat(r.getResponse().getContentAsString()).doesNotContain(TOKEN).doesNotContain(GOOD_PW);
-        verify(reset).confirm(argThat(b -> TOKEN.equals(b.token()) && GOOD_PW.equals(b.newPassword())));
+        verify(reset).confirm(argThat(b -> TOKEN.equals(b.getToken()) && GOOD_PW.equals(b.getNewPassword())));
         assertThat(r.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
     }
 

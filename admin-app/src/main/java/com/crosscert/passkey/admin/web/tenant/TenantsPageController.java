@@ -128,11 +128,11 @@ public class TenantsPageController {
                             long credentials, long apiKeys, OffsetDateTime lastEventAt, OffsetDateTime createdAt) {
 
         static TenantRow from(TenantAdminDto.TenantView v) {
-            String st = v.status();
-            return new TenantRow(String.valueOf(v.id()), v.displayName() == null ? "" : v.displayName(),
-                    v.slug() == null ? "" : v.slug(), v.rpId(),
+            String st = v.getStatus();
+            return new TenantRow(String.valueOf(v.getId()), v.getDisplayName() == null ? "" : v.getDisplayName(),
+                    v.getSlug() == null ? "" : v.getSlug(), v.getRpId(),
                     st != null && st.equalsIgnoreCase(ACTIVE) ? ACTIVE : SUSPENDED,
-                    v.credentials(), v.apiKeys(), v.lastEventAt(), v.createdAt());
+                    v.getCredentials(), v.getApiKeys(), v.getLastEventAt(), v.getCreatedAt());
         }
 
         /** {@code t.name.slice(0, 1).toUpperCase()} */
@@ -327,8 +327,8 @@ public class TenantsPageController {
             log.warn("[tenants] create failed: status={} cause={}", info.httpStatus(), e.toString());
             return invalid(res, model, new NewTenantForm(name, slugV, rpIdV, null, null, null, failure(e, info)));
         }
-        Toasts.successTitled(res, "Tenant 생성 완료", created.displayName() + " · WebAuthn 설정으로 이동합니다");
-        Htmx.redirect(req, res, PAGE_PATH + "/" + created.id() + "?tab=webauthn");
+        Toasts.successTitled(res, "Tenant 생성 완료", created.getDisplayName() + " · WebAuthn 설정으로 이동합니다");
+        Htmx.redirect(req, res, PAGE_PATH + "/" + created.getId() + "?tab=webauthn");
         return null;
     }
 

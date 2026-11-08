@@ -145,7 +145,7 @@ class SignupRequestFlowIT {
         TenantAdminDto.TenantCreateRequest createReq = new TenantAdminDto.TenantCreateRequest(
                 "signup-it", "Signup IT Tenant", "localhost", "Signup IT RP",
                 List.of("http://localhost:9090"), Set.of("none"), true, false, "NONE", 60000);
-        UUID tenantId = tenantAdminService.create(createReq, ALICE_ID, ALICE_EMAIL).id();
+        UUID tenantId = tenantAdminService.create(createReq, ALICE_ID, ALICE_EMAIL).getId();
 
         // 1. 공개 요청
         String password = "securePassword123!";
@@ -154,9 +154,9 @@ class SignupRequestFlowIT {
         // 2. 목록 — 소문자 정규화된 이메일 1건
         List<SignupRequestDto.View> pending = signupService.list();
         assertThat(pending).hasSize(1);
-        assertThat(pending.get(0).email()).isEqualTo("newadmin@example.com");
-        assertThat(pending.get(0).reason()).isEqualTo("RP IAM 담당");
-        UUID requestId = pending.get(0).id();
+        assertThat(pending.get(0).getEmail()).isEqualTo("newadmin@example.com");
+        assertThat(pending.get(0).getReason()).isEqualTo("RP IAM 담당");
+        UUID requestId = pending.get(0).getId();
 
         // 3. 같은 이메일 재요청은 조용히 무시
         signupService.request(new SignupRequestDto.Create("newadmin@example.com", password, null));
@@ -165,9 +165,9 @@ class SignupRequestFlowIT {
         // 4. 승인 — RP_ADMIN + 테넌트 1개
         AdminUserDto.View view = signupService.approve(requestId,
                 new SignupRequestDto.Approve("RP_ADMIN", List.of(tenantId)), ALICE_ID, ALICE_EMAIL);
-        assertThat(view.status()).isEqualTo("ACTIVE");
-        assertThat(view.role()).isEqualTo("RP_ADMIN");
-        assertThat(view.tenantIds()).containsExactly(tenantId);
+        assertThat(view.getStatus()).isEqualTo("ACTIVE");
+        assertThat(view.getRole()).isEqualTo("RP_ADMIN");
+        assertThat(view.getTenantIds()).containsExactly(tenantId);
 
         // 5. 계정은 로그인 가능 상태이고 비밀번호는 요청 때 것
         var user = adminUserRepo.findByEmail("newadmin@example.com").orElseThrow();
@@ -192,7 +192,7 @@ class SignupRequestFlowIT {
     @Test
     void rejectFlow_removesRequestAndAudits() {
         signupService.request(new SignupRequestDto.Create("reject@example.com", "securePassword123!", null));
-        UUID requestId = signupService.list().get(0).id();
+        UUID requestId = signupService.list().get(0).getId();
 
         signupService.reject(requestId, ALICE_ID, ALICE_EMAIL);
 

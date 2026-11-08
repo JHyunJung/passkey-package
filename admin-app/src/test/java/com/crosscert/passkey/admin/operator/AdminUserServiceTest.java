@@ -205,8 +205,8 @@ class AdminUserServiceTest {
         List<AdminUserDto.View> views = service.list();
 
         assertThat(views).hasSize(2);
-        assertThat(views.get(0).tenantIds()).containsExactly(tenantA);
-        assertThat(views.get(1).tenantIds()).containsExactly(tenantB);
+        assertThat(views.get(0).getTenantIds()).containsExactly(tenantA);
+        assertThat(views.get(1).getTenantIds()).containsExactly(tenantB);
         verify(mappingRepo, times(1)).findByAdminUserIdIn(any());
         verify(mappingRepo, never()).findTenantIdsByAdminUserId(any());
     }

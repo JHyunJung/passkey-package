@@ -130,7 +130,7 @@ public class FunnelTabController {
     @GetMapping(FRAG + "{id}/tab/funnel")
     public String tab(@PathVariable String id, @RequestParam(name = "win", defaultValue = "7") String win, Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
-        UUID tid = v.id();
+        UUID tid = v.getId();
         int w = window(win);
         Instant now = clock.instant();
         model.addAttribute("tid", tid.toString());
@@ -307,7 +307,7 @@ public class FunnelTabController {
         int w = window(win);
         String today = KstFormat.kstToday(clock.instant());
         if ("monthly".equals(kind) || "devices".equals(kind)) return adoptionCsv(v, w, kind, today);
-        FunnelDto.View data = funnel.get(v.id(), w);
+        FunnelDto.View data = funnel.get(v.getId(), w);
         byte[] csv;
         String filename;
         switch (kind) {
@@ -316,7 +316,7 @@ public class FunnelTabController {
                 rows.add(summaryRow("registration", "등록", data.getRegistration()));
                 rows.add(summaryRow("authentication", "인증", data.getAuthentication()));
                 csv = CsvWriter.write(List.of("ceremony", "label", "attempts", "success", "successRate"), rows);
-                filename = "auth-status-" + v.slug() + "-" + w + "d-" + today + ".csv";
+                filename = "auth-status-" + v.getSlug() + "-" + w + "d-" + today + ".csv";
             }
             case "auth", "reg" -> {
                 List<List<String>> rows = new ArrayList<>();
@@ -325,7 +325,7 @@ public class FunnelTabController {
                     rows.add(List.of(p.getDay(), String.valueOf(p.getAttempts()), String.valueOf(p.getSuccess()), r == null ? "" : FunnelHelpers.toFixed(r, 4)));
                 }
                 csv = CsvWriter.write(List.of("day", "attempts", "success", "successRate"), rows);
-                filename = ("auth".equals(kind) ? "auth-daily-" : "registration-daily-") + v.slug() + "-" + w + "d-" + today + ".csv";
+                filename = ("auth".equals(kind) ? "auth-daily-" : "registration-daily-") + v.getSlug() + "-" + w + "d-" + today + ".csv";
             }
             case "failures" -> {
                 List<List<String>> rows = new ArrayList<>();
@@ -333,7 +333,7 @@ public class FunnelTabController {
                     rows.add(List.of(f.getReason() == null ? "" : f.getReason(), failureLabel(f.getReason()), String.valueOf(f.getN())));
                 }
                 csv = CsvWriter.write(List.of("reason", "label", "n"), rows);
-                filename = "auth-failures-" + v.slug() + "-" + w + "d-" + today + ".csv";
+                filename = "auth-failures-" + v.getSlug() + "-" + w + "d-" + today + ".csv";
             }
             default -> throw new BusinessException(ErrorCode.ENTITY_NOT_FOUND, "알 수 없는 내보내기");
         }
@@ -345,7 +345,7 @@ public class FunnelTabController {
 
     /** 도입·사용 CSV 2종: 월간 사용량(최근 3개월), 기기 분포. */
     private ResponseEntity<byte[]> adoptionCsv(TenantAdminDto.TenantView v, int w, String kind, String today) {
-        AdoptionDto.View a = adoption.get(v.id(), w);
+        AdoptionDto.View a = adoption.get(v.getId(), w);
         List<List<String>> rows = new ArrayList<>();
         byte[] csv;
         String filename;
@@ -354,13 +354,13 @@ public class FunnelTabController {
                 rows.add(List.of(m.getMonth(), m.getCurrent() ? "Y" : "N", String.valueOf(m.getAuthSuccess()), String.valueOf(m.getActiveUsers()), String.valueOf(m.getNewCredentials())));
             }
             csv = CsvWriter.write(List.of("month", "inProgress", "authSuccess", "activeUsers", "newPasskeys"), rows);
-            filename = "monthly-usage-" + v.slug() + "-" + today + ".csv";
+            filename = "monthly-usage-" + v.getSlug() + "-" + today + ".csv";
         } else {
             for (AdoptionDto.Device d : orEmpty(a.getDevices())) {
                 rows.add(List.of(d.getName(), String.valueOf(d.getCredentials()), String.valueOf(d.getAuthSuccess())));
             }
             csv = CsvWriter.write(List.of("authenticator", "passkeys", "authSuccessInWindow"), rows);
-            filename = "devices-" + v.slug() + "-" + w + "d-" + today + ".csv";
+            filename = "devices-" + v.getSlug() + "-" + w + "d-" + today + ".csv";
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replaceAll("[^A-Za-z0-9._-]", "_") + "\"")

@@ -72,7 +72,7 @@ class TenantAdminServiceTest {
 
         TenantAdminDto.TenantView view = service.create(req, UUID.randomUUID(), "alice@example.com");
 
-        assertThat(view.slug()).isEqualTo("T_A");
+        assertThat(view.getSlug()).isEqualTo("T_A");
         ArgumentCaptor<Tenant> tenantCaptor = ArgumentCaptor.forClass(Tenant.class);
         verify(repo).saveAndFlush(tenantCaptor.capture());
         assertThat(tenantCaptor.getValue().getRpId()).isEqualTo("localhost");
@@ -119,14 +119,14 @@ class TenantAdminServiceTest {
         List<TenantAdminDto.TenantView> views = service.list();
 
         assertThat(views).hasSize(2);
-        TenantAdminDto.TenantView va = views.stream().filter(v -> v.id().equals(idA)).findFirst().orElseThrow();
-        TenantAdminDto.TenantView vb = views.stream().filter(v -> v.id().equals(idB)).findFirst().orElseThrow();
-        assertThat(va.credentials()).isEqualTo(5L);
-        assertThat(va.apiKeys()).isEqualTo(2L);
-        assertThat(va.lastEventAt()).isEqualTo(eventA);
-        assertThat(vb.credentials()).isEqualTo(0L);
-        assertThat(vb.apiKeys()).isEqualTo(0L); // tenant absent from active-key aggregate => 0
-        assertThat(vb.lastEventAt()).isNull();   // tenant absent from event aggregate => null
+        TenantAdminDto.TenantView va = views.stream().filter(v -> v.getId().equals(idA)).findFirst().orElseThrow();
+        TenantAdminDto.TenantView vb = views.stream().filter(v -> v.getId().equals(idB)).findFirst().orElseThrow();
+        assertThat(va.getCredentials()).isEqualTo(5L);
+        assertThat(va.getApiKeys()).isEqualTo(2L);
+        assertThat(va.getLastEventAt()).isEqualTo(eventA);
+        assertThat(vb.getCredentials()).isEqualTo(0L);
+        assertThat(vb.getApiKeys()).isEqualTo(0L); // tenant absent from active-key aggregate => 0
+        assertThat(vb.getLastEventAt()).isNull();   // tenant absent from event aggregate => null
 
         // invariant: list() must NOT use the per-tenant N+1 methods anymore
         verify(credentialRepository, never()).countByTenantId(any());

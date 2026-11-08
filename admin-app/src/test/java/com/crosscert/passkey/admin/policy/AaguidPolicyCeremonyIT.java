@@ -189,7 +189,7 @@ class AaguidPolicyCeremonyIT {
                 true, false,
                 "NONE", 60000);
         TenantAdminDto.TenantView tenant = tenantAdminService.create(createReq, ACTOR_ID, ACTOR_EMAIL);
-        UUID tenantId = tenant.id();
+        UUID tenantId = tenant.getId();
 
         // policy row 자동 생성 검증
         TenantAaguidPolicy policy = policyRepo.findById(tenantId)

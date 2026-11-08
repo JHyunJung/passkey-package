@@ -142,12 +142,12 @@ public class AuditTabController {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         CurrentAdmin me = me(model);
         Instant now = clock.instant();
-        model.addAttribute("tid", v.id().toString());
+        model.addAttribute("tid", v.getId().toString());
         model.addAttribute("platform", me.platform());
-        model.addAttribute("tenantName", v.displayName() == null ? "" : v.displayName());
+        model.addAttribute("tenantName", v.getDisplayName() == null ? "" : v.getDisplayName());
         model.addAttribute("chainResult", null);
-        fillChainAttrs(model, v.id());
-        fillCard(model, v.id(), new Span(AuditHelpers.window(win).key(), now), now);
+        fillChainAttrs(model, v.getId());
+        fillCard(model, v.getId(), new Span(AuditHelpers.window(win).key(), now), now);
         return TAB_VIEW;
     }
 
@@ -158,8 +158,8 @@ public class AuditTabController {
                        Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         Instant now = clock.instant();
-        model.addAttribute("tid", v.id().toString());
-        fillCard(model, v.id(), new Span(AuditHelpers.window(win).key(), now), now);
+        model.addAttribute("tid", v.getId().toString());
+        fillCard(model, v.getId(), new Span(AuditHelpers.window(win).key(), now), now);
         return CARD_VIEW;
     }
 
@@ -180,7 +180,7 @@ public class AuditTabController {
         int p = Math.max(1, parseInt(page, 1));
         List<Item> items;
         try {
-            items = readPage(v.id(), span, p);
+            items = readPage(v.getId(), span, p);
         } catch (RuntimeException e) {
             if (denied(e)) throw e;
             log.warn("[audit-tab] more failed (page {}): {}", p, e.getClass().getSimpleName());
@@ -195,7 +195,7 @@ public class AuditTabController {
         model.addAttribute("nextPage", p + 1);
         model.addAttribute("lastDay", evs.isEmpty() ? lastDay : evs.get(evs.size() - 1).dayKey());
         model.addAttribute("hasMore", items.size() == PAGE_SIZE);
-        model.addAttribute("moreUrl", FRAG + v.id() + "/tab/audit/more");
+        model.addAttribute("moreUrl", FRAG + v.getId() + "/tab/audit/more");
         return MORE_VIEW;
     }
 
@@ -209,7 +209,7 @@ public class AuditTabController {
         CurrentAdmin me = me(model);
         if (!me.platform()) throw new AccessDeniedException("platform operator only");
         try {
-            AuditChainMonitorController.TenantVerifyResponse r = chain.verifyTenant(v.id().toString());
+            AuditChainMonitorController.TenantVerifyResponse r = chain.verifyTenant(v.getId().toString());
             int tampered = r.getTamperedEntryId() == null ? 0 : 1;
             model.addAttribute("chainResult", new ChainResult(r.getIntact(), tampered, r.getVerifiedAt() == null ? "—" : KstFormat.kstDateTimeMin(r.getVerifiedAt())));
         } catch (RuntimeException e) {
@@ -221,10 +221,10 @@ public class AuditTabController {
             res.setStatus(status);
             return EMPTY_VIEW;
         }
-        model.addAttribute("tid", v.id().toString());
+        model.addAttribute("tid", v.getId().toString());
         model.addAttribute("platform", true);
-        model.addAttribute("tenantName", v.displayName() == null ? "" : v.displayName());
-        fillChainAttrs(model, v.id());
+        model.addAttribute("tenantName", v.getDisplayName() == null ? "" : v.getDisplayName());
+        fillChainAttrs(model, v.getId());
         return CHAIN_VIEW;
     }
 
@@ -251,7 +251,7 @@ public class AuditTabController {
         boolean onlyFailures = "true".equals(failures);
         List<Item> items = new ArrayList<>();
         for (int p = 0; p < n; p++) {
-            List<Item> page = readPage(v.id(), span, p); // 실패는 그대로 던진다(부분 파일 금지)
+            List<Item> page = readPage(v.getId(), span, p); // 실패는 그대로 던진다(부분 파일 금지)
             items.addAll(page);
             if (page.size() < PAGE_SIZE) break;
         }
@@ -265,7 +265,7 @@ public class AuditTabController {
                     nz(a.getTargetType()), nz(a.getTargetId()), payloadCompact(it.payload(), true)));
         }
         byte[] csv = CsvWriter.write(List.of("ts", "eventType", "actorType", "actorId", "subjectType", "subjectId", "payload"), body);
-        String filename = "audit-" + v.slug() + "-" + KstFormat.kstToday(now) + ".csv";
+        String filename = "audit-" + v.getSlug() + "-" + KstFormat.kstToday(now) + ".csv";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replaceAll("[^A-Za-z0-9._-]", "_") + "\"")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))

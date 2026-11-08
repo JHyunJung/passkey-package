@@ -177,7 +177,7 @@ class WebauthnConfigSnapshotIT {
                 true, false,
                 "NONE", 60000);
         TenantAdminDto.TenantView tenant = tenantAdminService.create(createReq, ACTOR_ID, ACTOR_EMAIL);
-        UUID tenantId = tenant.id();
+        UUID tenantId = tenant.getId();
 
         List<TenantWebauthnSnapshot> snapshotsAfterCreate =
                 snapshotRepo.findByTenantIdOrderByTakenAtDesc(tenantId);

@@ -175,14 +175,14 @@ class SignupPageControllerTest {
         assertThat(d.select("a:containsOwn(← 로그인으로)")).isEmpty();
         assertThat(d.selectFirst(".auth-card").attr("style")).contains("align-items: center").contains("text-align: center");
         // 이메일 소문자·trim, 사유 trim
-        verify(signup).request(argThat(b -> "alice@example.com".equals(b.email()) && PW.equals(b.password())
-                && "QA 팀".equals(b.reason()) && b.role() == null));
+        verify(signup).request(argThat(b -> "alice@example.com".equals(b.getEmail()) && PW.equals(b.getPassword())
+                && "QA 팀".equals(b.getReason()) && b.getRole() == null));
     }
 
     @Test
     void blankReasonIsSentAsNull() throws Exception {
         send("a@b.co", PW, PW, "   ", null);
-        verify(signup).request(argThat(b -> b.reason() == null));
+        verify(signup).request(argThat(b -> b.getReason() == null));
     }
 
     @Test
@@ -195,7 +195,7 @@ class SignupPageControllerTest {
         assertThat(d.selectFirst(".card__sub").text()).isEqualTo("Platform Operator 계정이 활성화되었습니다. 바로 로그인할 수 있습니다.");
         assertThat(d.selectFirst("a.btn").text()).isEqualTo("로그인하기");
         assertThat(d.selectFirst("img[alt=\"\"]").attr("src")).isEqualTo("/admin/img/signup-sent.webp");
-        verify(signup).request(argThat(b -> "PLATFORM_OPERATOR".equals(b.role())));
+        verify(signup).request(argThat(b -> "PLATFORM_OPERATOR".equals(b.getRole())));
     }
 
     @Test
@@ -203,14 +203,14 @@ class SignupPageControllerTest {
         selfSignup(true);
         MvcResult r = send("a@b.co", PW, PW, null, "RP_ADMIN");
         assertThat(doc(r).selectFirst("h1").text()).isEqualTo("요청이 접수되었습니다");
-        verify(signup).request(argThat(b -> b.role() == null));
+        verify(signup).request(argThat(b -> b.getRole() == null));
     }
 
     @Test
     void platformOperatorRoleIgnoredWhenSelfSignupIsOff() throws Exception {
         selfSignup(false);
         send("a@b.co", PW, PW, null, "PLATFORM_OPERATOR");
-        verify(signup).request(argThat(b -> b.role() == null));
+        verify(signup).request(argThat(b -> b.getRole() == null));
     }
 
     @Test
@@ -268,6 +268,8 @@ class SignupPageControllerTest {
     @Test
     void requestBodyTypeIsTheRestDto() {
         // 화면 컨트롤러는 REST DTO 를 그대로 만들어 넘긴다(필드 구성 고정).
-        assertThat(SignupRequestDto.Create.class.getRecordComponents()).hasSize(4);
+        assertThat(java.util.Arrays.stream(SignupRequestDto.Create.class.getDeclaredFields())
+                .filter(f -> !java.lang.reflect.Modifier.isStatic(f.getModifiers()) && !f.isSynthetic()))
+                .hasSize(4);
     }
 }

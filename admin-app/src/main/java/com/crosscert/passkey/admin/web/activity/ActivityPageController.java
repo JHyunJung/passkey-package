@@ -394,8 +394,8 @@ public class ActivityPageController {
         model.addAttribute("segOptions", segs);
         List<Option> tenantOpts = new ArrayList<>();
         for (TenantAdminDto.TenantView t : tenantList) {
-            String name = t.displayName() == null ? "" : t.displayName();
-            tenantOpts.add(new Option(t.id().toString(), name + " (" + t.slug() + ")", t.id().equals(f.tenantId())));
+            String name = t.getDisplayName() == null ? "" : t.getDisplayName();
+            tenantOpts.add(new Option(t.getId().toString(), name + " (" + t.getSlug() + ")", t.getId().equals(f.tenantId())));
         }
         model.addAttribute("tenantOptions", tenantOpts);
         Map<String, Object> tenantAttrs = rowsReq(ROWS_PATH, "#activity-cat");
@@ -405,7 +405,7 @@ public class ActivityPageController {
         model.addAttribute("categoryLabel", switch (f.category()) { case "ops" -> "운영"; case "security" -> "보안"; default -> "전체"; });
         String slug = null;
         if (f.tenantId() != null) {
-            for (TenantAdminDto.TenantView t : tenantList) if (t.id().equals(f.tenantId())) slug = t.slug();
+            for (TenantAdminDto.TenantView t : tenantList) if (t.getId().equals(f.tenantId())) slug = t.getSlug();
             if (slug == null && loaded) for (ActivityView.TopTenant t : view.getTop5()) if (f.tenantId().equals(t.getTenantId())) slug = t.getSlug();
             if (slug == null) slug = f.tenantId().toString();
         }

@@ -113,7 +113,7 @@ public class CommandPaletteController {
         try {
             List<TenantAdminDto.TenantView> list = tenants.list().data();
             return Search.tenants(q, list, t -> new Search.TenantRef(
-                    t.displayName() != null ? t.displayName() : t.slug(), t.slug(), String.valueOf(t.id())));
+                    t.getDisplayName() != null ? t.getDisplayName() : t.getSlug(), t.getSlug(), String.valueOf(t.getId())));
         } catch (RuntimeException e) {
             return List.of(); // TSX 의 catch { /* ignore */ }
         }

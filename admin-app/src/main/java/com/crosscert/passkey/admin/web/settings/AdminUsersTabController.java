@@ -110,13 +110,13 @@ public class AdminUsersTabController {
     @GetMapping(SIGNUP_BASE + "{id}/approve")
     public String approveDialog(@PathVariable UUID id, Model model) {
         SettingsSupport.platform(model);
-        SignupRequestDto.View req = signups.list().stream().filter(r -> id.equals(r.id())).findFirst()
+        SignupRequestDto.View req = signups.list().stream().filter(r -> id.equals(r.getId())).findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "signup request not found"));
         List<TenantOpt> opts = new ArrayList<>();
         try {
             for (TenantAdminDto.TenantView t : tenants.list().data()) {
-                if ("ACTIVE".equals(t.status())) opts.add(new TenantOpt(t.id().toString(), t.displayName(), t.slug(),
-                        (t.displayName() + " " + t.slug()).toLowerCase(java.util.Locale.ROOT)));
+                if ("ACTIVE".equals(t.getStatus())) opts.add(new TenantOpt(t.getId().toString(), t.getDisplayName(), t.getSlug(),
+                        (t.getDisplayName() + " " + t.getSlug()).toLowerCase(java.util.Locale.ROOT)));
             }
         } catch (RuntimeException e) {
             if (e instanceof AccessDeniedException) throw e;
@@ -136,9 +136,9 @@ public class AdminUsersTabController {
     public String suspend(@PathVariable UUID id, Authentication auth, HttpServletRequest req, HttpServletResponse res, Model model) {
         CurrentAdmin me = SettingsSupport.platform(model);
         List<AdminUserDto.View> list = users.list();
-        AdminUserDto.View row = list.stream().filter(u -> id.equals(u.id())).findFirst().orElse(null);
+        AdminUserDto.View row = list.stream().filter(u -> id.equals(u.getId())).findFirst().orElse(null);
         // 원본 confirmSuspend: 목록이 낡았거나(상태 바뀜) 막힌 대상이면 REST 를 부르지 않고 사유를 확인창 안에 보인다.
-        if (row == null || !"ACTIVE".equals(row.status())) {
+        if (row == null || !"ACTIVE".equals(row.getStatus())) {
             return SettingsSupport.blocked(res, "운영자 상태가 바뀌었습니다. " + STALE_REASON, Toasts.isConfirm(req));
         }
         String why = suspendBlock(row, list, me.email());
@@ -146,7 +146,7 @@ public class AdminUsersTabController {
         users.suspend(id, auth);
         Map<String, Object> undo = new LinkedHashMap<>();
         undo.put("url", USER_BASE + id + "/activate?undo=1");
-        Toasts.successTitledAction(res, row.email() + " 운영자를 정지했습니다.", "다음 요청부터 콘솔에 접근할 수 없습니다.", "되돌리기", UNDO_EVENT, undo);
+        Toasts.successTitledAction(res, row.getEmail() + " 운영자를 정지했습니다.", "다음 요청부터 콘솔에 접근할 수 없습니다.", "되돌리기", UNDO_EVENT, undo);
         return usersResult(model, res, me);
     }
 
@@ -163,13 +163,13 @@ public class AdminUsersTabController {
         String known = ""; // 이미 아는 이메일(되돌리기는 사전 확인에서 읽은 행)
         try {
             if (isUndo) {
-                AdminUserDto.View row = users.list().stream().filter(u -> id.equals(u.id())).findFirst().orElse(null);
-                if (row == null || !"SUSPENDED".equals(row.status())) {
+                AdminUserDto.View row = users.list().stream().filter(u -> id.equals(u.getId())).findFirst().orElse(null);
+                if (row == null || !"SUSPENDED".equals(row.getStatus())) {
                     Toasts.warnTitled(res, "되돌릴 수 없습니다", "운영자 상태가 바뀌었습니다. " + STALE_REASON);
                     res.setHeader("HX-Reswap", "none");
                     return SettingsSupport.EMPTY_VIEW;
                 }
-                known = row.email();
+                known = row.getEmail();
             }
             users.activate(id, auth);
         } catch (RuntimeException e) {
@@ -246,7 +246,7 @@ public class AdminUsersTabController {
             }
             return SettingsSupport.fail(res, "승인 실패", e, false);
         }
-        Toasts.successTitled(res, "가입 요청을 승인했습니다.", created.email() + " · 즉시 로그인 가능");
+        Toasts.successTitled(res, "가입 요청을 승인했습니다.", created.getEmail() + " · 즉시 로그인 가능");
         return refreshAll(model, res, me);
     }
 
@@ -255,7 +255,7 @@ public class AdminUsersTabController {
         SettingsSupport.platform(model);
         String email = "";
         try {
-            email = signups.list().stream().filter(r -> id.equals(r.id())).map(SignupRequestDto.View::email).findFirst().orElse("");
+            email = signups.list().stream().filter(r -> id.equals(r.getId())).map(SignupRequestDto.View::getEmail).findFirst().orElse("");
         } catch (RuntimeException e) {
             if (e instanceof AccessDeniedException) throw e;
             // 이메일은 토스트 문구용일 뿐이라 읽기 실패가 거절을 막지 않는다.
@@ -315,7 +315,7 @@ public class AdminUsersTabController {
     private Map<String, String> loadTenantNames() {
         Map<String, String> names = new HashMap<>();
         try {
-            for (TenantAdminDto.TenantView t : tenants.list().data()) names.put(t.id().toString(), t.displayName());
+            for (TenantAdminDto.TenantView t : tenants.list().data()) names.put(t.getId().toString(), t.getDisplayName());
         } catch (RuntimeException e) {
             if (e instanceof AccessDeniedException) throw e;
             log.debug("[settings] tenant names failed: {}", e.getClass().getSimpleName()); // 실패해도 id 꼬리로 보인다
@@ -345,7 +345,7 @@ public class AdminUsersTabController {
     }
 
     private SignupRow signupRow(SignupRequestDto.View r, Instant now) {
-        String id = r.id().toString();
+        String id = r.getId().toString();
         Map<String, Object> approve = new LinkedHashMap<>();
         approve.put("hx-get", SIGNUP_BASE + id + "/approve");
         approve.put("hx-target", "#au-dialog-slot");
@@ -356,8 +356,8 @@ public class AdminUsersTabController {
         reject.put("hx-target", "#au-signups");
         reject.put("hx-swap", "outerHTML");
         reject.put("hx-sync", "this:drop");
-        Instant at = r.requestedAt() == null ? null : r.requestedAt().toInstant();
-        return new SignupRow(id, r.email(), initial(r.email()), r.reason(), KstFormat.timeAgo(at, now), "au-reject-" + id, approve, reject);
+        Instant at = r.getRequestedAt() == null ? null : r.getRequestedAt().toInstant();
+        return new SignupRow(id, r.getEmail(), initial(r.getEmail()), r.getReason(), KstFormat.timeAgo(at, now), "au-reject-" + id, approve, reject);
     }
 
     private boolean loadUsers(Model model, CurrentAdmin me, Map<String, String> names) {
@@ -368,7 +368,7 @@ public class AdminUsersTabController {
             List<AdminUserDto.View> list = users.list();
             Instant now = Instant.now(clock);
             List<OpRow> rows = new ArrayList<>();
-            long active = list.stream().filter(u -> "ACTIVE".equals(u.status())).count();
+            long active = list.stream().filter(u -> "ACTIVE".equals(u.getStatus())).count();
             for (AdminUserDto.View u : list) rows.add(opRow(u, list, me.email(), names, now));
             model.addAttribute("ops", rows);
             model.addAttribute("opsSummary", list.size() + "명 · 활성 " + active + "명");
@@ -393,9 +393,9 @@ public class AdminUsersTabController {
     }
 
     private OpRow opRow(AdminUserDto.View u, List<AdminUserDto.View> all, String meEmail, Map<String, String> names, Instant now) {
-        String id = u.id().toString();
-        boolean platform = PLATFORM_ROLE.equals(u.role());
-        String block = "ACTIVE".equals(u.status()) ? suspendBlock(u, all, meEmail) : null;
+        String id = u.getId().toString();
+        boolean platform = PLATFORM_ROLE.equals(u.getRole());
+        String block = "ACTIVE".equals(u.getStatus()) ? suspendBlock(u, all, meEmail) : null;
         Map<String, Object> suspend = new LinkedHashMap<>();
         suspend.put("hx-post", USER_BASE + id + "/suspend");
         suspend.put("hx-target", "#au-users");
@@ -407,27 +407,27 @@ public class AdminUsersTabController {
         activate.put("hx-swap", "outerHTML");
         activate.put("hx-sync", "this:drop");
         activate.put("hx-disabled-elt", "this");
-        Instant last = u.lastLoginAt() == null ? null : u.lastLoginAt().toInstant();
-        return new OpRow(id, u.email(), initial(u.email()), tail(id, 10), u.role(), platform ? "PLATFORM" : "RP_ADMIN", platform,
-                tenantCell(u, names), u.mfaEnabled(), last == null ? "미접속" : KstFormat.timeAgo(last, now), u.status(), filterStatus(u),
-                block, (u.email() + " " + id).toLowerCase(java.util.Locale.ROOT), activate, suspend, "au-suspend-" + id);
+        Instant last = u.getLastLoginAt() == null ? null : u.getLastLoginAt().toInstant();
+        return new OpRow(id, u.getEmail(), initial(u.getEmail()), tail(id, 10), u.getRole(), platform ? "PLATFORM" : "RP_ADMIN", platform,
+                tenantCell(u, names), u.getMfaEnabled(), last == null ? "미접속" : KstFormat.timeAgo(last, now), u.getStatus(), filterStatus(u),
+                block, (u.getEmail() + " " + id).toLowerCase(java.util.Locale.ROOT), activate, suspend, "au-suspend-" + id);
     }
 
     private static String filterStatus(AdminUserDto.View u) {
-        return "SUSPENDED".equals(u.status()) ? "SUSPENDED" : "";
+        return "SUSPENDED".equals(u.getStatus()) ? "SUSPENDED" : "";
     }
 
     /** 원본 suspendBlock: 본인, 또는 마지막 활성 PLATFORM 운영자. */
     static String suspendBlock(AdminUserDto.View u, List<AdminUserDto.View> all, String meEmail) {
-        if (u.email() != null && meEmail != null && u.email().equalsIgnoreCase(meEmail)) return "본인 계정은 정지할 수 없음";
-        long activePlatform = all.stream().filter(x -> PLATFORM_ROLE.equals(x.role()) && "ACTIVE".equals(x.status())).count();
-        if (PLATFORM_ROLE.equals(u.role()) && "ACTIVE".equals(u.status()) && activePlatform <= 1) return "마지막 활성 PLATFORM 운영자";
+        if (u.getEmail() != null && meEmail != null && u.getEmail().equalsIgnoreCase(meEmail)) return "본인 계정은 정지할 수 없음";
+        long activePlatform = all.stream().filter(x -> PLATFORM_ROLE.equals(x.getRole()) && "ACTIVE".equals(x.getStatus())).count();
+        if (PLATFORM_ROLE.equals(u.getRole()) && "ACTIVE".equals(u.getStatus()) && activePlatform <= 1) return "마지막 활성 PLATFORM 운영자";
         return null;
     }
 
     static TenantCell tenantCell(AdminUserDto.View u, Map<String, String> names) {
-        if (PLATFORM_ROLE.equals(u.role())) return new TenantCell("ALL", "전체 tenant", null, 0);
-        List<UUID> ids = u.tenantIds() == null ? List.of() : u.tenantIds();
+        if (PLATFORM_ROLE.equals(u.getRole())) return new TenantCell("ALL", "전체 tenant", null, 0);
+        List<UUID> ids = u.getTenantIds() == null ? List.of() : u.getTenantIds();
         if (ids.isEmpty()) return new TenantCell("NONE", "—", null, 0);
         String first = ids.get(0).toString();
         String name = names.get(first);

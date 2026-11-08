@@ -101,8 +101,8 @@ public class WebauthnTabController {
     /** 화면에 그리는 편집 값(폼 입력). timeoutMs 는 입력 원문이다. */
     public record Form(String rpId, String rpName, String timeoutMs, List<String> origins, String uv, String at) {
         static Form of(TenantAdminDto.TenantView v) {
-            return new Form(v.rpId(), v.rpName(), String.valueOf(v.webauthnTimeoutMs()), List.copyOf(v.allowedOrigins()),
-                    v.requireUserVerification() ? "REQUIRED" : "PREFERRED", v.attestationConveyance());
+            return new Form(v.getRpId(), v.getRpName(), String.valueOf(v.getWebauthnTimeoutMs()), List.copyOf(v.getAllowedOrigins()),
+                    v.getRequireUserVerification() ? "REQUIRED" : "PREFERRED", v.getAttestationConveyance());
         }
     }
 
@@ -138,7 +138,7 @@ public class WebauthnTabController {
     public ResponseEntity<String> originCheck(@PathVariable String id, @RequestParam(name = "value", defaultValue = "") String value,
                                               @RequestParam(name = "existing", required = false) List<String> existing) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
-        OriginValidation.Result r = OriginValidation.validate(value, v.rpId());
+        OriginValidation.Result r = OriginValidation.validate(value, v.getRpId());
         if (!r.ok()) return text(r.error(), null);
         if (existing != null && existing.contains(r.value())) return text("'" + r.value() + "' 는 이미 추가되어 있습니다.", null);
         return text("", r.value());
@@ -168,7 +168,7 @@ public class WebauthnTabController {
                        @RequestParam(name = "attestationConveyance", defaultValue = "") String at,
                        HttpServletResponse res, Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
-        Form draft = new Form(v.rpId(), rpName, timeoutMs.trim(), clean(origins), uv, at);
+        Form draft = new Form(v.getRpId(), rpName, timeoutMs.trim(), clean(origins), uv, at);
         Map<String, String> errors = validate(v, draft);
         model.addAttribute("errors", errors);
         model.addAttribute("dialog", false);
@@ -180,8 +180,8 @@ public class WebauthnTabController {
         List<Change> merged;
         try {
             List<Change> local = diffObjects(Form.of(v), draft);
-            WebauthnConfigDiff server = tenants.diff(v.id().toString(), new WebauthnDiffRequest(
-                    v.rpId(), draft.rpName(), draft.origins(), v.acceptedFormats(), "REQUIRED".equals(draft.uv()), v.mdsRequired()));
+            WebauthnConfigDiff server = tenants.diff(v.getId().toString(), new WebauthnDiffRequest(
+                    v.getRpId(), draft.rpName(), draft.origins(), v.getAcceptedFormats(), "REQUIRED".equals(draft.uv()), v.getMdsRequired()));
             merged = mergeChanges(adaptDiff(server), local);
         } catch (AccessDeniedException e) {
             throw e;
@@ -222,7 +222,7 @@ public class WebauthnTabController {
                        @RequestParam(name = "changes", defaultValue = "0") String changes,
                        Authentication auth, HttpServletResponse res, Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
-        Form draft = new Form(v.rpId(), rpName, timeoutMs.trim(), clean(origins), uv, at);
+        Form draft = new Form(v.getRpId(), rpName, timeoutMs.trim(), clean(origins), uv, at);
         Map<String, String> errors = validate(v, draft);
         if (!errors.isEmpty()) {
             // 비교 단계가 이미 걸렀으므로 여기서의 실패는 위조·경합이다: 다이얼로그 안 인라인 오류(스왑 없음).
@@ -230,7 +230,7 @@ public class WebauthnTabController {
             Toasts.confirmError(res, errors.values().iterator().next(), null, null);
             return EMPTY_VIEW;
         }
-        TenantAdminDto.TenantView updated = tenants.update(v.id().toString(), request(v, draft), auth).data();
+        TenantAdminDto.TenantView updated = tenants.update(v.getId().toString(), request(v, draft), auth).data();
         int n = parseCount(changes);
         Toasts.successSaved(res, "WebAuthn 설정을 저장했습니다", n + "개 항목이 바뀌었습니다.");
         fill(model, updated, Form.of(updated));
@@ -271,8 +271,8 @@ public class WebauthnTabController {
     static TenantAdminDto.TenantUpdateRequest request(TenantAdminDto.TenantView v, Form f) {
         Integer ms = parseMs(f.timeoutMs());
         return new TenantAdminDto.TenantUpdateRequest(
-                v.displayName(), v.rpId(), f.rpName(), f.origins(), v.acceptedFormats(),
-                "REQUIRED".equals(f.uv()), v.mdsRequired(), f.at(), ms == null ? 0 : ms);
+                v.getDisplayName(), v.getRpId(), f.rpName(), f.origins(), v.getAcceptedFormats(),
+                "REQUIRED".equals(f.uv()), v.getMdsRequired(), f.at(), ms == null ? 0 : ms);
     }
 
     // ── diff ────────────────────────────────────────────────
@@ -293,11 +293,11 @@ public class WebauthnTabController {
     /** adaptDiffChanges: 배열 필드는 서버가 from/to 대신 added/removed 를 채운다(from=removed, to=added 로 옮긴다). */
     static List<Change> adaptDiff(WebauthnConfigDiff diff) {
         List<Change> out = new ArrayList<>();
-        for (WebauthnConfigDiff.FieldChange c : diff.changes()) {
-            if (c.added() != null || c.removed() != null) {
-                out.add(new Change(c.field(), c.removed() == null ? List.<String>of() : c.removed(), c.added() == null ? List.<String>of() : c.added()));
+        for (WebauthnConfigDiff.FieldChange c : diff.getChanges()) {
+            if (c.getAdded() != null || c.getRemoved() != null) {
+                out.add(new Change(c.getField(), c.getRemoved() == null ? List.<String>of() : c.getRemoved(), c.getAdded() == null ? List.<String>of() : c.getAdded()));
             } else {
-                out.add(new Change(c.field(), c.from(), c.to()));
+                out.add(new Change(c.getField(), c.getFrom(), c.getTo()));
             }
         }
         return out;
@@ -361,8 +361,8 @@ public class WebauthnTabController {
     // ── 모델 채우기 ─────────────────────────────────────────
 
     private void fill(Model model, TenantAdminDto.TenantView v, Form f) {
-        String base = FRAG + v.id() + "/webauthn";
-        model.addAttribute("tid", v.id().toString());
+        String base = FRAG + v.getId() + "/webauthn";
+        model.addAttribute("tid", v.getId().toString());
         model.addAttribute("f", f);
         model.addAttribute("diffUrl", base + "/diff");
         model.addAttribute("originCheckUrl", base + "/origin-check");
@@ -378,7 +378,7 @@ public class WebauthnTabController {
 
     private static Map<String, Object> saveAttrs(TenantAdminDto.TenantView v) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("hx-put", FRAG + v.id() + "/webauthn");
+        m.put("hx-put", FRAG + v.getId() + "/webauthn");
         m.put("hx-target", "#" + TenantTabs.TARGET_ID);
         m.put("hx-swap", "innerHTML");
         m.put("hx-sync", TenantTabs.SYNC);

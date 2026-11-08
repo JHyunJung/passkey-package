@@ -94,7 +94,7 @@ public class AaguidTabController {
         AaguidPolicyDto.View policy;
         try {
             v = TenantTabs.load(tenants, id);
-            policy = aaguid.get(v.id());
+            policy = aaguid.get(v.getId());
         } catch (BusinessException | AccessDeniedException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -103,7 +103,7 @@ public class AaguidTabController {
             model.addAttribute("retryAttrs", TenantTabs.requesterAttrs(FRAG + id + "/tab/aaguid"));
             return TAB_VIEW;
         }
-        fill(model, v.id().toString(), Policy.of(policy));
+        fill(model, v.getId().toString(), Policy.of(policy));
         return TAB_VIEW;
     }
 
@@ -131,7 +131,7 @@ public class AaguidTabController {
             res.setStatus(422);
             return RESULT_VIEW;
         }
-        Policy saved = Policy.of(aaguid.get(v.id()));
+        Policy saved = Policy.of(aaguid.get(v.getId()));
         Policy draft = draft(saved, mode, aaguids, mdsStrict);
         List<Change> changes = policyChanges(saved, draft);
         if (changes.isEmpty()) {
@@ -168,15 +168,15 @@ public class AaguidTabController {
             Toasts.confirmError(res, errors.values().iterator().next(), null, null);
             return EMPTY_VIEW;
         }
-        Policy saved = Policy.of(aaguid.get(v.id()));
+        Policy saved = Policy.of(aaguid.get(v.getId()));
         Policy draft = draft(saved, mode, aaguids, mdsStrict);
         List<AaguidPolicyDto.EntryInput> entries = new ArrayList<>();
         for (Entry e : draft.entries()) entries.add(new AaguidPolicyDto.EntryInput(UUID.fromString(e.aaguid()), e.note()));
-        AaguidPolicyDto.View updated = aaguid.update(v.id(),
+        AaguidPolicyDto.View updated = aaguid.update(v.getId(),
                 new AaguidPolicyDto.UpdateRequest(TenantAaguidPolicy.Mode.valueOf(draft.mode()), draft.mdsStrict(), entries), auth);
         Policy p = Policy.of(updated);
         Toasts.successSaved(res, "AAGUID 정책 저장 완료", "");
-        fill(model, v.id().toString(), p);
+        fill(model, v.getId().toString(), p);
         int unverified = unverifiedCount(p);
         model.addAttribute("badgeOob", true);
         model.addAttribute("badgeText", unverified > 0 ? "확인 필요 " + unverified : null);
@@ -328,7 +328,7 @@ public class AaguidTabController {
 
     private static Map<String, Object> saveAttrs(TenantAdminDto.TenantView v) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("hx-put", FRAG + v.id() + "/aaguid");
+        m.put("hx-put", FRAG + v.getId() + "/aaguid");
         m.put("hx-target", "#" + TenantTabs.TARGET_ID);
         m.put("hx-swap", "innerHTML");
         m.put("hx-sync", TenantTabs.SYNC);

@@ -123,13 +123,13 @@ public class TenantDetailPageController {
                                List<String> origins, String userVerification, String attestation, int timeoutMs) {
 
         static TenantDetail from(TenantAdminDto.TenantView v) {
-            String st = v.status();
-            return new TenantDetail(String.valueOf(v.id()), v.displayName() == null ? "" : v.displayName(),
-                    v.slug() == null ? "" : v.slug(), v.rpId(),
+            String st = v.getStatus();
+            return new TenantDetail(String.valueOf(v.getId()), v.getDisplayName() == null ? "" : v.getDisplayName(),
+                    v.getSlug() == null ? "" : v.getSlug(), v.getRpId(),
                     st != null && st.equalsIgnoreCase("ACTIVE") ? "ACTIVE" : "SUSPENDED",
-                    v.credentials(), v.apiKeys(), v.createdAt(),
-                    v.allowedOrigins(), v.requireUserVerification() ? "REQUIRED" : "PREFERRED",
-                    v.attestationConveyance(), v.webauthnTimeoutMs());
+                    v.getCredentials(), v.getApiKeys(), v.getCreatedAt(),
+                    v.getAllowedOrigins(), v.getRequireUserVerification() ? "REQUIRED" : "PREFERRED",
+                    v.getAttestationConveyance(), v.getWebauthnTimeoutMs());
         }
 
         /** {@code tenant.name.slice(0, 1).toUpperCase()} */

@@ -148,8 +148,8 @@ public class CredentialsTabController {
                       Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         St st = St.of(page, size, q, aaguid, status);
-        model.addAttribute("tid", v.id().toString());
-        fillList(model, v.id(), st, false, null);
+        model.addAttribute("tid", v.getId().toString());
+        fillList(model, v.getId(), st, false, null);
         return TAB_VIEW;
     }
 
@@ -172,8 +172,8 @@ public class CredentialsTabController {
         if ("aaguid".equals(reset) || "all".equals(reset)) st = new St(st.page(), st.size(), st.q(), "", st.status());
         if ("status".equals(reset) || "all".equals(reset)) st = new St(st.page(), st.size(), st.q(), st.aaguid(), ALL);
         if ("all".equals(reset)) st = new St(1, st.size(), "", st.aaguid(), st.status());
-        model.addAttribute("tid", v.id().toString());
-        fillList(model, v.id(), st, false, reset);
+        model.addAttribute("tid", v.getId().toString());
+        fillList(model, v.getId(), st, false, reset);
         return LIST_VIEW;
     }
 
@@ -192,7 +192,7 @@ public class CredentialsTabController {
                          @RequestParam(name = "list", required = false) String listToo,
                          Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
-        UUID tid = v.id();
+        UUID tid = v.getId();
         St st = St.of(page, size, q, aaguid, status);
         Found f = find(tid, cid, st);
         CredentialView c = f.view();
@@ -242,12 +242,12 @@ public class CredentialsTabController {
                                 Model model) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         St st = St.of(page, size, q, aaguid, status);
-        CredentialView c = find(v.id(), cid, st).view();
-        Row r = row(v.id(), c, st);
+        CredentialView c = find(v.getId(), cid, st).view();
+        Row r = row(v.getId(), c, st);
         model.addAttribute("c", r);
         model.addAttribute("typeLabel", "확인을 위해 마지막 8자 " + r.tail8() + " 를 입력하세요");
         Map<String, Object> confirm = new LinkedHashMap<>();
-        confirm.put("hx-delete", FRAG + v.id() + "/credentials/" + cid + "?" + st.query());
+        confirm.put("hx-delete", FRAG + v.getId() + "/credentials/" + cid + "?" + st.query());
         confirm.put("hx-target", "#cred-results");
         confirm.put("hx-swap", "outerHTML");
         confirm.put("hx-sync", "this:drop");
@@ -270,11 +270,11 @@ public class CredentialsTabController {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         if (!Toasts.isConfirm(req)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "확인 후 다시 시도하세요.");
         St st = St.of(page, size, q, aaguid, status);
-        CredentialView c = find(v.id(), cid, st).view();
-        credentials.revoke(v.id(), cid, auth);
+        CredentialView c = find(v.getId(), cid, st).view();
+        credentials.revoke(v.getId(), cid, auth);
         Toasts.successTitled(res, "Credential을 회수했습니다.", tail(c.getCredentialId(), 12) + " · " + c.getUserHandle());
-        model.addAttribute("tid", v.id().toString());
-        fillList(model, v.id(), st, false, null); // 회수는 이미 성공했다 — 목록 새로고침 실패는 목록 자리의 LoadError 로
+        model.addAttribute("tid", v.getId().toString());
+        fillList(model, v.getId(), st, false, null); // 회수는 이미 성공했다 — 목록 새로고침 실패는 목록 자리의 LoadError 로
         return LIST_VIEW;
     }
 
@@ -288,7 +288,7 @@ public class CredentialsTabController {
                                          @RequestParam(name = "status", defaultValue = ALL) String status) {
         TenantAdminDto.TenantView v = TenantTabs.load(tenants, id);
         St st = St.of(page, size, q, aaguid, status);
-        Loaded l = load(v.id(), st);
+        Loaded l = load(v.getId(), st);
         List<List<String>> body = new ArrayList<>();
         for (CredentialView c : applyClientFilter(l.pv().content(), l.st())) {
             body.add(List.of(c.getCredentialId(), c.getUserHandle(), nz(c.getLabel()), nz(c.getAuthenticatorName()), ACTIVE, nz(c.getAaguidHex()),
@@ -297,7 +297,7 @@ public class CredentialsTabController {
         }
         byte[] csv = CsvWriter.write(List.of("credentialId", "externalUserId", "label", "authenticatorName", "status", "aaguid", "transports",
                 "signatureCounter", "lastUsedAt", "createdAt"), body);
-        String filename = "credentials-" + v.slug() + "-" + KstFormat.kstToday(clock.instant()) + ".csv";
+        String filename = "credentials-" + v.getSlug() + "-" + KstFormat.kstToday(clock.instant()) + ".csv";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replaceAll("[^A-Za-z0-9._-]", "_") + "\"")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
