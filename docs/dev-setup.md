@@ -20,7 +20,7 @@
 | Docker | recent | Oracle XE + Redis 컨테이너 |
 | JDK | 17 | passkey-app / admin-app / sdk-java / rp-app |
 | Gradle | 9.7.0 (wrapper) | `./gradlew` 가 자동으로 받는다 — 별도 설치 불필요. Gradle 9 는 JDK 17+ 에서만 실행된다 |
-| Kotlin | 2.4.21 (Gradle 플러그인) | passkey-app 전용. 컴파일러는 Gradle 이 받으므로 별도 설치 불필요. IDE 는 IntelliJ IDEA 기본 번들 Kotlin 플러그인이면 충분 |
+| Kotlin | 2.4.21 (Gradle 플러그인) | passkey-app / admin-app. 컴파일러는 Gradle 이 받으므로 별도 설치 불필요. IDE 는 IntelliJ IDEA 기본 번들 Kotlin 플러그인이면 충분 |
 
 ### 1.2 저장소 구조 (monorepo)
 

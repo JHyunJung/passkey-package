@@ -21,7 +21,7 @@ passkey-app Java→Kotlin 전환(2026-11-06, 브랜치 `feat/passkey-app-kotlin`
    파라미터 non-null(컨트롤러가 non-null 을 넘기면 null 입력은 표현 불가 → 그 입력을 고정하던 특성 테스트는 근거와 함께 삭제), `Optional<T>` → `T?`(단, `Optional` 이
    의미를 갖는 곳은 유지 — 예: `ChallengeStore.take*` 의 키 부재 400 vs 저장값 JSON `null` 500 구분), Java 전용 `@Jvm*` 제거(JUnit companion 라이프사이클 등 프레임워크 요구는 유지),
    중복 private 헬퍼는 internal 확장 함수 한 파일로. 예: 이 브랜치 final fix wave(controller Ruling 6). DB/HTTP 원천 null(예: `ApiKeyAuthRow.keyHash: String?`)은 유지.
-   `!!` 로 NPE 지점을 맞추던 곳은 기준 동작을 다시 확인한다 — null 토큰은 기준 Java 에서 NPE 가 아니라 "token missing or expired" IAE 였다(`?: throw` 로 복원).
+   `!!` 로 NPE 지점을 맞추던 곳은 기준 동작을 다시 확인한다 — null 토큰은 기준 Java 에서 NPE 가 아니라 "token missing or expired" IAE 였다(`?: throw` 로 복원). 단 `findById(null)` 류 Spring Data 호출의 IAE 는 실 컨텍스트에선 리포지토리 프록시가 `InvalidDataAccessApiUsageException` 으로 번역한다 — 단위 테스트(목)의 IAE 와 실제 응답이 다를 수 있다(admin-app: `?: throw IAE` 3곳, backlog).
 
 ## 3. 함정과 해결
 † = Java 호출자가 남은 혼합 단계 전용 규칙(§2-5).
@@ -45,3 +45,17 @@ passkey-app Java→Kotlin 전환(2026-11-06, 브랜치 `feat/passkey-app-kotlin`
 | `Long::class.java` 는 primitive `long` | Java `Long.class` 대응은 `Long::class.javaObjectType` |
 | 손으로 만든 ObjectMapper(core `LicenseCache`, webauthn `JsonMappers`)에는 Kotlin 모듈이 없음 | Kotlin 클래스를 그 매퍼로 넘기지 않음(`javaParameters = true` 면 생성자 creator 는 인식됨) |
 | 라이브러리 null 애너테이션 불일치(webauthn4j `getTransports()` non-null 표기지만 null 반환, Spring Security 7 `encode` 는 `String?`) | javap/소스로 확인 후 로컬 변수를 nullable 로 선언해 원 null 체크 유지 |
+
+## 4. admin-app 고유 함정 (3단계, 2026-11-09)
+| 함정 | 해결 |
+|---|---|
+| 템플릿/SpEL: record→data class 가 되면 `x()` 가 아니라 프로퍼티(`getX()`)로 해석. 계산 메서드는 프로퍼티화하면 SpEL 호출식이 깨짐 | 계산 메서드는 이름 그대로 메서드로 유지. **렌더 HTML 스냅샷**을 전후 비교하되 속성 순서는 정규화(`Map.of` 순서 비결정) |
+| 세션(Redis) 직렬화 클래스: Kotlin 화하면 계산된 serialVersionUID 가 바뀌어 기존 세션 역직렬화 실패 | 원 Java 클래스의 값을 `serialver` 로 구해 `serialVersionUID` 로 고정 |
+| 폼 바인딩 객체: 검증 대상을 non-null 로 두면 바인딩/검증 에러 흐름이 바뀜. 기본형은 null 이 불가 | 검증 대상 필드는 nullable + `@field:`, 기본형은 non-null. 컬렉션 요소 TYPE_USE 제약(`List<@NotBlank String>`)은 `-Xemit-jvm-type-annotations` 필요 |
+| 화면 컨트롤러가 in-method 로 403 을 던지는 순서(인증 null 체크 → 권한 검사) | `auth: Authentication?` 로 받아 원 순서 보존(non-null 로 두면 Spring 이 먼저 거부) |
+| `!!` 위치가 try 밖이면 LoadError vs 500 경계가 바뀜 | `!!` 는 원 NPE 가 나던 try 경계의 같은 쪽에 둔다 |
+| 테스트 전환: typed `any(X.class)` 가 null 매칭 의미 변화 | `any<X>()` 항상(파라미터가 nullable 이어도), Java bare `any()` → `anyOrNull()` |
+| thenThrow 뒤 재스텁이 예외를 다시 던짐 / mockito-kotlin `eq` 가 실제 값을 넘김 | `doReturn(..).whenever(mock).m(..)` 로 재스텁 |
+| 이름 보존 증명 | 테스트 목록(`classname#name`) 전후 diff. `?.` 는 null 이면 반드시 실패하는 단언에만 사용 |
+| Spring 7 `@NullMarked` 때문에 null 을 넘기던 Java 테스트가 Kotlin 에서 컴파일 불가 | 해당 인자를 쓰지 않는 더미(`MockHttpServletRequest` / `MethodParameter`)로 대체 |
+| de-interop: 템플릿·리플렉션이 쓰는 멤버를 `internal` 로 → 이름 맹글링으로 해석 실패 | 그런 멤버는 `internal` 금지. JUnit companion 의 `@JvmStatic` 유지. `OptionalLong` 처럼 Mockito 기본값(0L)이 의미를 바꾸는 반환형은 유지 |
