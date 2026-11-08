@@ -1,0 +1,69 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<section class="card" data-timeout-text="15초 안에 응답이 없었습니다."
+         data-view="done"
+         hx-request='{"timeout": 15000}'
+         id="tenant-chain"
+         x-data="{ view: $el.dataset.view, reason: $el.dataset.reason || '', verifying: false }"
+         x-on:htmx:after-request="verifying = false"
+         x-on:htmx:before-request="if ($event.target.hasAttribute('data-manual')) verifying = true" x-on:htmx:send-error="if (!$event.target.hasAttribute('data-manual')) { view = 'unavailable'; reason = '네트워크에 연결할 수 없습니다.' }" x-on:htmx:timeout="if (!$event.target.hasAttribute('data-manual')) { view = 'unavailable'; reason = $el.dataset.timeoutText }">
+  <div class="card__head">
+    <div class="card__head-main"><h2 class="card__title">감사 체인</h2></div>
+    <div class="spacer"></div>
+    <a class="btn btn--ghost btn--sm" href="/admin/tenants/00000000-0000-0000-0000-00000000f222?tab=audit">자세히 <svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M9 6l6 6-6 6"/></svg></a>
+  </div>
+  <div class="card__body stack-3">
+    <!-- 검증 중(수동) -->
+    <div aria-busy="true" class="row" style="gap: 10px" x-cloak x-show="verifying">
+      <span class="badge">검증 중</span>
+      <span class="hint" style="margin: 0">수동 검증을 실행하고 있습니다.</span>
+    </div>
+
+    <!-- 확인 중 -->
+    <div class="row" style="gap: 12px; flex-wrap: nowrap" x-cloak="true" x-show="!verifying && view === 'checking'">
+      <span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 10px; background: var(--sunk); color: var(--mute); display: inline-flex; align-items: center; justify-content: center; flex: none"><svg aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20"><path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/></svg></span>
+      <div class="col" style="min-width: 0">
+        <strong>확인 중</strong>
+        <span class="hint" style="margin: 0">체인 무결성 상태를 확인하고 있습니다.</span>
+      </div>
+    </div>
+
+    <!-- 확인 불가 -->
+    <div class="stack-2" x-cloak="true" x-show="!verifying && view === 'unavailable'">
+      <div class="row" style="gap: 10px">
+        <span class="badge">확인 불가</span>
+        <strong>검증 결과를 받지 못했습니다</strong>
+      </div>
+      <span class="hint" style="margin: 0"><span x-text="reason"></span> 다시 시도하거나 감사 로그에서 확인하세요.</span>
+    </div>
+
+    <!-- 무결 / 위변조 -->
+    
+      <div class="row" style="gap: 12px; flex-wrap: nowrap" x-show="!verifying && view === 'done'">
+        <span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 10px; background: var(--ok-soft); color: var(--ok); display: inline-flex; align-items: center; justify-content: center; flex: none"><svg aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20"><path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/></svg></span>
+        <div class="col" style="min-width: 0">
+          <strong>무결 · 위변조 0건</strong>
+          <span class="hint" style="margin: 0">마지막 검증 2일 전</span>
+        </div>
+      </div>
+      
+    
+
+    <!-- 버튼: 확인 불가면 다시 시도·감사 로그로, 그 밖에는 수동 검증·월간 보고서 -->
+    <div class="row" x-cloak="true" x-show="view === 'unavailable' && !verifying">
+      <button class="btn btn--primary btn--sm" data-quiet hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f222/overview/chain"
+              hx-swap="outerHTML" hx-sync="this:drop" hx-target="#tenant-chain"
+              type="button" x-on:click="view = 'checking'">다시 시도</button>
+      <a class="btn btn--ghost btn--sm" href="/admin/tenants/00000000-0000-0000-0000-00000000f222?tab=audit">감사 로그로</a>
+    </div>
+    <div class="row" x-show="view !== 'unavailable'">
+      <button class="btn btn--sm" data-manual hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f222/overview/chain?manual=1"
+              hx-swap="outerHTML" hx-sync="this:drop" hx-target="#tenant-chain"
+              type="button" x-bind:disabled="verifying || view === 'checking'">
+        <span x-show="!verifying">수동 검증</span><span x-cloak x-show="verifying">검증 중…</span>
+      </button>
+      <a class="btn btn--sm" href="/admin/audit-chain" x-bind:aria-disabled="verifying" x-on:click="if (verifying) $event.preventDefault()">월간 보고서</a>
+    </div>
+  </div>
+</section>

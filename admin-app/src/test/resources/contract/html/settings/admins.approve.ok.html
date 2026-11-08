@@ -1,0 +1,293 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+@header HX-Trigger: {"toast":{"kind":"success","title":"\uAC00\uC785 \uC694\uCCAD\uC744 \uC2B9\uC778\uD588\uC2B5\uB2C8\uB2E4.","message":"new@example.com \u00B7 \uC989\uC2DC \uB85C\uADF8\uC778 \uAC00\uB2A5"}}
+
+
+  <div class="stack-6" id="au-content">
+  <section aria-label="가입 요청" class="card" id="au-signups" style="border-color: var(--warn-line)" x-data="{ stale: false }">
+  <!-- 변경 뒤 다시 읽기에 실패했을 때의 경고 자리(화면은 그대로 두고 여기만 OOB 로 채운다) -->
+  <div id="au-signups-warn"></div>
+  <!-- 목록을 못 읽음: '없음'이 아니라 실패(대기 —) -->
+  
+
+  
+
+  
+    <div class="card__head" style="background: var(--warn-soft); border-radius: var(--r) var(--r) 0 0">
+      <div class="col" style="gap: 2px">
+        <div class="row" style="gap: 8px">
+          <h2 class="card__title">가입 요청</h2>
+          <span class="badge badge--warning">대기 1건</span>
+        </div>
+        <p class="card__sub">로그인 화면에서 들어온 관리자 계정 요청. 승인 시 역할과 tenant 를 지정합니다.</p>
+      </div>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0">
+      <li class="row au-req" data-request="00000000-0000-0000-0000-0000000000d1">
+        <span aria-hidden="true" class="avatar au-avatar-warn">N</span>
+        <div class="col" style="flex: 1 1 260px; min-width: 0">
+          <strong style="font-size: 13px">new@example.com</strong>
+          <span class="truncate" style="font-size: 13px; color: var(--ink-2)" title="RP 운영 담당입니다">RP 운영 담당입니다</span>
+        </div>
+        <span class="hint hint--flush">2일 전</span>
+        <div class="row" style="gap: 6px">
+          <button class="btn" data-dialog="au-reject-00000000-0000-0000-0000-0000000000d1" type="button" x-bind:disabled="stale" x-bind:title="stale ? '목록을 새로 고친 뒤 다시 시도하세요' : null"
+                  x-data x-on:click="$dispatch('dialog:open', { id: $el.dataset.dialog })">거절…</button>
+          <button class="btn btn--primary" hx-get="/admin/_/settings/signups/00000000-0000-0000-0000-0000000000d1/approve" hx-swap="innerHTML" hx-sync="this:drop" hx-target="#au-dialog-slot" type="button" x-bind:disabled="stale" x-bind:title="stale ? '목록을 새로 고친 뒤 다시 시도하세요' : null">승인…</button>
+        </div>
+      </li>
+    </ul>
+
+    <!-- 거절 확인(L1). 승인은 대화상자를 GET 으로 받아 #au-dialog-slot 에 연다. -->
+    
+      
+        <div x-data="dialog({&quot;id&quot;:&quot;au-reject-00000000-0000-0000-0000-0000000000d1&quot;,&quot;level&quot;:&quot;L1&quot;,&quot;verb&quot;:&quot;거절&quot;,&quot;closeOnScrim&quot;:false,&quot;typing&quot;:false,&quot;ack&quot;:false})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim">
+      <div aria-labelledby="au-reject-00000000-0000-0000-0000-0000000000d1-title" aria-modal="true" class="dialog" role="alertdialog"
+           x-on:htmx:after-request="onAfterRequest($event)" x-on:htmx:before-request="onBeforeRequest($event)"
+           x-on:match-change="typed = $event.detail" x-trap.noscroll="open">
+        <div class="dialog__head">
+          <h3 class="dialog__title" id="au-reject-00000000-0000-0000-0000-0000000000d1-title">가입 요청을 거절할까요?</h3>
+          
+        </div>
+        <div class="dialog__body">
+          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <div class="banner banner--danger banner--top" id="au-reject-00000000-0000-0000-0000-0000000000d1-error" role="alert" x-cloak x-show="error">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title" x-text="error && error.title"></div>
+              <div x-text="error && error.text"></div>
+            </div>
+          </div>
+          
+    <p class="card__sub" style="margin: 0">new@example.com의 요청을 거절합니다. 요청자는 다시 가입 요청을 보낼 수 있습니다.</p>
+  
+          
+          
+        </div>
+        <div class="dialog__foot">
+          <button autofocus class="btn" type="button" x-bind:disabled="busy" x-on:click="close()">취소</button>
+          <button class="btn btn--danger-solid" data-confirm data-quiet hx-headers='{"X-Confirm": "1"}' hx-post="/admin/_/settings/signups/00000000-0000-0000-0000-0000000000d1/reject" hx-swap="outerHTML" hx-sync="this:drop" hx-target="#au-signups" type="button" x-bind:disabled="busy || !gateOk"><span x-show="!busy">거절</span><span x-cloak x-show="busy">거절 중…</span></button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+      
+    
+  
+</section>
+  <section class="card" id="au-users" x-data="operatorFilter({})"
+         x-on:au-undo-suspend.window="onUndo($event)" x-on:segmented-change="filter = $event.detail.value">
+  <div id="au-users-warn"></div>
+  <div class="card__head">
+    <div class="col" style="gap: 2px">
+      <h2 class="card__title">콘솔 운영자</h2>
+      <span class="hint hint--flush">3명 · 활성 2명</span>
+    </div>
+    <div class="spacer"></div>
+    
+      <div aria-label="역할" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;all&quot;})">
+  
+  <button aria-pressed="true" class="seg__btn seg__btn--on" data-value="all" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">전체</button><button aria-pressed="false" class="seg__btn" data-value="PLATFORM" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">PLATFORM</button><button aria-pressed="false" class="seg__btn" data-value="RP_ADMIN" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">RP_ADMIN</button><button aria-pressed="false" class="seg__btn" data-value="SUSPENDED" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">정지</button>
+</div>
+      <div class="search" style="flex: 0 1 220px">
+        <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="15"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input aria-label="운영자 검색" class="input" placeholder="이메일 · ID" x-model="q">
+      </div>
+    
+  </div>
+
+  
+
+  <div class="tw">
+    <table class="table">
+      <thead>
+        <tr><th>운영자</th><th>역할</th><th>Tenant</th><th>MFA</th><th>마지막 로그인</th><th>상태</th><th>액션</th></tr>
+      </thead>
+      <tbody>
+        <tr data-hay="op@example.com 00000000-0000-0000-0000-0000000000a1" data-op data-role="PLATFORM_OPERATOR" x-show="match($el)">
+          <td>
+            <div class="row" style="gap: 10px; flex-wrap: nowrap">
+              <span aria-hidden="true" class="avatar" style="width: 30px; height: 30px; font-size: 12px">O</span>
+              <div class="col" style="min-width: 0">
+                <strong style="font-size: 13px">op@example.com</strong>
+                <span class="hint hint--flush mono">…00000000a1</span>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge badge--violet">PLATFORM</span></td>
+          <td>
+            <span style="font-size: 13px; color: var(--ink-2)">전체 tenant</span>
+            
+            
+          </td>
+          <td><span class="badge badge--success badge--dot">ON</span></td>
+          <td><span style="font-size: 13px; color: var(--ink-2)">2일 전</span></td>
+          <td>
+  <span class="badge badge--success badge--dot"
+      title="ACTIVE">활성</span>
+</td>
+          <td>
+            
+            
+              <div class="col" style="gap: 2px; align-items: flex-start">
+                <button aria-describedby="suspend-why-00000000-0000-0000-0000-0000000000a1" class="btn btn--sm" disabled type="button">정지…</button>
+                <span class="hint hint--flush" id="suspend-why-00000000-0000-0000-0000-0000000000a1">본인 계정은 정지할 수 없음</span>
+              </div>
+              
+            
+          </td>
+        </tr>
+        <tr data-hay="rp@example.com 00000000-0000-0000-0000-0000000000d2" data-op data-role="RP_ADMIN" x-show="match($el)">
+          <td>
+            <div class="row" style="gap: 10px; flex-wrap: nowrap">
+              <span aria-hidden="true" class="avatar" style="width: 30px; height: 30px; font-size: 12px">R</span>
+              <div class="col" style="min-width: 0">
+                <strong style="font-size: 13px">rp@example.com</strong>
+                <span class="hint hint--flush mono">…00000000d2</span>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge badge--info">RP_ADMIN</span></td>
+          <td>
+            
+            
+            <div class="col" style="min-width: 0">
+              <span class="truncate" style="font-size: 13px" title="00000000-0000-0000-0000-00000000f111">Alpha Corp</span>
+              
+              <span class="hint hint--flush">외 1개</span>
+            </div>
+          </td>
+          <td><span class="badge badge--warning badge--dot">OFF</span></td>
+          <td><span style="font-size: 13px; color: var(--ink-2)">미접속</span></td>
+          <td>
+  <span class="badge badge--success badge--dot"
+      title="ACTIVE">활성</span>
+</td>
+          <td>
+            
+            
+              
+              <button class="btn btn--sm btn--danger" data-dialog="au-suspend-00000000-0000-0000-0000-0000000000d2" type="button"
+                      x-bind:disabled="stale" x-bind:title="stale ? '목록을 새로 고친 뒤 다시 시도하세요' : null"
+                      x-data x-on:click="$dispatch('dialog:open', { id: $el.dataset.dialog })">정지…</button>
+            
+          </td>
+        </tr>
+        <tr data-hay="gone@example.com 00000000-0000-0000-0000-0000000000d3" data-op data-role="RP_ADMIN" data-status="SUSPENDED" x-show="match($el)">
+          <td>
+            <div class="row" style="gap: 10px; flex-wrap: nowrap">
+              <span aria-hidden="true" class="avatar" style="width: 30px; height: 30px; font-size: 12px">G</span>
+              <div class="col" style="min-width: 0">
+                <strong style="font-size: 13px">gone@example.com</strong>
+                <span class="hint hint--flush mono">…00000000d3</span>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge badge--info">RP_ADMIN</span></td>
+          <td>
+            
+            
+            <div class="col" style="min-width: 0">
+              <span class="truncate" style="font-size: 13px" title="00000000-0000-0000-0000-00000000f111">Alpha Corp</span>
+              
+              
+            </div>
+          </td>
+          <td><span class="badge badge--warning badge--dot">OFF</span></td>
+          <td><span style="font-size: 13px; color: var(--ink-2)">22일 전</span></td>
+          <td>
+  <span class="badge badge--danger badge--dot"
+      title="SUSPENDED">정지</span>
+</td>
+          <td>
+            <button class="btn btn--sm" hx-disabled-elt="this" hx-post="/admin/_/settings/admins/00000000-0000-0000-0000-0000000000d3/activate" hx-swap="outerHTML" hx-sync="this:drop" hx-target="#au-users" name="email" type="button" value="gone@example.com" x-bind:disabled="stale" x-bind:title="stale ? '목록을 새로 고친 뒤 다시 시도하세요' : null">활성화</button>
+            
+          </td>
+        </tr>
+        <tr class="table__empty" x-cloak x-show="none">
+          <td colspan="7">
+            <div class="empty empty--compact">
+  <img alt="" class="empty__art" src="/admin/img/no-results.webp">
+  <p class="empty__title">조건에 맞는 운영자가 없습니다.</p>
+  
+  
+</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 정지 확인(L1): 막힌 운영자(본인·마지막 PLATFORM)는 다이얼로그를 만들지 않는다. -->
+  
+    
+  
+    
+      <div x-data="dialog({&quot;id&quot;:&quot;au-suspend-00000000-0000-0000-0000-0000000000d2&quot;,&quot;level&quot;:&quot;L1&quot;,&quot;verb&quot;:&quot;정지&quot;,&quot;closeOnScrim&quot;:false,&quot;typing&quot;:false,&quot;ack&quot;:false})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim">
+      <div aria-labelledby="au-suspend-00000000-0000-0000-0000-0000000000d2-title" aria-modal="true" class="dialog" role="alertdialog"
+           x-on:htmx:after-request="onAfterRequest($event)" x-on:htmx:before-request="onBeforeRequest($event)"
+           x-on:match-change="typed = $event.detail" x-trap.noscroll="open">
+        <div class="dialog__head">
+          <h3 class="dialog__title" id="au-suspend-00000000-0000-0000-0000-0000000000d2-title">rp@example.com을 정지할까요?</h3>
+          
+        </div>
+        <div class="dialog__body">
+          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <div class="banner banner--danger banner--top" id="au-suspend-00000000-0000-0000-0000-0000000000d2-error" role="alert" x-cloak x-show="error">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title" x-text="error && error.title"></div>
+              <div x-text="error && error.text"></div>
+            </div>
+          </div>
+          
+    <dl class="kv" style="grid-template-columns: 80px minmax(0, 1fr)">
+      <dt>이메일</dt>
+      <dd>rp@example.com</dd>
+      <dt>역할</dt>
+      <dd class="row" style="gap: 6px">
+        RP_ADMIN · 
+        
+        
+        <span class="truncate" style="font-size: 13px">Alpha Corp</span>
+        
+        <span class="hint hint--flush">외 1개</span>
+      </dd>
+    </dl>
+    <p class="card__sub" style="margin: 0">다음 요청부터 콘솔에 접근할 수 없고, 다시 로그인할 수도 없습니다.</p>
+    <p class="hint" style="margin: 0">계정과 기록은 남습니다. 목록의 “활성화”로 언제든 되돌릴 수 있습니다.</p>
+  
+          
+          
+        </div>
+        <div class="dialog__foot">
+          <button autofocus class="btn" type="button" x-bind:disabled="busy" x-on:click="close()">취소</button>
+          <button class="btn btn--danger-solid" data-confirm data-quiet hx-headers='{"X-Confirm": "1"}' hx-post="/admin/_/settings/admins/00000000-0000-0000-0000-0000000000d2/suspend" hx-swap="outerHTML" hx-sync="this:drop" hx-target="#au-users" type="button" x-bind:disabled="busy || !gateOk"><span x-show="!busy">정지</span><span x-cloak x-show="busy">정지 중…</span></button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+    
+  
+    
+  
+</section>
+</div>
+  <div hx-swap-oob="true" id="au-dialog-slot"></div>
+  <span class="tabs__countslot" hx-swap-oob="true" id="settings-tab-admins-count">
+  <span class="tabs__count">1</span>
+</span>

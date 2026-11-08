@@ -1,0 +1,54 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+
+  <p class="field__error" data-field-error hx-swap-oob="true"
+     id="ag-err-mode"></p>
+  <p class="field__error" data-field-error hx-swap-oob="true"
+     id="ag-err-aaguid"></p>
+  <p class="field__error" data-field-error hx-swap-oob="true"
+     id="ag-err-form"></p>
+
+  <form class="fieldset--bare" id="ag-confirm-form" novalidate x-data x-init="$nextTick(() => $dispatch('dialog:open', { id: 'ag-confirm' }))"
+        x-on:submit.prevent>
+    <input name="mode" type="hidden" value="ALLOWLIST">
+    <input name="aaguid" type="hidden" value="adce0002-35bc-c60a-648b-0b25f1f05503">
+    <input name="mdsStrict" type="hidden" value="true">
+    
+    
+    
+      <div x-data="dialog({&quot;id&quot;:&quot;ag-confirm&quot;,&quot;level&quot;:&quot;L2&quot;,&quot;verb&quot;:&quot;저장&quot;,&quot;closeOnScrim&quot;:false,&quot;typing&quot;:false,&quot;ack&quot;:false})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim">
+      <div aria-labelledby="ag-confirm-title" aria-modal="true" class="dialog" role="alertdialog"
+           x-on:htmx:after-request="onAfterRequest($event)" x-on:htmx:before-request="onBeforeRequest($event)"
+           x-on:match-change="typed = $event.detail" x-trap.noscroll="open">
+        <div class="dialog__head">
+          <h3 class="dialog__title" id="ag-confirm-title">변경 사항 3개를 저장할까요?</h3>
+          <div class="dialog__sub">다음 패스키 등록부터 적용됩니다.</div>
+        </div>
+        <div class="dialog__body">
+          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <div class="banner banner--danger banner--top" id="ag-confirm-error" role="alert" x-cloak x-show="error">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title" x-text="error && error.title"></div>
+              <div x-text="error && error.text"></div>
+            </div>
+          </div>
+          
+    <ul class="stack-1 changes"><li>방식: 전체 허용 → 허용 목록</li><li class="mono">+ adce0002-35bc-c60a-648b-0b25f1f05503</li><li class="mono">- 00000000-0000-0000-0000-00000000f111</li></ul>
+  
+          
+          
+        </div>
+        <div class="dialog__foot">
+          <button autofocus class="btn" type="button" x-bind:disabled="busy" x-on:click="close()">취소</button>
+          <button class="btn btn--primary" data-confirm data-quiet hx-headers='{"X-Confirm": "1"}' hx-put="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/aaguid" hx-swap="innerHTML" hx-sync="#tenant-tab:replace" hx-target="#tenant-tab" type="button" x-bind:disabled="busy || !gateOk"><span x-show="!busy">저장</span><span x-cloak x-show="busy">저장 중…</span></button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+    
+  </form>

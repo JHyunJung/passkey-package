@@ -1,0 +1,113 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+
+  
+
+  
+    <form class="stack-4" data-revert-url="/admin/_/settings/tab/security?revert=1" data-savebar-labels='{"sessionIdleTimeoutMinutes":"세션 idle timeout","mfaRequired":"MFA 필수","corsAllowlist":"CORS Allowlist"}'
+          data-savebar-unordered="corsAllowlist"
+          hx-put="/admin/_/settings/security"
+          hx-swap="innerHTML" hx-sync="this:drop" hx-target="#sec-confirm-slot" id="sec-form"
+          novalidate x-bind:inert="saving" x-data="securityPolicy({&quot;idle&quot;:&quot;15&quot;,&quot;cors&quot;:[],&quot;consoleOrigin&quot;:&quot;http://localhost&quot;,&quot;savedHasConsole&quot;:false})"
+          x-on:chips-change="onChips($event)"
+          x-on:htmx:after-request="onAfter($event)" x-on:htmx:before-request="onBefore($event)" x-on:keydown.enter="$event.target.tagName === 'INPUT' &amp;&amp; $event.preventDefault()">
+      <section class="card">
+        <div class="card__head">
+  <div class="card__head-main">
+    <div class="row card__titlerow">
+      <h2 class="card__title">세션 &amp; 인증 정책</h2>
+      <span class="card__cap">모든 콘솔 운영자에게 적용</span>
+    </div>
+    
+    
+  </div>
+  
+</div>
+
+        <div class="set" data-field="sessionIdleTimeoutMinutes">
+          <div>
+            <label class="set__label" for="sec-idle-timeout" style="display: block">세션 idle timeout (분)</label>
+            <p class="set__desc">이 시간 동안 활동이 없으면 세션이 만료됩니다. 만료 직전 연장 모달이 뜹니다.</p>
+          </div>
+          <div class="stack-1">
+            <div class="row" style="gap: 10px">
+              <input class="input mono" id="sec-idle-timeout" inputmode="numeric" max="1440" min="1" name="sessionIdleTimeoutMinutes" step="1" style="max-width: 120px"
+                     type="number" value="15" x-bind:aria-describedby="timeoutErr ? 'sec-idle-timeout-err' : 'sec-idle-timeout-help'" x-bind:aria-invalid="timeoutErr ? 'true' : null" x-model="idle"
+                     x-on:input="clearErr('sec-err-sessionIdleTimeoutMinutes')"
+                     x-ref="idle">
+              <span style="font-size: 13px; color: var(--ink-2)">분</span>
+            </div>
+            <p class="field__error" id="sec-idle-timeout-err" role="alert" style="margin: 0" x-cloak x-show="timeoutErr" x-text="timeoutErr"></p>
+            <p class="hint" id="sec-idle-timeout-help" style="margin: 0" x-show="!timeoutErr">1–1440분 (최대 24시간)</p>
+            <p class="field__error" data-field-error id="sec-err-sessionIdleTimeoutMinutes"></p>
+          </div>
+        </div>
+
+        <div class="set" data-field="mfaRequired">
+          <div>
+            <span class="set__label" style="display: block">MFA 필수</span>
+            <p class="set__desc">켜면 MFA 를 등록하지 않은 운영자는 다음 로그인 때 등록해야 합니다.</p>
+          </div>
+          <div style="align-self: flex-start">
+            <label class="switch" x-data="switchToggle({&quot;checked&quot;:true})">
+  <input name="mfaRequired" type="hidden" value="true" x-bind:value="on ? 'true' : 'false'">
+  <input aria-checked="true" checked="checked" class="sr-only" role="switch"
+         type="checkbox" x-bind:aria-checked="on" x-model="on">
+  <span aria-hidden="true" class="switch__track"></span>
+  <span>모든 운영자에게 MFA 필수</span>
+</label>
+          </div>
+        </div>
+
+        <div class="set" data-field="corsAllowlist">
+          <div>
+            <span class="set__label" style="display: block">CORS Allowlist</span>
+            <p class="set__desc">콘솔 API 를 호출할 수 있는 origin. Enter 로 추가합니다.</p>
+          </div>
+          <div class="stack-2">
+            <div class="stack-2" x-data="chipInput({&quot;name&quot;:&quot;corsAllowlist&quot;,&quot;values&quot;:[],&quot;mono&quot;:true,&quot;validateUrl&quot;:&quot;/admin/_/settings/security/origin-check&quot;})">
+  <template x-bind:key="v" x-for="v in values">
+    <input type="hidden" x-bind:name="name" x-bind:value="v">
+  </template>
+  <div class="chips" x-cloak x-show="values.length > 0">
+    <template x-bind:key="v" x-for="v in values">
+      <span class="chip" x-bind:class="(added.includes(v) ? 'chip--added ' : '') + (mono ? 'mono' : '')">
+        <span class="truncate" x-text="v"></span>
+        <button class="chip__x" type="button" x-bind:aria-label="v + ' 삭제'" x-bind:disabled="disabled" x-on:click="remove(v)"><svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </span>
+    </template>
+  </div>
+  <input aria-label="origin 추가" class="input mono" placeholder="https://… 추가 후 Enter" x-bind:aria-invalid="!!error" x-model="draft" x-on:input="onInput()" x-on:keydown.enter.prevent="onEnter()">
+  <p class="field__error" role="alert" x-cloak x-show="error" x-text="error"></p>
+</div>
+            <p class="field__error" role="alert" style="margin: 0" x-cloak x-show="listError" x-text="listError"></p>
+            <p class="field__error" data-field-error id="sec-err-corsAllowlist"></p>
+            <p class="hint" style="margin: 0">https://호스트[:포트] 형식. 경로 · 와일드카드(*) 불가.</p>
+            <!-- 지금 쓰고 있는 콘솔 주소를 허용 목록에서 뺐다(저장된 목록엔 있었음) — 경고 + 삭제 되돌리기 -->
+            <div class="banner banner--warning" role="status" x-cloak x-show="removesConsole">
+              <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+              <div class="banner__body">
+                <div><span class="mono">http://localhost</span> 은 지금 쓰고 있는 콘솔 주소입니다. 이 주소가 CORS 허용 목록에서 빠집니다. 다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.</div>
+              </div>
+              <div class="banner__actions"><button class="btn btn--sm" type="button" x-on:click="restore()">삭제 되돌리기</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <p class="field__error" data-field-error id="sec-err-form"></p>
+      <div aria-label="저장되지 않은 변경" class="savebar" role="region"
+     x-cloak x-data="saveBar({&quot;saveLabel&quot;:&quot;저장&quot;})" x-show="dirty">
+  <span aria-hidden="true" class="savebar__dot"></span>
+  <strong class="savebar__title">저장하지 않은 변경 <span x-text="count">0</span>건</strong>
+  
+  <span class="hint hint--flush" x-cloak x-show="changedText" x-text="changedText"></span>
+  <div class="spacer"></div>
+  <button class="btn" type="button" x-bind:disabled="saving || previewing" x-on:click="revert()">취소</button>
+  <button class="btn btn--primary" type="button" x-bind:disabled="saving || previewing" x-on:click="save()"
+          x-text="(saving || previewing) ? '저장 중…' : saveLabel">저장</button>
+</div>
+    </form>
+    <div id="sec-confirm-slot"></div>
+  

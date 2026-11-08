@@ -1,0 +1,45 @@
+@status: 422
+@contentType: text/html;charset=UTF-8
+
+
+  <!-- 네트워크 오류·시간 초과(응답 없음): 전역 토스트 대신 같은 경고를 인라인으로(form 의 netErr, 서버 거절 경고와 같은 제목) -->
+  <div class="banner banner--danger banner--top" x-bind:role="netErr ? 'alert' : null" x-cloak x-show="netErr">
+    <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+    <div class="banner__body">
+      <div class="banner__title">Tenant를 만들지 못했습니다</div>
+      <div x-text="netErr"></div>
+    </div>
+  </div>
+  
+
+  <div>
+    <label class="label" for="nt-name">표시 이름</label>
+    <input aria-describedby="nt-name-error" aria-invalid="true" autocomplete="off" class="input" id="nt-name"
+           name="name" placeholder="예: Acme Corp" value="" x-bind:readonly="busy">
+    <p class="field__error" id="nt-name-error">표시 이름을 입력하세요.</p>
+  </div>
+
+  <div>
+    <label class="label" for="nt-slug">Slug (영문 식별자)</label>
+    <input aria-describedby="nt-slug-error" aria-invalid="true" autocomplete="off" class="input mono" id="nt-slug"
+           name="slug" placeholder="acme-corp" value="-bad" x-bind:readonly="busy" x-on:input="$el.value = $el.value.toLowerCase()">
+    <p class="field__error" id="nt-slug-error">영문 소문자·숫자로 시작하고, 영문 소문자·숫자·하이픈(-)만 사용해 2~63자로 입력하세요.</p>
+    
+  </div>
+
+  <div>
+    <label class="label" for="nt-rpid">RP ID</label>
+    <input aria-describedby="nt-rpid-error" aria-invalid="true" autocomplete="off" class="input mono" id="nt-rpid"
+           name="rpId" placeholder="예: passkey.acme.com" value="https://example.com" x-bind:readonly="busy" x-on:input="$el.value = $el.value.toLowerCase().trim()">
+    <p class="field__error" id="nt-rpid-error">스킴·포트·경로 없이 실제 도메인 hostname을 입력하세요(예: passkey.acme.com). example.com은 placeholder라 사용할 수 없습니다.</p>
+    
+  </div>
+
+  <div class="stack-2" style="gap: 10px; padding: 14px 16px; border-radius: var(--r); background: var(--brand-50); border: 1px solid var(--brand-100)">
+    <span class="t-over" id="nt-next-steps" style="color: var(--brand-700)">다음 단계</span>
+    <ol aria-labelledby="nt-next-steps" class="stack-2" style="list-style: none; margin: 0; padding: 0; gap: 10px">
+      <li class="row" style="gap: 10px; flex-wrap: nowrap; font-size: 13px"><span aria-hidden="true" class="nt-step">1</span><strong>WebAuthn config</strong><span class="muted">origin · UV · attestation</span></li>
+      <li class="row" style="gap: 10px; flex-wrap: nowrap; font-size: 13px"><span aria-hidden="true" class="nt-step">2</span><strong>AAGUID 정책</strong><span class="muted">허용할 인증기</span></li>
+      <li class="row" style="gap: 10px; flex-wrap: nowrap; font-size: 13px"><span aria-hidden="true" class="nt-step">3</span><strong>API key 발급</strong><span class="muted">RP 서버 연동</span></li>
+    </ol>
+  </div>

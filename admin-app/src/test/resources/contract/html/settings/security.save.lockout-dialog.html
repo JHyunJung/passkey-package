@@ -1,0 +1,52 @@
+@status: 422
+@contentType: text/html;charset=UTF-8
+
+
+  <p class="field__error" data-field-error hx-swap-oob="true"
+     id="sec-err-sessionIdleTimeoutMinutes"></p>
+  <p class="field__error" data-field-error hx-swap-oob="true"
+     id="sec-err-corsAllowlist"></p>
+  <p class="field__error" data-field-error hx-swap-oob="true"
+     id="sec-err-form"></p>
+
+  <form class="fieldset--bare" id="sec-confirm-form" novalidate x-data x-init="$nextTick(() => $dispatch('dialog:open', { id: 'sec-confirm' }))"
+        x-on:submit.prevent>
+    <input name="sessionIdleTimeoutMinutes" type="hidden" value="30">
+    <input name="mfaRequired" type="hidden" value="true">
+    <input name="corsAllowlist" type="hidden" value="https://other.example.com">
+    <input name="confirmLockout" type="hidden" value="1">
+    <div x-data="dialog({&quot;id&quot;:&quot;sec-confirm&quot;,&quot;level&quot;:&quot;L2&quot;,&quot;verb&quot;:&quot;저장&quot;,&quot;closeOnScrim&quot;:false,&quot;typing&quot;:false,&quot;ack&quot;:false})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim">
+      <div aria-labelledby="sec-confirm-title" aria-modal="true" class="dialog" role="alertdialog"
+           x-on:htmx:after-request="onAfterRequest($event)" x-on:htmx:before-request="onBeforeRequest($event)"
+           x-on:match-change="typed = $event.detail" x-trap.noscroll="open">
+        <div class="dialog__head">
+          <h3 class="dialog__title" id="sec-confirm-title">현재 콘솔 주소를 빼고 저장할까요?</h3>
+          
+        </div>
+        <div class="dialog__body">
+          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <div class="banner banner--danger banner--top" id="sec-confirm-error" role="alert" x-cloak x-show="error">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title" x-text="error && error.title"></div>
+              <div x-text="error && error.text"></div>
+            </div>
+          </div>
+          
+    <p class="card__sub" style="margin: 0"><span class="mono">http://localhost</span> 이 CORS 허용 목록에서 빠집니다. 다른 도메인에서 이 콘솔 API를 호출하는 구성이라면 접속이 막힐 수 있습니다.</p>
+    <p class="hint" style="margin: 0">필요하면 이 주소를 다시 추가해 저장하세요.</p>
+  
+          
+          
+        </div>
+        <div class="dialog__foot">
+          <button autofocus class="btn" type="button" x-bind:disabled="busy" x-on:click="close()">취소</button>
+          <button class="btn btn--primary" data-confirm data-quiet hx-headers='{"X-Confirm": "1"}' hx-put="/admin/_/settings/security" hx-swap="innerHTML" hx-sync="#settings-tab:replace" hx-target="#settings-tab" type="button" x-bind:disabled="busy || !gateOk"><span x-show="!busy">저장</span><span x-cloak x-show="busy">저장 중…</span></button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+  </form>

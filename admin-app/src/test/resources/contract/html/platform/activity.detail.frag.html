@@ -1,0 +1,86 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<section aria-label="이벤트 상세" class="card">
+  <div class="card__head">
+    <h2 class="card__title">상세</h2>
+    <span class="tag" title="TENANT_UPDATED">TENANT_UPDATED</span>
+    <div class="spacer"></div>
+    <button aria-label="닫기" class="icon-btn" title="닫기" type="button" x-on:click="closeDetail()"><svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="card__body stack-4" style="gap: 18px">
+    
+    
+      <div aria-label="언제" class="stack-1" role="group" style="gap: 6px">
+        <div class="row"><span class="t-over">언제</span></div>
+        <span style="font-size: 13px">2026-10-11 12:34:56 <span class="muted" style="font-size: 12px">KST</span></span>
+        <span class="mono muted" style="font-size: 12px">2026-10-11T03:34:56Z UTC</span>
+      </div>
+      <div aria-label="누가" class="stack-1" role="group" style="gap: 6px">
+        <div class="row"><span class="t-over">누가</span></div>
+        <span class="row" style="gap: 8px; font-size: 13px">
+          <span aria-hidden="true" class="avatar avatar--sm">O</span>
+          <span>op@example.com</span>
+        </span>
+      </div>
+      <div aria-label="테넌트 · 대상" class="stack-1" role="group" style="gap: 6px">
+        <div class="row"><span class="t-over">테넌트 · 대상</span></div>
+        <span class="row" style="gap: 4px; font-size: 13px">
+          <a class="btn btn--ghost btn--xs" href="/admin/tenants/00000000-0000-0000-0000-00000000f111">alpha</a>
+          
+          <span>· TENANT</span>
+          <span class="mono muted" style="font-size: 12px" title="00000000-0000-0000-0000-00000000f111">…0000f111</span>
+        </span>
+      </div>
+      <div aria-label="어떻게 바뀜" class="stack-1" role="group" style="gap: 6px">
+        <div class="row"><span class="t-over">어떻게 바뀜</span></div>
+        <div class="row" style="gap: 8px; font-size: 12px">
+          <span class="mono truncate" style="width: 84px; color: var(--mute)" title="rpName">rpName</span>
+          
+          
+            <span class="tag" style="background: var(--bad-soft); color: var(--bad-ink); text-decoration: line-through">Alpha</span>
+            <span style="color: var(--mute); display: inline-flex"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="tag" style="background: var(--ok-soft); color: var(--ok-ink)">Alpha 2</span>
+          
+          <span class="sr-only">rpName: Alpha 에서 Alpha 2 로 변경</span>
+        </div>
+        <div class="row" style="gap: 8px; font-size: 12px">
+          <span class="mono truncate" style="width: 84px; color: var(--mute)" title="origins">origins</span>
+          
+            
+            <span class="tag" style="background: var(--ok-soft); color: var(--ok-ink)">+ https://b.com</span>
+          
+          
+          <span class="sr-only">origins: [&quot;https://a.com&quot;] 에서 [&quot;https://a.com&quot;,&quot;https://b.com&quot;] 로 변경</span>
+        </div>
+      </div>
+      <div aria-label="원본 JSON" class="stack-1" role="group" style="gap: 6px">
+        <div class="row"><span class="t-over">원본 JSON</span><div class="spacer"></div>
+          
+  
+  <button class="btn btn--sm" type="button"
+          x-data="copyBtn({&quot;value&quot;:&quot;{\n  \&quot;before\&quot;: {\n    \&quot;rpName\&quot;: \&quot;Alpha\&quot;,\n    \&quot;origins\&quot;: [\n      \&quot;https://a.com\&quot;\n    ]\n  },\n  \&quot;after\&quot;: {\n    \&quot;rpName\&quot;: \&quot;Alpha 2\&quot;,\n    \&quot;origins\&quot;: [\n      \&quot;https://a.com\&quot;,\n      \&quot;https://b.com\&quot;\n    ]\n  }\n}&quot;,&quot;label&quot;:&quot;복사&quot;})" x-on:click="copy($event)">
+    <span x-show="!copied"><svg aria-hidden="true" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="13"><rect height="11" rx="2" width="11" x="9" y="9"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></span>
+    <span x-cloak x-show="copied"><svg aria-hidden="true" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="13"><path d="M5 12l5 5L20 7"/></svg></span>
+    <span x-text="copied ? '복사됨' : label">복사</span>
+  </button>
+</div>
+        <pre class="mono activity-json">{
+  &quot;before&quot;: {
+    &quot;rpName&quot;: &quot;Alpha&quot;,
+    &quot;origins&quot;: [
+      &quot;https://a.com&quot;
+    ]
+  },
+  &quot;after&quot;: {
+    &quot;rpName&quot;: &quot;Alpha 2&quot;,
+    &quot;origins&quot;: [
+      &quot;https://a.com&quot;,
+      &quot;https://b.com&quot;
+    ]
+  }
+}</pre>
+      </div>
+    
+  </div>
+</section>

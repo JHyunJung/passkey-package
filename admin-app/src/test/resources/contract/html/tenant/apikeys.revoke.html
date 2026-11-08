@@ -1,0 +1,253 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+@header HX-Trigger: {"toast":{"kind":"success","title":"API \uD0A4 \u201C\uC6B4\uC601 \uC11C\uBC84\u201D\uB97C \uD68C\uC218\uD588\uC2B5\uB2C8\uB2E4.","message":"pk_live_ab12"}}
+
+
+  <div class="stack-6" id="ak-list">
+  <div class="kpis kpis--3">
+    
+  
+  <div class="kpi">
+    <span class="kpi__label">총 API Key</span>
+    <span class="kpi__value">2</span>
+    <span class="kpi__hint">활성 1 · 만료 0 · 회수 1</span>
+  </div>
+
+    
+  
+  <div class="kpi">
+    <span class="kpi__label">최근 발급</span>
+    <span class="kpi__value">12일 전</span>
+    
+  </div>
+
+    
+  
+  <div class="kpi">
+    <span class="kpi__label">권장 회전 주기</span>
+    <span class="kpi__value">90일</span>
+    <span class="kpi__hint">초과 키 0개</span>
+  </div>
+
+  </div>
+
+  <section class="card">
+    <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">API 키</h2>
+    <p class="card__sub">키 원문은 발급 직후 한 번만 보입니다. 서버는 해시만 저장합니다.</p>
+  </div>
+  <div class="spacer"></div><div class="row" style="gap: 8px">
+    
+    
+  
+    <button class="btn btn--primary" type="button" x-data x-on:click="$dispatch('dialog:open', { id: 'ak-new' })"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 5v14M5 12h14"/></svg>새 키 발급</button>
+  </div>
+</div>
+    
+    
+    <div class="tw">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>이름 · 키 접두사</th>
+            <th>권한 범위</th>
+            <th>상태</th>
+            <th>마지막 사용</th>
+            <th>생성일</th>
+            <th>만료</th>
+            <th style="width: 48px"><span class="sr-only">액션</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-key="00000000-0000-0000-0000-0000000000c1">
+            <td>
+              <div class="stack-1" style="gap: 0">
+                <strong style="font-size: 13px">운영 서버</strong>
+                <span class="mono" style="font-size: 12px; color: var(--mute)">pk_live_ab12…</span>
+              </div>
+            </td>
+            <td><div class="row" style="gap: 4px"><span class="tag" title="registration">패스키 등록</span><span class="tag" title="authentication">패스키 인증</span></div></td>
+            <td>
+  <span class="badge badge--success badge--dot"
+      title="ACTIVE">활성</span>
+</td>
+            <td><span style="font-size: 13px; color: var(--ink-2)">2일 전</span></td>
+            <td><span style="font-size: 13px; color: var(--ink-2)">2026-10-01</span></td>
+            <td>
+              <div class="stack-1" style="gap: 2px">
+                <span class="badge badge--warning">만료 임박 · 3일 남음</span>
+                <span class="hint hint--flush">2026-10-16</span>
+              </div>
+            </td>
+            <td>
+              
+                <div class="menu-wrap" x-data="menu"
+     x-on:keydown="onKeydown($event)" x-on:mousedown.window="outside($event)" x-on:resize.window="open = false" x-on:scroll.window.capture="dismiss($event)">
+  
+  <button aria-haspopup="menu" aria-label="운영 서버 키 액션" class="icon-btn" title="운영 서버 키 액션" type="button"
+          x-bind:aria-expanded="open" x-on:click.stop="toggle()" x-ref="trigger"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><circle cx="5" cy="12" fill="currentColor" r="1.5" stroke="none"/><circle cx="12" cy="12" fill="currentColor" r="1.5" stroke="none"/><circle cx="19" cy="12" fill="currentColor" r="1.5" stroke="none"/></svg></button>
+  <div aria-label="운영 서버 키 액션" class="menu" role="menu" tabindex="-1" x-bind:style="pos" x-cloak x-on:click.stop x-ref="menu" x-show="open">
+    <button class="menu__item" data-dialog="ak-rotate-00000000-0000-0000-0000-0000000000c1" role="menuitem" tabindex="-1"
+        type="button" x-on:click="onItemClick($event)" x-on:click.capture="$dispatch(&#39;dialog:open&#39;, { id: $el.dataset.dialog })">
+  <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>
+  
+  회전
+</button><button class="menu__item" data-prefix="pk_live_ab12" role="menuitem" tabindex="-1"
+        type="button" x-on:click="onItemClick($event)" x-on:click.capture="window.adminCopy($el.dataset.prefix).then((ok) =&gt; $dispatch(&#39;toast&#39;, ok ? { kind: &#39;success&#39;, title: &#39;접두사를 복사했습니다.&#39;, message: $el.dataset.prefix } : { kind: &#39;warn&#39;, title: &#39;복사 실패&#39;, message: &#39;클립보드 복사에 실패했습니다.&#39; }))">
+  <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><rect height="11" rx="2" width="11" x="9" y="9"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
+  
+  접두사 복사
+</button>
+    
+      <div class="menu__sep"></div>
+      <span class="menu__section">위험</span>
+      <button class="menu__item menu__item--danger" data-dialog="ak-revoke-00000000-0000-0000-0000-0000000000c1" role="menuitem" tabindex="-1"
+        type="button" x-on:click="onItemClick($event)" x-on:click.capture="$dispatch(&#39;dialog:open&#39;, { id: $el.dataset.dialog })">
+  <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M5 6l1 14a2 2 0 002 2h8a2 2 0 002-2l1-14"/></svg>
+  
+  회수
+</button>
+    
+  </div>
+</div>
+              
+            </td>
+          </tr>
+          <tr data-key="00000000-0000-0000-0000-0000000000c2">
+            <td>
+              <div class="stack-1" style="gap: 0">
+                <strong style="font-size: 13px">old</strong>
+                <span class="mono" style="font-size: 12px; color: var(--mute)">pk_live_zz99…</span>
+              </div>
+            </td>
+            <td><div class="row" style="gap: 4px"><span class="tag" title="registration">패스키 등록</span></div></td>
+            <td>
+  <span class="badge badge--danger badge--dot"
+      title="REVOKED">회수</span>
+</td>
+            <td><span style="font-size: 13px; color: var(--ink-2)">미사용</span></td>
+            <td><span style="font-size: 13px; color: var(--ink-2)">2026-07-03</span></td>
+            <td>
+              <div class="stack-1" style="gap: 2px">
+                <span class="badge">무기한</span>
+                <span class="hint hint--flush">만료일 없음</span>
+              </div>
+            </td>
+            <td>
+              
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 행별 확인 다이얼로그(ACTIVE 키만). 회전: L2 영향 요약(primary), 회수: L2 영향 요약(입력 확인 없음, danger) — 원본과 같다. -->
+  
+    <div x-data="dialog({&quot;id&quot;:&quot;ak-rotate-00000000-0000-0000-0000-0000000000c1&quot;,&quot;level&quot;:&quot;L2&quot;,&quot;verb&quot;:&quot;회전&quot;,&quot;closeOnScrim&quot;:false,&quot;typing&quot;:false,&quot;ack&quot;:false})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim">
+      <div aria-labelledby="ak-rotate-00000000-0000-0000-0000-0000000000c1-title" aria-modal="true" class="dialog" role="alertdialog"
+           x-on:htmx:after-request="onAfterRequest($event)" x-on:htmx:before-request="onBeforeRequest($event)"
+           x-on:match-change="typed = $event.detail" x-trap.noscroll="open">
+        <div class="dialog__head">
+          <h3 class="dialog__title" id="ak-rotate-00000000-0000-0000-0000-0000000000c1-title">API 키를 회전할까요?</h3>
+          
+        </div>
+        <div class="dialog__body">
+          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <div class="banner banner--danger banner--top" id="ak-rotate-00000000-0000-0000-0000-0000000000c1-error" role="alert" x-cloak x-show="error">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title" x-text="error && error.title"></div>
+              <div x-text="error && error.text"></div>
+            </div>
+          </div>
+          
+    <dl class="kv" style="grid-template-columns: 80px minmax(0, 1fr)">
+      <dt>이름</dt><dd>운영 서버</dd>
+      <dt>prefix</dt><dd class="mono" style="font-size: 12px">pk_live_ab12</dd>
+    </dl>
+    <div class="row ak-rotate-flow">
+      <span class="tag">기존 pk_live_ab12</span>
+      <span style="color: var(--ink-2)">24시간 함께 유효</span>
+      <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M9 6l6 6-6 6"/></svg>
+      <span class="tag tag--new">새 키</span>
+      <span style="color: var(--ink-2)">즉시 발급 · 1회 표시</span>
+    </div>
+    <p style="margin: 0; font-size: 13px; color: var(--ink-2)">유예 기간 안에 RP 서버 설정을 새 키로 바꾸세요. 유예가 끝나면 기존 키 요청은 거부됩니다.</p>
+  
+          
+          
+        </div>
+        <div class="dialog__foot">
+          <button autofocus class="btn" type="button" x-bind:disabled="busy" x-on:click="close()">취소</button>
+          <button class="btn btn--primary" data-confirm data-quiet hx-headers='{"X-Confirm": "1"}' hx-post="/admin/_/api-keys/00000000-0000-0000-0000-0000000000c1/rotate?tenantId=00000000-0000-0000-0000-00000000f111" hx-swap="innerHTML" hx-sync="#ak-root:drop" hx-target="#ak-issued-slot" type="button" x-bind:disabled="busy || !gateOk"><span x-show="!busy">회전</span><span x-cloak x-show="busy">회전 중…</span></button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+    <div x-data="dialog({&quot;id&quot;:&quot;ak-revoke-00000000-0000-0000-0000-0000000000c1&quot;,&quot;level&quot;:&quot;L2&quot;,&quot;verb&quot;:&quot;회수&quot;,&quot;closeOnScrim&quot;:false,&quot;typing&quot;:false,&quot;ack&quot;:false})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim">
+      <div aria-labelledby="ak-revoke-00000000-0000-0000-0000-0000000000c1-title" aria-modal="true" class="dialog" role="alertdialog"
+           x-on:htmx:after-request="onAfterRequest($event)" x-on:htmx:before-request="onBeforeRequest($event)"
+           x-on:match-change="typed = $event.detail" x-trap.noscroll="open">
+        <div class="dialog__head">
+          <h3 class="dialog__title" id="ak-revoke-00000000-0000-0000-0000-0000000000c1-title">API 키를 회수할까요?</h3>
+          
+        </div>
+        <div class="dialog__body">
+          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <div class="banner banner--danger banner--top" id="ak-revoke-00000000-0000-0000-0000-0000000000c1-error" role="alert" x-cloak x-show="error">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title" x-text="error && error.title"></div>
+              <div x-text="error && error.text"></div>
+            </div>
+          </div>
+          
+    <dl class="kv" style="grid-template-columns: 80px minmax(0, 1fr)">
+      <dt>이름</dt><dd>운영 서버</dd>
+      <dt>prefix</dt><dd class="mono" style="font-size: 12px">pk_live_ab12</dd>
+      <dt>마지막 사용</dt><dd>2일 전</dd>
+    </dl>
+    <div class="banner banner--danger banner--top"
+     role="alert">
+  <span class="banner__icon">
+    
+    
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M5 12l5 5L20 7"/></svg>
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 8h.01"/></svg>
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg>
+    
+  </span>
+  <div class="banner__body">
+    <div class="banner__title">영향</div>
+    <div>이 키를 쓰는 RP 서버의 요청이 즉시 거부됩니다(401). 회수는 되돌릴 수 없습니다.</div>
+  </div>
+  
+</div>
+  
+          
+          
+        </div>
+        <div class="dialog__foot">
+          <button autofocus class="btn" type="button" x-bind:disabled="busy" x-on:click="close()">취소</button>
+          <button class="btn btn--danger-solid" data-confirm data-quiet hx-delete="/admin/_/api-keys/00000000-0000-0000-0000-0000000000c1?tenantId=00000000-0000-0000-0000-00000000f111" hx-headers='{"X-Confirm": "1"}' hx-swap="outerHTML" hx-sync="#ak-root:drop" hx-target="#ak-list" type="button" x-bind:disabled="busy || !gateOk"><span x-show="!busy">회수</span><span x-cloak x-show="busy">회수 중…</span></button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+  
+</div>
+  <span class="tabs__badgeslot" hx-swap-oob="true" id="tenant-tab-apikeys-badge">
+  <span class="badge badge--warning tabs__badge" title="30일 안에 만료되는 키 1개">확인 필요 1</span>
+</span>
+  
+  <span data-count="2" hidden hx-swap-oob="true" id="tenant-apikey-count"></span>
+

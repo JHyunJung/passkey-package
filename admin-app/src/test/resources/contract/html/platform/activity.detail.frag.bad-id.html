@@ -1,0 +1,27 @@
+@status: 422
+@contentType: text/html;charset=UTF-8
+
+<section aria-label="이벤트 상세" class="card">
+  <div class="card__head">
+    <h2 class="card__title">상세</h2>
+    
+    <div class="spacer"></div>
+    <button aria-label="닫기" class="icon-btn" title="닫기" type="button" x-on:click="closeDetail()"><svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="card__body stack-4" style="gap: 18px">
+    
+      <div class="empty empty--compact" role="alert" x-data="loadError({&quot;text&quot;:&quot;이벤트 상세\n서버가 잠시 응답하지 않습니다\n저장된 데이터는 그대로 있습니다. 잠시 후 다시 시도하세요.\nHTTP 500&quot;})">
+  <img alt="" class="empty__art empty__art--error" src="/admin/img/load-error.webp">
+  <p class="empty__title">이벤트 상세를 불러오지 못했습니다</p>
+  <p class="empty__sub">서버가 잠시 응답하지 않습니다. 저장된 데이터는 그대로 있습니다. 잠시 후 다시 시도하세요.</p>
+  <div class="empty__actions">
+    <button class="btn btn--primary" data-quiet="" hx-get="/admin/_/activity/not-a-uuid" hx-swap="innerHTML" hx-sync="#activity-detail:replace" hx-target="#activity-detail" type="button">다시 시도</button>
+    <button class="btn btn--ghost" type="button" x-on:click="copy()" x-text="labels[state]">오류 정보 복사</button>
+  </div>
+  <span aria-live="polite" class="hint hint--flush" x-text="state === 'idle' ? '' : labels[state]"></span>
+  <p class="hint hint--flush mono">HTTP 500</p>
+</div>
+    
+    
+  </div>
+</section>

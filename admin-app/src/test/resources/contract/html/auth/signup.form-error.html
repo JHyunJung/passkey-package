@@ -1,0 +1,75 @@
+@status: 422
+@contentType: text/html;charset=UTF-8
+
+<div class="auth__col auth__col--wide" id="auth-col">
+    <img alt="CROSSCERT" class="auth__logo" src="/admin/img/crosscert-logo-transparent.png">
+    <div class="auth-card" id="auth-card"
+         style="gap: 18px;">
+      
+      
+      <form action="/admin/signup" class="col" data-email="not-an-email" data-role="RP_ADMIN" hx-post="/admin/signup"
+            hx-swap="outerHTML" hx-sync="this:drop" hx-target="#auth-col" method="post"
+            novalidate style="gap: 18px;" x-data="signupForm"
+            x-on:htmx:after-request="onAfter($event)" x-on:htmx:before-request="onBefore($event)" x-on:htmx:send-error="onNetworkError()" x-on:htmx:timeout="onNetworkError()">
+        <input name="_csrf" type="hidden" value="{{CSRF}}">
+        <div class="col" style="gap: 6px;">
+          <h1 class="page__title">관리자 계정 가입 요청</h1>
+          <p class="card__sub">플랫폼 운영자가 승인하면 계정이 활성화됩니다. 역할과 담당 tenant 는 승인 시 지정됩니다.</p>
+        </div>
+        <template x-if="rejected">
+          <div class="banner banner--danger banner--top" role="alert">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title">요청이 거부되었습니다.</div>
+              <div>보안 토큰이 만료되었을 수 있습니다. 페이지를 새로 고친 뒤 다시 시도하세요. 입력한 비밀번호는 지워질 수 있습니다.<span class="mono" style="display: block; font-size: 11px;" x-text="'HTTP ' + status"></span></div>
+            </div>
+            <div class="banner__actions"><button class="btn btn--sm" type="button" x-on:click="window.location.reload()">새로 고침</button></div>
+          </div>
+        </template>
+        <template x-if="failure">
+          <div class="banner banner--danger banner--top" role="alert">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title">요청을 보내지 못했습니다.</div>
+              <div>네트워크 또는 서버 문제로 접수되지 않았습니다. 입력한 내용은 그대로 있습니다.<span class="mono" style="display: block; font-size: 11px;" x-show="status !== null" x-text="'HTTP ' + status"></span></div>
+            </div>
+          </div>
+        </template>
+        
+        <div>
+          <label class="label" for="signup-email">이메일</label>
+          <input aria-describedby="signup-email-error signup-email-server-error" aria-invalid="false" autocomplete="username" autofocus class="input" data-server-error="true" id="signup-email"
+                 name="email" placeholder="you@company.com" type="email"
+                 x-bind:aria-invalid="(emailInvalid() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" x-bind:readonly="submitting" x-model="email" x-on:blur="emailTouched = true">
+          <p class="field__error" id="signup-email-error" x-cloak x-show="emailInvalid()">이메일 형식이 올바르지 않습니다. 예: you@company.com</p>
+          <p class="field__error" id="signup-email-server-error">이메일 형식이 올바르지 않습니다. 예: you@company.com</p>
+        </div>
+        <div>
+          <label class="label" for="signup-pw">비밀번호</label>
+          <input aria-describedby="signup-pw-error signup-pw-server-error" aria-invalid="false" autocomplete="new-password" class="input" data-server-error="true" id="signup-pw"
+                 maxlength="128" name="password"
+                 type="password" x-bind:aria-invalid="(pwTooShort() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" x-bind:readonly="submitting" x-model="pw">
+          <p class="field__error" id="signup-pw-error" x-cloak x-show="pwTooShort()" x-text="pw.length + '자 입력됨 · 12–128자로 입력하세요'"></p>
+          <p class="field__error" id="signup-pw-server-error">5자 입력됨 · 12–128자로 입력하세요</p>
+          <p class="hint" x-show="!pwTooShort()">12–128자</p>
+        </div>
+        <div>
+          <label class="label" for="signup-pw2">비밀번호 확인</label>
+          <input aria-describedby="signup-pw2-error" aria-invalid="false" autocomplete="new-password" class="input" id="signup-pw2" maxlength="128"
+                 name="password2" type="password"
+                 x-bind:aria-invalid="(mismatch() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" x-bind:readonly="submitting" x-model="pw2">
+          <p class="field__error" id="signup-pw2-error" x-cloak x-show="mismatch()">비밀번호가 일치하지 않습니다.</p>
+          
+        </div>
+        <div>
+          <label class="label" for="signup-reason">요청 사유 <span style="font-weight: 400; color: var(--mute);">(선택)</span></label>
+          <textarea class="input" id="signup-reason" maxlength="500" name="reason" placeholder="소속 · 담당 RP · 필요한 권한" rows="3"
+                    x-bind:readonly="submitting" x-model="reason"></textarea>
+          
+        </div>
+        <button class="btn btn--primary btn--lg" type="submit" x-bind:disabled="!canSubmit()" x-ref="submit"
+                x-text="submitting ? '전송 중…' : (failure ? '다시 시도' : '가입 요청 보내기')">가입 요청 보내기</button>
+      </form>
+    </div>
+    <a href="/admin" style="font-size: 13px; font-weight: 600;">← 로그인으로</a>
+  </div>

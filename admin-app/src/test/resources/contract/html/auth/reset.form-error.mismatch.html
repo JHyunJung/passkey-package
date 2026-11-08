@@ -1,0 +1,96 @@
+@status: 422
+@contentType: text/html;charset=UTF-8
+
+<!DOCTYPE html>
+<html lang="ko">
+<!--
+  새 비밀번호 설정(← pages/ResetPasswordPage.tsx). 메일 링크의 ?token= 으로 진입한다.
+  card 조각의 상태(state): form | invalid(토큰 없음) | expired(토큰 거부) | done.
+  제출: hx-post /admin/reset-password(token, password, password2, _csrf) → #auth-card 교체.
+  토큰은 폼의 hidden 값으로만 오간다(URL·로그·응답 헤더에 되풀이하지 않는다 — 컨트롤러가 no-store·no-referrer 를 건다).
+  비밀번호는 응답에 다시 그리지 않는다.
+-->
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <title>비밀번호 재설정</title>
+  <link href="/admin/img/favicon.png" rel="icon">
+  <link href="/admin/css/fonts.css" rel="stylesheet">
+  <link href="/admin/css/tokens.css" rel="stylesheet">
+  <link href="/admin/css/globals.css" rel="stylesheet">
+  <link href="/admin/css/components.css" rel="stylesheet">
+  <script src="/admin/js/vendor/htmx.min.js"></script>
+  <script src="/admin/js/ui.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script defer src="/admin/js/vendor/alpine.min.js"></script>
+</head>
+<body>
+<main class="auth">
+  <div class="auth__col">
+    <img alt="CROSSCERT" class="auth__logo" src="/admin/img/crosscert-logo-transparent.png">
+    <div class="auth-card" id="auth-card">
+      
+      
+      <form action="/admin/reset-password" class="col" hx-post="/admin/reset-password" hx-swap="outerHTML" hx-sync="this:drop"
+            hx-target="#auth-card" method="post" novalidate style="gap: 20px;"
+            x-data="resetForm"
+            x-on:htmx:after-request="onAfter($event)" x-on:htmx:before-request="onBefore($event)"
+            x-on:htmx:send-error="onNetworkError()" x-on:htmx:timeout="onNetworkError()">
+        <input name="_csrf" type="hidden" value="{{CSRF}}">
+        <input name="token" type="hidden" value="tok123">
+        <div class="col" style="gap: 6px;">
+          <h1 class="page__title">새 비밀번호 설정</h1>
+          <p class="card__sub">12자 이상으로 새 비밀번호를 입력하세요.</p>
+        </div>
+        <template x-if="rejected">
+          <div class="banner banner--danger banner--top" role="alert">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title">요청이 거부되었습니다.</div>
+              <div>보안 토큰이 만료되었을 수 있습니다. 페이지를 새로 고친 뒤 다시 시도하세요. 입력한 비밀번호는 지워질 수 있습니다.<span class="mono" style="display: block; font-size: 11px;" x-text="'HTTP ' + status"></span></div>
+            </div>
+            <div class="banner__actions"><button class="btn btn--sm" type="button" x-on:click="window.location.reload()">새로 고침</button></div>
+          </div>
+        </template>
+        <template x-if="failure">
+          <div class="banner banner--danger banner--top" role="alert">
+            <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+            <div class="banner__body">
+              <div class="banner__title">비밀번호를 바꾸지 못했습니다.</div>
+              <div>서버가 응답하지 않습니다. 입력한 내용은 그대로 있습니다.<span class="mono" style="display: block; font-size: 11px;" x-show="status !== null" x-text="'HTTP ' + status"></span></div>
+            </div>
+            <div class="banner__actions"><button class="btn btn--sm" type="button" x-bind:disabled="!canSubmit()" x-on:click="$root.requestSubmit()">다시 시도</button></div>
+          </div>
+        </template>
+        <div>
+          <label class="label" for="reset-pw">새 비밀번호</label>
+          <input aria-describedby="reset-pw-meter" aria-invalid="false" autocomplete="new-password" autofocus class="input input--lg" id="reset-pw"
+                 name="password" type="password"
+                 x-bind:aria-invalid="(tooShort() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" x-bind:readonly="submitting" x-model="pw">
+          <div class="row" id="reset-pw-meter" style="gap: 6px; margin-top: 8px; flex-wrap: nowrap;">
+            <template x-bind:key="i" x-for="i in [0, 1, 2]">
+              <span aria-hidden="true" style="flex: 1 1 0; height: 4px; border-radius: 2px; background: var(--line);" x-bind:style="{ background: segColor(i) }"></span>
+            </template>
+            <span class="hint" style="margin: 0; flex: none;" x-bind:style="{ color: (pw.length > 0 && pw.length < min) ? 'var(--bad)' : '' }"
+                  x-text="pw.length >= min ? '12자 이상 충족' : '12자 이상'">12자 이상</span>
+          </div>
+          
+        </div>
+        <div>
+          <label class="label" for="reset-pw2">새 비밀번호 확인</label>
+          <input aria-describedby="reset-pw2-error reset-pw2-server-error" aria-invalid="false" autocomplete="new-password" class="input input--lg" data-server-error="true"
+                 id="reset-pw2" name="password2"
+                 type="password" x-bind:aria-invalid="(mismatch() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" x-bind:readonly="submitting" x-model="pw2">
+          <p class="field__error" id="reset-pw2-error" x-cloak x-show="mismatch()">비밀번호가 일치하지 않습니다.</p>
+          <p class="field__error" id="reset-pw2-server-error">비밀번호가 일치하지 않습니다.</p>
+        </div>
+        
+        <button class="btn btn--primary btn--lg" type="submit" x-bind:disabled="!canSubmit()" x-ref="submit"
+                x-text="submitting ? '변경 중…' : '비밀번호 변경'">비밀번호 변경</button>
+      </form>
+    </div>
+    <a href="/admin" style="font-size: 13px; font-weight: 600;">← 로그인으로</a>
+  </div>
+</main>
+</body>
+</html>
