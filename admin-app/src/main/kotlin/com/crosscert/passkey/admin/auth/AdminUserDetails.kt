@@ -25,18 +25,25 @@ import java.util.UUID
  * equals/hashCode 를 정의하지 않는다 — SessionRegistry(maximumSessions)의 principal 비교 방식이 바뀌지 않게 하기 위함이다.
  *
  * null 인자(core Java 엔티티의 플랫폼 타입 값 등): 원 Java 의 Objects.requireNonNull 과 같이 NullPointerException
- * (Kotlin non-null 파라미터 검사 — 메시지만 다르다). lockedUntil 만 nullable.
+ * (Kotlin non-null 파라미터 검사 — 메시지만 다르다). nullable 인 것은 lockedUntil 뿐이다
+ * (passwordHash 는 생성자에서 non-null 이고, 소거 후에만 내부 필드가 null).
  */
 class AdminUserDetails(
     val id: UUID,
     private val email: String,
-    private var passwordHash: String?, // eraseCredentials() 후 null (직렬화 형식의 필드 이름·JVM 타입 String 은 그대로)
+    passwordHash: String,
     val role: String, // "PLATFORM_OPERATOR" | "RP_ADMIN"
     allowedTenantIds: Set<UUID>,
     private val enabled: Boolean,
     private val lockedUntil: OffsetDateTime?,
     private val clock: Clock,
 ) : UserDetails, CredentialsContainer {
+
+    /**
+     * 생성자 인자는 non-null(Kotlin 검사 = 생성 시점 NPE, 원 Java requireNonNull 과 동일)이고, 소거 가능한 값은
+     * 본문 필드로 둔다. 필드 이름·JVM 타입(String)이 그대로라 직렬화 형식이 변하지 않는다. eraseCredentials() 후 null.
+     */
+    private var passwordHash: String? = passwordHash
 
     /** PLATFORM_OPERATOR 는 빈 Set. Set.copyOf: 불변 사본 — null 원소·contains(null) NPE 도 원 Java 와 같다. */
     val allowedTenantIds: Set<UUID> = java.util.Set.copyOf(allowedTenantIds)

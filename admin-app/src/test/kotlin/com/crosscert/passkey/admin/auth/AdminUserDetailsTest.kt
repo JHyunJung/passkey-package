@@ -148,4 +148,18 @@ class AdminUserDetailsTest {
         val serialized = String(jdkSerialize(me), StandardCharsets.ISO_8859_1)
         assertThat(serialized).doesNotContain("\$2a\$12\$secrethashvalue")
     }
+
+    @Test
+    fun constructor_rejectsNullPasswordHash() {
+        // admin_user.bcrypt_hash 는 NULL 가능 — 원 Java 의 requireNonNull 처럼 생성 시점에 NPE 여야 한다
+        // (그래야 인증 실패 사유가 bad-password 가 아니라 other 로 남고 실패 횟수/잠금이 늘지 않는다).
+        val ctor = AdminUserDetails::class.java.declaredConstructors.single { it.parameterCount == 8 }
+        val ex = org.junit.jupiter.api.Assertions.assertThrows(java.lang.reflect.InvocationTargetException::class.java) {
+            ctor.newInstance(
+                UUID.randomUUID(), "rp@x.com", null, "RP_ADMIN",
+                setOf<UUID>(), true, null, Clock.systemUTC(),
+            )
+        }
+        assertThat(ex.cause).isInstanceOf(NullPointerException::class.java)
+    }
 }
