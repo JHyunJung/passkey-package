@@ -27,6 +27,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.Clock
 import java.time.Instant
@@ -94,6 +95,20 @@ class PasswordResetControllerTest {
         )
             .andExpect(status().isOk())
         verify(service).request(eq("ghost@x.com"))
+    }
+
+    /** S9 특성화 — request 응답 본문은 계정 존재 여부와 무관하게 정확히 {"ok":true}. */
+    @Test
+    fun request_body_is_ok_true_for_known_and_unknown() {
+        for (email in arrayOf("ghost@x.com", "op@crosscert.com")) {
+            mvc.perform(
+                post("/admin/api/password-reset/request").with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"email\":\"$email\"}"),
+            )
+                .andExpect(status().isOk())
+                .andExpect(content().json("{\"ok\":true}", true))
+        }
     }
 
     @Test
