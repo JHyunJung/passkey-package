@@ -61,6 +61,10 @@ services:
       # '설정됨' 으로 취급하므로 이 형태여야 한다. prometheus 스크레이프가
       # 필요한 배포만 .env 에서 켠다(기본은 core 의 health,info).
       - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+      # P6: DB 풀 상한(기본 20)과 요청 워커 상한(기본 19). 같은 값 없는 리스트형 —
+      # .env 에 없으면 키가 빠져 yml 기본값을 쓴다. 바꿀 때는 반드시 워커 ≤ 풀 − 1.
+      - SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE
+      - SERVER_TOMCAT_THREADS_MAX
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 15s
@@ -120,6 +124,8 @@ services:
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
       - PASSKEY_MAIL_FROM
       - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+      # P6: admin-app DB 풀 상한(기본 10). 설정하면 passkey-app 과 같은 .env 값을 공유한다.
+      - SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
       interval: 15s

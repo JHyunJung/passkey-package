@@ -54,9 +54,10 @@ public class CeremonyEventRecorder {
      *
      * <p>설계 트레이드오프(의도적): afterCommit 콜백은 outer 트랜잭션 connection 이
      * 완전히 반납되기 직전에 실행되므로, 여기서 여는 REQUIRES_NEW 기록이 짧은 순간
-     * 두 번째 connection 을 요청한다. best-effort·저빈도 집계 지표라 이 잔여
-     * 오버랩은 수용한다(실패해도 ceremony 는 안 깨짐). 고동시성이 현실화되면
-     * 전용 @Async executor 로 dispatch 하도록 격상한다.
+     * 두 번째 connection 을 요청한다. 이 오버랩이 풀 고갈 정지로 번지지 않도록
+     * passkey-app 은 {@code server.tomcat.threads.max ≤ spring.datasource.hikari.maximum-pool-size − 1}
+     * 을 설정으로 보장한다(passkey-app application.yml, DbPoolThreadBudgetConfigTest).
+     * 기록 시점을 응답 이후로 미루는 @Async 전환은 행 기록 시점이 바뀌므로 별도 결정 사항이다.
      */
     public void recordAfterCommit(UUID tenantId, String action) {
         Objects.requireNonNull(tenantId, "tenantId");

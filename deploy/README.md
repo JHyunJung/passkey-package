@@ -185,6 +185,8 @@ compose 기본값으로 동작한다:
 | QA (rp-app) | `WK_IOS_APPID` | `LTPC88ZFE8.com.crosscert.sample.passkey` | `/.well-known/apple-app-site-association` 의 `<TeamID>.<BundleID>` |
 | SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. `docker-compose.yml` 의 admin-app 에 패스스루됨 — **빈 값 금지**(`SPRING_MAIL_HOST=` 처럼 두면 빈 값도 '설정됨' 으로 취급돼 mail health 가 DOWN 이 된다). 쓰지 않으면 주석 처리로 끈다 |
 | actuator | `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE` | `health,info` | prometheus 를 켜려면 `health,info,prometheus`. passkey-app 은 인증이 없으니 내부망 스크레이퍼만 접근 가능하게 둔다 |
+| DB 풀 | `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | passkey-app `20`, admin-app `10` | 컨테이너당 DB 커넥션 상한. `.env` 에 넣으면 **두 앱 모두** 이 값이 된다. Oracle 최대 세션 = (서버별 passkey-app 인스턴스 수 × 서버 수, 롤링 업데이트 피크 `--scale passkey-app=6` 포함) × passkey 풀 + admin 풀 + Flyway. 올리기 전에 `SELECT name, value FROM v$parameter WHERE name IN ('processes','sessions')` 로 여유를 확인한다 |
+| DB 풀 | `SERVER_TOMCAT_THREADS_MAX` | `19` | passkey-app 요청 워커 상한. **반드시 풀 상한 − 1 이하** — 아니면 동시 ceremony 가 몰릴 때 이벤트 기록이 풀을 고갈시켜 30초 정지할 수 있다. 풀을 바꾸면 함께 바꾼다 |
 
 아래는 **필수** — 기본값이 없어 비워두면 기동에 실패한다:
 

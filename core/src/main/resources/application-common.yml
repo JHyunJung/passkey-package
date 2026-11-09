@@ -48,7 +48,12 @@ spring:
     hibernate.ddl-auto: validate
   datasource:
     hikari:
-      maximum-pool-size: 10
+      # P6: 앱별 기본값은 passkey.db.pool-max-default 로 정한다(미설정 앱은 10 — admin-app).
+      # passkey-app 은 application.yml 에서 20 으로 두고 server.tomcat.threads.max 를 이 값 − 1(19)로
+      # 묶는다. 이 파일은 import 되는 쪽이라 앱 yml 의 같은 키보다 우선하므로, 앱별 값은
+      # 이 키가 아니라 placeholder 의 기본값 속성으로 넘긴다. 풀을 바꾸면 워커 상한도 함께 바꾼다.
+      # minimum-idle 은 그대로 2 — 상한만 올라가고 유휴 세션 수는 불변.
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE:${passkey.db.pool-max-default:10}}
       minimum-idle: 2
       pool-name: passkey-pool
       connection-init-sql: "ALTER SESSION SET TIME_ZONE='Asia/Seoul'"
