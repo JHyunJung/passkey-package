@@ -8,7 +8,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.spy
@@ -78,7 +78,7 @@ class ApiKeyAuthFilterVerifiedSecretCacheTest {
         assertThat(send(SECRET)).isEqualTo(200)
         assertThat(send(SECRET)).isEqualTo(200)
 
-        verify(encoder, times(1)).matches(any(), eq(hash))
+        verify(encoder, times(1)).matches(anyOrNull(), eq(hash))
         verify(lookup, times(2)).findByPrefix(PREFIX)
     }
 
@@ -87,11 +87,11 @@ class ApiKeyAuthFilterVerifiedSecretCacheTest {
         assertThat(send(SECRET)).isEqualTo(200)
         clock.advance(Duration.ofSeconds(29))
         assertThat(send(SECRET)).isEqualTo(200)
-        verify(encoder, times(1)).matches(any(), eq(hash))
+        verify(encoder, times(1)).matches(anyOrNull(), eq(hash))
 
         clock.advance(Duration.ofSeconds(1)) // verifiedAt + 30s → 만료
         assertThat(send(SECRET)).isEqualTo(200)
-        verify(encoder, times(2)).matches(any(), eq(hash))
+        verify(encoder, times(2)).matches(anyOrNull(), eq(hash))
     }
 
     @Test
@@ -99,7 +99,7 @@ class ApiKeyAuthFilterVerifiedSecretCacheTest {
         assertThat(send(SECRET)).isEqualTo(200)
         assertThat(send("WRONG_SECRET_01234567890ABCDEFGH")).isEqualTo(401)
 
-        verify(encoder, times(2)).matches(any(), eq(hash))
+        verify(encoder, times(2)).matches(anyOrNull(), eq(hash))
     }
 
     @Test
@@ -110,7 +110,7 @@ class ApiKeyAuthFilterVerifiedSecretCacheTest {
         returnRow(rehashed, null, null)
         assertThat(send(SECRET)).isEqualTo(200)
 
-        verify(encoder, times(1)).matches(any(), eq(rehashed))
+        verify(encoder, times(1)).matches(anyOrNull(), eq(rehashed))
     }
 
     @Test
@@ -122,7 +122,7 @@ class ApiKeyAuthFilterVerifiedSecretCacheTest {
 
         returnRow(hash, null, null)
         assertThat(send(SECRET)).isEqualTo(200)
-        verify(encoder, times(2)).matches(any(), eq(hash))
+        verify(encoder, times(2)).matches(anyOrNull(), eq(hash))
     }
 
     @Test
@@ -135,7 +135,7 @@ class ApiKeyAuthFilterVerifiedSecretCacheTest {
 
         returnRow(hash, clock.instant().plusSeconds(3600), null)
         assertThat(send(SECRET)).isEqualTo(200)
-        verify(encoder, times(2)).matches(any(), eq(hash))
+        verify(encoder, times(2)).matches(anyOrNull(), eq(hash))
     }
 
     private companion object {
