@@ -1,6 +1,6 @@
 package com.crosscert.passkey.core.license;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,7 +9,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServer;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
 
@@ -43,7 +43,7 @@ class LicenseGuardFilterExemptPathTest {
     @BeforeAll
     static void startTomcat() {
         LicenseGuardFilter filter = new LicenseGuardFilter(
-                deadStateMachine(), new ObjectMapper().findAndRegisterModules());
+                deadStateMachine(), new ObjectMapper());
         ServletContextInitializer init = ctx -> {
             ctx.addFilter("licenseGuardFilter", filter)
                     .addMappingForUrlPatterns(EnumSet.of(DispatcherType.REQUEST), false, "/*");
