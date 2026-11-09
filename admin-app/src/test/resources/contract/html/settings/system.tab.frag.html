@@ -1,0 +1,81 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+
+  
+
+  <div class="stack-6">
+    <div class="kpis kpis--3">
+      <div class="kpi">
+        <span class="kpi__label">전체 상태</span>
+        <span class="kpi__value"><span class="row" style="gap: 8px"><span class="dot" style="width: 10px; height: 10px; background: var(--bad)"></span>중단</span></span>
+        <span class="kpi__hint">컴포넌트 0 / 2</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__label">서버 버전</span>
+        <span class="kpi__value"><span class="mono" style="font-size: 22px">1.4.2</span></span>
+        <span class="kpi__hint">2026-10-01 09:00 KST 배포</span>
+      </div>
+      <!-- 시간 단위 세분화는 서버 지원 후(스펙 §8). -->
+      
+  
+  <div class="kpi">
+    <span class="kpi__label">가동 시간</span>
+    <span class="kpi__value">12일</span>
+    
+  </div>
+
+    </div>
+
+    <div class="grid-2">
+      <section class="card">
+        <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">백엔드 컴포넌트</h2>
+    
+  </div>
+  
+</div>
+        <ul aria-label="백엔드 컴포넌트" style="list-style: none; margin: 0; padding: 0">
+          <li class="row sys-comp">
+            <span aria-hidden="true" class="sys-comp__icon"><svg aria-hidden="true" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="15"><rect height="6" rx="1.5" width="16" x="4" y="4.5"/><rect height="6" rx="1.5" width="16" x="4" y="13.5"/><path d="M7.5 7.5h.01M7.5 16.5h.01"/></svg></span>
+            <span class="col" style="flex: 1 1 0; min-width: 0">
+              <span class="mono truncate">Oracle</span>
+              
+            </span>
+            <span class="hint hint--flush mono truncate" style="max-width: 45%" title="19c">19c</span>
+            <span class="badge badge--success badge--dot">정상</span>
+          </li>
+          <li class="row sys-comp sys-comp--last">
+            <span aria-hidden="true" class="sys-comp__icon"><svg aria-hidden="true" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="15"><rect height="6" rx="1.5" width="16" x="4" y="4.5"/><rect height="6" rx="1.5" width="16" x="4" y="13.5"/><path d="M7.5 7.5h.01M7.5 16.5h.01"/></svg></span>
+            <span class="col" style="flex: 1 1 0; min-width: 0">
+              <span class="mono truncate">Redis</span>
+              <span class="hint hint--flush">연결 거부</span>
+            </span>
+            <span class="hint hint--flush mono truncate" style="max-width: 45%" title="7.2">7.2</span>
+            <span class="badge badge--danger badge--dot">중단</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">호스트 정보</h2>
+    
+  </div>
+  <div class="spacer"></div><span class="badge badge--info">환경 · <span>prod</span></span>
+</div>
+        <div class="card__body">
+          <dl class="kv" style="grid-template-columns: 120px minmax(0, 1fr)">
+            <dt>활성 프로필</dt>
+            <dd><span class="chips"><span class="tag">prod</span></span></dd>
+            <dt>배포 시각</dt>
+            <dd class="mono" style="font-size: 12px">2026-10-01 09:00 KST</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+  </div>

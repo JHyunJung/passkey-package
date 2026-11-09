@@ -1,0 +1,30 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<div class="menu-wrap" x-data="shellMenu(false)" x-on:htmx:after-request="switching = false; close()"
+     x-on:keydown.escape.window="close()" x-on:mousedown.window="outside($event)">
+  <button aria-haspopup="menu" class="btn btn--ghost" type="button" x-bind:aria-expanded="open" x-bind:disabled="switching" x-on:click="toggle()">
+    <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M4 21V5a2 2 0 012-2h8a2 2 0 012 2v16"/><path d="M16 8h2a2 2 0 012 2v11"/><path d="M8 7h2M8 11h2M8 15h2M14 11h2M14 15h2"/></svg>
+    <span class="truncate" style="max-width: 140px" x-show="!switching">Alpha Corp</span>
+    <span class="truncate" style="max-width: 140px" x-cloak x-show="switching">전환 중…</span>
+    <svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
+  <div aria-label="RP 전환" class="menu" role="menu" style="left: 0; right: auto; min-width: 220px" x-cloak x-show="open">
+    <span class="t-over" style="display: block; padding: 4px 10px 6px">RP 전환</span>
+    
+      <button aria-checked="true" class="menu__item" role="menuitemradio" type="button" x-on:click="close()">
+        <span style="width: 14px; display: inline-flex"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M5 12l5 5L20 7"/></svg></span>
+        Alpha Corp
+      </button>
+      
+    
+      
+      <button aria-checked="false" class="menu__item" hx-post="/admin/_/active-tenant" hx-swap="none"
+              hx-vals="{&quot;tenantId&quot;: &quot;00000000-0000-0000-0000-00000000f222&quot;}"
+              role="menuitemradio" type="button" x-on:click="switching = true">
+        <span style="width: 14px; display: inline-flex"></span>
+        베타
+      </button>
+    
+  </div>
+</div>

@@ -1,0 +1,19 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.error" : "object",
+  "$.error.errorCode" : "string",
+  "$.error.fieldErrors" : "array<object>",
+  "$.error.fieldErrors[]" : "object",
+  "$.error.fieldErrors[].field" : "b64url|string",
+  "$.error.fieldErrors[].reason" : "string",
+  "$.error.fieldErrors[]{}" : "field,reason",
+  "$.error{}" : "errorCode,fieldErrors",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,error,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "400"
+}

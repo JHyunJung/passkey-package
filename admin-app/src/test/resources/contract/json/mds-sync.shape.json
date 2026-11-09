@@ -1,0 +1,16 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.error" : "string",
+  "$.data.status" : "string",
+  "$.data.version" : "number",
+  "$.data{}" : "status,version,error",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

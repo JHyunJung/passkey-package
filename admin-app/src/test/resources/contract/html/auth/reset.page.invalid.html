@@ -1,0 +1,50 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<!DOCTYPE html>
+<html lang="ko">
+<!--
+  새 비밀번호 설정(← pages/ResetPasswordPage.tsx). 메일 링크의 ?token= 으로 진입한다.
+  card 조각의 상태(state): form | invalid(토큰 없음) | expired(토큰 거부) | done.
+  제출: hx-post /admin/reset-password(token, password, password2, _csrf) → #auth-card 교체.
+  토큰은 폼의 hidden 값으로만 오간다(URL·로그·응답 헤더에 되풀이하지 않는다 — 컨트롤러가 no-store·no-referrer 를 건다).
+  비밀번호는 응답에 다시 그리지 않는다.
+-->
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <title>비밀번호 재설정</title>
+  <link href="/admin/img/favicon.png" rel="icon">
+  <link href="/admin/css/fonts.css" rel="stylesheet">
+  <link href="/admin/css/tokens.css" rel="stylesheet">
+  <link href="/admin/css/globals.css" rel="stylesheet">
+  <link href="/admin/css/components.css" rel="stylesheet">
+  <script src="/admin/js/vendor/htmx.min.js"></script>
+  <script src="/admin/js/ui.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script defer src="/admin/js/vendor/alpine.min.js"></script>
+</head>
+<body>
+<main class="auth">
+  <div class="auth__col">
+    <img alt="CROSSCERT" class="auth__logo" src="/admin/img/crosscert-logo-transparent.png">
+    <div class="auth-card" id="auth-card">
+      
+        <div class="banner banner--warning banner--top" role="status">
+          <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+          <div class="banner__body">
+            <div class="banner__title">링크를 사용할 수 없습니다</div>
+            
+            <div>유효하지 않은 링크입니다. 만료됐거나 이미 사용된 링크일 수 있습니다.</div>
+          </div>
+        </div>
+        <a class="btn btn--primary" href="/admin/forgot-password">재설정 링크 다시 받기</a>
+      
+      
+      
+    </div>
+    <a href="/admin" style="font-size: 13px; font-weight: 600;">← 로그인으로</a>
+  </div>
+</main>
+</body>
+</html>

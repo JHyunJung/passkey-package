@@ -1,0 +1,14 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.daysUntilExpiry" : "number",
+  "$.data.deploymentMode" : "string",
+  "$.data.features" : "array<>",
+  "$.data{}" : "deploymentMode,daysUntilExpiry,features",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "${}" : "success,code,message,data,timestamp",
+  "@source" : "LicenseController.get() direct, app ObjectMapper"
+}

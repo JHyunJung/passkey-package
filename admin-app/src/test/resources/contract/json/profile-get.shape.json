@@ -1,0 +1,16 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.active" : "array<>",
+  "$.data.local" : "boolean",
+  "$.data.platformOperatorSelfSignup" : "boolean",
+  "$.data{}" : "active,local,platformOperatorSelfSignup",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

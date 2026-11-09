@@ -1,0 +1,7 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="registration-daily-acme-30d-2026-10-11.csv"
+
+﻿day,attempts,success,successRate
+2026-10-10,10,7,0.7000
+2026-10-11,0,0,

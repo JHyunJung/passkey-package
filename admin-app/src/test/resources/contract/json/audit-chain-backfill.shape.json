@@ -1,0 +1,9 @@
+{
+  "$" : "object",
+  "$.rowsSkipped" : "number",
+  "$.rowsUpdated" : "number",
+  "$.tenantsProcessed" : "number",
+  "${}" : "tenantsProcessed,rowsUpdated,rowsSkipped",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

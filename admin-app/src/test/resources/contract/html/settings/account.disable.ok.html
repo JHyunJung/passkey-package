@@ -1,0 +1,82 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+@header HX-Trigger: {"toast":{"kind":"warn","title":"2\uB2E8\uACC4 \uC778\uC99D\uC774 \uAEBC\uC84C\uC2B5\uB2C8\uB2E4.","message":""}}
+
+<div id="mfa-account">
+  <section class="card">
+    <div class="set">
+      <div class="stack-1" style="gap: 6px">
+        <div class="row" style="gap: 8px">
+          <h2 class="card__title">2단계 인증 (MFA)</h2>
+          <span class="badge badge--success badge--dot">켜짐</span>
+          
+        </div>
+        <p class="card__sub">로그인 시 authenticator 코드가 필요합니다.</p>
+      </div>
+
+      
+
+      <div class="stack-3" style="gap: 14px">
+        
+        <!-- 남은 개수·재발급은 서버 지원 후(스펙 §8). 지금은 보관 안내만. -->
+        <div class="banner banner--info banner--top"
+     role="status">
+  <span class="banner__icon">
+    
+    
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M5 12l5 5L20 7"/></svg>
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 8h.01"/></svg>
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg>
+    
+  </span>
+  <div class="banner__body">
+    <div class="banner__title">복구 코드 보관</div>
+    <div>복구 코드는 2단계 인증을 켤 때 한 번만 표시됩니다. 휴대폰을 잃어버렸을 때 로그인할 수 있는 유일한 방법이니 비밀번호 관리자 등 안전한 곳에 보관하세요. 코드를 모두 잃어버렸다면 운영자에게 MFA 초기화를 요청하세요.</div>
+  </div>
+  
+</div>
+        <div style="border-top: 1px solid var(--line-soft); padding-top: 14px">
+          <span class="t-over" style="color: var(--bad)">위험 영역</span>
+          <div class="row" style="gap: 12px; margin-top: 6px">
+            <span class="card__sub" style="flex: 1 1 220px">끄면 비밀번호만으로 로그인됩니다. 현재 authenticator 코드가 필요합니다.</span>
+            <button class="btn btn--danger" type="button" x-data x-on:click="$dispatch('dialog:open', { id: 'mfa-disable' })">2단계 인증 끄기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 끄기 확인창(alertdialog). 코드 입력은 숫자 6자리만, 요청 중에는 읽기 전용 + 취소·Escape 막힘. 실패는 입력칸 아래(값 유지 + 전체 선택). -->
+  <div x-data="dialog({&quot;id&quot;:&quot;mfa-disable&quot;})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+    <template x-if="open">
+      <div class="scrim" x-on:mousedown="onScrim($event)">
+        <div aria-labelledby="mfa-disable-title" aria-modal="true" class="dialog" role="alertdialog" x-data="mfaDisable" x-trap.noscroll="open">
+          <span hidden x-effect="busy = disabling"></span>
+          <div class="dialog__head">
+            <h3 class="dialog__title" id="mfa-disable-title">2단계 인증 끄기</h3>
+            <div class="dialog__sub">본인 확인을 위해 현재 authenticator 코드를 입력하세요.</div>
+          </div>
+          <div class="dialog__body">
+            <form autocomplete="off" data-quiet hx-post="/admin/_/settings/mfa/disable" hx-swap="outerHTML"
+                  hx-sync="this:drop" hx-target="#mfa-account" id="mfa-disable-form" novalidate
+                  x-on:htmx:after-request="onAfter($event)"
+                  x-on:htmx:before-request="onBefore($event)" x-on:htmx:send-error="onNetwork(false)"
+                  x-on:htmx:timeout="onNetwork(true)" x-on:submit="if (disabling || code.length !== 6) $event.preventDefault()">
+              <label class="label" for="mfa-disable-code">인증 코드</label>
+              <input autocomplete="one-time-code" class="input mono" id="mfa-disable-code" inputmode="numeric" name="code" placeholder="000000"
+                     style="max-width: 200px; letter-spacing: 0.2em" x-bind:aria-describedby="invalid ? 'mfa-disable-err' : null"
+                     x-bind:aria-invalid="invalid ? 'true' : null" x-bind:readonly="disabling" x-on:input="onInput($event)"
+                     x-ref="input">
+              <div id="mfa-disable-err"></div>
+              <p class="field__error" role="alert" x-cloak x-show="netErr" x-text="netErr"></p>
+            </form>
+          </div>
+          <div class="dialog__foot">
+            <button class="btn" type="button" x-bind:disabled="disabling" x-on:click="if (!disabling) open = false">취소</button>
+            <button class="btn btn--danger-solid" disabled form="mfa-disable-form" type="submit" x-bind:disabled="code.length !== 6 || disabling">끄기</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>

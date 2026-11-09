@@ -1,0 +1,19 @@
+{
+  "$" : "object",
+  "$.createdAt" : "iso-offset(+09:00)",
+  "$.createdByEmail" : "string",
+  "$.detail" : "string",
+  "$.id" : "uuid",
+  "$.resolutionNote" : "string",
+  "$.resolvedAt" : "iso-offset(+09:00)",
+  "$.resolvedByEmail" : "string",
+  "$.severity" : "string",
+  "$.status" : "string",
+  "$.tamperedEntryId" : "uuid",
+  "$.tenantId" : "uuid",
+  "$.tenantName" : "string",
+  "$.type" : "string",
+  "${}" : "id,tenantId,tenantName,tamperedEntryId,type,severity,status,detail,createdAt,createdByEmail,resolvedAt,resolvedByEmail,resolutionNote",
+  "@contentType" : "application/json",
+  "@status" : "201"
+}

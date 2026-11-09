@@ -1,0 +1,586 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<!DOCTYPE html>
+<html lang="ko">
+<!--
+  공통 레이아웃(← App.tsx AuthenticatedApp). 모든 인증 후 화면이 이 안에서 그려진다.
+
+  페이지 템플릿 규약 — 화면 템플릿은 정확히 이 한 줄로 시작한다.
+    <html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}">
+  그리고 같은 파일에 세 조각을 둔다.
+    <head><title>페이지 이름</title></head>                  → title   : <title> 요소 하나
+    <body>
+      <th:block th:fragment="crumbs">…</th:block>            → crumbs  : 상단 바의 브레드크럼(보통 breadcrumb 조각 호출)
+      <main>…</main>                                         → content : <main> 요소 하나
+    </body>
+  crumbs 조각이 없으면 상단 바에 브레드크럼이 없다. 모델의 me / navActive / deploymentMode / helpLinks 는 어드바이스가 넣는다.
+  주의: 모델 속성 이름을 crumbs 로 짓지 말 것 — 레이아웃의 같은 이름 조각 인자에 가려진다(화면은 breadcrumbs 처럼 다른 이름을 쓴다).
+
+  htmx 조각 응답(/admin/_/** 의 hx-get·hx-post)은 이 레이아웃을 쓰지 않고 조각만 반환한다.
+  hx-boost 로 이동하는 요청은 전체 페이지를 받아 htmx 가 body 만 교체한다.
+
+  head 스크립트 순서: htmx → alpine-focus(defer) → ui.js → app.js → alpine(defer, 마지막).
+-->
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <title>Tenants</title>
+  <link href="/admin/img/favicon.png" rel="icon">
+  <link href="/admin/css/fonts.css" rel="stylesheet">
+  <link href="/admin/css/tokens.css" rel="stylesheet">
+  <link href="/admin/css/globals.css" rel="stylesheet">
+  <link href="/admin/css/components.css" rel="stylesheet">
+  <script src="/admin/js/vendor/htmx.min.js"></script>
+  <script defer src="/admin/js/vendor/alpine-focus.min.js"></script>
+  <script src="/admin/js/ui.js"></script>
+  <script src="/admin/js/app.js"></script>
+  <script defer src="/admin/js/vendor/alpine.min.js"></script>
+</head>
+<body hx-boost="true" hx-headers="{&quot;X-XSRF-TOKEN&quot;: &quot;{{CSRF}}&quot;}">
+  <!-- 라이선스 배너: 5분(300초)마다 다시 조회. 조회 실패는 알리지 않는다(주변 UI). -->
+  <div data-quiet hx-get="/admin/_/shell/license-banner" hx-preserve
+     hx-swap="innerHTML" hx-trigger="load, every 300s" id="license-banner"></div>
+  <div class="app">
+    <aside aria-label="주 메뉴" class="sidebar">
+  <div class="sidebar__brand">
+    <img alt="CROSSCERT" src="/admin/img/crosscert-logo-transparent.png">
+    <div class="sidebar__env">Passkey Admin</div>
+  </div>
+  <div class="sidebar__group">
+    <span class="sidebar__label">플랫폼</span>
+    <a aria-current="page" class="nav-item nav-item--active" href="/admin/tenants">
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M4 21V5a2 2 0 012-2h8a2 2 0 012 2v16"/><path d="M16 8h2a2 2 0 012 2v11"/><path d="M8 7h2M8 11h2M8 15h2M14 11h2M14 15h2"/></svg><span>Tenants</span>
+    </a>
+    <a class="nav-item" href="/admin/insights">
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg><span>현황</span>
+    </a>
+    <a class="nav-item" href="/admin/activity">
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>활동</span>
+    </a>
+    <a class="nav-item" href="/admin/audit-chain">
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M10 14a4 4 0 005.7 0l4.3-4.3a4 4 0 00-5.7-5.7L13 5.3"/><path d="M14 10a4 4 0 00-5.7 0L4 14.3a4 4 0 005.7 5.7L11 18.7"/></svg><span>감사 체인</span><span class="nav-item__count" x-cloak x-data x-show="$store.chain.tampered > 0" x-text="'위변조 ' + $store.chain.tampered"></span>
+    </a>
+    
+  </div>
+  <div class="sidebar__group">
+    <span class="sidebar__label">관리</span>
+    <a class="nav-item" href="/admin/settings">
+      <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg><span>설정</span>
+    </a>
+  </div>
+  <div class="sidebar__foot">
+    <div data-quiet hx-disinherit="hx-target hx-swap hx-sync" hx-get="/admin/_/shell/chain-card" hx-preserve
+         hx-request='{"timeout": 120000}' hx-swap="innerHTML" hx-sync="#chain-card:drop"
+         hx-target="#chain-card-body" hx-trigger="load, every 30s"
+         id="chain-card" x-data="chainCard" x-on:htmx:after-request="done($event)" x-on:htmx:before-request="before($event)">
+      <div id="chain-card-body" x-cloak x-show="!checking &amp;&amp; !failed"></div>
+      <div class="chain-card chain-card--pending" x-show="checking">
+        <span class="chain-card__dot"></span>
+        <span class="stack-1" style="gap: 2px">
+          <span class="chain-card__title">검증 중…</span>
+          <span aria-live="off" class="chain-card__sub" x-text="secs + '초째 확인 중'">0초째 확인 중</span>
+        </span>
+      </div>
+      <div class="chain-card chain-card--warn" x-cloak x-show="failed &amp;&amp; !checking">
+        <span class="chain-card__dot"></span>
+        <span class="stack-1" style="gap: 4px">
+          <span class="chain-card__title" role="status">검증 상태 확인 불가</span>
+          <span class="chain-card__sub" x-text="lastText">서버 응답이 없습니다</span>
+          <button class="btn btn--sm" data-quiet hx-get="/admin/_/shell/chain-card" hx-swap="innerHTML" hx-sync="#chain-card:replace" hx-target="#chain-card-body" style="align-self: flex-start" type="button" x-on:click="start()">다시 시도</button>
+        </span>
+      </div>
+    </div>
+    <span class="sidebar__copy">© Crosscert</span>
+  </div>
+</aside>
+    <div class="content">
+      <header class="topbar">
+  <nav aria-label="현재 위치" class="crumbs">
+  
+    
+    <span aria-current="page" class="crumbs__current">Tenants</span>
+    
+    
+  
+</nav>
+  <div class="spacer"></div>
+  
+  <!-- 문구는 실제 검색 범위(lib/search.ts: tenant 이름·slug)만 약속한다. -->
+  <button aria-label="tenant 이름 · slug 검색 (Ctrl K)" class="topbar__search" type="button" x-bind:aria-label="'tenant 이름 · slug 검색 (' + key + ')'"
+          x-data="platformKey" x-on:click="$dispatch('open-palette')">
+    <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="15"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>tenant 이름 · slug 검색</span><kbd x-text="key">Ctrl K</kbd>
+  </button>
+  <!-- 도움말(H10). 주소가 빈 항목은 숨긴다. -->
+  <div class="menu-wrap" x-data="shellMenu(true)" x-on:keydown.escape.window="close()" x-on:mousedown.window="outside($event)">
+    <button aria-expanded="false" aria-haspopup="menu" class="btn" type="button" x-bind:aria-expanded="open" x-on:click="toggle()">
+      <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.5-1.5 1-1.5 2M12 17h.01"/></svg>도움말
+    </button>
+    <div aria-label="도움말" class="menu" role="menu" style="min-width: 220px" tabindex="-1" x-cloak x-on:keydown="arrow($event)" x-show="open">
+      
+      
+      <button aria-keyshortcuts="?" class="menu__item" role="menuitem" type="button" x-on:click="close(); $dispatch('open-shortcuts')">
+        키보드 단축키<kbd aria-hidden="true" style="margin-left: auto">?</kbd>
+      </button>
+      
+    </div>
+  </div>
+  <!-- 사용자 메뉴: 로그아웃만(동작하지 않는 역할 전환은 없다). -->
+  <div class="menu-wrap" x-data="shellMenu(false)" x-on:keydown.escape.window="close()" x-on:mousedown.window="outside($event)">
+    <button aria-expanded="false" aria-haspopup="menu" aria-label="사용자 메뉴" class="user-pill" type="button" x-bind:aria-expanded="open" x-on:click="toggle()">
+      <span class="avatar">O</span>
+      <span class="stack-1" style="gap: 0; line-height: 1.2; text-align: left"><span style="font-weight: 600">op@example.com</span><span style="font-size: 11px; color: var(--mute)">op@example.com</span></span>
+      <span class="badge badge--violet">PLATFORM</span>
+      <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div aria-label="사용자 메뉴" class="menu" role="menu" style="min-width: 240px" x-cloak x-show="open">
+      <div class="stack-1" style="padding: 8px 10px 10px; border-bottom: 1px solid var(--line-soft); margin-bottom: 4px; gap: 2px">
+        <strong style="font-size: 13px">op@example.com</strong><span style="font-size: 12px; color: var(--mute)">op@example.com</span>
+        <span style="margin-top: 4px"><span class="badge badge--violet">PLATFORM</span></span>
+      </div>
+      <form action="/admin/logout" hx-boost="false" method="post"><input name="_csrf" type="hidden" value="{{CSRF}}"/>
+        <button class="menu__item menu__item--danger" role="menuitem" type="submit"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>로그아웃</button>
+      </form>
+    </div>
+  </div>
+</header>
+      <main>
+  <!-- RequirePlatform: RP_ADMIN 인데 테넌트가 없다(데이터 이상). 있으면 컨트롤러가 자기 테넌트로 리다이렉트한다. -->
+  
+
+  <div class="page">
+    <div class="page__head">
+  <div class="page__head-main">
+    <h1 class="page__title">Tenants</h1>
+    <p class="page__sub">RP 회사별로 격리된 Passkey 환경 — 각 tenant 는 자체 rpId · credential · API 키를 가집니다.</p>
+  </div>
+  <div class="spacer"></div><div class="row"><button class="btn btn--primary" type="button" x-data x-on:click="$dispatch('dialog:open', { id: 'new-tenant' })"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 5v14M5 12h14"/></svg>신규 tenant</button></div>
+</div>
+
+    <!-- 로드 전·실패 시 빈 배열로 계산한 0 을 보이지 않는다 — 실제 값이 없으면 "—". -->
+    <div class="kpis kpis--3">
+      
+        
+  <button aria-pressed="true" class="kpi kpi--clickable kpi--selected" hx-get="/admin/_/tenants/list?status=ALL&amp;size=50" hx-include="#tenant-q" hx-swap="outerHTML" hx-sync="#tenants-card:replace" hx-target="#tenants-results" id="tenants-kpi-active" type="button">
+    <span class="kpi__label">활성 Tenant</span>
+    <span class="kpi__value">1</span>
+    <span class="kpi__hint">전체 2건 · 클릭하면 활성만 보기</span>
+  </button>
+  
+
+        
+  
+  <div class="kpi">
+    <span class="kpi__label">등록 Credential</span>
+    <span class="kpi__value">1,234</span>
+    <span class="kpi__hint">모든 tenant 합산</span>
+  </div>
+
+        <div class="kpi">
+          <span class="kpi__label">유효 API Key</span>
+          <span class="kpi__value">2</span>
+          <span class="kpi__hint">ACTIVE 만 · <span style="color: var(--warn); font-weight: 600">만료 임박 1</span></span>
+        </div>
+      
+      
+    </div>
+
+    <!-- 목록 조회 실패는 "tenant 가 없음"과 구분한다(role=alert 하나, 토스트 중복 없음). -->
+    
+
+    
+      
+
+      <section class="card" hx-sync="this:replace" id="tenants-card">
+        <div class="card__head">
+          <div class="search" style="flex: 0 1 280px">
+            <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="15"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input aria-label="tenant 검색" autocomplete="off" class="input" hx-get="/admin/_/tenants/list" hx-include="#tenants-state, #tenants-size" hx-swap="outerHTML" hx-target="#tenants-results"
+       hx-trigger="input changed delay:250ms, search" id="tenant-q" name="q"
+       placeholder="name · slug 검색" type="search" value="al">
+          </div>
+          <div id="tenants-controls" style="display: contents">
+  <div aria-label="상태" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;ACTIVE&quot;})">
+  
+  <button aria-pressed="false" class="seg__btn" data-value="ALL" hx-get="/admin/_/tenants/list?status=ALL&amp;size=50"
+          hx-include="#tenant-q" hx-swap="outerHTML"
+          hx-target="#tenants-results"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }" x-on:click="select($el.dataset.value)">전체 2</button><button aria-pressed="true" class="seg__btn seg__btn--on" data-value="ACTIVE" hx-get="/admin/_/tenants/list?status=ACTIVE&amp;size=50"
+          hx-include="#tenant-q" hx-swap="outerHTML"
+          hx-target="#tenants-results"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }" x-on:click="select($el.dataset.value)">활성 1</button><button aria-pressed="false" class="seg__btn" data-value="SUSPENDED" hx-get="/admin/_/tenants/list?status=SUSPENDED&amp;size=50"
+          hx-include="#tenant-q" hx-swap="outerHTML"
+          hx-target="#tenants-results"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }" x-on:click="select($el.dataset.value)">정지 1</button>
+</div>
+  <div class="spacer"></div>
+  <span class="muted" style="font-size: 12px">1 / 2건</span>
+  <a class="btn" data-csv-download download href="/admin/_/tenants/export?q=al&amp;status=ACTIVE" hx-boost="false">
+    <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>CSV
+  </a>
+</div>
+        </div>
+        <div id="tenants-results">
+  <!-- 다음 요청(검색 입력·페이지 크기 선택)이 이어 받는 현재 필터 -->
+  <div hidden id="tenants-state"><input name="status" type="hidden" value="ACTIVE"></div>
+  <input id="tenants-size" name="size" type="hidden" value="50">
+
+  <div class="applied">
+    <span class="muted" style="font-size: 12px">적용된 필터</span>
+    <span class="chip">
+  <span class="truncate">상태: 활성</span>
+  <button aria-label="상태 필터 제거" class="chip__x" hx-get="/admin/_/tenants/list?status=ALL&amp;size=50" hx-include="#tenant-q" hx-swap="outerHTML" hx-target="#tenants-results" type="button"><svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</span>
+    <span class="chip">
+  <span class="truncate">검색: al</span>
+  <button aria-label="검색어 제거" class="chip__x" hx-get="/admin/_/tenants/list?status=ACTIVE&amp;size=50&amp;reset=q" hx-swap="outerHTML" hx-target="#tenants-results" type="button"><svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</span>
+    <button class="btn btn--ghost btn--sm" hx-get="/admin/_/tenants/list?status=ALL&amp;size=50&amp;reset=q" hx-swap="outerHTML" hx-target="#tenants-results" type="button">모두 지우기</button>
+  </div>
+
+  <div class="tw">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>
+          
+          Tenant
+        </th>
+        <th>
+          
+          슬러그
+        </th>
+        <th>
+          
+          RP ID
+        </th>
+        <th class="num">
+          
+          Credentials
+        </th>
+        <th class="num">
+          
+          API 키
+        </th>
+        <th>
+          
+          상태
+        </th>
+        <th>
+          
+          마지막 이벤트
+        </th>
+        <th>
+          
+          생성일
+        </th>
+        <th style="width: 40px">
+          <span class="sr-only">열기</span>
+          
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+  <tr class="is-clickable" x-data
+      x-on:click="if (!$event.target.closest('a, button')) $el.querySelector('a.row-link').click()">
+    <td>
+      <div class="row" style="gap: 10px; flex-wrap: nowrap; min-width: 0">
+        <span aria-hidden="true" class="avatar avatar--sq" style="width: 30px; height: 30px; font-size: 13px">A</span>
+        <div class="col" style="min-width: 0">
+          <a class="row-link" href="/admin/tenants/00000000-0000-0000-0000-00000000f111?tab=overview"><strong class="truncate" style="font-size: 13px; max-width: 260px" title="Alpha Corp">Alpha Corp</strong></a>
+          <span class="mono muted" style="font-size: 12px">…0000f111</span>
+        </div>
+      </div>
+    </td>
+    <td><span class="mono" style="font-size: 12px">alpha</span></td>
+    <td><span class="mono truncate" style="font-size: 12px; display: inline-block; max-width: 240px; vertical-align: middle" title="passkey.alpha.com">passkey.alpha.com</span></td>
+    <td class="num">1,234</td>
+    <td class="num">2</td>
+    <td>
+  <span class="badge badge--success badge--dot"
+      title="ACTIVE">활성</span>
+</td>
+    <td><span class="muted">2일 전</span></td>
+    <td><span class="muted">2026-09-11</span></td>
+    <td><span style="color: var(--faint); display: inline-flex"><svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><path d="M9 6l6 6-6 6"/></svg></span></td>
+  </tr>
+  
+</tbody>
+  </table>
+</div>
+
+  <div class="pager">
+    <span>1–1 / 1건</span>
+    <div class="spacer"></div>
+    <label class="row pager__size">페이지당
+      <select class="input" hx-get="/admin/_/tenants/list" hx-include="#tenant-q, #tenants-state" hx-swap="outerHTML"
+              hx-target="#tenants-results" hx-trigger="change" name="size">
+        <option selected="selected" value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </label>
+    
+    <button aria-label="이전 페이지" class="btn btn--sm" disabled type="button"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <span>1 / 1</span>
+    
+    <button aria-label="다음 페이지" class="btn btn--sm" disabled type="button"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+</div>
+      </section>
+    
+
+    
+  <div x-data="dialog({&quot;id&quot;:&quot;new-tenant&quot;,&quot;open&quot;:true})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown="onScrim($event)">
+      <div aria-labelledby="new-tenant-title" aria-modal="true" class="dialog"
+           role="dialog" x-trap.noscroll="open">
+        <div class="dialog__head">
+          
+          
+            <h3 class="dialog__title" id="new-tenant-title">신규 Tenant 생성</h3>
+            <div class="dialog__sub">RP 회사 하나에 대한 격리된 Passkey 환경을 만듭니다.</div>
+          
+          
+        </div>
+        <div class="dialog__body"><form class="dialog__form" data-quiet hx-post="/admin/_/tenants" hx-swap="innerHTML"
+        hx-sync="this:drop" hx-target="this" id="nt-form" novalidate
+        x-data="{ netErr: null }"
+        x-on:htmx:after-request="if (!$event.detail.successful &amp;&amp; !($event.detail.xhr &amp;&amp; $event.detail.xhr.getResponseHeader('HX-Redirect'))) busy = false"
+        x-on:htmx:after-swap="$nextTick(() => { const f = $el.querySelector('[aria-invalid=true]'); if (f) f.focus() })"
+        x-on:htmx:before-request="busy = true; netErr = null"
+        x-on:htmx:send-error="netErr = '네트워크에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요. 입력한 내용은 그대로 있습니다.'"
+        x-on:htmx:timeout="netErr = '서버가 잠시 응답하지 않습니다. 응답이 오지 않아 요청을 중단했습니다. 잠시 후 다시 시도하세요. 입력한 내용은 그대로 있습니다.'">
+    
+  <!-- 네트워크 오류·시간 초과(응답 없음): 전역 토스트 대신 같은 경고를 인라인으로(form 의 netErr, 서버 거절 경고와 같은 제목) -->
+  <div class="banner banner--danger banner--top" x-bind:role="netErr ? 'alert' : null" x-cloak x-show="netErr">
+    <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+    <div class="banner__body">
+      <div class="banner__title">Tenant를 만들지 못했습니다</div>
+      <div x-text="netErr"></div>
+    </div>
+  </div>
+  
+
+  <div>
+    <label class="label" for="nt-name">표시 이름</label>
+    <input autocomplete="off" class="input" id="nt-name" name="name" placeholder="예: Acme Corp"
+           value="" x-bind:readonly="busy">
+    
+  </div>
+
+  <div>
+    <label class="label" for="nt-slug">Slug (영문 식별자)</label>
+    <input autocomplete="off" class="input mono" id="nt-slug" name="slug" placeholder="acme-corp"
+           value="" x-bind:readonly="busy" x-on:input="$el.value = $el.value.toLowerCase()">
+    
+    <p class="hint">소문자·숫자·하이픈. URL 과 로그에서 tenant 를 식별합니다.</p>
+  </div>
+
+  <div>
+    <label class="label" for="nt-rpid">RP ID</label>
+    <input autocomplete="off" class="input mono" id="nt-rpid" name="rpId" placeholder="예: passkey.acme.com"
+           value="" x-bind:readonly="busy" x-on:input="$el.value = $el.value.toLowerCase().trim()">
+    
+    <p class="hint">
+      <span class="row" style="gap: 5px; color: var(--warn); flex-wrap: nowrap">
+        <svg aria-hidden="true" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="13"><rect height="10" rx="2" width="16" x="4" y="11"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+        <span>생성 후에는 변경할 수 없습니다. 기존 credential 이 이 값에 묶입니다.</span>
+      </span>
+    </p>
+  </div>
+
+  <div class="stack-2" style="gap: 10px; padding: 14px 16px; border-radius: var(--r); background: var(--brand-50); border: 1px solid var(--brand-100)">
+    <span class="t-over" id="nt-next-steps" style="color: var(--brand-700)">다음 단계</span>
+    <ol aria-labelledby="nt-next-steps" class="stack-2" style="list-style: none; margin: 0; padding: 0; gap: 10px">
+      <li class="row" style="gap: 10px; flex-wrap: nowrap; font-size: 13px"><span aria-hidden="true" class="nt-step">1</span><strong>WebAuthn config</strong><span class="muted">origin · UV · attestation</span></li>
+      <li class="row" style="gap: 10px; flex-wrap: nowrap; font-size: 13px"><span aria-hidden="true" class="nt-step">2</span><strong>AAGUID 정책</strong><span class="muted">허용할 인증기</span></li>
+      <li class="row" style="gap: 10px; flex-wrap: nowrap; font-size: 13px"><span aria-hidden="true" class="nt-step">3</span><strong>API key 발급</strong><span class="muted">RP 서버 연동</span></li>
+    </ol>
+  </div>
+
+  </form></div>
+        <div class="dialog__foot">
+          
+          
+    <button class="btn" type="button" x-bind:disabled="busy" x-on:click="close()">취소</button>
+    <button class="btn btn--primary" form="nt-form" id="nt-submit" type="submit" x-bind:disabled="busy"><span x-show="!busy">생성하고 설정으로 이동</span><span x-cloak x-show="busy">생성 중…</span></button>
+  
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+    <!-- 팔레트의 "신규 tenant 생성"(?new=1)은 다이얼로그를 처음부터 열어 둔다. 새로 고침·뒤로 가기에서 다시 열리지 않게 주소에서 new 를 지운다. -->
+    <span data-clean-url="/admin/tenants?q=al&amp;status=ACTIVE" hidden x-data x-init="history.replaceState(history.state, '', $el.dataset.cleanUrl)"></span>
+  </div>
+</main>
+    </div>
+  </div>
+  <div class="toast-rack" x-data="toastHost" x-on:toast.window="push($event.detail)">
+  <template x-bind:key="t.id" x-for="t in toasts">
+    <div class="toast" x-bind:role="t.kind === 'err' ? 'alert' : 'status'"
+         x-on:focusin="pause(t, 'focus', true)" x-on:focusout="if (!$event.currentTarget.contains($event.relatedTarget)) pause(t, 'focus', false)"
+         x-on:mouseenter="pause(t, 'hover', true)" x-on:mouseleave="pause(t, 'hover', false)">
+      <div class="toast__icon" x-bind:class="'toast__icon--' + t.kind">
+        <span x-show="t.kind === 'err'"><svg aria-hidden="true" fill="none" height="11" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="11"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+        <span x-cloak x-show="t.kind === 'warn'"><svg aria-hidden="true" fill="none" height="11" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="11"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+        <span x-cloak x-show="t.kind === 'ok'"><svg aria-hidden="true" fill="none" height="11" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="11"><path d="M5 12l5 5L20 7"/></svg></span>
+      </div>
+      <div class="toast__body">
+        <div class="toast__title" x-text="t.title"></div>
+        <div class="toast__sub" x-show="t.message" x-text="t.message"></div>
+        <details class="toast__details" x-show="t.detail || t.traceId">
+          <summary>자세히</summary>
+          <div class="toast__trace" x-show="t.detail" x-text="t.detail"></div>
+          <div class="toast__trace" x-show="t.traceId" x-text="'traceId · ' + t.traceId"></div>
+        </details>
+      </div>
+      <button class="btn btn--sm toast__action" type="button" x-cloak x-on:click="run(t)" x-show="t.action" x-text="t.action ? t.action.label : ''"></button>
+      <button aria-label="닫기" class="btn btn--ghost btn--xs" type="button" x-on:click="close(t.id)"><svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </template>
+</div>
+  <div x-data="unsavedGuard"
+     x-on:click.capture.window="onClick($event)" x-on:keydown.escape.window="if (open) stay()" x-on:unsaved-ask.window="onAsk($event)">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown.self="stay()">
+      <div aria-labelledby="unsaved-guard-title" aria-modal="true" class="dialog" role="alertdialog" x-trap.noscroll="open">
+        <div class="dialog__head">
+          <h3 class="dialog__title" data-default="저장하지 않은 변경이 있습니다" id="unsaved-guard-title"
+              x-text="($store.dirty.notice &amp;&amp; $store.dirty.notice.title) || $el.dataset.default">저장하지 않은 변경이 있습니다</h3>
+        </div>
+        <div class="dialog__body"><p class="dialog__text" data-default="이동하면 변경 사항이 사라집니다."
+              x-text="($store.dirty.notice &amp;&amp; $store.dirty.notice.body) || $el.dataset.default">이동하면 변경 사항이 사라집니다.</p></div>
+        <div class="dialog__foot">
+          <button autofocus class="btn" type="button" x-on:click="stay()">머무르기</button>
+          <button class="btn btn--danger-solid" type="button" x-on:click="leave()">이동</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+  <!-- 명령 팔레트(⌘K)·단축키 시트(?)·유휴 세션 모달. 단축키 리스너는 app.js 가 window 에 한 번 단다. -->
+  <div x-data="commandPalette" x-on:keydown.window="onKey($event)" x-on:open-palette.window="show()" x-on:palette-toggle.window="toggle()">
+  <!-- 표시는 x-show 가 아니라 style 바인딩: Alpine x-show 는 보이게 할 때 requestAnimationFrame 을 기다려, 창이 포커스·가시 상태가 아니면(프레임 지연) 입력칸이 0.5~1초 뒤에야 나타나 포커스가 닿지 않았다. -->
+  <div class="scrim" x-bind:style="open ? '' : 'display: none'" x-cloak x-on:mousedown.self="close()">
+    <div aria-label="명령 팔레트" class="dialog palette" role="dialog" x-bind:aria-modal="open ? 'true' : null" x-trap.noscroll.noreturn="open">
+      <label class="palette__search">
+        <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <span class="sr-only">검색</span>
+        <input aria-autocomplete="list" aria-controls="palette-results" aria-expanded="true" aria-label="검색" autocomplete="off" autofocus class="palette__input"
+               hx-get="/admin/_/palette" hx-swap="innerHTML" hx-sync="this:replace" hx-target="#palette-results" hx-trigger="input changed delay:150ms, palette-load"
+               id="palette-input"
+               name="q" placeholder="tenant 이름 · slug, 화면, 동작 검색…" role="combobox"
+               type="text" x-on:htmx:after-request="loading = false" x-on:input="onInput()" x-ref="input">
+        <kbd>esc</kbd>
+      </label>
+      <p class="hint palette__loading" role="status" x-cloak x-show="loading">불러오는 중…</p>
+      <div aria-label="검색 결과" class="palette__list" id="palette-results" role="listbox" x-on:click="activate($event)"
+           x-on:htmx:after-swap="afterSwap($event)" x-on:mouseover="hover($event)" x-ref="list"></div>
+      <div class="palette__foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> 이동</span>
+        <span><kbd>↵</kbd> 실행</span>
+        <span><kbd>esc</kbd> 닫기</span>
+        <span class="palette__count" x-text="count + '개 결과'">0개 결과</span>
+      </div>
+    </div>
+  </div>
+</div>
+  <div data-go-shortcuts="true" x-data x-on:open-shortcuts.window="$dispatch('dialog:open', { id: 'shortcut-sheet' })">
+  <div x-data="dialog({&quot;id&quot;:&quot;shortcut-sheet&quot;})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown="onScrim($event)">
+      <div aria-labelledby="shortcut-sheet-title" aria-modal="true" class="dialog"
+           role="dialog" x-trap.noscroll="open">
+        <div class="dialog__head">
+          
+          
+            <h3 class="dialog__title" id="shortcut-sheet-title">키보드 단축키</h3>
+            
+          
+          
+        </div>
+        <div class="dialog__body"><table class="table shortcut-table">
+      <caption class="sr-only">키보드 단축키 목록</caption>
+      <tbody>
+        <tr>
+          <td style="width: 180px" x-data="platformKey">
+            <kbd x-text="key">Ctrl K</kbd>
+            <span class="hint" style="margin: 0 0 0 8px" x-text="key === '⌘K' ? 'Windows · Ctrl K' : 'Mac · ⌘K'">Mac · ⌘K</span>
+          </td>
+          <td>명령 팔레트 열기</td>
+        </tr>
+        
+          <tr><td style="width: 180px"><kbd>G T</kbd></td><td>Tenants 목록으로 이동</td></tr>
+          <tr><td style="width: 180px"><kbd>G A</kbd></td><td>활동으로 이동</td></tr>
+          <tr><td style="width: 180px"><kbd>G C</kbd></td><td>감사 체인으로 이동</td></tr>
+          <tr><td style="width: 180px"><kbd>G S</kbd></td><td>설정으로 이동</td></tr>
+        
+        <tr><td style="width: 180px"><kbd>?</kbd></td><td>이 단축키 목록</td></tr>
+        <tr><td style="width: 180px"><kbd>← →</kbd></td><td>탭 사이 이동</td></tr>
+        <tr><td style="width: 180px"><kbd>Enter</kbd></td><td>표에서 선택한 행 열기</td></tr>
+        <tr><td style="width: 180px"><kbd>Esc</kbd></td><td>다이얼로그 · 메뉴 닫기</td></tr>
+      </tbody>
+    </table></div>
+        <div class="dialog__foot">
+          <div class="dialog__foot-start"><span class="hint shortcut-note" style="margin: 0">입력란에 포커스가 있으면 G · ? 단축키는 동작하지 않습니다.</span></div>
+          <button class="btn shortcut-close" type="button" x-on:click="close()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+  <!-- 조각 인자 원본(아래 세 요소를 dialog 가 가져간다). 화면에는 dialog 안쪽에서만 그려진다. -->
+  
+</div>
+  <div data-minutes="30" x-data="idleSession">
+  <form action="/admin/logout" hidden hx-boost="false" id="idle-logout-form" method="post"><input name="_csrf" type="hidden" value="{{CSRF}}"/></form>
+  <template x-if="open">
+    <div class="scrim">
+      <div aria-labelledby="idle-title" aria-modal="true" class="dialog" role="alertdialog" x-trap.noscroll="open">
+        <div class="dialog__head dialog__head--icon">
+          <span class="dialog__icon">
+            <span class="idle-ring">
+              <svg aria-hidden="true" height="64" viewBox="0 0 64 64" width="64">
+                <circle cx="32" cy="32" fill="none" r="28" stroke="var(--line-soft)" stroke-width="6"></circle>
+                <circle class="idle-ring__arc" cx="32" cy="32" fill="none" r="28" stroke-linecap="round" stroke-width="6"
+                        transform="rotate(-90 32 32)" x-bind:stroke="tone" x-bind:stroke-dasharray="ring + ' ' + ring" x-bind:stroke-dashoffset="ringOffset"></circle>
+              </svg>
+              <span aria-hidden="true" class="mono idle-ring__text" x-text="secondsLeft + '초'"></span>
+            </span>
+          </span>
+          <div class="dialog__head-text">
+            <h3 class="dialog__title" id="idle-title">세션이 곧 만료됩니다</h3>
+            <div class="dialog__sub" x-text="secondsLeft + '초 후 자동으로 로그아웃됩니다.'"></div>
+          </div>
+        </div>
+        <div class="dialog__body">
+          <div class="stack-3">
+            <div aria-label="세션 만료까지 남은 시간" aria-valuemin="0" class="idle-progress" role="progressbar"
+                 x-bind:aria-valuemax="countdown" x-bind:aria-valuenow="secondsLeft" x-bind:aria-valuetext="secondsLeft + '초 남음'">
+              <span class="idle-progress__bar" x-bind:style="{ width: (pct * 100) + '%', background: tone }"></span>
+            </div>
+            <p class="dialog__text idle-copy">보안 정책에 따라 <span x-text="minutes">30</span>분 동안 활동이 없어 세션을 종료하려고 합니다. 작업 중이라면 세션을 연장하세요.</p>
+            <p class="idle-copy"><strong>로그아웃하면 저장하지 않은 변경이 사라집니다.</strong></p>
+            <div class="banner banner--danger banner--top" role="alert" x-cloak x-show="extendError">
+              <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+              <div class="banner__body">
+                <div class="banner__title" x-text="extendError && extendError.title"></div>
+                <div x-text="extendError && extendError.detail"></div>
+              </div>
+            </div>
+            <span aria-live="polite" class="sr-only" x-text="announcement"></span>
+          </div>
+        </div>
+        <div class="dialog__foot">
+          <button class="btn" type="button" x-on:click="logoutNow()">로그아웃</button>
+          <button autofocus class="btn btn--primary" type="button" x-bind:disabled="extending" x-on:click="extend()" x-ref="extend">세션 연장</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+</body>
+</html>

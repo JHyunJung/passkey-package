@@ -1,0 +1,14 @@
+{
+  "$" : "object",
+  "$.activeTenantId" : "uuid",
+  "$.allowedTenantIds" : "array<uuid>",
+  "$.allowedTenantIds[]" : "uuid",
+  "$.allowedTenants" : "array<object>",
+  "$.allowedTenants[]" : "object",
+  "$.allowedTenants[].id" : "uuid",
+  "$.allowedTenants[].name" : "string",
+  "$.allowedTenants[]{}" : "id,name",
+  "${}" : "activeTenantId,allowedTenantIds,allowedTenants",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

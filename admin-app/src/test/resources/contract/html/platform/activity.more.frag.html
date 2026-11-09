@@ -1,0 +1,57 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+
+  <div hx-swap-oob="beforeend:#day-2026-10-10-rows">
+  <div class="row feed-row" data-id="00000000-0000-0000-0000-0000000000e3" data-label="API 키 발급" data-type="API_KEY_ISSUED" x-bind:aria-current="selectedId === $el.dataset.id ? 'true' : null" x-bind:class="{ 'feed-row--sel': selectedId === $el.dataset.id }">
+    <span class="mono muted feed-row__time">12:34</span>
+    <span aria-hidden="true" class="dot feed-row__dot" style="background: var(--warn-dot)"></span>
+    <div class="col feed-row__body">
+      <div class="row" style="gap: 8px">
+        <span class="tag" title="API 키 발급">API_KEY_ISSUED</span>
+        <a class="btn btn--ghost btn--xs" href="/admin/tenants/00000000-0000-0000-0000-00000000f222">beta</a>
+        
+      </div>
+      <span class="feed-row__sentence">rp@example.com 님이 beta 테넌트에 k1 · API 키 발급</span>
+    </div>
+    <button aria-label="상세 열기" class="icon-btn" data-id="00000000-0000-0000-0000-0000000000e3" data-quiet="" hx-get="/admin/_/activity/00000000-0000-0000-0000-0000000000e3" hx-swap="innerHTML" hx-sync="#activity-detail:replace" hx-target="#activity-detail" title="상세 열기" type="button" x-on:click="openDetail($el.dataset.id)"><svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+</div>
+  <div hx-swap-oob="beforeend:#activity-feed">
+  <div aria-label="2026-10-11" class="feed-group" data-day="2026-10-11" id="day-2026-10-11" role="group">
+    <div class="t-over feed-day">2026-10-11</div>
+    <div id="day-2026-10-11-rows">
+  <div class="row feed-row" data-id="00000000-0000-0000-0000-0000000000e1" data-label="TENANT_UPDATED" data-type="TENANT_UPDATED" x-bind:aria-current="selectedId === $el.dataset.id ? 'true' : null" x-bind:class="{ 'feed-row--sel': selectedId === $el.dataset.id }">
+    <span class="mono muted feed-row__time">12:34</span>
+    <span aria-hidden="true" class="dot feed-row__dot" style="background: var(--warn-dot)"></span>
+    <div class="col feed-row__body">
+      <div class="row" style="gap: 8px">
+        <span class="tag" title="TENANT_UPDATED">TENANT_UPDATED</span>
+        <a class="btn btn--ghost btn--xs" href="/admin/tenants/00000000-0000-0000-0000-00000000f111">alpha</a>
+        
+      </div>
+      <span class="feed-row__sentence">op@example.com 님이 alpha 테넌트에 00000000-0000-0000-0000-00000000f111 · TENANT_UPDATED</span>
+    </div>
+    <button aria-label="상세 열기" class="icon-btn" data-id="00000000-0000-0000-0000-0000000000e1" data-quiet="" hx-get="/admin/_/activity/00000000-0000-0000-0000-0000000000e1" hx-swap="innerHTML" hx-sync="#activity-detail:replace" hx-target="#activity-detail" title="상세 열기" type="button" x-on:click="openDetail($el.dataset.id)"><svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+  <div class="row feed-row" data-id="00000000-0000-0000-0000-0000000000e2" data-label="로그인 실패" data-type="ADMIN_LOGIN_FAILED" x-bind:aria-current="selectedId === $el.dataset.id ? 'true' : null" x-bind:class="{ 'feed-row--sel': selectedId === $el.dataset.id }">
+    <span class="mono muted feed-row__time">07:34</span>
+    <span aria-hidden="true" class="dot feed-row__dot" style="background: var(--bad)"></span>
+    <div class="col feed-row__body">
+      <div class="row" style="gap: 8px">
+        <span class="tag" title="로그인 실패">ADMIN_LOGIN_FAILED</span>
+        
+        <span class="muted" style="font-size: 13px">플랫폼</span>
+      </div>
+      <span class="feed-row__sentence">x@example.com 님이 플랫폼에 — · 로그인 실패</span>
+    </div>
+    <button aria-label="상세 열기" class="icon-btn" data-id="00000000-0000-0000-0000-0000000000e2" data-quiet="" hx-get="/admin/_/activity/00000000-0000-0000-0000-0000000000e2" hx-swap="innerHTML" hx-sync="#activity-detail:replace" hx-target="#activity-detail" title="상세 열기" type="button" x-on:click="openDetail($el.dataset.id)"><svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+</div>
+  </div>
+</div>
+  
+    <input hx-swap-oob="true" id="activity-before" name="before" type="hidden" value="2026-10-10T03:34:56Z">
+    <input hx-swap-oob="true" id="activity-before-id" name="beforeId" type="hidden" value="00000000-0000-0000-0000-0000000000e3">
+    <input hx-swap-oob="true" id="activity-last-day" name="lastDay" type="hidden" value="2026-10-10">
+  

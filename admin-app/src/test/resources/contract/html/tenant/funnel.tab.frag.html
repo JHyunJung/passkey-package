@@ -1,0 +1,340 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<div class="stack-6" data-win="7" hx-swap="outerHTML" hx-sync="this:replace" hx-target="this" id="funnel-root" x-data="funnelTab" x-on:htmx:after-request="end($event)" x-on:htmx:before-request="begin()">
+  <div class="row" style="gap: 16px">
+    <div aria-label="기간" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;7&quot;})">
+  
+  <button aria-pressed="false" class="seg__btn" data-value="1" hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/tab/funnel?win=1"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value"
+          x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">24h</button><button aria-pressed="true" class="seg__btn seg__btn--on" data-value="7" hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/tab/funnel?win=7"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value"
+          x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">7d</button><button aria-pressed="false" class="seg__btn" data-value="30" hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/tab/funnel?win=30"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value"
+          x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">30d</button>
+</div>
+    <div class="spacer"></div>
+    <a class="btn" data-csv-download download href="/admin/tenants/00000000-0000-0000-0000-00000000f111/funnel.csv?win=7&amp;kind=summary" hx-boost="false"
+       x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">
+      <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>내보내기</a>
+    
+  </div>
+
+  <!-- 기간 전환 중에는 이전 결과를 숨기고 스켈레톤(원본: 전환 중 data 를 쓰지 않음). 요청이 교체 없이 실패하면(네트워크·서버 오류 토스트)
+       after-request 가 결과를 다시 보이고 세그먼트 선택도 보이는 기간(data-win)으로 되돌린다(funnelTab) — CSV 링크·숫자와 선택이 어긋나지 않는다. -->
+  <div x-cloak x-show="pending"><div aria-busy="true" aria-label="인증 현황 불러오는 중" class="skeleton-block" role="status" x-data="skeleton">
+  <span class="skeleton-block__line"></span><span class="skeleton-block__line"></span><span class="skeleton-block__line"></span><span class="skeleton-block__line"></span><span class="skeleton-block__line"></span><span class="skeleton-block__line"></span>
+  <p class="hint hint--flush" x-cloak x-show="slow">아직 불러오는 중입니다…</p>
+</div></div>
+  <div class="stack-6" x-show="!pending">
+  
+
+  
+    <h2 class="fn-section">인증 품질</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="kpi__label">등록 성공률</span>
+        <span class="kpi__value">100.0%</span>
+        <span class="kpi__hint">성공 1 / 시도 1</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__label">인증 성공률</span>
+        <span class="kpi__value">100.0%</span>
+        <span class="kpi__hint">성공 1 / 시도 1</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__label">차단된 위험 인증</span>
+        <span class="kpi__value">1건</span>
+        <span class="kpi__hint kpi__hint--warn">x 1</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__label">기간</span>
+        <span class="kpi__value"><span style="font-size: 20px">최근 7일</span></span>
+        <span class="kpi__hint">2026-10-07 – 2026-10-13</span>
+      </div>
+    </div>
+    <p class="hint" style="margin: 0">성공하지 못한 시도에는 사용자 취소와 시간 초과도 포함돼요. 성공률이 평소보다 떨어지는지 추이로 확인하세요.</p>
+
+    <div class="grid-2">
+      <section class="card" data-series="auth" x-data="{ asTable: false }">
+  <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">일별 인증 시도와 성공</h2>
+    
+  </div>
+  <div class="spacer"></div><span class="row hint" style="gap: 10px; margin: 0" x-show="!asTable">
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-att"></span>시도</span>
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-ok-auth"></span>성공</span>
+</span>
+</div>
+  <div class="card__body stack-3">
+    <div x-show="!asTable">
+      <div aria-label="일별 인증 시도와 성공 막대 차트, 1일" class="fn-series" role="img">
+        <div class="fn-day">
+          <div aria-hidden="true" class="fn-tip"><strong>x</strong><span>시도 1 · 성공 1 · 100.0%</span></div>
+          <span class="fn-att" style="height: 100.0%"></span>
+          <span class="fn-ok-auth" style="height: 100.0%"></span>
+        </div>
+      </div>
+      <div class="row hint" style="justify-content: space-between; padding: 0 4px; margin: 0">
+        <span>오늘</span>
+      </div>
+    </div>
+    <div x-cloak x-show="asTable">
+      <div class="tw">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>
+          
+          날짜
+        </th>
+        <th class="num">
+          
+          시도
+        </th>
+        <th class="num">
+          
+          성공
+        </th>
+        <th class="num">
+          
+          성공률
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+  <tr>
+    <td><span class="mono">x</span></td>
+    <td class="num">1</td>
+    <td class="num">1</td>
+    <td class="num">100.0%</td>
+  </tr>
+</tbody>
+  </table>
+</div>
+    </div>
+    <div class="row" style="gap: 8px">
+      <button aria-pressed="false" class="btn btn--ghost btn--sm" type="button" x-bind:aria-pressed="asTable" x-on:click="asTable = !asTable">표로 보기</button>
+      <a class="btn btn--ghost btn--sm" data-csv-download download href="/admin/tenants/00000000-0000-0000-0000-00000000f111/funnel.csv?win=7&amp;kind=auth" hx-boost="false" x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+    </div>
+  </div>
+</section><section class="card" data-series="reg" x-data="{ asTable: false }">
+  <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">일별 등록 시도와 성공</h2>
+    
+  </div>
+  <div class="spacer"></div><span class="row hint" style="gap: 10px; margin: 0" x-show="!asTable">
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-att"></span>시도</span>
+  <span class="row" style="gap: 4px"><span aria-hidden="true" class="fn-legend-dot fn-ok-reg"></span>성공</span>
+</span>
+</div>
+  <div class="card__body stack-3">
+    <div x-show="!asTable">
+      <div aria-label="일별 등록 시도와 성공 막대 차트, 1일" class="fn-series" role="img">
+        <div class="fn-day">
+          <div aria-hidden="true" class="fn-tip"><strong>x</strong><span>시도 1 · 성공 1 · 100.0%</span></div>
+          <span class="fn-att" style="height: 100.0%"></span>
+          <span class="fn-ok-reg" style="height: 100.0%"></span>
+        </div>
+      </div>
+      <div class="row hint" style="justify-content: space-between; padding: 0 4px; margin: 0">
+        <span>오늘</span>
+      </div>
+    </div>
+    <div x-cloak x-show="asTable">
+      <div class="tw">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>
+          
+          날짜
+        </th>
+        <th class="num">
+          
+          시도
+        </th>
+        <th class="num">
+          
+          성공
+        </th>
+        <th class="num">
+          
+          성공률
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+  <tr>
+    <td><span class="mono">x</span></td>
+    <td class="num">1</td>
+    <td class="num">1</td>
+    <td class="num">100.0%</td>
+  </tr>
+</tbody>
+  </table>
+</div>
+    </div>
+    <div class="row" style="gap: 8px">
+      <button aria-pressed="false" class="btn btn--ghost btn--sm" type="button" x-bind:aria-pressed="asTable" x-on:click="asTable = !asTable">표로 보기</button>
+      <a class="btn btn--ghost btn--sm" data-csv-download download href="/admin/tenants/00000000-0000-0000-0000-00000000f111/funnel.csv?win=7&amp;kind=reg" hx-boost="false" x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+    </div>
+  </div>
+</section>
+    </div>
+
+    <section class="card" data-failures>
+      <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">인증 실패 원인</h2>
+    <p class="card__sub">패스키 인증이 검증 단계에서 거절된 건 — 최근 7일. 사용자 취소·시간 초과는 포함되지 않아요.</p>
+  </div>
+  
+</div>
+      <div class="card__body stack-3">
+        
+        <div class="tw">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>
+          
+          원인
+        </th>
+        <th>
+          
+          의미
+        </th>
+        <th class="num">
+          
+          건수
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+  <tr>
+    <td><strong title="x">x</strong></td>
+    <td class="hint" style="margin: 0"></td>
+    <td class="num">1</td>
+  </tr>
+</tbody>
+  </table>
+</div>
+        <div class="row" style="gap: 8px">
+          <a class="btn btn--ghost btn--sm" data-csv-download download href="/admin/tenants/00000000-0000-0000-0000-00000000f111/funnel.csv?win=7&amp;kind=failures" hx-boost="false" x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+        </div>
+      </div>
+    </section>
+
+    <h2 class="fn-section">패스키 도입·사용</h2>
+    
+    
+      <div class="kpis" data-adoption>
+        <div class="kpi">
+          <span class="kpi__label">활성 사용자</span>
+          <span class="kpi__value">1명</span>
+          <span class="kpi__hint">기간 중 인증 성공 · 사용된 패스키 1개</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi__label">신규 패스키</span>
+          <span class="kpi__value">1개</span>
+          <span class="kpi__hint">기간 중 새로 등록</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi__label">누적 패스키</span>
+          <span class="kpi__value">1개</span>
+          <span class="kpi__hint">사용자 1명</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi__label">패스키 1개뿐인 사용자</span>
+          <span class="kpi__value">100.0%</span>
+          <span class="kpi__hint kpi__hint--warn">1명 / 1명 · 기기를 잃으면 로그인할 수 없어요</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <section class="card" data-monthly>
+  <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">월간 사용량</h2>
+    <p class="card__sub">인증 기록은 90일 보관돼요. 이번 달 포함 최근 3개월만 집계해요.</p>
+  </div>
+  
+</div>
+  <div class="card__body stack-3">
+    <div class="tw">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>
+          
+          월
+        </th>
+        <th class="num">
+          
+          인증 성공
+        </th>
+        <th class="num">
+          
+          활성 사용자
+        </th>
+        <th class="num">
+          
+          신규 패스키
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+  <tr>
+    <td>x (진행 중)</td>
+    <td class="num">1</td>
+    <td class="num">1명</td>
+    <td class="num">1</td>
+  </tr>
+</tbody>
+  </table>
+</div>
+    <div class="row" style="gap: 8px">
+      <a class="btn btn--ghost btn--sm" data-csv-download download href="/admin/tenants/00000000-0000-0000-0000-00000000f111/funnel.csv?win=7&amp;kind=monthly" hx-boost="false" x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+    </div>
+  </div>
+</section>
+
+        <section class="card" data-devices>
+  <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">사용자 기기 분포</h2>
+    <p class="card__sub">등록된 패스키를 만든 인증기별 비율이에요.</p>
+  </div>
+  
+</div>
+  <div class="card__body stack-3">
+    
+    <div class="stack-3">
+      <div class="dv-row">
+        <span class="dv-row__name truncate" title="x">x</span>
+        <span class="dv-row__track"><span class="dv-row__bar" style="width: 100.0%"></span></span>
+        <span class="dv-row__num"><strong>100.0%</strong> <span class="hint" style="margin: 0">1개</span></span>
+        <span class="dv-row__sub hint">기간 인증 1건</span>
+      </div>
+    </div>
+    <div class="row" style="gap: 8px">
+      <a class="btn btn--ghost btn--sm" data-csv-download download href="/admin/tenants/00000000-0000-0000-0000-00000000f111/funnel.csv?win=7&amp;kind=devices" hx-boost="false" x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">CSV</a>
+    </div>
+  </div>
+</section>
+      </div>
+    
+  
+  </div>
+</div>

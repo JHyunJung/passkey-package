@@ -1,0 +1,276 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+
+  <!-- 이벤트 종류·실패만 필터 상태(Alpine auditFilter)는 카드 밖 여기 있다 — 기간 전환·다시 시도로 카드가 바뀌어도 유지되고(원본과 같다),
+       카드 교체·더 보기로 행이 들어오면(htmx after-swap/settle) 다시 거른다. -->
+  <div class="stack-6" id="audit-root" x-data="auditFilter" x-on:htmx:after-settle="apply()" x-on:htmx:after-swap="apply()">
+    <div hx-disinherit="hx-target hx-swap hx-sync"
+     hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/audit/verify"
+     hx-request='{"timeout": 120000}' hx-swap="outerHTML" hx-sync="this:drop" hx-target="this" hx-trigger="verify-run" id="audit-chain"
+     x-data="{ running: false, startedAt: 0, elapsed: 0, timer: null,
+               get startText() { return this.startedAt ? new Date(this.startedAt).toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }) : ''; },
+               begin() {
+                 this.running = true; this.startedAt = Date.now(); this.elapsed = 0; clearInterval(this.timer);
+                 this.timer = setInterval(() => {
+                   if (!this.$root.isConnected) { clearInterval(this.timer); return; }
+                   this.elapsed = Math.max(0, Math.floor((Date.now() - this.startedAt) / 1000));
+                 }, 1000);
+               },
+               end() { this.running = false; clearInterval(this.timer); } }" x-on:htmx:after-request="if ($event.detail.elt === $el) end()" x-on:htmx:before-request="if ($event.detail.elt === $el) begin()">
+  <section class="card">
+    <div class="row" style="gap: 16px; padding: 16px 20px">
+      <span aria-hidden="true" class="chain-ico chain-ico--ok">
+        <svg aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20"><path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/></svg>
+      </span>
+      <div class="stack-1" style="gap: 2px; flex: 1 1 320px; min-width: 0">
+        <div class="row" style="gap: 8px">
+          <h2 class="card__title">감사 로그 위변조 검증</h2>
+          <span class="badge" x-cloak x-show="running">검증 중</span>
+          
+          <span class="badge badge--violet">PLATFORM 전용</span>
+        </div>
+        <p class="card__sub">감사 로그 행이 해시로 이어져 바뀌거나 지워지지 않았는지 확인합니다.</p>
+      </div>
+      
+      <button class="btn btn--primary" type="button" x-bind:disabled="running" x-on:click="$dispatch('dialog:open', { id: 'audit-verify' })">
+        <span x-show="!running">검증 실행</span><span x-cloak x-show="running">검증 중…</span>
+      </button>
+    </div>
+  </section>
+  <div x-data="dialog({&quot;id&quot;:&quot;audit-verify&quot;})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown="onScrim($event)">
+      <div aria-labelledby="audit-verify-title" aria-modal="true" class="dialog"
+           role="dialog" x-trap.noscroll="open">
+        <div class="dialog__head">
+          
+          
+            <h3 class="dialog__title" id="audit-verify-title">해시 체인 검증</h3>
+            <div class="dialog__sub">Alpha Corp의 감사 로그 전체를 검증합니다. 읽기 전용이며 데이터는 바뀌지 않습니다.</div>
+          
+          
+        </div>
+        <div class="dialog__body">
+  <p style="margin: 0; font-size: 13px; color: var(--ink-2)">전체 체인 검증 — 처음부터 해시를 다시 계산해 확인합니다. 기간은 지정하지 않습니다.</p>
+  <div class="stack-2" x-cloak x-show="running">
+    <div class="row">
+      <strong aria-live="polite" role="status" style="font-size: 13px">검증 중…</strong>
+      <div class="spacer"></div>
+      <!-- 경과 시간은 매초 바뀌므로 aria-live 밖에 둔다 -->
+      <span class="hint" style="margin: 0">시작 <span x-text="startText"></span> · 경과 <span x-text="elapsed"></span>초</span>
+    </div>
+    <div aria-label="검증 진행 중" class="indet" role="progressbar"></div>
+  </div>
+  <p class="hint" style="margin: 0">진행률을 알 수 없어 퍼센트를 표시하지 않습니다. 창을 닫아도 검증은 계속되고 결과는 위 카드에 표시됩니다.</p>
+</div>
+        <div class="dialog__foot">
+          
+          
+  <button class="btn" type="button" x-on:click="close()"><span x-text="running ? '닫기 (계속 실행)' : '취소'">취소</span></button>
+  <button class="btn btn--primary" type="button" x-bind:disabled="running" x-on:click="$dispatch('verify-run')"><span x-text="running ? '검증 중…' : '검증 실행'">검증 실행</span></button>
+
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+</div>
+    <section class="card" hx-swap="outerHTML" hx-sync="this:replace" hx-target="this" id="audit-card">
+  <!-- 더 보기·CSV 가 이어 받는 구간(win·to)과 다음 쪽 번호(= 불러온 쪽 수)·마지막 행의 날짜 키 -->
+  <div hidden id="audit-state">
+    <input name="win" type="hidden" value="24h">
+    <input name="to" type="hidden" value="2026-10-13T03:34:56.000Z">
+    <input id="audit-page" name="page" type="hidden" value="1">
+    <input id="audit-last-day" name="lastDay" type="hidden" value="2026-10-11">
+  </div>
+  <div class="card__head">
+    <div aria-label="이벤트 종류" class="row" role="group" style="gap: 6px">
+      <button aria-pressed="false" class="fchip" data-g="auth" title="AUTH_* · AUTHENTICATION_* · CREDENTIAL_AUTHENTICATED · SIGNATURE_*" type="button" x-bind:aria-pressed="has($el.dataset.g) ? 'true' : 'false'"
+              x-bind:class="{ 'fchip--on': has($el.dataset.g) }" x-on:click="toggle($el.dataset.g)">인증</button><button aria-pressed="false" class="fchip" data-g="registration" title="REGISTRATION_* · CREDENTIAL_REGISTERED · ATTESTATION_TRUST_*" type="button" x-bind:aria-pressed="has($el.dataset.g) ? 'true' : 'false'"
+              x-bind:class="{ 'fchip--on': has($el.dataset.g) }" x-on:click="toggle($el.dataset.g)">등록</button><button aria-pressed="false" class="fchip" data-g="config" title="WEBAUTHN_CONFIG_* · AAGUID_* · ATTESTATION_POLICY_* · TENANT_*" type="button" x-bind:aria-pressed="has($el.dataset.g) ? 'true' : 'false'"
+              x-bind:class="{ 'fchip--on': has($el.dataset.g) }" x-on:click="toggle($el.dataset.g)">설정 변경</button><button aria-pressed="false" class="fchip" data-g="keys" title="API_KEY_* · CREDENTIAL_REVOKE*" type="button" x-bind:aria-pressed="has($el.dataset.g) ? 'true' : 'false'"
+              x-bind:class="{ 'fchip--on': has($el.dataset.g) }" x-on:click="toggle($el.dataset.g)">키 관리</button><button aria-pressed="false" class="fchip" data-g="other" title="위 네 그룹에 속하지 않는 이벤트" type="button" x-bind:aria-pressed="has($el.dataset.g) ? 'true' : 'false'"
+              x-bind:class="{ 'fchip--on': has($el.dataset.g) }" x-on:click="toggle($el.dataset.g)">기타</button>
+    </div>
+    <button class="btn btn--ghost btn--sm" type="button" x-cloak x-on:click="clear()" x-show="filtering">필터 지우기</button>
+    <div class="spacer"></div>
+    <label class="switch">
+      <input aria-checked="false" class="sr-only" role="switch" type="checkbox"
+             x-bind:aria-checked="failures ? 'true' : 'false'" x-bind:checked="failures" x-on:change="setFailures($el.checked)">
+      <span aria-hidden="true" class="switch__track"></span>
+      <span>실패만</span>
+    </label>
+    <div aria-label="기간" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;24h&quot;})">
+  
+  <button aria-pressed="true" class="seg__btn seg__btn--on" data-value="24h" hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/tab/audit/card?win=24h"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value"
+          x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">24시간</button><button aria-pressed="false" class="seg__btn" data-value="7d" hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/tab/audit/card?win=7d"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value"
+          x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">7일</button><button aria-pressed="false" class="seg__btn" data-value="30d" hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/tab/audit/card?win=30d"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value"
+          x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">30일</button>
+</div>
+    
+    
+      <a class="btn" data-base="/admin/tenants/00000000-0000-0000-0000-00000000f111/audit.csv?win=24h&amp;to=2026-10-13T03%3A34%3A56.000Z" data-csv-download download href="/admin/tenants/00000000-0000-0000-0000-00000000f111/audit.csv?win=24h&amp;to=2026-10-13T03%3A34%3A56.000Z&amp;pages=1"
+         hx-boost="false" x-bind:href="csvHref($el.dataset.base)" x-show="shown > 0">
+        <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg><span x-text="csvLabel">CSV 내보내기 (현재 페이지 1건)</span></a>
+      <button class="btn" disabled type="button" x-cloak="true" x-show="shown === 0">
+        <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg><span x-text="csvLabel">CSV 내보내기 (현재 페이지 1건)</span></button>
+    
+  </div>
+
+  
+
+  <div class="tw">
+    <table class="table" x-data="{ exp: null }">
+      <thead>
+        <tr>
+          <th style="width: 140px">시각</th><th>이벤트</th><th>행위자</th><th>대상</th><th>상세 내용</th>
+          <th style="width: 32px"><span class="sr-only">펼치기</span></th>
+        </tr>
+      </thead>
+      <!-- 행 하나뿐인 tbody: 더 보기가 끝에 이어 붙이고, 필터는 행의 hidden 으로 거른다(auditFilter.apply). -->
+      <tbody id="audit-rows">
+        <tr class="table__empty" x-cloak="true" x-show="shown === 0">
+          <td colspan="6">
+            <div x-show="!filtering"><div class="empty empty--compact">
+  
+  <p class="empty__title">이 기간에 감사 이벤트가 없습니다.</p>
+  
+  
+</div></div>
+            <div x-cloak x-show="filtering"><div class="empty empty--compact">
+  
+  <p class="empty__title">조건에 맞는 이벤트가 없습니다.</p>
+  
+  
+</div></div>
+          </td>
+        </tr>
+        
+  
+    <tr class="table__group" data-day="2026-10-11"><td colspan="6">2026-10-11</td></tr>
+  
+    <tr class="is-clickable" data-day="2026-10-11" data-ev data-fail="0"
+        data-g="other" data-id="00000000-0000-0000-0000-00000000f111"
+        tabindex="0" x-bind:aria-expanded="exp === $el.dataset.id" x-bind:class="{ 'is-expanded': exp === $el.dataset.id }" x-on:click="exp = exp === $el.dataset.id ? null : $el.dataset.id" x-on:keydown.self.enter.prevent="$el.click()" x-on:keydown.self.space.prevent="$el.click()">
+      <td>
+        <div class="stack-1" style="gap: 0">
+          <span style="font-size: 13px">12:34:56</span>
+          <span class="hint" style="margin: 0">2일 전</span>
+        </div>
+      </td>
+      <td><span class="badge  mono">x</span></td>
+      <td>
+        <span class="row" style="gap: 6px; flex-wrap: nowrap">
+          <span class="tag">ADMIN</span>
+          <span class="mono hint" style="margin: 0">…x</span>
+        </span>
+      </td>
+      <td>
+        <span class="row" style="gap: 6px; flex-wrap: nowrap">
+          <span class="tag">x</span>
+          <span class="mono hint" style="margin: 0">…x</span>
+        </span>
+      </td>
+      <td><span class="mono hint truncate" style="display: inline-block; max-width: 280px; margin: 0; vertical-align: middle">{&quot;raw&quot;:&quot;x&quot;}</span></td>
+      <td>
+        <span style="color: var(--mute); display: inline-flex">
+          <span x-show="exp !== $el.closest('tr').dataset.id"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M6 9l6 6 6-6"/></svg></span>
+          <span x-cloak x-show="exp === $el.closest('tr').dataset.id"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M6 15l6-6 6 6"/></svg></span>
+        </span>
+      </td>
+    </tr>
+    <tr class="table__expanded" data-id="00000000-0000-0000-0000-00000000f111" x-cloak x-show="exp === $el.dataset.id">
+      <td colspan="6">
+        <div class="stack-3" style="padding-left: 140px">
+          
+          <div class="row" style="gap: 8px">
+            <span class="t-over">payload</span>
+            <div class="spacer"></div>
+            
+  
+  <button class="btn btn--sm" type="button"
+          x-data="copyBtn({&quot;value&quot;:&quot;{\n  \&quot;raw\&quot;: \&quot;x\&quot;\n}&quot;,&quot;label&quot;:&quot;JSON 복사&quot;})" x-on:click="copy($event)">
+    <span x-show="!copied"><svg aria-hidden="true" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="13"><rect height="11" rx="2" width="11" x="9" y="9"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></span>
+    <span x-cloak x-show="copied"><svg aria-hidden="true" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="13"><path d="M5 12l5 5L20 7"/></svg></span>
+    <span x-text="copied ? '복사됨' : label">JSON 복사</span>
+  </button>
+
+            <button class="btn btn--sm" data-dlg="audit-evt-00000000-0000-0000-0000-00000000f111" type="button" x-on:click="$dispatch('dialog:open', { id: $el.dataset.dlg })">상세 다이얼로그</button>
+          </div>
+          <pre class="mono audit-pre">{
+  &quot;raw&quot;: &quot;x&quot;
+}</pre>
+        </div>
+        <!-- Audit Event 다이얼로그(V2: 언제 · 누가 · 대상 · payload). 열릴 때 안쪽을 그린다(x-if). -->
+        <div x-data="dialog({&quot;id&quot;:&quot;audit-evt-00000000-0000-0000-0000-00000000f111&quot;})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+          <template x-if="open">
+            <div class="scrim" x-on:mousedown="onScrim($event)">
+              <div aria-labelledby="audit-evt-00000000-0000-0000-0000-00000000f111-title" aria-modal="true" class="dialog" role="dialog" x-trap.noscroll="open">
+                <div class="dialog__head">
+                  <h3 class="dialog__title" id="audit-evt-00000000-0000-0000-0000-00000000f111-title">
+                    <span class="row" style="gap: 8px"><span>Audit Event</span><span class="badge  mono">x</span></span>
+                  </h3>
+                </div>
+                <div class="dialog__body stack-4">
+                  <div class="stack-1">
+                    <span class="t-over">언제</span>
+                    <span style="font-size: 13px">2026-10-11 12:34:56 KST</span>
+                    <span class="mono hint" style="margin: 0">2026-10-11T03:34:56.000Z</span>
+                  </div>
+                  <div class="row" style="gap: 24px; align-items: flex-start">
+                    <div class="stack-1">
+                      <span class="t-over">누가 (actor)</span>
+                      <span class="row" style="gap: 6px; font-size: 13px"><span class="tag">ADMIN</span><span class="mono hint" style="margin: 0">x</span></span>
+                    </div>
+                    <div class="stack-1">
+                      <span class="t-over">대상 (subject)</span>
+                      <span class="row" style="gap: 6px; font-size: 13px"><span class="tag">x</span><span class="mono hint" style="margin: 0">x</span></span>
+                    </div>
+                  </div>
+                  <div class="stack-2">
+                    <div class="row"><span class="t-over">payload</span><div class="spacer"></div>
+                      
+  
+  <button class="btn btn--sm" type="button"
+          x-data="copyBtn({&quot;value&quot;:&quot;{\n  \&quot;raw\&quot;: \&quot;x\&quot;\n}&quot;,&quot;label&quot;:&quot;JSON 복사&quot;})" x-on:click="copy($event)">
+    <span x-show="!copied"><svg aria-hidden="true" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="13"><rect height="11" rx="2" width="11" x="9" y="9"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></span>
+    <span x-cloak x-show="copied"><svg aria-hidden="true" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="13"><path d="M5 12l5 5L20 7"/></svg></span>
+    <span x-text="copied ? '복사됨' : label">JSON 복사</span>
+  </button>
+</div>
+                    <pre class="mono audit-pre audit-pre--dlg">{
+  &quot;raw&quot;: &quot;x&quot;
+}</pre>
+                  </div>
+                </div>
+                <div class="dialog__foot"><button class="btn" type="button" x-on:click="close()">닫기</button></div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </td>
+    </tr>
+  
+  
+
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card__foot">
+    
+    <span class="hint" style="margin: 0" x-text="countText">최근 1건</span>
+    <div class="spacer"></div>
+    <div id="audit-more" style="display: contents">
+  
+</div>
+  </div>
+</section>
+  </div>

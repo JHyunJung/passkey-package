@@ -1,0 +1,10 @@
+{
+  "$" : "object",
+  "$.intact" : "boolean",
+  "$.tamperedEntryId" : "uuid",
+  "$.tenantId" : "uuid",
+  "$.verifiedAt" : "iso-offset(Z)",
+  "${}" : "tenantId,intact,tamperedEntryId,verifiedAt",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

@@ -1,0 +1,8 @@
+{
+  "$" : "object",
+  "$.email" : "string",
+  "$.mfaRequired" : "boolean",
+  "$.role" : "string",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

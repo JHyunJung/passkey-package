@@ -1,0 +1,7 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="devices-acme-30d-2026-10-11.csv"
+
+﻿authenticator,passkeys,authSuccessInWindow
+"가나다 한글 테넌트, Say ""hi""",3,9
+'@Unknown,1,0

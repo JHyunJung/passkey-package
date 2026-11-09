@@ -1,0 +1,20 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.email" : "string",
+  "$.data.mfaEnabled" : "boolean",
+  "$.data.mfaRequired" : "boolean",
+  "$.data.role" : "string",
+  "$.data.sessionIdleTimeoutMinutes" : "number",
+  "$.data.tenantIds" : "array<uuid>",
+  "$.data.tenantIds[]" : "uuid",
+  "$.data{}" : "email,role,tenantIds,mfaEnabled,mfaRequired,sessionIdleTimeoutMinutes",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

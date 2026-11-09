@@ -1,0 +1,473 @@
+package com.crosscert.passkey.admin.web.tenant
+
+import com.crosscert.passkey.admin.audit.AuditChainMonitorController
+import com.crosscert.passkey.admin.audit.AuditLogController
+import com.crosscert.passkey.admin.audit.AuditLogController.AuditLogView
+import com.crosscert.passkey.admin.tenant.TenantAdminController
+import com.crosscert.passkey.admin.web.format.CsvWriter
+import com.crosscert.passkey.admin.web.format.ErrorMessages
+import com.crosscert.passkey.admin.web.format.KstFormat
+import com.crosscert.passkey.admin.web.format.javaIsBlank
+import com.crosscert.passkey.admin.web.format.javaTrim
+import com.crosscert.passkey.admin.web.support.CurrentAdmin
+import com.crosscert.passkey.admin.web.support.ExportLimit
+import com.crosscert.passkey.admin.web.support.Toasts
+import com.crosscert.passkey.core.api.BusinessException
+import com.crosscert.passkey.core.api.ErrorCode
+import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
+import org.springframework.security.access.AccessDeniedException
+import org.springframework.stereotype.Controller
+import org.springframework.ui.Model
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RequestParam
+import tools.jackson.core.JacksonException
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.ObjectMapper
+import tools.jackson.databind.node.NullNode
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.time.Clock
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.util.Locale
+import java.util.UUID
+
+private val log = LoggerFactory.getLogger(AuditTabController::class.java)
+
+/**
+ * Tenant 상세의 감사 로그 탭(← pages/tenant/AuditTab.tsx, auditHelpers.ts, api/audit.ts, lib/csvExport.ts).
+ *
+ * 모든 엔드포인트가 [TenantTabs.load] 를 먼저 부른다(RP 다른 tenant → 403, CSV 포함).
+ *
+ * 원본에는 자동 갱신(폴링)이 없다(setInterval 은 체인 검증 경과 시간뿐) — 그래서 hx-trigger every 도 두지 않는다(브리프와 다름, 원본이 이긴다).
+ * 기간 전환·다시 시도는 카드를 새로 그린다(구간 끝 to 를 새로 잡고 첫 쪽). "더 보기"는 원본 loadMore 처럼 같은 구간(win·to)의 다음 한 쪽만 읽어
+ * 표 끝에 붙인다(OOB beforeend) — 다음 쪽 번호·마지막 날짜 키는 카드 안 숨은 입력(#audit-state)이 들고 다니고 응답이 갱신한다. 쪽 수 상한은 없다.
+ * 이벤트 종류·실패만 필터는 원본처럼 "읽어 온 행 안에서" 클라이언트(Alpine auditFilter)가 거른다 — REST 에 그 파라미터가 없고,
+ * 더 보기로 붙인 행에도 같은 필터가 적용된다. 필터 상태는 카드 밖(#audit-root)에 있어 기간 전환으로 카드가 바뀌어도 유지된다(원본과 같다).
+ * CSV 는 화면이 불러온 쪽 수(pages)만큼 같은 구간을 다시 읽어 같은 필터로 거른다([ExportLimit.MAX_PAGES] 초과는 422 — 일부만 담은 파일 금지).
+ *
+ * 감사 로그 payload·행위자·대상은 사용자가 정할 수 있는 값이다 — 템플릿은 th:text 만 쓰고 속성의 JS 평가 위치에는 넣지 않는다.
+ *
+ * `v.id!!` 는 원 Java `v.getId().toString()` 의 NPE 자리다(더 보기·CSV 는 원 Java 도 id 를 문자열 연결·nullable 파라미터로만 써서 NPE 가 없다 — 그대로 nullable).
+ */
+@Controller
+class AuditTabController(
+    private val tenants: TenantAdminController,
+    private val audit: AuditLogController,
+    private val chain: AuditChainMonitorController,
+    private val clock: Clock,
+    private val json: ObjectMapper,
+) {
+
+    // ── 모델 ────────────────────────────────────────────────
+
+    /** 조회 구간: 기간 키와 구간 끝(to). 같은 구간으로 더 보기·CSV 가 이어 읽는다. */
+    private data class Span(val win: String, val to: Instant) {
+        fun range(): Array<OffsetDateTime> {
+            val r = AuditHelpers.windowRange(AuditHelpers.window(win).hours, to)
+            return arrayOf(
+                OffsetDateTime.ofInstant(Instant.parse(r.from), ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(Instant.parse(r.to), ZoneOffset.UTC),
+            )
+        }
+
+        fun toIso(): String = AuditHelpers.iso(to)
+
+        companion object {
+            /** to 가 비었거나 형식이 틀리면 now, 미래면 now. */
+            fun of(win: String, to: String, now: Instant): Span {
+                var t = now
+                if (!to.javaIsBlank()) {
+                    try {
+                        t = Instant.parse(to.javaTrim())
+                        if (t.isAfter(now)) t = now
+                    } catch (ignored: RuntimeException) {
+                        t = now
+                    }
+                }
+                return Span(AuditHelpers.window(win).key, t)
+            }
+        }
+    }
+
+    /** 표의 한 줄(api/audit.ts adapt + 열 계산). group·fail·dayKey 는 클라이언트 필터·날짜 머리글이 읽는 data-* 값(서버 상수). */
+    data class Ev(
+        val id: String?,
+        val eventType: String?,
+        val tone: String?,
+        val hms: String?,
+        val ago: String?,
+        val actorType: String?,
+        val actorId: String?,
+        val actorTail: String?,
+        val subjectType: String?,
+        val subjectId: String?,
+        val subjectTail: String?,
+        val detail: String?,
+        val diff: List<Diff>?,
+        val pretty: String?,
+        val whenKst: String?,
+        val whenIso: String,
+        val group: String?,
+        val fail: Boolean,
+        val dayKey: String,
+    )
+
+    data class Diff(val field: String?, val from: String?, val to: String?)
+
+    /** 날짜 그룹. head=false 면 머리글 행을 그리지 않는다(더 보기의 첫 그룹이 화면 마지막 그룹과 같은 날짜일 때). */
+    data class Day(val label: String?, val key: String?, val head: Boolean, val events: List<Ev>?)
+
+    data class Chip(val id: String?, val label: String?, val title: String?)
+
+    data class ChainResult(val intact: Boolean, val tampered: Int, val at: String?)
+
+    private data class Item(val view: AuditLogView, val payload: JsonNode?)
+
+    // ── 화면 ────────────────────────────────────────────────
+
+    @GetMapping(FRAG + "{id}/tab/audit")
+    fun tab(
+        @PathVariable id: String,
+        @RequestParam(name = "win", defaultValue = AuditHelpers.DEFAULT_WINDOW) win: String,
+        model: Model,
+    ): String {
+        val v = TenantTabs.load(tenants, id)
+        val me = me(model)
+        val now = clock.instant()
+        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        val tid = v.id!!
+        model.addAttribute("tid", tid.toString())
+        model.addAttribute("platform", me.platform)
+        model.addAttribute("tenantName", v.displayName ?: "")
+        model.addAttribute("chainResult", null)
+        fillChainAttrs(model, tid)
+        fillCard(model, tid, Span(AuditHelpers.window(win).key, now), now)
+        return TAB_VIEW
+    }
+
+    /** 카드 교체 응답(기간 전환·다시 시도). 구간 끝을 새로 잡고 첫 쪽을 읽는다. 탭 영역이 아니라 #audit-card 만 바꾼다. */
+    @GetMapping(FRAG + "{id}/tab/audit/card")
+    fun card(
+        @PathVariable id: String,
+        @RequestParam(name = "win", defaultValue = AuditHelpers.DEFAULT_WINDOW) win: String,
+        model: Model,
+    ): String {
+        val v = TenantTabs.load(tenants, id)
+        val now = clock.instant()
+        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        val tid = v.id!!
+        model.addAttribute("tid", tid.toString())
+        fillCard(model, tid, Span(AuditHelpers.window(win).key, now), now)
+        return CARD_VIEW
+    }
+
+    /**
+     * 더 보기(원본 loadMore): 같은 구간(win·to)의 `page` 쪽 하나만 읽어 표 끝에 붙인다(OOB). 다음 쪽 번호·마지막 날짜 키·버튼을 OOB 로 갱신한다.
+     * 실패는 실제 오류 상태 + 토스트(본문 없음) — 붙인 행과 숨은 상태는 그대로라 같은 쪽을 다시 누를 수 있다.
+     */
+    @GetMapping(FRAG + "{id}/tab/audit/more")
+    fun more(
+        @PathVariable id: String,
+        @RequestParam(name = "win", defaultValue = AuditHelpers.DEFAULT_WINDOW) win: String,
+        @RequestParam(name = "to", defaultValue = "") to: String,
+        @RequestParam(name = "page", defaultValue = "1") page: String,
+        @RequestParam(name = "lastDay", defaultValue = "") lastDay: String,
+        res: HttpServletResponse,
+        model: Model,
+    ): String {
+        val v = TenantTabs.load(tenants, id)
+        val now = clock.instant()
+        val span = Span.of(win, to, now)
+        val p = Math.max(1, parseInt(page, 1))
+        val items = try {
+            readPage(v.id, span, p)
+        } catch (e: RuntimeException) {
+            if (denied(e)) throw e
+            log.warn("[audit-tab] more failed (page {}): {}", p, e.javaClass.simpleName)
+            val info = ErrorMessages.describe(e)
+            val status = info.httpStatus ?: HttpServletResponse.SC_INTERNAL_SERVER_ERROR
+            Toasts.errorTitled(res, "감사 로그를 더 불러오지 못했습니다", info.toastMessage(), "HTTP $status", MDC.get("traceId"))
+            res.status = status
+            return EMPTY_VIEW
+        }
+        val evs = items.map { item -> ev(item, now) }
+        model.addAttribute("days", days(evs, lastDay, now))
+        model.addAttribute("nextPage", p + 1)
+        model.addAttribute("lastDay", if (evs.isEmpty()) lastDay else evs[evs.size - 1].dayKey)
+        model.addAttribute("hasMore", items.size == PAGE_SIZE)
+        model.addAttribute("moreUrl", FRAG + v.id + "/tab/audit/more") // 원 Java 문자열 연결 — null 이면 "null"
+        return MORE_VIEW
+    }
+
+    /**
+     * 체인 검증(PLATFORM 전용). 성공하면 카드 전체를 결과로 교체하고(열린 다이얼로그도 함께 사라진다 — 원본 setShowVerify(false)),
+     * 실패하면 실제 오류 상태 + 토스트(본문 없음)라 카드·다이얼로그가 그대로 남고 버튼이 다시 풀린다.
+     */
+    @GetMapping(FRAG + "{id}/audit/verify")
+    fun verify(@PathVariable id: String, res: HttpServletResponse, model: Model): String {
+        val v = TenantTabs.load(tenants, id)
+        val me = me(model)
+        if (!me.platform) throw AccessDeniedException("platform operator only")
+        try {
+            // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리(try 안 — 검증 실패 토스트).
+            val r = chain.verifyTenant(v.id!!.toString())
+            val tampered = if (r.tamperedEntryId == null) 0 else 1
+            val verifiedAt = r.verifiedAt
+            model.addAttribute("chainResult", ChainResult(r.intact, tampered, if (verifiedAt == null) "—" else KstFormat.kstDateTimeMin(verifiedAt)))
+        } catch (e: RuntimeException) {
+            if (denied(e)) throw e
+            log.warn("[audit-tab] chain verify failed: {}", e.javaClass.simpleName)
+            val info = ErrorMessages.describe(e)
+            val status = info.httpStatus ?: HttpServletResponse.SC_INTERNAL_SERVER_ERROR
+            Toasts.errorTitled(res, "체인 검증에 실패했습니다", info.toastMessage(), "HTTP $status", MDC.get("traceId"))
+            res.status = status
+            return EMPTY_VIEW
+        }
+        // 위 try 의 v.id!! 를 통과했다(smart cast 로 non-null) — 원 Java 의 두 번째 v.getId().toString() 도 여기서는 NPE 가 나지 않는다.
+        val tid = v.id
+        model.addAttribute("tid", tid.toString())
+        model.addAttribute("platform", true)
+        model.addAttribute("tenantName", v.displayName ?: "")
+        fillChainAttrs(model, tid)
+        return CHAIN_VIEW
+    }
+
+    /**
+     * 화면이 불러온 행의 CSV(원본 downloadCsv: audit-{slug}-{KST 오늘}.csv). 같은 구간(win·to)의 0..pages-1 쪽을 다시 읽어 화면과 같은 필터(g·failures)로 거른다.
+     * pages 가 [ExportLimit.MAX_PAGES] 를 넘으면 422(이유 문구). 어느 쪽이든 읽기에 실패하면 부분 파일 없이 오류.
+     */
+    @GetMapping(PAGE + "{id}/audit.csv")
+    fun export(
+        @PathVariable id: String,
+        @RequestParam(name = "win", defaultValue = AuditHelpers.DEFAULT_WINDOW) win: String,
+        @RequestParam(name = "g", required = false) g: List<String?>?,
+        @RequestParam(name = "failures", defaultValue = "") failures: String,
+        @RequestParam(name = "pages", defaultValue = "1") pages: String,
+        @RequestParam(name = "to", defaultValue = "") to: String,
+    ): ResponseEntity<ByteArray> {
+        val v = TenantTabs.load(tenants, id)
+        val now = clock.instant()
+        val span = Span.of(win, to, now)
+        val n = Math.max(1, parseInt(pages, 1))
+        if (n > ExportLimit.MAX_PAGES) return ExportLimit.tooLarge()
+        val groups = ArrayList<String>()
+        if (g != null) {
+            for (eg in AuditHelpers.EVENT_GROUPS) if (g.contains(eg.id)) groups.add(eg.id) // 알려진 그룹만
+        }
+        val onlyFailures = "true" == failures
+        val items = ArrayList<Item>()
+        for (p in 0 until n) {
+            val page = readPage(v.id, span, p) // 실패는 그대로 던진다(부분 파일 금지)
+            items.addAll(page)
+            if (page.size < PAGE_SIZE) break
+        }
+        val body = ArrayList<List<String?>>()
+        for (it in items) {
+            val a = it.view
+            val type = a.action ?: ""
+            if (groups.isNotEmpty() && !groups.contains(AuditHelpers.eventGroup(type))) continue
+            if (onlyFailures && !AuditHelpers.isFailure(type, null)) continue
+            body.add(
+                java.util.List.of(
+                    isoOf(a.createdAt), nz(a.action), if (a.actorEmail != null) "ADMIN" else "SYSTEM", nz(a.actorEmail),
+                    nz(a.targetType), nz(a.targetId), payloadCompact(it.payload, true),
+                ),
+            )
+        }
+        val csv = CsvWriter.write(java.util.List.of("ts", "eventType", "actorType", "actorId", "subjectType", "subjectId", "payload"), body)
+        val filename = "audit-" + v.slug + "-" + KstFormat.kstToday(now) + ".csv"
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replace(UNSAFE_FILENAME, "_") + "\"")
+            .contentType(MediaType("text", "csv", StandardCharsets.UTF_8))
+            .body(csv)
+    }
+
+    // ── 조회 ────────────────────────────────────────────────
+
+    /** 구간의 한 쪽. 실패는 그대로 던진다(권한 거부 포함). tid: 원 Java 와 같이 nullable 그대로 REST 에 넘긴다. */
+    private fun readPage(tid: UUID?, span: Span, page: Int): List<Item> {
+        val r = span.range()
+        val rows: List<AuditLogView>? = audit.list(null, null, tid, r[0], r[1], page, PAGE_SIZE).data()
+        val items = ArrayList<Item>()
+        if (rows != null) for (a in rows) items.add(Item(a, parsePayload(a.payload)))
+        return items
+    }
+
+    /** payload 문자열 → JSON. 비어 있으면 null, 파싱 실패는 {raw: 원문}, JSON null 은 null. */
+    private fun parsePayload(s: String?): JsonNode? {
+        if (s == null || s.isEmpty()) return null
+        try {
+            val n: JsonNode? = json.readTree(s)
+            return if (n == null || n is NullNode) null else n
+        } catch (e: JacksonException) {
+            val o = json.createObjectNode()
+            o.put("raw", s)
+            return o
+        }
+    }
+
+    private fun isoOf(t: OffsetDateTime?): String? {
+        if (t == null) return ""
+        try {
+            return json.convertValue(t, String::class.java)
+        } catch (e: RuntimeException) {
+            return t.toString()
+        }
+    }
+
+    // ── 모델 채우기 ─────────────────────────────────────────
+
+    private fun fillChainAttrs(model: Model, tid: UUID) {
+        model.addAttribute("verifyUrl", "$FRAG$tid/audit/verify")
+    }
+
+    private fun fillCard(model: Model, tid: UUID, span: Span, now: Instant) {
+        val base = "$FRAG$tid/tab/audit/card"
+        var items: List<Item> = java.util.List.of()
+        var error: RuntimeException? = null
+        try {
+            items = readPage(tid, span, 0)
+        } catch (e: RuntimeException) {
+            if (denied(e)) throw e
+            log.warn("[audit-tab] list failed: {}", e.javaClass.simpleName)
+            error = e
+        }
+        val failed = error != null
+        val evs = items.map { item -> ev(item, now) }
+
+        model.addAttribute("tid", tid.toString())
+        model.addAttribute("win", span.win)
+        model.addAttribute("days", days(evs, "", now))
+        model.addAttribute("loadError", error)
+        model.addAttribute("total", evs.size)
+        // 처음 값(필터 없음). 이후 건수·CSV 라벨은 Alpine(auditFilter)이 읽어 온 행으로 다시 센다.
+        model.addAttribute("countText", if (failed) "—" else "최근 " + num(evs.size.toLong()) + "건")
+        model.addAttribute("csvLabel", "CSV 내보내기 (현재 페이지 " + num(evs.size.toLong()) + "건)")
+        val csvBase = PAGE + tid + "/audit.csv?win=" + span.win + "&to=" + enc(span.toIso())
+        model.addAttribute("csvBase", csvBase)
+        model.addAttribute("csvUrl", "$csvBase&pages=1")
+        model.addAttribute("hasMore", !failed && items.size == PAGE_SIZE)
+        model.addAttribute("moreUrl", "$FRAG$tid/tab/audit/more")
+        // 숨은 상태: 더 보기·CSV 가 이어 받는 구간과 다음 쪽 번호(= 불러온 쪽 수)·마지막 날짜 키
+        model.addAttribute("toIso", span.toIso())
+        model.addAttribute("nextPage", 1)
+        model.addAttribute("lastDay", if (evs.isEmpty()) "" else evs[evs.size - 1].dayKey)
+
+        val chips = ArrayList<Chip>()
+        for (eg in AuditHelpers.EVENT_GROUPS) chips.add(Chip(eg.id, eg.label, eg.codes))
+        model.addAttribute("chips", chips)
+        val windows = ArrayList<Map<String, Any?>>()
+        for (w in AuditHelpers.WINDOWS) {
+            val o = LinkedHashMap<String, Any?>()
+            o["value"] = w.key
+            o["label"] = w.label
+            o["title"] = null
+            // 기간을 바꾸면 구간 끝(to)을 새로 잡고 첫 쪽부터(필터는 카드 밖 Alpine 상태라 그대로).
+            o["attrs"] = get(base + "?win=" + w.key)
+            windows.add(o)
+        }
+        model.addAttribute("windows", windows)
+        model.addAttribute("retryAttrs", get(base + "?win=" + span.win))
+    }
+
+    private fun ev(it: Item, now: Instant): Ev {
+        val a = it.view
+        val type = a.action ?: ""
+        val p = it.payload
+        val createdAt = a.createdAt
+        val at: Instant? = createdAt?.toInstant()
+        val kst = KstFormat.kstDateTime(at)
+        val actorId = a.actorEmail
+        val actorType = if (actorId != null) "ADMIN" else "SYSTEM"
+        val targetId = a.targetId
+        val diff = AuditHelpers.payloadDiff(p).map { d -> Diff(d.field, AuditHelpers.diffValue(d.from), AuditHelpers.diffValue(d.to)) }
+        return Ev(
+            a.id.toString(), type, AuditHelpers.eventTone(type, null), // id: 원 Java String.valueOf — null 이면 "null"
+            if (kst.length > 11) kst.substring(11) else kst, KstFormat.timeAgo(at, now), actorType, actorId,
+            if (actorId == null) null else "…" + tail(actorId, 10),
+            a.targetType ?: "—", targetId, if (targetId == null) null else "…" + tail(targetId, 12),
+            payloadCompact(p, false), diff, AuditHelpers.pretty(p ?: json.createObjectNode()), kst,
+            if (at == null) "" else AuditHelpers.iso(at), AuditHelpers.eventGroup(type), AuditHelpers.isFailure(type, null),
+            if (at == null) "" else KstFormat.kstDate(at),
+        )
+    }
+
+    companion object {
+        private const val FRAG = "/admin/_/tenants/"
+        private const val PAGE = "/admin/tenants/"
+        private const val TAB_VIEW = "admin/tenant/audit :: tab"
+        private const val CARD_VIEW = "admin/tenant/audit-rows :: response"
+        private const val MORE_VIEW = "admin/tenant/audit-rows :: more"
+        private const val CHAIN_VIEW = "admin/tenant/audit :: chain"
+        private const val EMPTY_VIEW = "admin/fragments/shell/empty :: none"
+
+        private const val PAGE_SIZE = 50
+
+        /** 체인 검증 클라이언트 시간 제한(LONG_TIMEOUT_MS). 템플릿의 hx-request 와 같은 값. */
+        private const val VERIFY_TIMEOUT_MS = 120_000
+
+        private val UNSAFE_FILENAME = Regex("[^A-Za-z0-9._-]")
+
+        /** JSON.stringify(payload) — null 은 "null". orEmpty 면 payload ?? {} (CSV). */
+        private fun payloadCompact(p: JsonNode?, orEmpty: Boolean): String {
+            if (p == null) return if (orEmpty) "{}" else "null"
+            return p.toString()
+        }
+
+        /** KST 날짜(키)별 연속 구간으로 묶는다(원본 DataTable groupBy dayLabel). 첫 그룹의 키가 prevKey 와 같으면 머리글을 그리지 않는다. */
+        private fun days(evs: List<Ev>, prevKey: String, now: Instant): List<Day> {
+            val out = ArrayList<Day>()
+            var cur: MutableList<Ev>? = null
+            var key: String? = null
+            for (e in evs) {
+                var c = cur
+                if (c == null || e.dayKey != key) {
+                    val k = e.dayKey
+                    key = k
+                    c = ArrayList()
+                    cur = c
+                    val head = !(out.isEmpty() && k == prevKey)
+                    out.add(Day(KstFormat.dayLabel(e.whenIso, now), k, head, c))
+                }
+                c.add(e)
+            }
+            return out
+        }
+
+        private fun get(url: String): Map<String, Any?> {
+            val m = LinkedHashMap<String, Any?>()
+            m["hx-get"] = url
+            return m
+        }
+
+        private fun denied(e: RuntimeException): Boolean =
+            e is AccessDeniedException || (e is BusinessException && e.errorCode == ErrorCode.ACCESS_DENIED)
+
+        private fun me(model: Model): CurrentAdmin =
+            model.getAttribute("me") as? CurrentAdmin ?: throw AccessDeniedException("no authenticated admin")
+
+        private fun tail(s: String, n: Int): String = if (s.length <= n) s else s.substring(s.length - n)
+
+        private fun parseInt(s: String, dflt: Int): Int {
+            try {
+                return Integer.parseInt(s.javaTrim())
+            } catch (e: RuntimeException) {
+                return dflt
+            }
+        }
+
+        private fun nz(s: String?): String = s ?: ""
+
+        private fun num(n: Long): String = String.format(Locale.KOREA, "%,d", n)
+
+        private fun enc(s: String): String = URLEncoder.encode(s, StandardCharsets.UTF_8)
+    }
+}

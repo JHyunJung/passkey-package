@@ -1,0 +1,14 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.error" : "object",
+  "$.error.errorCode" : "string",
+  "$.error{}" : "errorCode",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,error,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "404"
+}

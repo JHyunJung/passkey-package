@@ -1,0 +1,74 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<div x-data="dialog({&quot;id&quot;:&quot;au-approve&quot;,&quot;open&quot;:true})" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown="onScrim($event)">
+      <div aria-labelledby="au-approve-title" aria-modal="true" class="dialog" role="dialog" x-data="signupApprove" x-trap.noscroll="open">
+        <span hidden x-effect="busy = submitting"></span>
+        <div class="dialog__head"><h3 class="dialog__title" id="au-approve-title">가입 요청 승인</h3></div>
+        <div class="dialog__body">
+          <div class="row" style="gap: 12px; flex-wrap: nowrap; padding: 12px 14px; border-radius: var(--r); background: var(--canvas)">
+            <span aria-hidden="true" class="avatar au-avatar-warn">N</span>
+            <div class="col" style="min-width: 0">
+              <strong style="font-size: 13px">new@example.com</strong>
+              <span style="font-size: 13px; color: var(--ink-2); white-space: pre-wrap">RP 운영 담당입니다</span>
+            </div>
+          </div>
+          <form autocomplete="off" class="stack-4" hx-post="/admin/_/settings/signups/00000000-0000-0000-0000-0000000000d1/approve" hx-swap="outerHTML"
+                hx-sync="this:drop" hx-target="#au-content" id="au-approve-form" novalidate
+                x-on:htmx:after-request="onAfter($event)" x-on:htmx:before-request="onBefore($event)">
+            <input name="role" type="hidden" value="RP_ADMIN" x-bind:value="role">
+            <div>
+              <span class="label" id="au-role-label">역할</span>
+              <div aria-labelledby="au-role-label" class="choices choices--2" role="radiogroup">
+                <button aria-checked="false" class="choice" role="radio"
+        type="button" x-bind:aria-checked="role === &#39;PLATFORM_OPERATOR&#39;" x-bind:class="{ &#39;choice--on&#39;: role === &#39;PLATFORM_OPERATOR&#39; }" x-on:click="role = &#39;PLATFORM_OPERATOR&#39;; clearErr()">
+  <span aria-hidden="true" class="choice__radio"></span>
+  <span class="choice__stack">
+    <span class="choice__title">Platform Operator</span>
+    <span class="choice__desc">모든 tenant 와 플랫폼 설정 관리</span>
+  </span>
+</button>
+                <button aria-checked="true" class="choice choice--on" role="radio"
+        type="button" x-bind:aria-checked="role === &#39;RP_ADMIN&#39;" x-bind:class="{ &#39;choice--on&#39;: role === &#39;RP_ADMIN&#39; }" x-on:click="role = &#39;RP_ADMIN&#39;; clearErr()">
+  <span aria-hidden="true" class="choice__radio"></span>
+  <span class="choice__stack">
+    <span class="choice__title">RP Admin</span>
+    <span class="choice__desc">할당된 tenant 만 관리</span>
+  </span>
+</button>
+              </div>
+            </div>
+            <div x-show="role === 'RP_ADMIN'">
+              <div class="row" style="justify-content: space-between">
+                <span class="label">할당 Tenant</span>
+                <span class="hint" style="margin: 0 0 6px" x-text="tenantIds.length + '개 선택'">0개 선택</span>
+              </div>
+              <div class="search" style="margin-bottom: 8px">
+                <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="15"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                <input aria-label="tenant 검색" class="input" placeholder="tenant 검색" x-model="q">
+              </div>
+              <div aria-label="할당 Tenant" class="au-tenants" role="group" x-bind:class="{ 'au-tenants--bad': showErr }">
+                
+                <label class="row au-tenant" data-q="alpha corp alpha" data-tenant x-show="matches($el.dataset.q)">
+                  <input name="tenantId" type="checkbox" value="00000000-0000-0000-0000-00000000f111" x-model="tenantIds" x-on:change="touched = true; clearErr()">
+                  <span class="truncate">Alpha Corp</span>
+                  <span class="spacer"></span>
+                  <span class="mono hint" style="margin: 0">alpha</span>
+                </label>
+                <p class="hint" style="margin: 0; padding: 10px 14px" x-cloak x-show="noMatch">일치하는 tenant 없음</p>
+              </div>
+              <p class="field__error" role="alert" x-cloak x-show="showErr">Tenant를 최소 1개 선택해야 합니다.</p>
+            </div>
+            <div id="au-approve-err"></div>
+          </form>
+        </div>
+        <div class="dialog__foot">
+          <button class="btn" type="button" x-bind:disabled="submitting" x-on:click="if (!submitting) close()">취소</button>
+          <button class="btn btn--primary" form="au-approve-form" type="submit" x-bind:disabled="submitting">승인하고 계정 생성</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>

@@ -1,0 +1,23 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.keys" : "array<object>",
+  "$.data.keys[]" : "object",
+  "$.data.keys[].alg" : "string",
+  "$.data.keys[].createdAt" : "iso-offset(+09:00)",
+  "$.data.keys[].id" : "uuid",
+  "$.data.keys[].kid" : "string",
+  "$.data.keys[].revokedAt" : "iso-offset(+09:00)",
+  "$.data.keys[].rotatedAt" : "iso-offset(+09:00)",
+  "$.data.keys[].status" : "string",
+  "$.data.keys[]{}" : "id,kid,alg,status,createdAt,rotatedAt,revokedAt",
+  "$.data{}" : "keys",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

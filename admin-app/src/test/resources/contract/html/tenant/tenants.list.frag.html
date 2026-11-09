@@ -1,0 +1,137 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+@header HX-Push-Url: /admin/tenants?status=SUSPENDED
+
+
+  <div id="tenants-results">
+  <!-- 다음 요청(검색 입력·페이지 크기 선택)이 이어 받는 현재 필터 -->
+  <div hidden id="tenants-state"><input name="status" type="hidden" value="SUSPENDED"></div>
+  <input id="tenants-size" name="size" type="hidden" value="50">
+
+  <div class="applied">
+    <span class="muted" style="font-size: 12px">적용된 필터</span>
+    <span class="chip">
+  <span class="truncate">상태: 정지</span>
+  <button aria-label="상태 필터 제거" class="chip__x" hx-get="/admin/_/tenants/list?status=ALL&amp;size=50" hx-include="#tenant-q" hx-swap="outerHTML" hx-target="#tenants-results" type="button"><svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</span>
+    
+    <button class="btn btn--ghost btn--sm" hx-get="/admin/_/tenants/list?status=ALL&amp;size=50&amp;reset=q" hx-swap="outerHTML" hx-target="#tenants-results" type="button">모두 지우기</button>
+  </div>
+
+  <div class="tw">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>
+          
+          Tenant
+        </th>
+        <th>
+          
+          슬러그
+        </th>
+        <th>
+          
+          RP ID
+        </th>
+        <th class="num">
+          
+          Credentials
+        </th>
+        <th class="num">
+          
+          API 키
+        </th>
+        <th>
+          
+          상태
+        </th>
+        <th>
+          
+          마지막 이벤트
+        </th>
+        <th>
+          
+          생성일
+        </th>
+        <th style="width: 40px">
+          <span class="sr-only">열기</span>
+          
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+  <tr class="is-clickable" x-data
+      x-on:click="if (!$event.target.closest('a, button')) $el.querySelector('a.row-link').click()">
+    <td>
+      <div class="row" style="gap: 10px; flex-wrap: nowrap; min-width: 0">
+        <span aria-hidden="true" class="avatar avatar--sq" style="width: 30px; height: 30px; font-size: 13px">베</span>
+        <div class="col" style="min-width: 0">
+          <a class="row-link" href="/admin/tenants/00000000-0000-0000-0000-00000000f222?tab=overview"><strong class="truncate" style="font-size: 13px; max-width: 260px" title="베타">베타</strong></a>
+          <span class="mono muted" style="font-size: 12px">…0000f222</span>
+        </div>
+      </div>
+    </td>
+    <td><span class="mono" style="font-size: 12px">beta</span></td>
+    <td><span class="mono truncate" style="font-size: 12px; display: inline-block; max-width: 240px; vertical-align: middle" title="beta.example.org">beta.example.org</span></td>
+    <td class="num">0</td>
+    <td class="num">0</td>
+    <td>
+  <span class="badge badge--danger badge--dot"
+      title="SUSPENDED">정지</span>
+</td>
+    <td><span class="muted">—</span></td>
+    <td><span class="muted">2026-10-08</span></td>
+    <td><span style="color: var(--faint); display: inline-flex"><svg aria-hidden="true" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="16"><path d="M9 6l6 6-6 6"/></svg></span></td>
+  </tr>
+  
+</tbody>
+  </table>
+</div>
+
+  <div class="pager">
+    <span>1–1 / 1건</span>
+    <div class="spacer"></div>
+    <label class="row pager__size">페이지당
+      <select class="input" hx-get="/admin/_/tenants/list" hx-include="#tenant-q, #tenants-state" hx-swap="outerHTML"
+              hx-target="#tenants-results" hx-trigger="change" name="size">
+        <option selected="selected" value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </label>
+    
+    <button aria-label="이전 페이지" class="btn btn--sm" disabled type="button"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <span>1 / 1</span>
+    
+    <button aria-label="다음 페이지" class="btn btn--sm" disabled type="button"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+</div>
+  <div hx-swap-oob="true" id="tenants-controls" style="display: contents">
+  <div aria-label="상태" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;SUSPENDED&quot;})">
+  
+  <button aria-pressed="false" class="seg__btn" data-value="ALL" hx-get="/admin/_/tenants/list?status=ALL&amp;size=50"
+          hx-include="#tenant-q" hx-swap="outerHTML"
+          hx-target="#tenants-results"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }" x-on:click="select($el.dataset.value)">전체 2</button><button aria-pressed="false" class="seg__btn" data-value="ACTIVE" hx-get="/admin/_/tenants/list?status=ACTIVE&amp;size=50"
+          hx-include="#tenant-q" hx-swap="outerHTML"
+          hx-target="#tenants-results"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }" x-on:click="select($el.dataset.value)">활성 1</button><button aria-pressed="true" class="seg__btn seg__btn--on" data-value="SUSPENDED" hx-get="/admin/_/tenants/list?status=SUSPENDED&amp;size=50"
+          hx-include="#tenant-q" hx-swap="outerHTML"
+          hx-target="#tenants-results"
+          type="button" x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }" x-on:click="select($el.dataset.value)">정지 1</button>
+</div>
+  <div class="spacer"></div>
+  <span class="muted" style="font-size: 12px">1 / 2건</span>
+  <a class="btn" data-csv-download download href="/admin/_/tenants/export?q=&amp;status=SUSPENDED" hx-boost="false">
+    <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>CSV
+  </a>
+</div>
+  
+  <button aria-pressed="false" class="kpi kpi--clickable" hx-get="/admin/_/tenants/list?status=ACTIVE&amp;size=50" hx-include="#tenant-q" hx-swap="outerHTML" hx-swap-oob="true" hx-sync="#tenants-card:replace" hx-target="#tenants-results" id="tenants-kpi-active" type="button">
+    <span class="kpi__label">활성 Tenant</span>
+    <span class="kpi__value">1</span>
+    <span class="kpi__hint">전체 2건 · 클릭하면 활성만 보기</span>
+  </button>
+  
+
+  

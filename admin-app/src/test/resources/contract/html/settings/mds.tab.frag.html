@@ -1,0 +1,154 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<div id="mds-root">
+  <!-- 갱신 뒤 다시 읽기에 실패했을 때의 경고 자리(화면은 그대로 두고 여기만 OOB 로 채운다) -->
+  <div id="mds-warn"></div>
+  
+
+  <div class="stack-6">
+    <section class="card mds-head">
+      <span aria-hidden="true" class="mds-head__icon mds-head__icon--ok">
+        <svg aria-hidden="true" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="24"><path d="M5 12l5 5L20 7"/></svg>
+        
+      </span>
+      <div class="col" style="gap: 2px; flex: 1 1 320px; min-width: 0">
+        <span class="t-over">MDS 동기화 상태</span>
+        <strong style="font-size: 20px; line-height: 28px">정상 · BLOB #42</strong>
+        <span class="card__sub">FIDO MDS3 BLOB 을 매일 03:00 KST 에 갱신합니다 · 다음 갱신 2026-11-01 03:00 KST</span>
+      </div>
+      <button class="btn" hx-disabled-elt="this" hx-post="/admin/_/settings/mds/sync" hx-request='{"timeout": 120000}' hx-swap="outerHTML" hx-sync="this:drop" hx-target="#mds-root" type="button">
+        <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>
+        <span class="mds-sync__idle">즉시 갱신</span><span class="mds-sync__busy">갱신 중…</span>
+      </button>
+    </section>
+
+    <div class="kpis kpis--3">
+      <div class="kpi">
+        <span class="kpi__label">MDS BLOB 버전</span>
+        <span class="kpi__value"><span class="mono">#42</span></span>
+      </div>
+      
+  
+  <div class="kpi">
+    <span class="kpi__label">신뢰 앵커 (Trust anchors)</span>
+    <span class="kpi__value">3</span>
+    
+  </div>
+
+      
+  
+  <div class="kpi">
+    <span class="kpi__label">마지막 동기화</span>
+    <span class="kpi__value">2일 전</span>
+    
+  </div>
+
+    </div>
+
+    <div class="mds-grid">
+      <section class="card">
+        <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">동기화 설정</h2>
+    
+  </div>
+  
+</div>
+        <div class="card__body">
+          <dl class="kv">
+            <dt>주소 (endpoint)</dt>
+            <dd class="mono kv__nowrap"><span style="font-size: 12px">https://mds3.fidoalliance.org/</span></dd>
+            <dt>다음 갱신 예정</dt>
+            <dd>2026-11-01 03:00 KST</dd>
+            <dt>동기화 성공률 (30일)</dt>
+            <dd>
+              <span>93%</span><span class="muted"> · 28 / 30</span>
+              
+            </dd>
+            <dt>신뢰 모드</dt>
+            <dd>
+              
+              <span class="col" style="gap: 6px; align-items: flex-start">
+                <span title="PINNED"><span class="badge badge--info">PINNED</span></span>
+                
+              </span>
+            </dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">최근 동기화 이력</h2>
+    
+  </div>
+  <div class="spacer"></div>
+    
+      <div aria-label="최근 3회 동기화 결과 · 실패 1회" class="strip" role="img">
+  
+    <span class="strip__bar strip__bar--none"></span>
+    
+    
+  
+    
+    <span class="strip__bar strip__bar--bad"></span>
+    
+  
+    
+    
+    <span class="strip__bar"></span>
+  
+</div>
+    
+  
+</div>
+        
+        <div class="tw">
+          <table class="table">
+            <thead>
+              <tr><th>시각 (KST)</th><th>버전</th><th>변경</th><th>상태</th><th class="num">응답 시간</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span style="font-size: 13px; color: var(--ink-2)">2026-10-13 03:00</span></td>
+                <td><span class="mono" style="font-size: 12px">#42</span></td>
+                <td>
+                  
+                  <span style="font-size: 13px; color: var(--ink-2)">+2 / -0 entries</span>
+                </td>
+                <td><span class="badge badge--success badge--dot">동기화됨</span></td>
+                <td class="num"><span class="mono" style="font-size: 12px">1834ms</span></td>
+              </tr>
+              <tr>
+                <td><span style="font-size: 13px; color: var(--ink-2)">2026-10-12 03:00</span></td>
+                <td><span class="mono" style="font-size: 12px">—</span></td>
+                <td>
+                  <span class="truncate" style="display: inline-block; max-width: 360px; vertical-align: middle; font-size: 13px; color: var(--bad-ink)"
+                        title="BLOB signature verification failed">BLOB signature verification failed</span>
+                  
+                </td>
+                <td><span class="badge badge--danger badge--dot">실패</span></td>
+                <td class="num"><span class="mono" style="font-size: 12px">5012ms</span></td>
+              </tr>
+              <tr>
+                <td><span style="font-size: 13px; color: var(--ink-2)">2026-10-11 03:00</span></td>
+                <td><span class="mono" style="font-size: 12px">#41</span></td>
+                <td>
+                  
+                  <span style="font-size: 13px; color: var(--ink-2)">—</span>
+                </td>
+                <td><span class="badge  badge--dot">건너뜀</span></td>
+                <td class="num"><span class="mono" style="font-size: 12px">—</span></td>
+              </tr>
+              
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,17 @@
+{
+  "$" : "object",
+  "$.createdAt" : "iso-offset(+09:00)",
+  "$.createdBy" : "string",
+  "$.email" : "string",
+  "$.id" : "uuid",
+  "$.lastLoginAt" : "iso-offset(+09:00)",
+  "$.mfaEnabled" : "boolean",
+  "$.role" : "string",
+  "$.status" : "string",
+  "$.suspendedAt" : "iso-offset(+09:00)",
+  "$.tenantIds" : "array<uuid>",
+  "$.tenantIds[]" : "uuid",
+  "${}" : "id,email,role,status,tenantIds,createdAt,lastLoginAt,suspendedAt,createdBy,mfaEnabled",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

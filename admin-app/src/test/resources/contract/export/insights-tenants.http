@@ -1,0 +1,7 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="platform-tenants-7d-2026-10-11.csv"
+
+﻿slug,name,status,activeUsers,authAttempts,authSuccess,authSuccessRate,regAttempts,regSuccess,regSuccessRate,riskBlocked,passkeys,users,singlePasskeyUsers
+acme,"Acme, Inc. 가나다 한글 테넌트",ACTIVE,30,100,90,0.9000,20,15,0.7500,3,40,25,5
+beta,null,null,0,0,0,,0,0,,0,0,0,0

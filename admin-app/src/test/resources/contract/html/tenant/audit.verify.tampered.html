@@ -1,0 +1,76 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<div hx-disinherit="hx-target hx-swap hx-sync"
+     hx-get="/admin/_/tenants/00000000-0000-0000-0000-00000000f111/audit/verify"
+     hx-request='{"timeout": 120000}' hx-swap="outerHTML" hx-sync="this:drop" hx-target="this" hx-trigger="verify-run" id="audit-chain"
+     x-data="{ running: false, startedAt: 0, elapsed: 0, timer: null,
+               get startText() { return this.startedAt ? new Date(this.startedAt).toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }) : ''; },
+               begin() {
+                 this.running = true; this.startedAt = Date.now(); this.elapsed = 0; clearInterval(this.timer);
+                 this.timer = setInterval(() => {
+                   if (!this.$root.isConnected) { clearInterval(this.timer); return; }
+                   this.elapsed = Math.max(0, Math.floor((Date.now() - this.startedAt) / 1000));
+                 }, 1000);
+               },
+               end() { this.running = false; clearInterval(this.timer); } }" x-on:htmx:after-request="if ($event.detail.elt === $el) end()" x-on:htmx:before-request="if ($event.detail.elt === $el) begin()">
+  <section class="card">
+    <div class="row" style="gap: 16px; padding: 16px 20px">
+      <span aria-hidden="true" class="chain-ico chain-ico--bad">
+        <svg aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20"><path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/></svg>
+      </span>
+      <div class="stack-1" style="gap: 2px; flex: 1 1 320px; min-width: 0">
+        <div class="row" style="gap: 8px">
+          <h2 class="card__title">감사 로그 위변조 검증</h2>
+          <span class="badge" x-cloak x-show="running">검증 중</span>
+          
+            <span class="badge badge--danger badge--dot" x-show="!running">위변조 1건</span>
+          
+          <span class="badge badge--violet">PLATFORM 전용</span>
+        </div>
+        <p class="card__sub">감사 로그 행이 해시로 이어져 바뀌거나 지워지지 않았는지 확인합니다. 마지막 검증 2026-10-13 12:34 KST</p>
+      </div>
+      
+      <button class="btn btn--primary" type="button" x-bind:disabled="running" x-on:click="$dispatch('dialog:open', { id: 'audit-verify' })">
+        <span x-show="!running">검증 실행</span><span x-cloak x-show="running">검증 중…</span>
+      </button>
+    </div>
+  </section>
+  <div x-data="dialog({&quot;id&quot;:&quot;audit-verify&quot;})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+  <template x-if="open">
+    <div class="scrim" x-on:mousedown="onScrim($event)">
+      <div aria-labelledby="audit-verify-title" aria-modal="true" class="dialog"
+           role="dialog" x-trap.noscroll="open">
+        <div class="dialog__head">
+          
+          
+            <h3 class="dialog__title" id="audit-verify-title">해시 체인 검증</h3>
+            <div class="dialog__sub">Alpha Corp의 감사 로그 전체를 검증합니다. 읽기 전용이며 데이터는 바뀌지 않습니다.</div>
+          
+          
+        </div>
+        <div class="dialog__body">
+  <p style="margin: 0; font-size: 13px; color: var(--ink-2)">전체 체인 검증 — 처음부터 해시를 다시 계산해 확인합니다. 기간은 지정하지 않습니다.</p>
+  <div class="stack-2" x-cloak x-show="running">
+    <div class="row">
+      <strong aria-live="polite" role="status" style="font-size: 13px">검증 중…</strong>
+      <div class="spacer"></div>
+      <!-- 경과 시간은 매초 바뀌므로 aria-live 밖에 둔다 -->
+      <span class="hint" style="margin: 0">시작 <span x-text="startText"></span> · 경과 <span x-text="elapsed"></span>초</span>
+    </div>
+    <div aria-label="검증 진행 중" class="indet" role="progressbar"></div>
+  </div>
+  <p class="hint" style="margin: 0">진행률을 알 수 없어 퍼센트를 표시하지 않습니다. 창을 닫아도 검증은 계속되고 결과는 위 카드에 표시됩니다.</p>
+</div>
+        <div class="dialog__foot">
+          
+          
+  <button class="btn" type="button" x-on:click="close()"><span x-text="running ? '닫기 (계속 실행)' : '취소'">취소</span></button>
+  <button class="btn btn--primary" type="button" x-bind:disabled="running" x-on:click="$dispatch('verify-run')"><span x-text="running ? '검증 중…' : '검증 실행'">검증 실행</span></button>
+
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+</div>

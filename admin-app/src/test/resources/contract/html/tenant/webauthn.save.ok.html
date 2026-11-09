@@ -1,0 +1,177 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+@header HX-Trigger: {"saved":true,"toast":{"kind":"success","title":"WebAuthn \uC124\uC815\uC744 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4","message":"3\uAC1C \uD56D\uBAA9\uC774 \uBC14\uB00C\uC5C8\uC2B5\uB2C8\uB2E4."}}
+
+
+  
+  
+  <form class="stack-6" data-preview="true" data-savebar-labels="{&quot;rpName&quot;:&quot;RP 표시 이름&quot;,&quot;timeoutMs&quot;:&quot;대기 시간&quot;,&quot;origins&quot;:&quot;허용 origin&quot;,&quot;userVerification&quot;:&quot;사용자 검증&quot;,&quot;attestationConveyance&quot;:&quot;인증기 증명&quot;}" data-savebar-numeric="timeoutMs" hx-post="/admin/_/tenants/00000000-0000-0000-0000-00000000f222/webauthn/diff"
+        hx-swap="innerHTML" hx-sync="this:drop" hx-target="#wa-confirm-slot" id="wa-form" novalidate x-data x-on:keydown.enter="$event.target.tagName === 'INPUT' &amp;&amp; $event.preventDefault()">
+    <section class="card">
+      <div class="card__head">
+  <div class="card__head-main">
+    
+    <h2 class="card__title">WebAuthn 설정</h2>
+    <p class="card__sub">변경 사항은 저장 후 다음 패스키 등록·인증부터 적용됩니다.</p>
+  </div>
+  <div class="spacer"></div>
+    
+  
+</div>
+
+      <div class="set" data-field="rpId">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px"><label class="set__label" for="wa-rpid"><span title="rpId">RP ID</span></label></div>
+          <p class="set__desc">생성 시 고정. 기존 credential 이 이 값에 묶여 있습니다.</p>
+        </div>
+        <div style="min-width: 0">
+          <div class="row" style="gap: 10px; flex-wrap: nowrap">
+            <input aria-readonly="true" class="input mono" id="wa-rpid" readonly title="rpId는 생성 후 변경할 수 없습니다" value="beta.example.org">
+            <span class="badge"><svg aria-hidden="true" fill="none" height="11" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="11"><rect height="10" rx="2" width="16" x="4" y="11"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>변경 불가</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="set" data-field="rpName">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <label class="set__label" for="wa-rpname"><span title="rpName">RP 표시 이름</span></label>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">사용자의 패스키 프롬프트에 보이는 이름</p>
+        </div>
+        <div style="min-width: 0">
+          <input aria-describedby="wa-err-rpName" class="input input--track" id="wa-rpname" name="rpName" value="Beta">
+          <p class="field__error" data-field-error id="wa-err-rpName"></p>
+        </div>
+      </div>
+
+      <div class="set" data-field="timeoutMs">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <label class="set__label" for="wa-timeout"><span title="timeoutMs">대기 시간</span></label>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">사용자가 패스키 창에 응답할 때까지 기다리는 시간</p>
+        </div>
+        <div style="min-width: 0" x-data="timeoutHint({&quot;value&quot;:&quot;120000&quot;})">
+          <input aria-describedby="wa-timeout-hint wa-err-timeoutMs" class="input mono input--track" id="wa-timeout" name="timeoutMs" style="max-width: 180px" type="number"
+                 value="120000" x-model="ms">
+          <p class="hint" id="wa-timeout-hint" x-bind:style="guide.tone === 'warn' ? 'color: var(--warn)' : ''" x-text="guide.text">= 120초 (2분) — 권장 범위(60–120초) 안입니다.</p>
+          <p class="field__error" data-field-error id="wa-err-timeoutMs"></p>
+        </div>
+      </div>
+
+      <div class="set" data-field="origins">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <span class="set__label"><span title="origins">허용 origin</span></span>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">허용할 웹 origin 과 Android 앱 키 해시. Enter 로 추가합니다.
+            </p>
+        </div>
+        <div style="min-width: 0">
+          <div class="stack-3" style="gap: 10px">
+            <div class="stack-2" x-data="chipInput({&quot;name&quot;:&quot;origins&quot;,&quot;values&quot;:[],&quot;mono&quot;:true,&quot;validateUrl&quot;:&quot;/admin/_/tenants/00000000-0000-0000-0000-00000000f222/webauthn/origin-check&quot;})">
+  <template x-bind:key="v" x-for="v in values">
+    <input type="hidden" x-bind:name="name" x-bind:value="v">
+  </template>
+  <div class="chips" x-cloak x-show="values.length > 0">
+    <template x-bind:key="v" x-for="v in values">
+      <span class="chip" x-bind:class="(added.includes(v) ? 'chip--added ' : '') + (mono ? 'mono' : '')">
+        <span class="truncate" x-text="v"></span>
+        <button class="chip__x" type="button" x-bind:aria-label="v + ' 삭제'" x-bind:disabled="disabled" x-on:click="remove(v)"><svg aria-hidden="true" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="12"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </span>
+    </template>
+  </div>
+  <input aria-label="origin 추가" class="input mono" placeholder="https://beta.example.org 입력 후 Enter" x-bind:aria-invalid="!!error" x-model="draft" x-on:input="onInput()" x-on:keydown.enter.prevent="onEnter()">
+  <p class="field__error" role="alert" x-cloak x-show="error" x-text="error"></p>
+</div>
+            <div class="stack-2" x-data="chipAdder({&quot;url&quot;:&quot;/admin/_/tenants/00000000-0000-0000-0000-00000000f222/webauthn/apk-key&quot;,&quot;target&quot;:&quot;origins&quot;})">
+              <div class="row" style="gap: 8px; flex-wrap: nowrap">
+                <input aria-label="Android APK 키 해시" class="input mono" placeholder="Android APK signing key SHA-256" x-bind:aria-invalid="!!error"
+                       x-model="input" x-on:input="onInput()" x-on:keydown.enter.prevent="add()">
+                <button class="btn" type="button" x-bind:disabled="busy" x-on:click="add()">앱 키 추가</button>
+              </div>
+              <p class="field__error" role="alert" x-cloak x-show="error" x-text="error"></p>
+            </div>
+            <p class="field__error" data-field-error id="wa-err-origins"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="set" data-field="userVerification">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <span class="set__label"><span title="requireUserVerification">사용자 검증</span></span>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">생체·PIN 검증 요구 수준.
+            </p>
+        </div>
+        <div style="min-width: 0">
+          <div class="stack-2" x-data="guideSwitch({&quot;value&quot;:&quot;PREFERRED&quot;})" x-on:segmented-change="on($event)">
+            <div aria-label="사용자 검증" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;PREFERRED&quot;})">
+  <input name="userVerification" type="hidden" value="PREFERRED" x-bind:value="value">
+  <button aria-pressed="false" class="seg__btn" data-value="REQUIRED" title="REQUIRED" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">필수</button><button aria-pressed="true" class="seg__btn seg__btn--on" data-value="PREFERRED" title="PREFERRED" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">권장</button>
+</div>
+            <div class="desc-box" data-for="REQUIRED" x-cloak="true" x-show="v === $el.dataset.for"><span title="REQUIRED">필수</span> — PIN·지문·얼굴 등 사용자 확인(UV)을 반드시 요구합니다. UV를 못 하는 인증기는 패스키 등록·인증이 실패합니다. 2FA 수준의 보안이 필요할 때 권장.</div>
+            <div class="desc-box" data-for="PREFERRED" x-show="v === $el.dataset.for"><span title="PREFERRED">권장</span> — 가능하면 UV를 수행하되, 지원하지 않는 인증기는 UV 없이도 허용합니다. 보안과 호환성의 균형 — 대부분의 서비스 기본값.</div>
+          </div>
+          <p class="field__error" data-field-error id="wa-err-userVerification"></p>
+        </div>
+      </div>
+
+      <div class="set" data-field="attestationConveyance">
+        <div class="stack-1">
+          <div class="row" style="gap: 8px">
+            <span class="set__label"><span title="attestationConveyance">인증기 증명</span></span>
+            <span class="badge badge--warning chg">변경됨</span>
+          </div>
+          <p class="set__desc">등록 시 인증기 증명 요청.
+            </p>
+        </div>
+        <div style="min-width: 0">
+          <div class="stack-2" x-data="guideSwitch({&quot;value&quot;:&quot;DIRECT&quot;})" x-on:segmented-change="on($event)">
+            <div aria-label="인증기 증명" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;DIRECT&quot;})">
+  <input name="attestationConveyance" type="hidden" value="DIRECT" x-bind:value="value">
+  <button aria-pressed="false" class="seg__btn" data-value="NONE" title="NONE" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">요청 안 함</button><button aria-pressed="false" class="seg__btn" data-value="INDIRECT" title="INDIRECT" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">익명 허용</button><button aria-pressed="true" class="seg__btn seg__btn--on" data-value="DIRECT" title="DIRECT" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">직접</button><button aria-pressed="false" class="seg__btn" data-value="ENTERPRISE" title="ENTERPRISE" type="button"
+          x-bind:aria-pressed="value === $el.dataset.value" x-bind:class="{ 'seg__btn--on': value === $el.dataset.value }"
+          x-on:click="select($el.dataset.value)">기업용</button>
+</div>
+            <div class="desc-box" data-for="NONE" x-cloak="true" x-show="v === $el.dataset.for"><span title="NONE">요청 안 함</span> — attestation을 요청하지 않습니다. 프라이버시가 가장 높고 등록이 단순해, 인증기 모델 검증이 불필요한 일반 서비스에 권장.</div>
+            <div class="desc-box" data-for="INDIRECT" x-cloak="true" x-show="v === $el.dataset.for"><span title="INDIRECT">익명 허용</span> — attestation을 원하되 클라이언트가 익명화할 수 있게 허용합니다. 출처 정보를 받되 개별 기기 추적은 피하고 싶을 때.</div>
+            <div class="desc-box" data-for="DIRECT" x-show="v === $el.dataset.for"><span title="DIRECT">직접</span> — 인증기의 attestation을 그대로 받습니다. AAGUID·모델 확인이나 MDS 매칭으로 허용 기기를 통제하려면 필요. 등록 시 사용자 동의 프롬프트가 뜰 수 있습니다.</div>
+            <div class="desc-box" data-for="ENTERPRISE" x-cloak="true" x-show="v === $el.dataset.for"><span title="ENTERPRISE">기업용</span> — 기기를 개별 식별할 수 있는 attestation을 요구합니다. 사전 등록된 인증기만 쓰는 사내 환경 전용 — 일반 사용자 대상 서비스에는 부적합.</div>
+          </div>
+          <p class="field__error" data-field-error id="wa-err-attestationConveyance"></p>
+        </div>
+      </div>
+    </section>
+
+    <p class="field__error" data-field-error id="wa-err-form"></p>
+    <div aria-label="저장되지 않은 변경" class="savebar" role="region"
+     x-cloak x-data="saveBar({&quot;saveLabel&quot;:&quot;저장…&quot;})" x-show="dirty">
+  <span aria-hidden="true" class="savebar__dot"></span>
+  <strong class="savebar__title">저장하지 않은 변경 <span x-text="count">0</span>건</strong>
+  
+  <span class="hint hint--flush" x-cloak x-show="changedText" x-text="changedText"></span>
+  <div class="spacer"></div>
+  <button class="btn" type="button" x-bind:disabled="saving || previewing" x-on:click="revert()">되돌리기</button>
+  <button class="btn btn--primary" type="button" x-bind:disabled="saving || previewing" x-on:click="save()"
+          x-text="(saving || previewing) ? '저장 중…' : saveLabel">저장…</button>
+</div>
+  </form>
+  <div id="wa-confirm-slot"></div>
+  

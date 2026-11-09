@@ -1,0 +1,8 @@
+HTTP 200
+Content-Type: text/csv;charset=UTF-8
+Content-Disposition: attachment; filename="platform-devices-7d-2026-10-11.csv"
+
+﻿authenticator,passkeys,authSuccessInWindow
+"Say ""hi"" 가나다 한글 테넌트",3,9
+"line1
+line2",0,0

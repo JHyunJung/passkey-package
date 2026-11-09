@@ -1,0 +1,8 @@
+{
+  "$" : "object",
+  "$.confirmed" : "boolean",
+  "$.recoveryCodes" : "array<string>",
+  "$.recoveryCodes[]" : "string",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}

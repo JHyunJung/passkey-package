@@ -1,0 +1,7 @@
+{
+  "$" : "object",
+  "$.error" : "string",
+  "$.message" : "string",
+  "@contentType" : "application/json",
+  "@status" : "409"
+}

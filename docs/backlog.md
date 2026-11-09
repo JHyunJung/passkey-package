@@ -18,7 +18,7 @@
       actuator 가 완전 미인증이고 nosniff/frame-options 등 기본 보안헤더도 적용되지 않는다. [master-backlog 2026-05-31]
 - [ ] **HSTS/CSP 미설정** — `contentSecurityPolicy`/`httpStrictTransportSecurity`/`Strict-Transport-Security`/`Content-Security-Policy`
       가 admin-app·passkey-app·core·deploy·nginx 어디에도 0건. 앱과 프록시 중 어디서 넣을지 결정 필요. [master-backlog 2026-05-31]
-- [ ] **recovery code 가 솔트 없는 단일 SHA-256** — `admin-app/.../auth/RecoveryCodeService.java:46,54` = `CryptoUtils.sha256Hex(...)`.
+- [ ] **recovery code 가 솔트 없는 단일 SHA-256** — `admin-app/.../auth/RecoveryCodeService.kt:42,51` = `CryptoUtils.sha256Hex(...)`.
       pepper/HMAC 없음. [master-backlog 2026-05-31]
 - [ ] **`X-Trace-Id` 무검증 → 로그 인젝션** — `core/.../api/TraceIdFilter.java:27-31` 이 `isBlank()` 만 보고 헤더 값을
       MDC 와 응답 헤더에 그대로 넣는다. CRLF·길이·문자집합 제한 없음. rp-app 의 동명 필터
@@ -46,7 +46,7 @@
       재발급 경로가 없다. [admin-ui-followup-screens 2026-05-31]
 - [ ] **NAV_RP dead code 해소** — (React 시절 `admin-ui/src/shell/Sidebar.tsx`; Thymeleaf 이식 후 위치는 `templates/admin/fragments/shell/sidebar.html`). RP_ADMIN 네비게이션이 정의돼 있으나
       호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. (Thymeleaf 포트에서 RP_ADMIN 은 [관리] 설정만 노출 — 재확인 후 종결 후보) [rp-admin-role-gating 2026-05-31]
-- [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.java:43` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
+- [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.kt:36` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
 - [ ] **p95 응답 metric** — Activity KPI 가 'N/A'. admin-app 에 p95 산출 0건. [activity-page 2026-05-28]
 - [ ] **Activity 실시간 갱신을 push 로** — (React 시절 `ActivityPage.tsx`; 현재 `templates/admin/activity/*.html` + `web/activity/ActivityPageController`) 가 5초 htmx 폴링이다.
       WebSocket/SSE 로 바꾸면 유휴 부하와 지연이 함께 줄어든다. 서버 측 이벤트 발행 설계가 선행돼야 한다.
@@ -54,20 +54,20 @@
 - [ ] **Activity KPI·topTenants 초기값이 fixture** — (React 시절 `ActivityPage.tsx` 의 `activityFixture` 초기 state — Thymeleaf 포트(`templates/admin/activity/`, `ActivityPageController`)는 서버 렌더라 fixture 초기값이 없다. 갱신 실패·부분 응답 시 이전 값 잔존 여부만 재확인 필요). 원래 기록: 첫 로딩·첫 오류는 가드가 막지만,
       **갱신 실패(2회차 이후)나 KPI 만 비는 부분 응답에서는 이전 fixture 값이 그대로 남는다**.
       초기값을 null 로 두고 KPI 영역에도 로딩·오류 표시를 따로 두는 편이 안전하다. [master-backlog 2026-05-31]
-- [ ] **`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다** — `admin-app/.../config/AdminSecurityConfig.java:242-245` 가
+- [ ] **`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다** — `admin-app/.../config/AdminSecurityConfig.kt:260-262` 가
       `AuditAppendRequest` 의 tenantId 를 `null` 로 넘긴다. RP_ADMIN 로그인도 테넌트 스코프 없이 기록돼
       테넌트별 감사 조회에서 누락된다. [activity-page 2026-05-28]
 
 ## 2. 보안·정합성 (P2)
 
-- [ ] **MDC `actorEmail` 이 평문 email 로 로그에 남는다** — `AdminMdcFilter.java:42` 가 `auth.getName()` 을 request attribute 로
+- [ ] **MDC `actorEmail` 이 평문 email 로 로그에 남는다** — `AdminMdcFilter.kt:34-37` 가 `auth.name` 을 request attribute 로
       넘기고 `RequestLoggingFilter.java:110` 이 그대로 MDC 에 넣는다. `SecretMaskingConverter` 는 `%msg` 에만 걸리고
       `%compactMdc` 는 거치지 않으므로, 메시지 본문은 `maskEmail` 로 가려도 MDC 칸에는 평문이 남는다(16자 절단).
       prod JSON 로그의 `includeMdcKeyName` 에도 그대로 실린다. 마스킹 위치를 MDC put 지점으로 옮길지 결정 필요.
       [2026-09-13 문서 감사에서 발견]
 - [ ] **credential DELETE 가 registration scope 를 공유** — `passkey-app/.../security/ApiKeyScopeResolver.kt:28-31`.
       파괴적 작업의 scope 분리는 정책 결정 사항. 같은 파일의 `admin` scope 가 dead scope 인 것도 함께. [config-enforcement-B 2026-05-31, master-backlog 2026-05-31]
-- [ ] **CORS allowlist origin 형식 검증** — `SecurityPolicyDto.java:29` 에 `@NotBlank @Size(max=256)` 는 있으나
+- [ ] **CORS allowlist origin 형식 검증** — `SecurityPolicyDto.kt:63` 에 `@NotBlank @Size(max = 256)` 는 있으나
       `^https?://[^/]+$` 형식·`*` 금지 검증은 없다. [master-backlog 2026-05-31]
 - [ ] **`IllegalArgumentException` 메시지를 클라이언트에 그대로 반환** — `core/.../api/GlobalExceptionHandler.java:114-118`
       = `ApiResponse.error(INVALID_INPUT, e.getMessage())`. 내부 메시지 노출. [master-backlog 2026-05-31]
@@ -78,7 +78,7 @@
       (core 전체에 두 애너테이션 0건). 락 없이 로드·수정·flush 하면 동시 `/authentication/finish` 의 `signCount` 갱신을 되돌린다.
       F22(rename 비잠금 전환)가 이 이유로 롤백됐다 — **락 제거형 성능개선은 항상 이걸 먼저 의심한다.** [zero-base 2026-07-04]
 - [ ] **G02 rp-app `StreamReadConstraints` 미설정** — rp-app 에 0건. passkey-app 만
-      `PasskeyAppJacksonConfig.java:31-37` 로 설정돼 있다. [zero-base 2026-07-04]
+      `PasskeyAppJacksonConfig.kt:33-40` 로 설정돼 있다. [zero-base 2026-07-04]
 - [ ] **G10 rp-app issuer-base localhost 폴백** — `rp-app/src/main/resources/application.yml:32`
       = `${PASSKEY_ISSUER_BASE:http://localhost:8080}`. 환경변수 누락 시 조용히 localhost 로 떨어진다. [zero-base 2026-07-04]
 - [ ] **F30 `NativeWebAuthnVerifier` BE/BS 플래그 검사 · F35 `CborDecoder` non-minimal int 거부** [zero-base 2026-07-04]
@@ -96,8 +96,8 @@
 
 ## 3. 성능 (P2/P3)
 
-- [ ] **트랜잭션 안에서 동기 메일 발송** — `PasswordResetService.java:68-85`(`@Transactional` 메서드가 `mail.send`),
-      `SignupRequestService.java:206,232`(`sendQuietly` → `mail.send`). SMTP 지연이 DB 커넥션 점유 시간이 된다.
+- [ ] **트랜잭션 안에서 동기 메일 발송** — `PasswordResetService.kt:55-85`(`@Transactional` 메서드가 `mail.send`),
+      `SignupRequestService.kt:244,279,285-287`(`sendQuietly` → `mail.send`). SMTP 지연이 DB 커넥션 점유 시간이 된다.
       커밋 후 발송(`TransactionSynchronization`)이나 비동기 큐로 분리한다. [master-backlog 2026-05-31]
 
 - [ ] **API key BCrypt(cost 12) 를 매 요청 수행 + 전역 캐싱 인프라 부재** — `@EnableCaching`/Caffeine/`@Cacheable`
@@ -135,7 +135,7 @@
       [prod-hardening 2026-05-25]
 
 - [ ] **`AdminUser.role` 을 Java enum 으로** — `core/.../entity/AdminUser.java:16-17` 이 `String` 이고
-      `AdminUserDetails.java:24,47-48` 등이 문자열 리터럴로 비교한다. DB CHECK 제약은 있으나 컴파일 타임
+      `AdminUserDetails.kt:28,38-43` 등이 문자열 리터럴로 비교한다. DB CHECK 제약은 있으나 컴파일 타임
       안전성이 없다. [admin-role-separation 2026-05-27]
 
 - [ ] **`LogRedact` 죽은 헬퍼 정리** — `core/.../logging/LogRedact.java` 를 main 에서 호출하는 곳이 0건인데
@@ -152,7 +152,7 @@
 - [ ] **이벤트 타입 분류/색상이 ActivityPage vs AuditTab 로 이원화** [master-backlog 2026-05-31, activity-page 2026-05-28]
 - [ ] **`uuidToBytes`/`uuidFromBytes` 를 `CryptoUtils` 로** — `IdTokenIssuer.java:91`, `DefaultAaguidPolicyChecker.java:100` 의
       private 중복. `sha256Hex`/`hex`/`maskEmail`/`randomToken` 은 이미 통합됐다. [master-backlog 2026-05-31]
-- [ ] **JWT TTL 900 하드코딩** — `AuthenticationFinishService.java:232,234` 리터럴 2곳. [master-backlog 2026-05-31]
+- [ ] **JWT TTL 900 하드코딩** — `AuthenticationFinishService.kt:40` 의 `private const val ID_TOKEN_TTL_SEC = 900L`(사용처 215,217) — 설정으로 외부화되지 않음. [master-backlog 2026-05-31]
 - [ ] **`MfaPendingFilter` 가 `getRequestURI()`** — 다른 필터는 `getServletPath()`. `:74`(및 `:71` javadoc). [master-backlog 2026-05-31]
 - [ ] **(superseded: React 제거로 해당 없음) `TweaksPanel` 이 prod 에서도 무조건 렌더 + `as any`** — `:125` 에 `as any` 잔존, `import.meta.env.DEV` 가드 0건.
       `App.tsx` 의 `handleSwitchRole` stub·잔여 `as any` 도 함께. [master-backlog 2026-05-31, rp-admin-role-gating 2026-05-31]
@@ -169,6 +169,16 @@
 - [ ] **`ActivityRepositoryFeedPageIT` 가 UUID 정렬에 암묵 의존** — 주석으로만 표시. [zero-base 2026-07-04]
 - [ ] **`CredentialRecord` 봉투가 `uvInitialized`/`backupState` 를 폐기하는 건** — 자체 verifier 전환 + V47 의
       `credential.backup_state` 컬럼 제거로 전제가 바뀌었다. 재평가 필요. [prod-hardening 2026-05-25]
+- [ ] **월간 감사 보고서 PDF 가 항상 500** — `MonthlyReportService.buildHtml` 이 `<meta>` 를 종료하지 않아 XHTML 파서가
+      `SAXParseException` 을 던진다. contract 스냅샷이 현재의 500 을 고정하고 있으므로 수정 시 스냅샷도 함께 갱신한다. [admin-app-kotlin 2026-11-09]
+- [ ] **`alert.html` 기본 아이콘 알림이 아이콘 3개를 모두 렌더** — `templates/admin/fragments/ui/alert.html:20-22` 에서
+      `th:case` 와 `th:replace` 가 같은 요소에 있어 `th:replace` 가 먼저 적용된다. 렌더 스냅샷에 현행 동작이 고정돼 있다. [admin-app-kotlin 2026-11-09]
+- [ ] **admin-app 기존 약한 테스트** — `AaguidTabControllerTest.saveCallsRestAndTriggersSaved` 의 `Elements` `isNotNull()`(항상 참),
+      `CredentialsTabControllerTest` 의 미사용 `holder`, AdminUsers 의 `substring(0,1)` 류 약한 검사. [admin-app-kotlin 2026-11-09]
+- [ ] **null tenantId `?: throw IllegalArgumentException` 3곳** (`ApiKeyAdminService`, `TenantLifecycleService`, `WebauthnDiffService`) —
+      기준 Java 는 실 컨텍스트에서 `InvalidDataAccessApiUsageException`(500) 이었고 지금은 IAE(400 매핑). 정상 경로에서는 도달 불가이며,
+      응답 DTO 필드 nullability tightening 시 함께 정리한다. [admin-app-kotlin 2026-11-09]
+- [ ] **응답 DTO(`TenantView` 등) nullable 필드로 web 컨트롤러에 `!!` 잔존** — DTO tightening 을 별도 작업으로 진행. [admin-app-kotlin 2026-11-09]
 
 ## 5. 의존성 — 결정 기록 (KEEP + 근거, 재평가 트리거)
 

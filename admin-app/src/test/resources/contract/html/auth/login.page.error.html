@@ -1,0 +1,116 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<!DOCTYPE html>
+<html lang="ko">
+<!--
+  로그인 화면(← pages/LoginPage.tsx). 공통 틀 없이 단독 페이지.
+  제출: hx-post /admin/login(email, password, _csrf). 성공·실패 응답은 보안 체인의 핸들러가 정한다
+  (성공 → HX-Redirect /admin 또는 MFA 대기면 /admin/login, 실패 → HX-Redirect /admin/login?error).
+  ?error 로 다시 그려지면 폼 위에 "로그인 실패" 경고 하나, 비밀번호 칸에 포커스, 이메일은 auth.js 가 sessionStorage 에서 되살린다.
+  리다이렉트 없이 온 4xx(예: CSRF 거부)는 TSX 처럼 자격 오류로 보고 /admin/login?error 로 다시 그린다.
+  5xx·네트워크 오류는 auth.js(loginForm)가 "지금은 로그인할 수 없습니다" 경고를 띄운다(입력 유지, 다시 시도).
+  데모 계정 카드는 dev·local 프로필일 때만 그리고(LoginPage.tsx 와 같은 조건), 그때만 데모 계정 값이 페이지에 들어간다.
+  입력란은 카드를 눌렀을 때 채운다(auth.js loginForm.selectDemo).
+-->
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <title>Crosscert Passkey Admin</title>
+  <link href="/admin/img/favicon.png" rel="icon">
+  <link href="/admin/css/fonts.css" rel="stylesheet">
+  <link href="/admin/css/tokens.css" rel="stylesheet">
+  <link href="/admin/css/globals.css" rel="stylesheet">
+  <link href="/admin/css/components.css" rel="stylesheet">
+  <script src="/admin/js/vendor/htmx.min.js"></script>
+  <script src="/admin/js/ui.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script defer src="/admin/js/vendor/alpine.min.js"></script>
+</head>
+<body>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--surface);">
+  <!-- 브랜드 패널 — 로그인 전에는 실제 지표를 조회할 수 없으므로 숫자 대신 콘솔이 하는 일을 적는다. -->
+  <aside style="flex: 1 1 440px; background: var(--brand-50); border-right: 1px solid var(--line); padding: 48px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px;">
+    <img alt="CROSSCERT" src="/admin/img/crosscert-logo-transparent.png" style="width: 156px; height: auto;">
+    <div class="col" style="gap: 10px; margin-top: 12px;">
+      <h1 style="margin: 0; font-size: 34px; line-height: 44px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink);">패스키 인증을<br>운영하는 콘솔.</h1>
+      <p style="margin: 0; font-size: 15px; line-height: 24px; color: var(--ink-2); max-width: 420px;">RP 별 tenant · 패스키 · API 키를 한 곳에서 관리하고, 모든 변경은 위·변조를 확인할 수 있는 감사 로그로 남습니다.</p>
+    </div>
+    <img alt="" src="/admin/img/login-hero.webp" style="width: 100%; max-width: 420px; height: auto; align-self: center;">
+    <div class="col" style="gap: 8px; padding-top: 18px; border-top: 1px solid var(--line); margin-top: auto;">
+      <span class="t-over">이 콘솔에서 하는 일</span>
+      <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--ink-2);">
+        <li>tenant 생성 · 정책 설정 · API 키 발급</li>
+        <li>사용자 패스키 조회와 회수</li>
+        <li>감사 로그 무결성 확인과 내보내기</li>
+      </ul>
+      <span class="hint" style="margin: 0;">실시간 지표는 로그인 후 확인할 수 있습니다.</span>
+    </div>
+    <p class="hint" style="margin: 0;">© 2026 Crosscert · 이 콘솔의 모든 접근은 감사 로그에 기록됩니다.</p>
+  </aside>
+
+  <!-- 폼 -->
+  <main style="flex: 1 1 440px; display: flex; align-items: center; justify-content: center; padding: 48px 24px; box-sizing: border-box;">
+    <form class="col" data-error="credentials" hx-post="/admin/login"
+          hx-swap="none" hx-sync="this:drop" id="login-form"
+          style="width: 100%; max-width: 380px; gap: 20px;" x-data="loginForm" x-on:htmx:after-request="onAfter($event)"
+          x-on:htmx:before-request="onBefore($event)" x-on:htmx:send-error="onNetworkError()" x-on:htmx:timeout="onNetworkError()">
+      <input name="_csrf" type="hidden" value="{{CSRF}}">
+      <div class="col" style="gap: 6px;">
+        <h2 class="page__title">관리자 로그인</h2>
+        <p class="card__sub">등록된 운영자 계정으로 로그인하세요.</p>
+      </div>
+
+      <!-- 오류는 폼 위 한 곳에만. 토스트로 중복하지 않는다. -->
+      <div class="banner banner--danger banner--top" role="alert" x-show="error === 'credentials'">
+        <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+        <div class="banner__body">
+          <div class="banner__title">로그인 실패</div>
+          <div>이메일 또는 비밀번호가 올바르지 않습니다. <span class="mono" style="font-size: 11px;">A001</span></div>
+        </div>
+      </div>
+      <template x-if="error === 'transient'">
+        <div class="banner banner--danger banner--top" role="alert">
+          <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
+          <div class="banner__body">
+            <div class="banner__title">지금은 로그인할 수 없습니다</div>
+            <div>서버가 응답하지 않습니다. 입력한 내용은 그대로 있습니다.<span class="mono" style="display: block; font-size: 11px;" x-show="status !== null" x-text="'HTTP ' + status"></span></div>
+          </div>
+          <div class="banner__actions"><button class="btn btn--sm" type="button" x-bind:disabled="submitting" x-on:click="retry()">다시 시도</button></div>
+        </div>
+      </template>
+
+      <div>
+        <label class="label" for="login-email">이메일</label>
+        <input autocomplete="username" class="input input--lg" id="login-email" name="email" placeholder="you@crosscert.com" type="email"
+               x-bind:readonly="submitting" x-on:input="clearError()" x-ref="email">
+      </div>
+      <div>
+        <div class="row" style="justify-content: space-between; align-items: flex-end;">
+          <label class="label" for="login-password">비밀번호</label>
+          <a href="/admin/forgot-password" style="font-size: 12px; font-weight: 500; margin-bottom: 6px;">비밀번호를 잊으셨나요?</a>
+        </div>
+        <div class="row" style="gap: 8px; flex-wrap: nowrap;">
+          <input autocomplete="current-password" autofocus="autofocus" class="input input--lg" id="login-password" name="password" placeholder="비밀번호"
+                 style="flex: 1 1 0; min-width: 0;" type="password" x-bind:readonly="submitting" x-bind:type="showPw ? 'text' : 'password'" x-on:input="clearError()" x-ref="password">
+          <button aria-label="비밀번호 표시" aria-pressed="false" class="btn btn--lg" type="button"
+                  x-bind:aria-label="showPw ? '비밀번호 숨기기' : '비밀번호 표시'" x-bind:aria-pressed="showPw ? 'true' : 'false'"
+                  x-on:click="showPw = !showPw" x-text="showPw ? '숨기기' : '표시'">표시</button>
+        </div>
+      </div>
+
+      <button class="btn btn--primary btn--lg" style="width: 100%;" type="submit" x-bind:disabled="submitting" x-text="submitting ? '확인 중…' : '로그인'">로그인</button>
+
+      <!-- 데모 계정 — dev·local 프로필에서만(LoginPageController.showDemoAccount). 클릭하면 채운다. -->
+      
+
+      <p class="card__sub" style="text-align: center;">계정이 없으신가요? <a href="/admin/signup" style="font-weight: 600;">가입 요청</a></p>
+      <div class="row" style="justify-content: space-between; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line-soft);">
+        <p class="hint" style="margin: 0;">30분 동안 활동이 없으면 자동으로 로그아웃됩니다.</p>
+        
+      </div>
+    </form>
+  </main>
+</div>
+</body>
+</html>

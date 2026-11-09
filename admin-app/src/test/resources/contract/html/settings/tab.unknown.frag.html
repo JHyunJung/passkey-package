@@ -1,0 +1,37 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<div class="stack-4">
+  <div id="mfa-account">
+  <section class="card">
+    <div class="set">
+      <div class="stack-1" style="gap: 6px">
+        <div class="row" style="gap: 8px">
+          <h2 class="card__title">2단계 인증 (MFA)</h2>
+          
+          <span class="badge  badge--dot">꺼짐</span>
+        </div>
+        <p class="card__sub">로그인 시 비밀번호에 더해 authenticator 앱의 6자리 코드를 요구합니다.</p>
+      </div>
+
+      <div class="row mfa-promo">
+        <img alt="" class="mfa-promo__art" height="96" src="/admin/img/mfa.webp" width="96">
+        <div class="stack-2" style="flex: 1 1 0; min-width: 0">
+          <strong>계정을 한 단계 더 보호하세요</strong>
+          <span class="card__sub">3단계로 끝납니다 — 앱으로 QR 스캔 → 코드 확인 → 복구 코드 저장.</span>
+          <div class="row">
+            <button class="btn btn--primary" hx-disabled-elt="this" hx-post="/admin/_/settings/mfa/enroll" hx-swap="innerHTML" hx-sync="this:drop" hx-target="#mfa-enroll-slot" type="button">2단계 인증 켜기</button>
+          </div>
+        </div>
+      </div>
+
+      
+    </div>
+  </section>
+
+  <!-- 끄기 확인창(alertdialog). 코드 입력은 숫자 6자리만, 요청 중에는 읽기 전용 + 취소·Escape 막힘. 실패는 입력칸 아래(값 유지 + 전체 선택). -->
+  
+</div>
+  <div id="mfa-enroll-slot"></div>
+  <div id="mfa-rc-slot"></div>
+</div>

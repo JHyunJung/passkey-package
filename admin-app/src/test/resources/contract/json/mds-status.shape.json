@@ -1,0 +1,22 @@
+{
+  "$" : "object",
+  "$.code" : "string",
+  "$.data" : "object",
+  "$.data.fetchedAt" : "iso-offset(Z)",
+  "$.data.nextUpdate" : "string",
+  "$.data.successRate30d" : "object",
+  "$.data.successRate30d.ok" : "number",
+  "$.data.successRate30d.total" : "number",
+  "$.data.successRate30d{}" : "ok,total",
+  "$.data.trustAnchorCount" : "number",
+  "$.data.trustMode" : "string",
+  "$.data.version" : "number",
+  "$.data{}" : "version,nextUpdate,fetchedAt,trustAnchorCount,trustMode,successRate30d",
+  "$.message" : "string",
+  "$.success" : "boolean",
+  "$.timestamp" : "iso-offset(Z)",
+  "$.traceId" : "string",
+  "${}" : "success,code,message,data,traceId,timestamp",
+  "@contentType" : "application/json",
+  "@status" : "200"
+}
