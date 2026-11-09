@@ -6,7 +6,9 @@ import com.crosscert.passkey.core.repository.AuditLogRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.clearInvocations
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 import tools.jackson.databind.ObjectMapper
 import java.time.Clock
@@ -83,6 +85,62 @@ class AuditChainVerifierTest {
         val r = verifier.verify()
         assertThat(r.ok).isFalse()
         assertThat(r.brokenAt).isEqualTo(ROW_2_ID)
+    }
+
+    @Test
+    fun verifyTenantRowsMatchesVerifyTenantWithoutReadingRepo() {
+        val tenant = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001")
+        val rows = buildValidTenantChain(tenant, 3)
+        whenever(repo.findAllByTenantOrdered(tenant)).thenReturn(rows)
+        val viaRepo = verifier.verifyTenant(tenant)
+        clearInvocations(repo)
+
+        val viaRows = verifier.verifyTenantRows(tenant, rows)
+
+        assertThat(viaRows).isEqualTo(viaRepo).isEqualTo(AuditChainVerifier.TenantResult.valid(tenant))
+        verifyNoInteractions(repo)
+    }
+
+    @Test
+    fun verifyTenantRowsReportsFirstBrokenRowLikeVerifyTenant() {
+        val tenant = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001")
+        val rows = buildValidTenantChain(tenant, 3)
+        val middle = rows[1]
+        val tampered = AuditLog(
+            middle.prevHash, middle.hash, middle.actorId, middle.actorEmail,
+            middle.action, middle.targetType, middle.targetId, tenant,
+            middle.tenantPrevHash, middle.tenantHash,
+            "{\"x\":\"tampered\"}", middle.createdAt,
+        )
+        copyId(tampered, ROW_2_ID)
+        rows[1] = tampered
+        whenever(repo.findAllByTenantOrdered(tenant)).thenReturn(rows)
+
+        assertThat(verifier.verifyTenantRows(tenant, rows))
+            .isEqualTo(verifier.verifyTenant(tenant))
+            .isEqualTo(AuditChainVerifier.TenantResult.broken(tenant, ROW_2_ID))
+    }
+
+    /** tenant_prev_hash / tenant_hash 체인을 AuditLogService.computeHash 로 만든다. */
+    private fun buildValidTenantChain(tenantId: UUID, n: Int): MutableList<AuditLog> {
+        val chain = ArrayList<AuditLog>()
+        var prev: ByteArray? = null
+        val now = OffsetDateTime.now(clock)
+        for (i in 1..n) {
+            val payload = "{\"seq\":$i}"
+            val req = AuditAppendRequest(
+                null, "alice@example.com", "ACTION_$i", "TENANT", "T_$i", tenantId, mapOf("seq" to i),
+            )
+            val hash = AuditLogService.computeHash(prev, req, payload, now)
+            val row = AuditLog(
+                null, hash, null, req.actorEmail, req.action, req.targetType, req.targetId,
+                tenantId, prev, hash, payload, now,
+            )
+            copyId(row, UUID.fromString(String.format("00000000-0000-0000-0000-%012d", i)))
+            chain.add(row)
+            prev = hash
+        }
+        return chain
     }
 
     /** Build a valid chain by reusing AuditLogService.computeHash. */

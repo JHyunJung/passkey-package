@@ -88,8 +88,20 @@ class AuditChainVerifier(
      * @return [TenantResult.valid] when the chain is intact, or
      *         [TenantResult.broken] with the id of the first failing row.
      */
-    fun verifyTenant(tenantId: UUID?): TenantResult {
-        val rows = repo.findAllByTenantOrdered(tenantId)
+    fun verifyTenant(tenantId: UUID?): TenantResult =
+        verifyTenantRows(tenantId, repo.findAllByTenantOrdered(tenantId))
+
+    /**
+     * 이미 읽어 둔 tenant 행으로 체인을 검증한다. [rows] 는
+     * [AuditLogRepository.findAllByTenantOrdered] 가 돌려준 그대로(id ASC)여야 하며,
+     * 이 메서드는 리스트를 바꾸지 않는다. overview 가 같은 행을 버킷 집계에도 써서
+     * audit_log 를 tenant 당 한 번만 읽기 위해 분리했다(P3).
+     *
+     * @param tenantId tenant UUID, or null for rows with no tenant
+     * @param rows     the tenant's rows in chain order
+     * @return [TenantResult.valid] or [TenantResult.broken] with the id of the first failing row
+     */
+    fun verifyTenantRows(tenantId: UUID?, rows: List<AuditLog>): TenantResult {
         var expectedPrev: ByteArray? = null
         for (row in rows) {
             if (!Arrays.equals(expectedPrev, row.tenantPrevHash)) {
