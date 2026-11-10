@@ -20,6 +20,9 @@
 #   scripts/init-dev-db.sh           # 확인 프롬프트 후 실행
 #   scripts/init-dev-db.sh --yes     # 프롬프트 없이 실행 (CI/스크립트용)
 #
+# git worktree 에서도 메인 체크아웃과 같은 개발 볼륨(passkey2_oracle-data)을 지운다.
+# worktree 에서 --yes 로 돌리려면 INIT_DEV_DB_FORCE=1 을 함께 지정해야 한다.
+#
 # 다른 프로필(local/qa)로 초기화하려면 PROFILE 환경변수로:
 #   PROFILE=local scripts/init-dev-db.sh
 #
@@ -39,9 +42,31 @@ COMPOSE="docker compose -p passkey2"
 ASSUME_YES=false
 [ "${1:-}" = "--yes" ] && ASSUME_YES=true
 
+ORACLE_VOLUME="passkey2_oracle-data"
+
+# git worktree 안에서 실행해도 위 고정 project name 때문에 메인 체크아웃과 같은
+# (공유) 개발 볼륨을 지운다. 프롬프트 없이(--yes) worktree 에서 돌리는 실수를
+# 막기 위해 그 조합은 INIT_DEV_DB_FORCE=1 을 명시해야만 진행한다.
+IN_WORKTREE=false
+GIT_DIR_ABS="$(git -C "${REPO_ROOT}" rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
+GIT_COMMON_ABS="$(git -C "${REPO_ROOT}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+if [ -n "${GIT_DIR_ABS}" ] && [ "${GIT_DIR_ABS}" != "${GIT_COMMON_ABS}" ]; then
+  IN_WORKTREE=true
+fi
+
 echo "==> dev DB 초기화 (profile=${PROFILE})"
 echo "    repo: ${REPO_ROOT}"
-echo "    ⚠️  현재 Oracle 볼륨의 모든 데이터가 삭제됩니다."
+echo "    compose project: passkey2 — 볼륨 ${ORACLE_VOLUME} 을(를) 삭제 후 재생성"
+if docker volume inspect "${ORACLE_VOLUME}" >/dev/null 2>&1; then
+  echo "    ⚠️  기존 볼륨 ${ORACLE_VOLUME} 이(가) 있습니다 — 그 안의 모든 데이터가 삭제됩니다."
+fi
+if [ "${IN_WORKTREE}" = "true" ]; then
+  echo "    ⚠️  git worktree 에서 실행 중입니다. worktree 전용 DB 가 아니라 메인 체크아웃과 공유하는 개발 DB 를 지웁니다."
+  if [ "${ASSUME_YES}" = "true" ] && [ "${INIT_DEV_DB_FORCE:-}" != "1" ]; then
+    echo "    worktree 에서 --yes 로 실행하려면 INIT_DEV_DB_FORCE=1 을 함께 지정하세요. 중단합니다." >&2
+    exit 2
+  fi
+fi
 if [ "${ASSUME_YES}" != "true" ]; then
   read -r -p "계속하시겠습니까? [y/N] " reply
   case "${reply}" in
