@@ -130,7 +130,7 @@ sudo firewall-cmd --reload
 
 > **Flyway 미사용** — QA 번들은 admin-app 의 Flyway 를 끈다(`SPRING_FLYWAY_ENABLED=false`).
 > 앱은 스키마를 만들거나 바꾸지 않고, 스키마 이력(`flyway_schema_history`)도 검사하지 않는다.
-> 스키마는 DBA 가 `V1`~`V5`(정본: `ls core/src/main/resources/db/migration`) 기준으로 미리
+> 스키마는 DBA 가 `V1`~`V6`(정본: `ls core/src/main/resources/db/migration`) 기준으로 미리
 > 만들어 두고, 스키마 소유자(`PSK_APP_OWNER`) 계정 비밀번호는 번들에 필요 없다.
 > 테이블·컬럼이 빠져 있으면 두 앱이 기동 시 `Schema-validation: missing table/column` 으로 멈춘다.
 

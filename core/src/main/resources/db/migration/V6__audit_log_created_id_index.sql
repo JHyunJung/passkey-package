@@ -1,0 +1,62 @@
+-- ============================================================
+-- V6 — audit_log (created_at, id) 복합 인덱스: 체인 헤드 조회의 전체 정렬 제거 (감사 P5).
+--
+-- 문제: AuditLogService.append 는 scheduler_lease 'AUDIT_CHAIN_LOCK' 행을
+-- FOR UPDATE 로 잡은 상태에서 AuditLogRepository.findLatestForUpdate
+-- (order by created_at desc, id desc, 1건)를 실행한다. V1 에는
+-- (SYS_EXTRACT_UTC(created_at)) 단일 인덱스(audit_log_created_at_ix)만 있어
+-- id tie-breaker 까지 포함한 순서를 인덱스로 낼 수 없다 → audit_log 전체를
+-- 읽고 정렬한다. 감사 대상 작업마다 테이블 크기에 비례해 지연되고, 그동안
+-- 전역 락이 유지돼 모든 감사 append 가 직렬로 밀린다.
+--
+-- 해법: (SYS_EXTRACT_UTC(created_at), id) 복합 인덱스 + 체인 헤드 조회의 정렬식을
+-- 인덱스 식과 같게 맞춤. findLatestForUpdate 는
+-- order by function('SYS_EXTRACT_UTC', a.createdAt) desc, a.id desc 로 정렬한다.
+-- Oracle 은 TSTZ 컬럼의 평범한 ORDER BY created_at 을 이 함수 기반 인덱스로
+-- 받치지 못한다(실측: INDEX_DESC 힌트를 줘도 TABLE ACCESS FULL/INDEX SCAN 뒤
+-- WINDOW SORT). 정렬식이 인덱스 식과 같을 때만 정렬 없이 인덱스를 내림차순으로
+-- 읽는다. 정렬 결과는 같다(아래 표기 항목).
+--
+-- 실측(20,005행, 실제 Hibernate SQL 의 커서 통계): buffer gets 376 → 92.
+-- TABLE ACCESS FULL + WINDOW SORT 가 INDEX FULL SCAN DESCENDING 으로 바뀌어,
+-- AUDIT_CHAIN_LOCK 을 쥔 채 하던 전체 정렬은 사라졌다. 다만 비용은 여전히 O(n) 이다:
+-- Hibernate 는 잠금 + limit 1 을 "id in (… fetch first 1 rows only) for update" 로
+-- 렌더링하고, Oracle 의 세미조인 unnesting 이 FETCH FIRST 를 STOPKEY 없는 WINDOW
+-- BUFFER 로 바꿔 인덱스 전체를 읽는다(단독 서브쿼리라면 WINDOW NOSORT STOPKEY).
+-- 서브쿼리를 "where rownum <= 1" 인 native 형태로 쓰면 COUNT STOPKEY 로 인덱스 1건만
+-- 읽는다(5 gets, O(1)) — 후속 과제.
+-- findAllOrdered / search / activity 피드처럼 ORDER BY created_at 을 그대로 쓰는
+-- 다른 쿼리는 이 인덱스로 정렬이 사라지지 않는다(이번 변경 범위 밖).
+--
+-- 표기: TIMESTAMP WITH TIME ZONE 컬럼 인덱스는 Oracle 이 자동으로
+-- SYS_EXTRACT_UTC 함수 기반 인덱스로 만든다. V1(DBMS_METADATA 추출본)과
+-- 같은 명시 표기를 쓴다. TSTZ 비교는 UTC 순간 기준이므로 인덱스 순서와
+-- ORDER BY created_at 의 의미는 같다.
+--
+-- 동작 불변: 인덱스는 접근 경로만 바꾼다. 정렬식 SYS_EXTRACT_UTC(created_at) 은
+-- TSTZ 비교(UTC 순간)와 같은 순서이고, id 가 PK 라 정렬 키가 전순서이므로
+-- 어떤 실행 계획이든 결과 행·순서는 같다(AuditLogOrderIndexIT 가 고정).
+--
+-- 기존 audit_log_created_at_ix 는 그대로 둔다 — created_at 범위 조건 쿼리
+-- (Funnel 집계, retention 등)의 계획을 건드리지 않기 위해서다.
+--
+-- GRANT 없음: 인덱스는 권한 부여 대상이 아니며, audit_log 에 SELECT 권한이
+-- 있는 PSK_APP_ADMIN / PSK_APP_RUNTIME 세션이면 옵티마이저가 그대로 사용한다
+-- (V1 의 인덱스들도 GRANT 가 없다).
+--
+-- 잠금: 대상 DB 는 Oracle SE2 라 ONLINE 빌드(EE 전용, ORA-00439)를 쓰지 않는다.
+--  - 빌드는 audit_log 에 테이블 락을 잡는다. 시작 시점에 커밋 안 된 audit_log
+--    트랜잭션(구 admin-app append, AuditChainBackfillService UPDATE, DBA 세션)이
+--    있으면 기본값(NOWAIT)으로는 즉시 ORA-00054 로 실패하고 Flyway 가 V6 를
+--    실패 처리해 admin-app 이 기동하지 않는다. 그래서 DDL_LOCK_TIMEOUT 으로
+--    최대 60초 기다린다(SE2 지원, Flyway owner 세션에만 적용). 60초 안에 열린
+--    트랜잭션이 끝나지 않으면 여전히 ORA-00054 로 실패한다.
+--  - 빌드 중 새 audit_log DML 은 빌드가 끝날 때까지 대기한다.
+--  - audit_log 가 크면 빌드 시간만큼 admin-app 기동이 늦어진다. compose
+--    healthcheck(start_period 90s + 15s×5) 동안은 "unhealthy" 로 보일 수 있다.
+-- 스키마 접두사 없음: Flyway default-schema 가 PSK_APP_OWNER 다(V1~V5 와 동일).
+-- ============================================================
+
+ALTER SESSION SET DDL_LOCK_TIMEOUT = 60;
+
+CREATE INDEX audit_log_created_id_ix ON audit_log (SYS_EXTRACT_UTC(created_at), id);

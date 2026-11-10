@@ -7,7 +7,7 @@
 --   ⚠️ 선행 조건: scripts/full-schema-part1-accounts.sql 이 먼저 실행돼
 --      PSK_APP_OWNER / PSK_APP_RUNTIME / PSK_APP_ADMIN 롤·유저가 있어야 한다.
 --
---   출처: V1__baseline_schema.sql (전체) + V2/V3 (ALTER) + V4 (GRANT) + V5 (admin_signup_request, 초대 테이블 DROP)
+--   출처: V1__baseline_schema.sql (전체) + V2/V3 (ALTER) + V4 (GRANT) + V5 (admin_signup_request, 초대 테이블 DROP) + V6 (audit_log 복합 인덱스)
 --
 -- ############################################################################
 -- ############################################################################
@@ -820,7 +820,7 @@ WHEN NOT MATCHED THEN
 COMMIT;
 
 -- ============================================================
--- 7. V2~V4 증분 (baseline 이후 추가된 변경)
+-- 7. V2~V4, V6 증분 (baseline 이후 추가된 변경; V5 는 위 본문에 병합됨)
 --
 -- V1 의 CREATE TABLE 에 병합하지 않고 순차 적용 형태로 둔다 — 실제 마이그레이션
 -- 파일과 1:1 대조가 가능해야 두 소스가 어긋났을 때 바로 드러난다.
@@ -857,12 +857,21 @@ ALTER TABLE admin_user ADD (mfa_failed_count NUMBER DEFAULT 0 NOT NULL);
 -- ------------------------------------------------------------
 GRANT SELECT ON security_incident TO PSK_APP_RUNTIME;
 
+-- ------------------------------------------------------------
+-- V6 — audit_log (created_at, id) 복합 인덱스
+--
+-- 감사 append 가 전역 체인 락을 쥔 채 실행하는 체인 헤드 조회
+-- (order by created_at desc, id desc, 1건)가 전체 정렬 없이 인덱스
+-- 내림차순 스캔으로 끝나게 한다. 인덱스라 GRANT 는 없다.
+-- ------------------------------------------------------------
+CREATE INDEX audit_log_created_id_ix ON audit_log (SYS_EXTRACT_UTC(created_at), id);
+
 PROMPT
 PROMPT ============================================================
-PROMPT  PART 2 완료 — 스키마 생성됨 (V1~V4 반영).
+PROMPT  PART 2 완료 — 스키마 생성됨 (V1~V6 반영).
 PROMPT
 PROMPT  Flyway 를 함께 쓴다면 baseline 처리를 잊지 말 것:
-PROMPT    flyway baseline -baselineVersion=4
+PROMPT    flyway baseline -baselineVersion=6
 PROMPT ============================================================
 PROMPT
 
