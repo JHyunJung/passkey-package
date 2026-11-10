@@ -125,8 +125,8 @@ class MdsTabControllerTest {
         assertThat(kpi(d, "신뢰 앵커 (Trust anchors)").selectFirst(".kpi__value")!!.text()).isEqualTo("42")
         assertThat(kpi(d, "마지막 동기화").selectFirst(".kpi__value")!!.text()).isEqualTo("3분 전")
         val dl = d.selectFirst("dl.kv")!!
-        assertThat(dl.selectFirst("dd.kv__nowrap")!!.text()).isEqualTo("https://mds3.fidoalliance.org/")
-        assertThat(dl.text()).contains("https://mds3.fidoalliance.org/").contains("2026-10-12 03:00 KST").contains("93%").contains("28 / 30")
+        assertThat(dl.selectFirst("dd.kv__nowrap")!!.text()).isEqualTo("https://mds.fidoalliance.org/")
+        assertThat(dl.text()).contains("https://mds.fidoalliance.org/").contains("2026-10-12 03:00 KST").contains("93%").contains("28 / 30")
         val trust = d.selectFirst("dd span[title=MDS_STRICT_OPTIONAL]")!!
         assertThat(trust.text()).isEqualTo("MDS 확인 권장")
         assertThat(dl.text()).contains("MDS 에 없는 인증기도 기본은 허용합니다.")

@@ -197,6 +197,9 @@
       기준 Java 는 실 컨텍스트에서 `InvalidDataAccessApiUsageException`(500) 이었고 지금은 IAE(400 매핑). 정상 경로에서는 도달 불가이며,
       응답 DTO 필드 nullability tightening 시 함께 정리한다. [admin-app-kotlin 2026-11-09]
 - [ ] **응답 DTO(`TenantView` 등) nullable 필드로 web 컨트롤러에 `!!` 잔존** — DTO tightening 을 별도 작업으로 진행. [admin-app-kotlin 2026-11-09]
+- [ ] **MDS 설정 화면의 endpoint 표시가 하드코딩** — `templates/admin/settings/mds.html` 이 `https://mds.fidoalliance.org/` 를
+      문자열로 박아 두어 `passkey.mds.blob-endpoint` 를 바꿔도 화면은 그대로다. 컨트롤러 모델에 실제 설정값을 실어 렌더하고
+      contract 스냅샷 4개(`contract/html/settings/mds.*.html`)를 갱신한다. (기본 주소 `mds3.`→`mds.` 301 동기화 실패는 2026-11-10 해결) [backlog-fix 2026-11-10]
 
 ## 5. 의존성 — 결정 기록 (KEEP + 근거, 재평가 트리거)
 
