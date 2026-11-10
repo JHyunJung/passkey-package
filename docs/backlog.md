@@ -187,10 +187,11 @@
 - [ ] **`ActivityRepositoryFeedPageIT` 가 UUID 정렬에 암묵 의존** — 주석으로만 표시. [zero-base 2026-07-04]
 - [ ] **`CredentialRecord` 봉투가 `uvInitialized`/`backupState` 를 폐기하는 건** — 자체 verifier 전환 + V47 의
       `credential.backup_state` 컬럼 제거로 전제가 바뀌었다. 재평가 필요. [prod-hardening 2026-05-25]
-- [ ] **월간 감사 보고서 PDF 가 항상 500** — `MonthlyReportService.buildHtml` 이 `<meta>` 를 종료하지 않아 XHTML 파서가
-      `SAXParseException` 을 던진다. contract 스냅샷이 현재의 500 을 고정하고 있으므로 수정 시 스냅샷도 함께 갱신한다. [admin-app-kotlin 2026-11-09]
-- [ ] **`alert.html` 기본 아이콘 알림이 아이콘 3개를 모두 렌더** — `templates/admin/fragments/ui/alert.html:20-22` 에서
-      `th:case` 와 `th:replace` 가 같은 요소에 있어 `th:replace` 가 먼저 적용된다. 렌더 스냅샷에 현행 동작이 고정돼 있다. [admin-app-kotlin 2026-11-09]
+- [x] ~~**월간 감사 보고서 PDF 가 항상 500**~~ — `<meta charset='utf-8'/>` 로 닫아 해결, 테스트는 실제 PDF 텍스트 검증으로 교체. [2026-11-10]
+- [ ] **월간 감사 보고서 PDF 에 한글이 안 나옴** — openhtmltopdf 기본 글꼴(PDF base-14)에는 한글 글리프가 없어 한글 테넌트명이
+      빠진다. 한글 글꼴(예: Noto Sans KR, OFL) TTF 를 리소스로 번들하고 `PdfRendererBuilder.useFont` 로 등록해야 한다 —
+      라이선스·이미지 크기(수 MB) 결정이 필요. [backlog-fix 2026-11-10]
+- [x] ~~**`alert.html` 기본 아이콘 알림이 아이콘 3개를 모두 렌더**~~ — `th:case` 를 바깥 블록으로 분리해 해결, 렌더 스냅샷 갱신. [2026-11-10]
 - [ ] **admin-app 기존 약한 테스트** — `AaguidTabControllerTest.saveCallsRestAndTriggersSaved` 의 `Elements` `isNotNull()`(항상 참),
       `CredentialsTabControllerTest` 의 미사용 `holder`, AdminUsers 의 `substring(0,1)` 류 약한 검사. [admin-app-kotlin 2026-11-09]
 - [ ] **null tenantId `?: throw IllegalArgumentException` 3곳** (`ApiKeyAdminService`, `TenantLifecycleService`, `WebauthnDiffService`) —
