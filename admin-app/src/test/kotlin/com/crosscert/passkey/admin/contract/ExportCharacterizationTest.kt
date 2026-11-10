@@ -35,10 +35,7 @@ import com.crosscert.passkey.core.api.ApiResponse
 import com.crosscert.passkey.core.api.PageView
 import com.crosscert.passkey.core.ceremony.CredentialAuthFailureReason
 import com.crosscert.passkey.core.config.CoreJacksonConfig
-import com.openhtmltopdf.util.XRRuntimeException
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
-import org.assertj.core.api.ThrowingConsumer
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyInt
@@ -57,7 +54,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.xml.sax.SAXParseException
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.time.Clock
@@ -65,7 +61,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
-import java.util.TreeMap
 import java.util.UUID
 import java.util.regex.Pattern
 
@@ -76,11 +71,10 @@ import java.util.regex.Pattern
  * [InsightsPageController](4종), [ActivityPageController], [FunnelTabController](6종))의 다운로드 응답을
  * 상태줄·`Content-Type`·`Content-Disposition` 헤더와 본문 전체 바이트(BOM 포함)로 고정한다
  * (`contract/export/` 아래 `.http`). 데이터에는 쉼표·따옴표·줄바꿈(LF·CRLF)·한글·수식 접두(`= + - @ TAB`)를 넣는다.
- * 월간 감사 체인 PDF([MonthlyReportService] 실제 구현 + [MonthlyReportController])는 base 에서 **항상 500** 이다
- * (buildHtml 의 닫히지 않은 `<meta>` → openhtmltopdf `SAXParseException`, 알려진 결함 — 수정은 백로그). 그래서
- * PDF 텍스트 대신 (1) 500 응답 형태, (2) 원인 예외가 그 결함(`XRRuntimeException` ← `SAXParseException` "meta")임,
- * (3) 렌더러에 들어가는 보고서 HTML 전체(`Generated at` 시각만 치환, `contract/export/monthly-report.html`)를 고정한다.
- * 결함이 고쳐지면 (1)(2) 가 실패하므로 그때 PDF 텍스트 스냅샷을 새로 추가한다.
+ * 월간 감사 체인 PDF([MonthlyReportService] 실제 구현 + [MonthlyReportController])는 (1) 200·`application/pdf`·
+ * 첨부 파일명 헤더, (2) PDFBox 로 뽑은 본문 텍스트(요약 수치·이스케이프된 테넌트명), (3) 렌더러에 들어가는 보고서
+ * HTML 전체(`Generated at` 시각만 치환, `contract/export/monthly-report.html`)로 고정한다.
+ * (예전에는 buildHtml 의 닫히지 않은 `<meta>` 때문에 항상 500 이었다 — 2026-11-10 수정.)
  *
  * 기록: `./gradlew :admin-app:test --tests '*ExportCharacterizationTest' -Pcontract.record=true`
  */
@@ -339,34 +333,31 @@ class ExportCharacterizationTest {
                 .param("from", "2026-10-01").param("to", "2026-10-31")
                 .with(authentication(platform())),
         ).andReturn().response
-        // 현재(Java base) 동작: MonthlyReportService.buildHtml 이 닫히지 않은 <meta charset='utf-8'> 를 써서
-        // openhtmltopdf 의 XML 파서가 SAXParseException 을 내고, GlobalExceptionHandler 가 500 봉투로 바꾼다
-        // (데이터와 무관하게 항상). 전환은 이 동작을 바꾸지 않아야 하므로 그대로 고정한다 — 고치는 것은 별도 작업(백로그).
-        assertThat(res.status).`as`("월간 PDF 는 base 에서 항상 500 (알려진 결함)").isEqualTo(500)
-        val meta = TreeMap<String, String>()
-        meta["@status"] = res.status.toString()
-        meta["@contentType"] = res.contentType.toString()
-        meta["@contentDisposition"] = res.getHeader(HttpHeaders.CONTENT_DISPOSITION).toString()
-        ContractSnapshot.assertMatches(
-            "export/monthly-report.response.shape.json",
-            AdminJsonShape.of(res.getContentAsString(StandardCharsets.UTF_8), true, meta),
-        )
-
-        // (a) 500 의 원인이 바로 그 알려진 결함인지 — 다른 예외로 바뀌면 여기서 드러난다.
-        assertThatThrownBy { reportService.generate(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31")) }
-            .isInstanceOf(XRRuntimeException::class.java)
-            .satisfies(
-                ThrowingConsumer { e ->
-                    var root: Throwable = e
-                    while (true) {
-                        val c = root.cause
-                        if (c == null || c === root) break
-                        root = c
-                    }
-                    assertThat(root).isInstanceOf(SAXParseException::class.java)
-                    assertThat(root.message).`as`("닫히지 않은 meta 요소").contains("meta")
-                },
-            )
+        // 과거에는 buildHtml 의 닫히지 않은 <meta charset='utf-8'> 때문에 openhtmltopdf XML 파서가
+        // SAXParseException 을 내서 항상 500 이었다(2026-11-10 수정). 이제 실제 PDF 가 내려와야 한다.
+        assertThat(res.status).`as`("월간 PDF 다운로드 성공").isEqualTo(200)
+        assertThat(res.contentType).isEqualTo("application/pdf")
+        assertThat(res.getHeader(HttpHeaders.CONTENT_DISPOSITION))
+            .isEqualTo("attachment; filename=\"audit-chain-monthly-2026-10-01-to-2026-10-31.pdf\"")
+        val pdf = res.contentAsByteArray
+        assertThat(String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-")
+        // (a) PDF 본문 텍스트 — 요약 수치·이스케이프된 테넌트명이 실제로 렌더됐는지.
+        // (한글 글꼴은 번들돼 있지 않아 한글 테넌트명은 글리프가 빠진다 — backlog. 여기서는 단정하지 않는다.)
+        val text = org.apache.pdfbox.pdmodel.PDDocument.load(pdf).use { doc ->
+            org.apache.pdfbox.text.PDFTextStripper().getText(doc)
+        }
+        assertThat(text)
+            .contains("Audit Chain Monthly Report")
+            .contains("Period: 2026-10-01 — 2026-10-31")
+            .contains("Tenants intact: 1 / 3")
+            .contains("Tenants tampered: 1")
+            .contains("Verified rows: 1234")
+        // 표 셀은 좁아서 PDF 텍스트에 줄바꿈이 끼어든다 — 공백을 모두 지운 형태로 셀 값을 확인한다.
+        val compact = text.replace(Regex("\\s+"), "")
+        assertThat(compact)
+            .contains("Acme<&>\"quoted\"'single'")
+            .contains("[platform][platform]INTACT10—")
+            .contains("TAMPERED2400000000-0000-0000-0000-0000000000bb")
 
         // (b) PDF 렌더러로 들어가는 보고서 본문(HTML) 고정 — 이스케이프(<&>"')·한글·null tenantId·위변조 행.
         // buildHtml 은 private 이라 reflection 으로 부른다(main 무수정). 생성 시각(Instant.now())만 치환.

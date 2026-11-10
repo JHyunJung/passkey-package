@@ -44,7 +44,7 @@ class MonthlyReportService(private val monitor: AuditChainMonitorController) {
 
     private fun buildHtml(from: LocalDate, to: LocalDate, overview: AuditChainOverview): String {
         val sb = StringBuilder()
-        sb.append("<html><head><meta charset='utf-8'>")
+        sb.append("<html><head><meta charset='utf-8'/>")
         sb.append("<style>body{font-family:sans-serif} table{border-collapse:collapse;width:100%}")
         sb.append("th,td{border:1px solid #ccc;padding:6px;font-size:11px;text-align:left}")
         sb.append(".intact{color:#080} .tampered{color:#c00;font-weight:bold}</style>")
