@@ -52,8 +52,8 @@ else info "인자 없음 — ./preflight.sh <OracleIP> [포트] 로 확인 가�
 fi
 
 echo "== 7. MDS 아웃바운드 (선택, README 문제 해결) =="
-timeout 6 bash -c ": < /dev/tcp/mds3.fidoalliance.org/443" 2>/dev/null \
-  && ok "mds3.fidoalliance.org:443 열림" \
+timeout 6 bash -c ": < /dev/tcp/mds.fidoalliance.org/443" 2>/dev/null \
+  && ok "mds.fidoalliance.org:443 열림" \
   || info "차단됨 — mdsRequired=false 로 QA 진행 가능(README 문제 해결)"
 
 echo "== 8. 호스트 nginx (PROXY_MODE=host — 서버에 있는 nginx 가 TLS 종료) =="

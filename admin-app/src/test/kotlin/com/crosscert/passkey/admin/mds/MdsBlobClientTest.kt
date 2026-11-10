@@ -12,6 +12,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.net.http.HttpClient
+import java.net.http.HttpHeaders
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Clock
@@ -43,7 +44,7 @@ class MdsBlobClientTest {
 
         val client = MdsBlobClient(
             http, verifier, rootProvider,
-            "https://mds3.fidoalliance.org/", FIXED_CLOCK,
+            "https://mds.fidoalliance.org/", FIXED_CLOCK,
         )
 
         val result = client.fetch()
@@ -56,6 +57,28 @@ class MdsBlobClientTest {
         val http = mock<HttpClient>()
         val resp = mock<HttpResponse<String>>()
         whenever(resp.statusCode()).thenReturn(503)
+        whenever(resp.headers()).thenReturn(HttpHeaders.of(mapOf()) { _, _ -> true })
+        whenever(http.send(anyOrNull<HttpRequest>(), anyOrNull<HttpResponse.BodyHandler<String>>())).thenReturn(resp)
+        val client = MdsBlobClient(
+            http,
+            mock<MetadataBlobVerifier>(), mock<MdsRootCertProvider>(),
+            "https://mds.fidoalliance.org/", FIXED_CLOCK,
+        )
+        assertThatThrownBy { client.fetch() }
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessage("MDS fetch failed: HTTP 503")
+    }
+
+    @Test
+    fun fetchRedirectFailsWithLocationInMessage() {
+        // 공급자가 주소를 옮기면(실제로 mds3 → mds, 301) 리다이렉트를 따르지 않고 실패하되,
+        // 새 주소를 메시지로 드러내야 한다.
+        val http = mock<HttpClient>()
+        val resp = mock<HttpResponse<String>>()
+        whenever(resp.statusCode()).thenReturn(301)
+        whenever(resp.headers()).thenReturn(
+            HttpHeaders.of(mapOf("location" to listOf("https://mds.fidoalliance.org/"))) { _, _ -> true },
+        )
         whenever(http.send(anyOrNull<HttpRequest>(), anyOrNull<HttpResponse.BodyHandler<String>>())).thenReturn(resp)
         val client = MdsBlobClient(
             http,
@@ -63,7 +86,18 @@ class MdsBlobClientTest {
             "https://mds3.fidoalliance.org/", FIXED_CLOCK,
         )
         assertThatThrownBy { client.fetch() }
-            .isInstanceOf(IllegalStateException::class.java).hasMessageContaining("MDS fetch failed")
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("HTTP 301")
+            .hasMessageContaining("Location: https://mds.fidoalliance.org/")
+    }
+
+    @Test
+    fun defaultEndpointIsCurrentFidoHost() {
+        // mds3.fidoalliance.org 는 301 로 mds.fidoalliance.org 로 옮겨졌다 — 기본값이 옛 주소면 동기화가 항상 실패한다.
+        val param = MdsBlobClient::class.java.constructors.single().parameters
+            .single { it.isAnnotationPresent(org.springframework.beans.factory.annotation.Value::class.java) }
+        assertThat(param.getAnnotation(org.springframework.beans.factory.annotation.Value::class.java).value)
+            .isEqualTo("\${passkey.mds.blob-endpoint:https://mds.fidoalliance.org/}")
     }
 
     @Test
@@ -81,7 +115,7 @@ class MdsBlobClientTest {
         whenever(rootProvider.anchors()).thenReturn(setOf())
         val client = MdsBlobClient(
             http, verifier, rootProvider,
-            "https://mds3.fidoalliance.org/", FIXED_CLOCK,
+            "https://mds.fidoalliance.org/", FIXED_CLOCK,
         )
         assertThatThrownBy { client.fetch() }
             .isInstanceOf(IllegalStateException::class.java).hasMessageContaining("MDS fetch failed")
@@ -110,7 +144,7 @@ class MdsBlobClientTest {
 
         val client = MdsBlobClient(
             http, verifier, rootProvider,
-            "https://mds3.fidoalliance.org/", FIXED_CLOCK,
+            "https://mds.fidoalliance.org/", FIXED_CLOCK,
         )
         client.fetch()
 
@@ -142,7 +176,7 @@ class MdsBlobClientTest {
 
         val client = MdsBlobClient(
             http, verifier, rootProvider,
-            "https://mds3.fidoalliance.org/", FIXED_CLOCK,
+            "https://mds.fidoalliance.org/", FIXED_CLOCK,
         )
 
         assertThatThrownBy { client.fetch() }

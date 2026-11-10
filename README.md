@@ -139,6 +139,8 @@ PASSKEY_ISSUER_BASE="http://localhost:8080" \
 
 ```bash
 scripts/init-dev-db.sh            # 확인 프롬프트 후 풀 초기화 (--yes 로 생략)
+                                  # git worktree 에서도 메인과 공유하는 passkey2_oracle-data 볼륨을 지운다
+                                  # → worktree 에서 --yes 는 INIT_DEV_DB_FORCE=1 이 있어야 진행
 scripts/reset-app-owner.sh        # 'RESET' 타이핑 확인 후 스키마만 리셋 (--yes 로 생략)
 PROFILE=dev scripts/reset-app-owner.sh   # dev 시드로 리셋
 ```

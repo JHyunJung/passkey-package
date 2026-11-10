@@ -28,7 +28,7 @@ class MdsBlobClient(
     private val httpClient: HttpClient,
     private val verifier: MetadataBlobVerifier,
     private val rootProvider: MdsRootCertProvider,
-    @Value("\${passkey.mds.blob-endpoint:https://mds3.fidoalliance.org/}") private val endpoint: String,
+    @Value("\${passkey.mds.blob-endpoint:https://mds.fidoalliance.org/}") private val endpoint: String,
     private val clock: Clock,
 ) {
 
@@ -39,7 +39,13 @@ class MdsBlobClient(
                 .timeout(Duration.ofSeconds(30)).GET().build()
             val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
             if (resp.statusCode() != 200) {
-                throw IllegalStateException("MDS fetch failed: HTTP " + resp.statusCode())
+                // HttpClient 는 리다이렉트를 따르지 않는다(기본 NEVER) — 공급자가 주소를 옮기면
+                // 3xx 로 실패하므로 Location 을 메시지에 실어 운영자가 새 주소를 바로 알 수 있게 한다.
+                val location = resp.headers().firstValue("location").orElse(null)
+                throw IllegalStateException(
+                    "MDS fetch failed: HTTP " + resp.statusCode() +
+                        (if (location != null) " (Location: $location — passkey.mds.blob-endpoint 확인)" else ""),
+                )
             }
             // Java String.trim() 과 같은 규칙(코드 포인트 <= U+0020 만 제거) — Kotlin trim() 은 유니코드 공백 전체를 제거한다.
             resp.body().trim { it <= ' ' }
