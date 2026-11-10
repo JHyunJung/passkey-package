@@ -342,7 +342,7 @@ class ExportCharacterizationTest {
         val pdf = res.contentAsByteArray
         assertThat(String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-")
         // (a) PDF 본문 텍스트 — 요약 수치·이스케이프된 테넌트명이 실제로 렌더됐는지.
-        // (한글 글꼴은 번들돼 있지 않아 한글 테넌트명은 글리프가 빠진다 — backlog. 여기서는 단정하지 않는다.)
+        // 한글 테넌트명은 번들된 나눔고딕(fonts/)으로 렌더돼야 한다 — 기본 base-14 글꼴엔 한글 글리프가 없다.
         val text = org.apache.pdfbox.pdmodel.PDDocument.load(pdf).use { doc ->
             org.apache.pdfbox.text.PDFTextStripper().getText(doc)
         }
@@ -358,6 +358,7 @@ class ExportCharacterizationTest {
             .contains("Acme<&>\"quoted\"'single'")
             .contains("[platform][platform]INTACT10—")
             .contains("TAMPERED2400000000-0000-0000-0000-0000000000bb")
+            .contains(KOREAN.replace(" ", ""))
 
         // (b) PDF 렌더러로 들어가는 보고서 본문(HTML) 고정 — 이스케이프(<&>"')·한글·null tenantId·위변조 행.
         // buildHtml 은 private 이라 reflection 으로 부른다(main 무수정). 생성 시각(Instant.now())만 치환.
