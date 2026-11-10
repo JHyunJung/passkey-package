@@ -45,11 +45,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * V6 {@code audit_log_created_id_ix} 가 체인 헤드 조회(정렬식
  * {@code SYS_EXTRACT_UTC(createdAt) desc, id desc})를 정렬 단계 없이 받치는지 확인한다.
  *
- * <p>특성화 테스트(이 클래스의 앞 4개)는 인덱스 유무와 무관하게 같아야 한다 —
+ * <p>특성화 테스트(이 클래스의 앞 5개)는 인덱스 유무와 무관하게 같아야 한다 —
  * {@code id} 가 PK 라 정렬 키가 전순서이므로 실행 계획이 바뀌어도 결과 순서는 SQL
  * 의미로 유일하다. 픽스처는 서로 다른 오프셋(+09:00 / +00:00)을 섞어 TSTZ 정렬이
  * 벽시계가 아니라 UTC 순간 기준임을, 같은 순간의 두 행으로 id tie-breaker 를 고정한다.
- * 이 4개는 통계 없는 소규모 테이블이라 전체 스캔 경로를 탄다. 인덱스 경로의 결과는
+ * 이 5개는 통계 없는 소규모 테이블이라 전체 스캔 경로를 탄다. 인덱스 경로의 결과는
  * {@code chainHeadLookup_usesCompositeIndexWithoutSort_andKeepsOrder} 가 고정한다.
  *
  * <p>Testcontainers Oracle XE 21 / bootstrap-schema.sql / owner pool 패턴은
@@ -156,7 +156,7 @@ class AuditLogOrderIndexIT {
         ownerJdbc().update("DELETE FROM PSK_APP_OWNER.audit_log");
         ownerJdbc().execute(
                 "BEGIN DBMS_STATS.DELETE_TABLE_STATS("
-                        + "ownname => 'PSK_APP_OWNER', tabname => 'AUDIT_LOG', cascade_indexes => TRUE); END;");
+                        + "ownname => 'PSK_APP_OWNER', tabname => 'AUDIT_LOG', cascade_indexes => TRUE, no_invalidate => FALSE); END;");
     }
 
     private static String hex(UUID id) {
@@ -303,7 +303,7 @@ class AuditLogOrderIndexIT {
                         + "FROM dual CONNECT BY LEVEL <= 20000");
         ownerJdbc().execute(
                 "BEGIN DBMS_STATS.GATHER_TABLE_STATS("
-                        + "ownname => 'PSK_APP_OWNER', tabname => 'AUDIT_LOG', cascade => TRUE); END;");
+                        + "ownname => 'PSK_APP_OWNER', tabname => 'AUDIT_LOG', cascade => TRUE, no_invalidate => FALSE); END;");
         seedOrderingFixture();
 
         // 1) 단독 서브쿼리 형태(리터럴/바인드, wrapper 없는 전체 컬럼) — 정렬 없이 V6 인덱스를

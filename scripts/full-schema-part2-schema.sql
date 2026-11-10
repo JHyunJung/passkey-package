@@ -860,9 +860,12 @@ GRANT SELECT ON security_incident TO PSK_APP_RUNTIME;
 -- ------------------------------------------------------------
 -- V6 — audit_log (created_at, id) 복합 인덱스
 --
--- 감사 append 가 전역 체인 락을 쥔 채 실행하는 체인 헤드 조회
--- (order by created_at desc, id desc, 1건)가 전체 정렬 없이 인덱스
--- 내림차순 스캔으로 끝나게 한다. 인덱스라 GRANT 는 없다.
+-- 감사 append 가 전역 체인 락을 쥔 채 실행하는 체인 헤드 조회가 전체 정렬
+-- 없이 끝나게 한다. 효과는 정렬식을 인덱스 식과 같은 SYS_EXTRACT_UTC(created_at)
+-- 로 쓸 때만 난다(findLatestForUpdate 가 그렇게 정렬한다). 평범한
+-- ORDER BY created_at 은 이 인덱스로 정렬이 사라지지 않는다. 결과는 정렬 없는
+-- 인덱스 내림차순 전체 스캔이라 비용은 여전히 O(n) 이다(V6 헤더 참고).
+-- 인덱스라 GRANT 는 없다.
 -- ------------------------------------------------------------
 CREATE INDEX audit_log_created_id_ix ON audit_log (SYS_EXTRACT_UTC(created_at), id);
 

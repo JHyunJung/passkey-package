@@ -3,11 +3,12 @@
 --
 -- 문제: AuditLogService.append 는 scheduler_lease 'AUDIT_CHAIN_LOCK' 행을
 -- FOR UPDATE 로 잡은 상태에서 AuditLogRepository.findLatestForUpdate
--- (order by created_at desc, id desc, 1건)를 실행한다. V1 에는
--- (SYS_EXTRACT_UTC(created_at)) 단일 인덱스(audit_log_created_at_ix)만 있어
--- id tie-breaker 까지 포함한 순서를 인덱스로 낼 수 없다 → audit_log 전체를
--- 읽고 정렬한다. 감사 대상 작업마다 테이블 크기에 비례해 지연되고, 그동안
--- 전역 락이 유지돼 모든 감사 append 가 직렬로 밀린다.
+-- (order by created_at desc, id desc, 1건)를 실행한다. 이 정렬식은 어떤 인덱스
+-- 식과도 맞지 않는다 — Oracle 은 TSTZ 컬럼 인덱스를 SYS_EXTRACT_UTC(created_at)
+-- 함수 기반 인덱스로 만들고, 평범한 ORDER BY created_at 은 그 인덱스로 정렬을
+-- 없애지 못한다(아래 해법 참고) → audit_log 전체를 읽고 정렬한다. 감사 대상
+-- 작업마다 테이블 크기에 비례해 지연되고, 그동안 전역 락이 유지돼 모든 감사
+-- append 가 직렬로 밀린다.
 --
 -- 해법: (SYS_EXTRACT_UTC(created_at), id) 복합 인덱스 + 체인 헤드 조회의 정렬식을
 -- 인덱스 식과 같게 맞춤. findLatestForUpdate 는
@@ -51,6 +52,11 @@
 --    실패 처리해 admin-app 이 기동하지 않는다. 그래서 DDL_LOCK_TIMEOUT 으로
 --    최대 60초 기다린다(SE2 지원, Flyway owner 세션에만 적용). 60초 안에 열린
 --    트랜잭션이 끝나지 않으면 여전히 ORA-00054 로 실패한다.
+--  - 배포 안내: ORA-00054 등으로 V6 가 실패하면 Flyway 가 flyway_schema_history 에
+--    실패한 V6 를 기록하고, 그 상태로는 admin-app 이 다시 기동하지 않는다.
+--    원인(열린 트랜잭션)을 정리한 뒤 `flyway repair` 로 실패 기록을 지우고
+--    재기동해야 V6 가 다시 적용된다. ORA-00054 면 CREATE INDEX 자체가 실행되지
+--    않아 인덱스는 없으므로 repair 만으로 충분하다.
 --  - 빌드 중 새 audit_log DML 은 빌드가 끝날 때까지 대기한다.
 --  - audit_log 가 크면 빌드 시간만큼 admin-app 기동이 늦어진다. compose
 --    healthcheck(start_period 90s + 15s×5) 동안은 "unhealthy" 로 보일 수 있다.
