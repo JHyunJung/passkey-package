@@ -17,9 +17,10 @@
   <span class="banner__icon">
     <th:block th:if="${icon}"><th:block th:replace="${icon}"/></th:block>
     <th:block th:unless="${icon}" th:switch="${tone}">
-      <th:block th:case="'ok'" th:replace="~{admin/fragments/icons :: check(18)}"/>
-      <th:block th:case="'info'" th:replace="~{admin/fragments/icons :: info(18)}"/>
-      <th:block th:case="*" th:replace="~{admin/fragments/icons :: alert(18)}"/>
+      <!--/* th:replace 는 th:case 보다 먼저 처리되므로(속성 우선순위) 같은 요소에 두면 세 아이콘이 모두 렌더된다 — case 를 바깥에 둔다. */-->
+      <th:block th:case="'ok'"><th:block th:replace="~{admin/fragments/icons :: check(18)}"/></th:block>
+      <th:block th:case="'info'"><th:block th:replace="~{admin/fragments/icons :: info(18)}"/></th:block>
+      <th:block th:case="*"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"/></th:block>
     </th:block>
   </span>
   <div class="banner__body">
