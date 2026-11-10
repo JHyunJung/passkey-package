@@ -1,12 +1,14 @@
 -- ============================================================================
 -- Passkey2 — 전체 DB 생성 DDL (계정 + 스키마 + 권한)
 --
--- 생성 시점 기준: V1~V4 마이그레이션 반영
+-- 생성 시점 기준: V1~V6 마이그레이션 반영
 -- 소스: scripts/bootstrap-schema.sql
 --       core/src/main/resources/db/migration/V1__baseline_schema.sql
 --                                            V2__admin_user_totp_replay_guard.sql
 --                                            V3__admin_user_mfa_lockout_counter.sql
 --                                            V4__grant_security_incident_to_app_runtime.sql
+--                                            V5__admin_signup_request.sql
+--                                            V6__audit_log_created_id_index.sql
 --
 -- ⚠️ 이 파일은 위 소스들을 합쳐 만든 "스냅샷"이다. 정본은 여전히 위 파일들이며,
 --    스키마를 바꿀 때는 이 파일이 아니라 새 V<n> 마이그레이션을 추가해야 한다.
@@ -38,7 +40,7 @@
 --
 -- 3) Flyway 를 함께 쓸 경우 — 이 스크립트로 스키마를 만든 뒤에는
 --    flyway_schema_history 가 비어 있으므로 baseline 처리가 필요하다:
---      flyway baseline -baselineVersion=4
+--      flyway baseline -baselineVersion=6
 --    그렇지 않으면 다음 배포에서 V1 부터 다시 적용하려다 실패한다.
 --
 -- ============================================================================

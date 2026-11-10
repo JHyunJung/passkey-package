@@ -31,7 +31,7 @@
 - [ ] 계정 2개 비밀번호 확보
       (`PSK_APP_ADMIN_USER` / `PSK_APP_RUNTIME_USER`)
       **비밀번호에 작은따옴표(`'`) 불가, 백슬래시(`\`)로 끝나면 불가** — `setup.sh` 가 입력을 거부한다(README §5 입력 규칙). DBA 에게 발급 요청할 때 미리 알린다.
-- [ ] 스키마가 `V1`~`V5` 기준으로 생성돼 있음 — 번들은 Flyway 를 쓰지 않으므로 앱이 스키마를 만들지 않는다
+- [ ] 스키마가 `V1`~`V6` 기준으로 생성돼 있음 — 번들은 Flyway 를 쓰지 않으므로 앱이 스키마를 만들지 않는다
       (정본은 `ls core/src/main/resources/db/migration` 의 최댓값 — README §4)
 - [ ] admin 콘솔 로그인용 운영자 계정이 `admin_user` 에 존재
 

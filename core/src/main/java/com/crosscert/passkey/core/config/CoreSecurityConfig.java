@@ -11,8 +11,12 @@ import java.security.SecureRandom;
 public class CoreSecurityConfig {
 
     /**
-     * BCrypt cost 12. Tolerable on the auth path because ApiKeyCache
-     * gates a 30-second skip after the first verification.
+     * BCrypt cost 12. Shared by admin-app (operator passwords, API key
+     * issuance) and passkey-app (API key secret verification in
+     * ApiKeyAuthFilter). On the RP auth path, passkey-app's
+     * VerifiedSecretCache skips re-running BCrypt for 30 seconds after a
+     * successful verification of the same secret, bound to the key's id and
+     * keyHash. Every cache miss, and every failure, is verified by this encoder.
      */
     @Bean
     public PasswordEncoder passwordEncoder() {

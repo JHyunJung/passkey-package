@@ -1,7 +1,6 @@
 package com.crosscert.passkey.admin.operator
 
 import com.crosscert.passkey.core.entity.AdminPasswordResetToken
-import com.crosscert.passkey.core.mail.MailSender
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository
 import com.crosscert.passkey.core.repository.AdminUserRepository
 import com.crosscert.passkey.core.util.CryptoUtils
@@ -26,13 +25,14 @@ private const val URL_PREFIX = "/reset-password?token="
  *
  * sha-256 token_hash, MailSender, 1회용 토큰.
  * request 는 enumeration 방지를 위해 사용자 존재 여부와 무관하게 동일하게 동작
- * (없으면 조용히 no-op). confirm 은 lockout 리셋.
+ * (없으면 조용히 no-op). 메일은 [AfterCommitMailDispatcher] 로 커밋 이후 전용
+ * 스레드에서 보내 응답 시간이 SMTP 왕복에 좌우되지 않게 한다(S9). confirm 은 lockout 리셋.
  */
 @Service
 class PasswordResetService(
     private val tokens: AdminPasswordResetTokenRepository,
     private val users: AdminUserRepository,
-    private val mail: MailSender,
+    private val mail: AfterCommitMailDispatcher,
     private val encoder: PasswordEncoder,
     private val clock: Clock,
     private val env: Environment,
@@ -69,17 +69,14 @@ class PasswordResetService(
         tokens.save(tok)
 
         val resetUrl = baseUrl + URL_PREFIX + plaintext
-        try {
-            mail.send(
-                email, "비밀번호 재설정 — Passkey2",
-                String.format(
-                    "재설정 URL: <a href=\"%s\">%s</a><br>만료: %s",
-                    resetUrl, resetUrl, tok.expiresAt,
-                ),
-            )
-        } catch (ignore: Exception) {
-            // 메일 실패해도 토큰은 발급됨
-        }
+        // S9: 커밋 이후 전용 스레드에서 발송 — 메일 실패해도 토큰은 발급됨(dispatcher 가 삼킴).
+        mail.sendAfterCommit(
+            email, "비밀번호 재설정 — Passkey2",
+            String.format(
+                "재설정 URL: <a href=\"%s\">%s</a><br>만료: %s",
+                resetUrl, resetUrl, tok.expiresAt,
+            ),
+        )
         log.info("password reset token issued: email={} tokenPrefix={}", CryptoUtils.maskEmail(email), prefix)
     }
 

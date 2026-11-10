@@ -27,9 +27,29 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * makes it strictly increasing along the chain. The id must NOT be used as
      * the order key — Hibernate's TIME-style UUID changes its middle bits on
      * every JVM start, so ids from a restarted app can sort before older rows.
+     *
+     * <p>The sort key is written as {@code SYS_EXTRACT_UTC(createdAt)} so it
+     * matches the V6 function-based index
+     * {@code audit_log_created_id_ix (SYS_EXTRACT_UTC(created_at), id)} exactly.
+     * Oracle cannot use that index to satisfy a plain {@code ORDER BY created_at}
+     * on a TIMESTAMP WITH TIME ZONE column (measured: full scan + WINDOW SORT even
+     * with an INDEX_DESC hint), but it does for the identical expression, so the
+     * AUDIT_CHAIN_LOCK is no longer held across a full-table scan + sort.
+     * Measured on 20,005 rows: buffer gets 376 → 92 (TABLE ACCESS FULL + WINDOW SORT
+     * → INDEX FULL SCAN DESCENDING, no sort). It is still O(n): Hibernate renders the
+     * locked {@code limit 1} as {@code id in (… fetch first 1 rows only) for update},
+     * and Oracle's semi-join unnesting turns the FETCH FIRST into WINDOW BUFFER
+     * without STOPKEY, so the whole index is read. A ROWNUM native form
+     * ({@code where rownum <= 1} in the subquery) reaches COUNT STOPKEY and reads one
+     * index entry (5 gets) — left as a follow-up.
+     * The order is the same as {@code createdAt desc}:
+     * Oracle compares TSTZ values as UTC instants, which is exactly what
+     * SYS_EXTRACT_UTC returns ({@code AuditLogOrderIndexIT} pins this, including
+     * mixed offsets and the id tie-breaker). Oracle-only JPQL — every caller runs
+     * against Oracle (no H2 profile exists).
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select a from AuditLog a order by a.createdAt desc, a.id desc limit 1")
+    @Query("select a from AuditLog a order by function('SYS_EXTRACT_UTC', a.createdAt) desc, a.id desc limit 1")
     Optional<AuditLog> findLatestForUpdate();
 
     /**

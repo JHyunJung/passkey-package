@@ -93,22 +93,40 @@
       legacy 평문 판별이 프리픽스 부재에만 의존하는 것도 함께. [admin-account-security 2026-05-31, master-backlog 2026-05-31]
 - [ ] **signing key 자동 회전 스케줄러 부재** — `KeyRotationService` 는 수동, `KeyExpirationJob` 은 만료 전용. [master-backlog 2026-05-31]
 - [ ] **`AuthenticationStartRequest.userHandle` 길이 검증 일관화 · unknown-prefix 타이밍 오라클** [zero-base 2026-07-04, master-backlog 2026-05-31]
+- [ ] **라이선스 DEAD 상태 예외 경로가 React 시절 그대로** — `LicenseGuardFilter` 예외 목록에 Thymeleaf `/admin/license` 화면과
+      `/admin/css`·`/admin/js` 정적 자원이 없어 DEAD 상태에서 로그인 화면 자원과 라이선스 페이지가 503 이 된다(main 기존 결함,
+      S8 경로 정규화와는 별개). [audit-top10-kotlin 2026-11-10]
+- [ ] **탭 조각 로드 실패 시 재시도 URL 을 경로의 원본 id 로 이어 붙임** — `AaguidTabController.kt:101`·`ApiKeysTabController.kt:300`·
+      `WebauthnTabController.kt:111`. 같은 사용자의 same-origin GET 이라 영향은 미미하지만 `@{}`/UriComponents 로 인코딩해 만들 것
+      (React 시절 S23 의 Thymeleaf 잔여분). [audit-top10-kotlin 2026-11-10]
 
 ## 3. 성능 (P2/P3)
 
-- [ ] **트랜잭션 안에서 동기 메일 발송** — `PasswordResetService.kt:55-85`(`@Transactional` 메서드가 `mail.send`),
-      `SignupRequestService.kt:244,279,285-287`(`sendQuietly` → `mail.send`). SMTP 지연이 DB 커넥션 점유 시간이 된다.
-      커밋 후 발송(`TransactionSynchronization`)이나 비동기 큐로 분리한다. [master-backlog 2026-05-31]
+- [ ] **트랜잭션 안에서 동기 메일 발송(가입 요청)** — `SignupRequestService.kt`(`sendQuietly` → `mail.send`). SMTP 지연이
+      DB 커넥션 점유 시간이 된다. 비밀번호 재설정은 `AfterCommitMailDispatcher` 로 커밋 후 전용 스레드 발송으로 해소됐다(S9) —
+      같은 dispatcher 로 옮길 수 있다. [master-backlog 2026-05-31, audit-top10-kotlin 2026-11-10]
+- [ ] **S9 메일 큐 포화 시 요청 스레드 직접 발송** — `AfterCommitMailDispatcher` 큐(100)가 차면 호출 스레드에서 보내므로 그 동안
+      응답 시간 차이가 다시 생긴다(메일 유실 방지를 우선한 원 설계). [audit-top10-kotlin 2026-11-10]
 
-- [ ] **API key BCrypt(cost 12) 를 매 요청 수행 + 전역 캐싱 인프라 부재** — `@EnableCaching`/Caffeine/`@Cacheable`
-      이 core·passkey-app·admin-app 통틀어 0건. [master-backlog 2026-05-31]
+- [x] ~~**API key BCrypt(cost 12) 를 매 요청 수행**~~ — `VerifiedSecretCache`(30초, apiKeyId·keyHash·SHA-256(secret))로 해소(P1).
+      [master-backlog 2026-05-31, audit-top10-kotlin 2026-11-10]
+- [ ] **`VerifiedSecretCache` 상한(10,000)이 근사값** — 용량 확인과 삽입이 원자적이지 않아 동시 삽입 시 잠깐 넘을 수 있다.
+      인증 판정에는 영향 없음. 원자적 admission 이나 문서 수정. [audit-top10-kotlin 2026-11-10]
+- [ ] **P5 체인 헤드 조회가 아직 O(n) 인덱스 전체 스캔** — `findLatestForUpdate` 는 V6 인덱스로 정렬은 없어졌지만(20,005행 376→92 gets)
+      Hibernate 잠금 래퍼(`id in (… fetch first 1) for update`)가 STOPKEY 를 잃는다. ROWNUM 네이티브 쿼리
+      (`where id in (select id from (… order by sys_extract_utc(created_at) desc, id desc) where rownum <= 1) for update`)는
+      5 gets(O(1)) — 네이티브 쿼리 도입 승인 필요. [audit-top10-kotlin 2026-11-10]
+- [ ] **사이드바 chain-card 가 숨은 탭에서도 30초마다 폴링** — `sidebar.html` htmx `every 30s`. React 시절 수정(97c08e53·b0506e3e:
+      숨은 탭 중지 + 가벼운 `/admin/api/me` keep-alive 로 세션 유지)을 Thymeleaf/Alpine 으로 옮길 때 세션 keep-alive 의미를
+      브라우저로 실검증할 것. [audit-top10-kotlin 2026-11-10]
 - [ ] **`ApiKeyAdminService.list()` 가 `findAll()` + scopes N+1 + ORDER BY 부재** — `:73` = `repo.findAll().stream()`.
       (zero-base F08 과 동일 지점) [master-backlog 2026-05-31, zero-base 2026-07-04]
 - [ ] **`TenantAdminService.list()` KPI 3쿼리 N+1** [master-backlog 2026-05-31]
 - [ ] **credential 검색이 `RAWTOHEX(...) LIKE '%q%'` 풀스캔** — `CredentialRepository.java:78-89`. [master-backlog 2026-05-31]
 - [ ] **`searchByTenantId` native query 에 ORDER BY 미명시** — `Pageable` 의 Sort 에만 의존해 페이지 경계가 불안정.
       `CredentialRepository.java:78-93`. [admin-tenant-detail 2026-05-27]
-- [ ] **audit chain overview/verify 가 전체 스캔 + 중복 수행** [master-backlog 2026-05-31]
+- [x] ~~**audit chain overview/verify 가 전체 스캔 + 중복 수행**~~ — overview 가 tenant 당 한 번만 읽어 검증·버킷 집계에 재사용(P3).
+      [master-backlog 2026-05-31, audit-top10-kotlin 2026-11-10]
 - [ ] **(superseded: Thymeleaf 포트로 해당 없음) admin-ui 코드 스플리팅 부재** — React 시절 372KB 단일 청크. 번들러가 없어졌다(htmx + Alpine vendor 파일). [master-backlog 2026-05-31]
 - [ ] **F04 `KeyRotationService` 리스 미해제 · G07 lease 하트비트 부재** — `release` 0건. [zero-base 2026-07-04]
 - [ ] **`KeyExpirationJob`/`MdsSyncJob` 도 lease release 패턴으로 통일** — 둘 다 `release` 0건, TTL 만료에만 의존. [data-retention-D 2026-05-31]
@@ -228,3 +246,14 @@
 - **dev 시드가 남은 DB 에 prod 프로필로 기동하면 Flyway 가 거부한다**(의도된 동작). 볼륨을 재생성한다. [docker-deployment 2026-08-07]
 - **GRANT 누락 전수 조사**: `user_tab_privs_made` 안티조인 쿼리. 컬럼 GRANT 는 `user_col_privs_made` 를 따로 봐야 한다. [docker-deployment 2026-08-07]
 - **`MASTER_KEY` 는 정확히 32바이트** — `openssl rand -base64 32`. [docker-deployment 2026-08-07]
+- **감사 Top 10 배포 노트** [audit-top10-kotlin 2026-11-10]
+  - **배포 전 게이트 — Oracle 세션 여유**: passkey-app DB 풀 기본값이 10→20. 대상 DB 에서
+    `SELECT name, value FROM v$parameter WHERE name IN ('processes','sessions')` 와 계정 `SESSIONS_PER_USER` 를 확인한다.
+    필요 세션 ≈ (롤링 피크 포함 passkey-app 인스턴스 수) × 20 + admin 10 + Flyway + DBA·모니터링(README 구성 기준 약 251, 변경 전 약 131).
+    여유가 없으면 `.env` 의 `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE`·`SERVER_TOMCAT_THREADS_MAX` 를 **워커 ≤ 풀 − 1** 로 함께 낮춘다
+    (기동 시 이 관계를 검사하지 않으므로 풀만 낮추면 30초 정지 문제가 되살아난다).
+  - **Tomcat 워커 200→19(passkey-app)**: 처리량이 바뀌는 변경 — 목표 동시성으로 부하 테스트.
+  - **V6 인덱스**: SE2 라 ONLINE 빌드 불가 → audit_log 테이블 락. admin-app 한 대로, 관리 작업이 적은 시간에. ORA-00054 로
+    실패하면 막는 세션 정리 후 `flyway repair` → 재기동. QA 번들(Flyway off)은 DBA 가 `scripts/full-schema-part2-schema.sql` 의
+    V6 문장을 수동 실행. 앱·DB 배포 순서는 무관(V6 없이도 결과 동일).
+  - **S16 세션**: 강제 로그아웃 불필요 — 기존 Redis 세션은 만료·재로그인 전까지 해시 보유, 새 로그인부터 미보유. 롤백 안전.

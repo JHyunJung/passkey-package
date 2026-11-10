@@ -284,6 +284,8 @@ class AdminJsonShapeContractTest {
         whenever(tenantRepo.findAllById(anyOrNull())).thenReturn(listOf(tenant))
         val row: AuditLog = Mockito.mock(AuditLog::class.java, Fill.ANSWER)
         whenever(auditRepo.findAllByTenantOrdered(anyOrNull())).thenReturn(listOf(row))
+        // overview 는 tenant id 목록을 리포지토리에서 직접 읽고(P3) 행은 verifier.verifyTenantRows 로 넘긴다.
+        whenever(auditRepo.findDistinctTenantIds()).thenReturn(listOf(Fill.ID))
         whenever(auditRepo.search(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))
             .thenReturn(PageImpl(listOf(row)))
         whenever(signingKeys.findAll()).thenReturn(listOf(Mockito.mock(SigningKey::class.java, Fill.ANSWER)))

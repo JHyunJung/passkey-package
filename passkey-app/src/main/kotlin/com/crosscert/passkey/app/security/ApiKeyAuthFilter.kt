@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import java.time.Clock
+import java.time.Duration
 
 private val log = LoggerFactory.getLogger(ApiKeyAuthFilter::class.java)
 
@@ -33,6 +34,12 @@ private const val MDC_TENANT_ID = "tenantId"
 private const val DUMMY_HASH = "\$2a\$12\$KIXxA7B0NQI8YzCq0RZ.7eN5lUucl0wH0G3jWvSEqcD9QYxIqUyqK"
 
 private const val AUTH_COUNTER = "passkey_apikey_auth_total"
+
+/** P1: BCrypt 검증 성공을 기억하는 시간. 짧게 두어 운영상 변경이 곧 반영되게 한다. */
+internal val VERIFIED_SECRET_TTL: Duration = Duration.ofSeconds(30)
+
+/** P1: 검증 캐시 상한(활성 키 수보다 넉넉히). 넘치면 저장하지 않고 BCrypt 로 검증한다. */
+internal const val VERIFIED_SECRET_MAX_ENTRIES = 10_000
 
 /**
  * Filters every `/api/v1/rp/` request. Parses `X-API-Key`,
@@ -57,6 +64,12 @@ private const val AUTH_COUNTER = "passkey_apikey_auth_total"
  *   rate-limited by RateLimitFilter.
  * - Only headers starting with the canonical `"pk_"` prefix
  *   are processed; any other shape is rejected before any DB call.
+ * - P1: a successful BCrypt verification is remembered for
+ *   [VERIFIED_SECRET_TTL] in [VerifiedSecretCache], bound to
+ *   (apiKeyId, keyHash, SHA-256(secret)). The DB lookup and the
+ *   active/expiry checks still run on every request; any cache miss
+ *   (absent, stale, keyHash changed, different secret) falls back to
+ *   BCrypt, so accept/reject decisions are unchanged.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 5)
@@ -69,6 +82,8 @@ class ApiKeyAuthFilter(
     private val eventPublisher: ApplicationEventPublisher,
     private val clock: Clock,
 ) : OncePerRequestFilter() {
+
+    private val verifiedSecrets = VerifiedSecretCache(VERIFIED_SECRET_TTL, VERIFIED_SECRET_MAX_ENTRIES)
 
     // Pre-resolved result-tagged counters. Micrometer returns the same
     // Counter for a given name+tags, so hoisting the lookup out of the
@@ -121,6 +136,8 @@ class ApiKeyAuthFilter(
 
         val now = clock.instant()
         if (!row.isActive(now)) {
+            // P1: 폐기·만료된 키의 이전 검증 기록은 버린다(판정은 아래 그대로).
+            verifiedSecrets.invalidate(row.id)
             // Same timing equalization for revoked/expired keys.
             encoder.matches(secret, DUMMY_HASH)
             val revoked = row.revokedAt != null
@@ -129,19 +146,25 @@ class ApiKeyAuthFilter(
             unauthorized(res)
             return
         }
-        if (!encoder.matches(secret, row.keyHash)) {
-            log.warn("api-key auth failed: reason=bad-secret prefix={}", prefix)
-            cBadSecret.increment()
-            eventPublisher.publishEvent(
-                SecurityAlertEvent(
-                    SecurityAlertEvent.AlertType.API_KEY_BRUTE_FORCE,
-                    SecurityAlertEvent.Severity.MEDIUM,
-                    "api key auth failed (bad secret)",
-                    mapOf("prefix" to prefix),
-                ),
-            )
-            unauthorized(res)
-            return
+        // P1: 같은 apiKeyId·keyHash 로 TTL 안에 BCrypt 를 통과한 바로 그 secret 이면
+        // BCrypt 를 생략한다. 그 밖의 모든 경우(없음·만료·keyHash 변경·secret 불일치)는
+        // 기존 BCrypt 경로 그대로 — 수락·거부 판정과 실패 시 로그·메트릭·경보는 같다.
+        if (!verifiedSecrets.isVerified(row.id, row.keyHash, secret, now)) {
+            if (!encoder.matches(secret, row.keyHash)) {
+                log.warn("api-key auth failed: reason=bad-secret prefix={}", prefix)
+                cBadSecret.increment()
+                eventPublisher.publishEvent(
+                    SecurityAlertEvent(
+                        SecurityAlertEvent.AlertType.API_KEY_BRUTE_FORCE,
+                        SecurityAlertEvent.Severity.MEDIUM,
+                        "api key auth failed (bad secret)",
+                        mapOf("prefix" to prefix),
+                    ),
+                )
+                unauthorized(res)
+                return
+            }
+            verifiedSecrets.remember(row.id, row.keyHash, secret, now)
         }
 
         TenantContextHolder.set(row.tenantId)

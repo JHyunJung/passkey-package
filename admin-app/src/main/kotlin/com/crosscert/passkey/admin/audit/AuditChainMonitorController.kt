@@ -47,16 +47,19 @@ class AuditChainMonitorController(
         val since = now.minus(windowHours.toLong(), ChronoUnit.HOURS)
         val bucketSizeMinutes = 60
 
-        val results = verifier.verifyAllTenants()
+        val tenantIds = auditRepo.findDistinctTenantIds()
         // Collectors.toMap: 원 Java 와 같이 중복 id 면 IllegalStateException.
         val tenantsById: Map<UUID, Tenant> = tenantRepo.findAll().stream()
             .collect(Collectors.toMap({ it.id }, { it }))
 
-        val tenants = ArrayList<AuditChainTenantOverview>(results.size)
+        val tenants = ArrayList<AuditChainTenantOverview>(tenantIds.size)
         var verifiedRowsTotal = 0L
         var tampered = 0
-        for (r in results) {
-            val rows = auditRepo.findAllByTenantOrdered(r.tenantId)
+        for (tenantId in tenantIds) {
+            // tenant 당 audit_log 를 한 번만 읽어 체인 검증과 버킷 집계에 같은 행을 쓴다(P3).
+            // 검증은 첫 break 에서 멈추지만 집계는 break 이후 행까지 전부 센다(기존과 동일).
+            val rows = auditRepo.findAllByTenantOrdered(tenantId)
+            val r = verifier.verifyTenantRows(tenantId, rows)
             verifiedRowsTotal += rows.size
             if (!r.ok) tampered++
 
@@ -91,7 +94,7 @@ class AuditChainMonitorController(
 
         val verifyMs = clock.millis() - startMs
         val totals = AuditChainOverview.Totals(
-            results.size - tampered, results.size, tampered, verifiedRowsTotal, verifyMs,
+            tenantIds.size - tampered, tenantIds.size, tampered, verifiedRowsTotal, verifyMs,
         )
         return AuditChainOverview(now, windowHours, bucketSizeMinutes, totals, tenants)
     }
