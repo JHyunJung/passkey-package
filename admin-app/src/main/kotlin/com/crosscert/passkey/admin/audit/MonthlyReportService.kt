@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.audit
 
+import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder.FontStyle
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder
 import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
@@ -8,6 +9,13 @@ import java.time.Instant
 import java.time.LocalDate
 
 private const val OVERVIEW_WINDOW_HOURS = 24
+
+/** 번들 한글 글꼴(나눔고딕, SIL OFL 1.1 — fonts/OFL.txt). PDF base-14 글꼴엔 한글 글리프가 없다. */
+private const val REPORT_FONT_FAMILY = "NanumGothic"
+private val REPORT_FONTS = listOf(
+    "fonts/NanumGothic-Regular.ttf" to 400,
+    "fonts/NanumGothic-Bold.ttf" to 700,
+)
 
 /**
  * F4 Task 6 — Generates the Audit Chain Monthly Report as a PDF byte stream.
@@ -32,6 +40,10 @@ class MonthlyReportService(private val monitor: AuditChainMonitorController) {
         try {
             ByteArrayOutputStream().use { out ->
                 val builder = PdfRendererBuilder()
+                for ((path, weight) in REPORT_FONTS) {
+                    // subset=true: 실제로 쓰인 글리프만 PDF 에 포함(파일 크기 유지).
+                    builder.useFont({ fontStream(path) }, REPORT_FONT_FAMILY, weight, FontStyle.NORMAL, true)
+                }
                 builder.withHtmlContent(html, null)
                 builder.toStream(out)
                 builder.run()
@@ -42,10 +54,14 @@ class MonthlyReportService(private val monitor: AuditChainMonitorController) {
         }
     }
 
+    private fun fontStream(path: String) =
+        MonthlyReportService::class.java.classLoader.getResourceAsStream(path)
+            ?: throw IllegalStateException("PDF font resource missing: $path")
+
     private fun buildHtml(from: LocalDate, to: LocalDate, overview: AuditChainOverview): String {
         val sb = StringBuilder()
         sb.append("<html><head><meta charset='utf-8'/>")
-        sb.append("<style>body{font-family:sans-serif} table{border-collapse:collapse;width:100%}")
+        sb.append("<style>body{font-family:'NanumGothic',sans-serif} table{border-collapse:collapse;width:100%}")
         sb.append("th,td{border:1px solid #ccc;padding:6px;font-size:11px;text-align:left}")
         sb.append(".intact{color:#080} .tampered{color:#c00;font-weight:bold}</style>")
         sb.append("</head><body>")
