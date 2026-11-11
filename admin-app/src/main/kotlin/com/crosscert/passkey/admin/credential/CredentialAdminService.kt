@@ -42,12 +42,10 @@ class CredentialAdminService(
     fun list(tenantId: UUID, page: Int, size: Int, q: String?): PageView<CredentialView> {
         tenantBoundary.assertCanAccessTenant(tenantId)
         val cappedSize = Math.min(Math.max(size, 1), 200)
-        // Ordering is owned by the @Query ORDER BY of findAllByTenantId
-        // (lastUsedAt desc nulls last, id desc). searchByTenantId is a
-        // native query with no ORDER BY and Spring Data does not push
-        // Pageable Sort into native SQL — so passing Sort here was a no-op
-        // there and a duplicate for the JPQL path. Removing it keeps the
-        // JPQL ordering authoritative and avoids the duplicate ORDER BY.
+        // Ordering is owned by each query's own ORDER BY — findAllByTenantId (JPQL) and
+        // searchByTenantId (native) both use lastUsedAt desc nulls last, id desc. Spring Data
+        // does not push Pageable Sort into native SQL and would duplicate it for JPQL, so the
+        // PageRequest stays unsorted.
         val pageReq = PageRequest.of(Math.max(page, 0), cappedSize)
 
         // Java String.isBlank 와 같은 판정(Character.isWhitespace) — Kotlin isBlank 는 NBSP 등도 공백으로 본다.

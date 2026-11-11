@@ -24,7 +24,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -113,7 +112,6 @@ class AdminLockWriteSkewIT {
         UUID b = user("lock-po-b@x.com", "PLATFORM_OPERATOR").getId();
         TransactionTemplate tx = new TransactionTemplate(txm);
         CountDownLatch firstLocked = new CountDownLatch(1);
-        AtomicLong firstCommitNanos = new AtomicLong();
 
         // T1: a 가 b 를 정지 — 락을 잡은 뒤 HOLD_MS 동안 붙잡고 커밋. T2: b 가 a 를 정지 — T1 락 이후 시도.
         CompletableFuture<Outcome> t1 = CompletableFuture.supplyAsync(() -> {
@@ -129,7 +127,6 @@ class AdminLockWriteSkewIT {
                 users.saveAndFlush(target);
                 return new Outcome(true, locked);
             });
-            firstCommitNanos.set(System.nanoTime());
             return o;
         });
         CompletableFuture<Outcome> t2 = CompletableFuture.supplyAsync(() -> {
@@ -150,8 +147,9 @@ class AdminLockWriteSkewIT {
         Outcome o2 = t2.get(60, TimeUnit.SECONDS);
         assertThat(o1.applied()).isTrue();
         assertThat(o2.applied()).as("두 번째는 커밋된 상태(1명)를 보고 거부").isFalse();
-        assertThat(o2.lockedAtNanos()).as("두 번째 락 획득은 첫 커밋 이후(실제로 대기)")
-                .isGreaterThanOrEqualTo(firstCommitNanos.get() - TimeUnit.MILLISECONDS.toNanos(50));
+        // 두 번째 락 획득은 첫 트랜잭션이 락을 쥔 HOLD_MS 이후 — 실제로 대기했다는 증거(스케줄링 지연에 둔감한 비교).
+        assertThat(o2.lockedAtNanos() - o1.lockedAtNanos()).as("두 번째는 첫 락 보유 시간만큼 대기")
+                .isGreaterThanOrEqualTo(TimeUnit.MILLISECONDS.toNanos(HOLD_MS - 100));
         Integer remaining = new TransactionTemplate(txm).execute(s -> users.findActivePlatformOperatorsForUpdate().size());
         assertThat(remaining).isEqualTo(1);
     }
@@ -165,7 +163,6 @@ class AdminLockWriteSkewIT {
         mappings.save(AdminUserTenant.of(admin, t2, "tester"));
         TransactionTemplate tx = new TransactionTemplate(txm);
         CountDownLatch firstLocked = new CountDownLatch(1);
-        AtomicLong firstCommitNanos = new AtomicLong();
 
         CompletableFuture<Outcome> r1 = CompletableFuture.supplyAsync(() -> {
             Outcome o = tx.execute(s -> {
@@ -177,7 +174,6 @@ class AdminLockWriteSkewIT {
                 mappings.deleteByAdminUserIdAndTenantId(admin, t1);
                 return new Outcome(true, locked);
             });
-            firstCommitNanos.set(System.nanoTime());
             return o;
         });
         CompletableFuture<Outcome> r2 = CompletableFuture.supplyAsync(() -> {
@@ -195,7 +191,9 @@ class AdminLockWriteSkewIT {
         Outcome o2 = r2.get(60, TimeUnit.SECONDS);
         assertThat(o1.applied()).isTrue();
         assertThat(o2.applied()).as("두 번째는 남은 1개를 보고 거부").isFalse();
-        assertThat(o2.lockedAtNanos()).isGreaterThanOrEqualTo(firstCommitNanos.get() - TimeUnit.MILLISECONDS.toNanos(50));
+        // 두 번째 락 획득은 첫 트랜잭션이 락을 쥔 HOLD_MS 이후 — 실제로 대기했다는 증거(스케줄링 지연에 둔감한 비교).
+        assertThat(o2.lockedAtNanos() - o1.lockedAtNanos()).as("두 번째는 첫 락 보유 시간만큼 대기")
+                .isGreaterThanOrEqualTo(TimeUnit.MILLISECONDS.toNanos(HOLD_MS - 100));
         assertThat(mappings.findTenantIdsByAdminUserId(admin)).containsExactly(t2);
     }
 
