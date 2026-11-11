@@ -65,7 +65,10 @@ spring:
           max-active: 8
 
 management:
-  endpoint.health.show-details: always
+  # 무인증 health 는 status 만 — DB·Redis 구성 요소 상세는 인증된 요청에만(admin-app 운영자).
+  # passkey-app 은 Spring Security 가 없어 사실상 항상 숨김. compose healthcheck 는 "UP" 문자열만 본다.
+  # 로컬에서 상세가 필요하면 env MANAGEMENT_ENDPOINT_HEALTH_SHOWDETAILS=always.
+  endpoint.health.show-details: when-authorized
   endpoint.health.probes.enabled: true
   # prometheus 는 기본 비노출 — 스크레이프가 필요한 배포만 env
   # MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,prometheus 로 켠다

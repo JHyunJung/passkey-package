@@ -132,6 +132,21 @@ class ApiContractIT @Autowired constructor(
     private fun origin() = "http://localhost:$port"
 
     // ------------------------------------------------------------
+    // actuator — passkey-app 은 Spring Security 가 없어 health 가 무인증이다.
+    // show-details: when-authorized 이므로 DB·Redis 구성 요소 상세가 나가면 안 된다.
+    // ------------------------------------------------------------
+
+    @Test
+    fun actuatorHealth_unauthenticated_exposesStatusOnly() {
+        val res = http.getForEntity("http://localhost:$port/actuator/health", String::class.java)
+        assertThat(res.statusCode.value()).isEqualTo(200)
+        val body = mapper.readTree(res.body)
+        assertThat(body.path("status").asString()).isEqualTo("UP")
+        assertThat(body.has("components")).`as`("구성 요소 상세 비노출").isFalse()
+        assertThat(body.has("details")).isFalse()
+    }
+
+    // ------------------------------------------------------------
     // Happy-path shapes
     // ------------------------------------------------------------
 
