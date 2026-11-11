@@ -58,14 +58,13 @@ class ApiKeyAdminService(
     @Transactional(readOnly = true)
     fun list(tenantId: String?): List<ApiKeyAdminDto.ApiKeyView> {
         val scopeTid: UUID? = tenantBoundary.currentTenantScope()
-        return repo.findAll()
-            .filter { k ->
-                val kid: UUID? = k.tenantId
-                if (scopeTid != null && scopeTid != kid) return@filter false
-                if (tenantId != null && tenantId != (if (kid == null) null else kid.toString())) return@filter false
-                true
-            }
-            .map { ApiKeyAdminDto.ApiKeyView.from(it) }
+        // 필터를 쿼리로 내린다(이전: findAll() 후 메모리 필터 — RP_ADMIN 도 전 테넌트 키를 읽었다).
+        // tenantId 는 이전처럼 정규 UUID 문자열과 정확히 같아야 한다(대문자·비정규 표기·잘못된 값 → 빈 목록).
+        val requested: UUID? = if (tenantId == null) null else canonicalUuidOrNull(tenantId) ?: return emptyList()
+        if (scopeTid != null && requested != null && requested != scopeTid) return emptyList()
+        val target = scopeTid ?: requested
+        val keys = if (target == null) repo.findAllForAdminList() else repo.findAllForAdminListByTenantId(target)
+        return keys.map { ApiKeyAdminDto.ApiKeyView.from(it) }
     }
 
     @Transactional
@@ -241,4 +240,12 @@ class ApiKeyAdminService(
         random.nextBytes(buf)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(buf)
     }
+
+    /** `UUID.toString()` 으로 되돌렸을 때 입력과 같을 때만 UUID — 이전 문자열 비교 의미를 그대로 유지한다. */
+    private fun canonicalUuidOrNull(s: String): UUID? =
+        try {
+            UUID.fromString(s).takeIf { it.toString() == s }
+        } catch (e: IllegalArgumentException) {
+            null
+        }
 }

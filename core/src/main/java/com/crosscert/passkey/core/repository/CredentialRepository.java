@@ -70,17 +70,22 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
      * tenant 안에서 credential_id 또는 user_handle 의 hex 표현이 q 를 substring 으로 포함하는 행.
      * q 는 서비스 측 normalizeQ 가 이미 lowercase + wildcard escape (\\ % _) 한 상태로 들어와야 한다.
      * ESCAPE '\\' 절이 백슬래시 escape 를 인식.
+     *
+     * <p>{@code {h-schema}} 필수 — 런타임 유저(PSK_APP_ADMIN_USER)는 스키마 OWNER 가 아니라 접두사 없이는 ORA-00942.
+     * ORDER BY 는 {@link #findAllByTenantId} 와 같다 — native 쿼리엔 Pageable Sort 가 전달되지 않으므로 이게 유일한
+     * 정렬 근거이고, 없으면 OFFSET/FETCH 페이지 경계에서 행이 겹치거나 빠진다.
      */
     @Query(value = """
-            SELECT * FROM credential
+            SELECT * FROM {h-schema}credential
             WHERE tenant_id = :tid
               AND (
                 LOWER(RAWTOHEX(credential_id)) LIKE LOWER('%' || :q || '%') ESCAPE '\\'
                 OR LOWER(RAWTOHEX(user_handle)) LIKE LOWER('%' || :q || '%') ESCAPE '\\'
               )
+            ORDER BY last_used_at DESC NULLS LAST, id DESC
             """, nativeQuery = true,
         countQuery = """
-            SELECT COUNT(*) FROM credential
+            SELECT COUNT(*) FROM {h-schema}credential
             WHERE tenant_id = :tid
               AND (
                 LOWER(RAWTOHEX(credential_id)) LIKE LOWER('%' || :q || '%') ESCAPE '\\'

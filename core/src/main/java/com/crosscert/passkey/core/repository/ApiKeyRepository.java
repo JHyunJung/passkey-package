@@ -1,11 +1,13 @@
 package com.crosscert.passkey.core.repository;
 
 import com.crosscert.passkey.core.entity.ApiKey;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,4 +67,17 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
             """)
     java.util.List<com.crosscert.passkey.core.entity.ApiKey> findActiveByTenantId(
             @Param("tenantId") UUID tenantId, @Param("now") java.time.OffsetDateTime now);
+
+    /**
+     * 관리 콘솔 키 목록(전체 테넌트) — 최신 발급순(createdAt DESC, id DESC). scopes 를 같은 쿼리로 읽어 키마다
+     * 추가 조회(N+1)가 없다. 단일 컬렉션 fetch 라 행 중복 없이 키 하나가 한 번만 나온다.
+     */
+    @EntityGraph(attributePaths = "scopes")
+    @Query("select k from ApiKey k order by k.createdAt desc, k.id desc")
+    List<ApiKey> findAllForAdminList();
+
+    /** 관리 콘솔 키 목록(한 테넌트) — 정렬·scopes 로딩은 {@link #findAllForAdminList()} 와 같다. */
+    @EntityGraph(attributePaths = "scopes")
+    @Query("select k from ApiKey k where k.tenantId = :tenantId order by k.createdAt desc, k.id desc")
+    List<ApiKey> findAllForAdminListByTenantId(@Param("tenantId") UUID tenantId);
 }

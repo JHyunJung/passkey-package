@@ -269,8 +269,52 @@ class ApiKeyAdminServiceTest {
         assertThat(checkNotNull(aud.payload)["prefix"]).isEqualTo("pk_abcd1234")
     }
 
+    // ── list(): 필터를 쿼리로 내린 뒤에도 기존 의미(문자열 정확일치, RP_ADMIN 스코프)를 그대로 지킨다 ──
+
+    private fun key(tid: UUID): ApiKey = ApiKey(tid, "pk_" + UUID.randomUUID().toString().take(8), "h", "k")
+
+    @Test
+    fun listPlatformWithoutFilterUsesOrderedAllQuery() {
+        whenever(boundary.currentTenantScope()).thenReturn(null)
+        val a = key(TENANT_UUID); val b = key(OTHER_UUID)
+        whenever(repo.findAllForAdminList()).thenReturn(listOf(a, b))
+        assertThat(service.list(null).map { it.tenantId }).containsExactly(TENANT_UUID, OTHER_UUID)
+        verify(repo, org.mockito.kotlin.never()).findAll()
+    }
+
+    @Test
+    fun listPlatformWithTenantFilterQueriesThatTenant() {
+        whenever(boundary.currentTenantScope()).thenReturn(null)
+        whenever(repo.findAllForAdminListByTenantId(TENANT_UUID)).thenReturn(listOf(key(TENANT_UUID)))
+        assertThat(service.list(TENANT_UUID.toString())).hasSize(1)
+    }
+
+    @Test
+    fun listTenantFilterMustBeCanonicalUuidStringElseEmpty() {
+        // 이전 구현은 kid.toString() 과 문자열 비교 — 대문자·비정규 UUID·잘못된 값은 아무것도 맞지 않았다.
+        whenever(boundary.currentTenantScope()).thenReturn(null)
+        for (bad in listOf("0000000A-0000-0000-0000-00000000000B", "not-a-uuid", "1-1-1-1-1", "")) {
+            assertThat(service.list(bad)).`as`(bad).isEmpty()
+        }
+        verify(repo, org.mockito.kotlin.never()).findAllForAdminListByTenantId(anyOrNull())
+        verify(repo, org.mockito.kotlin.never()).findAllForAdminList()
+    }
+
+    @Test
+    fun listRpAdminIsScopedToOwnTenant() {
+        whenever(boundary.currentTenantScope()).thenReturn(TENANT_UUID)
+        whenever(repo.findAllForAdminListByTenantId(TENANT_UUID)).thenReturn(listOf(key(TENANT_UUID)))
+        assertThat(service.list(null)).hasSize(1)
+        assertThat(service.list(TENANT_UUID.toString())).hasSize(1)
+        // 다른 테넌트를 지정하면 빈 목록(이전과 동일) — 그 테넌트를 조회하지도 않는다.
+        assertThat(service.list(OTHER_UUID.toString())).isEmpty()
+        verify(repo, org.mockito.kotlin.never()).findAllForAdminListByTenantId(OTHER_UUID)
+        verify(repo, org.mockito.kotlin.never()).findAllForAdminList()
+    }
+
     private companion object {
         val TENANT_UUID: UUID = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        val OTHER_UUID: UUID = UUID.fromString("00000000-0000-0000-0000-000000000002")
         val ACTOR_UUID: UUID = UUID.fromString("00000000-0000-0000-0000-000000000010")
     }
 }

@@ -87,7 +87,8 @@
 - [ ] **alert throttle/dedup 미구현** — 고빈도 이벤트 폭주 시 알림 스톰. 훅만 존재. [observability-C 2026-05-31]
 - [ ] **SDK 429 → 500 오분류** — `PasskeyClientContractIT` 의 429 path 보강. [sdk-and-sample-rp 2026-05-27]
 - [ ] **F14 onprem license grace 정수절단 · F15 cache-vs-disk tenantId 미검증** [zero-base 2026-07-04]
-- [ ] **Oracle `FOR UPDATE` write-skew · Set-Cookie 실증** — Docker 부재로 미실증, CI 대기. [zero-base 2026-07-04]
+- [ ] **Oracle `FOR UPDATE` write-skew · Set-Cookie 실증** — write-skew 는 **실증 완료**(`AdminLockWriteSkewIT`: 두 번째 트랜잭션이
+      첫 커밋까지 대기, `@Lock` 제거 시 재현). Set-Cookie 쪽은 원 지적의 범위가 기록에 남아 있지 않아 미착수. [zero-base 2026-07-04]
 - [ ] **G01 `DataIntegrityViolation` 오분류 · `ActivityRepository` before·beforeId 불변식 미강제** [zero-base 2026-07-04]
 - [ ] **password-reset request 타이밍 사이드채널** — 2회 지적. [admin-account-security 2026-05-31, admin-ui-followup-screens 2026-05-31]
 - [ ] **비번재설정 토큰 prefix 8자를 로그·DB 에 기록 · confirm 오류 메시지가 토큰 상태 단계를 노출** [master-backlog 2026-05-31]
@@ -121,12 +122,15 @@
 - [ ] **사이드바 chain-card 가 숨은 탭에서도 30초마다 폴링** — `sidebar.html` htmx `every 30s`. React 시절 수정(97c08e53·b0506e3e:
       숨은 탭 중지 + 가벼운 `/admin/api/me` keep-alive 로 세션 유지)을 Thymeleaf/Alpine 으로 옮길 때 세션 keep-alive 의미를
       브라우저로 실검증할 것. [audit-top10-kotlin 2026-11-10]
-- [ ] **`ApiKeyAdminService.list()` 가 `findAll()` + scopes N+1 + ORDER BY 부재** — `:73` = `repo.findAll().stream()`.
-      (zero-base F08 과 동일 지점) [master-backlog 2026-05-31, zero-base 2026-07-04]
-- [ ] **`TenantAdminService.list()` KPI 3쿼리 N+1** [master-backlog 2026-05-31]
-- [ ] **credential 검색이 `RAWTOHEX(...) LIKE '%q%'` 풀스캔** — `CredentialRepository.java:78-89`. [master-backlog 2026-05-31]
-- [ ] **`searchByTenantId` native query 에 ORDER BY 미명시** — `Pageable` 의 Sort 에만 의존해 페이지 경계가 불안정.
-      `CredentialRepository.java:78-93`. [admin-tenant-detail 2026-05-27]
+- [x] ~~**`ApiKeyAdminService.list()` 가 `findAll()` + scopes N+1 + ORDER BY 부재**~~ — `findAllForAdminList[ByTenantId]`
+      (테넌트 조건·`createdAt DESC, id DESC`·`@EntityGraph(scopes)`)로 교체, 필터 의미 유지. `ApiKeyAdminListIT`. [2026-11-11]
+- [x] ~~**`TenantAdminService.list()` KPI 3쿼리 N+1**~~ — 이미 해소돼 있었다(Phase QW-3 `listAllWithBatchAggregates`, GROUP BY 3쿼리).
+      backlog 기록만 낡음. [2026-11-11 확인]
+- [x] ~~**credential 검색이 `RAWTOHEX(...) LIKE '%q%'` 풀스캔**~~ — **수용(변경 없음)**: 부분 문자열 검색은 B-tree 를 못 쓰고
+      `(tenant_id, user_handle)` 인덱스가 범위를 한 테넌트로 묶는다. 대신 같은 쿼리에서 **운영 ORA-00942**(`{h-schema}` 누락)를
+      발견해 수정. [2026-11-11]
+- [x] ~~**`searchByTenantId` native query 에 ORDER BY 미명시**~~ — `findAllByTenantId` 와 같은 정렬 명시. `CredentialSearchOrderIT`
+      (ORDER BY 제거 시 실패 확인). [2026-11-11]
 - [x] ~~**audit chain overview/verify 가 전체 스캔 + 중복 수행**~~ — overview 가 tenant 당 한 번만 읽어 검증·버킷 집계에 재사용(P3).
       [master-backlog 2026-05-31, audit-top10-kotlin 2026-11-10]
 - [ ] **(superseded: Thymeleaf 포트로 해당 없음) admin-ui 코드 스플리팅 부재** — React 시절 372KB 단일 청크. 번들러가 없어졌다(htmx + Alpine vendor 파일). [master-backlog 2026-05-31]
