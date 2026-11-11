@@ -25,10 +25,10 @@
 - [x] ~~**시드 평문 비번이 prod 에 실리지 않는지 확인**~~ — 확인 완료(코드 변경 없음): `application-prod.yml` locations =
       `db/migration,db/prod`(seed-common 미포함). qa 는 의도적으로 seed-common 포함이나 QA 번들은
       `SPRING_FLYWAY_ENABLED=false`. [2026-11-11]
-- [ ] **(릴리스 차단) QA 번들 이미지가 아직 Spring Boot 3.5 빌드** — `qa-bundle/images/*.tar.gz` 와
-      `qa-bundle/images/SHA256SUMS` 는 Boot 4.1 업그레이드 이전 이미지 기준이다. 번들을 반출하기 전에
-      `scripts/build-images.sh` 를 **`NO_SAVE` 없이** 실행해 amd64 이미지 tar 를 다시 만들고, 새 `SHA256SUMS` 를
-      커밋한다(번들 README §6-1 의 세션 정리 절차는 새 이미지 전제). [boot4-upgrade 2026-11-06]
+- [x] ~~**(릴리스 차단) QA 번들 이미지가 아직 Spring Boot 3.5 빌드**~~ — `scripts/build-images.sh`(NO_SAVE 없이)로
+      main `aa28f5e7` 기준 amd64 이미지 3개 재빌드, `SHA256SUMS` 갱신. 이미지 내부 jar 에서 Boot 4.1.2·나눔고딕·
+      `show-details: when-authorized` 확인. infra.tar.gz 는 불변. tar.gz 는 커밋 대상이 아니므로 반출 시 이 머신의
+      `qa-bundle/images/` 를 그대로 가져간다. [2026-11-11]
 - [x] ~~**sdk-java 패치 릴리스 + 변경 이력**~~ — 1.0.0 이후 공개 API 추가(`RegistrationRelayCodec`, 3-인자
       `verifyIdToken`)가 있어 패치가 아닌 **1.1.0** 으로 올리고 `sdk-java/CHANGELOG.md` 신설(보안·동작 변화 포함).
       외부 `passkey_rp` 저장소의 로컬 jar 는 별도 교체 필요. [2026-11-11]
