@@ -230,4 +230,21 @@ class PasswordResetServiceTest {
         assertThatThrownBy { service.confirm("t", "NewPassw0rd!") }
             .isInstanceOf(IllegalArgumentException::class.java)
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = [0, 1, 11, 129])
+    fun confirm_rejects_password_outside_12_to_128_before_touching_token(len: Int) {
+        // 가입(SignupRequestDto)과 같은 12–128자. REST 경로는 화면 검사를 거치지 않으므로 서비스가 최종 방어선이다.
+        assertThatThrownBy { service.confirm("t", "a".repeat(len)) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageNotContaining("token") // 화면이 'token' 단어로 만료 카드를 고르므로 섞이면 안 된다
+        org.mockito.kotlin.verifyNoInteractions(tokens, users, encoder) // 토큰 상태를 드러내지 않는다
+    }
+
+    @Test
+    fun confirm_rejects_null_password() {
+        assertThatThrownBy { service.confirm("t", null) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+        org.mockito.kotlin.verifyNoInteractions(tokens)
+    }
 }

@@ -92,7 +92,7 @@ envelope 으로 감싸여 나가므로 클라이언트는 `data` 아래에서 �
 | `passkey.base-url` | `PASSKEY_BASE_URL` | `http://localhost:8080` | passkey-app 주소 |
 | `passkey.api-key` | `PASSKEY_API_KEY` | (빈 값) | X-API-Key. 기동 시 1회 읽어 고정(교체 시 재기동) |
 | `passkey.tenant-id` | `PASSKEY_TENANT_ID` | (빈 값) | 테넌트 UUID |
-| `passkey.issuer-base` | `PASSKEY_ISSUER_BASE` | `http://localhost:8080` | ID Token iss prefix |
+| `passkey.issuer-base` | `PASSKEY_ISSUER_BASE` | `http://localhost:8080` (dev/local 전용) | ID Token iss prefix — dev/local 외 프로필(미지정 포함)에서 비었거나 localhost 면 기동 차단 |
 | `passkey.connect-timeout` | — | `3s` | SDK connect 타임아웃 |
 | `passkey.read-timeout` | — | `10s` | SDK read 타임아웃 |
 | `passkey.jwks-cache-ttl` | — | `5m` | JWKS 캐시 TTL |

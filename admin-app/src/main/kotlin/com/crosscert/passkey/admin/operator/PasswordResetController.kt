@@ -1,5 +1,9 @@
 package com.crosscert.passkey.admin.operator
 
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Size
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -33,12 +37,16 @@ class PasswordResetController(
     }
 
     @PostMapping("/confirm")
-    fun confirm(@RequestBody body: ConfirmBody): ResponseEntity<*> {
+    fun confirm(@Valid @RequestBody body: ConfirmBody): ResponseEntity<*> {
         service.confirm(body.token, body.newPassword)
         return ResponseEntity.ok(java.util.Map.of("reset", true))
     }
 
     data class RequestBodyDto(val email: String?)
 
-    data class ConfirmBody(val token: String?, val newPassword: String?)
+    /** 화면 경로([com.crosscert.passkey.admin.web.auth.PasswordPagesController])는 메서드를 직접 불러 검증을 거치지 않으므로 서비스도 같은 규칙을 확인한다. */
+    data class ConfirmBody(
+        @field:NotBlank val token: String?,
+        @field:NotNull @field:Size(min = PASSWORD_MIN, max = PASSWORD_MAX) val newPassword: String?,
+    )
 }

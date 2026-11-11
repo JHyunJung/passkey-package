@@ -193,7 +193,8 @@ PASSKEY_ISSUER_BASE=http://localhost:8080 \
 ```
 
 프로필 지정은 필수다. `RelayKeyGuard` 는 active profile 에 `dev`/`local` 이 없으면
-relay 데모 기본 키를 거부하고 기동을 중단시킨다(프로필 미지정 = 운영 취급).
+relay 데모 기본 키를 거부하고 기동을 중단시킨다(프로필 미지정 = 운영 취급). `IssuerBaseGuard` 도 같은 기준으로
+`passkey.issuer-base` 가 비었거나 localhost 면 기동을 중단시킨다.
 
 **dev 프로필 (서버 배포 환경):**
 
@@ -341,4 +342,4 @@ SPRING_PROFILES_ACTIVE=local ./gradlew :admin-app:bootRun   # 또는 dev
 - 공통 운영자 시드: [`core/src/main/resources/db/seed-common/R__seed_operators.sql`](../core/src/main/resources/db/seed-common/R__seed_operators.sql)
 - ApiKey 인증 필터: `passkey-app/src/main/kotlin/com/crosscert/passkey/app/security/ApiKeyAuthFilter.kt`
 - SDK 모듈: [`sdk-java/`](../sdk-java/) — `project(":sdk-java")` 로 직접 의존
-- 데모 RP: [`rp-app/`](../rp-app/) — `./gradlew :rp-app:bootRun`
+- 데모 RP: [`rp-app/`](../rp-app/) — `SPRING_PROFILES_ACTIVE=local ./gradlew :rp-app:bootRun`(프로필 필수 — §위 실행 절)

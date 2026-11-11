@@ -68,6 +68,10 @@ class AdminUserTenantRepositoryTest {
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
+        // Flyway 는 스키마 OWNER 로 — 런타임 유저(PSK_APP_ADMIN_USER)에는 DDL 권한이 없다(ORA-01031).
+        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired AdminUserTenantRepository repo;
@@ -75,9 +79,15 @@ class AdminUserTenantRepositoryTest {
     @Autowired TenantRepository tenants;
 
     @AfterEach
-    void cleanup() {
+    void cleanup() throws Exception {
         repo.deleteAll();
-        adminUsers.deleteAll();
+        // 런타임 롤(PSK_APP_ADMIN)엔 admin_user DELETE 가 의도적으로 없다(계정은 비활성화로만 관리).
+        // 테스트 정리는 스키마 OWNER 연결로 한다 — 앱 권한을 테스트 때문에 넓히지 않는다.
+        try (java.sql.Connection c = java.sql.DriverManager.getConnection(
+                ORACLE.getJdbcUrl(), "PSK_APP_OWNER", SYS_PASSWORD);
+             java.sql.Statement st = c.createStatement()) {
+            st.executeUpdate("DELETE FROM PSK_APP_OWNER.admin_user");
+        }
         tenants.deleteAll();
     }
 

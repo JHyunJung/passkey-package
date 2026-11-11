@@ -126,4 +126,23 @@ class RpAppJsonContractTest {
         assertThat(fe.get("field").asText()).isEqualTo("username");
         assertThat(fe.get("rejectedValue").isNull()).isTrue();
     }
+
+    /**
+     * G02 — passkey-app 과 같은 파서 상한(중첩 64, 문자열 256KB)이 MVC JSON 컨버터와 ObjectMapper 빈 양쪽에 걸린다.
+     * 문서 전체 크기 상한은 두지 않는다 — 같은 빈이 InMemoryUserStore 파일 로드에도 쓰여 사용자 수에 비례해 커진다.
+     */
+    @Test
+    void jacksonParserConstraintsApplyToConverterAndBean() throws Exception {
+        MappingJackson2HttpMessageConverter conv = (MappingJackson2HttpMessageConverter) handlerAdapter.getMessageConverters().stream()
+                .filter(c -> c instanceof MappingJackson2HttpMessageConverter).findFirst().orElseThrow();
+        for (ObjectMapper m : List.of(conv.getObjectMapper(), json)) {
+            var c = m.getFactory().streamReadConstraints();
+            assertThat(c.getMaxNestingDepth()).isEqualTo(64);
+            assertThat(c.getMaxStringLength()).isEqualTo(256 * 1024);
+        }
+        String deep = "[".repeat(65) + "]".repeat(65);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> json.readTree(deep))
+                .isInstanceOf(com.fasterxml.jackson.core.exc.StreamConstraintsException.class);
+        assertThat(json.readTree("[".repeat(64) + "]".repeat(64))).isNotNull();
+    }
 }

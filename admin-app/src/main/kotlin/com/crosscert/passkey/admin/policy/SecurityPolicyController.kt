@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.policy
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest
 import com.crosscert.passkey.admin.audit.AuditLogService
+import com.crosscert.passkey.admin.web.format.PolicyValidation
 import jakarta.validation.Valid
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
@@ -28,6 +29,9 @@ class SecurityPolicyController(
         @Valid @RequestBody req: SecurityPolicyDto.UpdateRequest,
         auth: Authentication,
     ): SecurityPolicyDto.View {
+        // 화면(SecurityPolicyTabController)과 같은 origin 규칙 — https://호스트[:포트] 만(경로·와일드카드 불가).
+        // Bean Validation 은 공백·길이만 보므로 "*"·경로 포함 값이 저장돼 allowCredentials CORS 를 깨뜨렸다.
+        PolicyValidation.validate(req)["corsAllowlist"]?.let { throw IllegalArgumentException(it) }
         val actor = auth.name
         val view = service.update(req, actor)
         auditService.append(

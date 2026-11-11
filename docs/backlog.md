@@ -64,20 +64,25 @@
       [2026-09-13 문서 감사에서 발견]
 - [ ] **credential DELETE 가 registration scope 를 공유** — `passkey-app/.../security/ApiKeyScopeResolver.kt:28-31`.
       파괴적 작업의 scope 분리는 정책 결정 사항. 같은 파일의 `admin` scope 가 dead scope 인 것도 함께. [config-enforcement-B 2026-05-31, master-backlog 2026-05-31]
-- [ ] **CORS allowlist origin 형식 검증** — `SecurityPolicyDto.kt:63` 에 `@NotBlank @Size(max = 256)` 는 있으나
-      `^https?://[^/]+$` 형식·`*` 금지 검증은 없다. [master-backlog 2026-05-31]
+- [x] ~~**CORS allowlist origin 형식 검증**~~ — 화면은 이미 `PolicyValidation` 으로 검사했고 REST `PUT /admin/api/security-policy`
+      만 빠져 있었다. 같은 규칙으로 400(서비스 미호출). `SecurityPolicyControllerSecurityTest` 에 `*`·경로·http 외부 호스트 케이스. [2026-11-11]
 - [ ] **`IllegalArgumentException` 메시지를 클라이언트에 그대로 반환** — `core/.../api/GlobalExceptionHandler.java:114-118`
-      = `ApiResponse.error(INVALID_INPUT, e.getMessage())`. 내부 메시지 노출. [master-backlog 2026-05-31]
-- [ ] **`PasswordResetController.confirm` 에 `@Valid`/제약 부재** — `confirm(@RequestBody ConfirmBody body)` 에 검증 애너테이션 0건.
-      실패는 서비스의 `IllegalArgumentException` → 400 으로만 매핑된다. [master-backlog 2026-05-31]
+      = `ApiResponse.error(INVALID_INPUT, e.getMessage())`. **결정 필요(2026-11-11 재분류)**: passkey-app 의 IAE 메시지
+      (`authentication token missing or expired` 등)는 RP 대상 API 계약이고 contract 스냅샷에 고정돼 있다. 일괄 일반화는
+      외부 API 변경이므로, 의도된 메시지는 전용 예외(BusinessException)로 옮기고 나머지만 숨기는 식의 범위 결정이 먼저다. [master-backlog 2026-05-31]
+- [x] ~~**`PasswordResetController.confirm` 에 `@Valid`/제약 부재**~~ — 실제로는 REST 경로가 화면의 12자 검사를 우회해 빈·짧은
+      비밀번호로 재설정 가능했다. 서비스가 토큰 조회 전에 12–128자(가입과 동일)를 확인하고 DTO 에 `@Valid` 제약. [2026-11-11]
+- [ ] **비밀번호 상한 128자 vs BCrypt 72바이트** — 가입(`SignupRequestDto` 12–128)·재설정(`PasswordResetService` 12–128)이
+      글자 수로 허용하지만 `BCryptPasswordEncoder` 는 72바이트 초과 시 `IllegalArgumentException("password cannot be more than 72 bytes")`.
+      영문 73자+·한글 25자+ 에서 영어 오류가 그대로 노출된다. 상한을 72바이트로 맞출지(기존 계정 영향 없음) 결정. [p2-batch1 리뷰 2026-11-11]
 - [ ] **G03 세션 무효화 수단 없음** — 이미 발급된 활성 세션이 idle timeout 까지 유효. admin-app 에 `SessionRegistry` 0건. [zero-base 2026-07-04]
 - [ ] **`AdminUser`·`Credential` 에 `@Version`/`@DynamicUpdate` 부재 → 전체컬럼 UPDATE lost-update**
       (core 전체에 두 애너테이션 0건). 락 없이 로드·수정·flush 하면 동시 `/authentication/finish` 의 `signCount` 갱신을 되돌린다.
       F22(rename 비잠금 전환)가 이 이유로 롤백됐다 — **락 제거형 성능개선은 항상 이걸 먼저 의심한다.** [zero-base 2026-07-04]
-- [ ] **G02 rp-app `StreamReadConstraints` 미설정** — rp-app 에 0건. passkey-app 만
-      `PasskeyAppJacksonConfig.kt:33-40` 로 설정돼 있다. [zero-base 2026-07-04]
-- [ ] **G10 rp-app issuer-base localhost 폴백** — `rp-app/src/main/resources/application.yml:32`
-      = `${PASSKEY_ISSUER_BASE:http://localhost:8080}`. 환경변수 누락 시 조용히 localhost 로 떨어진다. [zero-base 2026-07-04]
+- [x] ~~**G02 rp-app `StreamReadConstraints` 미설정**~~ — `JacksonLimitsConfig`(Jackson 2 빌더 커스터마이저)로 중첩 64·문자열 256KB.
+      문서 크기 상한은 같은 빈이 `InMemoryUserStore` 파일 로드에 쓰여 두지 않음. [2026-11-11]
+- [x] ~~**G10 rp-app issuer-base localhost 폴백**~~ — `IssuerBaseGuard` 가 dev/local 외(미지정 포함)에서 비었거나 localhost 면
+      기동 차단(`RelayKeyGuard` 와 같은 기준). [2026-11-11]
 - [ ] **F30 `NativeWebAuthnVerifier` BE/BS 플래그 검사 · F35 `CborDecoder` non-minimal int 거부** [zero-base 2026-07-04]
 - [ ] **alert throttle/dedup 미구현** — 고빈도 이벤트 폭주 시 알림 스톰. 훅만 존재. [observability-C 2026-05-31]
 - [ ] **SDK 429 → 500 오분류** — `PasskeyClientContractIT` 의 429 path 보강. [sdk-and-sample-rp 2026-05-27]
@@ -168,7 +173,10 @@
 - [ ] **`uuidToBytes`/`uuidFromBytes` 를 `CryptoUtils` 로** — `IdTokenIssuer.java:91`, `DefaultAaguidPolicyChecker.java:100` 의
       private 중복. `sha256Hex`/`hex`/`maskEmail`/`randomToken` 은 이미 통합됐다. [master-backlog 2026-05-31]
 - [ ] **JWT TTL 900 하드코딩** — `AuthenticationFinishService.kt:40` 의 `private const val ID_TOKEN_TTL_SEC = 900L`(사용처 215,217) — 설정으로 외부화되지 않음. [master-backlog 2026-05-31]
-- [ ] **`MfaPendingFilter` 가 `getRequestURI()`** — 다른 필터는 `getServletPath()`. `:74`(및 `:71` javadoc). [master-backlog 2026-05-31]
+- [ ] **`MfaPendingFilter` 가 `getRequestURI()`** — 다른 필터는 `getServletPath()`. `:74`(및 `:71` javadoc).
+      **보류(2026-11-11)**: 보안 체인 안이라 `StrictHttpFirewall` 이 비정규 URI(`..`·`;`·인코딩 슬래시)를 먼저 거부하고, 허용 판정이
+      정확일치라 우회 경로가 없다. servletPath 로 바꾸면 MockMvc/MockHttpServletRequest 테스트에서 servletPath 가 "" 라 판정이
+      조용히 바뀔 위험이 더 크다 — 일관성 외 이득이 없어 손대지 않는다. [master-backlog 2026-05-31]
 - [ ] **(superseded: React 제거로 해당 없음) `TweaksPanel` 이 prod 에서도 무조건 렌더 + `as any`** — `:125` 에 `as any` 잔존, `import.meta.env.DEV` 가드 0건.
       `App.tsx` 의 `handleSwitchRole` stub·잔여 `as any` 도 함께. [master-backlog 2026-05-31, rp-admin-role-gating 2026-05-31]
 - [ ] **(React 시절 항목, Thymeleaf 포트에서 재평가 필요) 거대 컴포넌트 분리, 확인 다이얼로그 double-submit 가드(Rotate/Revoke), Header '내 계정' 링크, `/admin/favicon.ico` 500(현재 favicon 은 `/admin/img/favicon.png`)**

@@ -623,11 +623,13 @@ class AdminJsonShapeContractTest {
         )
 
         shape("password-reset-request-empty", json(post("/admin/api/password-reset/request"), "{}"))
+        // 빈 본문은 이제 @Valid 로 400(검증 오류 봉투). 이전 스냅샷(200 reset:true)은 서비스 mock 이 받아 준 버그 동작이었다.
         shape("password-reset-confirm-empty", json(post("/admin/api/password-reset/confirm"), "{}"))
-        doThrow(IllegalArgumentException("invalid or expired token")).whenever(passwordReset).confirm("bad", "pw")
+        // 길이 검증(12–128, 2026-11-11)을 통과하는 비밀번호로 — 서비스 IAE → 400 봉투 형태를 계속 고정한다.
+        doThrow(IllegalArgumentException("invalid or expired token")).whenever(passwordReset).confirm("bad", "NewPassw0rd!")
         shape(
             "password-reset-confirm-invalid",
-            json(post("/admin/api/password-reset/confirm"), "{\"token\":\"bad\",\"newPassword\":\"pw\"}"),
+            json(post("/admin/api/password-reset/confirm"), "{\"token\":\"bad\",\"newPassword\":\"NewPassw0rd!\"}"),
         )
     }
 

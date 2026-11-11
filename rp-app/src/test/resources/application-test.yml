@@ -6,3 +6,5 @@ passkey:
   connect-timeout: 5s
   read-timeout: 30s
   jwks-cache-ttl: 30s
+  # test 프로필은 dev/local 이 아니므로 IssuerBaseGuard 가 localhost 기본값을 거부한다 — 비-로컬 값을 둔다.
+  issuer-base: https://issuer.test.example
