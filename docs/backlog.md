@@ -12,29 +12,26 @@
       `admin-app/src/main/resources/application.yml:50`, `passkey-app/src/main/resources/application.yml:19` 둘 다
       `forward-headers-strategy: framework` 이고 `internal-proxies` 화이트리스트가 없다.
       스트립하지 않으면 감사 IP 스푸핑·Secure 쿠키 오판·rate-limit IP 우회가 동시에 성립한다. [zero-base 2026-07-04]
-- [ ] **actuator `health.show-details: always` 미인증 노출** — `core/src/main/resources/application-common.yml:46`.
-      prod/qa 오버라이드 없음. 노출 엔드포인트는 `:51` 에서 `health,info` 로 제한돼 있다. [master-backlog 2026-05-31]
+- [x] ~~**actuator `health.show-details: always` 미인증 노출**~~ — `when-authorized` 로 변경(무인증은 status 만,
+      admin-app 운영자만 상세). `ApiContractIT.actuatorHealth_unauthenticated_exposesStatusOnly` 로 고정. [2026-11-11]
 - [ ] **passkey-app SecurityFilterChain 부재** — `passkey-app/src/main/kotlin` 전체에 `SecurityFilterChain` 0건.
       actuator 가 완전 미인증이고 nosniff/frame-options 등 기본 보안헤더도 적용되지 않는다. [master-backlog 2026-05-31]
 - [ ] **HSTS/CSP 미설정** — `contentSecurityPolicy`/`httpStrictTransportSecurity`/`Strict-Transport-Security`/`Content-Security-Policy`
       가 admin-app·passkey-app·core·deploy·nginx 어디에도 0건. 앱과 프록시 중 어디서 넣을지 결정 필요. [master-backlog 2026-05-31]
 - [ ] **recovery code 가 솔트 없는 단일 SHA-256** — `admin-app/.../auth/RecoveryCodeService.kt:42,51` = `CryptoUtils.sha256Hex(...)`.
       pepper/HMAC 없음. [master-backlog 2026-05-31]
-- [ ] **`X-Trace-Id` 무검증 → 로그 인젝션** — `core/.../api/TraceIdFilter.java:27-31` 이 `isBlank()` 만 보고 헤더 값을
-      MDC 와 응답 헤더에 그대로 넣는다. CRLF·길이·문자집합 제한 없음. rp-app 의 동명 필터
-      (`rp-app/src/main/java/com/crosscert/passkey/rpapp/common/filter/TraceIdFilter.java:30-35`)도 같다. [master-backlog 2026-05-31]
-- [ ] **시드 평문 비번이 prod 에 실리지 않는지 확인** — `core/src/main/resources/db/seed-common/R__seed_operators.sql:4-5`
-      에 "prod 는 이 디렉터리를 `flyway.locations` 에 포함하지 않는다" 로 명시돼 있다. 배포 전 실제 locations 로 재확인.
-      (bob 은 더 이상 이 파일에서 시드하지 않는다 — alice 만.) [prod-hardening 2026-05-25]
+- [x] ~~**`X-Trace-Id` 무검증 → 로그 인젝션**~~ — core·rp-app `TraceIdFilter` 가 `[A-Za-z0-9._-]{1,64}` 일 때만 수용,
+      아니면 새 ID 발급(요청은 거부하지 않음). 양쪽 `TraceIdFilterTest` 에 CRLF·길이·문자집합 케이스. [2026-11-11]
+- [x] ~~**시드 평문 비번이 prod 에 실리지 않는지 확인**~~ — 확인 완료(코드 변경 없음): `application-prod.yml` locations =
+      `db/migration,db/prod`(seed-common 미포함). qa 는 의도적으로 seed-common 포함이나 QA 번들은
+      `SPRING_FLYWAY_ENABLED=false`. [2026-11-11]
 - [ ] **(릴리스 차단) QA 번들 이미지가 아직 Spring Boot 3.5 빌드** — `qa-bundle/images/*.tar.gz` 와
       `qa-bundle/images/SHA256SUMS` 는 Boot 4.1 업그레이드 이전 이미지 기준이다. 번들을 반출하기 전에
       `scripts/build-images.sh` 를 **`NO_SAVE` 없이** 실행해 amd64 이미지 tar 를 다시 만들고, 새 `SHA256SUMS` 를
       커밋한다(번들 README §6-1 의 세션 정리 절차는 새 이미지 전제). [boot4-upgrade 2026-11-06]
-- [ ] **sdk-java 패치 릴리스 + 변경 이력** — Spring 7 호환 수정(커밋 `2cd29539`: 요청 바디를 SDK 자체 Jackson 2
-      매퍼로 `byte[]` 직렬화 + `Content-Type: application/json`, 3-인자 `handleError` 구현)이 SDK 버전 `1.0.0` 그대로
-      들어가 있다. 외부 RP 배포 전에 패치 버전(예: `1.0.1`)으로 올리고 변경 이력을 남긴다 — 동작 차이로
-      요청이 이제 명시적 `Content-Length` 로 나간다(이전엔 chunked 가능). 현재 별도 CHANGELOG 파일은 없다
-      (`sdk-java/README.md` "Spring 6 · 7 호환" 항목만). [boot4-upgrade 2026-11-06]
+- [x] ~~**sdk-java 패치 릴리스 + 변경 이력**~~ — 1.0.0 이후 공개 API 추가(`RegistrationRelayCodec`, 3-인자
+      `verifyIdToken`)가 있어 패치가 아닌 **1.1.0** 으로 올리고 `sdk-java/CHANGELOG.md` 신설(보안·동작 변화 포함).
+      외부 `passkey_rp` 저장소의 로컬 jar 는 별도 교체 필요. [2026-11-11]
 - [x] ~~**Kotlin 전환(2단계) 착수 전 Kotlin 카탈로그 버전 상향**~~ — **해소** (passkey-app-kotlin 2026-11-06):
       카탈로그 `kotlin = "2.4.21"` 로 올리고 passkey-app 에 적용, Boot BOM `kotlin.version` 도 루트 `build.gradle.kts` 에서
       같은 값으로 덮어쓴다. passkey-app 은 본 코드·테스트 모두 Kotlin. [boot4-upgrade 2026-11-06]
