@@ -18,7 +18,7 @@ Passkey2 RP(Relying Party) API 를 호출하는 순수 Java 클라이언트 라�
   (Spring 7 · Jackson 3 클래스패스) RP 에서도 그대로 동작한다. 요청 바디는 SDK 자체 Jackson 2
   매퍼로 `byte[]` 직렬화해 `Content-Type: application/json` + 명시적 `Content-Length` 로 보내므로
   RP 의 JSON 컨버터 구성과 무관하게 와이어 형식이 같고, 4xx/5xx → `PasskeyApiException` 매핑도
-  Spring 7 이 호출하는 3-인자 `handleError` 로 처리한다. (공개 API·SDK 버전 변경 없음)
+  Spring 7 이 호출하는 3-인자 `handleError` 로 처리한다. (1.1.0 — 변경 이력은 [CHANGELOG.md](CHANGELOG.md))
 
 ### 토큰 플로우
 
@@ -48,7 +48,7 @@ Maven local 또는 사내 레포에 publish 후 좌표로 의존:
 
 ```kotlin
 // build.gradle.kts
-implementation("com.crosscert.passkey:sdk-java:1.0.0")
+implementation("com.crosscert.passkey:sdk-java:1.1.0")
 ```
 
 로컬 publish:
