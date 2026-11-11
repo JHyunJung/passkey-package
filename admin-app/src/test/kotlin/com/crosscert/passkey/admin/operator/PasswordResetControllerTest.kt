@@ -133,4 +133,26 @@ class PasswordResetControllerTest {
         )
             .andExpect(status().isBadRequest())
     }
+
+    @Test
+    fun confirm_short_password_is_400_without_calling_service() {
+        mvc.perform(
+            post("/admin/api/password-reset/confirm").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"t\",\"newPassword\":\"short\"}"),
+        )
+            .andExpect(status().isBadRequest())
+        org.mockito.kotlin.verifyNoInteractions(service)
+    }
+
+    @Test
+    fun confirm_missing_token_is_400_without_calling_service() {
+        mvc.perform(
+            post("/admin/api/password-reset/confirm").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"newPassword\":\"NewPassw0rd!\"}"),
+        )
+            .andExpect(status().isBadRequest())
+        org.mockito.kotlin.verifyNoInteractions(service)
+    }
 }
