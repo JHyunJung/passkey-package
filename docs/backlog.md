@@ -72,6 +72,9 @@
       외부 API 변경이므로, 의도된 메시지는 전용 예외(BusinessException)로 옮기고 나머지만 숨기는 식의 범위 결정이 먼저다. [master-backlog 2026-05-31]
 - [x] ~~**`PasswordResetController.confirm` 에 `@Valid`/제약 부재**~~ — 실제로는 REST 경로가 화면의 12자 검사를 우회해 빈·짧은
       비밀번호로 재설정 가능했다. 서비스가 토큰 조회 전에 12–128자(가입과 동일)를 확인하고 DTO 에 `@Valid` 제약. [2026-11-11]
+- [ ] **비밀번호 상한 128자 vs BCrypt 72바이트** — 가입(`SignupRequestDto` 12–128)·재설정(`PasswordResetService` 12–128)이
+      글자 수로 허용하지만 `BCryptPasswordEncoder` 는 72바이트 초과 시 `IllegalArgumentException("password cannot be more than 72 bytes")`.
+      영문 73자+·한글 25자+ 에서 영어 오류가 그대로 노출된다. 상한을 72바이트로 맞출지(기존 계정 영향 없음) 결정. [p2-batch1 리뷰 2026-11-11]
 - [ ] **G03 세션 무효화 수단 없음** — 이미 발급된 활성 세션이 idle timeout 까지 유효. admin-app 에 `SessionRegistry` 0건. [zero-base 2026-07-04]
 - [ ] **`AdminUser`·`Credential` 에 `@Version`/`@DynamicUpdate` 부재 → 전체컬럼 UPDATE lost-update**
       (core 전체에 두 애너테이션 0건). 락 없이 로드·수정·flush 하면 동시 `/authentication/finish` 의 `signCount` 갱신을 되돌린다.

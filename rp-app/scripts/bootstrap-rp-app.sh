@@ -113,4 +113,5 @@ else
 fi
 
 echo
-echo "다음: set -a && source rp-app/.env && set +a && ./gradlew :rp-app:bootRun"
+echo "다음: set -a && source rp-app/.env && set +a && SPRING_PROFILES_ACTIVE=local ./gradlew :rp-app:bootRun"
+echo "      (프로필 필수 — dev/local 외에서는 IssuerBaseGuard 가 localhost issuer 를 거부한다)"
