@@ -79,6 +79,10 @@ class CredentialAuthEventRepositoryTest {
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
+        // Flyway 는 스키마 OWNER 로 — 런타임 유저(PSK_APP_ADMIN_USER)에는 DDL 권한이 없다(ORA-01031).
+        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
+        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
+        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired CredentialAuthEventRepository repo;
