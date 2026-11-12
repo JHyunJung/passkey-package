@@ -15,7 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter
  * isSecure)에만 — 평문 http 응답의 HSTS 는 무시되고 dev 에서 혼란만 준다.
  *
  * 헤더는 체인 진입 **전에** 쓴다 — [RateLimitFilter]·[ApiKeyAuthFilter] 가 체인을 잇지 않고 429/401 을 써도 실린다.
- * 그래서 순서가 가장 앞이다(RateLimitFilter 는 HIGHEST_PRECEDENCE + 1).
+ * 그래서 순서가 가장 앞이다(RateLimitFilter 는 HIGHEST_PRECEDENCE + 2).
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)

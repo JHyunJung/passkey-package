@@ -90,8 +90,9 @@ class SignupPageControllerTest {
             .isEqualTo("플랫폼 운영자가 승인하면 계정이 활성화됩니다. 역할과 담당 tenant 는 승인 시 지정됩니다.")
         val f = d.selectFirst("form[hx-post=/admin/signup]")!!
         assertThat(f.select("input#signup-email[name=email][type=email]")).hasSize(1)
-        assertThat(f.select("input#signup-pw[name=password][type=password][maxlength=72]")).hasSize(1)
-        assertThat(f.select("input#signup-pw2[name=password2][type=password][maxlength=72]")).hasSize(1)
+        // maxlength 없음: 긴 비밀번호를 붙여넣으면 브라우저가 조용히 잘라 사용자가 아는 값과 다른 비밀번호로 가입된다 — 서버가 거절한다.
+        assertThat(f.select("input#signup-pw[name=password][type=password]:not([maxlength])")).hasSize(1)
+        assertThat(f.select("input#signup-pw2[name=password2][type=password]:not([maxlength])")).hasSize(1)
         assertThat(f.select("textarea#signup-reason[name=reason][maxlength=500]")).hasSize(1)
         assertThat(f.select("input[type=hidden][name=_csrf]").attr("value")).isNotBlank()
         assertThat(f.selectFirst("label[for=signup-reason]")!!.text()).isEqualTo("요청 사유 (선택)")

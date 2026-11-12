@@ -46,8 +46,8 @@
         </div>
         <div>
           <label class="label" for="signup-pw">비밀번호</label>
-          <input aria-describedby="signup-pw-error signup-pw-server-error" aria-invalid="false" autocomplete="new-password" class="input" data-server-error="true" id="signup-pw"
-                 maxlength="72" name="password"
+          <input aria-describedby="signup-pw-error signup-pw-server-error" aria-invalid="false" autocomplete="new-password" class="input" data-server-error="true"
+                 id="signup-pw" name="password"
                  type="password" x-bind:aria-invalid="(pwTooShort() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" x-bind:readonly="submitting" x-model="pw">
           <p class="field__error" id="signup-pw-error" x-cloak x-show="pwTooShort()" x-text="pw.length + '자 입력됨 · 12자 이상, 영문 72자(한글 24자) 이하로 입력하세요'"></p>
           <p class="field__error" id="signup-pw-server-error">5자 입력됨 · 12자 이상, 영문 72자(한글 24자) 이하로 입력하세요</p>
@@ -55,7 +55,7 @@
         </div>
         <div>
           <label class="label" for="signup-pw2">비밀번호 확인</label>
-          <input aria-describedby="signup-pw2-error" aria-invalid="false" autocomplete="new-password" class="input" id="signup-pw2" maxlength="72"
+          <input aria-describedby="signup-pw2-error" aria-invalid="false" autocomplete="new-password" class="input" id="signup-pw2"
                  name="password2" type="password"
                  x-bind:aria-invalid="(mismatch() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" x-bind:readonly="submitting" x-model="pw2">
           <p class="field__error" id="signup-pw2-error" x-cloak x-show="mismatch()">비밀번호가 일치하지 않습니다.</p>

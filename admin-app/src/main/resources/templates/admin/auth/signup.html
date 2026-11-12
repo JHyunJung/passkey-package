@@ -84,7 +84,7 @@
         </div>
         <div>
           <label class="label" for="signup-pw">비밀번호</label>
-          <input id="signup-pw" name="password" class="input" type="password" maxlength="72" autocomplete="new-password"
+          <input id="signup-pw" name="password" class="input" type="password" autocomplete="new-password"
                  x-model="pw" x-bind:readonly="submitting"
                  th:attr="aria-describedby=${errors != null and errors['password'] != null} ? 'signup-pw-error signup-pw-server-error' : 'signup-pw-error', data-server-error=${errors != null and errors['password'] != null} ? 'true' : null"
                  x-bind:aria-invalid="(pwTooShort() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" aria-invalid="false">
@@ -94,7 +94,7 @@
         </div>
         <div>
           <label class="label" for="signup-pw2">비밀번호 확인</label>
-          <input id="signup-pw2" name="password2" class="input" type="password" maxlength="72" autocomplete="new-password"
+          <input id="signup-pw2" name="password2" class="input" type="password" autocomplete="new-password"
                  x-model="pw2" x-bind:readonly="submitting"
                  th:attr="aria-describedby=${errors != null and errors['password2'] != null} ? 'signup-pw2-error signup-pw2-server-error' : 'signup-pw2-error', data-server-error=${errors != null and errors['password2'] != null} ? 'true' : null"
                  x-bind:aria-invalid="(mismatch() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" aria-invalid="false">

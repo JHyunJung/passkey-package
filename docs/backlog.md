@@ -8,10 +8,12 @@
 
 ## 0. 배포 전 필수 (P1 — 코드 변경이 필요 없는 운영 전제 포함)
 
-- [x] ~~**forward-headers 신뢰 프록시 전제**~~ — 세 앱을 `framework`→**`native`**(Tomcat RemoteIpValve)로 전환. [2026-11-12]
+- [ ] **forward-headers 신뢰 프록시 전제** (코드 조치 완료, **운영 전제만 남음**) — 세 앱을 `framework`→**`native`**(Tomcat RemoteIpValve)로 전환. [2026-11-12]
       framework 는 X-Forwarded-For 맨 왼쪽을 믿어 번들 nginx(`$proxy_add_x_forwarded_for`) 뒤에서도 클라이언트가 채운 값이 이겼다
       (passkey-app IP rate-limit 우회·admin 감사 IP 위조). native 는 사설·루프백 프록시의 헤더만 반영하고 XFF 를 오른쪽부터 판정.
-      **운영 전제(남음)**: 앞단 프록시가 공인 IP 로 접속하면 `SERVER_TOMCAT_REMOTEIP_TRUSTED_PROXIES` 로 추가. admin-app 을 프록시 없이
+      **운영 전제(남음)**: native 는 사설 IP hop 을 모두 신뢰 프록시로 건너뛰므로, 사내망(사설 IP) 클라이언트에 대해서는 **맨 앞단 프록시가
+      XFF 를 덮어써야** 위조가 막힌다. QA 번들 nginx(맨 앞단)는 `$remote_addr` 로 덮어쓰도록 바꿨고, `deploy/` nginx 는 LB 뒤라 이어 붙이므로
+      LB 가 덮어쓰거나 `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` 를 nginx·LB 주소로 좁혀야 한다. 앞단 프록시가 공인 IP 면 `SERVER_TOMCAT_REMOTEIP_TRUSTED_PROXIES` 로 추가. admin-app 을 프록시 없이
       사내망에 직접 바인딩하면 사설 IP 클라이언트는 신뢰 프록시로 보이므로 감사 IP 는 사내망 기준 best-effort. `ProxiedSameOriginPostTest`(실제 Tomcat).
 - [x] ~~**actuator `health.show-details: always` 미인증 노출**~~ — `when-authorized` 로 변경(무인증은 status 만,
       admin-app 운영자만 상세). `ApiContractIT.actuatorHealth_unauthenticated_exposesStatusOnly` 로 고정. [2026-11-11]
@@ -78,7 +80,7 @@
 - [x] ~~**`PasswordResetController.confirm` 에 `@Valid`/제약 부재**~~ — 실제로는 REST 경로가 화면의 12자 검사를 우회해 빈·짧은
       비밀번호로 재설정 가능했다. 서비스가 토큰 조회 전에 12–128자(가입과 동일)를 확인하고 DTO 에 `@Valid` 제약. [2026-11-11]
 - [x] ~~**비밀번호 상한 128자 vs BCrypt 72바이트**~~ — `PasswordPolicy`(12자 이상·UTF-8 72바이트 이하)를 가입·재설정 REST·화면에 적용,
-      `@Size`/maxlength 72. 한글 25자+·영문 73자+ 가 영어 BCrypt 원문 대신 한국어 규칙 문구로 400/422. 기존 계정 영향 없음. [2026-11-12]
+      `@Size` 72, 화면은 maxlength 없이 바이트 검사(붙여넣기 조용한 절단 방지). 한글 25자+·영문 73자+ 가 영어 BCrypt 원문 대신 한국어 규칙 문구로 400/422. 기존 계정 영향 없음. [2026-11-12]
 - [ ] **G03 세션 무효화 수단 없음** — 이미 발급된 활성 세션이 idle timeout 까지 유효. admin-app 에 `SessionRegistry` 0건. [zero-base 2026-07-04]
 - [ ] **`AdminUser`·`Credential` 에 `@Version`/`@DynamicUpdate` 부재 → 전체컬럼 UPDATE lost-update**
       (core 전체에 두 애너테이션 0건). 락 없이 로드·수정·flush 하면 동시 `/authentication/finish` 의 `signCount` 갱신을 되돌린다.
