@@ -4,10 +4,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -49,6 +51,24 @@ public class KeyEnvelope {
         // shorten the master key's residence in the heap.
         java.util.Arrays.fill(keyBytes, (byte) 0);
         this.random = random;
+    }
+
+    /**
+     * master key 에서 용도별 하위 키(32바이트)를 파생한다: HMAC-SHA256(master, purpose).
+     * 용도 문자열이 다르면 키가 분리되므로 암호화 키(master)를 다른 목적에 그대로 쓰지 않는다.
+     * 예: 관리자 recovery code 저장용 HMAC 키(pepper) — DB 밖의 비밀이라 DB 만 유출되면 대입할 수 없다.
+     */
+    public byte[] deriveSubkey(String purpose) {
+        byte[] master = masterKey.getEncoded();
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(master, "HmacSHA256"));
+            return mac.doFinal(purpose.getBytes(StandardCharsets.UTF_8));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("subkey derivation failed", e);
+        } finally {
+            java.util.Arrays.fill(master, (byte) 0);
+        }
     }
 
     public byte[] seal(byte[] pkcs8) {

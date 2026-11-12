@@ -2,6 +2,10 @@ package com.crosscert.passkey.core.jwt;
 
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -67,5 +71,22 @@ class KeyEnvelopeTest {
         assertThatThrownBy(() -> new KeyEnvelope(shortKey, new SecureRandom()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32 bytes");
+    }
+
+    @Test
+    void deriveSubkeyIsHmacSha256OfPurposeUnderMasterKey() throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(new byte[32], "HmacSHA256"));
+        byte[] expected = mac.doFinal("purpose-a".getBytes(StandardCharsets.UTF_8));
+        assertThat(envelope.deriveSubkey("purpose-a")).hasSize(32).isEqualTo(expected);
+    }
+
+    @Test
+    void deriveSubkeySeparatesPurposesAndMasterKeys() {
+        assertThat(envelope.deriveSubkey("purpose-a")).isNotEqualTo(envelope.deriveSubkey("purpose-b"));
+        byte[] other = new byte[32];
+        other[0] = 1;
+        KeyEnvelope otherEnvelope = new KeyEnvelope(Base64.getEncoder().encodeToString(other), new SecureRandom());
+        assertThat(otherEnvelope.deriveSubkey("purpose-a")).isNotEqualTo(envelope.deriveSubkey("purpose-a"));
     }
 }
