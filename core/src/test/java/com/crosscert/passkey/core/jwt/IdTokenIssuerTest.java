@@ -102,6 +102,17 @@ class IdTokenIssuerTest {
     }
 
     @Test
+    void tokenTtlSecondsMatchesExpMinusIat() throws Exception {
+        assertThat(issuer.tokenTtlSeconds()).isEqualTo(900L);
+        SignedJWT jwt = SignedJWT.parse(issuer.issue(
+                "11111111-2222-3333-4444-555555555555", new byte[]{1, 2, 3},
+                UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), null));
+        long expMinusIat = (jwt.getJWTClaimsSet().getExpirationTime().getTime()
+                - jwt.getJWTClaimsSet().getIssueTime().getTime()) / 1000;
+        assertThat(expMinusIat).isEqualTo(issuer.tokenTtlSeconds());
+    }
+
+    @Test
     void aaguidClaimIsOmittedWhenNull() throws Exception {
         String jwt = issuer.issue("T_A", new byte[]{0}, UUID.randomUUID(), null);
         SignedJWT parsed = SignedJWT.parse(jwt);

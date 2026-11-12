@@ -6,11 +6,11 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.nio.ByteBuffer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -53,6 +53,11 @@ public class IdTokenIssuer {
         this.clock = clock;
     }
 
+    /** 발급하는 id-token 의 수명(초) — {@code passkey.id-token.ttl}. 응답 expiresIn 이 JWT exp 와 어긋나지 않도록 이 값을 쓴다. */
+    public long tokenTtlSeconds() {
+        return tokenTtl.toSeconds();
+    }
+
     public String issue(String tenantId, byte[] userHandle, UUID credentialId, byte[] aaguid) {
         Instant now = clock.instant();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
@@ -64,7 +69,7 @@ public class IdTokenIssuer {
                 .claim("amr", List.of("webauthn"))
                 .claim("cred_id",
                         Base64.getUrlEncoder().withoutPadding()
-                                .encodeToString(uuidToBytes(credentialId)));
+                                .encodeToString(CryptoUtils.uuidToBytes(credentialId)));
         if (aaguid != null) {
             claims.claim("aaguid", HexFormat.of().formatHex(aaguid));
         }
@@ -88,10 +93,4 @@ public class IdTokenIssuer {
         return jwt.serialize();
     }
 
-    private static byte[] uuidToBytes(UUID uuid) {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[16]);
-        buf.putLong(uuid.getMostSignificantBits());
-        buf.putLong(uuid.getLeastSignificantBits());
-        return buf.array();
-    }
 }

@@ -2,14 +2,13 @@ package com.crosscert.passkey.admin.audit
 
 import com.crosscert.passkey.core.config.DbSchemaProperties
 import com.crosscert.passkey.core.repository.AuditLogRepository
+import com.crosscert.passkey.core.util.CryptoUtils
 import jakarta.persistence.EntityManager
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
-import java.nio.ByteBuffer
 import java.util.Arrays
-import java.util.UUID
 
 /**
  * 기존 audit_log row 의 tenant chain 컬럼 (V25 신규) 을 채우는 백필 서비스.
@@ -84,7 +83,7 @@ class AuditChainBackfillService(
                 )
                     .setParameter("prevHash", prev)
                     .setParameter("hash", computed)
-                    .setParameter("id", uuidToBytes(row.id))
+                    .setParameter("id", CryptoUtils.uuidToBytes(row.id))
                     .executeUpdate()
                 // Detach the entity so Hibernate does not attempt a full-row flush on commit.
                 em.detach(row)
@@ -97,13 +96,5 @@ class AuditChainBackfillService(
 
     private companion object {
         val PAYLOAD_TYPE = object : TypeReference<Map<String, Any?>>() {}
-
-        /** Convert UUID to 16-byte big-endian RAW(16) for Oracle JDBC binding. */
-        fun uuidToBytes(id: UUID): ByteArray {
-            val bb = ByteBuffer.allocate(16)
-            bb.putLong(id.mostSignificantBits)
-            bb.putLong(id.leastSignificantBits)
-            return bb.array()
-        }
     }
 }

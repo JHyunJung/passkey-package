@@ -36,9 +36,6 @@ import kotlin.jvm.optionals.getOrNull
 
 private val log = LoggerFactory.getLogger(AuthenticationFinishService::class.java)
 
-/** id-token 수명(초) — 응답 expiresIn 과 발급 로그에 같은 값을 쓴다. */
-private const val ID_TOKEN_TTL_SEC = 900L
-
 @Service
 class AuthenticationFinishService(
     private val store: ChallengeStore,
@@ -212,9 +209,11 @@ class AuthenticationFinishService(
             val jwt = idTokens.issue(ch.tenantId, cred.userHandle, cred.id, cred.aaguid)
             // id-token claims meta only — never the JWT body itself
             val subTail = cred.userHandle.toBase64Url().idTail()
-            log.info("id-token issued: subTail={} aud={} ttlSec={}", subTail, ch.tenantId, ID_TOKEN_TTL_SEC)
+            // 응답 expiresIn 과 발급 로그는 JWT exp 와 같은 출처(passkey.id-token.ttl)를 쓴다.
+            val ttlSec = idTokens.tokenTtlSeconds()
+            log.info("id-token issued: subTail={} aud={} ttlSec={}", subTail, ch.tenantId, ttlSec)
 
-            val response = AuthenticationFinishResponse(jwt, "Bearer", ID_TOKEN_TTL_SEC)
+            val response = AuthenticationFinishResponse(jwt, "Bearer", ttlSec)
             ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId), CeremonyAction.AUTHENTICATION_SUCCESS)
             ceremonyMetrics.recordSuccess("authentication", "finish")
             return response

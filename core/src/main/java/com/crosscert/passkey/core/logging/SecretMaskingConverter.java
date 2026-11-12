@@ -17,8 +17,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
  * <p>Redaction logic is shared with JSON output via {@link SecretRedactor} —
  * both text and JSON paths call the same {@code redact()} function.
  *
- * <p>This is the second line of defense — the first is the source-level
- * {@link LogRedact} helper which developers should call directly. See
+ * <p>This is the second line of defense — the first is source-level masking at
+ * the call site (e.g. {@code CryptoUtils.maskEmail}). See
  * docs/logging-conventions.md.
  */
 public class SecretMaskingConverter extends MessageConverter {

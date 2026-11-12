@@ -1,6 +1,7 @@
 package com.crosscert.passkey.core.repository;
 
 import com.crosscert.passkey.core.entity.AuditLog;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -52,6 +53,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Testcontainers
 class ActivityRepositoryFeedPageIT {
+
+    /**
+     * Oracle 이 {@code ORDER BY id} 로 RAW(16) 을 비교하는 순서(바이트 단위 unsigned). Java
+     * {@link UUID#compareTo} 는 MSB/LSB 를 signed long 으로 비교해 최상위 비트가 다른 UUID 끼리는
+     * 순서가 뒤집힌다 — 지금 id 생성기(TIME)의 비트 배치에 우연히 기대지 않도록 DB 와 같은 기준으로 정렬한다.
+     */
+    private static final java.util.Comparator<UUID> ORACLE_RAW_ORDER =
+            (a, b) -> java.util.Arrays.compareUnsigned(CryptoUtils.uuidToBytes(a), CryptoUtils.uuidToBytes(b));
 
     @SpringBootApplication
     @EntityScan("com.crosscert.passkey.core.entity")
@@ -161,7 +170,7 @@ class ActivityRepositoryFeedPageIT {
         AuditLog r3 = auditLogRepository.save(row(new byte[]{3}, t));
 
         List<UUID> allIdsDesc = List.of(r1.getId(), r2.getId(), r3.getId()).stream()
-                .sorted((a, b) -> b.compareTo(a))
+                .sorted(ORACLE_RAW_ORDER.reversed())
                 .toList();
         UUID lowestIdAtT = allIdsDesc.get(allIdsDesc.size() - 1);
 
@@ -194,7 +203,7 @@ class ActivityRepositoryFeedPageIT {
         AuditLog r3 = auditLogRepository.save(row(new byte[]{3}, t));
 
         List<UUID> allIdsDesc = List.of(r1.getId(), r2.getId(), r3.getId()).stream()
-                .sorted((a, b) -> b.compareTo(a))
+                .sorted(ORACLE_RAW_ORDER.reversed())
                 .toList();
         UUID lowestIdAtT = allIdsDesc.get(allIdsDesc.size() - 1);
 
@@ -241,7 +250,7 @@ class ActivityRepositoryFeedPageIT {
         AuditLog r5 = auditLogRepository.save(row(new byte[]{15}, t, "ADMIN_LOGIN"));
 
         List<UUID> filteredIdsDesc = List.of(r1.getId(), r3.getId(), r5.getId()).stream()
-                .sorted((a, b) -> b.compareTo(a))
+                .sorted(ORACLE_RAW_ORDER.reversed())
                 .toList();
         UUID lowestFilteredIdAtT = filteredIdsDesc.get(filteredIdsDesc.size() - 1);
 

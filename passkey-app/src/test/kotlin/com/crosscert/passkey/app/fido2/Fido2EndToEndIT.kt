@@ -245,7 +245,7 @@ class Fido2EndToEndIT @Autowired constructor(
             .contains(TENANT_A_UUID.toString())
 
         // Phase 6: cred_id claim is now base64url of 16-byte UUID
-        // (IdTokenIssuer.uuidToBytes: MSB then LSB via ByteBuffer).
+        // (CryptoUtils.uuidToBytes: MSB then LSB, big-endian).
         // Verify the claim decodes to exactly 16 bytes and round-trips
         // back to a valid UUID — confirms the PK type migration is
         // reflected correctly in the issued token.

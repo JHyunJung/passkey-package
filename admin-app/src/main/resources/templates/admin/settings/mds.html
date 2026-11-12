@@ -45,7 +45,7 @@
         <div class="card__body">
           <dl class="kv">
             <dt>주소 (endpoint)</dt>
-            <dd class="mono kv__nowrap"><span style="font-size: 12px">https://mds.fidoalliance.org/</span></dd>
+            <dd class="mono kv__nowrap"><span style="font-size: 12px" th:text="${mdsEndpoint}">https://mds.fidoalliance.org/</span></dd>
             <dt>다음 갱신 예정</dt>
             <dd th:text="${v.nextUpdate != null} ? ${v.nextUpdate + ' 03:00 KST'} : '—'">—</dd>
             <dt>동기화 성공률 (30일)</dt>

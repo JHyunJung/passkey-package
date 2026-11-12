@@ -1,6 +1,7 @@
 package com.crosscert.passkey.app.security
 
 import com.crosscert.passkey.core.config.DbSchemaProperties
+import com.crosscert.passkey.core.util.CryptoUtils
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.jdbc.core.JdbcTemplate
@@ -118,8 +119,4 @@ private fun toUuidOrFail(bytes: ByteArray?, columnName: String): UUID {
 }
 
 /** Converts a UUID to a 16-byte array suitable for Oracle RAW(16) binding. */
-private fun UUID.toRawBytes(): ByteArray =
-    ByteBuffer.allocate(16)
-        .putLong(mostSignificantBits)
-        .putLong(leastSignificantBits)
-        .array()
+private fun UUID.toRawBytes(): ByteArray = CryptoUtils.uuidToBytes(this)

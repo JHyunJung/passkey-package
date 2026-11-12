@@ -7,8 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Verifies {@link SecretMaskingConverter} masks all 5 secret patterns and
- * that {@link LogRedact} helpers return the expected redaction shape.
+ * Verifies {@link SecretMaskingConverter} masks all 5 secret patterns.
  *
  * <p>Calls the converter directly (no logback pipeline) — that's the simplest
  * surface that still exercises the patterns end-to-end. The plan permits this
@@ -57,20 +56,6 @@ class SecretMaskingConverterTest {
                 "stored=$2a$12$gvD5tGra6vKnSn/9cxqfQOKZOzlzp4LCg276Ddfkpwl8Kk24Zbb1G"));
         assertThat(out).contains("<bcrypt-redacted>");
         assertThat(out).doesNotContain("Kk24Zbb1G");
-    }
-
-    @Test
-    void logRedactHelpers() {
-        assertThat(LogRedact.email("alice@crosscert.com")).isEqualTo("a***@crosscert.com");
-        assertThat(LogRedact.apiKey("pk_devacme0longsecret")).isEqualTo("pk_devacme0");
-        assertThat(LogRedact.token("eyJhbGciOiJSUzI1NiJ9.x.y")).isEqualTo("eyJhb…<redacted>");
-        assertThat(LogRedact.idTail("ABCDEFGHIJKLMNO", 8)).isEqualTo("HIJKLMNO");
-        assertThat(LogRedact.idTail("short", 8)).isEqualTo("***");
-        assertThat(LogRedact.email(null)).isEqualTo("");
-        assertThat(LogRedact.apiKey(null)).isEqualTo("<redacted>");
-        assertThat(LogRedact.apiKey("pk_only11ch")).isEqualTo("<redacted>"); // exactly 11 chars
-        assertThat(LogRedact.token(null)).isEqualTo("<redacted>");
-        assertThat(LogRedact.idTail(null, 8)).isEqualTo("");
     }
 
     // ── JSON 토큰 필드 마스킹 ─────────────────────────────────────────────────

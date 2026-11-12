@@ -100,6 +100,7 @@ class AuthenticationFinishServiceCharacterizationTest {
 
         whenever(credentials.findByCredentialIdForUpdate(anyOrNull())).thenReturn(Optional.of(cred))
         whenever(idTokens.issue(any<String>(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn("jwt.value")
+        whenever(idTokens.tokenTtlSeconds()).thenReturn(900L)
     }
 
     @AfterEach
@@ -391,6 +392,21 @@ class AuthenticationFinishServiceCharacterizationTest {
         assertThat(resp.idToken).isEqualTo("jwt.value")
         verify(authEvents).recordAfterCommit(CRED_UUID, TENANT, CredentialAuthResult.SUCCESS, null, 0L)
         verifyNoInteractions(events)
+    }
+
+    @Test
+    fun success_expiresInFollowsIssuerTtl_notAHardcodedConstant() {
+        // passkey.id-token.ttl 을 바꾸면 JWT exp 와 응답 expiresIn·발급 로그가 같은 값을 말해야 한다.
+        whenever(idTokens.tokenTtlSeconds()).thenReturn(600L)
+        stubChallenge(USER)
+        storedCount(1)
+        whenever(verifier.verifyAuthentication(anyOrNull()))
+            .thenReturn(AuthenticationResult(CRED_ID, 2, true, true, false))
+
+        val resp = svc().finish(validReq())
+
+        assertThat(resp.expiresIn).isEqualTo(600L)
+        assertThat(messages(Level.INFO)).contains("id-token issued: subTail=*** aud=$TENANT ttlSec=600")
     }
 
     @Test

@@ -2,6 +2,9 @@ package com.crosscert.passkey.core.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HexFormat;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CryptoUtilsTest {
@@ -55,5 +58,19 @@ class CryptoUtilsTest {
         assertThat(a).startsWith("rst_");
         assertThat(a).hasSize(4 + 64); // prefix + 32 bytes * 2 hex chars
         assertThat(a).isNotEqualTo(b);
+    }
+
+    @Test
+    void uuidToBytesIsBigEndianMsbThenLsb() {
+        UUID u = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff");
+        assertThat(HexFormat.of().formatHex(CryptoUtils.uuidToBytes(u)))
+                .isEqualTo("00112233445566778899aabbccddeeff");
+    }
+
+    @Test
+    void uuidToBytesHandlesSignBitsWithoutExtension() {
+        UUID u = UUID.fromString("ffffffff-ffff-ffff-8000-000000000001");
+        assertThat(HexFormat.of().formatHex(CryptoUtils.uuidToBytes(u)))
+                .isEqualTo("ffffffffffffffff8000000000000001");
     }
 }
