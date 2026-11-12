@@ -655,8 +655,6 @@ class CredentialsTabControllerTest {
     @Test
     @DisplayName("회수: REST revoke(tenant, credentialId, auth), 성공 토스트(제목+끝 12자·사용자), 갱신된 목록(#cred-results 본 대상)+OOB 컨트롤")
     fun revokeCallsRestAndRefreshes() {
-        @Suppress("UNUSED_VARIABLE")
-        val holder = arrayOfNulls<MvcResult>(1)
         whenever(credentials.revoke(eq(T1), eq(CA), anyOrNull())).thenAnswer {
             stubList(listOf(cred(CB, "user-b", null, null, null, null, 1, null)))
             ResponseEntity.ok(ApiResponse.ok())

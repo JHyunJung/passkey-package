@@ -197,8 +197,8 @@ class AdminUsersTabControllerTest {
         assertThat(rpRow.text()).contains("RP_ADMIN").contains("Acme").contains("외 1개")
         assertThat(rpRow.selectFirst("td:eq(2) .truncate")!!.attr("title")).isEqualTo(T1.toString())
         val gone = row(d, "gone@x.com")
-        assertThat(gone.text()).contains("…0000000bff".substring(0, 1)).contains("미접속").contains("OFF").contains("정지")
-        assertThat(gone.selectFirst("td:eq(2) .mono")!!.text()).startsWith("…")
+        assertThat(gone.text()).contains("…0000000bff").contains("미접속").contains("OFF").contains("정지")
+        assertThat(gone.selectFirst("td:eq(2) .mono")!!.text()).isEqualTo("…0000000bff") // 이름 없는 tenant: id 끝 10자
         assertThat(card.select("[role=group][aria-label=역할] button").eachText()).containsExactly("전체", "PLATFORM", "RP_ADMIN", "정지")
         assertThat(card.selectFirst("input[aria-label=운영자 검색]")!!.attr("placeholder")).isEqualTo("이메일 · ID")
         // 필터용 데이터 속성

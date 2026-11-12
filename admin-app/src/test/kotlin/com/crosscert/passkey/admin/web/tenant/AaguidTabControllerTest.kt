@@ -444,7 +444,7 @@ class AaguidTabControllerTest {
         assertThat(t.get("toast").get("title").asString()).isEqualTo("AAGUID 정책 저장 완료")
         val d = doc(r)
         assertThat(d.select("form#ag-form")).hasSize(1)
-        assertThat(d.select("template[x-for]").first()!!.parent()!!.select("[x-data^=chipInput]")).isNotNull()
+        assertThat(d.select("template[x-for]").first()!!.parent()!!.select("[x-data^=chipInput]")).isNotEmpty()
         assertThat(d.selectFirst("[x-data^=chipInput]")!!.attr("x-data")).contains(added).contains("Some Key")
     }
 
