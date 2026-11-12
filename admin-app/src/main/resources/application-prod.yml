@@ -52,7 +52,7 @@ server:
   servlet:
     session:
       cookie:
-        # F-cookieSecure: base application.yml 의 forward-headers-strategy=framework
+        # F-cookieSecure: base application.yml 의 forward-headers-strategy=native
         # 가 request.isSecure() 를 X-Forwarded-Proto 기반으로 정확히 판정하게 만들어
         # Spring Session 쿠키 직렬화기(DefaultCookieSerializer)의 Secure 자동판정도
         # 이미 옳게 동작하지만, prod 는 명시적으로 강제해 방어심층을 추가한다(LB 설정

@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin
 
+import com.crosscert.passkey.core.jwt.KeyEnvelope
 import com.crosscert.passkey.admin.auth.RecoveryCodeService
 import com.crosscert.passkey.admin.credential.CredentialAdminController
 import com.crosscert.passkey.admin.credential.CredentialAdminService
@@ -63,6 +64,7 @@ class KotlinProxyWiringTest @Autowired constructor(
         @Bean fun credentialAdminService(): CredentialAdminService = mock()
         @Bean fun adminUserRepository(): AdminUserRepository = mock()
         @Bean fun clock(): Clock = Clock.systemUTC()
+        @Bean fun keyEnvelope(): KeyEnvelope = KeyEnvelope(java.util.Base64.getEncoder().encodeToString(ByteArray(32)), java.security.SecureRandom())
     }
 
     /**

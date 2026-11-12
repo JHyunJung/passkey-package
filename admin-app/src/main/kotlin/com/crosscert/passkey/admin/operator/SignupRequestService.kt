@@ -92,6 +92,10 @@ class SignupRequestService(
         val email = normalize(req.email!!)
         val masked = CryptoUtils.maskEmail(email)
 
+        // 72바이트 초과는 BCrypt 가 영어 원문 IAE 를 던진다 — REST 는 @Size(글자 수)만 거치므로 여기서 한국어로 거른다.
+        // 이메일과 무관한 판정이라 아래 타이밍 이퀄라이제이션을 깨지 않는다.
+        PasswordPolicy.require(req.password)
+
         // 타이밍 이퀄라이제이션(열거 저항) — bcrypt(strength 12, 수백 ms)는 아래
         // 세 확인(스킵 경로 포함)을 지배하는 비용이다. 존재/대기/상한 확인보다
         // 먼저, 스킵 여부와 무관하게 항상 해싱해야 공개 엔드포인트 응답시간으로

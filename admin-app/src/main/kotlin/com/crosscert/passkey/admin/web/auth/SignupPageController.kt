@@ -2,6 +2,8 @@ package com.crosscert.passkey.admin.web.auth
 
 import com.crosscert.passkey.admin.config.ProfileController
 import com.crosscert.passkey.admin.operator.SignupRequestController
+import com.crosscert.passkey.admin.operator.PASSWORD_RULE
+import com.crosscert.passkey.admin.operator.PasswordPolicy
 import com.crosscert.passkey.admin.operator.SignupRequestDto
 import com.crosscert.passkey.admin.web.format.javaTrim
 import com.crosscert.passkey.admin.web.support.Htmx
@@ -107,10 +109,14 @@ class SignupPageController(
         for (v in violations) {
             when (v.propertyPath.toString()) {
                 "email" -> errors["email"] = "이메일 형식이 올바르지 않습니다. 예: you@company.com"
-                "password" -> errors["password"] = "${pw.length}자 입력됨 · 12–128자로 입력하세요"
+                "password" -> errors["password"] = passwordError(pw)
                 "reason" -> errors["reason"] = "요청 사유는 500자 이하로 입력하세요."
                 else -> { /* role 은 위에서 걸러 보낸다 */ }
             }
+        }
+        // @Size 는 글자 수만 본다 — 다바이트(한글 25자 = 75바이트)는 BCrypt 상한을 넘으므로 같은 문구로 거른다.
+        if (!errors.containsKey("password") && !PasswordPolicy.accepts(pw)) {
+            errors["password"] = passwordError(pw)
         }
         // SignupRequestPage.tsx 의 EMAIL_RE: 점이 없는 주소(a@b)는 @Email 은 통과시키지만 화면은 거부한다.
         if (!errors.containsKey("email") && !EMAIL_RE.matcher(email).matches()) {
@@ -121,6 +127,9 @@ class SignupPageController(
         }
         return errors
     }
+
+    /** 화면 문구: 입력 글자 수 + 규칙. */
+    private fun passwordError(pw: String): String = "${pw.length}자 입력됨 · ${PASSWORD_RULE}로 입력하세요"
 
     private fun selfSignupAvailable(): Boolean {
         return try {

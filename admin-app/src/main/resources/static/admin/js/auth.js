@@ -176,7 +176,8 @@
         mismatch() { return this.pw.length > 0 && this.pw2.length > 0 && this.pw !== this.pw2; },
         pwTooShort() { return this.pw.length > 0 && this.pw.length < 12; },
         canSubmit() {
-          return EMAIL_RE.test(this.email.trim()) && this.pw.length >= 12 && this.pw.length <= 128
+          // 72바이트 = BCrypt 상한(서버 PasswordPolicy 와 같은 규칙). maxlength 는 두지 않는다 — 붙여넣은 긴 비밀번호를 조용히 잘라 다른 값으로 가입시키지 않도록.
+          return EMAIL_RE.test(this.email.trim()) && this.pw.length >= 12 && new TextEncoder().encode(this.pw).length <= 72
             && this.pw === this.pw2 && this.reason.length <= 500 && !this.submitting;
         },
       });

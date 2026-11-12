@@ -164,7 +164,7 @@ services:
       # 들어가기 전에 빌드된 rp-app 이미지로도 nginx(TLS 종료) 뒤에서 /passkey/** 가
       # 403(Invalid CORS request)이 되지 않게, 번들에서만 한 번 더 지정한다.
       # 이미지를 새로 빌드해 반입했다면 지워도 동작은 같다.
-      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SERVER_FORWARD_HEADERS_STRATEGY: native
     volumes:
       # user-store JSON 영속화. Dockerfile 이 /app/data 를 appuser 소유로 만들어 두므로
       # named volume 이 그 소유권을 이어받아 컨테이너가 쓸 수 있다.

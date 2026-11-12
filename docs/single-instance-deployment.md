@@ -118,7 +118,7 @@ PASSKEY_ID_TOKEN_ISSUER_BASE='https://dev-passkey.crosscert.com' \
 | `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | 선택, 기본 passkey-app `20` / admin-app `10` | DB 커넥션 풀 상한. 바꾸면 아래 값도 함께 조정. |
 | `SERVER_TOMCAT_THREADS_MAX` | 선택, 기본 `19` | passkey-app 요청 워커 상한. **반드시 풀 상한 − 1 이하** — 아니면 동시 ceremony 가 몰릴 때 이벤트 기록이 풀을 고갈시켜 30초 정지할 수 있다. |
 
-> ℹ️ **forward-headers 는 주입하지 않습니다**: `SERVER_FORWARD_HEADERS_STRATEGY` 를 따로 설정할 필요가 없습니다 — passkey-app/admin-app/rp-app 의 base `application.yml` 에 `forward-headers-strategy: framework` 가 이미 있습니다. env 로 주입하면 오히려 그 값을 덮어씁니다. 필요한 것은 프록시가 `X-Forwarded-For` 와 `X-Forwarded-Proto` 를 보내는지(§5)뿐입니다 — 전자가 감사로그 클라이언트 IP·rate-limit IP 버킷의 근거(`request.getRemoteAddr()`)가 되고, 후자가 스킴(`request.isSecure()`) 판정으로 쿠키 Secure 를 결정합니다.
+> ℹ️ **forward-headers 는 주입하지 않습니다**: `SERVER_FORWARD_HEADERS_STRATEGY` 를 따로 설정할 필요가 없습니다 — passkey-app/admin-app/rp-app 의 base `application.yml` 에 `forward-headers-strategy: native` 가 이미 있습니다(Tomcat RemoteIpValve — 사설·루프백 IP 의 프록시가 보낸 헤더만 신뢰하고, `X-Forwarded-For` 는 오른쪽부터 판정해 클라이언트가 미리 채운 값을 무시). env 로 주입하면 오히려 그 값을 덮어씁니다. 필요한 것은 프록시가 `X-Forwarded-For` 와 `X-Forwarded-Proto` 를 보내는지(§5)뿐입니다 — 전자가 감사로그 클라이언트 IP·rate-limit IP 버킷의 근거(`request.getRemoteAddr()`)가 되고, 후자가 스킴(`request.isSecure()`) 판정으로 쿠키 Secure 를 결정합니다.
 
 ### 3.2 admin 콘솔 (admin-app, 내부 8081) — 테넌트/키 발급용
 
@@ -310,7 +310,7 @@ sudo nginx -t && sudo systemctl reload nginx
 > - **`X-Forwarded-For`** → `request.getRemoteAddr()` 이 실제 클라이언트 IP 를 가리키게 합니다. 감사로그의 IP 와 rate-limit 의 IP 버킷 분리가 이 값을 씁니다. 없으면 모든 요청이 프록시 IP 하나로 뭉칩니다.
 > - **`X-Forwarded-Proto`** → `request.isSecure()` 가 "외부에서 https로 들어왔다"를 인식하게 합니다. 세션/CSRF 쿠키의 Secure 자동판정이 여기에 달려 있습니다.
 >
-> 앱 쪽 설정은 base `application.yml` 의 `forward-headers-strategy: framework` 로 이미 되어 있어 별도 주입이 필요 없습니다(admin-app 은 `application-prod.yml` 에서 세션 쿠키 `secure: true` 를 명시해 헤더가 누락돼도 fail-closed).
+> 앱 쪽 설정은 base `application.yml` 의 `forward-headers-strategy: native` 로 이미 되어 있어 별도 주입이 필요 없습니다(admin-app 은 `application-prod.yml` 에서 세션 쿠키 `secure: true` 를 명시해 헤더가 누락돼도 fail-closed).
 >
 > 다만 **패스키 origin 검증은 이 헤더와 무관합니다.** WebAuthn 은 브라우저가 서명한 `clientDataJSON` 의 origin 을 테넌트 `allowed_origins` 와 대조합니다(서버가 자기 요청 URL 에서 origin 을 유도하지 않습니다). 등록이 origin 문제로 실패하면 §4.1 의 `allowedOrigins` 를 브라우저 주소창 origin(443, 포트 표기 없음)과 정확히 맞추세요.
 
@@ -334,7 +334,7 @@ sudo nginx -t && sudo systemctl reload nginx
 |---|---|---|
 | 등록 시 `C001`(origin 관련) | 테넌트 `allowedOrigins`가 실제 origin과 불일치 | `allowedOrigins`를 정확히 `https://rp-dev.crosscert.com`(포트 없음)으로. 브라우저 주소창의 origin과 글자까지 일치해야 함. |
 | `iss mismatch` 로그인 실패 | passkey-app `PASSKEY_ID_TOKEN_ISSUER_BASE` ≠ rp-app `PASSKEY_ISSUER_BASE` | 둘을 `https://dev-passkey.crosscert.com`으로 동일하게. |
-| 등록이 origin 불일치로 실패 | 브라우저 `clientDataJSON` 의 origin 과 테넌트 `allowed_origins` 불일치 | §4.1 의 `allowedOrigins` 를 브라우저 주소창 origin(`https://rp-dev.crosscert.com`, 포트 표기 없음)과 정확히 맞춤. `SERVER_FORWARD_HEADERS_STRATEGY` 는 주입 대상이 아니다(base `application.yml` 이 `framework` 로 고정). |
+| 등록이 origin 불일치로 실패 | 브라우저 `clientDataJSON` 의 origin 과 테넌트 `allowed_origins` 불일치 | §4.1 의 `allowedOrigins` 를 브라우저 주소창 origin(`https://rp-dev.crosscert.com`, 포트 표기 없음)과 정확히 맞춤. `SERVER_FORWARD_HEADERS_STRATEGY` 는 주입 대상이 아니다(base `application.yml` 이 `native` 로 고정). |
 | 패스키가 다른 서브도메인에서 안 됨 | `rpId`를 좁게 설정함 | 여러 서브도메인을 쓰려면 `rpId`를 상위 도메인(`crosscert.com`)으로, `allowedOrigins`에 각 origin 추가. |
 | JWKS 404/타임아웃 | nginx가 `dev-passkey` 서브도메인을 8080으로 프록시 안 함 | §5 nginx 설정·DNS 확인. |
 | 401 (RP→Passkey 호출) | `PASSKEY_API_KEY` 형식/scope 오류 | prefix+secret 이어붙임 확인, 키에 registration·authentication scope 있는지 확인. |

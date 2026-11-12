@@ -43,6 +43,7 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
 import org.springframework.security.web.access.intercept.AuthorizationFilter
 import org.springframework.security.web.authentication.AuthenticationFailureHandler
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
@@ -102,6 +103,12 @@ class AdminSecurityConfig {
             // P0-6: security_policy.cors_allowlist 를 동적으로 적용. allowlist 가 비어
             // 있으면 corsSource 가 null 을 반환 → CORS 헤더 미발급(same-origin 만 허용).
             .cors { cors -> cors.configurationSource(corsSource) }
+            // 기본 헤더(nosniff·X-Frame-Options DENY·HTTPS 요청의 HSTS·Cache-Control)에 CSP·Referrer-Policy 를 더한다.
+            // HSTS 는 isSecure 요청에만 붙으므로 프록시 뒤에서는 native forward-headers 가 X-Forwarded-Proto 로 복원해 준다.
+            .headers { h ->
+                h.contentSecurityPolicy { csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY) }
+                h.referrerPolicy { rp -> rp.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN) }
+            }
             .authorizeHttpRequests { authz ->
                 authz
                     // 화면 경로(/admin 아래)에서 난 컨테이너 오류 디스패치(/error)는 원래 상태의 오류 화면을 그리게 둔다(아래 denyAll 이
@@ -447,6 +454,18 @@ class AdminSecurityConfig {
         }
 
     companion object {
+        /**
+         * 콘솔 화면 구성에 맞춘 CSP. 인라인 `<script>`·이벤트 핸들러 속성·외부 리소스가 0건이라 script 는 'self' 로 묶는다.
+         * - script 'unsafe-eval': Alpine(x-data·x-on 등)과 htmx(hx-on·트리거 필터)가 속성 식을 Function 으로 평가한다.
+         * - style 'unsafe-inline': 템플릿의 style 속성과 htmx 표시기 스타일 주입.
+         * - img data:: MFA 등록 QR 이 data:image/svg+xml(QrSvg).
+         * 주입된 인라인 `<script>`·외부 스크립트·프레이밍·다른 origin 으로의 폼 전송을 막는다.
+         */
+        internal const val CONTENT_SECURITY_POLICY =
+            "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
+                "img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
+                "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
         /** Fallback idle timeout (minutes) when the policy is unreadable or invalid — matches application.yml PT30M. Also used by MeController as the no-session fallback. */
         internal const val DEFAULT_IDLE_MINUTES = 30
 

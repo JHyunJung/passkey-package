@@ -112,7 +112,7 @@ services:
       WK_IOS_APPID: ${WK_IOS_APPID:-LTPC88ZFE8.com.crosscert.sample.passkey}
       JAVA_OPTS: ${RP_JAVA_OPTS:--XX:MaxRAMPercentage=75}
       # 지우면 nginx 뒤에서 /passkey/** 요청이 403(Invalid CORS request)이 된다.
-      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SERVER_FORWARD_HEADERS_STRATEGY: native
     volumes:
       - rp-data:/app/data
 

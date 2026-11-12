@@ -99,6 +99,17 @@ class SignupRequestServiceTest {
     }
 
     @Test
+    fun request_passwordOver72Bytes_rejectedBeforeBcryptWithKoreanMessage() {
+        // REST(/admin/api/signup-requests)는 @Size(글자 수)만 거치므로 다바이트 문자는 서비스가 최종 방어선이다.
+        // 놓치면 BCrypt 가 "password cannot be more than 72 bytes"(영어 원문)를 400 으로 그대로 내보낸다.
+        assertThatThrownBy { service.request(SignupRequestDto.Create("new@x.com", "가".repeat(25), null)) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("한글 24자")
+        verify(encoder, never()).encode(anyString())
+        verify(requests, never()).save(any<AdminSignupRequest>())
+    }
+
+    @Test
     fun request_emailAlreadyAnAdminUser_silentlySkips() {
         whenever(users.findByEmail("alice@crosscert.com")).thenReturn(Optional.of(AdminUser.create()))
 

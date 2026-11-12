@@ -46,7 +46,7 @@ class DbPoolConfigSnapshotTest {
                     .`as`("tomcat max-queue-capacity").isEqualTo(Int.MAX_VALUE)
                 assertThat(server.port).`as`("server.port").isEqualTo(8081)
                 assertThat(server.forwardHeadersStrategy).`as`("forward-headers-strategy")
-                    .isEqualTo(ServerProperties.ForwardHeadersStrategy.FRAMEWORK)
+                    .isEqualTo(ServerProperties.ForwardHeadersStrategy.NATIVE)
                 assertThat(binder.bind("spring.threads.virtual.enabled", Boolean::class.javaObjectType).orElse(false))
                     .`as`("spring.threads.virtual.enabled").isFalse()
             }

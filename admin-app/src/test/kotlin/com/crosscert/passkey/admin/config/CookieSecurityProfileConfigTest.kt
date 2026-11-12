@@ -29,7 +29,7 @@ class CookieSecurityProfileConfigTest {
         // G13: without this, request.getRemoteAddr()/isSecure() only ever see
         // the LB's TCP peer address/plain-http scheme behind a reverse proxy.
         assertThat(prop("application.yml", "server.forward-headers-strategy"))
-            .isEqualTo("framework")
+            .isEqualTo("native")
     }
 
     @Test

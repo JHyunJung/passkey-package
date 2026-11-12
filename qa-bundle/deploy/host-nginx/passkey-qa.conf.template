@@ -12,7 +12,7 @@
 # 같은 server_name 의 443 블록이 이미 있으면 nginx 가 "conflicting server name" 경고를 내고
 # 먼저 읽힌 블록만 쓴다. 그 경우 기존 블록을 지우거나 아래 location 들을 기존 블록으로 옮긴다.
 #
-# 모든 블록에 같은 헤더 4개를 넘긴다. 셋 다 forward-headers-strategy=framework 라서 이 값으로
+# 모든 블록에 같은 헤더 4개를 넘긴다. 셋 다 forward-headers-strategy=native(신뢰 프록시=사설·루프백 IP)라서 이 값으로
 # 원래 요청(https, 포트, 클라이언트 IP)을 복원한다.
 #   X-Forwarded-Proto $scheme      — TLS 를 여기서 끝내므로 항상 https. 쿠키 Secure·리다이렉트 판정.
 #   X-Forwarded-Port  $server_port — RP 처럼 443 이 아닌 포트에서 필수. 없으면 rp-app 이 브라우저

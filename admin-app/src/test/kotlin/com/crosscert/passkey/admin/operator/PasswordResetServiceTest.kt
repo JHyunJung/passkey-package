@@ -232,9 +232,9 @@ class PasswordResetServiceTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(ints = [0, 1, 11, 129])
-    fun confirm_rejects_password_outside_12_to_128_before_touching_token(len: Int) {
-        // 가입(SignupRequestDto)과 같은 12–128자. REST 경로는 화면 검사를 거치지 않으므로 서비스가 최종 방어선이다.
+    @org.junit.jupiter.params.provider.ValueSource(ints = [0, 1, 11, 73])
+    fun confirm_rejects_password_outside_policy_before_touching_token(len: Int) {
+        // 가입(SignupRequestDto)과 같은 정책(12자 이상·72바이트 이하). REST 경로는 화면 검사를 거치지 않으므로 서비스가 최종 방어선이다.
         assertThatThrownBy { service.confirm("t", "a".repeat(len)) }
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageNotContaining("token") // 화면이 'token' 단어로 만료 카드를 고르므로 섞이면 안 된다
@@ -246,5 +246,14 @@ class PasswordResetServiceTest {
         assertThatThrownBy { service.confirm("t", null) }
             .isInstanceOf(IllegalArgumentException::class.java)
         org.mockito.kotlin.verifyNoInteractions(tokens)
+    }
+
+    @Test
+    fun confirm_rejects_multibyte_password_over_72_bytes_with_korean_message() {
+        // 25자(12–128자 규칙은 통과)지만 75바이트 — BCrypt 의 영어 오류 대신 정책 메시지로 거른다.
+        assertThatThrownBy { service.confirm("t", "가".repeat(25)) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("한글 24자")
+        org.mockito.kotlin.verifyNoInteractions(tokens, users, encoder)
     }
 }
