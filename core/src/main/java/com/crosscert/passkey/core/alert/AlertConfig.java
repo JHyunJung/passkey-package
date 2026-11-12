@@ -11,17 +11,20 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableAsync
 public class AlertConfig {
 
+    private static final int QUEUE_CAPACITY = 100;
+
     @Bean("alertExecutor")
     public TaskExecutor alertExecutor() {
         ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
         ex.setCorePoolSize(2);
         ex.setMaxPoolSize(2);
-        ex.setQueueCapacity(100);
+        ex.setQueueCapacity(QUEUE_CAPACITY);
         ex.setThreadNamePrefix("alert-");
         ex.setRejectedExecutionHandler((r, executor) -> {
             // 큐 포화 시 조용히 버리되, 드롭 자체는 반드시 관측되게(공격 중 가시성 보존).
             org.slf4j.LoggerFactory.getLogger(AlertConfig.class)
-                .error("alert dropped: executor queue saturated (queueCapacity={})", executor.getQueue().size());
+                .error("alert dropped: executor queue saturated (queueSize={}, queueCapacity={})",
+                        executor.getQueue().size(), QUEUE_CAPACITY);
         });
         ex.initialize();
         return ex;
