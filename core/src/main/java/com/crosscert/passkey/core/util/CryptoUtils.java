@@ -1,10 +1,12 @@
 package com.crosscert.passkey.core.util;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.HexFormat;
+import java.util.UUID;
 
 /**
  * 공유 암호/해시/마스킹 유틸. admin-app 의 sha256Hex/hex/maskEmail/토큰 생성 중복을 통합.
@@ -44,5 +46,13 @@ public final class CryptoUtils {
         byte[] raw = new byte[32];
         RNG.nextBytes(raw);
         return prefix + hex(raw);
+    }
+
+    /** UUID → 16바이트 big-endian(MSB 8바이트 + LSB 8바이트). Oracle RAW(16) 바인딩·AAGUID 비교·jti 인코딩 공용. */
+    public static byte[] uuidToBytes(UUID uuid) {
+        return ByteBuffer.allocate(16)
+                .putLong(uuid.getMostSignificantBits())
+                .putLong(uuid.getLeastSignificantBits())
+                .array();
     }
 }

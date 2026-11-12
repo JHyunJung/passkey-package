@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.api.ErrorCode;
 import com.crosscert.passkey.core.entity.TenantAaguidPolicy;
 import com.crosscert.passkey.core.mds.MdsAaguidCache;
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -58,7 +59,7 @@ public class DefaultAaguidPolicyChecker implements AaguidPolicyChecker {
         // ── mds_strict 검사: MDS 에 없는 AAGUID 는 차단 ──────────────────
         if (policy.isMdsStrict()) {
             // MdsAaguidCache.lookup() 은 byte[] 를 받으므로 UUID → byte[] 변환
-            byte[] aaguidBytes = uuidToBytes(aaguid);
+            byte[] aaguidBytes = CryptoUtils.uuidToBytes(aaguid); // MdsAaguidCache 와 같은 big-endian 형식
             boolean knownByMds = mdsCache.lookup(aaguidBytes).isPresent();
             if (!knownByMds) {
                 log.warn("[AaguidPolicy] mds_strict 위반: tenant={} aaguid={} (MDS 미등록)",
@@ -96,19 +97,4 @@ public class DefaultAaguidPolicyChecker implements AaguidPolicyChecker {
         }
     }
 
-    /** UUID → 16-byte big-endian array (MdsAaguidCache 와 동일한 형식). */
-    private static byte[] uuidToBytes(UUID uuid) {
-        byte[] bytes = new byte[16];
-        long msb = uuid.getMostSignificantBits();
-        long lsb = uuid.getLeastSignificantBits();
-        for (int i = 7; i >= 0; i--) {
-            bytes[i] = (byte) (msb & 0xff);
-            msb >>= 8;
-        }
-        for (int i = 15; i >= 8; i--) {
-            bytes[i] = (byte) (lsb & 0xff);
-            lsb >>= 8;
-        }
-        return bytes;
-    }
 }
