@@ -138,8 +138,8 @@
       rotate 는 `@Transactional` 안에서 lease 를 잡아 커밋까지 행 락이 걸리고, 해제하지 않는 30초 TTL 이 **연속 클릭 이중 회전**을 막는
       쿨다운 역할을 한다(해제하면 첫 커밋 직후 두 번째 클릭이 또 회전). 하트비트는 작업이 TTL 보다 짧아(키 1개 생성) 불필요. [zero-base 2026-07-04]
 - [x] ~~**`KeyExpirationJob`/`MdsSyncJob` 도 lease release 패턴으로 통일**~~ — **재판정: 통일하지 않음** [2026-11-12]
-      두 잡의 TTL 은 상호배제가 아니라 **같은 tick 중복 실행 억제창**이다. 즉시 해제하면 기동 시각이 조금 다른 다른 인스턴스가 곧바로
-      재실행해 MDS BLOB 을 한 번 더 받는다. KeyExpirationJob 은 상태 기반(ROTATED→REVOKED)이라 해제해도 이득이 없다. `RetentionPurgeJob` 만
+      두 잡의 TTL 은 상호배제가 아니라 **근접 중복 실행을 best-effort 로 억제하는 창**이다(MDS: fixedDelay PT6H·TTL 5분 — 5분 안에 tick 이
+      겹친 인스턴스만 건너뛴다). 즉시 해제하면 같이 기동한 인스턴스(`--scale`)가 곧바로 재실행해 MDS BLOB 을 한 번 더 받는다. KeyExpirationJob 은 상태 기반(ROTATED→REVOKED)이라 해제해도 이득이 없다. `RetentionPurgeJob` 만
       작업이 길어(배치 분할) 해제가 의미 있다. [data-retention-D 2026-05-31]
 - [ ] **F10 `FunnelService` rolling-window vs day-bucket 불일치 · F11 `MdsHistoryService` WITH TIME ZONE 왕복이 JVM TZ 의존**
       — KST 전환(`988d909`) 이후 재확인 필요. [zero-base 2026-07-04]
