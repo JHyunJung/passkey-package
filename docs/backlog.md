@@ -8,18 +8,22 @@
 
 ## 0. 배포 전 필수 (P1 — 코드 변경이 필요 없는 운영 전제 포함)
 
-- [ ] **forward-headers 신뢰 프록시 전제** — 앞단 LB/프록시가 클라이언트發 `X-Forwarded-*` 를 반드시 스트립해야 한다.
-      `admin-app/src/main/resources/application.yml:50`, `passkey-app/src/main/resources/application.yml:19` 둘 다
-      `forward-headers-strategy: framework` 이고 `internal-proxies` 화이트리스트가 없다.
-      스트립하지 않으면 감사 IP 스푸핑·Secure 쿠키 오판·rate-limit IP 우회가 동시에 성립한다. [zero-base 2026-07-04]
+- [x] ~~**forward-headers 신뢰 프록시 전제**~~ — 세 앱을 `framework`→**`native`**(Tomcat RemoteIpValve)로 전환. [2026-11-12]
+      framework 는 X-Forwarded-For 맨 왼쪽을 믿어 번들 nginx(`$proxy_add_x_forwarded_for`) 뒤에서도 클라이언트가 채운 값이 이겼다
+      (passkey-app IP rate-limit 우회·admin 감사 IP 위조). native 는 사설·루프백 프록시의 헤더만 반영하고 XFF 를 오른쪽부터 판정.
+      **운영 전제(남음)**: 앞단 프록시가 공인 IP 로 접속하면 `SERVER_TOMCAT_REMOTEIP_TRUSTED_PROXIES` 로 추가. admin-app 을 프록시 없이
+      사내망에 직접 바인딩하면 사설 IP 클라이언트는 신뢰 프록시로 보이므로 감사 IP 는 사내망 기준 best-effort. `ProxiedSameOriginPostTest`(실제 Tomcat).
 - [x] ~~**actuator `health.show-details: always` 미인증 노출**~~ — `when-authorized` 로 변경(무인증은 status 만,
       admin-app 운영자만 상세). `ApiContractIT.actuatorHealth_unauthenticated_exposesStatusOnly` 로 고정. [2026-11-11]
-- [ ] **passkey-app SecurityFilterChain 부재** — `passkey-app/src/main/kotlin` 전체에 `SecurityFilterChain` 0건.
-      actuator 가 완전 미인증이고 nosniff/frame-options 등 기본 보안헤더도 적용되지 않는다. [master-backlog 2026-05-31]
-- [ ] **HSTS/CSP 미설정** — `contentSecurityPolicy`/`httpStrictTransportSecurity`/`Strict-Transport-Security`/`Content-Security-Policy`
-      가 admin-app·passkey-app·core·deploy·nginx 어디에도 0건. 앱과 프록시 중 어디서 넣을지 결정 필요. [master-backlog 2026-05-31]
-- [ ] **recovery code 가 솔트 없는 단일 SHA-256** — `admin-app/.../auth/RecoveryCodeService.kt:42,51` = `CryptoUtils.sha256Hex(...)`.
-      pepper/HMAC 없음. [master-backlog 2026-05-31]
+- [x] ~~**passkey-app SecurityFilterChain 부재**~~ — **Spring Security 는 들이지 않음**(결정): JSON API 이고 인증은 ApiKeyAuthFilter 가 맡아
+      체인 도입은 필터 순서·actuator 동작을 바꾼다. 대신 `SecurityHeadersFilter`(HIGHEST, 429/401 에도 적용)로 nosniff·DENY·no-referrer·
+      CSP `default-src 'none'`·HTTPS HSTS. actuator 는 nginx 가 차단하고 health 상세는 when-authorized(무인증 status 만). [2026-11-12]
+- [x] ~~**HSTS/CSP 미설정**~~ — **앱에서 설정**(결정). admin: Spring Security 기본 HSTS(HTTPS 요청)가 이미 나가고 있었음을 테스트로 고정 +
+      화면 맞춤 CSP(script 'self'+'unsafe-eval'(Alpine/htmx), style 'unsafe-inline', img data:(QR), frame-ancestors/object/base/form-action 제한)·
+      Referrer-Policy same-origin. 렌더 스냅샷을 같은 CSP 로 서빙해 Playwright 로 위반 0건·주입 인라인 스크립트 차단 확인. passkey-app 은 위 항목. [2026-11-12]
+- [x] ~~**recovery code 가 솔트 없는 단일 SHA-256**~~ — master key 파생 키(`KeyEnvelope.deriveSubkey`)의 HMAC-SHA256 으로 저장. 코드 공간 40비트라
+      무키 해시는 DB 유출 시 즉시 역산됐다. 새 환경변수·스키마 변경 없음, 전환 전 SHA-256 코드는 재발급 전까지 계속 유효. master key 를 바꾸면
+      (봉인 서명 키·MFA secret 과 같이) 코드도 재발급 필요. [2026-11-12]
 - [x] ~~**`X-Trace-Id` 무검증 → 로그 인젝션**~~ — core·rp-app `TraceIdFilter` 가 `[A-Za-z0-9._-]{1,64}` 일 때만 수용,
       아니면 새 ID 발급(요청은 거부하지 않음). 양쪽 `TraceIdFilterTest` 에 CRLF·길이·문자집합 케이스. [2026-11-11]
 - [x] ~~**시드 평문 비번이 prod 에 실리지 않는지 확인**~~ — 확인 완료(코드 변경 없음): `application-prod.yml` locations =
@@ -62,19 +66,19 @@
       `%compactMdc` 는 거치지 않으므로, 메시지 본문은 `maskEmail` 로 가려도 MDC 칸에는 평문이 남는다(16자 절단).
       prod JSON 로그의 `includeMdcKeyName` 에도 그대로 실린다. 마스킹 위치를 MDC put 지점으로 옮길지 결정 필요.
       [2026-09-13 문서 감사에서 발견]
-- [ ] **credential DELETE 가 registration scope 를 공유** — `passkey-app/.../security/ApiKeyScopeResolver.kt:28-31`.
-      파괴적 작업의 scope 분리는 정책 결정 사항. 같은 파일의 `admin` scope 가 dead scope 인 것도 함께. [config-enforcement-B 2026-05-31, master-backlog 2026-05-31]
+- [x] ~~**credential DELETE 가 registration scope 를 공유**~~ — **현행 유지**(결정) [2026-11-12]
+      scope 를 나누면 이미 발급된 모든 RP API key 의 credential 삭제가 403 이 되어 RP 측 키 재발급·SDK 안내가 동반돼야 한다. 등록 권한을 가진
+      RP 서버는 자기 테넌트 사용자의 패스키를 이미 관리하는 주체라 분리 이득이 작다. `admin` scope 는 DB CHECK(`ck_aks_scope`)의 허용값이라
+      제거하지 않는다. 외부 RP 가 세분 권한을 요구하면 재검토. [config-enforcement-B 2026-05-31, master-backlog 2026-05-31]
 - [x] ~~**CORS allowlist origin 형식 검증**~~ — 화면은 이미 `PolicyValidation` 으로 검사했고 REST `PUT /admin/api/security-policy`
       만 빠져 있었다. 같은 규칙으로 400(서비스 미호출). `SecurityPolicyControllerSecurityTest` 에 `*`·경로·http 외부 호스트 케이스. [2026-11-11]
-- [ ] **`IllegalArgumentException` 메시지를 클라이언트에 그대로 반환** — `core/.../api/GlobalExceptionHandler.java:114-118`
-      = `ApiResponse.error(INVALID_INPUT, e.getMessage())`. **결정 필요(2026-11-11 재분류)**: passkey-app 의 IAE 메시지
-      (`authentication token missing or expired` 등)는 RP 대상 API 계약이고 contract 스냅샷에 고정돼 있다. 일괄 일반화는
-      외부 API 변경이므로, 의도된 메시지는 전용 예외(BusinessException)로 옮기고 나머지만 숨기는 식의 범위 결정이 먼저다. [master-backlog 2026-05-31]
+- [x] ~~**`IllegalArgumentException` 메시지를 클라이언트에 그대로 반환**~~ — **현행 유지**(결정) [2026-11-12]
+      passkey-app IAE 메시지는 RP API 계약(contract 스냅샷 고정)이고, 메시지는 개발자가 쓴 `require` 문구라 비밀을 담지 않는다. 실제로 새던
+      라이브러리 원문은 BCrypt 72바이트 오류였고 아래 항목에서 막았다. 새 IAE 를 던질 때 입력값·내부 식별자를 메시지에 넣지 않는 것을 규칙으로 둔다. [master-backlog 2026-05-31]
 - [x] ~~**`PasswordResetController.confirm` 에 `@Valid`/제약 부재**~~ — 실제로는 REST 경로가 화면의 12자 검사를 우회해 빈·짧은
       비밀번호로 재설정 가능했다. 서비스가 토큰 조회 전에 12–128자(가입과 동일)를 확인하고 DTO 에 `@Valid` 제약. [2026-11-11]
-- [ ] **비밀번호 상한 128자 vs BCrypt 72바이트** — 가입(`SignupRequestDto` 12–128)·재설정(`PasswordResetService` 12–128)이
-      글자 수로 허용하지만 `BCryptPasswordEncoder` 는 72바이트 초과 시 `IllegalArgumentException("password cannot be more than 72 bytes")`.
-      영문 73자+·한글 25자+ 에서 영어 오류가 그대로 노출된다. 상한을 72바이트로 맞출지(기존 계정 영향 없음) 결정. [p2-batch1 리뷰 2026-11-11]
+- [x] ~~**비밀번호 상한 128자 vs BCrypt 72바이트**~~ — `PasswordPolicy`(12자 이상·UTF-8 72바이트 이하)를 가입·재설정 REST·화면에 적용,
+      `@Size`/maxlength 72. 한글 25자+·영문 73자+ 가 영어 BCrypt 원문 대신 한국어 규칙 문구로 400/422. 기존 계정 영향 없음. [2026-11-12]
 - [ ] **G03 세션 무효화 수단 없음** — 이미 발급된 활성 세션이 idle timeout 까지 유효. admin-app 에 `SessionRegistry` 0건. [zero-base 2026-07-04]
 - [ ] **`AdminUser`·`Credential` 에 `@Version`/`@DynamicUpdate` 부재 → 전체컬럼 UPDATE lost-update**
       (core 전체에 두 애너테이션 0건). 락 없이 로드·수정·flush 하면 동시 `/authentication/finish` 의 `signCount` 갱신을 되돌린다.
