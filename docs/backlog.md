@@ -68,11 +68,10 @@
 
 ## 2. 보안·정합성 (P2)
 
-- [ ] **MDC `actorEmail` 이 평문 email 로 로그에 남는다** — `AdminMdcFilter.kt:34-37` 가 `auth.name` 을 request attribute 로
-      넘기고 `RequestLoggingFilter.java:110` 이 그대로 MDC 에 넣는다. `SecretMaskingConverter` 는 `%msg` 에만 걸리고
-      `%compactMdc` 는 거치지 않으므로, 메시지 본문은 `maskEmail` 로 가려도 MDC 칸에는 평문이 남는다(16자 절단).
-      prod JSON 로그의 `includeMdcKeyName` 에도 그대로 실린다. 마스킹 위치를 MDC put 지점으로 옮길지 결정 필요.
-      [2026-09-13 문서 감사에서 발견]
+- [x] ~~**MDC `actorEmail` 이 평문 email 로 로그에 남는다**~~ — core `RequestLoggingFilter` 가 MDC put 지점에서
+      `CryptoUtils.maskEmail` 로 가린다(`a***@example.com`, `@` 없으면 `***`). `%compactMdc`·prod JSON MDC 키 모두 마스킹 값만 실린다.
+      request attribute 는 평문 그대로(로그 외 소비처 없음). rp-app 사본 필터는 이 attribute 를 세팅하는 곳이 없어 MDC 칸이 항상 비므로 무수정.
+      `RequestLoggingFilterTest`. [2026-11-13, 원 발견 2026-09-13 문서 감사]
 - [x] ~~**credential DELETE 가 registration scope 를 공유**~~ — **현행 유지**(결정) [2026-11-12]
       scope 를 나누면 이미 발급된 모든 RP API key 의 credential 삭제가 403 이 되어 RP 측 키 재발급·SDK 안내가 동반돼야 한다. 등록 권한을 가진
       RP 서버는 자기 테넌트 사용자의 패스키를 이미 관리하는 주체라 분리 이득이 작다. `admin` scope 는 DB CHECK(`ck_aks_scope`)의 허용값이라

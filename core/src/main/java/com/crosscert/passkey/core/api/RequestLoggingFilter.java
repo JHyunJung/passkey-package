@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.crosscert.passkey.core.util.CryptoUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
@@ -107,7 +108,8 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             if (name.isBlank()) {
                 return false;
             }
-            MDC.put(MDC_ACTOR_EMAIL, name);
+            // 마스킹은 여기서 한다: SecretMaskingConverter 는 %msg 에만 걸려 %compactMdc·JSON MDC 키에는 평문이 남는다.
+            MDC.put(MDC_ACTOR_EMAIL, CryptoUtils.maskEmail(name));
             return true;
         } catch (Throwable t) {
             return false;
