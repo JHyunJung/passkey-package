@@ -92,7 +92,7 @@ private fun resolveTier(path: String?, method: String?): RateTier? {
  * - `/api/v1/rp/authentication/start`  — 300/min
  * - `/api/v1/rp/authentication/finish` — 300/min
  *
- * Order: [Ordered.HIGHEST_PRECEDENCE] — runs BEFORE
+ * Order: `HIGHEST_PRECEDENCE + 1` — right after [SecurityHeadersFilter] (so 429s carry security headers), BEFORE
  * [ApiKeyAuthFilter] (at `HIGHEST_PRECEDENCE + 5`) so
  * floods are dropped before the (slow) BCrypt verification path.
  *
@@ -101,7 +101,7 @@ private fun resolveTier(path: String?, method: String?): RateTier? {
  * body that intentionally omits any tenant-identifying detail.
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 1)
 class RateLimitFilter(private val proxy: ProxyManager<String>) : OncePerRequestFilter() {
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {

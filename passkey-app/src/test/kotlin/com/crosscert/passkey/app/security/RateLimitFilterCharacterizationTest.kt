@@ -102,7 +102,7 @@ class RateLimitFilterCharacterizationTest {
     fun order_is_highest_precedence_and_is_component() {
         val order = AnnotationUtils.findAnnotation(RateLimitFilter::class.java, Order::class.java)
         assertThat(order).isNotNull()
-        assertThat(order?.value).isEqualTo(Ordered.HIGHEST_PRECEDENCE)
+        assertThat(order?.value).isEqualTo(Ordered.HIGHEST_PRECEDENCE + 1) // SecurityHeadersFilter(HIGHEST) 다음 — 429 에도 보안 헤더(2026-11-12)
         assertThat(AnnotationUtils.findAnnotation(RateLimitFilter::class.java, Component::class.java)).isNotNull()
     }
 
