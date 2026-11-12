@@ -11,6 +11,7 @@ import com.crosscert.passkey.admin.web.format.javaTrim
 import com.crosscert.passkey.admin.web.support.Toasts
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -52,6 +53,8 @@ private val WHITESPACE: Pattern = Pattern.compile("\\s+")
 class MdsTabController(
     private val mds: MdsAdminController,
     private val clock: Clock,
+    /** 화면 '주소 (endpoint)' 표시 — 실제 동기화(`MdsBlobClient`)와 같은 키·기본값. */
+    @Value("\${passkey.mds.blob-endpoint:https://mds.fidoalliance.org/}") private val endpoint: String,
 ) {
 
     // ── 모델 ────────────────────────────────────────────────
@@ -131,6 +134,7 @@ class MdsTabController(
     private fun load(model: Model, strict: Boolean): Boolean {
         model.addAttribute("retryAttrs", SettingsPageController.tabRequesterAttrs(TAB_PATH))
         model.addAttribute("syncAttrs", syncAttrs())
+        model.addAttribute("mdsEndpoint", endpoint)
         model.addAttribute("loadError", null)
         model.addAttribute("historyError", null)
         model.addAttribute("v", null)
