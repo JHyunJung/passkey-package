@@ -35,6 +35,9 @@
       main `aa28f5e7` 기준 amd64 이미지 3개 재빌드, `SHA256SUMS` 갱신. 이미지 내부 jar 에서 Boot 4.1.2·나눔고딕·
       `show-details: when-authorized` 확인. infra.tar.gz 는 불변. tar.gz 는 커밋 대상이 아니므로 반출 시 이 머신의
       `qa-bundle/images/` 를 그대로 가져간다. [2026-11-11]
+      **재빌드(2026-11-13)**: 결정 7건(forward-headers native·보안 헤더 등) 반영해 main `c5653c13` 기준 앱 이미지 3개 재빌드.
+      `infra.tar.gz` 가 이 머신에서 유실돼 있어 `nginx:1.27-alpine`·`redis:7-alpine` 을 `--platform linux/amd64` 로
+      pull·save 해 재생성(해시 변경). 4개 모두 linux/amd64 확인, `shasum -c` 전부 OK.
 - [x] ~~**sdk-java 패치 릴리스 + 변경 이력**~~ — 1.0.0 이후 공개 API 추가(`RegistrationRelayCodec`, 3-인자
       `verifyIdToken`)가 있어 패치가 아닌 **1.1.0** 으로 올리고 `sdk-java/CHANGELOG.md` 신설(보안·동작 변화 포함).
       외부 `passkey_rp` 저장소의 로컬 jar 는 별도 교체 필요. [2026-11-11]
