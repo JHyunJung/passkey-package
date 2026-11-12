@@ -90,12 +90,12 @@ class SignupPageControllerTest {
             .isEqualTo("플랫폼 운영자가 승인하면 계정이 활성화됩니다. 역할과 담당 tenant 는 승인 시 지정됩니다.")
         val f = d.selectFirst("form[hx-post=/admin/signup]")!!
         assertThat(f.select("input#signup-email[name=email][type=email]")).hasSize(1)
-        assertThat(f.select("input#signup-pw[name=password][type=password][maxlength=128]")).hasSize(1)
-        assertThat(f.select("input#signup-pw2[name=password2][type=password][maxlength=128]")).hasSize(1)
+        assertThat(f.select("input#signup-pw[name=password][type=password][maxlength=72]")).hasSize(1)
+        assertThat(f.select("input#signup-pw2[name=password2][type=password][maxlength=72]")).hasSize(1)
         assertThat(f.select("textarea#signup-reason[name=reason][maxlength=500]")).hasSize(1)
         assertThat(f.select("input[type=hidden][name=_csrf]").attr("value")).isNotBlank()
         assertThat(f.selectFirst("label[for=signup-reason]")!!.text()).isEqualTo("요청 사유 (선택)")
-        assertThat(f.text()).contains("12–128자")
+        assertThat(f.text()).contains("12자 이상 · 영문 72자(한글 24자) 이하")
         assertThat(f.selectFirst("button[type=submit]")!!.text()).isEqualTo("가입 요청 보내기")
         assertThat(f.attr("x-data")).isEqualTo("signupForm")
         assertThat(f.selectFirst("button[type=submit]")!!.attr("x-bind:disabled")).isEqualTo("!canSubmit()")
@@ -127,7 +127,7 @@ class SignupPageControllerTest {
         assertThat(d.select("input#signup-email").first()!!.parent()!!.select(".field__error:not([x-show])").text())
             .isEqualTo("이메일 형식이 올바르지 않습니다. 예: you@company.com")
         assertThat(d.select("input#signup-pw").first()!!.parent()!!.select(".field__error:not([x-show])").text())
-            .isEqualTo("5자 입력됨 · 12–128자로 입력하세요")
+            .isEqualTo("5자 입력됨 · 12자 이상, 영문 72자(한글 24자) 이하로 입력하세요")
         assertThat(d.select("textarea#signup-reason").first()!!.parent()!!.select(".field__error:not([x-show])").text())
             .isEqualTo("요청 사유는 500자 이하로 입력하세요.")
         // 비밀번호 길이가 맞으면 확인란 불일치가 따로 나온다
@@ -150,12 +150,24 @@ class SignupPageControllerTest {
     }
 
     @Test
-    fun passwordOver128IsRejected() {
-        val pw = "p".repeat(129)
+    fun passwordOver72CharsIsRejected() {
+        val pw = "p".repeat(73)
         val r = send("a@b.co", pw, pw, null, null)
         assertThat(r.response.status).isEqualTo(422)
         assertThat(doc(r).select("input#signup-pw").first()!!.parent()!!.select(".field__error:not([x-show])").text())
-            .isEqualTo("129자 입력됨 · 12–128자로 입력하세요")
+            .isEqualTo("73자 입력됨 · 12자 이상, 영문 72자(한글 24자) 이하로 입력하세요")
+        verify(signup, never()).request(anyOrNull())
+    }
+
+    @Test
+    fun multibytePasswordOver72BytesIsRejectedInline() {
+        // 25자 — 글자 수 검사(@Size)는 통과하지만 75바이트라 BCrypt 가 받지 못한다.
+        val pw = "가".repeat(25)
+        val r = send("a@b.co", pw, pw, null, null)
+        assertThat(r.response.status).isEqualTo(422)
+        assertThat(doc(r).select("input#signup-pw").first()!!.parent()!!.select(".field__error:not([x-show])").text())
+            .isEqualTo("25자 입력됨 · 12자 이상, 영문 72자(한글 24자) 이하로 입력하세요")
+        verify(signup, never()).request(anyOrNull())
     }
 
     @Test

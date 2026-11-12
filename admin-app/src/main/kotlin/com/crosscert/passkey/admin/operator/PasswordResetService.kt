@@ -20,10 +20,6 @@ private val log = LoggerFactory.getLogger(PasswordResetService::class.java)
 private val TOKEN_TTL: Duration = Duration.ofHours(1)
 private const val URL_PREFIX = "/reset-password?token="
 
-/** 가입 요청([SignupRequestDto])과 같은 비밀번호 길이 규칙. */
-internal const val PASSWORD_MIN = 12
-internal const val PASSWORD_MAX = 128
-
 /**
  * Admin self-service password reset (P1-6).
  *
@@ -87,12 +83,10 @@ class PasswordResetService(
     /** plaintext/newPassword nullable: 컨트롤러가 JSON 본문 값(누락 시 null)을 그대로 넘긴다 — 원 흐름 유지. */
     @Transactional
     fun confirm(plaintext: String?, newPassword: String?) {
-        // 가입(SignupRequestDto)과 같은 12–128자. REST 경로(/admin/api/password-reset/confirm)는 화면 검사를
-        // 거치지 않으므로 여기서 최종 확인한다. 토큰 조회 전에 검사해 토큰 상태를 드러내지 않고,
-        // 메시지에 'token' 을 넣지 않는다(화면이 그 단어로 만료 카드를 고른다).
-        require(newPassword != null && newPassword.length in PASSWORD_MIN..PASSWORD_MAX) {
-            "비밀번호는 ${PASSWORD_MIN}–${PASSWORD_MAX}자로 입력하세요."
-        }
+        // 가입(SignupRequestDto)과 같은 규칙(PasswordPolicy: 12자 이상·72바이트 이하). REST 경로(/admin/api/password-reset/confirm)는
+        // 화면 검사를 거치지 않으므로 토큰 조회 전에 여기서 거른다(토큰 상태를 드러내지 않는다). 메시지에 'token' 을
+        // 넣지 않는다(화면이 그 단어로 만료 카드를 고른다).
+        PasswordPolicy.require(newPassword)
         val hash = CryptoUtils.sha256Hex(plaintext)
         val tok = tokens.findByTokenHash(hash)
             .orElseThrow { IllegalArgumentException("invalid token") }

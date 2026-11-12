@@ -84,17 +84,17 @@
         </div>
         <div>
           <label class="label" for="signup-pw">비밀번호</label>
-          <input id="signup-pw" name="password" class="input" type="password" maxlength="128" autocomplete="new-password"
+          <input id="signup-pw" name="password" class="input" type="password" maxlength="72" autocomplete="new-password"
                  x-model="pw" x-bind:readonly="submitting"
                  th:attr="aria-describedby=${errors != null and errors['password'] != null} ? 'signup-pw-error signup-pw-server-error' : 'signup-pw-error', data-server-error=${errors != null and errors['password'] != null} ? 'true' : null"
                  x-bind:aria-invalid="(pwTooShort() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" aria-invalid="false">
-          <p class="field__error" id="signup-pw-error" x-show="pwTooShort()" x-cloak x-text="pw.length + '자 입력됨 · 12–128자로 입력하세요'"></p>
+          <p class="field__error" id="signup-pw-error" x-show="pwTooShort()" x-cloak x-text="pw.length + '자 입력됨 · 12자 이상, 영문 72자(한글 24자) 이하로 입력하세요'"></p>
           <p class="field__error" id="signup-pw-server-error" th:if="${errors != null and errors['password'] != null}" th:text="${errors['password']}">오류</p>
-          <p class="hint" x-show="!pwTooShort()">12–128자</p>
+          <p class="hint" x-show="!pwTooShort()">12자 이상 · 영문 72자(한글 24자) 이하</p>
         </div>
         <div>
           <label class="label" for="signup-pw2">비밀번호 확인</label>
-          <input id="signup-pw2" name="password2" class="input" type="password" maxlength="128" autocomplete="new-password"
+          <input id="signup-pw2" name="password2" class="input" type="password" maxlength="72" autocomplete="new-password"
                  x-model="pw2" x-bind:readonly="submitting"
                  th:attr="aria-describedby=${errors != null and errors['password2'] != null} ? 'signup-pw2-error signup-pw2-server-error' : 'signup-pw2-error', data-server-error=${errors != null and errors['password2'] != null} ? 'true' : null"
                  x-bind:aria-invalid="(mismatch() || $el.hasAttribute('data-server-error')) ? 'true' : 'false'" aria-invalid="false">
