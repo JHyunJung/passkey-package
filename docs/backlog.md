@@ -60,9 +60,11 @@
 - [ ] **Activity KPI·topTenants 초기값이 fixture** — (React 시절 `ActivityPage.tsx` 의 `activityFixture` 초기 state — Thymeleaf 포트(`templates/admin/activity/`, `ActivityPageController`)는 서버 렌더라 fixture 초기값이 없다. 갱신 실패·부분 응답 시 이전 값 잔존 여부만 재확인 필요). 원래 기록: 첫 로딩·첫 오류는 가드가 막지만,
       **갱신 실패(2회차 이후)나 KPI 만 비는 부분 응답에서는 이전 fixture 값이 그대로 남는다**.
       초기값을 null 로 두고 KPI 영역에도 로딩·오류 표시를 따로 두는 편이 안전하다. [master-backlog 2026-05-31]
-- [ ] **`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다** — `admin-app/.../config/AdminSecurityConfig.kt:260-262` 가
-      `AuditAppendRequest` 의 tenantId 를 `null` 로 넘긴다. RP_ADMIN 로그인도 테넌트 스코프 없이 기록돼
-      테넌트별 감사 조회에서 누락된다. [activity-page 2026-05-28]
+- [x] ~~**`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다**~~ — **현행 유지**(결정) [2026-11-13]
+      작성 당시(운영자↔RP 1:1) 전제가 N:M(`allowedTenantIds` + RP 스위처)으로 바뀌어, 로그인 시점에는 귀속 RP 가 정해지지 않는다
+      (활성 RP 는 로그인 후 세션에서 고르는 값). 로그인은 RP 리소스에 대한 행위가 아니라 운영자 본인의 이벤트이므로
+      `tenant_id = null`(플랫폼 이벤트)이 맞고, `AuditAppendRequest`·`ActivityView` 주석도 그렇게 정의한다.
+      첫 RP 임의 태깅·RP 수만큼 행 복제는 오해·체인 부풀림이라 채택하지 않음. [activity-page 2026-05-28]
 
 ## 2. 보안·정합성 (P2)
 
