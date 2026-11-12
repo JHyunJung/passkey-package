@@ -11,12 +11,19 @@ server:
   # 만 보고 X-Forwarded-For 를 무시 — RateLimitFilter 의 IP 버킷
   # (ratelimit:<path>:ip:<remoteAddr>) 이 모든 클라이언트에 대해 동일한 키로
   # 붕괴해 rate-limit 이 전체 트래픽을 한 버킷에 몰아넣는다(정상 사용자
-  # 상호 429 + IP 스프레이 공격자에 대한 방어 무력화). FRAMEWORK 로 켜면
-  # Spring 의 ForwardedHeaderFilter 가 신뢰할 수 있는 X-Forwarded-For 헤더를
+  # 상호 429 + IP 스프레이 공격자에 대한 방어 무력화). forward-headers 처리를 켜면
+  # 신뢰할 수 있는 X-Forwarded-For 헤더를
   # 반영해 RateLimitFilter 코드 변경 없이 실제 클라이언트 IP 로 버킷이
   # 분리된다. admin-app 과 동일한 방식(commit 44cb1fe8, G13). dev/local 처럼
   # 프록시가 없는 환경은 헤더 자체가 없으니 안전한 no-op.
-  forward-headers-strategy: framework
+  # native(2026-11-12, framework 에서 전환): Tomcat RemoteIpValve 가 **신뢰 프록시**(기본 internal-proxies =
+  # 사설·루프백·링크로컬 IP — Docker 브리지·호스트 nginx·사내 LB)에서 온 요청의 X-Forwarded-* 만 반영하고,
+  # X-Forwarded-For 는 오른쪽부터 신뢰 프록시를 건너뛴 첫 외부 IP 를 클라이언트로 본다. framework(Spring
+  # ForwardedHeaderFilter)는 출처와 무관하게 맨 왼쪽 값을 믿어, 클라이언트가 X-Forwarded-For 를 미리 채우면
+  # (nginx $proxy_add_x_forwarded_for 가 이어 붙임) 감사 IP 위조·IP 기반 rate-limit 우회가 됐다.
+  # 앞단 프록시가 공인 IP 로 접속하는 구성이면 SERVER_TOMCAT_REMOTEIP_TRUSTED_PROXIES(정규식)로 그 주소를 추가한다.
+  # rp-app ProxiedSameOriginPostTest(실제 Tomcat)가 위조 무시·스킴/포트 복원을 고정한다.
+  forward-headers-strategy: native
   # P6: Tomcat 워커 상한 = Hikari maximum-pool-size(아래 passkey.db.pool-max-default, 기본 20) − 1.
   # CeremonyEventRecorder/CredentialAuthEventRecorder 의 afterCommit·afterCompletion 콜백은
   # outer 트랜잭션 커넥션을 아직 반납하지 않은 채(JpaTransactionManager 는 콜백 뒤 cleanup 에서

@@ -47,11 +47,18 @@ server:
   # NONE(기본값)이면 request.getRemoteAddr()/isSecure() 가 프록시 TCP peer/스킴만
   # 보고 X-Forwarded-For/-Proto 를 무시 — 감사 로그 IP 가 전부 LB IP로 찍히고
   # (G13), 세션/CSRF 쿠키의 Secure 자동판정(request.isSecure() 기반, 각 저장소
-  # 기본 동작)도 항상 false 가 된다(F-cookieSecure). FRAMEWORK 로 켜면 Spring 의
-  # ForwardedHeaderFilter 가 신뢰할 수 있는 X-Forwarded-* 헤더를 반영해 두 문제를
+  # 기본 동작)도 항상 false 가 된다(F-cookieSecure). forward-headers 처리를 켜면 신뢰할 수 있는
+  # X-Forwarded-* 헤더를 반영해 두 문제를
   # 함께 해결한다. dev/local 처럼 프록시가 없는 환경은 헤더 자체가 없으니 안전한
   # no-op(getRemoteAddr/isSecure 그대로) — 전 프로필 공통으로 켜도 무해하다.
-  forward-headers-strategy: framework
+  # native(2026-11-12, framework 에서 전환): Tomcat RemoteIpValve 가 **신뢰 프록시**(기본 internal-proxies =
+  # 사설·루프백·링크로컬 IP — Docker 브리지·호스트 nginx·사내 LB)에서 온 요청의 X-Forwarded-* 만 반영하고,
+  # X-Forwarded-For 는 오른쪽부터 신뢰 프록시를 건너뛴 첫 외부 IP 를 클라이언트로 본다. framework(Spring
+  # ForwardedHeaderFilter)는 출처와 무관하게 맨 왼쪽 값을 믿어, 클라이언트가 X-Forwarded-For 를 미리 채우면
+  # (nginx $proxy_add_x_forwarded_for 가 이어 붙임) 감사 IP 위조·IP 기반 rate-limit 우회가 됐다.
+  # 앞단 프록시가 공인 IP 로 접속하는 구성이면 SERVER_TOMCAT_REMOTEIP_TRUSTED_PROXIES(정규식)로 그 주소를 추가한다.
+  # rp-app ProxiedSameOriginPostTest(실제 Tomcat)가 위조 무시·스킴/포트 복원을 고정한다.
+  forward-headers-strategy: native
 
 management:
   metrics:
