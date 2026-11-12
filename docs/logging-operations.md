@@ -97,13 +97,12 @@ MDC 칸(`%compactMdc`·JSON MDC 필드)은 이 변환을 거치지 않으므로 
 | Bcrypt hash | `<bcrypt-redacted>` |
 | Raw attestation/assertion bytes | 메시지에 포함 안 함 (claim 메타만) |
 | Email (로그 **메시지** 안) | `a***@domain` — `CryptoUtils.maskEmail` 을 호출한 곳만. **MDC `actorEmail` 칸은 평문**(§1 참조) |
-| User handle (b64url) | `idTail(…, 12)` 끝 12자만 |
+| User handle (b64url) | 끝 12자만 (호출부에서 직접 자름) |
 
 방어선:
 1. `CryptoUtils.maskEmail` 등 마스킹 유틸 — 개발자가 로그 호출 시 직접 적용 (소스 컨벤션).
    email 마스킹의 실제 관례는 이쪽이다(`AdminSecurityConfig`, `TenantBoundary`,
-   `SignupRequestService`, `PasswordResetService`). `core` 에 `LogRedact` 클래스가 남아
-   있지만 main 코드에서 호출하는 곳이 없다 — 컨벤션의 정본이 아니다.
+   `SignupRequestService`, `PasswordResetService`).
 2. `SecretMaskingConverter` — logback 출력 시점 자동 마스킹 (defense-in-depth, 실수 방어).
    텍스트·JSON(`RedactingMessageJsonProvider`) 양쪽에 걸린다.
 
