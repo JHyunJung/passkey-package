@@ -53,6 +53,11 @@ public class IdTokenIssuer {
         this.clock = clock;
     }
 
+    /** 발급하는 id-token 의 수명(초) — {@code passkey.id-token.ttl}. 응답 expiresIn 이 JWT exp 와 어긋나지 않도록 이 값을 쓴다. */
+    public long tokenTtlSeconds() {
+        return tokenTtl.toSeconds();
+    }
+
     public String issue(String tenantId, byte[] userHandle, UUID credentialId, byte[] aaguid) {
         Instant now = clock.instant();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
