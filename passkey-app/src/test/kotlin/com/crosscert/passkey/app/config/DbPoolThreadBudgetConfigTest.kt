@@ -78,7 +78,7 @@ class DbPoolThreadBudgetConfigTest {
         assertThat(e.tomcatMaxQueueCapacity).`as`("tomcat max-queue-capacity").isEqualTo(Int.MAX_VALUE)
         assertThat(e.serverPort).`as`("server.port").isEqualTo(8080)
         assertThat(e.forwardHeaders).`as`("forward-headers-strategy")
-            .isEqualTo(ServerProperties.ForwardHeadersStrategy.FRAMEWORK)
+            .isEqualTo(ServerProperties.ForwardHeadersStrategy.NATIVE)
         // 가상 스레드가 켜지면 server.tomcat.threads.max 가 무시되므로 꺼져 있어야 한다.
         assertThat(e.virtualThreads).`as`("spring.threads.virtual.enabled").isFalse()
     }
