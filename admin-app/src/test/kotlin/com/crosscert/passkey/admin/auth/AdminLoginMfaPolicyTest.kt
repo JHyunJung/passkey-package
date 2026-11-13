@@ -171,6 +171,9 @@ class AdminLoginMfaPolicyTest {
         val body = r.response.contentAsString
         val keys = com.fasterxml.jackson.databind.ObjectMapper().readTree(body).fieldNames().asSequence().toSet()
         assertThat(keys).containsExactlyInAnyOrder("email", "role", "mfaRequired", "mfaEnrollRequired")
+        val node = com.fasterxml.jackson.databind.ObjectMapper().readTree(body)
+        assertThat(node["mfaRequired"].asBoolean(true)).isFalse()
+        assertThat(node["mfaEnrollRequired"].asBoolean(true)).isFalse()
         assertThat(pageLogin().response.redirectedUrl).isEqualTo("/admin")
     }
 
@@ -181,6 +184,7 @@ class AdminLoginMfaPolicyTest {
         val r = jsonLogin()
         assertThat(r.response.status).isEqualTo(200)
         assertState(r, pending = false, enroll = true)
+        assertThat(com.fasterxml.jackson.databind.ObjectMapper().readTree(r.response.contentAsString)["mfaEnrollRequired"].asBoolean(false)).isTrue()
         assertThat(session(r).maxInactiveInterval).isEqualTo(30 * 60)
     }
 
@@ -190,6 +194,7 @@ class AdminLoginMfaPolicyTest {
         whenever(securityPolicyService.get()).thenThrow(IllegalStateException("deserialize cors_allowlist failed"))
         val r = jsonLogin()
         assertState(r, pending = false, enroll = true)
+        assertThat(com.fasterxml.jackson.databind.ObjectMapper().readTree(r.response.contentAsString)["mfaEnrollRequired"].asBoolean(false)).isTrue()
         assertThat(session(r).maxInactiveInterval).isEqualTo(30 * 60)
     }
 
@@ -199,5 +204,40 @@ class AdminLoginMfaPolicyTest {
         whenever(securityPolicyService.get()).thenReturn(view(true, 45))
         val r = jsonLogin()
         assertThat(session(r).maxInactiveInterval).isEqualTo(2700)
+    }
+
+    private fun loginInto(session: MockHttpSession): MvcResult =
+        mvc.perform(
+            post("/admin/login").session(session)
+                .param("email", EMAIL).param("password", PASSWORD).with(csrf().asHeader()),
+        ).andReturn()
+
+    @Test
+    fun relogin_enrollThenMfaUser_onlyPending() {
+        whenever(securityPolicyService.get()).thenReturn(view(true))
+        stubUser(false)
+        val s = session(jsonLogin())
+        assertThat(s.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
+        stubUser(true)
+        assertState(loginInto(s), pending = true, enroll = false)
+    }
+
+    @Test
+    fun relogin_mfaUserThenEnrollUser_onlyEnroll() {
+        whenever(securityPolicyService.get()).thenReturn(view(true))
+        stubUser(true)
+        val s = session(jsonLogin())
+        assertThat(s.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
+        stubUser(false)
+        assertState(loginInto(s), pending = false, enroll = true)
+    }
+
+    @Test
+    fun relogin_policyTurnedOff_noStaleAttributes() {
+        whenever(securityPolicyService.get()).thenReturn(view(true))
+        stubUser(false)
+        val s = session(jsonLogin())
+        whenever(securityPolicyService.get()).thenReturn(view(false))
+        assertState(loginInto(s), pending = false, enroll = false)
     }
 }

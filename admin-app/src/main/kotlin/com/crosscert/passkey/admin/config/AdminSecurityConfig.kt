@@ -309,6 +309,10 @@ class AdminSecurityConfig {
             // (MfaPendingFilter blocks until /admin/api/mfa/verify clears it).
             // MFA-less operators while the policy requires MFA: stamp enrollment-required
             // instead (never both attributes at once).
+            // 같은 세션으로 재로그인할 수 있으므로(세션 고정 방어는 속성을 유지한다) 이전 판정을
+            // 먼저 지워 두 속성이 함께 남거나 stale 값이 남지 않게 한다.
+            req.session.removeAttribute(MfaPendingFilter.MFA_PENDING_ATTR)
+            req.session.removeAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)
             val mfaRequired = u.isMfaEnabled
             val mfaEnrollRequired = !mfaRequired && policyRequiresMfa
             if (mfaRequired) {
