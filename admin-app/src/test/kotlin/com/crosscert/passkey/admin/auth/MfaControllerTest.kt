@@ -32,7 +32,7 @@ class MfaControllerTest {
     private val clock: Clock = Clock.fixed(Instant.parse("2026-06-11T00:00:00Z"), KstTime.ZONE)
 
     // max-attempts=5, duration=15m mirror AdminSecurityConfig defaults.
-    private val controller = MfaController(totp, users, clock, recoveryCodes, cipher, mock<AuditLogService>(), 5, Duration.ofMinutes(15))
+    private val controller = MfaController(totp, users, clock, recoveryCodes, cipher, mock<AuditLogService>(), mock(), 5, Duration.ofMinutes(15))
 
     private fun pendingRequest(pending: Boolean): HttpServletRequest {
         val req: HttpServletRequest = mock()

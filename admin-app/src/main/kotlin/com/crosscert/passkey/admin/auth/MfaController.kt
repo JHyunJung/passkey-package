@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.auth
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest
 import com.crosscert.passkey.admin.audit.AuditLogService
+import com.crosscert.passkey.admin.policy.SecurityPolicyService
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
 import jakarta.servlet.http.HttpServletRequest
@@ -42,6 +43,7 @@ class MfaController(
     private val recoveryCodes: RecoveryCodeService,
     private val secretCipher: MfaSecretCipher,
     private val audit: AuditLogService,
+    private val securityPolicy: SecurityPolicyService,
     @Value("\${passkey.admin.lockout.max-attempts:5}") private val maxAttempts: Int,
     @Value("\${passkey.admin.lockout.duration:PT15M}") private val lockDuration: Duration,
 ) {
@@ -194,6 +196,19 @@ class MfaController(
         req: HttpServletRequest,
     ): ResponseEntity<*> {
         if (isPending(req)) return mfaRequired()
+        // 정책 판정은 TOTP 검증보다 먼저 — 거부 시 코드 시도·mfaLastTotpStep 이 소모되지 않는다.
+        // 정책 조회 실패(행 없음·CORS JSON 손상 등)는 fail-closed: 끄기를 거부한다.
+        val policyRequiresMfa = try {
+            securityPolicy.get().mfaRequired
+        } catch (e: Exception) {
+            log.warn("admin mfa disable: policy read failed, refusing (fail-closed)", e)
+            true
+        }
+        if (policyRequiresMfa) {
+            log.warn("admin mfa disable refused (policy requires mfa): email={}", mask(auth.name))
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(java.util.Map.of("error", "mfa_policy_required"))
+        }
         val email: String? = auth.name
         val u: AdminUser? = users.findByEmail(email).orElse(null)
         val code: String? = body.code

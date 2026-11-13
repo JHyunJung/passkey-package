@@ -9,4 +9,5 @@ data class MeView(
     val mfaEnabled: Boolean,
     val mfaRequired: Boolean,
     val sessionIdleTimeoutMinutes: Int,
+    val mfaEnrollRequired: Boolean = false,
 )
