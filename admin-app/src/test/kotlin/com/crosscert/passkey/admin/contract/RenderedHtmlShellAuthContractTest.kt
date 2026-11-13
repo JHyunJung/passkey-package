@@ -5,6 +5,7 @@ import com.crosscert.passkey.admin.audit.AuditChainTenantOverview
 import com.crosscert.passkey.admin.auth.ActiveTenantController
 import com.crosscert.passkey.admin.auth.MfaController
 import com.crosscert.passkey.admin.auth.MfaPendingFilter
+import com.crosscert.passkey.admin.auth.MfaSessionState
 import com.crosscert.passkey.admin.license.LicenseView
 import com.crosscert.passkey.admin.operator.PasswordResetController
 import com.crosscert.passkey.admin.operator.SignupRequestDto
@@ -39,6 +40,12 @@ class RenderedHtmlShellAuthContractTest : HtmlContractSupport() {
         fun pendingSession(): MockHttpSession {
             val s = MockHttpSession()
             s.setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, java.lang.Boolean.TRUE)
+            return s
+        }
+
+        fun enrollRequiredSession(): MockHttpSession {
+            val s = MockHttpSession()
+            s.setAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR, java.lang.Boolean.TRUE)
             return s
         }
 
@@ -158,6 +165,32 @@ class RenderedHtmlShellAuthContractTest : HtmlContractSupport() {
             write(post("/admin/login/mfa").param("code", "aaaa-bbbb"), operator()).session(pendingSession()),
         )
         snap("auth/mfa.verify.not-pending.html", write(post("/admin/login/mfa").param("code", "123456"), operator()))
+    }
+
+    @Test
+    fun loginMfaEnroll() {
+        snap("auth/mfa-enroll.page.html", page("/admin/login", operator()).session(enrollRequiredSession()))
+        doReturn(
+            ResponseEntity.ok(
+                mapOf(
+                    "secret" to "JBSWY3DPEHPK3PXP",
+                    "otpauthUri" to "otpauth://totp/Passkey:op@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Passkey",
+                ),
+            ),
+        ).whenever(mfa).enroll(anyOrNull(), anyOrNull())
+        snap("auth/mfa-enroll.start.html", write(post("/admin/login/mfa/enroll"), operator()).session(enrollRequiredSession()))
+        doReturn(ResponseEntity.ok(mapOf("confirmed" to true, "recoveryCodes" to listOf("AB3F-2K7M", "CD4G-3L8N"))))
+            .whenever(mfa).confirm(any<MfaController.VerifyRequest>(), anyOrNull(), anyOrNull())
+        snap(
+            "auth/mfa-enroll.confirm.ok.html",
+            write(post("/admin/login/mfa/confirm").param("code", "123456"), operator()).session(enrollRequiredSession()),
+        )
+        doReturn(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(mapOf("error" to "invalid_code")))
+            .whenever(mfa).confirm(any<MfaController.VerifyRequest>(), anyOrNull(), anyOrNull())
+        snap(
+            "auth/mfa-enroll.confirm.form-error.html",
+            write(post("/admin/login/mfa/confirm").param("code", "999999"), operator()).session(enrollRequiredSession()),
+        )
     }
 
     // ── PasswordPagesController ────────────────────────────

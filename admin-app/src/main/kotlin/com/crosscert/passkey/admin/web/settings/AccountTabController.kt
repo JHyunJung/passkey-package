@@ -286,8 +286,8 @@ class AccountTabController(
             return CODE_ERROR_VIEW
         }
 
-        /** 응답 본문의 `recoveryCodes` 를 번호(01–)와 함께 다이얼로그 줄로. 없으면 빈 목록(다이얼로그 없이 닫힘). */
-        private fun codesOf(r: ResponseEntity<*>): List<Code> {
+        /** 응답 본문의 `recoveryCodes` 를 번호(01–)와 함께 다이얼로그 줄로. 없으면 빈 목록(다이얼로그 없이 닫힘). internal: MFA 등록 화면(LoginPageController)도 쓴다. */
+        internal fun codesOf(r: ResponseEntity<*>): List<Code> {
             val codes = ArrayList<Code>()
             val body = r.body
             if (body is Map<*, *>) {
@@ -300,7 +300,7 @@ class AccountTabController(
         }
 
         /** mfaApi 의 ApiError(code): 본문의 `error` 값, 없으면 'error'. */
-        private fun errorOf(r: ResponseEntity<*>): String {
+        internal fun errorOf(r: ResponseEntity<*>): String {
             val m = r.body
             if (m is Map<*, *> && m["error"] != null) return m["error"].toString()
             return "error"
@@ -313,7 +313,7 @@ class AccountTabController(
             Toasts.warnTitled(res, "계정 정보를 새로고침하지 못했습니다.", "페이지를 새로고침해 주세요.")
         }
 
-        private fun noStore(res: HttpServletResponse) {
+        internal fun noStore(res: HttpServletResponse) {
             res.setHeader(HttpHeaders.CACHE_CONTROL, "no-store")
             res.setHeader(HttpHeaders.PRAGMA, "no-cache")
         }
