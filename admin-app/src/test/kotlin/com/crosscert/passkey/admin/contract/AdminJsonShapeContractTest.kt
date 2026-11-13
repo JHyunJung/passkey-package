@@ -514,6 +514,14 @@ class AdminJsonShapeContractTest {
         // 정책이 MFA 필수면 끄기는 409 mfa_policy_required.
         policy(true)
         shape("mfa-disable-policy-required", asOp(json(post("/admin/api/mfa/disable"), "{\"code\":\"123456\"}")))
+        // 이미 켠 계정의 enroll 은 409 mfa_already_enabled(secret 교체로 끄기 409 를 우회하지 못하게).
+        whenever(admins.findByEmail(anyString())).thenAnswer { inv ->
+            val u = AdminUser(inv.getArgument<String>(0), "x", "PLATFORM_OPERATOR")
+            u.setMfaSecret("sealed")
+            u.isMfaEnabled = true
+            Optional.of(u)
+        }
+        shape("mfa-enroll-already-enabled", asOp(post("/admin/api/mfa/enroll")))
         policy(false)
 
         // MFA 대기 세션의 enroll — MfaPendingFilter/컨트롤러 이중 차단 응답.

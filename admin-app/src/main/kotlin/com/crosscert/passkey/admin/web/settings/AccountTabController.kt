@@ -41,6 +41,9 @@ private const val QR_SIZE = 152
 /** MFA 필수 정책 동안 끄기 불가 안내(화면 설명·409 오류 공용). */
 private const val POLICY_LOCKED = "보안 정책상 모든 운영자에게 2단계 인증이 필수라 끌 수 없습니다."
 
+/** enroll 409 mfa_already_enabled(다른 세션에서 이미 켬) 안내 — 원문 코드 대신. */
+private const val ALREADY_ENABLED = "이미 2단계 인증이 켜져 있습니다."
+
 private const val ENROLL_ERROR_ID = "mfa-enroll-error"
 private const val DISABLE_ERROR_ID = "mfa-disable-err"
 private const val REGEN_ERROR_ID = "mfa-regen-err"
@@ -123,6 +126,9 @@ class AccountTabController(
         val status = r.statusCode.value()
         if (status < 200 || status >= 300) {
             val err = errorOf(r)
+            if (status == 409 && "mfa_already_enabled" == err) {
+                return enrollFailed(res, status, ErrorMessages.Info(ALREADY_ENABLED, null, status, err, false))
+            }
             return enrollFailed(res, status, ErrorMessages.describe(status, err, err))
         }
         val body: Map<*, *> = r.body as? Map<*, *> ?: java.util.Map.of<Any, Any>()
@@ -281,6 +287,7 @@ class AccountTabController(
         internal fun codeErrorText(status: Int, error: String?): String {
             if (status == 401 && "invalid_code" == error) return CODE_MISMATCH
             if (status == 409 && "mfa_policy_required" == error) return POLICY_LOCKED
+            if (status == 409 && "mfa_already_enabled" == error) return ALREADY_ENABLED
             return join(ErrorMessages.describe(status, error, error))
         }
 

@@ -132,6 +132,11 @@ class MfaController(
      * confirming would otherwise have a fresh secret with `enabled=Y` —
      * their next login could no longer pass with the old authenticator entry.
      * Keeping enrollment disabled-until-confirmed closes that lock-out window.
+     *
+     * An account that already has MFA **enabled** gets `409 {"error":"mfa_already_enabled"}` with the
+     * secret and flag untouched: otherwise a password-only or stale session could swap the secret and
+     * leave `mfa_enabled=N` without any TOTP proof (bypassing the policy's disable-409). The UI only
+     * offers enroll while MFA is off; to re-enroll, turn MFA off first (TOTP-gated).
      */
     @PostMapping("/enroll")
     fun enroll(auth: Authentication, req: HttpServletRequest): ResponseEntity<*> {
@@ -145,6 +150,11 @@ class MfaController(
             log.warn("admin mfa enroll: no user row for authenticated principal email={}", mask(email))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(java.util.Map.of("error", "unauthorized"))
+        }
+        if (u.isMfaEnabled) {
+            log.warn("admin mfa enroll refused (already enabled): email={}", mask(email))
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(java.util.Map.of("error", "mfa_already_enabled"))
         }
         val secret = totp.newSecretBase32()
         u.mfaSecret = secretCipher.seal(secret)
@@ -216,7 +226,7 @@ class MfaController(
         val policyRequiresMfa = try {
             securityPolicy.get().mfaRequired
         } catch (e: Exception) {
-            log.warn("admin mfa disable: policy read failed, refusing (fail-closed)", e)
+            log.warn("admin mfa disable: policy read failed, refusing (fail-closed): {}", e.toString())
             true
         }
         if (policyRequiresMfa) {

@@ -11,6 +11,7 @@ import com.crosscert.passkey.admin.web.settings.AccountTabController
 import com.crosscert.passkey.admin.web.support.Htmx
 import com.crosscert.passkey.admin.web.support.QrSvg
 import com.crosscert.passkey.admin.web.support.Toasts
+import com.crosscert.passkey.core.repository.AdminUserRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.servlet.http.HttpSession
@@ -64,6 +65,9 @@ private val AMP = Pattern.compile("&")
  * - MFA 필수 정책 등록(`MFA_ENROLL_REQUIRED` 세션): `GET /admin/login` 이 등록 화면, `POST /admin/login/mfa/enroll`·`…/confirm` 이
  *   [MfaController.enroll]·[MfaController.confirm] 을 메서드로 부른다(등록 필요 해제·감사는 confirm 이 한다). secret·복구 코드는
  *   응답 본문에만(no-store) — 세션·플래시·헤더·토스트·로그에 없다.
+ * - 오래된 등록 필요 세션(그사이 다른 세션에서 등록을 마쳐 DB 계정은 이미 MFA 켬): 등록 필요를 지우고 MFA 대기로 바꿔
+ *   TOTP 확인 단계로 보낸다(GET 은 MFA 단계 화면, POST 는 `HX-Redirect /admin/login`). 이때 enroll/confirm 은 부르지 않는다 —
+ *   비밀번호만 아는 세션이 등록된 secret 을 바꾸지 못하게.
  *
  * 인증 코드는 로그에도 응답에도 남기지 않는다.
  */
@@ -72,6 +76,7 @@ class LoginPageController(
     private val profiles: ProfileController,
     private val mfa: MfaController,
     private val clock: Clock,
+    private val users: AdminUserRepository,
 ) {
 
     /** 미인증이면 Spring 이 auth 에 null 을 넘긴다. */
@@ -79,7 +84,10 @@ class LoginPageController(
     fun login(auth: Authentication?, req: HttpServletRequest): ModelAndView {
         if (isAuthenticated(auth)) {
             if (isMfaPending(req)) return ModelAndView("admin/auth/mfa")
-            if (MfaSessionState.isEnrollRequired(req)) return ModelAndView(ENROLL_PAGE_VIEW, "authFocus", true)
+            if (MfaSessionState.isEnrollRequired(req)) {
+                if (switchedToVerify(auth, req)) return ModelAndView("admin/auth/mfa")
+                return ModelAndView(ENROLL_PAGE_VIEW, "authFocus", true)
+            }
             return ModelAndView("redirect:/admin")
         }
         val mav = ModelAndView("admin/auth/login")
@@ -167,6 +175,10 @@ class LoginPageController(
             Htmx.redirect(req, res, HOME)
             return null
         }
+        if (switchedToVerify(auth, req)) {
+            Htmx.redirect(req, res, "/admin/login")
+            return null
+        }
         AccountTabController.noStore(res)
         val r: ResponseEntity<*>
         try {
@@ -206,6 +218,10 @@ class LoginPageController(
             Htmx.redirect(req, res, HOME)
             return null
         }
+        if (switchedToVerify(auth, req)) {
+            Htmx.redirect(req, res, "/admin/login")
+            return null
+        }
         AccountTabController.noStore(res)
         val r: ResponseEntity<*>
         try {
@@ -224,6 +240,27 @@ class LoginPageController(
         mav.addObject("rcDoneHref", HOME)
         mav.addObject("accountOob", false)
         return mav
+    }
+
+    /**
+     * 등록 필요 세션인데 DB 계정이 이미 MFA 를 켰으면(다른 세션에서 등록 완료) 등록 필요를 지우고 MFA 대기를 붙인다 — 두 속성은
+     * 동시에 붙지 않는다. 바꿨으면 true. 계정 조회 실패는 false(등록 화면 유지) — 그 경우에도 [MfaController.enroll] 이 켜진
+     * 계정을 409 로 거부하고, confirm 은 현재 secret 의 TOTP 없이는 통과하지 못한다.
+     */
+    private fun switchedToVerify(auth: Authentication?, req: HttpServletRequest): Boolean {
+        val session = req.getSession(false) ?: return false
+        if (auth == null) return false
+        val enabled = try {
+            users.findByEmail(auth.name).map { it.isMfaEnabled }.orElse(false)
+        } catch (e: RuntimeException) {
+            log.warn("admin mfa enroll-required: account lookup failed: {}", e.javaClass.simpleName)
+            false
+        }
+        if (!enabled) return false
+        session.removeAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)
+        session.setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, java.lang.Boolean.TRUE)
+        log.info("admin mfa enroll-required session switched to verify (account already enrolled)")
+        return true
     }
 }
 

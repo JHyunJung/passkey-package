@@ -292,6 +292,37 @@ class MfaControllerSecurityTest {
             .andExpect(jsonPath("$.error").value("unauthorized"))
     }
 
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun enroll_policyOn_alreadyEnabled_409_andSecretAndFlagUntouched() {
+        // 이미 켠 계정의 enroll 은 TOTP 없이 secret 교체·mfa_enabled=N 을 만들어 정책상 끄기 409 를 우회할 수 있다 — 거부한다.
+        policy(true)
+        val (u, secret) = enabledUser()
+
+        mvc.perform(post("/admin/api/mfa/enroll").with(csrf()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("mfa_already_enabled"))
+            .andExpect(jsonPath("$.secret").doesNotExist())
+
+        verify(admins, never()).save(anyOrNull())
+        assertThat(u.isMfaEnabled).isTrue()
+        assertThat(u.mfaSecret).isEqualTo(secret)
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun enroll_policyOff_alreadyEnabled_409_too() {
+        val (u, secret) = enabledUser()
+
+        mvc.perform(post("/admin/api/mfa/enroll").with(csrf()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("mfa_already_enabled"))
+
+        verify(admins, never()).save(anyOrNull())
+        assertThat(u.isMfaEnabled).isTrue()
+        assertThat(u.mfaSecret).isEqualTo(secret)
+    }
+
     // ---- confirm --------------------------------------------------------
 
     @Test

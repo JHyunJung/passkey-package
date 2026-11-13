@@ -8,6 +8,8 @@ import com.crosscert.passkey.admin.web.settings.AccountTabController
 import com.crosscert.passkey.admin.config.ProfileController
 import com.crosscert.passkey.admin.web.AdminWebSliceTest
 import com.crosscert.passkey.core.api.ApiResponse
+import com.crosscert.passkey.core.entity.AdminUser
+import com.crosscert.passkey.core.repository.AdminUserRepository
 import jakarta.servlet.http.HttpServletRequest
 import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.Matchers.emptyString
@@ -46,6 +48,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.Collections
+import java.util.Optional
 import java.util.UUID
 
 /**
@@ -61,6 +64,7 @@ class LoginPageControllerTest {
     @MockitoBean lateinit var mfa: MfaController
     @MockitoBean lateinit var profiles: ProfileController
     @Autowired lateinit var clock: Clock
+    @Autowired lateinit var users: AdminUserRepository
 
     private val json = ObjectMapper()
 
@@ -584,6 +588,60 @@ class LoginPageControllerTest {
         ).andExpect(status().isForbidden())
         verify(mfa, never()).enroll(anyOrNull(), anyOrNull())
         verify(mfa, never()).confirm(anyOrNull(), anyOrNull(), anyOrNull())
+    }
+
+    // ── 오래된 등록 필요 세션: DB 계정은 (다른 세션에서) 이미 MFA 를 켰다 ──
+
+    private fun stubEnabledInDb() {
+        val u = AdminUser("alice@example.com", "x", "PLATFORM_OPERATOR")
+        u.isMfaEnabled = true
+        u.mfaSecret = "sealed"
+        whenever(users.findByEmail("alice@example.com")).thenReturn(Optional.of(u))
+    }
+
+    @Test
+    fun login_staleEnrollRequired_dbEnabled_rendersVerifyPage_andSwitchesToPending() {
+        stubEnabledInDb()
+        val session = enrollRequiredSession()
+        val r = mvc.perform(get("/admin/login").with(authentication(operator())).session(session))
+            .andExpect(status().isOk()).andReturn()
+        assertThat(r.modelAndView!!.viewName).isEqualTo("admin/auth/mfa")
+        assertThat(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
+        assertThat(session.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isNull()
+        verify(mfa, never()).enroll(anyOrNull(), anyOrNull())
+    }
+
+    @Test
+    fun enrollEndpoints_staleEnrollRequired_dbEnabled_redirectToVerify_withoutCallingMfa() {
+        stubEnabledInDb()
+        val s1 = enrollRequiredSession()
+        val e = enrollPost(s1)
+        assertThat(e.response.getHeader("HX-Redirect")).isEqualTo("/admin/login")
+        assertThat(e.response.contentAsString).isEmpty()
+        assertThat(s1.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
+        assertThat(s1.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isNull()
+
+        val s2 = enrollRequiredSession()
+        val c = confirmPost("123456", s2)
+        assertThat(c.response.getHeader("HX-Redirect")).isEqualTo("/admin/login")
+        assertThat(c.response.contentAsString).isEmpty()
+        assertThat(s2.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
+        assertThat(s2.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isNull()
+
+        verify(mfa, never()).enroll(anyOrNull(), anyOrNull())
+        verify(mfa, never()).confirm(anyOrNull(), anyOrNull(), anyOrNull())
+    }
+
+    @Test
+    fun enrollStart_alreadyEnabled409_showsPlainMessage() {
+        // DB 확인과 enroll 사이에 다른 세션이 켠 경합 — 원문 코드(mfa_already_enabled)가 아닌 쉬운 문구.
+        whenever(mfa.enroll(anyOrNull(), anyOrNull())).thenAnswer {
+            ResponseEntity.status(409).body(mapOf("error" to "mfa_already_enabled"))
+        }
+        val r = enrollPost(enrollRequiredSession())
+        assertThat(r.response.status).isEqualTo(422)
+        val d = Jsoup.parseBodyFragment(r.response.contentAsString)
+        assertThat(d.text()).isEqualTo("이미 2단계 인증이 켜져 있습니다.").doesNotContain("mfa_already_enabled")
     }
 
     @Test

@@ -335,6 +335,22 @@ class AccountTabControllerTest {
         assertThat(trigger(boom).toString()).contains("서버가 잠시 응답하지 않습니다").doesNotContain("leaked")
     }
 
+    @Test
+    @DisplayName("enroll 409 mfa_already_enabled: 오류 토스트에 원문 코드 대신 '이미 2단계 인증이 켜져 있습니다.'")
+    fun enrollAlreadyEnabledToast() {
+        whenever(mfa.enroll(anyOrNull(), anyOrNull())).thenAnswer {
+            ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("error" to "mfa_already_enabled"))
+        }
+        val r = enroll()
+        assertThat(r.response.status).isEqualTo(409)
+        val t = trigger(r).get("toast")
+        assertThat(t.get("title").asString()).isEqualTo("2단계 인증을 시작하지 못했습니다")
+        assertThat(t.get("message").asString()).isEqualTo("이미 2단계 인증이 켜져 있습니다.")
+        assertThat(trigger(r).toString()).doesNotContain("mfa_already_enabled")
+        assertThat(body(r).trim { it <= ' ' }).isEmpty()
+        assertThat(AccountTabController.codeErrorText(409, "mfa_already_enabled")).isEqualTo("이미 2단계 인증이 켜져 있습니다.")
+    }
+
     // ── 확인 → 복구 코드 ────────────────────────────────────
 
     @Test

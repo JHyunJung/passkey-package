@@ -284,6 +284,34 @@ class MfaRequiredPolicyIT {
     }
 
     @Test
+    fun policyOn_staleEnrollRequiredSession_cannotReplaceSecretAfterEnrollment() {
+        setPolicy(true)
+        val a = login("alice@crosscert.com", "alice-temp-pw") // 오래된 등록 필요 세션(예: 탈취된 비밀번호)
+        val b = login("alice@crosscert.com", "alice-temp-pw")
+        enrollAndConfirm(b)
+        fun sealedSecret(): String? = ownerJdbc().queryForObject(
+            "SELECT mfa_secret FROM PSK_APP_OWNER.admin_user WHERE email = 'alice@crosscert.com'",
+            String::class.java,
+        )
+        val before = sealedSecret()
+        assertThat(before).isNotNull()
+
+        val enroll = call(a, HttpMethod.POST, "/admin/login/mfa/enroll", htmx = true, json = false)
+        assertThat(enroll.headers.getFirst("HX-Redirect")).isEqualTo("/admin/login")
+        assertThat(enroll.body.orEmpty()).doesNotContain("secret__value")
+        // 세션 A 는 이제 TOTP 확인 대기 — 콘솔 API·MFA 변경 API 모두 막힌다.
+        assertThat(call(a, HttpMethod.POST, "/admin/api/mfa/enroll").statusCode.value()).isEqualTo(403)
+        assertThat(tenants(a).statusCode.value()).isEqualTo(403)
+
+        assertThat(sealedSecret()).isEqualTo(before)
+        val enabled = ownerJdbc().queryForObject(
+            "SELECT mfa_enabled FROM PSK_APP_OWNER.admin_user WHERE email = 'alice@crosscert.com'",
+            String::class.java,
+        )
+        assertThat(enabled).isEqualTo("Y")
+    }
+
+    @Test
     fun policyOn_disableRejected() {
         setPolicy(true)
         val s = login("alice@crosscert.com", "alice-temp-pw")
