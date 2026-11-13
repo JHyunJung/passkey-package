@@ -3,6 +3,8 @@ set -euo pipefail
 
 # 전제: admin 의 "MFA 필수" 정책(설정 › 보안 정책)이 꺼져 있고, ADMIN_EMAIL 계정이 MFA 미등록이어야 한다.
 # 이 스크립트는 JSON 로그인만 하므로 정책 on + 미등록 계정이면 등록 화면을 거쳐야 하는 로그인을 끝낼 수 없다.
+# 주의: 새로 만든 dev/local DB 는 베이스라인 시드로 정책이 'Y'(켜짐)다. 스키마 소유자(PSK_APP_OWNER)로 한 줄로 끈다:
+#   UPDATE security_policy SET mfa_required='N' WHERE id=1; COMMIT;
 
 # 환경 변수
 ADMIN_BASE="${ADMIN_BASE:-http://localhost:8081}"
