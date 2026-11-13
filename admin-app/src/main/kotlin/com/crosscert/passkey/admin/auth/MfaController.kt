@@ -181,6 +181,21 @@ class MfaController(
         users.save(u)
         log.info("admin mfa confirmed: email={}", mask(email))
         val codes = recoveryCodes.generate(u.id)
+        // 강제 등록 여부는 해제 전에 읽는다. 등록은 이미 끝났으므로 감사 실패가 응답을 막거나 되돌리지 않는다.
+        val forced = MfaSessionState.isEnrollRequired(req)
+        MfaSessionState.clearEnrollRequired(req)
+        try {
+            audit.append(
+                AuditAppendRequest(
+                    u.id, email, "MFA_ENROLL",
+                    "ADMIN_USER", u.id.toString(),
+                    null,
+                    java.util.Map.of("forced", forced),
+                ),
+            )
+        } catch (e: Exception) {
+            log.error("admin mfa enroll audit failed: {}", e.javaClass.simpleName)
+        }
         return ResponseEntity.ok(java.util.Map.of("confirmed", true, "recoveryCodes", codes))
     }
 

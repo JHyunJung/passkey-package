@@ -26,6 +26,7 @@ private val OPS_ACTIONS: Set<String> = java.util.Set.of(
     "SIGNING_KEY_ROTATE",
     "ADMIN_LOGIN",
     "MFA_RECOVERY_REGENERATE",
+    "MFA_ENROLL",
 )
 
 private val SECURITY_ACTIONS: Set<String> = java.util.Set.of(
