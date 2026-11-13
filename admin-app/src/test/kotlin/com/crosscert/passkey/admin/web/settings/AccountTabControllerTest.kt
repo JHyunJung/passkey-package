@@ -66,6 +66,7 @@ class AccountTabControllerTest {
     @MockitoBean lateinit var license: LicenseController
     @MockitoBean lateinit var chain: AuditChainMonitorController
     @MockitoBean lateinit var activeTenants: ActiveTenantController
+    @Autowired lateinit var policy: com.crosscert.passkey.admin.policy.SecurityPolicyService
 
     companion object {
         val JSON = ObjectMapper()
@@ -117,6 +118,13 @@ class AccountTabControllerTest {
         whenever(clock.zone).thenReturn(ZoneOffset.UTC)
         whenever(license.get()).thenReturn(ApiResponse.ok(LicenseView("saas", null, null, null, null, 0, listOf(), null, null, null)))
         whenever(users.findByEmail(anyString())).thenReturn(Optional.of(user(false)))
+        policyRequired(false)
+    }
+
+    private fun policyRequired(on: Boolean) {
+        whenever(policy.get()).thenReturn(
+            com.crosscert.passkey.admin.policy.SecurityPolicyDto.View(30, on, listOf(), null, null),
+        )
     }
 
     private fun tab(a: Authentication): MvcResult = mvc.perform(htmx(get(AccountTabController.TAB_PATH), a)).andReturn()
@@ -167,6 +175,50 @@ class AccountTabControllerTest {
     }
 
     // ── MFA 켜짐 ────────────────────────────────────────────
+
+    private val LOCKED_COPY = "보안 정책상 모든 운영자에게 2단계 인증이 필수라 끌 수 없습니다."
+
+    private fun assertDisableLocked(d: Document) {
+        val card = d.selectFirst("#mfa-account")!!
+        val btn = card.select("button").first { it.text() == "2단계 인증 끄기" }
+        assertThat(btn.hasAttr("disabled")).isTrue()
+        assertThat(btn.hasAttr("x-on:click")).isFalse()
+        assertThat(card.text()).contains(LOCKED_COPY).doesNotContain("끄면 비밀번호만으로 로그인됩니다")
+        assertThat(d.selectFirst("#mfa-disable-form")).isNull()
+        assertThat(d.html()).doesNotContain("mfa-disable-form")
+        assertThat(card.select("button").stream().map { it.text() }).contains("복구 코드 다시 받기")
+        assertThat(d.html()).contains("mfa-regen-form")
+    }
+
+    @Test
+    @DisplayName("켜짐 + 정책 필수: 끄기 버튼 disabled, 안내 문구, 끄기 확인창 없음, 복구 코드 다시 받기는 그대로")
+    fun on_policyRequired_disableLocked() {
+        whenever(users.findByEmail(anyString())).thenReturn(Optional.of(user(true)))
+        policyRequired(true)
+        assertDisableLocked(doc(tab(rp())))
+    }
+
+    @Test
+    @DisplayName("켜짐 + 정책 조회 실패: fail-closed 로 같은 결과")
+    fun on_policyReadFails_disableLocked() {
+        whenever(users.findByEmail(anyString())).thenReturn(Optional.of(user(true)))
+        whenever(policy.get()).thenThrow(IllegalStateException("row missing"))
+        assertDisableLocked(doc(tab(rp())))
+    }
+
+    @Test
+    @DisplayName("켜짐 + 정책 해제: 끄기 버튼 활성(x-on:click 있음)")
+    fun on_policyOff_unchanged() {
+        whenever(users.findByEmail(anyString())).thenReturn(Optional.of(user(true)))
+        val btn = doc(tab(rp())).select("#mfa-account button").first { it.text() == "2단계 인증 끄기" }
+        assertThat(btn.hasAttr("disabled")).isFalse()
+        assertThat(btn.hasAttr("x-on:click")).isTrue()
+    }
+
+    @Test
+    fun codeErrorText_policyRequired() {
+        assertThat(AccountTabController.codeErrorText(409, "mfa_policy_required")).isEqualTo(LOCKED_COPY)
+    }
 
     @Test
     @DisplayName("켜짐: badge--success, 등록일·남은 복구 코드 줄 없음(서버 값 없음), 보관 안내, 위험 영역 + 끄기 확인창(alertdialog)")
