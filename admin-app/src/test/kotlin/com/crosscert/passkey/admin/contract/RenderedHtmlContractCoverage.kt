@@ -47,14 +47,14 @@ import java.util.TreeSet
  *   <tr><td>AuditChainPageController</td><td>12</td><td>1 + RP 302</td><td>10 (+400·409)</td><td>1 (해결 메모 422)</td><td>O</td><td>Row.intact, Incident.open</td></tr>
  *   <tr><td>ShellController</td><td>7</td><td>-</td><td>7 (+비 htmx 302)</td><td>-</td><td>O</td><td>SwitcherItem.active, showLink</td></tr>
  *   <tr><td>CommandPaletteController</td><td>4</td><td>-</td><td>4</td><td>-</td><td>O</td><td>-</td></tr>
- *   <tr><td>LoginPageController</td><td>8</td><td>4 (로그인·오류·MFA·인증 후 302)</td><td>4</td><td>2 (TOTP·복구 코드 422)</td><td>-</td><td>loginError</td></tr>
+ *   <tr><td>LoginPageController</td><td>12</td><td>5 (로그인·오류·MFA·MFA 등록·인증 후 302)</td><td>7</td><td>3 (TOTP·복구 코드·등록 확인 422)</td><td>-</td><td>loginError</td></tr>
  *   <tr><td>PasswordPagesController</td><td>10</td><td>4 (+링크 302)</td><td>6</td><td>3</td><td>-</td><td>sent</td></tr>
  *   <tr><td>SignupPageController</td><td>3</td><td>1</td><td>2</td><td>1</td><td>-</td><td>-</td></tr>
  *   <tr><td>HomeRedirectController</td><td>4</td><td>4 (302)</td><td>-</td><td>-</td><td>O (+익명)</td><td>-</td></tr>
  *   <tr><td>ScreenErrorViewResolver</td><td>4</td><td>3 (404 P·RP, 500 디스패치)</td><td>1 (404)</td><td>-</td><td>O</td><td>-</td></tr>
  * </table>
  *
- * 합계 171 스냅샷(설정 탭 주소 전체 3 포함)(테넌트 상세 17 = 페이지 5 + 탭 주소 전체 6 + 조각 6). `ProfileView.local`(로그인 화면 데모 계정)은
+ * 합계 175 스냅샷(설정 탭 주소 전체 3 포함)(테넌트 상세 17 = 페이지 5 + 탭 주소 전체 6 + 조각 6). `ProfileView.local`(로그인 화면 데모 계정)은
  * 슬라이스의 실제 `ProfileController`(활성 프로필) 값 하나만 그려진다(false) — 기존 `LoginPageControllerTest` 가
  * true 쪽을 단언한다.
  *
@@ -93,7 +93,7 @@ class RenderedHtmlContractCoverage {
             "ShellController" to
                 listOf("shell/license-banner.", "shell/chain-card.", "shell/tenant-switcher.", "shell/active-tenant."),
             "CommandPaletteController" to listOf("shell/palette."),
-            "LoginPageController" to listOf("auth/login.", "auth/mfa."),
+            "LoginPageController" to listOf("auth/login.", "auth/mfa.", "auth/mfa-enroll."),
             "PasswordPagesController" to listOf("auth/forgot.", "auth/reset.", "auth/reset-link."),
             "SignupPageController" to listOf("auth/signup."),
             "HomeRedirectController" to listOf("shell/home."),

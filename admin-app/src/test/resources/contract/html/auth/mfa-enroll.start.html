@@ -1,0 +1,100 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+
+  <div data-mfa-wrap hx-history="false" x-data="dialog({&quot;id&quot;:&quot;mfa-enroll&quot;,&quot;open&quot;:true})" x-on:keydown.escape.window="onEscape()" x-on:mfa-enroll-done.window="open = false">
+    <template x-if="open">
+      <div class="scrim" x-on:mousedown="onScrim($event)">
+        <div aria-label="2단계 인증 켜기" aria-modal="true" class="dialog dialog--xwide" role="dialog" x-data="mfaEnroll"
+             x-trap.noscroll="open">
+          <span hidden x-effect="busy = confirming"></span>
+          <div class="mfa-enroll">
+            <div class="mfa-enroll__side">
+              <nav aria-label="2단계 인증 켜기">
+                <span class="t-over stepper__over">2단계 인증 켜기</span>
+                <ol class="stepper">
+                  <li class="stepper__item" x-bind:aria-current="stepState(0) === 'now' ? 'step' : null" x-bind:class="'stepper__item--' + stepState(0)">
+                    <span aria-hidden="true" class="stepper__mark" x-text="stepState(0) === 'done' ? '✓' : '1'">1</span>
+                    <span class="stepper__text"><span class="stepper__label">QR 스캔</span><span class="stepper__desc">앱에 계정 추가</span></span>
+                  </li>
+                  <li class="stepper__item" x-bind:aria-current="stepState(1) === 'now' ? 'step' : null" x-bind:class="'stepper__item--' + stepState(1)">
+                    <span aria-hidden="true" class="stepper__mark">2</span>
+                    <span class="stepper__text"><span class="stepper__label">코드 확인</span><span class="stepper__desc">6자리 입력</span></span>
+                  </li>
+                  <li class="stepper__item stepper__item--todo">
+                    <span aria-hidden="true" class="stepper__mark">3</span>
+                    <span class="stepper__text"><span class="stepper__label">복구 코드 저장</span><span class="stepper__desc">10개 · 1회 표시</span></span>
+                  </li>
+                </ol>
+              </nav>
+            </div>
+            <div class="col" style="min-width: 0">
+              <div class="dialog__head">
+                <span class="hint hint--flush">1–2 / 3</span>
+                <h3 class="dialog__title">앱으로 스캔하고 코드 확인</h3>
+              </div>
+              <div class="dialog__body">
+                <div class="mfa-enroll__qr">
+                  <div class="stack-2" style="align-items: center">
+                    <div class="mfa-qr"><img alt="QR 코드" height="152" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNTIiIGhlaWdodD0iMTUyIiB2aWV3Qm94PSIwIDAgMzkgMzkiIHNoYXBlLXJlbmRlcmluZz0iY3Jpc3BFZGdlcyI+PHJlY3Qgd2lkdGg9IjM5IiBoZWlnaHQ9IjM5IiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZmlsbD0iIzAwMDAwMCIgZD0iTTEgMWgxdjFoLTF6TTIgMWgxdjFoLTF6TTMgMWgxdjFoLTF6TTQgMWgxdjFoLTF6TTUgMWgxdjFoLTF6TTYgMWgxdjFoLTF6TTcgMWgxdjFoLTF6TTkgMWgxdjFoLTF6TTExIDFoMXYxaC0xek0xMiAxaDF2MWgtMXpNMTQgMWgxdjFoLTF6TTE3IDFoMXYxaC0xek0xOCAxaDF2MWgtMXpNMjAgMWgxdjFoLTF6TTIyIDFoMXYxaC0xek0yNCAxaDF2MWgtMXpNMjYgMWgxdjFoLTF6TTI5IDFoMXYxaC0xek0zMSAxaDF2MWgtMXpNMzIgMWgxdjFoLTF6TTMzIDFoMXYxaC0xek0zNCAxaDF2MWgtMXpNMzUgMWgxdjFoLTF6TTM2IDFoMXYxaC0xek0zNyAxaDF2MWgtMXpNMSAyaDF2MWgtMXpNNyAyaDF2MWgtMXpNOSAyaDF2MWgtMXpNMTIgMmgxdjFoLTF6TTEzIDJoMXYxaC0xek0xNCAyaDF2MWgtMXpNMTUgMmgxdjFoLTF6TTE4IDJoMXYxaC0xek0yMCAyaDF2MWgtMXpNMjEgMmgxdjFoLTF6TTIyIDJoMXYxaC0xek0yMyAyaDF2MWgtMXpNMjcgMmgxdjFoLTF6TTI4IDJoMXYxaC0xek0zMSAyaDF2MWgtMXpNMzcgMmgxdjFoLTF6TTEgM2gxdjFoLTF6TTMgM2gxdjFoLTF6TTQgM2gxdjFoLTF6TTUgM2gxdjFoLTF6TTcgM2gxdjFoLTF6TTkgM2gxdjFoLTF6TTExIDNoMXYxaC0xek0xNiAzaDF2MWgtMXpNMTcgM2gxdjFoLTF6TTE5IDNoMXYxaC0xek0yMSAzaDF2MWgtMXpNMjMgM2gxdjFoLTF6TTI0IDNoMXYxaC0xek0yOCAzaDF2MWgtMXpNMzEgM2gxdjFoLTF6TTMzIDNoMXYxaC0xek0zNCAzaDF2MWgtMXpNMzUgM2gxdjFoLTF6TTM3IDNoMXYxaC0xek0xIDRoMXYxaC0xek0zIDRoMXYxaC0xek00IDRoMXYxaC0xek01IDRoMXYxaC0xek03IDRoMXYxaC0xek0xMSA0aDF2MWgtMXpNMTIgNGgxdjFoLTF6TTE0IDRoMXYxaC0xek0xNiA0aDF2MWgtMXpNMjEgNGgxdjFoLTF6TTIyIDRoMXYxaC0xek0yNSA0aDF2MWgtMXpNMjYgNGgxdjFoLTF6TTI5IDRoMXYxaC0xek0zMSA0aDF2MWgtMXpNMzMgNGgxdjFoLTF6TTM0IDRoMXYxaC0xek0zNSA0aDF2MWgtMXpNMzcgNGgxdjFoLTF6TTEgNWgxdjFoLTF6TTMgNWgxdjFoLTF6TTQgNWgxdjFoLTF6TTUgNWgxdjFoLTF6TTcgNWgxdjFoLTF6TTkgNWgxdjFoLTF6TTEwIDVoMXYxaC0xek0xMSA1aDF2MWgtMXpNMTMgNWgxdjFoLTF6TTE1IDVoMXYxaC0xek0xNyA1aDF2MWgtMXpNMTggNWgxdjFoLTF6TTIyIDVoMXYxaC0xek0yMyA1aDF2MWgtMXpNMjUgNWgxdjFoLTF6TTI4IDVoMXYxaC0xek0zMSA1aDF2MWgtMXpNMzMgNWgxdjFoLTF6TTM0IDVoMXYxaC0xek0zNSA1aDF2MWgtMXpNMzcgNWgxdjFoLTF6TTEgNmgxdjFoLTF6TTcgNmgxdjFoLTF6TTEwIDZoMXYxaC0xek0xMiA2aDF2MWgtMXpNMTMgNmgxdjFoLTF6TTE2IDZoMXYxaC0xek0xNyA2aDF2MWgtMXpNMjAgNmgxdjFoLTF6TTIyIDZoMXYxaC0xek0yNiA2aDF2MWgtMXpNMzEgNmgxdjFoLTF6TTM3IDZoMXYxaC0xek0xIDdoMXYxaC0xek0yIDdoMXYxaC0xek0zIDdoMXYxaC0xek00IDdoMXYxaC0xek01IDdoMXYxaC0xek02IDdoMXYxaC0xek03IDdoMXYxaC0xek05IDdoMXYxaC0xek0xMSA3aDF2MWgtMXpNMTMgN2gxdjFoLTF6TTE1IDdoMXYxaC0xek0xNyA3aDF2MWgtMXpNMTkgN2gxdjFoLTF6TTIxIDdoMXYxaC0xek0yMyA3aDF2MWgtMXpNMjUgN2gxdjFoLTF6TTI3IDdoMXYxaC0xek0yOSA3aDF2MWgtMXpNMzEgN2gxdjFoLTF6TTMyIDdoMXYxaC0xek0zMyA3aDF2MWgtMXpNMzQgN2gxdjFoLTF6TTM1IDdoMXYxaC0xek0zNiA3aDF2MWgtMXpNMzcgN2gxdjFoLTF6TTExIDhoMXYxaC0xek0xMiA4aDF2MWgtMXpNMTUgOGgxdjFoLTF6TTE3IDhoMXYxaC0xek0xOCA4aDF2MWgtMXpNMjQgOGgxdjFoLTF6TTI1IDhoMXYxaC0xek0yNiA4aDF2MWgtMXpNMjggOGgxdjFoLTF6TTI5IDhoMXYxaC0xek0xIDloMXYxaC0xek00IDloMXYxaC0xek01IDloMXYxaC0xek02IDloMXYxaC0xek03IDloMXYxaC0xek04IDloMXYxaC0xek05IDloMXYxaC0xek0xMCA5aDF2MWgtMXpNMTEgOWgxdjFoLTF6TTEyIDloMXYxaC0xek0xNiA5aDF2MWgtMXpNMTkgOWgxdjFoLTF6TTIwIDloMXYxaC0xek0yMSA5aDF2MWgtMXpNMjIgOWgxdjFoLTF6TTI4IDloMXYxaC0xek0yOSA5aDF2MWgtMXpNMzAgOWgxdjFoLTF6TTMzIDloMXYxaC0xek0zNSA5aDF2MWgtMXpNMzYgOWgxdjFoLTF6TTM3IDloMXYxaC0xek0xIDEwaDF2MWgtMXpNMyAxMGgxdjFoLTF6TTQgMTBoMXYxaC0xek01IDEwaDF2MWgtMXpNNiAxMGgxdjFoLTF6TTExIDEwaDF2MWgtMXpNMTMgMTBoMXYxaC0xek0xNCAxMGgxdjFoLTF6TTE1IDEwaDF2MWgtMXpNMTcgMTBoMXYxaC0xek0yMCAxMGgxdjFoLTF6TTIxIDEwaDF2MWgtMXpNMjQgMTBoMXYxaC0xek0yNSAxMGgxdjFoLTF6TTI5IDEwaDF2MWgtMXpNMzAgMTBoMXYxaC0xek0zMSAxMGgxdjFoLTF6TTM0IDEwaDF2MWgtMXpNMzUgMTBoMXYxaC0xek0zNiAxMGgxdjFoLTF6TTEgMTFoMXYxaC0xek0yIDExaDF2MWgtMXpNMyAxMWgxdjFoLTF6TTYgMTFoMXYxaC0xek03IDExaDF2MWgtMXpNOCAxMWgxdjFoLTF6TTkgMTFoMXYxaC0xek0xMSAxMWgxdjFoLTF6TTEyIDExaDF2MWgtMXpNMTMgMTFoMXYxaC0xek0xNCAxMWgxdjFoLTF6TTE1IDExaDF2MWgtMXpNMTYgMTFoMXYxaC0xek0xNyAxMWgxdjFoLTF6TTE5IDExaDF2MWgtMXpNMjAgMTFoMXYxaC0xek0yMSAxMWgxdjFoLTF6TTIzIDExaDF2MWgtMXpNMjQgMTFoMXYxaC0xek0yOCAxMWgxdjFoLTF6TTI5IDExaDF2MWgtMXpNMzAgMTFoMXYxaC0xek0zMSAxMWgxdjFoLTF6TTMyIDExaDF2MWgtMXpNMzMgMTFoMXYxaC0xek0zNSAxMWgxdjFoLTF6TTEgMTJoMXYxaC0xek00IDEyaDF2MWgtMXpNNiAxMmgxdjFoLTF6TTEwIDEyaDF2MWgtMXpNMTIgMTJoMXYxaC0xek0xNCAxMmgxdjFoLTF6TTE1IDEyaDF2MWgtMXpNMTcgMTJoMXYxaC0xek0xOSAxMmgxdjFoLTF6TTIwIDEyaDF2MWgtMXpNMjEgMTJoMXYxaC0xek0yNyAxMmgxdjFoLTF6TTMyIDEyaDF2MWgtMXpNMzQgMTJoMXYxaC0xek0zNSAxMmgxdjFoLTF6TTM2IDEyaDF2MWgtMXpNNCAxM2gxdjFoLTF6TTUgMTNoMXYxaC0xek02IDEzaDF2MWgtMXpNNyAxM2gxdjFoLTF6TTggMTNoMXYxaC0xek0xMCAxM2gxdjFoLTF6TTEyIDEzaDF2MWgtMXpNMTUgMTNoMXYxaC0xek0xNiAxM2gxdjFoLTF6TTIwIDEzaDF2MWgtMXpNMjEgMTNoMXYxaC0xek0yMiAxM2gxdjFoLTF6TTIzIDEzaDF2MWgtMXpNMjQgMTNoMXYxaC0xek0yNiAxM2gxdjFoLTF6TTI3IDEzaDF2MWgtMXpNMjggMTNoMXYxaC0xek0yOSAxM2gxdjFoLTF6TTMwIDEzaDF2MWgtMXpNMzIgMTNoMXYxaC0xek0zMyAxM2gxdjFoLTF6TTM0IDEzaDF2MWgtMXpNMzUgMTNoMXYxaC0xek0zNyAxM2gxdjFoLTF6TTMgMTRoMXYxaC0xek00IDE0aDF2MWgtMXpNNSAxNGgxdjFoLTF6TTYgMTRoMXYxaC0xek04IDE0aDF2MWgtMXpNOSAxNGgxdjFoLTF6TTEzIDE0aDF2MWgtMXpNMTUgMTRoMXYxaC0xek0xNyAxNGgxdjFoLTF6TTE5IDE0aDF2MWgtMXpNMjAgMTRoMXYxaC0xek0yMSAxNGgxdjFoLTF6TTI1IDE0aDF2MWgtMXpNMjYgMTRoMXYxaC0xek0yNyAxNGgxdjFoLTF6TTI5IDE0aDF2MWgtMXpNMzIgMTRoMXYxaC0xek0zNCAxNGgxdjFoLTF6TTM2IDE0aDF2MWgtMXpNMzcgMTRoMXYxaC0xek0xIDE1aDF2MWgtMXpNNCAxNWgxdjFoLTF6TTcgMTVoMXYxaC0xek04IDE1aDF2MWgtMXpNMTAgMTVoMXYxaC0xek0xMiAxNWgxdjFoLTF6TTEzIDE1aDF2MWgtMXpNMTUgMTVoMXYxaC0xek0xNiAxNWgxdjFoLTF6TTE3IDE1aDF2MWgtMXpNMTkgMTVoMXYxaC0xek0yMCAxNWgxdjFoLTF6TTIxIDE1aDF2MWgtMXpNMjQgMTVoMXYxaC0xek0yNiAxNWgxdjFoLTF6TTI3IDE1aDF2MWgtMXpNMjggMTVoMXYxaC0xek0zMSAxNWgxdjFoLTF6TTMyIDE1aDF2MWgtMXpNMzMgMTVoMXYxaC0xek0zNiAxNWgxdjFoLTF6TTM3IDE1aDF2MWgtMXpNMiAxNmgxdjFoLTF6TTMgMTZoMXYxaC0xek02IDE2aDF2MWgtMXpNOCAxNmgxdjFoLTF6TTEwIDE2aDF2MWgtMXpNMTEgMTZoMXYxaC0xek0xNiAxNmgxdjFoLTF6TTE5IDE2aDF2MWgtMXpNMjAgMTZoMXYxaC0xek0yNCAxNmgxdjFoLTF6TTI4IDE2aDF2MWgtMXpNMzAgMTZoMXYxaC0xek0zMiAxNmgxdjFoLTF6TTMzIDE2aDF2MWgtMXpNMzQgMTZoMXYxaC0xek0zNSAxNmgxdjFoLTF6TTIgMTdoMXYxaC0xek0zIDE3aDF2MWgtMXpNNCAxN2gxdjFoLTF6TTcgMTdoMXYxaC0xek05IDE3aDF2MWgtMXpNMTAgMTdoMXYxaC0xek0xMSAxN2gxdjFoLTF6TTEyIDE3aDF2MWgtMXpNMTMgMTdoMXYxaC0xek0xNCAxN2gxdjFoLTF6TTE1IDE3aDF2MWgtMXpNMTYgMTdoMXYxaC0xek0xOCAxN2gxdjFoLTF6TTE5IDE3aDF2MWgtMXpNMjQgMTdoMXYxaC0xek0yNyAxN2gxdjFoLTF6TTI4IDE3aDF2MWgtMXpNMzAgMTdoMXYxaC0xek0zMSAxN2gxdjFoLTF6TTMyIDE3aDF2MWgtMXpNMzQgMTdoMXYxaC0xek0zNyAxN2gxdjFoLTF6TTIgMThoMXYxaC0xek01IDE4aDF2MWgtMXpNOSAxOGgxdjFoLTF6TTEwIDE4aDF2MWgtMXpNMTIgMThoMXYxaC0xek0xMyAxOGgxdjFoLTF6TTE4IDE4aDF2MWgtMXpNMTkgMThoMXYxaC0xek0yMCAxOGgxdjFoLTF6TTIzIDE4aDF2MWgtMXpNMjUgMThoMXYxaC0xek0yOSAxOGgxdjFoLTF6TTMyIDE4aDF2MWgtMXpNMzUgMThoMXYxaC0xek0zNiAxOGgxdjFoLTF6TTM3IDE4aDF2MWgtMXpNMiAxOWgxdjFoLTF6TTMgMTloMXYxaC0xek00IDE5aDF2MWgtMXpNNiAxOWgxdjFoLTF6TTcgMTloMXYxaC0xek04IDE5aDF2MWgtMXpNMTAgMTloMXYxaC0xek0xMiAxOWgxdjFoLTF6TTEzIDE5aDF2MWgtMXpNMTQgMTloMXYxaC0xek0xNSAxOWgxdjFoLTF6TTE3IDE5aDF2MWgtMXpNMjAgMTloMXYxaC0xek0yMiAxOWgxdjFoLTF6TTI0IDE5aDF2MWgtMXpNMjkgMTloMXYxaC0xek0zMCAxOWgxdjFoLTF6TTMxIDE5aDF2MWgtMXpNMzMgMTloMXYxaC0xek0xIDIwaDF2MWgtMXpNMyAyMGgxdjFoLTF6TTQgMjBoMXYxaC0xek02IDIwaDF2MWgtMXpNOSAyMGgxdjFoLTF6TTEyIDIwaDF2MWgtMXpNMTMgMjBoMXYxaC0xek0xNCAyMGgxdjFoLTF6TTE2IDIwaDF2MWgtMXpNMTcgMjBoMXYxaC0xek0xOSAyMGgxdjFoLTF6TTI0IDIwaDF2MWgtMXpNMjYgMjBoMXYxaC0xek0yNyAyMGgxdjFoLTF6TTI5IDIwaDF2MWgtMXpNMzMgMjBoMXYxaC0xek0zNCAyMGgxdjFoLTF6TTM1IDIwaDF2MWgtMXpNMzcgMjBoMXYxaC0xek0xIDIxaDF2MWgtMXpNMyAyMWgxdjFoLTF6TTQgMjFoMXYxaC0xek02IDIxaDF2MWgtMXpNNyAyMWgxdjFoLTF6TTEyIDIxaDF2MWgtMXpNMTggMjFoMXYxaC0xek0xOSAyMWgxdjFoLTF6TTIwIDIxaDF2MWgtMXpNMjEgMjFoMXYxaC0xek0yMiAyMWgxdjFoLTF6TTIzIDIxaDF2MWgtMXpNMjYgMjFoMXYxaC0xek0yOCAyMWgxdjFoLTF6TTMwIDIxaDF2MWgtMXpNMzIgMjFoMXYxaC0xek0zNSAyMWgxdjFoLTF6TTM2IDIxaDF2MWgtMXpNMzcgMjFoMXYxaC0xek0xIDIyaDF2MWgtMXpNNCAyMmgxdjFoLTF6TTkgMjJoMXYxaC0xek0xMSAyMmgxdjFoLTF6TTEyIDIyaDF2MWgtMXpNMTYgMjJoMXYxaC0xek0xNyAyMmgxdjFoLTF6TTE4IDIyaDF2MWgtMXpNMjMgMjJoMXYxaC0xek0yOCAyMmgxdjFoLTF6TTMwIDIyaDF2MWgtMXpNMzIgMjJoMXYxaC0xek0zMyAyMmgxdjFoLTF6TTM0IDIyaDF2MWgtMXpNMzUgMjJoMXYxaC0xek0xIDIzaDF2MWgtMXpNMiAyM2gxdjFoLTF6TTQgMjNoMXYxaC0xek03IDIzaDF2MWgtMXpNOCAyM2gxdjFoLTF6TTExIDIzaDF2MWgtMXpNMTIgMjNoMXYxaC0xek0xNCAyM2gxdjFoLTF6TTE2IDIzaDF2MWgtMXpNMTcgMjNoMXYxaC0xek0yMCAyM2gxdjFoLTF6TTIxIDIzaDF2MWgtMXpNMjQgMjNoMXYxaC0xek0yNSAyM2gxdjFoLTF6TTMxIDIzaDF2MWgtMXpNMzIgMjNoMXYxaC0xek0zNSAyM2gxdjFoLTF6TTM2IDIzaDF2MWgtMXpNMzcgMjNoMXYxaC0xek0zIDI0aDF2MWgtMXpNNSAyNGgxdjFoLTF6TTYgMjRoMXYxaC0xek04IDI0aDF2MWgtMXpNMTEgMjRoMXYxaC0xek0xMyAyNGgxdjFoLTF6TTE0IDI0aDF2MWgtMXpNMTUgMjRoMXYxaC0xek0xNiAyNGgxdjFoLTF6TTE5IDI0aDF2MWgtMXpNMjAgMjRoMXYxaC0xek0yMSAyNGgxdjFoLTF6TTIyIDI0aDF2MWgtMXpNMjYgMjRoMXYxaC0xek0yNyAyNGgxdjFoLTF6TTI4IDI0aDF2MWgtMXpNMzAgMjRoMXYxaC0xek0zMSAyNGgxdjFoLTF6TTMyIDI0aDF2MWgtMXpNMzUgMjRoMXYxaC0xek01IDI1aDF2MWgtMXpNNyAyNWgxdjFoLTF6TTggMjVoMXYxaC0xek0xMCAyNWgxdjFoLTF6TTE1IDI1aDF2MWgtMXpNMTYgMjVoMXYxaC0xek0xOCAyNWgxdjFoLTF6TTIwIDI1aDF2MWgtMXpNMjIgMjVoMXYxaC0xek0yNCAyNWgxdjFoLTF6TTI2IDI1aDF2MWgtMXpNMjcgMjVoMXYxaC0xek0yOCAyNWgxdjFoLTF6TTMxIDI1aDF2MWgtMXpNMzQgMjVoMXYxaC0xek0zNSAyNWgxdjFoLTF6TTM3IDI1aDF2MWgtMXpNMSAyNmgxdjFoLTF6TTMgMjZoMXYxaC0xek02IDI2aDF2MWgtMXpNMTAgMjZoMXYxaC0xek0xMiAyNmgxdjFoLTF6TTEzIDI2aDF2MWgtMXpNMTkgMjZoMXYxaC0xek0yMSAyNmgxdjFoLTF6TTIzIDI2aDF2MWgtMXpNMjUgMjZoMXYxaC0xek0yNiAyNmgxdjFoLTF6TTI3IDI2aDF2MWgtMXpNMjkgMjZoMXYxaC0xek0zMSAyNmgxdjFoLTF6TTMyIDI2aDF2MWgtMXpNMzMgMjZoMXYxaC0xek0zNCAyNmgxdjFoLTF6TTM3IDI2aDF2MWgtMXpNMSAyN2gxdjFoLTF6TTIgMjdoMXYxaC0xek0zIDI3aDF2MWgtMXpNNCAyN2gxdjFoLTF6TTUgMjdoMXYxaC0xek02IDI3aDF2MWgtMXpNNyAyN2gxdjFoLTF6TTggMjdoMXYxaC0xek05IDI3aDF2MWgtMXpNMTQgMjdoMXYxaC0xek0xNiAyN2gxdjFoLTF6TTE4IDI3aDF2MWgtMXpNMjAgMjdoMXYxaC0xek0yMSAyN2gxdjFoLTF6TTI0IDI3aDF2MWgtMXpNMjUgMjdoMXYxaC0xek0yNyAyN2gxdjFoLTF6TTI4IDI3aDF2MWgtMXpNMjkgMjdoMXYxaC0xek0zMSAyN2gxdjFoLTF6TTM0IDI3aDF2MWgtMXpNMzUgMjdoMXYxaC0xek0zNiAyN2gxdjFoLTF6TTM3IDI3aDF2MWgtMXpNMSAyOGgxdjFoLTF6TTYgMjhoMXYxaC0xek05IDI4aDF2MWgtMXpNMTIgMjhoMXYxaC0xek0xMyAyOGgxdjFoLTF6TTE0IDI4aDF2MWgtMXpNMTUgMjhoMXYxaC0xek0xNyAyOGgxdjFoLTF6TTE4IDI4aDF2MWgtMXpNMTkgMjhoMXYxaC0xek0yMCAyOGgxdjFoLTF6TTIzIDI4aDF2MWgtMXpNMjQgMjhoMXYxaC0xek0zMiAyOGgxdjFoLTF6TTMzIDI4aDF2MWgtMXpNMSAyOWgxdjFoLTF6TTUgMjloMXYxaC0xek03IDI5aDF2MWgtMXpNOSAyOWgxdjFoLTF6TTEzIDI5aDF2MWgtMXpNMTUgMjloMXYxaC0xek0xNiAyOWgxdjFoLTF6TTE3IDI5aDF2MWgtMXpNMjIgMjloMXYxaC0xek0yMyAyOWgxdjFoLTF6TTI0IDI5aDF2MWgtMXpNMjYgMjloMXYxaC0xek0yNyAyOWgxdjFoLTF6TTI4IDI5aDF2MWgtMXpNMjkgMjloMXYxaC0xek0zMCAyOWgxdjFoLTF6TTMxIDI5aDF2MWgtMXpNMzIgMjloMXYxaC0xek0zMyAyOWgxdjFoLTF6TTM0IDI5aDF2MWgtMXpNMzUgMjloMXYxaC0xek0zNiAyOWgxdjFoLTF6TTkgMzBoMXYxaC0xek0xMCAzMGgxdjFoLTF6TTExIDMwaDF2MWgtMXpNMTYgMzBoMXYxaC0xek0xOCAzMGgxdjFoLTF6TTI1IDMwaDF2MWgtMXpNMjcgMzBoMXYxaC0xek0yOSAzMGgxdjFoLTF6TTMzIDMwaDF2MWgtMXpNMzQgMzBoMXYxaC0xek0zNSAzMGgxdjFoLTF6TTEgMzFoMXYxaC0xek0yIDMxaDF2MWgtMXpNMyAzMWgxdjFoLTF6TTQgMzFoMXYxaC0xek01IDMxaDF2MWgtMXpNNiAzMWgxdjFoLTF6TTcgMzFoMXYxaC0xek05IDMxaDF2MWgtMXpNMTEgMzFoMXYxaC0xek0xNCAzMWgxdjFoLTF6TTE1IDMxaDF2MWgtMXpNMTggMzFoMXYxaC0xek0xOSAzMWgxdjFoLTF6TTIwIDMxaDF2MWgtMXpNMjEgMzFoMXYxaC0xek0yMiAzMWgxdjFoLTF6TTI1IDMxaDF2MWgtMXpNMjYgMzFoMXYxaC0xek0yOCAzMWgxdjFoLTF6TTI5IDMxaDF2MWgtMXpNMzEgMzFoMXYxaC0xek0zMyAzMWgxdjFoLTF6TTM0IDMxaDF2MWgtMXpNMzYgMzFoMXYxaC0xek0zNyAzMWgxdjFoLTF6TTEgMzJoMXYxaC0xek03IDMyaDF2MWgtMXpNOSAzMmgxdjFoLTF6TTExIDMyaDF2MWgtMXpNMTIgMzJoMXYxaC0xek0xNCAzMmgxdjFoLTF6TTE1IDMyaDF2MWgtMXpNMTYgMzJoMXYxaC0xek0yMyAzMmgxdjFoLTF6TTI0IDMyaDF2MWgtMXpNMjYgMzJoMXYxaC0xek0yOCAzMmgxdjFoLTF6TTI5IDMyaDF2MWgtMXpNMzMgMzJoMXYxaC0xek0xIDMzaDF2MWgtMXpNMyAzM2gxdjFoLTF6TTQgMzNoMXYxaC0xek01IDMzaDF2MWgtMXpNNyAzM2gxdjFoLTF6TTkgMzNoMXYxaC0xek0xMSAzM2gxdjFoLTF6TTEyIDMzaDF2MWgtMXpNMTMgMzNoMXYxaC0xek0xNCAzM2gxdjFoLTF6TTE1IDMzaDF2MWgtMXpNMTYgMzNoMXYxaC0xek0xNyAzM2gxdjFoLTF6TTE5IDMzaDF2MWgtMXpNMjAgMzNoMXYxaC0xek0yMSAzM2gxdjFoLTF6TTIyIDMzaDF2MWgtMXpNMjMgMzNoMXYxaC0xek0yNSAzM2gxdjFoLTF6TTI2IDMzaDF2MWgtMXpNMjggMzNoMXYxaC0xek0yOSAzM2gxdjFoLTF6TTMwIDMzaDF2MWgtMXpNMzEgMzNoMXYxaC0xek0zMiAzM2gxdjFoLTF6TTMzIDMzaDF2MWgtMXpNMzUgMzNoMXYxaC0xek0zNiAzM2gxdjFoLTF6TTM3IDMzaDF2MWgtMXpNMSAzNGgxdjFoLTF6TTMgMzRoMXYxaC0xek00IDM0aDF2MWgtMXpNNSAzNGgxdjFoLTF6TTcgMzRoMXYxaC0xek05IDM0aDF2MWgtMXpNMTAgMzRoMXYxaC0xek0xMiAzNGgxdjFoLTF6TTEzIDM0aDF2MWgtMXpNMTUgMzRoMXYxaC0xek0yMSAzNGgxdjFoLTF6TTIzIDM0aDF2MWgtMXpNMjQgMzRoMXYxaC0xek0yNyAzNGgxdjFoLTF6TTI4IDM0aDF2MWgtMXpNMzAgMzRoMXYxaC0xek0zMiAzNGgxdjFoLTF6TTMzIDM0aDF2MWgtMXpNMzQgMzRoMXYxaC0xek0zNSAzNGgxdjFoLTF6TTM2IDM0aDF2MWgtMXpNMzcgMzRoMXYxaC0xek0xIDM1aDF2MWgtMXpNMyAzNWgxdjFoLTF6TTQgMzVoMXYxaC0xek01IDM1aDF2MWgtMXpNNyAzNWgxdjFoLTF6TTEwIDM1aDF2MWgtMXpNMTEgMzVoMXYxaC0xek0xMiAzNWgxdjFoLTF6TTE0IDM1aDF2MWgtMXpNMTUgMzVoMXYxaC0xek0yMSAzNWgxdjFoLTF6TTIzIDM1aDF2MWgtMXpNMjQgMzVoMXYxaC0xek0yNSAzNWgxdjFoLTF6TTI2IDM1aDF2MWgtMXpNMzIgMzVoMXYxaC0xek0zMyAzNWgxdjFoLTF6TTM0IDM1aDF2MWgtMXpNMzYgMzVoMXYxaC0xek0zNyAzNWgxdjFoLTF6TTEgMzZoMXYxaC0xek03IDM2aDF2MWgtMXpNMTIgMzZoMXYxaC0xek0xMyAzNmgxdjFoLTF6TTE0IDM2aDF2MWgtMXpNMTYgMzZoMXYxaC0xek0xOSAzNmgxdjFoLTF6TTIwIDM2aDF2MWgtMXpNMjEgMzZoMXYxaC0xek0yMiAzNmgxdjFoLTF6TTI1IDM2aDF2MWgtMXpNMjcgMzZoMXYxaC0xek0yOSAzNmgxdjFoLTF6TTMxIDM2aDF2MWgtMXpNMzIgMzZoMXYxaC0xek0zMyAzNmgxdjFoLTF6TTM1IDM2aDF2MWgtMXpNMSAzN2gxdjFoLTF6TTIgMzdoMXYxaC0xek0zIDM3aDF2MWgtMXpNNCAzN2gxdjFoLTF6TTUgMzdoMXYxaC0xek02IDM3aDF2MWgtMXpNNyAzN2gxdjFoLTF6TTkgMzdoMXYxaC0xek0xMiAzN2gxdjFoLTF6TTE0IDM3aDF2MWgtMXpNMTUgMzdoMXYxaC0xek0xOCAzN2gxdjFoLTF6TTIwIDM3aDF2MWgtMXpNMjEgMzdoMXYxaC0xek0yMiAzN2gxdjFoLTF6TTIzIDM3aDF2MWgtMXpNMjQgMzdoMXYxaC0xek0yNyAzN2gxdjFoLTF6TTI4IDM3aDF2MWgtMXpNMjkgMzdoMXYxaC0xek0zMSAzN2gxdjFoLTF6TTMzIDM3aDF2MWgtMXpNMzQgMzdoMXYxaC0xek0zNyAzN2gxdjFoLTF6Ii8+PC9zdmc+" width="152"></div>
+                    <span class="hint hint--flush">QR 코드</span>
+                  </div>
+                  <div class="stack-2" style="gap: 10px; min-width: 0">
+                    <span class="label" style="margin: 0">또는 수동 입력 키</span>
+                    <div class="secret" x-data="copyBtn({&quot;value&quot;:&quot;JBSWY3DPEHPK3PXP&quot;,&quot;reset&quot;:2147483647})">
+  <span class="secret__value">JBSWY3DPEHPK3PXP</span>
+  <button class="btn btn--sm btn--primary" type="button" x-on:click="copy($event)">
+    <span x-show="!copied">복사</span>
+    <span x-cloak x-show="copied">복사됨</span>
+  </button>
+</div>
+                    <p class="hint hint--flush">Google Authenticator · 1Password 등 TOTP 앱에 입력하세요.</p>
+                  </div>
+                </div>
+                <form autocomplete="off" data-quiet hx-post="/admin/login/mfa/confirm" hx-swap="innerHTML" hx-sync="this:drop"
+                      hx-target="#mfa-rc-slot" id="mfa-confirm-form" novalidate style="border-top: 1px solid var(--line-soft); padding-top: 16px"
+                      x-on:htmx:after-request="onAfter($event)"
+                      x-on:htmx:before-request="onBefore($event)" x-on:htmx:send-error="onNetwork(false)"
+                      x-on:htmx:timeout="onNetwork(true)" x-on:submit="if (confirming || code.length !== 6) $event.preventDefault()">
+                  <span class="label">앱에 표시된 인증 코드</span>
+                  <div style="display: inline-flex" x-on:input="sync()" x-on:keydown="sync()" x-on:otp-complete="sync()" x-on:paste="sync()">
+                    <fieldset class="otp-set" x-data="otpInput({&quot;length&quot;:6,&quot;submit&quot;:false})">
+  <legend class="sr-only">인증 코드 6자리</legend>
+  <input name="code" type="hidden" x-bind:value="value">
+  <div class="otp">
+    <input aria-label="인증 코드 1번째 자리" autocomplete="one-time-code" autofocus="autofocus"
+           class="otp__cell" inputmode="numeric"
+           maxlength="1" x-on:focus="$event.target.select()" x-on:input="onInput(0, $event)"
+           x-on:keydown="onKeydown(0, $event)" x-on:paste="onPaste($event)"><input aria-label="인증 코드 2번째 자리" autocomplete="off" class="otp__cell"
+           inputmode="numeric" maxlength="1"
+           x-on:focus="$event.target.select()" x-on:input="onInput(1, $event)" x-on:keydown="onKeydown(1, $event)"
+           x-on:paste="onPaste($event)"><input aria-label="인증 코드 3번째 자리" autocomplete="off" class="otp__cell"
+           inputmode="numeric" maxlength="1"
+           x-on:focus="$event.target.select()" x-on:input="onInput(2, $event)" x-on:keydown="onKeydown(2, $event)"
+           x-on:paste="onPaste($event)"><input aria-label="인증 코드 4번째 자리" autocomplete="off" class="otp__cell"
+           inputmode="numeric" maxlength="1"
+           x-on:focus="$event.target.select()" x-on:input="onInput(3, $event)" x-on:keydown="onKeydown(3, $event)"
+           x-on:paste="onPaste($event)"><input aria-label="인증 코드 5번째 자리" autocomplete="off" class="otp__cell"
+           inputmode="numeric" maxlength="1"
+           x-on:focus="$event.target.select()" x-on:input="onInput(4, $event)" x-on:keydown="onKeydown(4, $event)"
+           x-on:paste="onPaste($event)"><input aria-label="인증 코드 6번째 자리" autocomplete="off" class="otp__cell"
+           inputmode="numeric" maxlength="1"
+           x-on:focus="$event.target.select()" x-on:input="onInput(5, $event)" x-on:keydown="onKeydown(5, $event)"
+           x-on:paste="onPaste($event)">
+  </div>
+</fieldset>
+                  </div>
+                  <div id="mfa-enroll-error"></div>
+                  <p class="field__error" role="alert" x-cloak x-show="netErr" x-text="netErr"></p>
+                </form>
+              </div>
+              <div class="dialog__foot">
+                <button class="btn" type="button" x-bind:disabled="confirming" x-on:click="if (!confirming) open = false">취소</button>
+                <button class="btn btn--primary" disabled form="mfa-confirm-form" type="submit" x-bind:disabled="code.length !== 6 || confirming">확인 → 복구 코드</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>

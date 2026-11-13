@@ -482,6 +482,13 @@ class AdminJsonShapeContractTest {
 
     @Test
     fun mfa() {
+        // disable 은 정책이 MFA 필수가 아닐 때만 진행한다 — 기존 shape 는 정책 off 로 고정.
+        fun policy(mfaRequired: Boolean) {
+            whenever(securityPolicy.get()).thenReturn(
+                com.crosscert.passkey.admin.policy.SecurityPolicyDto.View(30, mfaRequired, listOf(), null, null),
+            )
+        }
+        policy(false)
         // {} — 코드 없음 → 401 invalid_code (복구 코드도 불일치).
         whenever(recoveryCodes.consume(anyOrNull(), isNull())).thenReturn(false)
         shape("mfa-verify-empty", asOp(json(post("/admin/api/mfa/verify"), "{}")))
@@ -504,6 +511,18 @@ class AdminJsonShapeContractTest {
         shape("mfa-verify-totp", asOp(json(post("/admin/api/mfa/verify"), "{\"code\":\"123456\"}")))
         unorderedShape("mfa-confirm", asOp(json(post("/admin/api/mfa/confirm"), "{\"code\":\"123456\"}")))
         shape("mfa-disable", asOp(json(post("/admin/api/mfa/disable"), "{\"code\":\"123456\"}")))
+        // 정책이 MFA 필수면 끄기는 409 mfa_policy_required.
+        policy(true)
+        shape("mfa-disable-policy-required", asOp(json(post("/admin/api/mfa/disable"), "{\"code\":\"123456\"}")))
+        // 이미 켠 계정의 enroll 은 409 mfa_already_enabled(secret 교체로 끄기 409 를 우회하지 못하게).
+        whenever(admins.findByEmail(anyString())).thenAnswer { inv ->
+            val u = AdminUser(inv.getArgument<String>(0), "x", "PLATFORM_OPERATOR")
+            u.setMfaSecret("sealed")
+            u.isMfaEnabled = true
+            Optional.of(u)
+        }
+        shape("mfa-enroll-already-enabled", asOp(post("/admin/api/mfa/enroll")))
+        policy(false)
 
         // MFA 대기 세션의 enroll — MfaPendingFilter/컨트롤러 이중 차단 응답.
         val pending = MockHttpSession()

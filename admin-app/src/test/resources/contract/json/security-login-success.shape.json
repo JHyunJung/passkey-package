@@ -1,6 +1,7 @@
 {
   "$" : "object",
   "$.email" : "string",
+  "$.mfaEnrollRequired" : "boolean",
   "$.mfaRequired" : "boolean",
   "$.role" : "string",
   "@contentType" : "application/json",

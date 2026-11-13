@@ -141,6 +141,7 @@ abstract class HtmlContractSupport {
     @Autowired lateinit var mvc: MockMvc
     @Autowired lateinit var clock: Clock
     @Autowired lateinit var admins: AdminUserRepository
+    @Autowired lateinit var policyService: com.crosscert.passkey.admin.policy.SecurityPolicyService
 
     @Autowired lateinit var tenants: TenantAdminController
     @Autowired lateinit var apiKeys: ApiKeyAdminController
@@ -167,6 +168,9 @@ abstract class HtmlContractSupport {
         whenever(clock.instant()).thenReturn(NOW)
         whenever(clock.millis()).thenReturn(NOW.toEpochMilli())
         whenever(clock.zone).thenReturn(ZoneOffset.UTC)
+        whenever(policyService.get()).thenReturn(
+            com.crosscert.passkey.admin.policy.SecurityPolicyDto.View(30, false, listOf(), null, null),
+        )
         whenever(admins.findByEmail(anyString())).thenAnswer { inv ->
             Optional.of(AdminUser(inv.getArgument<String>(0), "x", "PLATFORM_OPERATOR"))
         }

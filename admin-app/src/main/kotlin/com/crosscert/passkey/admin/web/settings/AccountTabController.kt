@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.web.settings
 
 import com.crosscert.passkey.admin.auth.MfaController
 import com.crosscert.passkey.admin.config.MeController
+import com.crosscert.passkey.admin.policy.SecurityPolicyService
 import com.crosscert.passkey.admin.web.format.ErrorMessages
 import com.crosscert.passkey.admin.web.format.KstFormat
 import com.crosscert.passkey.admin.web.format.RecoveryCodeFilename
@@ -37,6 +38,12 @@ private const val CODE_MISMATCH = "코드가 맞지 않습니다. 앱에 표시�
 /** 원본 QrCode size(AccountTab.tsx: `<QrCode size={152} />`). */
 private const val QR_SIZE = 152
 
+/** MFA 필수 정책 동안 끄기 불가 안내(화면 설명·409 오류 공용). */
+private const val POLICY_LOCKED = "보안 정책상 모든 운영자에게 2단계 인증이 필수라 끌 수 없습니다."
+
+/** enroll 409 mfa_already_enabled(다른 세션에서 이미 켬) 안내 — 원문 코드 대신. */
+private const val ALREADY_ENABLED = "이미 2단계 인증이 켜져 있습니다."
+
 private const val ENROLL_ERROR_ID = "mfa-enroll-error"
 private const val DISABLE_ERROR_ID = "mfa-disable-err"
 private const val REGEN_ERROR_ID = "mfa-regen-err"
@@ -65,12 +72,13 @@ class AccountTabController(
     private val mfa: MfaController,
     private val meController: MeController,
     private val clock: Clock,
+    private val policy: SecurityPolicyService,
 ) {
 
     /** 계정 카드 모델. enrolledAt 은 서버(MeView)가 아직 내려주지 않아 늘 null — 원본처럼 그 줄을 그리지 않는다. */
-    data class AccountView(val email: String?, val mfaEnabled: Boolean, val enrolledAt: String?) {
+    data class AccountView(val email: String?, val mfaEnabled: Boolean, val enrolledAt: String?, val disableLocked: Boolean = false) {
         internal companion object {
-            fun of(me: CurrentAdmin): AccountView = AccountView(me.email, me.mfaEnabled, null)
+            fun of(me: CurrentAdmin, disableLocked: Boolean = false): AccountView = AccountView(me.email, me.mfaEnabled, null, disableLocked)
         }
     }
 
@@ -84,7 +92,7 @@ class AccountTabController(
 
     /** 설정 화면(전체 페이지·일반 탭 조각)이 같은 모델로 내 계정 탭을 그린다. */
     fun populate(model: Model, me: CurrentAdmin) {
-        model.addAttribute("account", AccountView.of(me))
+        model.addAttribute("account", AccountView.of(me, me.mfaEnabled && mfaPolicyRequired()))
         model.addAttribute(
             "enrollAttrs",
             java.util.Map.of(
@@ -118,6 +126,9 @@ class AccountTabController(
         val status = r.statusCode.value()
         if (status < 200 || status >= 300) {
             val err = errorOf(r)
+            if (status == 409 && "mfa_already_enabled" == err) {
+                return enrollFailed(res, status, ErrorMessages.Info(ALREADY_ENABLED, null, status, err, false))
+            }
             return enrollFailed(res, status, ErrorMessages.describe(status, err, err))
         }
         val body: Map<*, *> = r.body as? Map<*, *> ?: java.util.Map.of<Any, Any>()
@@ -240,6 +251,15 @@ class AccountTabController(
 
     // ── 도우미 ──────────────────────────────────────────────
 
+    /** MFA 필수 정책이 켜져 있으면 끌 수 없다. 조회 실패·null 은 fail-closed(잠금). */
+    private fun mfaPolicyRequired(): Boolean =
+        try {
+            policy.get()?.mfaRequired ?: true
+        } catch (e: RuntimeException) {
+            log.warn("[settings] security policy read failed: {}", e.javaClass.simpleName)
+            true
+        }
+
     private fun reloadMe(auth: Authentication?, req: HttpServletRequest): CurrentAdmin? {
         try {
             return CurrentAdmin.from(meController.me(auth!!, req).data())
@@ -266,6 +286,8 @@ class AccountTabController(
          */
         internal fun codeErrorText(status: Int, error: String?): String {
             if (status == 401 && "invalid_code" == error) return CODE_MISMATCH
+            if (status == 409 && "mfa_policy_required" == error) return POLICY_LOCKED
+            if (status == 409 && "mfa_already_enabled" == error) return ALREADY_ENABLED
             return join(ErrorMessages.describe(status, error, error))
         }
 
@@ -286,8 +308,8 @@ class AccountTabController(
             return CODE_ERROR_VIEW
         }
 
-        /** 응답 본문의 `recoveryCodes` 를 번호(01–)와 함께 다이얼로그 줄로. 없으면 빈 목록(다이얼로그 없이 닫힘). */
-        private fun codesOf(r: ResponseEntity<*>): List<Code> {
+        /** 응답 본문의 `recoveryCodes` 를 번호(01–)와 함께 다이얼로그 줄로. 없으면 빈 목록(다이얼로그 없이 닫힘). internal: MFA 등록 화면(LoginPageController)도 쓴다. */
+        internal fun codesOf(r: ResponseEntity<*>): List<Code> {
             val codes = ArrayList<Code>()
             val body = r.body
             if (body is Map<*, *>) {
@@ -300,7 +322,7 @@ class AccountTabController(
         }
 
         /** mfaApi 의 ApiError(code): 본문의 `error` 값, 없으면 'error'. */
-        private fun errorOf(r: ResponseEntity<*>): String {
+        internal fun errorOf(r: ResponseEntity<*>): String {
             val m = r.body
             if (m is Map<*, *> && m["error"] != null) return m["error"].toString()
             return "error"
@@ -313,7 +335,7 @@ class AccountTabController(
             Toasts.warnTitled(res, "계정 정보를 새로고침하지 못했습니다.", "페이지를 새로고침해 주세요.")
         }
 
-        private fun noStore(res: HttpServletResponse) {
+        internal fun noStore(res: HttpServletResponse) {
             res.setHeader(HttpHeaders.CACHE_CONTROL, "no-store")
             res.setHeader(HttpHeaders.PRAGMA, "no-cache")
         }

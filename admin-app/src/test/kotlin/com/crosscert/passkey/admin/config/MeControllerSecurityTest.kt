@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.config
 
 import com.crosscert.passkey.admin.auth.AdminUserDetails
 import com.crosscert.passkey.admin.auth.MfaPendingFilter
+import com.crosscert.passkey.admin.auth.MfaSessionState
 import com.crosscert.passkey.admin.web.AdminWebSliceTest
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
@@ -70,6 +71,20 @@ class MeControllerSecurityTest {
         )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.mfaEnabled").value(false))
+            .andExpect(jsonPath("$.data.mfaRequired").value(false))
+    }
+
+    @Test
+    fun me_enrollRequiredSession_reportsFlag() {
+        whenever(users.findByEmail(anyString())).thenReturn(Optional.of(adminUser(false)))
+
+        mvc.perform(
+            get("/admin/api/me")
+                .with(authentication(operator()))
+                .sessionAttr(MfaSessionState.ENROLL_REQUIRED_ATTR, java.lang.Boolean.TRUE),
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.mfaEnrollRequired").value(true))
             .andExpect(jsonPath("$.data.mfaRequired").value(false))
     }
 

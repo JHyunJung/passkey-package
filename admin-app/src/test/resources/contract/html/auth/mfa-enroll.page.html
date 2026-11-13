@@ -1,0 +1,56 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+
+<!DOCTYPE html>
+<html lang="ko">
+<!--
+  MFA 필수 정책 등록 화면. 보안 정책이 MFA 를 요구하는데 아직 등록하지 않은 운영자(MFA_ENROLL_REQUIRED 세션)가 GET /admin/login 에서 받는다.
+  로그인·MFA 단계와 같은 auth 레이아웃(공통 틀 없음). 컨트롤러: LoginPageController.
+  등록 시작: hx-post /admin/login/mfa/enroll → MfaController.enroll → 설정 탭과 같은 켜기 다이얼로그(admin/settings/account :: enroll) → #mfa-enroll-step
+    다시 누르면 새 secret 으로 다시 시작한다(이전 secret 은 버려진다). 실패 → 422 + HX-Retarget #mfa-enroll-start-error
+  코드 확인: hx-post /admin/login/mfa/confirm → MfaController.confirm
+    성공 → 복구 코드 다이얼로그(admin/settings/account :: recoveryCodes, data-done-href=/admin) → #mfa-rc-slot. 닫으면 /admin 으로 이동.
+    실패 → 422 + HX-Retarget #mfa-enroll-error(설정 탭과 같은 문구)
+  secret·복구 코드는 응답 본문에만(no-store, 다이얼로그 루트 hx-history=false). 다이얼로그의 x-trap 을 위해 alpine-focus 를 싣는다(authFocus).
+-->
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <title>Crosscert Passkey Admin</title>
+  <link href="/admin/img/favicon.png" rel="icon">
+  <link href="/admin/css/fonts.css" rel="stylesheet">
+  <link href="/admin/css/tokens.css" rel="stylesheet">
+  <link href="/admin/css/globals.css" rel="stylesheet">
+  <link href="/admin/css/components.css" rel="stylesheet">
+  <script src="/admin/js/vendor/htmx.min.js"></script><script defer src="/admin/js/vendor/alpine-focus.min.js"></script>
+  <script src="/admin/js/ui.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script defer src="/admin/js/vendor/alpine.min.js"></script>
+</head>
+<body>
+<main class="auth">
+  <div class="auth__col">
+    <img alt="CROSSCERT" class="auth__logo" src="/admin/img/crosscert-logo-transparent.png">
+    <form class="auth-card" id="mfa-enroll-start" novalidate x-data x-on:submit.prevent>
+      <input name="_csrf" type="hidden" value="{{CSRF}}">
+      <div class="col" style="gap: 6px; align-items: center; text-align: center;">
+        <img alt="" src="/admin/img/mfa.webp" style="width: 88px; height: 88px; object-fit: contain;">
+        <h1 class="page__title">2단계 인증 등록</h1>
+        <p class="card__sub">보안 정책에 따라 2단계 인증을 등록해야 콘솔을 쓸 수 있습니다.</p>
+        <p class="hint" style="margin: 0;">3단계로 끝납니다 — 앱으로 QR 스캔 → 코드 확인 → 복구 코드 저장.</p>
+      </div>
+      <div id="mfa-enroll-start-error" x-ref="err"></div>
+      <button class="btn btn--primary btn--lg" hx-disabled-elt="this"
+              hx-post="/admin/login/mfa/enroll" hx-swap="innerHTML" hx-sync="this:drop" hx-target="#mfa-enroll-step" type="button"
+              x-on:htmx:before-request="$refs.err.replaceChildren()">등록 시작</button>
+    </form>
+    <!-- 출구: 등록 필요 세션을 끝내고 로그인 화면으로(POST /admin/logout, th:action 이 _csrf 를 넣는다). -->
+    <form action="/admin/logout" method="post" style="margin: 0;"><input name="_csrf" type="hidden" value="{{CSRF}}"/>
+      <button class="btn btn--ghost" style="color: var(--ink-2);" type="submit">← 다른 계정으로 로그인</button>
+    </form>
+  </div>
+</main>
+<div id="mfa-enroll-step"></div>
+<div id="mfa-rc-slot"></div>
+</body>
+</html>

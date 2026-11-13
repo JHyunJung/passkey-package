@@ -47,7 +47,10 @@
 
 ## 1. 기능 개발 (별도 spec 필요)
 
-- [ ] F01 **mfaRequired 강제화** — enroll-required vs verify-required 세션 상태 + 화면(Thymeleaf) 라우팅. 프론트+백 크로스커팅. [zero-base 2026-07-04]
+- [x] ~~**F01 mfaRequired 강제화**~~ — 정책 on 이면 MFA 미등록 운영자는 로그인 직후 등록 필요 세션(`MFA_ENROLL_REQUIRED`)이 되어
+      등록 화면에서 TOTP 를 등록해야 콘솔 API 가 열리고, 정책 on 에서는 MFA 끄기가 409. `MfaRequiredPolicyIT` 로 고정. [2026-11-13]
+      받아들인 위험: 비밀번호만 탈취된 미등록 계정은 공격자가 먼저 TOTP 를 등록할 수 있다 — `MFA_ENROLL` 감사(payload `forced`)로 탐지,
+      복구는 다른 운영자의 MFA 초기화(백로그).
 - [x] ~~**MFA 복구 코드 재발급 백엔드 엔드포인트**~~ — `POST /admin/api/mfa/recovery-codes`(MFA 켠 채로, **현재 TOTP 로만** 본인 확인 —
       복구 코드는 증명으로 받지 않음) + 설정 › 내 계정 "복구 코드 다시 받기" 확인창(`/admin/_/settings/mfa/recovery-codes`, 결과는 켜기 3/3 과
       같은 1회 표시 다이얼로그). 예전 코드는 즉시 전량 폐기, time-step 재사용 방지 저장, 감사 `MFA_RECOVERY_REGENERATE`(코드 값 없음, ops).

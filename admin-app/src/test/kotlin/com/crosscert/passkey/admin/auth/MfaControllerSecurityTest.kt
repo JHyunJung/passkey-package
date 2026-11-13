@@ -3,6 +3,7 @@ package com.crosscert.passkey.admin.auth
 import com.crosscert.passkey.admin.audit.AuditLogService
 import com.crosscert.passkey.admin.config.AdminSecurityConfig
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource
+import com.crosscert.passkey.admin.policy.SecurityPolicyDto
 import com.crosscert.passkey.admin.policy.SecurityPolicyService
 import com.crosscert.passkey.core.api.GlobalExceptionHandler
 import com.crosscert.passkey.core.entity.AdminUser
@@ -119,6 +120,56 @@ class MfaControllerSecurityTest {
         // verifying against the same Base32 secret the test generated.
         whenever(secretCipher.seal(anyString())).thenAnswer { inv -> inv.getArgument<String>(0) }
         whenever(secretCipher.open(anyString())).thenAnswer { inv -> inv.getArgument<String>(0) }
+        policy(false)
+    }
+
+    private fun policy(mfaRequired: Boolean) {
+        whenever(securityPolicyService.get())
+            .thenReturn(SecurityPolicyDto.View(30, mfaRequired, listOf(), null, null))
+    }
+
+    private fun enabledUser(): Pair<AdminUser, String> {
+        val secret = totp.newSecretBase32()
+        val u = adminUserWithUuid()
+        u.mfaSecret = secret
+        u.isMfaEnabled = true
+        whenever(admins.findByEmail(anyString())).thenReturn(Optional.of(u))
+        return u to secret
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun disable_policyOn_409_beforeTotp() {
+        policy(true)
+        val (u, secret) = enabledUser()
+        val code = totp.generate(secret, FIXED_MILLIS)
+
+        mvc.perform(
+            post("/admin/api/mfa/disable").with(csrf()).contentType("application/json")
+                .content("{\"code\":\"$code\"}"),
+        )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("mfa_policy_required"))
+
+        verify(admins, never()).save(anyOrNull())
+        assertThat(u.isMfaEnabled).isTrue()
+        assertThat(u.isTotpStepReplayed(Long.MAX_VALUE)).isFalse() // mfaLastTotpStep 미전진
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun disable_policyReadFails_409() {
+        whenever(securityPolicyService.get()).thenThrow(IllegalStateException("no row"))
+        val (_, secret) = enabledUser()
+        val code = totp.generate(secret, FIXED_MILLIS)
+
+        mvc.perform(
+            post("/admin/api/mfa/disable").with(csrf()).contentType("application/json")
+                .content("{\"code\":\"$code\"}"),
+        )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("mfa_policy_required"))
+        verify(admins, never()).save(anyOrNull())
     }
 
     // ---- verify ---------------------------------------------------------
@@ -239,6 +290,37 @@ class MfaControllerSecurityTest {
         )
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.error").value("unauthorized"))
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun enroll_policyOn_alreadyEnabled_409_andSecretAndFlagUntouched() {
+        // 이미 켠 계정의 enroll 은 TOTP 없이 secret 교체·mfa_enabled=N 을 만들어 정책상 끄기 409 를 우회할 수 있다 — 거부한다.
+        policy(true)
+        val (u, secret) = enabledUser()
+
+        mvc.perform(post("/admin/api/mfa/enroll").with(csrf()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("mfa_already_enabled"))
+            .andExpect(jsonPath("$.secret").doesNotExist())
+
+        verify(admins, never()).save(anyOrNull())
+        assertThat(u.isMfaEnabled).isTrue()
+        assertThat(u.mfaSecret).isEqualTo(secret)
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun enroll_policyOff_alreadyEnabled_409_too() {
+        val (u, secret) = enabledUser()
+
+        mvc.perform(post("/admin/api/mfa/enroll").with(csrf()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("mfa_already_enabled"))
+
+        verify(admins, never()).save(anyOrNull())
+        assertThat(u.isMfaEnabled).isTrue()
+        assertThat(u.mfaSecret).isEqualTo(secret)
     }
 
     // ---- confirm --------------------------------------------------------

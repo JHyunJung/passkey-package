@@ -5,6 +5,8 @@ import com.crosscert.passkey.admin.auth.ActiveTenantResolver
 import com.crosscert.passkey.admin.auth.AdminUserDetails
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService
 import com.crosscert.passkey.admin.auth.MfaPendingFilter
+import com.crosscert.passkey.admin.auth.MfaSessionState
+import com.crosscert.passkey.admin.policy.SecurityPolicyDto
 import com.crosscert.passkey.admin.policy.SecurityPolicyService
 import com.crosscert.passkey.admin.web.AdminWebSliceTest
 import com.crosscert.passkey.core.config.KstTime
@@ -70,6 +72,7 @@ class SessionSerializationTest {
         val DOCUMENTED_ATTRIBUTES: Set<String> = setOf(
             HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
             MfaPendingFilter.MFA_PENDING_ATTR,
+            MfaSessionState.ENROLL_REQUIRED_ATTR,
             ActiveTenantResolver.ACTIVE_TENANT_ATTR,
             "SPRING_SECURITY_SAVED_REQUEST",
         )
@@ -143,7 +146,8 @@ class SessionSerializationTest {
         whenever(clock.instant()).thenReturn(Fill.INSTANT)
         whenever(clock.zone).thenReturn(ZoneOffset.UTC)
         whenever(encoder.matches(anyString(), anyString())).thenReturn(true)
-        whenever(policy.get()).thenAnswer(Fill.ANSWER)
+        // 정책 off — 조회 실패/ON 은 MFA 등록 필수(fail-closed)로 판정되므로 명시한다(시나리오 D 가 ON 을 다룬다).
+        whenever(policy.get()).thenReturn(SecurityPolicyDto.View(30, false, listOf(), null, null))
     }
 
     private fun account(email: String, role: String, tenants: Set<UUID>, mfa: Boolean) {
@@ -179,6 +183,14 @@ class SessionSerializationTest {
         val mfa = login("mfa@example.com")
         assertThat(mfa.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
         observed.putAll(attributes(mfa))
+
+        // D. MFA 없는 운영자 + 정책 mfaRequired ON → MFA_ENROLL_REQUIRED.
+        whenever(policy.get()).thenReturn(SecurityPolicyDto.View(30, true, listOf(), null, null))
+        account("enroll@example.com", "PLATFORM_OPERATOR", emptySet(), false)
+        val enroll = login("enroll@example.com")
+        assertThat(enroll.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
+        assertThat(enroll.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isNull()
+        observed.putAll(attributes(enroll))
 
         // C. 미인증 화면 접근 → 요청 캐시(SPRING_SECURITY_SAVED_REQUEST).
         val anon = mvc.perform(get("/admin/tenants")).andReturn()

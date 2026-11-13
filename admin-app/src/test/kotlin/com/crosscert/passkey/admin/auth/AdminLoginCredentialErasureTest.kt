@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.audit.AuditLogService
 import com.crosscert.passkey.admin.config.AdminSecurityConfig
 import com.crosscert.passkey.admin.config.MeController
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource
+import com.crosscert.passkey.admin.policy.SecurityPolicyDto
 import com.crosscert.passkey.admin.policy.SecurityPolicyService
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
@@ -132,6 +133,8 @@ class AdminLoginCredentialErasureTest {
     fun stubs() {
         whenever(uds.loadUserByUsername(EMAIL)).thenAnswer { freshDetails() }
         whenever(users.findByEmail(EMAIL)).thenAnswer { Optional.of(adminUser(false)) }
+        // 정책 조회 실패는 fail-closed(MFA 등록 필수)라, 정책 off 특성화를 위해 명시 스텁한다.
+        whenever(securityPolicyService.get()).thenReturn(SecurityPolicyDto.View(30, false, listOf(), null, null))
     }
 
     private fun login(password: String): MvcResult =
@@ -178,7 +181,7 @@ class AdminLoginCredentialErasureTest {
         assertThat(p.isAccountNonLocked).isTrue()
 
         val session = session(r)
-        // SecurityPolicyService mock(get()=null) → 성공 핸들러의 기본 30분 폴백.
+        // 정책 스텁 idle=30분.
         assertThat(session.maxInactiveInterval).isEqualTo(30 * 60)
         assertThat(session.getAttribute(MfaPendingFilter.MFA_PENDING_ATTR)).isNull()
 

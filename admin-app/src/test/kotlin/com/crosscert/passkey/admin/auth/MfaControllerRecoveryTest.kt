@@ -267,6 +267,100 @@ class MfaControllerRecoveryTest {
         verify(recoveryCodes, never()).generate(any())
     }
 
+    // ── confirm: 등록 필요 해제 + MFA_ENROLL 감사 ────────────
+
+    private fun pendingEnrollUser(): AdminUser {
+        val u = adminUserWithUuid()
+        u.mfaSecret = "enc:v1:stored"
+        whenever(admins.findByEmail(anyString())).thenReturn(Optional.of(u))
+        whenever(secretCipher.open("enc:v1:stored")).thenReturn("PLAINSECRET")
+        whenever(recoveryCodes.generate(u.id)).thenReturn(listOf("AAAA-BBBB", "CCCC-DDDD"))
+        return u
+    }
+
+    /**
+     * 등록 필요 세션은 MfaPendingFilter 가 /admin/api/mfa/confirm 을 막는다(실제 경로는 LoginPageController 가
+     * 컨트롤러를 직접 호출). 그래서 플래그가 붙은 세션은 필터 없이 컨트롤러를 직접 호출해 검증한다.
+     */
+    private fun confirmDirect(code: String, session: MockHttpSession): org.springframework.http.ResponseEntity<*> {
+        val controller = MfaController(
+            totp, admins, Clock.fixed(Instant.ofEpochMilli(FIXED_MILLIS), ZoneOffset.UTC),
+            recoveryCodes, secretCipher, audit, securityPolicyService, 5, java.time.Duration.ofMinutes(15),
+        )
+        val req = org.springframework.mock.web.MockHttpServletRequest()
+        req.setSession(session)
+        val auth = org.springframework.security.authentication.TestingAuthenticationToken("alice@example.com", "x")
+        return controller.confirm(MfaController.VerifyRequest(code), auth, req)
+    }
+
+    private fun enrollRequiredSession(): MockHttpSession {
+        val s = MockHttpSession()
+        s.setAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR, java.lang.Boolean.TRUE)
+        return s
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun confirm_enrollRequiredSession_clearsFlag_auditsForced() {
+        val u = pendingEnrollUser()
+        whenever(totp.matchedCounter(eq("PLAINSECRET"), anyString(), anyLong()))
+            .thenReturn(OptionalLong.of(56_666_666L))
+        val session = enrollRequiredSession()
+
+        assertThat(confirmDirect("123456", session).statusCode.value()).isEqualTo(200)
+
+        assertThat(session.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isNull()
+        verify(audit).append(argThat {
+            action == "MFA_ENROLL" && payload?.get("forced") == true &&
+                targetId == u.id.toString() && tenantId == null
+        })
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun confirm_normalSession_auditsNotForced() {
+        pendingEnrollUser()
+        whenever(totp.matchedCounter(eq("PLAINSECRET"), anyString(), anyLong()))
+            .thenReturn(OptionalLong.of(56_666_666L))
+
+        mvc.perform(
+            post("/admin/api/mfa/confirm").with(csrf()).contentType("application/json")
+                .content("{\"code\":\"123456\"}"),
+        ).andExpect(status().isOk())
+
+        verify(audit).append(argThat { action == "MFA_ENROLL" && payload?.get("forced") == false })
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun confirm_auditFailure_stillConfirmed() {
+        val u = pendingEnrollUser()
+        whenever(totp.matchedCounter(eq("PLAINSECRET"), anyString(), anyLong()))
+            .thenReturn(OptionalLong.of(56_666_666L))
+        whenever(audit.append(any())).thenThrow(IllegalStateException("audit down"))
+        val session = enrollRequiredSession()
+
+        val res = confirmDirect("123456", session)
+        assertThat(res.statusCode.value()).isEqualTo(200)
+        assertThat((res.body as Map<*, *>)["recoveryCodes"]).isEqualTo(listOf("AAAA-BBBB", "CCCC-DDDD"))
+
+        assertThat(u.isMfaEnabled).isTrue()
+        assertThat(session.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isNull()
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun confirm_wrongCode_keepsFlag() {
+        pendingEnrollUser()
+        whenever(totp.matchedCounter(anyString(), anyString(), anyLong())).thenReturn(OptionalLong.empty())
+        val session = enrollRequiredSession()
+
+        assertThat(confirmDirect("000000", session).statusCode.value()).isEqualTo(401)
+
+        assertThat(session.getAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)).isEqualTo(java.lang.Boolean.TRUE)
+        verify(audit, never()).append(any())
+    }
+
     companion object {
         private const val FIXED_MILLIS = 1_700_000_000_000L
 

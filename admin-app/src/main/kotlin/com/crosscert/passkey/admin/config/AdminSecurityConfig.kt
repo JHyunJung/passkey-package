@@ -4,6 +4,7 @@ import com.crosscert.passkey.admin.audit.AuditAppendRequest
 import com.crosscert.passkey.admin.audit.AuditLogService
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService
 import com.crosscert.passkey.admin.auth.MfaPendingFilter
+import com.crosscert.passkey.admin.auth.MfaSessionState
 import com.crosscert.passkey.admin.auth.TenantBoundary
 import com.crosscert.passkey.admin.auth.TenantContextAdminFilter
 import com.crosscert.passkey.admin.policy.DynamicCorsConfigurationSource
@@ -128,7 +129,7 @@ class AdminSecurityConfig {
                         "/", "/admin", "/admin/", "/admin/tenants/**", "/admin/activity",
                         "/admin/audit-chain/**", "/admin/settings/**", "/admin/license",
                         "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
-                        "/admin/_/**", "/admin/login/mfa",
+                        "/admin/_/**", "/admin/login/mfa", "/admin/login/mfa/enroll", "/admin/login/mfa/confirm",
                     ).authenticated()
                     .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                     // /admin/api/profile 은 active profile 만 노출. (React 시절 로그인 화면) 이 미인증 상태에서
@@ -281,8 +282,12 @@ class AdminSecurityConfig {
             // value (DB corruption), fall back to the 30-minute default rather
             // than failing login or setting an unbounded (negative) timeout.
             var idleMinutes = DEFAULT_IDLE_MINUTES
+            // 정책 조회 실패(행 없음·CORS JSON 손상 등)는 fail-closed: MFA 필수로 간주한다.
+            var policyRequiresMfa: Boolean
             try {
-                val configured = policy.get().sessionIdleTimeoutMinutes
+                val view = policy.get()
+                policyRequiresMfa = view.mfaRequired
+                val configured = view.sessionIdleTimeoutMinutes
                 if (configured >= 1) {
                     idleMinutes = configured
                 } else {
@@ -292,28 +297,36 @@ class AdminSecurityConfig {
                     )
                 }
             } catch (ex: RuntimeException) {
+                policyRequiresMfa = true
                 log.warn(
-                    "could not read security policy for session timeout; using default {}min: {}",
+                    "could not read security policy; using default {}min and treating MFA as required (fail-closed): {}",
                     DEFAULT_IDLE_MINUTES, ex.toString(),
                 )
             }
             req.session.maxInactiveInterval = idleMinutes * 60
 
-            // For MFA-enabled operators, stamp the session as second-factor
-            // pending. MfaPendingFilter then blocks /admin/api/** (except the
-            // MFA endpoints + logout) until /admin/api/mfa/verify clears it.
-            // Operators without MFA are unaffected — behavior is unchanged.
+            // MFA-enabled operators: stamp the session as second-factor pending
+            // (MfaPendingFilter blocks until /admin/api/mfa/verify clears it).
+            // MFA-less operators while the policy requires MFA: stamp enrollment-required
+            // instead (never both attributes at once).
+            // 같은 세션으로 재로그인할 수 있으므로(세션 고정 방어는 속성을 유지한다) 이전 판정을
+            // 먼저 지워 두 속성이 함께 남거나 stale 값이 남지 않게 한다.
+            req.session.removeAttribute(MfaPendingFilter.MFA_PENDING_ATTR)
+            req.session.removeAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR)
             val mfaRequired = u.isMfaEnabled
+            val mfaEnrollRequired = !mfaRequired && policyRequiresMfa
             if (mfaRequired) {
                 req.session.setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, java.lang.Boolean.TRUE)
+            } else if (mfaEnrollRequired) {
+                req.session.setAttribute(MfaSessionState.ENROLL_REQUIRED_ATTR, java.lang.Boolean.TRUE)
             }
             log.info(
-                "admin login success: email={} role={} mfaRequired={}",
-                CryptoUtils.maskEmail(email), u.role, mfaRequired,
+                "admin login success: email={} role={} mfaRequired={} mfaEnrollRequired={}",
+                CryptoUtils.maskEmail(email), u.role, mfaRequired, mfaEnrollRequired,
             )
             if (isPageLogin(req)) {
-                // Thymeleaf 로그인 화면: MFA 대기면 로그인 화면(MFA 단계)으로, 아니면 홈으로.
-                Htmx.redirect(req, res, if (mfaRequired) "/admin/login" else "/admin")
+                // Thymeleaf 로그인 화면: MFA 대기·등록 필요면 로그인 화면(MFA 단계)으로, 아니면 홈으로.
+                Htmx.redirect(req, res, if (mfaRequired || mfaEnrollRequired) "/admin/login" else "/admin")
                 return@AuthenticationSuccessHandler
             }
             res.status = HttpServletResponse.SC_OK
@@ -321,7 +334,10 @@ class AdminSecurityConfig {
             // Use Jackson to avoid malformed JSON if email ever contains quotes/backslashes.
             res.writer.write(
                 mapper.writeValueAsString(
-                    java.util.Map.of("email", email, "role", u.role, "mfaRequired", mfaRequired),
+                    java.util.Map.of(
+                        "email", email, "role", u.role,
+                        "mfaRequired", mfaRequired, "mfaEnrollRequired", mfaEnrollRequired,
+                    ),
                 ),
             )
         }

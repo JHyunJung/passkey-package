@@ -549,15 +549,19 @@ document.addEventListener('alpine:init', () => {
     wrap: null,
     init() {
       this.wrap = this.$root.closest('[data-mfa-wrap]');
+      // 저장 안 한 변경 스토어는 공통 틀(app.js)에만 있다 — MFA 등록 화면(auth 레이아웃)에는 없어 건너뛴다.
       const d = Alpine.store('dirty');
+      if (!d) return;
       d.notice = { title: '복구 코드를 아직 저장하지 않았습니다', body: '이동하면 복구 코드를 다시 볼 수 없습니다.' };
       d.report('mfa-recovery-codes', 1, false);
     },
     destroy() {
       clearTimeout(this.timer);
       const d = Alpine.store('dirty');
-      d.report('mfa-recovery-codes', 0, false);
-      d.notice = null;
+      if (d) {
+        d.report('mfa-recovery-codes', 0, false);
+        d.notice = null;
+      }
       removeWrapLater(this.wrap);
     },
     text() { return Array.from(this.$root.querySelectorAll('[data-rc-code]')).map((el) => el.textContent.trim()).join('\n'); },
@@ -579,7 +583,13 @@ document.addEventListener('alpine:init', () => {
       a.click();
       URL.revokeObjectURL(url);
     },
-    finish() { if (this.checked) this.open = false; },
+    // data-done-href(MFA 필수 정책 등록 화면: /admin)가 있으면 닫은 뒤 그 주소로 이동한다.
+    finish() {
+      if (!this.checked) return;
+      const href = this.$root.dataset.doneHref;
+      this.open = false;
+      if (href) window.location.assign(href);
+    },
   }));
 
   // ── SaveBar / 저장하지 않은 변경 ───────────────────────

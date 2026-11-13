@@ -145,6 +145,10 @@ class RenderedHtmlSettingsContractTest : HtmlContractSupport() {
         snap("settings/account.tab.frag.mfa-off.html", frag("/admin/_/settings/tab/account", operator()))
         mfaOn()
         snap("settings/account.tab.frag.mfa-on.rp-admin.html", frag("/admin/_/settings/tab/account", rpAdmin()))
+        whenever(policyService.get()).thenReturn(
+            com.crosscert.passkey.admin.policy.SecurityPolicyDto.View(30, true, listOf(), null, null),
+        )
+        snap("settings/account.tab.frag.mfa-on.policy-required.html", frag("/admin/_/settings/tab/account", rpAdmin()))
     }
 
     @Test

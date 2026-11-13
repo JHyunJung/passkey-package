@@ -317,7 +317,8 @@ host 모드로 띄운 스택은 중지·상태 확인 때도 `-f` 두 개를 같
 
 ### 8. 테넌트 생성 → API 키 → rp-app 재기동
 
-admin 콘솔에서 테넌트를 만든다.
+admin 콘솔에서 테넌트를 만든다. 첫 로그인에서 2단계 인증(TOTP) 등록 화면이 나오면 등록을 마친다
+(아래 "운영 안내 — MFA 필수 정책" 참고).
 
 - host: `https://<ADMIN_SERVER_NAME>/admin/` — 서버 nginx 가 admin 도메인을 `127.0.0.1:8081` 로 넘긴다
 - bundled: `http://<ADMIN_BIND_ADDR>:<ADMIN_HOST_PORT>/admin/` (기본 `http://127.0.0.1:8081/admin/`).
@@ -348,6 +349,21 @@ API Keys 탭에서 `registration`, `authentication` scope 키를 발급한다.
 ```
 
 ---
+
+## 운영 안내 — MFA 필수 정책 (F01)
+
+- 베이스라인이 `security_policy.mfa_required='Y'` 로 시드한다.
+  - **기존 설치(업그레이드)**: 이 릴리스부터 **MFA 를 등록하지 않은 모든 운영자는 다음 로그인에서 TOTP 등록을 마쳐야
+    콘솔을 쓸 수 있다**. 원치 않으면 롤아웃(이미지 교체) **전에** 설정 › 보안 정책 › "모든 운영자에게 MFA 필수"를 끈다.
+  - **새 설치**: 정책이 처음부터 켜져 있다. 첫 운영자도 첫 로그인에서 TOTP 등록을 마쳐야 콘솔에 들어가 정책을 끌 수 있다.
+- fail-closed: 정책을 읽지 못하면(싱글턴 행 없음, CORS 허용목록 JSON 손상) 미등록 운영자는 마찬가지로 등록을 요구받고 MFA 끄기는 거부된다.
+- **비상 해제(등록이 불가능할 때)** — 운영자 MFA 초기화 기능이 아직 없으므로, 스키마 소유자(`PSK_APP_OWNER`) 계정으로
+  DB 에서 직접 끈다. 이미 열려 있는 등록 필요 세션은 다시 로그인해야 풀린다.
+
+  ```sql
+  UPDATE security_policy SET mfa_required='N' WHERE id=1;
+  COMMIT;
+  ```
 
 ## 반드시 먼저 해결해야 하는 것 — HTTPS
 

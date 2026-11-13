@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.config
 
 import com.crosscert.passkey.admin.auth.AdminUserDetails
 import com.crosscert.passkey.admin.auth.MfaPendingFilter
+import com.crosscert.passkey.admin.auth.MfaSessionState
 import com.crosscert.passkey.core.api.ApiResponse
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
@@ -56,6 +57,7 @@ class MeController(private val users: AdminUserRepository) {
                 mfaEnabled,
                 mfaRequired,
                 idleMinutes,
+                MfaSessionState.isEnrollRequired(req),
             ),
         )
     }

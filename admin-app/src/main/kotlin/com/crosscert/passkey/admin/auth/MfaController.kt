@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.auth
 
 import com.crosscert.passkey.admin.audit.AuditAppendRequest
 import com.crosscert.passkey.admin.audit.AuditLogService
+import com.crosscert.passkey.admin.policy.SecurityPolicyService
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
 import jakarta.servlet.http.HttpServletRequest
@@ -42,6 +43,7 @@ class MfaController(
     private val recoveryCodes: RecoveryCodeService,
     private val secretCipher: MfaSecretCipher,
     private val audit: AuditLogService,
+    private val securityPolicy: SecurityPolicyService,
     @Value("\${passkey.admin.lockout.max-attempts:5}") private val maxAttempts: Int,
     @Value("\${passkey.admin.lockout.duration:PT15M}") private val lockDuration: Duration,
 ) {
@@ -130,6 +132,11 @@ class MfaController(
      * confirming would otherwise have a fresh secret with `enabled=Y` —
      * their next login could no longer pass with the old authenticator entry.
      * Keeping enrollment disabled-until-confirmed closes that lock-out window.
+     *
+     * An account that already has MFA **enabled** gets `409 {"error":"mfa_already_enabled"}` with the
+     * secret and flag untouched: otherwise a password-only or stale session could swap the secret and
+     * leave `mfa_enabled=N` without any TOTP proof (bypassing the policy's disable-409). The UI only
+     * offers enroll while MFA is off; to re-enroll, turn MFA off first (TOTP-gated).
      */
     @PostMapping("/enroll")
     fun enroll(auth: Authentication, req: HttpServletRequest): ResponseEntity<*> {
@@ -143,6 +150,11 @@ class MfaController(
             log.warn("admin mfa enroll: no user row for authenticated principal email={}", mask(email))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(java.util.Map.of("error", "unauthorized"))
+        }
+        if (u.isMfaEnabled) {
+            log.warn("admin mfa enroll refused (already enabled): email={}", mask(email))
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(java.util.Map.of("error", "mfa_already_enabled"))
         }
         val secret = totp.newSecretBase32()
         u.mfaSecret = secretCipher.seal(secret)
@@ -179,6 +191,21 @@ class MfaController(
         users.save(u)
         log.info("admin mfa confirmed: email={}", mask(email))
         val codes = recoveryCodes.generate(u.id)
+        // 강제 등록 여부는 해제 전에 읽는다. 등록은 이미 끝났으므로 감사 실패가 응답을 막거나 되돌리지 않는다.
+        val forced = MfaSessionState.isEnrollRequired(req)
+        MfaSessionState.clearEnrollRequired(req)
+        try {
+            audit.append(
+                AuditAppendRequest(
+                    u.id, email, "MFA_ENROLL",
+                    "ADMIN_USER", u.id.toString(),
+                    null,
+                    java.util.Map.of("forced", forced),
+                ),
+            )
+        } catch (e: Exception) {
+            log.error("admin mfa enroll audit failed: {}", e.javaClass.simpleName)
+        }
         return ResponseEntity.ok(java.util.Map.of("confirmed", true, "recoveryCodes", codes))
     }
 
@@ -194,6 +221,19 @@ class MfaController(
         req: HttpServletRequest,
     ): ResponseEntity<*> {
         if (isPending(req)) return mfaRequired()
+        // 정책 판정은 TOTP 검증보다 먼저 — 거부 시 코드 시도·mfaLastTotpStep 이 소모되지 않는다.
+        // 정책 조회 실패(행 없음·CORS JSON 손상 등)는 fail-closed: 끄기를 거부한다.
+        val policyRequiresMfa = try {
+            securityPolicy.get().mfaRequired
+        } catch (e: Exception) {
+            log.warn("admin mfa disable: policy read failed, refusing (fail-closed): {}", e.toString())
+            true
+        }
+        if (policyRequiresMfa) {
+            log.warn("admin mfa disable refused (policy requires mfa): email={}", mask(auth.name))
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(java.util.Map.of("error", "mfa_policy_required"))
+        }
         val email: String? = auth.name
         val u: AdminUser? = users.findByEmail(email).orElse(null)
         val code: String? = body.code
