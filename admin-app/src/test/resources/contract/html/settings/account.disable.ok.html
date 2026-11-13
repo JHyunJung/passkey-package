@@ -18,7 +18,7 @@
 
       <div class="stack-3" style="gap: 14px">
         
-        <!-- 남은 개수·재발급은 서버 지원 후(스펙 §8). 지금은 보관 안내만. -->
+        <!-- 남은 개수는 서버 지원 후(스펙 §8). -->
         <div class="banner banner--info banner--top"
      role="status">
   <span class="banner__icon">
@@ -32,10 +32,14 @@
   </span>
   <div class="banner__body">
     <div class="banner__title">복구 코드 보관</div>
-    <div>복구 코드는 2단계 인증을 켤 때 한 번만 표시됩니다. 휴대폰을 잃어버렸을 때 로그인할 수 있는 유일한 방법이니 비밀번호 관리자 등 안전한 곳에 보관하세요. 코드를 모두 잃어버렸다면 운영자에게 MFA 초기화를 요청하세요.</div>
+    <div>복구 코드는 발급할 때 한 번만 표시됩니다. 휴대폰을 잃어버렸을 때 로그인할 수 있는 유일한 방법이니 비밀번호 관리자 등 안전한 곳에 보관하세요. 코드를 잃어버렸다면 아래에서 새로 받으세요. 휴대폰과 코드를 모두 잃어버렸다면 운영자에게 MFA 초기화를 요청하세요.</div>
   </div>
   
 </div>
+        <div class="row" style="gap: 12px">
+          <span class="card__sub" style="flex: 1 1 220px">새 복구 코드 10개를 받습니다. 예전 코드는 바로 쓸 수 없게 됩니다.</span>
+          <button class="btn" type="button" x-data x-on:click="$dispatch('dialog:open', { id: 'mfa-regen' })">복구 코드 다시 받기</button>
+        </div>
         <div style="border-top: 1px solid var(--line-soft); padding-top: 14px">
           <span class="t-over" style="color: var(--bad)">위험 영역</span>
           <div class="row" style="gap: 12px; margin-top: 6px">
@@ -75,6 +79,40 @@
           <div class="dialog__foot">
             <button class="btn" type="button" x-bind:disabled="disabling" x-on:click="if (!disabling) open = false">취소</button>
             <button class="btn btn--danger-solid" disabled form="mfa-disable-form" type="submit" x-bind:disabled="code.length !== 6 || disabling">끄기</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  
+  <div x-data="dialog({&quot;id&quot;:&quot;mfa-regen&quot;})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
+    <template x-if="open">
+      <div class="scrim" x-on:mousedown="onScrim($event)">
+        <div aria-labelledby="mfa-regen-title" aria-modal="true" class="dialog" role="alertdialog" x-data="mfaRegen" x-trap.noscroll="open">
+          <span hidden x-effect="busy = disabling"></span>
+          <div class="dialog__head">
+            <h3 class="dialog__title" id="mfa-regen-title">복구 코드 다시 받기</h3>
+            <div class="dialog__sub">본인 확인을 위해 현재 authenticator 코드를 입력하세요. 예전 복구 코드는 바로 쓸 수 없게 됩니다.</div>
+          </div>
+          <div class="dialog__body">
+            <form autocomplete="off" data-quiet hx-post="/admin/_/settings/mfa/recovery-codes" hx-swap="innerHTML"
+                  hx-sync="this:drop" hx-target="#mfa-rc-slot" id="mfa-regen-form" novalidate
+                  x-on:htmx:after-request="onAfter($event)"
+                  x-on:htmx:before-request="onBefore($event)" x-on:htmx:send-error="onNetwork(false)"
+                  x-on:htmx:timeout="onNetwork(true)" x-on:submit="if (disabling || code.length !== 6) $event.preventDefault()">
+              <label class="label" for="mfa-regen-code">인증 코드</label>
+              <input autocomplete="one-time-code" class="input mono" id="mfa-regen-code" inputmode="numeric" name="code" placeholder="000000"
+                     style="max-width: 200px; letter-spacing: 0.2em" x-bind:aria-describedby="invalid ? 'mfa-regen-err' : null"
+                     x-bind:aria-invalid="invalid ? 'true' : null" x-bind:readonly="disabling" x-on:input="onInput($event)"
+                     x-ref="input">
+              <div id="mfa-regen-err"></div>
+              <p class="field__error" role="alert" x-cloak x-show="netErr" x-text="netErr"></p>
+            </form>
+          </div>
+          <div class="dialog__foot">
+            <button class="btn" type="button" x-bind:disabled="disabling" x-on:click="if (!disabling) open = false">취소</button>
+            <button class="btn btn--primary" disabled form="mfa-regen-form" type="submit" x-bind:disabled="code.length !== 6 || disabling">새 코드 받기</button>
           </div>
         </div>
       </div>

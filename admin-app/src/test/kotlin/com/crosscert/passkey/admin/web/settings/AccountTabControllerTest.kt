@@ -451,6 +451,100 @@ class AccountTabControllerTest {
         assertThat(trigger(r).get("toast").get("title").asString()).isEqualTo("계정 정보를 새로고침하지 못했습니다.")
     }
 
+    // ── 복구 코드 다시 받기 ─────────────────────────────────
+
+    private fun regenerate(code: String): MvcResult =
+        mvc.perform(htmx(post(AccountTabController.REGENERATE_PATH), rp()).param("code", code)).andReturn()
+
+    @Test
+    @DisplayName("켜짐: 복구 코드 다시 받기 버튼 + 확인창(현재 authenticator 코드, 예전 코드 무효 안내, 결과는 #mfa-rc-slot)")
+    fun onShowsRegenerate() {
+        whenever(users.findByEmail(anyString())).thenReturn(Optional.of(user(true)))
+        val card = doc(tab(rp())).selectFirst("#mfa-account")!!
+        assertThat(card.select("button").stream().map { it.text() }).contains("복구 코드 다시 받기")
+        assertThat(card.text()).contains("잃어버렸다면").doesNotContain("운영자에게 MFA 초기화를 요청하세요. 코드를")
+
+        val dlg = card.select("template").map { Jsoup.parse(it.html()) }
+            .first { it.selectFirst("#mfa-regen-form") != null }
+        assertThat(dlg.selectFirst("[role=alertdialog]")!!.attr("aria-labelledby")).isEqualTo("mfa-regen-title")
+        assertThat(dlg.selectFirst("#mfa-regen-title")!!.text()).isEqualTo("복구 코드 다시 받기")
+        assertThat(dlg.text()).contains("현재 authenticator 코드").contains("예전 복구 코드는 바로 쓸 수 없게 됩니다")
+        val form = dlg.selectFirst("#mfa-regen-form")!!
+        assertThat(form.attr("hx-post")).isEqualTo(AccountTabController.REGENERATE_PATH)
+        assertThat(form.attr("hx-target")).isEqualTo("#mfa-rc-slot")
+        assertThat(form.attr("hx-swap")).isEqualTo("innerHTML")
+        val input = dlg.selectFirst("#mfa-regen-code")!!
+        assertThat(input.attr("name")).isEqualTo("code")
+        assertThat(input.attr("autocomplete")).isEqualTo("one-time-code")
+        assertThat(dlg.selectFirst("#mfa-regen-err")).isNotNull()
+        val submit = dlg.selectFirst("button[type=submit]")!!
+        assertThat(submit.text()).isEqualTo("새 코드 받기")
+        assertThat(submit.hasAttr("disabled")).isTrue()
+    }
+
+    @Test
+    @DisplayName("꺼짐: 복구 코드 다시 받기 없음")
+    fun offHasNoRegenerate() {
+        val card = doc(tab(rp())).selectFirst("#mfa-account")!!
+        assertThat(card.html()).doesNotContain("mfa-regen")
+    }
+
+    @Test
+    @DisplayName("다시 받기 성공: 새 복구 코드 다이얼로그(본문에만, no-store), 카드 OOB 없음, 성공 토스트(예전 코드 무효)")
+    fun regenerateShowsNewCodes() {
+        whenever(users.findByEmail(anyString())).thenReturn(Optional.of(user(true)))
+        whenever(mfa.regenerateRecoveryCodes(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenAnswer { ResponseEntity.ok(mapOf("recoveryCodes" to CODES)) }
+        val r = regenerate("123456")
+        assertThat(r.response.status).isEqualTo(200)
+        val req = argumentCaptor<MfaController.VerifyRequest>()
+        verify(mfa).regenerateRecoveryCodes(req.capture(), anyOrNull(), anyOrNull())
+        assertThat(req.lastValue.code).isEqualTo("123456")
+
+        val d = doc(r)
+        val wrap = d.selectFirst("[data-mfa-wrap]")!!
+        assertThat(wrap.attr("hx-history")).isEqualTo("false")
+        val inner = Jsoup.parse(wrap.selectFirst("template")!!.html())
+        assertThat(inner.select("[data-rc-code]").eachText()).containsExactlyElementsOf(CODES)
+        assertThat(inner.selectFirst("[role=alertdialog]")!!.attr("data-filename"))
+            .isEqualTo("passkey-admin-recovery-codes-alice-20261011.txt")
+        assertThat(d.selectFirst("#mfa-account")).isNull()
+        val t = trigger(r).get("toast")
+        assertThat(t.get("kind").asString()).isEqualTo("success")
+        assertThat(t.get("title").asString()).isEqualTo("새 복구 코드를 발급했습니다.")
+        assertThat(t.get("message").asString()).isEqualTo("예전 복구 코드는 더 이상 쓸 수 없습니다.")
+        assertThat(r.response.getHeader("Cache-Control")).contains("no-store")
+        for (h in r.response.headerNames) {
+            for (v in r.response.getHeaders(h)) for (c in CODES) assertThat(v).`as`("header $h").doesNotContain(c)
+        }
+    }
+
+    @Test
+    @DisplayName("다시 받기 실패: 401 invalid_code → 코드 불일치, 그 밖은 쉬운 문구, 확인창 안 인라인(422 + #mfa-regen-err), 토스트 없음")
+    fun regenerateFailureInline() {
+        whenever(users.findByEmail(anyString())).thenReturn(Optional.of(user(true)))
+        whenever(mfa.regenerateRecoveryCodes(anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenAnswer { ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(mapOf("error" to "invalid_code")) }
+        val r = regenerate("000000")
+        assertThat(r.response.status).isEqualTo(422)
+        assertThat(r.response.getHeader("HX-Retarget")).isEqualTo("#mfa-regen-err")
+        assertThat(r.response.getHeader("HX-Trigger")).isNull()
+        assertThat(doc(r).text()).isEqualTo(CODE_MISMATCH)
+
+        whenever(mfa.regenerateRecoveryCodes(anyOrNull(), anyOrNull(), anyOrNull())).thenThrow(IllegalStateException("ORA-00001 secret"))
+        val boom = regenerate("123456")
+        assertThat(boom.response.status).isEqualTo(422)
+        assertThat(body(boom)).doesNotContain("ORA").doesNotContain("secret")
+    }
+
+    @Test
+    @DisplayName("다시 받기는 CSRF 가 필요하다")
+    fun regenerateRequiresCsrf() {
+        val r = mvc.perform(post(AccountTabController.REGENERATE_PATH).with(authentication(rp())).header("HX-Request", "true").param("code", "123456")).andReturn()
+        assertThat(r.response.status).isEqualTo(403)
+        verify(mfa, never()).regenerateRecoveryCodes(anyOrNull(), anyOrNull(), anyOrNull())
+    }
+
     @Test
     @DisplayName("MFA 변경 요청은 CSRF 가 필요하다")
     fun mutationsRequireCsrf() {

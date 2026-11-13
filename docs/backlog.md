@@ -48,8 +48,13 @@
 ## 1. 기능 개발 (별도 spec 필요)
 
 - [ ] F01 **mfaRequired 강제화** — enroll-required vs verify-required 세션 상태 + 화면(Thymeleaf) 라우팅. 프론트+백 크로스커팅. [zero-base 2026-07-04]
-- [ ] **MFA 복구 코드 재발급 백엔드 엔드포인트** — `MfaController` 에 `/verify`·`/enroll`·`/confirm`·`/disable` 만 있고
-      재발급 경로가 없다. [admin-ui-followup-screens 2026-05-31]
+- [x] ~~**MFA 복구 코드 재발급 백엔드 엔드포인트**~~ — `POST /admin/api/mfa/recovery-codes`(MFA 켠 채로, **현재 TOTP 로만** 본인 확인 —
+      복구 코드는 증명으로 받지 않음) + 설정 › 내 계정 "복구 코드 다시 받기" 확인창(`/admin/_/settings/mfa/recovery-codes`, 결과는 켜기 3/3 과
+      같은 1회 표시 다이얼로그). 예전 코드는 즉시 전량 폐기, time-step 재사용 방지 저장, 감사 `MFA_RECOVERY_REGENERATE`(코드 값 없음, ops).
+      MFA 꺼짐이면 400 `mfa_not_enabled`, pending 세션 403. 휴대폰+코드 모두 분실(다른 운영자의 MFA 초기화)은 범위 밖. [2026-11-13]
+- [ ] **다른 운영자의 MFA 초기화 기능이 없다** — `auth/mfa.html`(로그인 2단계)·`settings/account.html`(복구 코드 안내)이
+      "운영자에게 MFA 초기화를 요청하세요" 라고 안내하지만, 운영자 관리(AdminUsersTab)에 MFA 초기화 동작이 없다. 휴대폰과 복구 코드를
+      모두 잃으면 DB 수동 조작 외에 복구 경로가 없다. 권한(PLATFORM_OPERATOR 만?)·본인 재등록 강제·감사 설계 필요. [2026-11-13 발견]
 - [ ] **NAV_RP dead code 해소** — (React 시절 `admin-ui/src/shell/Sidebar.tsx`; Thymeleaf 이식 후 위치는 `templates/admin/fragments/shell/sidebar.html`). RP_ADMIN 네비게이션이 정의돼 있으나
       호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. (Thymeleaf 포트에서 RP_ADMIN 은 [관리] 설정만 노출 — 재확인 후 종결 후보) [rp-admin-role-gating 2026-05-31]
 - [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.kt:36` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]

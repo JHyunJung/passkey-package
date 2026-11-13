@@ -185,6 +185,19 @@ class RenderedHtmlSettingsContractTest : HtmlContractSupport() {
             "settings/account.disable.ok.html",
             write(post("/admin/_/settings/mfa/disable").param("code", "123456"), operator()),
         )
+
+        doReturn(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(mapOf("error" to "invalid_code")))
+            .whenever(mfa).regenerateRecoveryCodes(any<MfaController.VerifyRequest>(), anyOrNull(), anyOrNull())
+        snap(
+            "settings/account.regenerate.form-error.html",
+            write(post("/admin/_/settings/mfa/recovery-codes").param("code", "000000"), operator()),
+        )
+        doReturn(ResponseEntity.ok(mapOf("recoveryCodes" to listOf("aaaa-bbbb-cccc", "dddd-eeee-ffff"))))
+            .whenever(mfa).regenerateRecoveryCodes(any<MfaController.VerifyRequest>(), anyOrNull(), anyOrNull())
+        snap(
+            "settings/account.regenerate.ok.html",
+            write(post("/admin/_/settings/mfa/recovery-codes").param("code", "123456"), operator()),
+        )
     }
 
     // ── AdminUsersTabController ────────────────────────────

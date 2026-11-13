@@ -1,0 +1,48 @@
+@status: 200
+@contentType: text/html;charset=UTF-8
+@header HX-Trigger: {"toast":{"kind":"success","title":"\uC0C8 \uBCF5\uAD6C \uCF54\uB4DC\uB97C \uBC1C\uAE09\uD588\uC2B5\uB2C8\uB2E4.","message":"\uC608\uC804 \uBCF5\uAD6C \uCF54\uB4DC\uB294 \uB354 \uC774\uC0C1 \uC4F8 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."}}
+
+
+  <!-- 켜기 다이얼로그를 닫는다(자리도 비워 secret 을 DOM 에서 지운다). 코드가 없으면 다이얼로그 없이 닫기만. -->
+  <span hidden x-data x-init="$dispatch('mfa-enroll-done')"></span>
+  <div data-mfa-wrap hx-history="false" x-data="dialog({&quot;id&quot;:&quot;mfa-rc&quot;,&quot;open&quot;:true,&quot;dismissible&quot;:false,&quot;closeOnScrim&quot;:false})">
+    <template x-if="open">
+      <div class="scrim">
+        <div aria-label="복구 코드 — 지금만 표시됩니다" aria-modal="true" class="dialog" data-filename="passkey-admin-recovery-codes-op-20261013.txt" role="alertdialog"
+             x-data="recoveryCodes" x-trap.noscroll="open">
+          <div class="dialog__body">
+            <div class="row" style="gap: 14px; flex-wrap: nowrap; margin-top: 4px">
+              <img alt="" height="72" src="/admin/img/recovery-codes.webp" style="object-fit: contain; flex: none" width="72">
+              <div class="stack-1">
+                <h3 class="dialog__title">복구 코드 — 지금만 표시됩니다</h3>
+                <p class="dialog__sub" style="margin: 0">authenticator 기기를 잃었을 때 각 코드를 한 번씩 로그인에 쓸 수 있습니다.</p>
+              </div>
+            </div>
+            <ol aria-label="복구 코드 목록" class="mono rc-list" x-ref="list">
+              <li><span class="hint rc-list__no">01</span><span data-rc-code>aaaa-bbbb-cccc</span></li>
+              <li><span class="hint rc-list__no">02</span><span data-rc-code>dddd-eeee-ffff</span></li>
+            </ol>
+            <div class="row">
+              <button class="btn" type="button" x-on:click="copy()">
+                <span x-show="!copied"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><rect height="11" rx="2" width="11" x="9" y="9"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></span>
+                <span x-cloak x-show="copied"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M5 12l5 5L20 7"/></svg></span>
+                <span x-text="copied ? '복사됨' : '복사'">복사</span>
+              </button>
+              <button class="btn" type="button" x-on:click="download()"><svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg> 다운로드 (.txt)</button>
+              <span class="hint hint--flush">복사 실패 시: 직접 선택하거나 다운로드</span>
+            </div>
+            <p class="field__error" role="alert" style="margin: 0" x-cloak x-show="copyFailed">복사에 실패했습니다. 위 코드를 직접 선택해 복사하거나 다운로드하세요.</p>
+            <label class="row rc-ack">
+              <input type="checkbox" x-model="checked">
+              <strong style="font-size: 13px">안전한 곳에 저장했습니다.</strong>
+            </label>
+          </div>
+          <div class="dialog__foot">
+            <button class="btn" disabled type="button" x-bind:class="checked ? 'btn--primary' : ''" x-bind:disabled="!checked" x-on:click="finish()"
+                    x-text="checked ? '닫기' : '닫기 · 체크 필요'">닫기 · 체크 필요</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+  

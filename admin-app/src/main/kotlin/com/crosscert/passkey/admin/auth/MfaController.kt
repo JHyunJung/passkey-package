@@ -1,5 +1,7 @@
 package com.crosscert.passkey.admin.auth
 
+import com.crosscert.passkey.admin.audit.AuditAppendRequest
+import com.crosscert.passkey.admin.audit.AuditLogService
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
 import jakarta.servlet.http.HttpServletRequest
@@ -39,6 +41,7 @@ class MfaController(
     private val clock: Clock,
     private val recoveryCodes: RecoveryCodeService,
     private val secretCipher: MfaSecretCipher,
+    private val audit: AuditLogService,
     @Value("\${passkey.admin.lockout.max-attempts:5}") private val maxAttempts: Int,
     @Value("\${passkey.admin.lockout.duration:PT15M}") private val lockDuration: Duration,
 ) {
@@ -204,6 +207,51 @@ class MfaController(
         users.save(u)
         log.info("admin mfa disabled: email={}", mask(email))
         return ResponseEntity.ok(java.util.Map.of("disabled", true))
+    }
+
+    /**
+     * Regenerate recovery codes while MFA stays enabled — for an operator who still has the
+     * authenticator but lost the saved codes. Proof is the current TOTP code only (a recovery code
+     * is not accepted: someone holding a leaked code must not be able to mint a fresh set).
+     * On success every previous code is discarded ([RecoveryCodeService.generate] deletes first)
+     * and the new plain codes are returned once in the body. The consumed time-step is persisted
+     * (replay guard), and an `MFA_RECOVERY_REGENERATE` audit row is appended first (no code values).
+     *
+     * `401 {"error":"invalid_code"}` on a wrong/absent code, `400 {"error":"mfa_not_enabled"}`
+     * when MFA is off (codes would be useless — turn MFA on instead).
+     */
+    @PostMapping("/recovery-codes")
+    fun regenerateRecoveryCodes(
+        @RequestBody body: VerifyRequest,
+        auth: Authentication,
+        req: HttpServletRequest,
+    ): ResponseEntity<*> {
+        if (isPending(req)) return mfaRequired()
+        val email: String? = auth.name
+        val u: AdminUser? = users.findByEmail(email).orElse(null)
+        if (u == null || !validCode(u, body.code)) {
+            log.warn("admin mfa recovery-code regenerate failed: email={}", mask(email))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(java.util.Map.of("error", "invalid_code"))
+        }
+        if (!u.isMfaEnabled) {
+            log.warn("admin mfa recovery-code regenerate refused (mfa off): email={}", mask(email))
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "mfa_not_enabled"))
+        }
+        users.save(u) // persist mfaLastTotpStep advanced by validCode
+        // Audit BEFORE generate: if the audit append fails nothing has changed (old codes still valid).
+        // The reverse order could discard the old codes and then fail before the new ones reach the operator.
+        audit.append(
+            AuditAppendRequest(
+                u.id, email, "MFA_RECOVERY_REGENERATE",
+                "ADMIN_USER", u.id.toString(),
+                null,
+                java.util.Map.of(),
+            ),
+        )
+        val codes = recoveryCodes.generate(u.id)
+        log.info("admin mfa recovery codes regenerated: email={}", mask(email))
+        return ResponseEntity.ok(java.util.Map.of("recoveryCodes", codes))
     }
 
     data class VerifyRequest(val code: String?)
