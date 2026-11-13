@@ -10,8 +10,13 @@ import com.crosscert.passkey.core.repository.AdminUserRepository
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
+import org.assertj.core.api.Assertions.assertThat
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argThat
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
+import org.springframework.mock.web.MockHttpSession
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringBootConfiguration
@@ -146,6 +151,120 @@ class MfaControllerRecoveryTest {
             .andExpect(jsonPath("$.remaining").value(9))
 
         verify(recoveryCodes).consume(eq(u.id), anyString())
+    }
+
+    // ── 복구 코드 재발급 ────────────────────────────────────
+
+    private fun enabledUser(): AdminUser {
+        val u = adminUserWithUuid()
+        u.mfaSecret = "enc:v1:stored"
+        u.isMfaEnabled = true
+        whenever(admins.findByEmail(anyString())).thenReturn(Optional.of(u))
+        whenever(secretCipher.open("enc:v1:stored")).thenReturn("PLAINSECRET")
+        return u
+    }
+
+    private fun regenerate(code: String, session: MockHttpSession? = null) =
+        mvc.perform(
+            post("/admin/api/mfa/recovery-codes")
+                .with(csrf())
+                .apply { if (session != null) session(session) }
+                .contentType("application/json")
+                .content("{\"code\":\"$code\"}"),
+        )
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun regenerate_validTotp_returnsNewCodesAndAudits() {
+        val u = enabledUser()
+        whenever(totp.matchedCounter(eq("PLAINSECRET"), anyString(), anyLong()))
+            .thenReturn(OptionalLong.of(56_666_666L))
+        whenever(recoveryCodes.generate(u.id)).thenReturn(listOf("AAAA-BBBB", "CCCC-DDDD"))
+
+        regenerate("123456")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.recoveryCodes[0]").value("AAAA-BBBB"))
+            .andExpect(jsonPath("$.recoveryCodes[1]").value("CCCC-DDDD"))
+
+        verify(recoveryCodes).generate(u.id)
+        // MFA 는 켜진 채로, 사용한 time-step 은 재사용 방지용으로 저장된다.
+        assertThat(u.isMfaEnabled).isTrue()
+        assertThat(u.mfaLastTotpStep).isEqualTo(56_666_666L)
+        verify(admins).save(u)
+        verify(audit).append(argThat {
+            action == "MFA_RECOVERY_REGENERATE" && actorId == u.id && tenantId == null &&
+                targetType == "ADMIN_USER" && targetId == u.id.toString() &&
+                // 코드 평문은 감사 payload 에 남기지 않는다.
+                payload?.values?.none { it.toString().contains("AAAA-BBBB") } == true
+        })
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun regenerate_auditFailure_keepsOldCodes() {
+        // 감사 기록이 실패하면 예전 코드를 폐기하지 않는다(새 코드를 못 받은 채 기존 코드만 잃는 상황 방지).
+        enabledUser()
+        whenever(totp.matchedCounter(eq("PLAINSECRET"), anyString(), anyLong()))
+            .thenReturn(OptionalLong.of(56_666_666L))
+        whenever(audit.append(any())).thenThrow(IllegalStateException("audit down"))
+
+        regenerate("123456").andExpect(status().is5xxServerError())
+
+        verify(recoveryCodes, never()).generate(any())
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun regenerate_wrongTotp_401_keepsOldCodes() {
+        enabledUser()
+        whenever(totp.matchedCounter(anyString(), anyString(), anyLong())).thenReturn(OptionalLong.empty())
+
+        regenerate("000000")
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error").value("invalid_code"))
+
+        verify(recoveryCodes, never()).generate(any())
+        verify(audit, never()).append(any())
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun regenerate_doesNotAcceptRecoveryCodeAsProof() {
+        enabledUser()
+        whenever(totp.matchedCounter(anyString(), anyString(), anyLong())).thenReturn(OptionalLong.empty())
+
+        regenerate("AAAA-BBBB").andExpect(status().isUnauthorized())
+
+        // 본인 확인은 authenticator(TOTP)만 — 복구 코드를 소비하거나 대조하지 않는다.
+        verify(recoveryCodes, never()).consume(any(), any())
+        verify(recoveryCodes, never()).generate(any())
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun regenerate_mfaDisabled_400_noCodes() {
+        val u = enabledUser()
+        u.isMfaEnabled = false
+        whenever(totp.matchedCounter(anyString(), anyString(), anyLong()))
+            .thenReturn(OptionalLong.of(56_666_666L))
+
+        regenerate("123456")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("mfa_not_enabled"))
+
+        verify(recoveryCodes, never()).generate(any())
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com", roles = ["PLATFORM_OPERATOR"])
+    fun regenerate_pendingSession_403() {
+        enabledUser()
+        val pending = MockHttpSession()
+        pending.setAttribute(MfaPendingFilter.MFA_PENDING_ATTR, java.lang.Boolean.TRUE)
+
+        regenerate("123456", pending).andExpect(status().isForbidden())
+
+        verify(recoveryCodes, never()).generate(any())
     }
 
     companion object {

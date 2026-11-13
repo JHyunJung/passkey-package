@@ -1,5 +1,6 @@
 package com.crosscert.passkey.admin.auth
 
+import com.crosscert.passkey.admin.audit.AuditLogService
 import com.crosscert.passkey.core.config.KstTime
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
@@ -31,7 +32,7 @@ class MfaControllerTest {
     private val clock: Clock = Clock.fixed(Instant.parse("2026-06-11T00:00:00Z"), KstTime.ZONE)
 
     // max-attempts=5, duration=15m mirror AdminSecurityConfig defaults.
-    private val controller = MfaController(totp, users, clock, recoveryCodes, cipher, 5, Duration.ofMinutes(15))
+    private val controller = MfaController(totp, users, clock, recoveryCodes, cipher, mock<AuditLogService>(), 5, Duration.ofMinutes(15))
 
     private fun pendingRequest(pending: Boolean): HttpServletRequest {
         val req: HttpServletRequest = mock()
@@ -63,6 +64,18 @@ class MfaControllerTest {
 
         assertThat(resp.statusCode).isEqualTo(HttpStatus.FORBIDDEN)
         verify(users, never()).save(anyOrNull())
+    }
+
+    @Test
+    fun regenerateRecoveryCodes_whilePending_is403() {
+        // MfaPendingFilter 가 우회돼도 핸들러가 비밀번호만 통과한 세션의 재발급을 거부한다(심층 방어).
+        val resp = controller.regenerateRecoveryCodes(
+            MfaController.VerifyRequest("123456"), auth(), pendingRequest(true),
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.FORBIDDEN)
+        verify(users, never()).save(anyOrNull())
+        verify(recoveryCodes, never()).generate(anyOrNull())
     }
 
     @Test

@@ -26,6 +26,7 @@ object ActivityLabels {
         java.util.Map.entry("ATTESTATION_POLICY_UPDATED", "AAGUID 정책 변경"),
         java.util.Map.entry("ADMIN_LOGIN", "관리자 로그인"),
         java.util.Map.entry("ADMIN_LOGIN_FAILED", "로그인 실패"),
+        java.util.Map.entry("MFA_RECOVERY_REGENERATE", "복구 코드 재발급"),
         java.util.Map.entry("SIGNATURE_COUNTER_REGRESSION", "서명 카운터 이상"),
         java.util.Map.entry("SIGNATURE_INVALID", "서명 검증 실패"),
         java.util.Map.entry("ATTESTATION_TRUST_FAILED", "Attestation 신뢰 실패"),

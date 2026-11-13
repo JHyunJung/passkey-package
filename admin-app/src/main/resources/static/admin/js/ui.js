@@ -505,9 +505,11 @@ document.addEventListener('alpine:init', () => {
     resetCode() { this.code = ''; const d = this.otp(); if (d) d.clear(); },
   }));
 
-  // 끄기 확인창: 숫자 6자리만, 요청 중 읽기 전용(늦은 실패가 다시 친 값을 덮지 않음). 실패하면 값은 남기고 전체 선택 + 포커스 + aria-invalid.
-  // 성공하면 응답이 계정 카드(#mfa-account)를 통째로 바꾼다(계정 정보 새로고침이 실패한 경우엔 카드는 그대로, 확인창만 닫는다).
-  Alpine.data('mfaDisable', () => ({
+  // authenticator 코드 확인창(끄기·복구 코드 다시 받기 공용): 숫자 6자리만, 요청 중 읽기 전용(늦은 실패가 다시 친 값을 덮지 않음).
+  // 실패하면 값은 남기고 전체 선택 + 포커스 + aria-invalid. 성공하면 확인창을 닫는다.
+  // 끄기 성공 응답은 계정 카드(#mfa-account)를 통째로 바꾸고(계정 정보 새로고침이 실패한 경우엔 카드는 그대로), 다시 받기 성공 응답은
+  // #mfa-rc-slot 에 복구 코드 다이얼로그를 그린다.
+  const mfaCodeConfirm = (formId, errId) => ({
     code: '',
     disabling: false,
     invalid: false,
@@ -518,10 +520,10 @@ document.addEventListener('alpine:init', () => {
       e.target.value = this.code;
       if (this.invalid || this.netErr) this.clearErr();
     },
-    clearErr() { this.invalid = false; this.netErr = ''; clearById('mfa-disable-err'); },
-    onBefore(e) { if (!ownRequest(e, 'mfa-disable-form')) return; this.disabling = true; this.clearErr(); },
+    clearErr() { this.invalid = false; this.netErr = ''; clearById(errId); },
+    onBefore(e) { if (!ownRequest(e, formId)) return; this.disabling = true; this.clearErr(); },
     onAfter(e) {
-      if (!ownRequest(e, 'mfa-disable-form')) return;
+      if (!ownRequest(e, formId)) return;
       this.disabling = false;
       const d = e.detail || {};
       if (d.successful) { this.open = false; return; }
@@ -533,7 +535,9 @@ document.addEventListener('alpine:init', () => {
       this.invalid = true;
       this.$nextTick(() => { const i = this.$refs.input; if (i) { i.focus(); i.select(); } });
     },
-  }));
+  });
+  Alpine.data('mfaDisable', () => mfaCodeConfirm('mfa-disable-form', 'mfa-disable-err'));
+  Alpine.data('mfaRegen', () => mfaCodeConfirm('mfa-regen-form', 'mfa-regen-err'));
 
   // 복구 코드(3 / 3): 화면의 코드로 복사(줄바꿈으로 이음)·.txt 다운로드(Blob, 파일명은 서버가 RecoveryCodeFilename 으로 준 값).
   // "안전한 곳에 저장했습니다." 체크 뒤 닫기 버튼만 닫는다(Escape·스크림 무시: dialog dismissible=false). 열려 있는 동안 이동·새로고침을 막는다.

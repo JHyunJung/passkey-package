@@ -39,6 +39,7 @@ private const val QR_SIZE = 152
 
 private const val ENROLL_ERROR_ID = "mfa-enroll-error"
 private const val DISABLE_ERROR_ID = "mfa-disable-err"
+private const val REGEN_ERROR_ID = "mfa-regen-err"
 
 /**
  * 설정 › 내 계정 탭(← pages/settings/AccountTab.tsx, RecoveryCodesModal.tsx, shell/QrCode.tsx, api/mfa.ts).
@@ -49,6 +50,8 @@ private const val DISABLE_ERROR_ID = "mfa-disable-err"
  * - 확인: `POST …/mfa/confirm` → 성공 응답이 복구 코드 다이얼로그(3/3)다. 코드는 이 응답 본문에만 있다 — 세션·플래시·헤더·토스트·리다이렉트
  *   없음, `Cache-Control: no-store`, 다이얼로그 루트 `hx-history="false"`. .txt 다운로드·복사는 브라우저(Alpine)가 화면의 코드로 한다.
  *   실패는 토스트 없이 입력칸 아래 인라인(422 + HX-Retarget): 401 invalid_code 만 "코드가 맞지 않습니다…", 그 밖은 쉬운 오류 문구.
+ * - 복구 코드 다시 받기: `POST …/mfa/recovery-codes` → 성공 응답이 확인과 같은 복구 코드 다이얼로그(카드 OOB 없음, 성공 토스트).
+ *   실패는 확인창 안 인라인(#mfa-regen-err).
  * - 끄기: `POST …/mfa/disable` → 성공하면 계정 카드를 다시 그린다(경고 토스트 "2단계 인증이 꺼졌습니다."). 실패는 확인 다이얼로그 안 인라인.
  *
  * 켜기·끄기가 성공하면 원본의 `onMeChange(await getMe())` 처럼 [MeController.me] 로 계정 정보를 다시 읽어 카드를 그린다(실패하면
@@ -153,15 +156,7 @@ class AccountTabController(
         val status = r.statusCode.value()
         if (status < 200 || status >= 300) return codeError(res, model, ENROLL_ERROR_ID, codeErrorText(status, errorOf(r)))
 
-        val codes = ArrayList<Code>()
-        val body = r.body
-        if (body is Map<*, *>) {
-            val list = body["recoveryCodes"]
-            if (list is List<*>) {
-                for (c in list) codes.add(Code(String.format("%02d", codes.size + 1), c.toString()))
-            }
-        }
-        model.addAttribute("codes", codes)
+        model.addAttribute("codes", codesOf(r))
         model.addAttribute("rcFilename", RecoveryCodeFilename.of(me.email, KstFormat.kstTodayDate(clock.instant())))
         // 복구 코드는 계정 정보 새로고침의 성공 여부와 무관하게 먼저 보여 준다.
         val fresh = reloadMe(auth, req)
@@ -173,6 +168,39 @@ class AccountTabController(
             model.addAttribute("accountOob", false)
             meRefreshFailed(res)
         }
+        return CODES_VIEW
+    }
+
+    // ── 복구 코드 다시 받기 ─────────────────────────────────
+
+    /**
+     * MFA 를 켠 채로 복구 코드만 새로 받는다(현재 authenticator 코드로 본인 확인). 성공 응답은 켜기 3/3 과 같은 복구 코드
+     * 다이얼로그(#mfa-rc-slot) — 코드는 이 응답 본문에만, no-store. 카드는 바뀌지 않으므로 OOB 없음. 실패는 확인창 안 인라인.
+     */
+    @PostMapping(REGENERATE_PATH)
+    fun regenerate(
+        @RequestParam(name = "code", required = false) code: String?,
+        auth: Authentication?,
+        req: HttpServletRequest,
+        res: HttpServletResponse,
+        model: Model,
+    ): String {
+        val me = me(model)
+        noStore(res)
+        val r: ResponseEntity<*>
+        try {
+            r = mfa.regenerateRecoveryCodes(MfaController.VerifyRequest(code), auth!!, req)
+        } catch (e: RuntimeException) {
+            log.warn("[settings] mfa recovery-code regenerate failed: {}", e.javaClass.simpleName)
+            return codeError(res, model, REGEN_ERROR_ID, codeErrorText(e))
+        }
+        val status = r.statusCode.value()
+        if (status < 200 || status >= 300) return codeError(res, model, REGEN_ERROR_ID, codeErrorText(status, errorOf(r)))
+
+        model.addAttribute("codes", codesOf(r))
+        model.addAttribute("rcFilename", RecoveryCodeFilename.of(me.email, KstFormat.kstTodayDate(clock.instant())))
+        model.addAttribute("accountOob", false)
+        Toasts.successTitled(res, "새 복구 코드를 발급했습니다.", "예전 복구 코드는 더 이상 쓸 수 없습니다.")
         return CODES_VIEW
     }
 
@@ -227,6 +255,7 @@ class AccountTabController(
         internal const val ENROLL_PATH = "/admin/_/settings/mfa/enroll"
         internal const val CONFIRM_PATH = "/admin/_/settings/mfa/confirm"
         internal const val DISABLE_PATH = "/admin/_/settings/mfa/disable"
+        internal const val REGENERATE_PATH = "/admin/_/settings/mfa/recovery-codes"
 
         internal const val CONTENT_VIEW = "admin/settings/account :: content"
 
@@ -255,6 +284,19 @@ class AccountTabController(
             model.addAttribute("codeError", text)
             model.addAttribute("codeErrorId", slotId)
             return CODE_ERROR_VIEW
+        }
+
+        /** 응답 본문의 `recoveryCodes` 를 번호(01–)와 함께 다이얼로그 줄로. 없으면 빈 목록(다이얼로그 없이 닫힘). */
+        private fun codesOf(r: ResponseEntity<*>): List<Code> {
+            val codes = ArrayList<Code>()
+            val body = r.body
+            if (body is Map<*, *>) {
+                val list = body["recoveryCodes"]
+                if (list is List<*>) {
+                    for (c in list) codes.add(Code(String.format("%02d", codes.size + 1), c.toString()))
+                }
+            }
+            return codes
         }
 
         /** mfaApi 의 ApiError(code): 본문의 `error` 값, 없으면 'error'. */
