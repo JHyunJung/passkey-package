@@ -3,6 +3,8 @@ package com.crosscert.passkey.admin.web
 import com.crosscert.passkey.admin.audit.AuditAppendRequest
 import com.crosscert.passkey.admin.audit.AuditLogService
 import com.crosscert.passkey.admin.auth.AdminUserDetails
+import com.crosscert.passkey.admin.policy.SecurityPolicyDto
+import com.crosscert.passkey.admin.policy.SecurityPolicyService
 import com.crosscert.passkey.admin.auth.AdminUserDetailsService
 import com.crosscert.passkey.core.entity.AdminUser
 import com.crosscert.passkey.core.repository.AdminUserRepository
@@ -48,11 +50,14 @@ class LoginHandlerBranchTest {
     @Autowired lateinit var users: AdminUserRepository
     @Autowired lateinit var audit: AuditLogService
     @Autowired lateinit var clock: Clock
+    @Autowired lateinit var policy: SecurityPolicyService
 
     private lateinit var user: AdminUser
 
     @BeforeEach
     fun stubLogin() {
+        // 정책 조회 실패는 fail-closed(등록 필수)라 정책 off 를 명시한다.
+        whenever(policy.get()).thenReturn(SecurityPolicyDto.View(30, false, listOf(), null, null))
         whenever(clock.instant()).thenReturn(Instant.parse("2026-11-03T00:00:00Z"))
         whenever(clock.zone).thenReturn(ZoneOffset.UTC)
         whenever(uds.loadUserByUsername(EMAIL)).thenReturn(
