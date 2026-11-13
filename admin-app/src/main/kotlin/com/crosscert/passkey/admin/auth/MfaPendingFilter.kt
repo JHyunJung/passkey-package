@@ -4,7 +4,6 @@ import com.crosscert.passkey.admin.web.support.Htmx
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import jakarta.servlet.http.HttpSession
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.filter.OncePerRequestFilter
 
@@ -26,6 +25,12 @@ import org.springframework.web.filter.OncePerRequestFilter
  * - `GET /admin/login`, `POST /admin/login/mfa` — the server-rendered MFA step.
  * - `/admin/css/\*\*`, `/admin/js/\*\*`, `/admin/fonts/\*\*`, `/admin/img/\*\*` — static assets.
  *
+ * A session carrying [MfaSessionState.ENROLL_REQUIRED_ATTR] (policy requires MFA but the operator has
+ * not enrolled) is gated the same way but with a narrower allow-list and `{"error":"mfa_enroll_required"}`:
+ * `GET /admin/login`, `POST /admin/login/mfa/enroll`, `POST /admin/login/mfa/confirm`,
+ * `/admin/api/me`, `/admin/logout`, static assets. `POST /admin/login/mfa` is blocked there, and
+ * the enroll/confirm screen paths are blocked for pending sessions.
+ *
  * Blocked `/admin/api/\*\*` requests get `403 {"error":"mfa_required"}`; any other
  * (screen) path is redirected to `/admin/login` (`HX-Redirect` for htmx requests).
  *
@@ -42,29 +47,56 @@ import org.springframework.web.filter.OncePerRequestFilter
 class MfaPendingFilter : OncePerRequestFilter() {
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
-        if (isMfaPending(req) && !isAllowedWhilePending(req)) {
-            val uri: String? = req.requestURI
-            if (uri == null || !uri.startsWith("/admin/api/")) {
-                // 화면 경로: 403 JSON 대신 로그인 화면(MFA 단계)으로 보낸다.
-                Htmx.redirect(req, res, "/admin/login")
+        if (isAuthenticated()) {
+            if (MfaSessionState.isPending(req) && !isAllowedWhilePending(req)) {
+                block(req, res, "mfa_required")
                 return
             }
-            res.status = HttpServletResponse.SC_FORBIDDEN
-            res.contentType = "application/json"
-            res.writer.write("{\"error\":\"mfa_required\"}")
-            return // do NOT continue the chain — request is fully handled.
+            if (MfaSessionState.isEnrollRequired(req) && !isAllowedWhileEnrollRequired(req)) {
+                block(req, res, "mfa_enroll_required")
+                return
+            }
         }
         chain.doFilter(req, res)
     }
 
-    private fun isMfaPending(req: HttpServletRequest): Boolean {
-        val auth = SecurityContextHolder.getContext().authentication
-        if (auth == null || !auth.isAuthenticated || "anonymousUser" == auth.name) {
-            return false
+    /** 차단 응답: `/admin/api/` 하위는 403 JSON, 화면 경로는 로그인 화면으로(htmx 는 HX-Redirect). */
+    private fun block(req: HttpServletRequest, res: HttpServletResponse, error: String) {
+        val uri: String? = req.requestURI
+        if (uri == null || !uri.startsWith("/admin/api/")) {
+            // 화면 경로: 403 JSON 대신 로그인 화면(MFA 단계/등록 단계)으로 보낸다.
+            Htmx.redirect(req, res, "/admin/login")
+            return
         }
-        val session: HttpSession? = req.getSession(false)
-        return session != null && java.lang.Boolean.TRUE == session.getAttribute(MFA_PENDING_ATTR)
+        res.status = HttpServletResponse.SC_FORBIDDEN
+        res.contentType = "application/json"
+        res.writer.write("{\"error\":\"$error\"}")
+        // do NOT continue the chain — request is fully handled.
     }
+
+    private fun isAuthenticated(): Boolean {
+        val auth = SecurityContextHolder.getContext().authentication
+        return auth != null && auth.isAuthenticated && "anonymousUser" != auth.name
+    }
+
+    /**
+     * MFA 등록 필요 세션에서 닿을 수 있는 경로: 로그인 화면(GET /admin/login — 등록 단계 화면),
+     * 등록 시작/확정 제출, `/admin/api/me`, 로그아웃, 정적 에셋. 그 외는 모두 차단.
+     */
+    private fun isAllowedWhileEnrollRequired(req: HttpServletRequest): Boolean {
+        val uri: String = req.requestURI ?: return false
+        if (uri == "/admin/api/me" || uri == "/admin/logout") return true
+        val method: String? = req.method
+        if ("GET" == method && uri == "/admin/login") return true
+        if ("POST" == method && (uri == "/admin/login/mfa/enroll" || uri == "/admin/login/mfa/confirm")) return true
+        return isStaticAsset(uri)
+    }
+
+    private fun isStaticAsset(uri: String): Boolean =
+        uri.startsWith("/admin/css/") ||
+            uri.startsWith("/admin/js/") ||
+            uri.startsWith("/admin/fonts/") ||
+            uri.startsWith("/admin/img/")
 
     /**
      * Paths reachable while a session is MFA-pending. Uses the servlet path
@@ -87,10 +119,7 @@ class MfaPendingFilter : OncePerRequestFilter() {
         val method: String? = req.method
         if ("GET" == method && uri == "/admin/login") return true
         if ("POST" == method && uri == "/admin/login/mfa") return true
-        return uri.startsWith("/admin/css/") ||
-            uri.startsWith("/admin/js/") ||
-            uri.startsWith("/admin/fonts/") ||
-            uri.startsWith("/admin/img/")
+        return isStaticAsset(uri)
     }
 
     companion object {

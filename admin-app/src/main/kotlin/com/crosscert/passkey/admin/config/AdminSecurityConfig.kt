@@ -129,7 +129,7 @@ class AdminSecurityConfig {
                         "/", "/admin", "/admin/", "/admin/tenants/**", "/admin/activity",
                         "/admin/audit-chain/**", "/admin/settings/**", "/admin/license",
                         "/admin/api-keys", "/admin/audit", "/admin/mds", "/admin/keys",
-                        "/admin/_/**", "/admin/login/mfa",
+                        "/admin/_/**", "/admin/login/mfa", "/admin/login/mfa/enroll", "/admin/login/mfa/confirm",
                     ).authenticated()
                     .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                     // /admin/api/profile 은 active profile 만 노출. (React 시절 로그인 화면) 이 미인증 상태에서
