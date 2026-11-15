@@ -48,7 +48,7 @@ class AuditChainMonitorController(
         val bucketSizeMinutes = 60
 
         val tenantIds = auditRepo.findDistinctTenantIds()
-        // Collectors.toMap: 원 Java 와 같이 중복 id 면 IllegalStateException.
+        // Collectors.toMap: 중복 id 면 IllegalStateException(Kotlin associateBy 는 뒤 값으로 덮어쓴다).
         val tenantsById: Map<UUID, Tenant> = tenantRepo.findAll().stream()
             .collect(Collectors.toMap({ it.id }, { it }))
 
@@ -56,8 +56,8 @@ class AuditChainMonitorController(
         var verifiedRowsTotal = 0L
         var tampered = 0
         for (tenantId in tenantIds) {
-            // tenant 당 audit_log 를 한 번만 읽어 체인 검증과 버킷 집계에 같은 행을 쓴다(P3).
-            // 검증은 첫 break 에서 멈추지만 집계는 break 이후 행까지 전부 센다(기존과 동일).
+            // tenant 당 audit_log 를 한 번만 읽어 체인 검증과 버킷 집계에 같은 행을 쓴다.
+            // 검증은 첫 break 에서 멈추지만 집계는 break 이후 행까지 전부 센다(AuditChainOverviewCharacterizationTest).
             val rows = auditRepo.findAllByTenantOrdered(tenantId)
             val r = verifier.verifyTenantRows(tenantId, rows)
             verifiedRowsTotal += rows.size
@@ -166,6 +166,8 @@ class AuditChainMonitorController(
         return toView(resolved, buildLookups(java.util.List.of(resolved)))
     }
 
+    // 아래 핸들러는 이 컨트롤러로 들어온 HTTP 요청에만 적용된다(본문 {error, message}).
+    // 화면(AuditChainPageController)은 이 컨트롤러 메서드를 직접 불러 incident 예외를 스스로 catch 한다.
     @ExceptionHandler(IncidentConflictException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun onConflict(e: IncidentConflictException): Map<String, String?> =

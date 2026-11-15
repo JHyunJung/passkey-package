@@ -31,7 +31,7 @@ private val LEASE_TTL: Duration = Duration.ofSeconds(30)
  * to ROTATED. Protected by a SchedulerLeaseService lease so concurrent
  * admin clicks don't double-rotate.
  *
- * Ordering (codex T17 review fixes): transition-old + insert-new
+ * Ordering: transition-old + insert-new
  * happen in one @Transactional, with an explicit `saveAndFlush`
  * between them so Hibernate emits the UPDATE-old before the INSERT-new
  * (otherwise Hibernate's default action ordering — inserts before
@@ -47,6 +47,9 @@ private val LEASE_TTL: Duration = Duration.ofSeconds(30)
  * holder so a second concurrent admin click in the SAME JVM cannot
  * piggy-back on a still-held lease (SchedulerLeaseService permits
  * `holder=?` re-acquisition for owner refresh).
+ *
+ * lease 는 release 하지 않는다. tryAcquire 가 이 @Transactional 에 합류하므로 회전이 롤백되면 lease 변경도
+ * 롤백되고, 커밋되면 LEASE_TTL(30초) 동안 남아 그사이 다른 회전 요청은 KEY_ROTATION_CONFLICT 가 된다.
  */
 @Service
 class KeyRotationService(

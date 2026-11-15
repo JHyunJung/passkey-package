@@ -19,10 +19,10 @@ private const val AUTHENTICATION_BEGIN = CeremonyAction.AUTHENTICATION_BEGIN
 private const val AUTHENTICATION_SUCCESS = CeremonyAction.AUTHENTICATION_SUCCESS
 
 /**
- * Phase F3 — Aggregates ceremony_event rows into a registration/authentication
- * funnel view for the admin Funnel page (Gap #3/#9).
+ * Aggregates ceremony_event rows into a registration/authentication
+ * funnel view. 화면은 tenant 상세의 인증 현황 탭(web.tenant.FunnelTabController)이 FunnelController 를 직접 부른다.
  *
- * Action constants follow spec § F3.1 via [CeremonyAction] (single
+ * Action constants come from [CeremonyAction] (single
  * source of truth shared with passkey-app's recorder).
  *
  * Counts come from `ceremony_event`, populated by passkey-app's
@@ -88,7 +88,7 @@ class FunnelService(
             since,
         )) {
             // row[0] = TRUNC(created_at) (Oracle DATE; Hibernate 7 -> LocalDateTime), row[1] = action, row[2] = count
-            // F06: reinterpret in KST — the same timezone the DB session used to
+            // Reinterpret in KST — the same timezone the DB session used to
             // compute TRUNC(created_at) (JVM TZ=Asia/Seoul, hibernate.jdbc.time_zone=
             // Asia/Seoul). Reinterpreting in UTC shifted every daily bucket back by
             // one day and, for KST 00:00–09:00 queries, pushed today's freshest

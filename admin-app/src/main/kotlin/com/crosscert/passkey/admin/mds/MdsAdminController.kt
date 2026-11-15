@@ -28,7 +28,8 @@ class MdsAdminController(
     dbSchema: DbSchemaProperties,
 ) {
 
-    // 원 Java 처럼 생성 시 null 검증을 하지 않는다(DbSchemaProperties 가 검증; 슬라이스 테스트 mock 은 null 을 준다).
+    // String?: non-null 로 두면 생성 시 null 검사가 붙는다 — AdminJsonShapeContractTest 는 DbSchemaProperties 를
+    // mock 해 null 을 주고 이 컨트롤러를 실제로 띄운다. 운영 값은 DbSchemaProperties 가 부팅 때 검증한다.
     private val schema: String? = dbSchema.schema()
 
     @PreAuthorize("hasRole('PLATFORM_OPERATOR')")
@@ -39,7 +40,7 @@ class MdsAdminController(
         // fetch). No dedicated table holds them. Best-effort count — if
         // Redis is unreachable, fall back to 0 instead of failing the call.
         //
-        // G16: SCAN (cursor-based, non-blocking) instead of KEYS — KEYS walks
+        // SCAN (cursor-based, non-blocking) instead of KEYS — KEYS walks
         // the entire keyspace on Redis's single thread, blocking every other
         // client (auth cache lookups, challenge lookups, ...) for the duration.
         val trustAnchorCount = try {

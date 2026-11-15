@@ -6,9 +6,8 @@ import java.util.UUID
 /**
  * Response payload for GET /admin/api/activity.
  *
- * kpi.p95Ms is intentionally `Long?` (nullable) — null is rendered
- * as 'N/A' in the UI until Micrometer instrumentation is wired in a later
- * phase. The other three KPIs are always non-null counts.
+ * kpi.p95Ms is intentionally `Long?` (nullable). The other three KPIs are always non-null counts.
+ * ActivityService 는 p95Ms 에 항상 null 을 넣고, 화면(ActivityPageController)은 null 이면 그 KPI 카드를 그리지 않는다.
  *
  * top5 is at most 5 tenants ordered by 24h event count desc.
  * Rows with `tenant_id IS NULL` (ADMIN_LOGIN, signing-key, MDS sync)

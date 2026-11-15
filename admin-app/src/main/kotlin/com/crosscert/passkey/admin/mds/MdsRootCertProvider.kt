@@ -13,10 +13,8 @@ import java.security.cert.X509Certificate
  * an X509Certificate and as a PKIX [TrustAnchor]
  * set for the native [com.crosscert.passkey.webauthn.mds.MetadataBlobVerifier].
  *
- * Test profile (application-test.yml) overrides
- * `passkey.mds.root-cert` to a test-only self-signed CA so
- * MdsSchedulerIT can verify the full fetch + cert-chain path without
- * depending on the live FIDO Alliance PKI.
+ * 테스트 설정(application-test.yml)은 `passkey.mds.root-cert` 를 바꾸지 않는다 —
+ * MdsSchedulerIT 는 MdsBlobClient 를, MdsBlobClientTest 는 이 클래스를 mock 한다.
  */
 @Component
 class MdsRootCertProvider(

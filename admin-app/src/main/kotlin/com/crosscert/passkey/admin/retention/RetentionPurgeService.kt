@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
 
 /**
- * P1-4 데이터 retention purge. 테이블별 독립 메서드로 — RetentionPurgeJob 이
+ * 데이터 retention purge. 테이블별 독립 메서드로 — RetentionPurgeJob 이
  * 각각을 try/catch 로 격리 호출한다(한 테이블 실패가 나머지를 막지 않음).
  * 각 메서드는 cutoff 이전의 비활성 행만 삭제(활성 데이터는 쿼리 조건상 보존).
  *

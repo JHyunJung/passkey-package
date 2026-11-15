@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
 /**
- * F4 Task 6 — Monthly Audit Chain Report PDF download endpoint.
+ * Monthly Audit Chain Report PDF download endpoint.
  *
  * `GET /admin/api/audit/chain/monthly-report?from=YYYY-MM-DD&to=YYYY-MM-DD`
  * returns `application/pdf` as an attachment. Records a

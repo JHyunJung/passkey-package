@@ -23,7 +23,7 @@ private const val MONTHS = 3
 private const val OK = "'" + CredentialAuthResult.SUCCESS + "'"
 private const val FAILED = "'" + CredentialAuthResult.FAILED + "'"
 
-/** JPQL `Object[]` 결과 행의 클래스 — 원소는 null 일 수 있다(원 Java 의 캐스트처럼 null 을 그대로 통과). */
+/** JPQL `Object[]` 결과 행의 클래스 — 원소는 null 일 수 있어 `as UUID?` 처럼 nullable 로 캐스트한다(`as UUID` 는 null 에서 NPE). */
 private val ROW = Array<Any?>::class.java
 
 /**
@@ -118,7 +118,7 @@ class PlatformInsightsService(
     /**
      * 확인 필요 테넌트. 한 테넌트가 여러 기준에 걸리면 각각 한 줄. 순서: 위험 인증 → 성공률 하락 → 1개뿐 비율.
      *
-     * 원 Java 는 package-private(같은 패키지 테스트가 직접 호출) — 같은 모듈 테스트가 부르므로 internal.
+     * internal: 같은 모듈 테스트(PlatformInsightsAlertsTest)가 직접 호출한다.
      */
     internal fun alerts(rows: List<PlatformInsightsDto.TenantRow>): List<PlatformInsightsDto.Alert> {
         val risk = ArrayList<PlatformInsightsDto.Alert>()

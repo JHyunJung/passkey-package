@@ -11,8 +11,8 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Database-backed lease for one-leader-at-a-time scheduler jobs
- * (Phase 3 T8). Each lease is identified by a name string (e.g.
+ * Database-backed lease for one-leader-at-a-time scheduler jobs.
+ * Each lease is identified by a name string (e.g.
  * "mds-sync", "key-expiration") and held by a host+process id.
  *
  * Acquisition:
@@ -23,8 +23,12 @@ import java.util.UUID
  * Release is atomic: `DELETE … WHERE name=? AND holder=?` so a
  * stale releaser cannot evict a row that another node has since acquired.
  *
- * Phase 6 T11: SchedulerLease PK is now UUID; name is UNIQUE.
- * Public signature of tryAcquire/release is unchanged.
+ * SchedulerLease PK is a UUID; name is UNIQUE (uq_scheduler_lease_name — the INSERT race above relies on it).
+ *
+ * 사용처: RetentionPurgeJob("retention-purge")만 끝나면 [release] 한다. KeyExpirationJob("key-expiration", TTL 30초)·
+ * MdsSchedulerService("mds-sync", TTL 5분)·KeyRotationService("key-rotation", TTL 30초)는 release 하지 않아
+ * TTL 이 지나야 다른 holder 가 잡는다(holder 가 같으면 바로 다시 잡는다). `AUDIT_CHAIN_LOCK` 행은 lease 가 아니라
+ * AuditLogService 가 FOR UPDATE 로 잡는 락 행이다.
  */
 @Service
 class SchedulerLeaseService(

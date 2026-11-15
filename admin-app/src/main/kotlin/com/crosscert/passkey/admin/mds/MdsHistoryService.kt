@@ -11,8 +11,8 @@ import java.time.Instant
 import java.time.OffsetDateTime
 
 /**
- * Reads + writes the `<schema>.mds_sync_history` append-only log
- * (V34 migration). Uses [JdbcTemplate] with an explicit schema prefix
+ * Reads + writes the `<schema>.mds_sync_history` append-only log.
+ * Uses [JdbcTemplate] with an explicit schema prefix
  * injected from [DbSchemaProperties] — matching the existing pattern in
  * [MdsBlobStore] and [MdsAdminController].
  *
@@ -26,7 +26,7 @@ class MdsHistoryService(
     dbSchema: DbSchemaProperties,
 ) {
 
-    // 원 Java 처럼 생성 시 null 검증을 하지 않는다(DbSchemaProperties 가 검증; 슬라이스 테스트 mock 은 null 을 준다).
+    // String?: 생성 시 null 검사를 하지 않는다(mock 한 DbSchemaProperties 는 null 을 준다). 운영 값은 DbSchemaProperties 가 부팅 때 검증한다.
     private val schema: String? = dbSchema.schema()
 
     @Transactional(readOnly = true)
@@ -63,7 +63,7 @@ class MdsHistoryService(
         durationMs: Int?,
         errorMessage: String?,
     ) {
-        // 원 Java 의 Objects.requireNonNull(startedAt, ...) 과 같은 예외·메시지.
+        // Objects.requireNonNull(startedAt, "startedAt must not be null") 과 같은 예외·메시지.
         if (startedAt == null) throw NullPointerException("startedAt must not be null")
         jdbc.update(
             "INSERT INTO " + schema + ".mds_sync_history " +
@@ -76,16 +76,16 @@ class MdsHistoryService(
     }
 
     /**
-     * P1-4 retention: started_at 이 cutoff 이전인 sync 이력 삭제. 삭제 건수 반환.
+     * Retention: started_at 이 cutoff 이전인 sync 이력 삭제. 삭제 건수 반환.
      * recent()/append() 와 동일하게 주입된 스키마 prefix 명시(JdbcTemplate raw SQL).
      *
      * Batched: ROWNUM 으로 한 트랜잭션 삭제 행 수를 batchSize 로 캡한다(첫 prod 실행 시
-     * 수개월 누적분 unbounded DELETE 방지). 호출측(RetentionPurgeService)이 0 행 될 때까지 반복.
+     * 수개월 누적분 unbounded DELETE 방지). 호출측(RetentionPurgeService)이 삭제 건수가 batchSize 미만이 될 때까지 반복.
      */
     @Transactional
     fun purgeStartedBefore(cutoff: OffsetDateTime, batchSize: Int): Int {
         // JDBC raw path — bind the absolute instant as a Timestamp (mds_sync_history
-        // is JdbcTemplate-managed, not a Hibernate entity). The caller now supplies a
+        // is JdbcTemplate-managed, not a Hibernate entity). The caller supplies a
         // KST OffsetDateTime; .toInstant() preserves the exact instant for the compare.
         return jdbc.update(
             "DELETE FROM " + schema + ".mds_sync_history WHERE started_at < ? AND ROWNUM <= ?",

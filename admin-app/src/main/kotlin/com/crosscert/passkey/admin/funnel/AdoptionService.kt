@@ -110,5 +110,5 @@ class AdoptionService(
     }
 }
 
-/** JPQL `Object[]` 결과 행의 클래스 — 원소는 null 일 수 있다(원 Java 의 캐스트처럼 null 을 그대로 통과). */
+/** JPQL `Object[]` 결과 행의 클래스 — 원소는 null 일 수 있다(aaguid 는 `as ByteArray?` 로 꺼낸다). */
 private val ROW = Array<Any?>::class.java

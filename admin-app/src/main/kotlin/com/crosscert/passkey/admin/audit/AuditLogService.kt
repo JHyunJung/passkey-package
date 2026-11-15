@@ -19,8 +19,8 @@ import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 
 /**
- * base mapper 의 설정을 복사하고 ORDER_MAP_ENTRIES_BY_KEYS 만 켠 사본(원 Java 의
- * `baseMapper.rebuild().enable(...).build()` 와 동일 — 전역 mapper 는 건드리지 않는다).
+ * base mapper 의 설정을 복사하고 ORDER_MAP_ENTRIES_BY_KEYS 만 켠 사본
+ * (`baseMapper.rebuild().enable(...).build()` — 전역 mapper 는 건드리지 않는다).
  * AuditLogService·AuditChainVerifier·AuditChainBackfillService 가 공유한다.
  *
  * `rebuild()` 의 재귀 제네릭(`<M, B extends MapperBuilder<M, B>>`)은 Kotlin 이 추론하지 못해
@@ -34,9 +34,9 @@ internal fun canonicalCopy(baseMapper: ObjectMapper): ObjectMapper {
 /**
  * Appends tamper-evident rows to AUDIT_LOG via a SHA-256 hash chain.
  *
- * ## Concurrency design (closes T6 deferred P1)
- * `findLatestForUpdate()` uses a `SELECT … FOR UPDATE` with a
- * subquery (`id = (SELECT MAX(id))`). Under Oracle snapshot isolation
+ * ## Concurrency design
+ * `findLatestForUpdate()` locks the latest row (`SELECT … FOR UPDATE`,
+ * createdAt DESC, id DESC, limit 1). Under Oracle snapshot isolation
  * (SERIALIZABLE), two concurrent transactions can each read the same
  * predecessor and both INSERT successfully — snapshot isolation detects
  * UPDATE/DELETE conflicts via ORA-08177, but not INSERT-only "write skew" on
@@ -52,7 +52,8 @@ internal fun canonicalCopy(baseMapper: ObjectMapper): ObjectMapper {
  * This row-level exclusive lock serializes all concurrent appenders within
  * Oracle. Only one transaction can hold the lock at a time; the second blocks
  * until the first commits. The lock is released automatically at commit.
- * The sentinel row is seeded by V14.
+ * The sentinel row is seeded by V1 (baseline).
+ * 같은 락을 AuditChainBackfillService 도 tenant chain 컬럼을 다시 쓰기 전에 잡는다.
  *
  * The repository's `@Lock(PESSIMISTIC_WRITE)` on
  * [AuditLogRepository.findLatestForUpdate] is belt-and-suspenders: it prevents
@@ -92,7 +93,7 @@ class AuditLogService(
     dbSchema: DbSchemaProperties,
 ) {
 
-    // 원 Java 처럼 생성 시 null 검증을 하지 않는다(DbSchemaProperties 가 검증; 슬라이스 테스트 mock 은 null 을 준다).
+    // String?: 생성 시 null 검사를 하지 않는다(mock 한 DbSchemaProperties 는 null 을 준다). 운영 값은 DbSchemaProperties 가 부팅 때 검증한다.
     private val schema: String? = dbSchema.schema()
 
     // Defensive copy so the global Jackson mapper's settings are
@@ -128,7 +129,7 @@ class AuditLogService(
 
         val latest = repo.findLatestForUpdate()
         val prevHash: ByteArray? = latest.map { it.hash }.orElse(null)
-        // Phase B — per-tenant chain head (lock 없이 읽어도 됨: global chain lock 이 직렬화 보장)
+        // per-tenant chain head (lock 없이 읽어도 됨: global chain lock 이 직렬화 보장)
         val latestTenantList = repo.findLatestByTenant(req.tenantId, PageRequest.of(0, 1))
         val tenantPrev: ByteArray? = if (latestTenantList.isEmpty()) null else latestTenantList[0].tenantHash
         // Truncate to micros so the hashed timestamp matches what Oracle
@@ -142,7 +143,7 @@ class AuditLogService(
         )
         val payloadJson = serialize(req.payload)
         val hash = computeHash(prevHash, req, payloadJson, now)
-        // Phase B — tenant-scoped chain hash (동일 알고리즘, tenantPrev 만 다름)
+        // tenant-scoped chain hash (동일 알고리즘, tenantPrev 만 다름)
         val tenantHash = computeHash(tenantPrev, req, payloadJson, now)
         val row = AuditLog(
             prevHash, hash, req.actorId, req.actorEmail,
@@ -157,7 +158,7 @@ class AuditLogService(
 
     private fun serialize(payload: Map<String, Any?>?): String {
         try {
-            // 원 Java 의 Map.of() 와 같은 빈 불변 맵(직렬화 결과 "{}").
+            // payload 가 null 이면 빈 맵으로 직렬화한다(결과 "{}" — 해시 입력이 된다).
             return canonical.writeValueAsString(payload ?: java.util.Map.of<String, Any>())
         } catch (e: Exception) {
             throw IllegalStateException("audit payload serialization failed", e)
@@ -175,7 +176,7 @@ class AuditLogService(
          * latest 는 global chain 의 최신 row 이고, 어떤 tenant chain 의 최신 row 보다도 늦거나 같다.
          * 보정한 값도 candidate 의 offset(KST)으로 표현해 해시 입력 형태를 바꾸지 않는다.
          *
-         * 원 Java 는 package-private static — 같은 모듈 테스트가 호출하므로 internal.
+         * internal: 같은 모듈 테스트(AuditLogServiceTest)가 직접 호출한다.
          */
         internal fun nextChainTime(candidate: OffsetDateTime, latest: OffsetDateTime?): OffsetDateTime {
             if (latest == null || candidate.isAfter(latest)) return candidate
@@ -193,8 +194,8 @@ class AuditLogService(
          * cannot collide with a different field split. Action/targetType/targetId
          * are controlled strings (e.g. "TENANT_CREATE") that must not contain "|".
          *
-         * 원 Java 는 package-private static(hash verifier(T9)·backfill·테스트 재사용) — 같은 모듈 안이라 internal.
-         * action·payloadJson 이 null 이면 원 Java StringBuilder 처럼 "null" 이 들어간다.
+         * internal: AuditChainVerifier·AuditChainBackfillService·테스트가 같은 계산을 재사용한다.
+         * action·payloadJson 이 null 이면 StringBuilder.append 가 문자열 "null" 을 넣는다(빈 문자열이 아니다).
          */
         internal fun computeHash(
             prevHash: ByteArray?,

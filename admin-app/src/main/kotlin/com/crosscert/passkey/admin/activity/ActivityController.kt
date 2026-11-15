@@ -16,18 +16,18 @@ import java.util.UUID
 class ActivityController(private val service: ActivityService) {
 
     /**
-     * PLATFORM_OPERATOR 전용. RP_ADMIN 은 TenantDetail 의 Activity 탭에서
-     * /admin/api/audit?tenantId={self} 를 사용 — admin-role-separation 의
-     * scope check 가 자기 tenant 강제.
+     * PLATFORM_OPERATOR 전용. RP_ADMIN 은 tenant 상세의 감사 로그 탭(web.tenant.AuditTabController)에서
+     * AuditLogController.list 를 쓴다 — 그 scope check(TenantBoundary)가 자기 tenant 로 강제한다.
+     * 화면(ActivityPageController, TenantDetailPageController)은 HTTP 가 아니라 이 메서드를 직접 부른다.
      *
-     * Phase F5 — added optional `before` (backward pagination) and
+     * Optional `before` (backward pagination) and
      * `tenantId` (tenant-scoped feed) params. KPIs / top5 always stay on
      * the latest 24h global window; only `feed` responds to these
      * cursors. `sinceId` (forward polling) and `before` (backward
      * pagination) are mutually exclusive — when both are supplied,
      * `sinceId` wins (matches dashboard polling contract).
      *
-     * F07 — added optional `beforeId`, the `id` of the last row
+     * Optional `beforeId` is the `id` of the last row
      * from the previous page (i.e. `feed[feed.length-1].id`). When
      * supplied alongside `before`, backward pagination uses the
      * `(createdAt, id)` tuple cursor instead of a strict-instant

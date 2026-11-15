@@ -39,13 +39,15 @@ private val SINGLETON_HEX: String = MdsBlobCache.SINGLETON_ID.toString().replace
 
 @Service
 class SystemInfoService(
+    // nullable 이라 Spring 이 선택 의존성으로 본다 — build-info.properties 가 없으면(BuildProperties 빈 없음) null 이 들어오고
+    // 버전은 "dev" 로 표시된다. non-null 로 바꾸면 그런 환경에서 기동이 실패한다.
     private val build: BuildProperties?,
     private val jdbc: JdbcTemplate,
     private val env: Environment,
     dbSchema: DbSchemaProperties,
 ) {
 
-    // 원 Java 처럼 생성 시 null 검증을 하지 않는다(DbSchemaProperties 가 검증; 슬라이스 테스트 mock 은 null 을 준다).
+    // String?: 생성 시 null 검사를 하지 않는다(mock 한 DbSchemaProperties 는 null 을 준다). 운영 값은 DbSchemaProperties 가 부팅 때 검증한다.
     private val schema: String? = dbSchema.schema()
 
     /**

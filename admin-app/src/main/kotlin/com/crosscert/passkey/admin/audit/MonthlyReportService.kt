@@ -18,7 +18,7 @@ private val REPORT_FONTS = listOf(
 )
 
 /**
- * F4 Task 6 — Generates the Audit Chain Monthly Report as a PDF byte stream.
+ * Generates the Audit Chain Monthly Report as a PDF byte stream.
  *
  * Reuses [AuditChainMonitorController.overview] to compose the
  * tenant-by-tenant chain status snapshot (24h verification window — the same
@@ -70,7 +70,7 @@ class MonthlyReportService(private val monitor: AuditChainMonitorController) {
             .append(" — ").append(esc(to.toString())).append("</p>")
         sb.append("<p>Generated at: ").append(esc(Instant.now().toString())).append("</p>")
 
-        // 원 Java 와 동일: totals/tenants 가 null 이면 NPE(참조형 컴포넌트는 record 처럼 nullable).
+        // `!!`: AuditChainOverview 의 필드 타입만 nullable 이고, overview() 는 totals·tenants 를 항상 채운다.
         val t = overview.totals!!
         sb.append("<h2>Summary</h2>")
         sb.append("<ul>")

@@ -16,8 +16,9 @@ import java.util.UUID
 import java.util.stream.Collectors
 
 /*
- * OPS_ACTIONS / SECURITY_ACTIONS 는 java.util.Set.of 로 둔다 — 원 Java 와 같은 불변 집합이며
- * contains(null) 이 NPE 인 동작까지 동일하게 유지한다(Kotlin setOf 는 false 를 반환).
+ * OPS_ACTIONS / SECURITY_ACTIONS 는 java.util.Set.of 로 둔다 — 불변 집합이고 contains(null) 이 NPE 다
+ * (Kotlin setOf 는 false 를 반환). categorize 에 null action 이 오면 여기서 NPE 가 나는데,
+ * audit_log.action 은 NOT NULL 이라 DB 에서 읽은 행에서는 나지 않는다.
  */
 private val OPS_ACTIONS: Set<String> = java.util.Set.of(
     "TENANT_CREATE", "TENANT_UPDATE",
@@ -57,7 +58,7 @@ class ActivityService(
         snapshot(sinceId, category, null, null, null)
 
     /**
-     * Phase F5 — extended snapshot with optional backward pagination (`before`)
+     * Extended snapshot with optional backward pagination (`before`)
      * and tenant scoping (`tenantId`).
      *
      * **Important:** KPIs (`events24h`, `ops24h`, `security24h`)
@@ -77,7 +78,7 @@ class ActivityService(
      *   (backward pagination, tenant-scoped) — or neither (newest 50 for that
      *   tenant).
      *
-     * F07 — `beforeId` (optional) is the `id` of the last row
+     * `beforeId` (optional) is the `id` of the last row
      * from the previous page (i.e. `events[events.size()-1].id`). When
      * supplied, backward pagination compares the `(createdAt, id)` tuple
      * of that row instead of the strict `createdAt < before` check —
@@ -123,7 +124,7 @@ class ActivityService(
         // 주의: findAllById 는 존재하지 않는 ID(삭제된 테넌트)를 결과에 넣지 않으므로,
         // 아래 slug 조회에서 getOrDefault(..., "(deleted)") fallback 으로 표기를 보존한다.
         val tenantIds: Set<UUID> = feed.mapNotNullTo(HashSet()) { it.tenantId }
-        // Collectors.toMap 유지 — 중복 키·null slug 시 예외인 원 동작 그대로.
+        // Collectors.toMap: 중복 키·null slug 면 예외(Kotlin associate 는 덮어쓰거나 null 을 그대로 넣는다).
         val slugByTenant: Map<UUID, String> = tenants.findAllById(tenantIds).stream()
             .collect(Collectors.toMap(Tenant::getId, Tenant::getSlug))
 
@@ -149,7 +150,7 @@ class ActivityService(
     }
 
     /**
-     * Phase F5 — pick the right repository entry point based on which cursor /
+     * Pick the right repository entry point based on which cursor /
      * filter the caller supplied. Centralised here so the controller-facing
      * [snapshot] reads as a flat data-pipeline.
      *
@@ -158,7 +159,7 @@ class ActivityService(
      * client asks "what's new since X", a pagination client asks "what came
      * before Y". The dashboard never sends both.
      *
-     * F07 — `beforeId` (optional) is threaded through to
+     * `beforeId` (optional) is threaded through to
      * `ActivityRepository#feedPage(UUID, OffsetDateTime, UUID, int)` /
      * `ActivityRepository#feedFilteredPage(Set, UUID, OffsetDateTime, UUID, int)`
      * so backward pagination uses the `(createdAt, id)` tuple cursor
