@@ -187,6 +187,8 @@ compose 기본값으로 동작한다:
 | actuator | `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE` | `health,info` | prometheus 를 켜려면 `health,info,prometheus`. passkey-app 은 인증이 없으니 내부망 스크레이퍼만 접근 가능하게 둔다 |
 | DB 풀 | `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | passkey-app `20`, admin-app `10` | 컨테이너당 DB 커넥션 상한. `.env` 에 넣으면 **두 앱 모두** 이 값이 된다. Oracle 최대 세션 = (서버별 passkey-app 인스턴스 수 × 서버 수, 롤링 업데이트 피크 `--scale passkey-app=6` 포함) × passkey 풀 + admin 풀 + Flyway. 올리기 전에 `SELECT name, value FROM v$parameter WHERE name IN ('processes','sessions')` 로 여유를 확인한다 |
 | DB 풀 | `SERVER_TOMCAT_THREADS_MAX` | `19` | passkey-app 요청 워커 상한. **반드시 풀 상한 − 1 이하** — 아니면 동시 ceremony 가 몰릴 때 이벤트 기록이 풀을 고갈시켜 30초 정지할 수 있다. 풀을 바꾸면 함께 바꾼다 |
+| 서명 키 | `PASSKEY_SIGNING_KEY_REFRESH_FIXED_DELAY` | `PT1M` | passkey-app 이 admin 콘솔에서 회전한 서명 키(ACTIVE kid 변경)를 확인하는 주기. 회전 뒤 이 시간 동안은 옛(ROTATED) 키로 서명하고 그 토큰은 ID Token 수명(`passkey.id-token.ttl`, 기본 `PT15M`) 동안 검증돼야 하므로 **주기 + ID Token 수명 ≤ 회전 grace(admin-app `passkey.key-rotation.grace`, 기본 `PT30M`)** — 기본값에서 주기는 `PT15M` 이하. 회전 뒤 재기동은 필요 없다. 변수를 빼면 `PT1M`, **빈 값(`=`)은 금지** — 일회성 실행이 되므로 기동을 거부한다 |
+| 서명 키 | `PASSKEY_SIGNING_KEY_REFRESH_INITIAL_DELAY` | `PT1M` | passkey-app 기동 후 첫 확인까지의 지연. 변수를 빼면 `PT1M` |
 
 아래는 **필수** — 기본값이 없어 비워두면 기동에 실패한다:
 

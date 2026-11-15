@@ -117,6 +117,8 @@ PASSKEY_ID_TOKEN_ISSUER_BASE='https://dev-passkey.crosscert.com' \
 | `PASSKEY_KEY_ENVELOPE_MASTER_KEY` | base64 32바이트 | at-rest 암호화 키. `openssl rand -base64 32`로 생성. |
 | `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | 선택, 기본 passkey-app `20` / admin-app `10` | DB 커넥션 풀 상한. 바꾸면 아래 값도 함께 조정. |
 | `SERVER_TOMCAT_THREADS_MAX` | 선택, 기본 `19` | passkey-app 요청 워커 상한. **반드시 풀 상한 − 1 이하** — 아니면 동시 ceremony 가 몰릴 때 이벤트 기록이 풀을 고갈시켜 30초 정지할 수 있다. |
+| `PASSKEY_SIGNING_KEY_REFRESH_FIXED_DELAY` | 선택, 기본 `PT1M` | admin 콘솔에서 회전한 서명 키를 passkey-app 이 확인하는 주기. 회전 뒤 이 시간 동안은 옛(ROTATED) 키로 서명하고 그 토큰은 ID Token 수명(`passkey.id-token.ttl`, 기본 `PT15M`) 동안 검증돼야 하므로 **주기 + ID Token 수명 ≤ 회전 grace(admin-app `passkey.key-rotation.grace`, 기본 `PT30M`)** — 기본값에서 주기는 `PT15M` 이하. 재기동은 필요 없다. 빈 값은 금지(기동 거부). |
+| `PASSKEY_SIGNING_KEY_REFRESH_INITIAL_DELAY` | 선택, 기본 `PT1M` | 기동 후 첫 확인까지의 지연. |
 
 > ℹ️ **forward-headers 는 주입하지 않습니다**: `SERVER_FORWARD_HEADERS_STRATEGY` 를 따로 설정할 필요가 없습니다 — passkey-app/admin-app/rp-app 의 base `application.yml` 에 `forward-headers-strategy: native` 가 이미 있습니다(Tomcat RemoteIpValve — 사설·루프백 IP 의 프록시가 보낸 헤더만 신뢰하고, `X-Forwarded-For` 는 오른쪽부터 판정해 클라이언트가 미리 채운 값을 무시). env 로 주입하면 오히려 그 값을 덮어씁니다. 필요한 것은 프록시가 `X-Forwarded-For` 와 `X-Forwarded-Proto` 를 보내는지(§5)뿐입니다 — 전자가 감사로그 클라이언트 IP·rate-limit IP 버킷의 근거(`request.getRemoteAddr()`)가 되고, 후자가 스킴(`request.isSecure()`) 판정으로 쿠키 Secure 를 결정합니다.
 

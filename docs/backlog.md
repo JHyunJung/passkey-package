@@ -15,12 +15,15 @@
       XFF 를 덮어써야** 위조가 막힌다. QA 번들 nginx(맨 앞단)는 `$remote_addr` 로 덮어쓰도록 바꿨고, `deploy/` nginx 는 LB 뒤라 이어 붙이므로
       LB 가 덮어쓰거나 `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` 를 nginx·LB 주소로 좁혀야 한다. 앞단 프록시가 공인 IP 면 `SERVER_TOMCAT_REMOTEIP_TRUSTED_PROXIES` 로 추가. admin-app 을 프록시 없이
       사내망에 직접 바인딩하면 사설 IP 클라이언트는 신뢰 프록시로 보이므로 감사 IP 는 사내망 기준 best-effort. `ProxiedSameOriginPostTest`(실제 Tomcat).
-- [ ] **서명 키 회전 뒤 passkey-app 이 옛 키로 계속 서명한다 → grace 뒤 RP 의 ID Token 검증 실패** [2026-11-15 주석 정비 중 발견, 코드 추적 확인]
+- [x] ~~**서명 키 회전 뒤 passkey-app 이 옛 키로 계속 서명한다 → grace 뒤 RP 의 ID Token 검증 실패**~~ [2026-11-15 주석 정비 중 발견, 코드 추적 확인]
       `SigningKeyProvider` 는 기동 시 한 번 ACTIVE 키를 읽어 캐시하고(`@PostConstruct init`), `reload()` 를 부르는 운영 코드는
-      admin-app `KeyRotationService` 뿐이다. passkey-app 에는 갱신 경로가 없어 회전 뒤에도 ROTATED 가 된 키로 서명한다.
-      grace(기본 PT30M) 뒤 `KeyExpirationJob` 이 그 키를 REVOKED 로 바꾸면 `JwksAssembler`(ACTIVE·ROTATED 만 제공)에서 빠지고,
-      sdk `IdTokenVerifier` 가 `Unknown or non-RSA kid` 로 실패한다. passkey-app 을 여러 대 띄워도 전부 해당.
-      **수정 전 운영 절차**: 회전 직후(grace 안에) passkey-app 전 인스턴스를 재기동한다. 코드 수정은 별도 spec.
+      admin-app `KeyRotationService` 뿐이었다. grace(기본 PT30M) 뒤 `KeyExpirationJob` 이 그 키를 REVOKED 로 바꾸면 JWKS 에서 빠져
+      sdk `IdTokenVerifier` 가 `Unknown or non-RSA kid` 로 실패했다.
+      **해결**: passkey-app `SigningKeyRefreshJob` 이 인스턴스마다(lease 없음) 주기적으로 `SigningKeyProvider.refreshIfRotated()` 를 불러
+      ACTIVE kid 가 바뀌었을 때만 키를 다시 읽는다(서명 경로에 DB 조회 없음, 실패 시 기존 키 유지). 설정 키
+      `passkey.signing-key.refresh.fixed-delay`·`passkey.signing-key.refresh.initial-delay`(둘 다 기본 PT1M, 주기 + ID Token 수명(`passkey.id-token.ttl`, PT15M) ≤ grace; fixed-delay 빈 값은 일회성 실행이 되므로 기동 거부).
+      회전 뒤 재기동은 필요 없다. `SigningKeyProviderTest.refreshIfRotated_*`, `SigningKeyRefreshJobTest`,
+      `SigningKeyRefreshIT.rotationIsPickedUpOnlyAfterRefreshJobRuns`(실제 Oracle) 로 고정. [2026-11-15]
 - [x] ~~**actuator `health.show-details: always` 미인증 노출**~~ — `when-authorized` 로 변경(무인증은 status 만,
       admin-app 운영자만 상세). `ApiContractIT.actuatorHealth_unauthenticated_exposesStatusOnly` 로 고정. [2026-11-11]
 - [x] ~~**passkey-app SecurityFilterChain 부재**~~ — **Spring Security 는 들이지 않음**(결정): JSON API 이고 인증은 ApiKeyAuthFilter 가 맡아

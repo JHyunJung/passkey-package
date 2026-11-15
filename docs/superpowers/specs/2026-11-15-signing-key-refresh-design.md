@@ -91,7 +91,7 @@ class SigningKeyRefreshJob(private val keys: SigningKeyProvider) {
 | `passkey.signing-key.refresh.fixed-delay` | `PT1M` | 확인 주기 |
 | `passkey.signing-key.refresh.initial-delay` | `PT1M` | 기동 후 첫 확인까지 |
 
-주기는 grace(PT30M)보다 충분히 짧아야 한다. 기본값에서는 회전 뒤 최대 약 1분 동안 옛(ROTATED) 키로 서명하고, 그 키는 grace 동안 JWKS 에 남아 있으므로 검증은 계속 통과한다. 주기를 grace 이상으로 설정하는 것을 기동 시 막지는 않는다(두 값이 서로 다른 앱의 설정이다) — 문서에 적는다.
+주기 + ID Token 수명(`passkey.id-token.ttl`, 기본 PT15M)이 grace(PT30M) 이하여야 한다 — 갱신 직전에 옛 키로 서명한 토큰도 만료될 때까지 검증돼야 하기 때문이다(최종 리뷰에서 정정). fixed-delay 가 빈 값이면 `@Scheduled` 가 반복 없이 한 번만 실행하므로 기동 시 거부한다. 기본값에서는 회전 뒤 최대 약 1분 동안 옛(ROTATED) 키로 서명하고, 그 키는 grace 동안 JWKS 에 남아 있으므로 검증은 계속 통과한다. 주기를 grace 이상으로 설정하는 것을 기동 시 막지는 않는다(두 값이 서로 다른 앱의 설정이다) — 문서에 적는다.
 
 ### 문서·주석
 

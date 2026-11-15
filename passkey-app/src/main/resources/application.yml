@@ -2,6 +2,9 @@ spring:
   application.name: passkey-app
   config.import: classpath:application-common.yml
   flyway.enabled: false
+  # 스케줄러 스레드 풀 2 — SigningKeyRefreshJob 과 onprem 모드의 core LicenseHeartbeatScheduler 가 공유한다.
+  # 한쪽 tick 이 DB/HTTP 대기로 멈춰도 다른 쪽이 밀리지 않게 한다. 두 job 은 상태를 공유하지 않는다.
+  task.scheduling.pool.size: 2
 
 server:
   port: 8080

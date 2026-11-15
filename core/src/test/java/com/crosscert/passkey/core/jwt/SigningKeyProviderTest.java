@@ -26,8 +26,12 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SigningKeyProviderTest {
@@ -165,6 +169,75 @@ class SigningKeyProviderTest {
 
         provider.reload();
         assertThat(provider.signingKey().getKeyID()).isEqualTo("second");
+    }
+
+    @Test
+    void refreshIfRotated_sameKid_returnsFalseAndKeepsInstance() throws Exception {
+        KeyEnvelope spyEnvelope = spy(envelope);
+        SigningKeyProvider p = new SigningKeyProvider(repo, spyEnvelope, mapper, clock);
+        SigningKey row = freshActiveKey("same");
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE")).thenReturn(Optional.of(row));
+
+        p.init();
+        RSAKey before = p.signingKey();
+
+        assertThat(p.refreshIfRotated()).isFalse();
+        assertThat(p.signingKey()).isSameAs(before);
+        // 봉투 복호화는 init() 때 한 번뿐이어야 한다.
+        verify(spyEnvelope, times(1)).open(any());
+    }
+
+    @Test
+    void refreshIfRotated_newActiveRow_returnsTrueAndSwitchesKid() throws Exception {
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")))
+                .thenReturn(Optional.of(freshActiveKey("second")));
+
+        provider.init();
+
+        assertThat(provider.refreshIfRotated()).isTrue();
+        assertThat(provider.signingKey().getKeyID()).isEqualTo("second");
+    }
+
+    @Test
+    void refreshIfRotated_beforeInit_loadsActiveRow() throws Exception {
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")));
+
+        // init() 을 부르지 않아 캐시가 비어 있다.
+        assertThat(provider.signingKey()).isNull();
+        assertThat(provider.refreshIfRotated()).isTrue();
+        assertThat(provider.signingKey().getKeyID()).isEqualTo("first");
+    }
+
+    @Test
+    void refreshIfRotated_noActiveRow_returnsFalseAndKeepsCache() throws Exception {
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")))
+                .thenReturn(Optional.empty());
+
+        provider.init();
+        RSAKey before = provider.signingKey();
+
+        assertThat(provider.refreshIfRotated()).isFalse();
+        assertThat(provider.signingKey()).isSameAs(before);
+    }
+
+    @Test
+    void refreshIfRotated_undecodableRow_throwsAndKeepsCache() throws Exception {
+        SigningKey broken = new SigningKey("broken", "RS256",
+                freshActiveKey("broken").getPublicJwk(), new byte[]{1, 2, 3});
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")))
+                .thenReturn(Optional.of(broken));
+
+        provider.init();
+        RSAKey before = provider.signingKey();
+
+        assertThatThrownBy(provider::refreshIfRotated)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("kid=broken");
+        assertThat(provider.signingKey()).isSameAs(before);
     }
 
     private SigningKey freshActiveKey(String kid) throws Exception {

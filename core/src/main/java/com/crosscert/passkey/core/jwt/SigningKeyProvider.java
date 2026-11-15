@@ -45,13 +45,15 @@ import java.util.List;
  * even if envelope decryption is misconfigured.
  *
  * <p>Signing: uses the cached key — the ACTIVE row as of the last
- * {@link #init()} / {@link #reload()} in this process. KeyRotationService
+ * {@link #init()} / {@link #reload()} / {@link #refreshIfRotated()} in this process. KeyRotationService
  * calls {@link #reload()} after a rotation so the cache picks up the
  * new ACTIVE row.
  *
- * <p>reload 는 그 메서드를 부른 프로세스(admin-app)의 캐시만 바꾼다. passkey-app 은 {@link #init()} 에서만
- * ACTIVE 키를 읽으므로, 회전 뒤에도 재기동 전까지 이전 키(이제 ROTATED)로 ID Token 에 서명한다.
- * 그 키가 KeyExpirationJob 에서 REVOKED 가 되어 JWKS 에서 빠지면 RP 의 서명 검증이 실패한다.
+ * <p>reload 는 그 메서드를 부른 프로세스(admin-app)의 캐시만 바꾼다. passkey-app 은 SigningKeyRefreshJob 이
+ * 주기적으로(기본 1분) {@link #refreshIfRotated()} 를 불러 새 ACTIVE 키로 바꾼다. 그 사이(기본 최대 약 1분)에는
+ * ROTATED 가 된 옛 키로 서명하고, 그 키는 grace 동안 JWKS 에 남아 RP 검증이 통과한다. 갱신 직전에 옛 키로 서명한
+ * 토큰도 만료({@code passkey.id-token.ttl}, 기본 PT15M)까지 검증돼야 하므로 갱신 주기 + ID Token 수명이
+ * grace({@code passkey.key-rotation.grace}, 기본 PT30M) 이하여야 한다.
  */
 @Component
 public class SigningKeyProvider {
@@ -119,6 +121,25 @@ public class SigningKeyProvider {
                 .orElseThrow(() -> new IllegalStateException(
                         "no ACTIVE signing key after reload — rotation contract broken"));
         this.cachedActive = decodeWithPrivate(row);
+    }
+
+    /**
+     * DB 의 ACTIVE 행 kid 가 캐시와 다를 때만 캐시를 새 키로 바꾼다. 바꿨으면 {@code true}.
+     * kid 가 같으면 봉투를 풀지 않는다. ACTIVE 행이 없으면 캐시를 유지하고 {@code false} 를 돌려준다
+     * (회전 트랜잭션 중간에 불릴 수 있다). 새 행을 풀지 못하면 예외를 던지고 캐시는 그대로다.
+     */
+    public boolean refreshIfRotated() {
+        SigningKey row = repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE").orElse(null);
+        if (row == null) {
+            return false;
+        }
+        RSAKey current = cachedActive;
+        if (current != null && row.getKid().equals(current.getKeyID())) {
+            return false;
+        }
+        RSAKey decoded = decodeWithPrivate(row);
+        this.cachedActive = decoded;
+        return true;
     }
 
     private SigningKey createInitialKey() {
