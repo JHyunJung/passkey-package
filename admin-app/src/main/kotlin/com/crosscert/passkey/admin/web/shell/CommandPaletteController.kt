@@ -64,7 +64,7 @@ class CommandPaletteController(
     ) {
         /**
          * 오른쪽에 보이는 문구: path ?? hint (비면 숨김).
-         * `shown`·`danger` 는 템플릿이 `${it.shown}` 처럼 getter 로 읽는다 — 함수로 바꾸면 그 식이 값을 찾지 못한다.
+         * `shown`·`danger` 는 command-palette.html 이 `${it.shown}`·`${it.danger}` 로 읽는다.
          */
         val shown: String?
             get() {

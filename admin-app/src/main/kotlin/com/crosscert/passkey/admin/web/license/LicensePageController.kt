@@ -31,7 +31,7 @@ private const val APPLY_STEP = "받은 라이선스 파일을 서버에 적용�
  * 데이터는 `LicenseController.get()` 하나. 설치 방식은 응답의 `deploymentMode` 를 따른다 — onprem 이 아니면(SaaS) 온프레미스 전용 안내만.
  *
  * "지금 다시 확인"은 `GET /admin/_/license/recheck` 로 상세 영역(#license-body)을 새 값으로 교체한다. 실패하면 이전 정보를 그대로 두고
- * 경고만 보인다(200 + HX-Retarget #license-recheck-alert). 처음 불러오기 실패는 LoadError(다시 시도 = 화면 다시 받기). 알 수 없는 예외의 원문은 싣지 않는다.
+ * 경고만 보인다(200 + HX-Retarget #license-recheck-alert). 처음 불러오기 실패는 loadError 조각(다시 시도 = 화면 다시 받기). 알 수 없는 예외의 원문은 싣지 않는다.
  */
 @Controller
 class LicensePageController(

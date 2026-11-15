@@ -44,7 +44,7 @@ object ActivityDiff {
     }
 
     /**
-     * 1) diff 가 주어지면(`diff != null`) 그대로. 지금 호출자(ActivityPageController)는 null 을 넘긴다.
+     * 1) diff 가 주어지면(`diff != null`) 그대로. 본 코드의 호출자(ActivityPageController)는 null 을 넘긴다(ActivityDiffTest 는 두 경우를 다 쓴다).
      * 2) 아니면 payload 의 before/after 객체(현재 TENANT_UPDATE: { before, after, changedFields }).
      *    changedFields 가 문자열 배열이면 그 순서, 아니면 JSON 값이 다른 키만.
      */

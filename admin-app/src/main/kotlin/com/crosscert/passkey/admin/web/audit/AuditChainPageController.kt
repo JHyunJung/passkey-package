@@ -44,7 +44,7 @@ private val log = LoggerFactory.getLogger(AuditChainPageController::class.java)
  * - 개요·검증·백필·사건 변경은 모두 `#chain-root` 를 통째로 다시 그려 돌려준다. 요청은 `hx-sync="#chain-root:drop"` 라
  *   더블 클릭·동시 실행이 중복되지 않는다. 타임아웃은 [LONG_TIMEOUT_MS](120s).
  * - 재검증이 실패하면 이전 결과를 남기고(교체하지 않음) 경고만 보인다: 200/422 + `HX-Retarget #chain-warn`. 처음 불러오는 중의 실패는
- *   오류 카드(LoadError, 422)다.
+ *   오류 카드(loadError 조각, 422)다.
  * - 백필(L3 확인, X-Confirm): 가장 최근 검증이 성공했고 위변조가 없을 때만 실행한다 — 요청마다 개요를 다시 검증해
  *   확인한 뒤에만 `backfill()`. 동시 실행 직렬화는 서비스의 DB 락이 한다.
  * - 사건 생성·해결: 컨트롤러 `@ExceptionHandler` 가 직접 호출에는 적용되지 않으므로 여기서 잡아 화면 문구로 바꾼다
@@ -358,7 +358,8 @@ class AuditChainPageController(
     private fun populate(model: Model, ov: AuditChainOverview, incidents: List<IncidentDto.IncidentView>?, view: String) {
         val now = clock.instant()
         val tampered = hasTampering(ov)
-        // `!!`: 바로 위 hasTampering 이 같은 값을 이미 `!!` 로 읽었다.
+        // `!!`: hasTampering 과 같은 근거(overview() 가 늘 채운다). totals 는 바로 위 hasTampering 이 먼저 읽지만, tenants 는
+        // tenantsTampered > 0 이면 `||` 단락으로 읽히지 않아 아래 줄이 처음 읽는 자리다.
         val t = ov.totals!!
         val tenants = ov.tenants!!
         val openTenants = HashSet<String?>()
@@ -580,8 +581,10 @@ class AuditChainPageController(
         // ── 도우미 ──────────────────────────────────────────────
 
         /**
-         * `!!`: AuditChainOverview 의 필드 타입만 nullable 이고 overview() 는 totals·tenants 를 항상 채운다. null 이면 NPE —
-         * 부르는 자리(백필 가드·populate)가 모두 조회 try 밖이라 WebExceptionAdvice 가 받는다.
+         * `!!`: AuditChainOverview 의 필드 타입만 nullable 이고 overview() 는 totals·tenants 를 항상 채운다.
+         * null 이면 NPE 이고 받는 쪽은 경로마다 다르다. 백필 가드와 overview·verify·backfill 의 renderRoot → populate 는 try 밖이라
+         * WebExceptionAdvice 가 받는다. createIncident·resolveIncident 는 renderRoot 를 자기 try 안에서 부르므로
+         * catch(RuntimeException) 가 다이얼로그 안 인라인 오류(issue, 422)로 바꾼다.
          */
         internal fun hasTampering(ov: AuditChainOverview): Boolean =
             ov.totals!!.tenantsTampered > 0 || ov.tenants!!.any { c: AuditChainTenantOverview -> !c.intact }

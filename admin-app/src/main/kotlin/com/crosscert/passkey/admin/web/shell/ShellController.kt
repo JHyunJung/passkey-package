@@ -96,7 +96,7 @@ class ShellController(
         return "admin/fragments/shell/chain-card :: card"
     }
 
-    /** RP 전환 목록. 허용 RP 가 2개 미만이거나 조회에 실패하면 빈 응답(스위처 없음, 실패는 삼킨다). */
+    /** RP 전환 목록. 허용 RP 가 2개 미만이거나 current() 조회에 실패하면 빈 응답(스위처 없음, 조회 실패는 삼킨다). */
     @GetMapping("/admin/_/shell/tenant-switcher")
     fun tenantSwitcher(model: Model): String {
         val view: ActiveTenantController.ActiveTenantView?
@@ -157,7 +157,7 @@ class ShellController(
     companion object {
         /**
          * 감사 체인 카드의 경과 시간: "방금" / "N분 전" / "N시간 전"(일 단위 없음).
-         * internal 이지만 호출자는 `chainCard` 뿐이다(테스트도 부르지 않는다).
+         * internal: 같은 모듈 테스트(ShellControllerTest)가 부른다.
          */
         internal fun timeAgo(t: Instant?, now: Instant): String {
             if (t == null) return "—"
