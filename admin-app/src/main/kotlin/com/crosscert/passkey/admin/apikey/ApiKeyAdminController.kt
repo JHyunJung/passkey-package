@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
+/** 화면(ApiKeysTabController)이 이 빈을 직접 부를 때는 `@Valid` 가 돌지 않아 화면 쪽이 Validator 로 먼저 검사한다. */
 @RestController
 @RequestMapping("/admin/api/api-keys")
 class ApiKeyAdminController(

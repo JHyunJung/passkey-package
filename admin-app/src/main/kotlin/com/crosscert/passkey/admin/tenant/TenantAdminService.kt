@@ -26,7 +26,7 @@ import java.util.UUID
 
 private val log = LoggerFactory.getLogger(TenantAdminService::class.java)
 
-// 원 Java 의 (UUID) r[0] 캐스트처럼 null 원소는 그대로 통과(as UUID?), (Number) r[1] 의 null 은 NPE.
+// r[0] 의 null 은 그대로 키가 되고(as UUID?), r[1] 이 null 이면 `as Number` 에서 NPE.
 private fun toCountMap(rows: List<Array<Any?>>): Map<UUID?, Long> {
     val m = HashMap<UUID?, Long>()
     for (r in rows) {
@@ -46,7 +46,7 @@ private fun toOffsetDateTimeMap(rows: List<Array<Any?>>): Map<UUID?, OffsetDateT
 /**
  * 등록/수정 시 allowedOrigin 형식을 DB 도달 전에 검증 — 위반 시 400 fail-fast.
  * 웹 origin 또는 android:apk-key-hash origin 만 허용 (AllowedOriginFormat).
- * origins 가 null 이면 원 Java for-each 처럼 NullPointerException(@NotEmpty 검증을 거친 경로에선 불가).
+ * origins 가 null 이면 `!!` 에서 NullPointerException(@NotEmpty 검증을 거친 경로에선 불가).
  */
 private fun validateOriginFormats(origins: List<String>?) {
     for (origin in origins!!) {
@@ -74,6 +74,11 @@ class TenantAdminService(
     private val clock: Clock,
 ) {
 
+    /**
+     * PLATFORM_OPERATOR 는 전체 테넌트, RP_ADMIN 은 활성 RP 하나만([TenantBoundary.currentTenantScope] — 활성 RP 가
+     * 없으면 ACCESS_DENIED). get/update 의 [TenantBoundary.assertCanAccessTenant] 는 활성 여부와 무관하게
+     * 매핑된 테넌트(allowedTenantIds) 전부를 허용한다.
+     */
     @Transactional(readOnly = true)
     fun list(): List<TenantAdminDto.TenantView> {
         val tid = tenantBoundary.currentTenantScope() ?: return listAllWithBatchAggregates()
@@ -114,8 +119,8 @@ class TenantAdminService(
     }
 
     /**
-     * 단건 경로(get/create/update)용 — per-tenant 쿼리 3개로 KPI 집계.
-     * list() 는 listAllWithBatchAggregates() 가 배치 집계 후 아래 오버로드를 직접 호출.
+     * 단건 경로(get/create/update, RP_ADMIN 의 list)용 — per-tenant 쿼리 3개로 KPI 집계.
+     * PLATFORM_OPERATOR 의 list() 는 listAllWithBatchAggregates() 가 배치 집계 후 아래 오버로드를 직접 호출.
      */
     private fun toView(t: Tenant): TenantAdminDto.TenantView {
         val credentials = credentialRepository.countByTenantId(t.id)
@@ -141,7 +146,7 @@ class TenantAdminService(
         }
 
         val t = Tenant(req.slug, req.displayName, req.rpId, req.rpName)
-        // 원 Java 의 Boolean → boolean 언박싱과 같은 지점의 NPE(@NotNull 검증을 거친 컨트롤러 경로에선 불가).
+        // `!!`: @NotNull 검증을 거친 경로에선 null 이 아니다(null 이면 여기서 NPE).
         t.setRequireUserVerification(req.requireUserVerification!!)
         t.setMdsRequired(req.mdsRequired!!)
         t.attestationConveyance = req.attestationConveyance
@@ -152,7 +157,7 @@ class TenantAdminService(
         for (origin in req.allowedOrigins!!) {
             t.addAllowedOrigin(origin, order++)
         }
-        // 원 Java for-each 와 동일: null 이면 NPE(@NotEmpty 검증을 거친 경로에선 불가).
+        // null 이면 NPE(@NotEmpty 검증을 거친 경로에선 불가).
         for (format in req.acceptedFormats!!) {
             t.addAcceptedFormat(format)
         }
@@ -236,7 +241,7 @@ class TenantAdminService(
             throw IllegalStateException("Failed to snapshot before update", e)
         }
 
-        // rpId / slug 는 silent ignore (별도 워크플로우 필요 — spec § 6.1)
+        // rpId / slug 는 silent ignore (바꾸려면 별도 워크플로우가 필요하다)
         if (req.rpId != null && req.rpId != t.rpId) {
             log.debug(
                 "rpId update ignored — not yet implemented (tenant={} from={} to={})",
@@ -248,7 +253,7 @@ class TenantAdminService(
         t.rpName = req.rpName
         replaceAllowedOrigins(t, req.allowedOrigins)
         replaceAcceptedFormats(t, req.acceptedFormats)
-        // 원 Java 의 Boolean → boolean 언박싱과 같은 지점의 NPE(@NotNull 검증을 거친 컨트롤러 경로에선 불가).
+        // `!!`: @NotNull 검증을 거친 경로에선 null 이 아니다(null 이면 여기서 NPE).
         t.setRequireUserVerification(req.requireUserVerification!!)
         t.setMdsRequired(req.mdsRequired!!)
         t.attestationConveyance = req.attestationConveyance
@@ -293,7 +298,7 @@ class TenantAdminService(
         // in the same batch with INSERTs ordered before DELETEs.
         em.flush()
         var order = 0
-        // 원 Java for-each 와 동일: null 이면 NPE(앞선 validateOriginFormats 가 이미 같은 NPE 를 낸다).
+        // null 이면 NPE — 다만 update() 앞단의 validateOriginFormats 가 같은 NPE 를 먼저 낸다.
         for (origin in origins!!) {
             t.addAllowedOrigin(origin, order++)
         }
@@ -305,15 +310,14 @@ class TenantAdminService(
         // UQ_TAF_TENANT_FORMAT(tenant_id, format) would otherwise be violated when
         // Hibernate batches INSERTs before DELETEs in the same flush cycle.
         em.flush()
-        // 원 Java for-each 와 동일: null 이면 clear·flush 뒤 이 지점에서 NPE(@NotEmpty 검증을 거친 경로에선 불가).
+        // null 이면 clear·flush 뒤 이 지점에서 NPE(@NotEmpty 검증을 거친 경로에선 불가).
         for (format in formats!!) {
             t.addAcceptedFormat(format)
         }
     }
 
     /**
-     * idOrSlug 의 UUID 파싱 시도 후 실패하면 slug 로 조회.
-     * audit log payload 의 changedFields 키로 직렬화.
+     * slug 로 먼저 찾고, 없으면 idOrSlug 를 UUID 로 해석해 id 로 조회. 둘 다 실패하면 TENANT_NOT_FOUND.
      */
     private fun lookup(idOrSlug: String): Tenant {
         // Try slug first (operator-friendly URL pattern: /admin/api/tenants/acme)

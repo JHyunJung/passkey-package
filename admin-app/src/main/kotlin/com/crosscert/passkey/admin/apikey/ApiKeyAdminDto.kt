@@ -27,7 +27,7 @@ class ApiKeyAdminDto private constructor() {
         val expiresAt: OffsetDateTime?, // null = 무기한
     )
 
-    /** P1-5 rotation 응답 — plaintextKey 는 ONE-TIME, oldKeyExpiresAt 는 구 키 grace 만료 시각. */
+    /** rotation 응답 — plaintextKey 는 ONE-TIME, oldKeyExpiresAt 는 구 키 grace 만료 시각. */
     data class ApiKeyRotateResponse(
         val id: UUID?,
         val plaintextKey: String?, // ONE-TIME — only returned at rotate

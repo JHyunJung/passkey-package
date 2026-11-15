@@ -41,7 +41,7 @@ class AaguidPolicyController(
                 tenantId.toString(), // targetId
                 tenantId, // tenantId
                 java.util.Map.of<String, Any>( // payload
-                    // 원 Java view.mode().name() 과 동일: mode 가 null(DB 값 누락)이면 감사 기록 전에 NPE.
+                    // `!!`: policy_mode 는 NOT NULL 컬럼이라 저장된 정책의 mode 는 null 이 아니다. null 이면 감사 기록 전에 NPE.
                     "mode", view.mode!!.name,
                     "mdsStrict", view.mdsStrict,
                     "entryCount", view.entries.size,

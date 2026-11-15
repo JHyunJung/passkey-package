@@ -14,13 +14,13 @@ class WebauthnDiffService(
 
     /**
      * tenantId nullable: 호출자(TenantAdminController.diff)가 TenantView.id(영속 엔티티 id 에서 온 nullable DTO 필드)를
-     * 그대로 넘긴다 — 정상 경로에선 null 이 오지 않는다. null 이면 원 Java 처럼 boundary 검사 후, 리포지토리 호출 전에
-     * SimpleJpaRepository 와 같은 문구의 IllegalArgumentException. 원 Java 는 `findById(null)` 안의 IAE 라 실제 Spring
-     * 컨텍스트에선 리포지토리 프록시가 `InvalidDataAccessApiUsageException` 으로 번역했다 — 도달 불가 경로라 그대로 둔다.
+     * 그대로 넘긴다 — 정상 경로에선 null 이 오지 않는다. null 이면 RP_ADMIN 은 boundary 검사에서 NPE,
+     * PLATFORM_OPERATOR 는 검사를 통과해 리포지토리 호출 전에 SimpleJpaRepository 와 같은 문구의 IllegalArgumentException
+     * (REST 호출이면 GlobalExceptionHandler 가 400(INVALID_INPUT)).
      */
     @Transactional(readOnly = true)
     fun diff(tenantId: UUID?, proposed: WebauthnDiffRequest): WebauthnConfigDiff {
-        // Self-guard (sec-webauthndiff-no-boundary-fragile): this method must
+        // Self-guard: this method must
         // enforce tenant isolation itself, not rely on the controller having
         // resolved tenantId via a boundary-checked path. Current sole caller
         // (TenantAdminController.diff → service.get()) already passes a

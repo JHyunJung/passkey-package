@@ -17,13 +17,12 @@ import java.util.UUID
 private val log = LoggerFactory.getLogger(TenantLifecycleService::class.java)
 
 /**
- * P0-2: 테넌트 status 전이 (suspend/activate) + suspend 시 활성 API 키 일괄 revoke.
+ * 테넌트 status 전이 (suspend/activate) + suspend 시 활성 API 키 일괄 revoke.
+ * activate 는 그때 revoke 된 키를 되살리지 않는다 — 재개한 테넌트는 키를 새로 발급받아야 한다.
  *
  * tenantId nullable: 호출자(TenantAdminController)가 TenantView.id(영속 엔티티 id 에서 온 nullable DTO 필드)를
  * 그대로 넘긴다 — 정상 경로에선 null 이 오지 않는다. null 이면 리포지토리 호출 전에 SimpleJpaRepository 와 같은 문구의
- * IllegalArgumentException 을 던진다. 원 Java 는 이 IAE 가 `tenants.findById(null)` 안에서 났으므로 실제 Spring
- * 컨텍스트에선 리포지토리 프록시의 예외 번역으로 `InvalidDataAccessApiUsageException`(cause = IAE)이었다 — 예외 타입이
- * 다르지만 도달 불가 경로라 그대로 둔다.
+ * IllegalArgumentException 을 던진다(REST 호출이면 GlobalExceptionHandler 가 400(INVALID_INPUT)).
  */
 @Service
 class TenantLifecycleService(

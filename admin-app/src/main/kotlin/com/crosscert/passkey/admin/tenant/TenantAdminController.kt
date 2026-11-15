@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
+/**
+ * 화면 컨트롤러(web.tenant 등)도 이 빈의 메서드를 직접 부른다. 그때 `@PreAuthorize` 는 프록시로 적용되지만
+ * `@Valid` 는 돌지 않으므로, 요청 본문을 만드는 화면 쪽이 Validator 로 같은 제약을 먼저 검사한다.
+ */
 @RestController
 @RequestMapping("/admin/api/tenants")
 class TenantAdminController(

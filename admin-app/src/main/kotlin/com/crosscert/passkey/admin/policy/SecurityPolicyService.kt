@@ -68,7 +68,7 @@ class SecurityPolicyService(
         }
     }
 
-    /** 반환형 nullable: 저장값이 JSON `null` 이면 readValue 가 null — View 가 원 Java 처럼 빈 목록으로 정규화한다. */
+    /** 반환형 nullable: 저장값이 JSON `null` 이면 readValue 가 null — View 생성자가 빈 목록으로 정규화한다. */
     private fun deserialize(json: String?): List<String>? {
         // Java String.isBlank 와 같은 판정(Character.isWhitespace) — Kotlin isBlank 는 NBSP 등도 공백으로 본다.
         if (json == null || json.all(Character::isWhitespace)) return java.util.List.of()
