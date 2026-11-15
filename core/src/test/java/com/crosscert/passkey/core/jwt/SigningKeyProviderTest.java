@@ -167,6 +167,63 @@ class SigningKeyProviderTest {
         assertThat(provider.signingKey().getKeyID()).isEqualTo("second");
     }
 
+    @Test
+    void refreshIfRotated_sameKid_returnsFalseAndKeepsInstance() throws Exception {
+        KeyEnvelope spyEnvelope = org.mockito.Mockito.spy(envelope);
+        SigningKeyProvider p = new SigningKeyProvider(repo, spyEnvelope, mapper, clock);
+        SigningKey row = freshActiveKey("same");
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE")).thenReturn(Optional.of(row));
+
+        p.init();
+        RSAKey before = p.signingKey();
+
+        assertThat(p.refreshIfRotated()).isFalse();
+        assertThat(p.signingKey()).isSameAs(before);
+        // 봉투 복호화는 init() 때 한 번뿐이어야 한다.
+        org.mockito.Mockito.verify(spyEnvelope, org.mockito.Mockito.times(1)).open(any());
+    }
+
+    @Test
+    void refreshIfRotated_newActiveRow_returnsTrueAndSwitchesKid() throws Exception {
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")))
+                .thenReturn(Optional.of(freshActiveKey("second")));
+
+        provider.init();
+
+        assertThat(provider.refreshIfRotated()).isTrue();
+        assertThat(provider.signingKey().getKeyID()).isEqualTo("second");
+    }
+
+    @Test
+    void refreshIfRotated_noActiveRow_returnsFalseAndKeepsCache() throws Exception {
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")))
+                .thenReturn(Optional.empty());
+
+        provider.init();
+        RSAKey before = provider.signingKey();
+
+        assertThat(provider.refreshIfRotated()).isFalse();
+        assertThat(provider.signingKey()).isSameAs(before);
+    }
+
+    @Test
+    void refreshIfRotated_undecodableRow_throwsAndKeepsCache() throws Exception {
+        SigningKey broken = new SigningKey("broken", "RS256",
+                freshActiveKey("broken").getPublicJwk(), new byte[]{1, 2, 3});
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")))
+                .thenReturn(Optional.of(broken));
+
+        provider.init();
+        RSAKey before = provider.signingKey();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(provider::refreshIfRotated)
+                .isInstanceOf(RuntimeException.class);
+        assertThat(provider.signingKey()).isSameAs(before);
+    }
+
     private SigningKey freshActiveKey(String kid) throws Exception {
         var gen = KeyPairGenerator.getInstance("RSA");
         gen.initialize(2048);

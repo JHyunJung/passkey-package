@@ -121,6 +121,24 @@ public class SigningKeyProvider {
         this.cachedActive = decodeWithPrivate(row);
     }
 
+    /**
+     * DB 의 ACTIVE 행 kid 가 캐시와 다를 때만 캐시를 새 키로 바꾼다. 바꿨으면 {@code true}.
+     * kid 가 같으면 봉투를 풀지 않는다. ACTIVE 행이 없으면 캐시를 유지하고 {@code false} 를 돌려준다
+     * (회전 트랜잭션 중간에 불릴 수 있다). 새 행을 풀지 못하면 예외를 던지고 캐시는 그대로다.
+     */
+    public boolean refreshIfRotated() {
+        SigningKey row = repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE").orElse(null);
+        if (row == null) {
+            return false;
+        }
+        if (row.getKid().equals(cachedActive.getKeyID())) {
+            return false;
+        }
+        RSAKey decoded = decodeWithPrivate(row);
+        this.cachedActive = decoded;
+        return true;
+    }
+
     private SigningKey createInitialKey() {
         if (jdbc == null) {
             throw new IllegalStateException(
