@@ -16,7 +16,7 @@ import java.util.function.Function
 
 private const val VIEW = "admin/fragments/shell/command-palette :: results"
 
-/** TENANT_TABS (CommandPalette.tsx). icon 은 icons 조각 이름. */
+/** RP 관리자의 현재 tenant 탭(탭 키, 표시 이름, icon). icon 은 icons 조각 이름. */
 private val TENANT_TABS: List<Array<String>> = java.util.List.of(
     arrayOf("overview", "개요", "activity"),
     arrayOf("webauthn", "WebAuthn", "globe"),
@@ -27,16 +27,16 @@ private val TENANT_TABS: List<Array<String>> = java.util.List.of(
     arrayOf("funnel", "인증 현황", "activity"),
 )
 
-/** GO_BY_LABEL + GO_SHORTCUTS (CommandPalette.tsx, useGoShortcuts.ts). */
+/** 이동 항목 라벨 → 항목 옆에 보이는 단축키(goKey). */
 private val GO_BY_LABEL: Map<String, String> = java.util.Map.of(
     "Tenants 목록", "G T", "Activity", "G A", "감사 체인 모니터", "G C", "설정", "G S",
 )
 
 /**
- * 명령 팔레트 결과 조각(← extras/CommandPalette.tsx). `GET /admin/_/palette?q=` 는 검색어에 맞는 항목을 그룹별로 그려 돌려준다.
+ * 명령 팔레트 결과 조각. `GET /admin/_/palette?q=` 는 검색어에 맞는 항목을 그룹별로 그려 돌려준다.
  *
  * 범위는 서버가 정한다: 역할은 인증된 `me`(ViewModelAdvice)에서, RP 관리자의 현재 tenant 는 `ActiveTenantController` 에서 읽고
- * 클라이언트 입력(q)은 검색어로만 쓴다. tenant 검색은 PLATFORM 운영자에게만 열려 있다(TSX 와 같다). RP 관리자는 자신의 현재 tenant 탭만 본다.
+ * 클라이언트 입력(q)은 검색어로만 쓴다. tenant 검색은 PLATFORM 운영자에게만 열려 있다. RP 관리자는 자신의 현재 tenant 탭만 본다.
  * 기존 REST 컨트롤러 빈을 메서드로 호출한다(HTTP 아님).
  */
 @Controller
@@ -62,7 +62,10 @@ class CommandPaletteController(
         val keepOpen: Boolean,
         val goKey: String?,
     ) {
-        /** 오른쪽에 보이는 문구: path ?? hint (비면 숨김). */
+        /**
+         * 오른쪽에 보이는 문구: path ?? hint (비면 숨김).
+         * `shown`·`danger` 는 템플릿이 `${it.shown}` 처럼 getter 로 읽는다 — 함수로 바꾸면 그 식이 값을 찾지 못한다.
+         */
         val shown: String?
             get() {
                 val s = path ?: hint
@@ -103,7 +106,7 @@ class CommandPaletteController(
         val out = ArrayList<Item>(base)
         if (platform && !q.javaIsBlank()) {
             for (r in searchTenants(q)) {
-                // 원 Java r.getId().length() — id 가 null 이면 같은 지점에서 NPE(searchTenants 는 String.valueOf 로 채워 null 이 없다).
+                // `!!`: searchTenants 가 id 를 `t.id.toString()` 으로 채워 null 이 오지 않는다.
                 val id = r.id!!
                 val last8 = if (id.length > 8) id.substring(id.length - 8) else id
                 val sub = r.sub
@@ -127,7 +130,7 @@ class CommandPaletteController(
                 },
             )
         } catch (e: RuntimeException) {
-            java.util.List.of() // TSX 의 catch { /* ignore */ }
+            java.util.List.of() // 조회 실패면 tenant 결과만 뺀다
         }
     }
 
@@ -144,7 +147,7 @@ class CommandPaletteController(
         val hasIds = tenantIds != null && tenantIds.isNotEmpty()
         if (!platform) {
             val at = activeTenant()
-            // 활성 tenant 가 확인되면 hasTenants 와 무관하게 보인다(TSX: tenantIds.length > 0 || status === 'ok').
+            // 활성 tenant 가 확인되면 me.tenantIds 가 비어 있어도 보인다.
             if (hasIds || at.ok) {
                 if (at.ok) {
                     val group = if (at.name != null && at.name.isNotEmpty()) "현재 Tenant · " + at.name else "현재 Tenant"
@@ -182,7 +185,7 @@ class CommandPaletteController(
             var name: String? = null
             val allowed = v.allowedTenants
             if (allowed != null) {
-                // 원 Java 스트림 그대로 — 일치 항목의 이름이 null 이면 findFirst 가 NPE(아래 catch 로 "확인 못 함").
+                // findFirst 는 고른 원소가 null 이면 NPE — 일치 항목의 이름이 null 이면 아래 catch 로 "확인 못 함"이 된다.
                 name = allowed.stream().filter { t -> activeId == t.id }
                     .map { t -> t.name }.findFirst().orElse(null)
             }

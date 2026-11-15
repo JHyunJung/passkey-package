@@ -8,7 +8,7 @@ import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.node.NullNode
 
 /**
- * 활동 상세 패널 "어떻게 바뀜" 행(← pages/activityDiff.ts, 1:1).
+ * 활동 상세 패널 "어떻게 바뀜" 행.
  * 값(from/to)은 JSON 노드이고 `null` 이 JS 의 `undefined`(키 없음), [NullNode] 가 JSON null 이다.
  */
 object ActivityDiff {
@@ -44,7 +44,7 @@ object ActivityDiff {
     }
 
     /**
-     * 1) 서버 ③ 의 detail.diff 가 정의되어 있으면(`diff != null`) 그대로.
+     * 1) diff 가 주어지면(`diff != null`) 그대로. 지금 호출자(ActivityPageController)는 null 을 넘긴다.
      * 2) 아니면 payload 의 before/after 객체(현재 TENANT_UPDATE: { before, after, changedFields }).
      *    changedFields 가 문자열 배열이면 그 순서, 아니면 JSON 값이 다른 키만.
      */
@@ -95,7 +95,7 @@ object ActivityDiff {
         return ArrayChange(added, removed)
     }
 
-    /** ActivityPage 의 fmtVal: undefined·null → —, 문자열은 그대로, 그 밖은 JSON.stringify. */
+    /** 화면 표시 값: undefined·null → —, 문자열은 그대로, 그 밖은 JSON.stringify. */
     fun fmtVal(v: JsonNode?): String {
         if (v == null || v.isNull) return "—"
         return if (v.isString) v.asString() else v.toString()

@@ -13,7 +13,8 @@ import tools.jackson.databind.json.JsonMapper
  * 호출하는 쪽은 이 빌더 위에 자기 기능만 얹는다(예: `FAIL_ON_TRAILING_TOKENS`, `ESCAPE_NON_ASCII`).
  * webauthn 모듈의 `JsonMappers.secure()` 와 같은 방식이다.
  *
- * Kotlin 모듈(jackson-module-kotlin)은 등록하지 않는다 — 원 Java 와 같은 순수 Jackson 매퍼다.
+ * Kotlin 모듈(jackson-module-kotlin)은 등록하지 않는다 — 쓰는 쪽은 Map 을 쓰거나(Toasts) JsonNode 로 읽거나(ActivityDiff)
+ * 값을 직렬화만 하고(ViewHelpers 의 테스트용 생성자), Kotlin 클래스로 역직렬화하는 곳이 없다.
  */
 object StandaloneJson {
 

@@ -7,9 +7,10 @@ private val FORMULA_PREFIX: Pattern = Pattern.compile("^[=+\\-@\\t\\r].*", Patte
 private val NEEDS_QUOTE: Pattern = Pattern.compile("[\",\\r\\n]")
 
 /**
- * CSV 직렬화(← admin-ui lib/csvExport.ts). RFC 4180 lite: 쉼표·따옴표·줄바꿈이 든 필드는 따옴표로 감싸고
+ * CSV 직렬화. RFC 4180 lite: 쉼표·따옴표·줄바꿈이 든 필드는 따옴표로 감싸고
  * 따옴표는 두 번 쓴다. Excel 수식 주입 방지로 `= + - @ TAB CR` 로 시작하면 앞에 작은따옴표를 붙인다.
  * Excel 의 UTF-8 인식을 위해 BOM 을 앞에 두고, 줄바꿈은 `\n`.
+ * BOM 은 소스에 유니코드 이스케이프로만 쓴다(write 의 문자열) — CsvWriterTest 가 이 파일을 읽어 보이지 않는 실제 문자가 없는지 확인한다.
  */
 object CsvWriter {
 
@@ -26,7 +27,7 @@ object CsvWriter {
         return out.joinToString(",")
     }
 
-    /** 원 Java 는 패키지 전용 — 같은 모듈 테스트(CsvWriterTest)가 부르므로 internal. */
+    /** internal: 같은 모듈 테스트(CsvWriterTest)가 부른다. */
     internal fun escape(v: String?): String {
         if (v == null) return ""
         var s: String = v

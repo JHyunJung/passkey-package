@@ -14,7 +14,7 @@ private val DASHES = Regex("-+")
 private val EDGE_DASHES = Regex("^-+|-+$")
 
 /**
- * 복구 코드 다운로드 파일명(← admin-ui lib/recoveryCodeFilename.ts).
+ * 복구 코드 다운로드 파일명.
  * `passkey-admin-recovery-codes-<account>-<YYYYMMDD>.txt`. 화면에 값으로 내려주고 브라우저 Blob 다운로드가 쓴다.
  * account 는 email 의 @ 앞 local part 를 파일명-안전하게 정리한 것으로, 비면 생략한다.
  */

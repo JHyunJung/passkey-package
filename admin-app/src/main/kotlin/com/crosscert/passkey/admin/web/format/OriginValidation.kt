@@ -9,7 +9,7 @@ private val BASE64URL_43: Pattern = Pattern.compile("^[A-Za-z0-9_-]{43}$")
 private val HAS_SCHEME: Pattern = Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE)
 
 /**
- * origin 입력 검증(← WebauthnConfigTab.tsx validateOrigin). WebAuthn 스펙상 origin 의 host 는 rpId 와 같거나 rpId 의 서브도메인이어야 한다.
+ * origin 입력 검증. WebAuthn 스펙상 origin 의 host 는 rpId 와 같거나 rpId 의 서브도메인이어야 한다.
  * 반환: ok 이면 정규화된 origin(scheme://host[:port], 경로·쿼리 제거), 아니면 사유.
  */
 object OriginValidation {

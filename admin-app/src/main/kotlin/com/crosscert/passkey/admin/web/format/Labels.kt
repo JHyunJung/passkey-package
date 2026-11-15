@@ -2,7 +2,7 @@ package com.crosscert.passkey.admin.web.format
 
 import java.util.Collections
 
-/** 화면 표시 라벨(← admin-ui i18n/labels.ts). enum 값(영어)은 로직·API 에 그대로 쓰고 화면에 그릴 때만 변환한다. */
+/** 화면 표시 라벨. enum 값(영어)은 로직·API 에 그대로 쓰고 화면에 그릴 때만 변환한다. */
 object Labels {
 
     /** 상태 배지 공용 라벨. */

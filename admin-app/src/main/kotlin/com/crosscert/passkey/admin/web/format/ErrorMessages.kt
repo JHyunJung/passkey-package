@@ -9,11 +9,10 @@ import java.io.UncheckedIOException
 import java.util.concurrent.TimeoutException
 
 /**
- * 사용자에게 보여 줄 쉬운 오류 문구(← admin-ui lib/describeError.ts, lib/transientError.ts).
+ * 사용자에게 보여 줄 쉬운 오류 문구.
  *
- * 원본의 ApiError 는 서버 응답의 HTTP 상태라서, 서버 측에서는 [BusinessException]·
- * [ResponseStatusException]·[AccessDeniedException]·Spring MVC [ErrorResponse] 의 상태로 옮긴다.
- * fetch 의 TypeError(네트워크)는 [IOException], RequestTimeoutError 는 [TimeoutException] 에 대응한다.
+ * HTTP 상태는 [BusinessException]·[ResponseStatusException]·[AccessDeniedException]·Spring MVC [ErrorResponse] 에서 읽는다.
+ * 네트워크 오류는 [IOException]·[UncheckedIOException], 시간 초과는 [TimeoutException] 으로 본다.
  */
 object ErrorMessages {
 
@@ -86,7 +85,7 @@ object ErrorMessages {
     }
 
     /**
-     * 오류 원문(rawErrorDetail): `HTTP 상태 · [코드] 서버 메시지`. 화면 예외 처리기(WebExceptionAdvice)와 RP 전환 실패(ShellController)가 같이 쓴다.
+     * 오류 원문: `HTTP 상태 · [코드] 서버 메시지`. 화면 예외 처리기(WebExceptionAdvice)와 RP 전환 실패(ShellController)가 같이 쓴다.
      * 서버 메시지는 업무 규칙이 정한 문구만 붙인다 — [BusinessException] 의 메시지와 4xx [ResponseStatusException] 의 reason.
      * Spring MVC 표준 예외([ErrorResponse]·타입 변환 실패 등)·JDK 예외(IllegalArgumentException "Invalid UUID string" 등)·
      * 권한 거부·예기치 못한 5xx 의 원문은 싣지 않는다(상태와 코드만).

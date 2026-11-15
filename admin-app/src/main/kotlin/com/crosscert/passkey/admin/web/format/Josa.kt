@@ -1,9 +1,9 @@
 package com.crosscert.passkey.admin.web.format
 
-/** 한글 조사 선택(← admin-ui lib/josa.ts). */
+/** 한글 조사 선택. */
 object Josa {
 
-    /** 받침 유무. 한글 음절이 아니면 null. 빈 문자열은 원본(NaN 비교)과 같이 받침 있음으로 본다. */
+    /** 받침 유무. 한글 음절이 아니면 null. null·빈 값·공백뿐인 값은 받침 있음으로 본다(→ '을'·'이'). */
     private fun hasBatchim(word: String?): Boolean? {
         val t = word?.javaStrip() ?: ""
         if (t.isEmpty()) return true

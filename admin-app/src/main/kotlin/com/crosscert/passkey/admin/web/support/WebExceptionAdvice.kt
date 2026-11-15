@@ -28,7 +28,7 @@ private val log = LoggerFactory.getLogger(WebExceptionAdvice::class.java)
  * 우선순위를 가장 높게 두어 화면 컨트롤러에서는 이 advice 가 먼저 잡게 한다.
  * REST 컨트롤러(`/admin/api/` 아래)의 JSON 오류 응답은 그대로다.
  *
- * 문구는 [ErrorMessages](describeError.ts 이전)가 상태별로 정한다.
+ * 문구는 [ErrorMessages] 가 상태별로 정한다.
  */
 @ControllerAdvice(basePackages = ["com.crosscert.passkey.admin.web"])
 @Order(Ordered.HIGHEST_PRECEDENCE)

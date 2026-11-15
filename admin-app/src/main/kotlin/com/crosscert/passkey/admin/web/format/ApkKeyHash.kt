@@ -9,7 +9,7 @@ private val HEX64: Pattern = Pattern.compile("[0-9a-fA-F]{64}")
 /**
  * Android 네이티브 WebAuthn 클라이언트의 clientData.origin 은
  * `android:apk-key-hash:<base64url(SHA-256(서명인증서))>`(padding 없는 43자) 형태다.
- * keytool 출력의 SHA-256 지문(hex)을 붙여넣으면 base64url 로 변환한다(← admin-ui lib/apkKeyHash.ts).
+ * keytool 출력의 SHA-256 지문(hex)을 붙여넣으면 base64url 로 변환한다.
  */
 object ApkKeyHash {
 

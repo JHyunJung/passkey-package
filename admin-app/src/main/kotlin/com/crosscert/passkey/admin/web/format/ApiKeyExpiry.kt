@@ -4,7 +4,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
 
-/** API 키 만료 임박 판정(← admin-ui lib/apiKeyExpiry.ts). */
+/** API 키 만료 임박 판정. */
 object ApiKeyExpiry {
 
     const val EXPIRY_WARN_DAYS = 30

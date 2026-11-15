@@ -27,7 +27,7 @@ class ShellAdvice(
     @Value("\${passkey.admin.help.support:}") support: String?,
 ) {
 
-    /** config/links.ts 의 HELP_LINKS. 값이 비면 그 항목은 숨긴다. */
+    /** 도움말 링크(`passkey.admin.help.*`). 값이 비면 템플릿이 그 항목을 숨긴다. */
     data class HelpLinks(val apiDocs: String?, val rpGuide: String?, val support: String?)
 
     private val helpLinks = HelpLinks(apiDocs, rpGuide, support)
@@ -42,7 +42,7 @@ class ShellAdvice(
         model.addAttribute("deploymentMode", deploymentMode())
     }
 
-    /** 라이선스 메뉴는 PLATFORM 에게만 보이므로 그때만 조회한다. 조회 실패는 saas(TSX 의 catch). */
+    /** 라이선스 메뉴는 PLATFORM 에게만 보이므로 그때만 조회한다. 빈이 없거나 조회에 실패하면 saas 로 본다. */
     private fun deploymentMode(): String? {
         val auth = SecurityContextHolder.getContext().authentication
         val user = auth?.principal as? AdminUserDetails
@@ -60,7 +60,7 @@ class ShellAdvice(
     companion object {
         /**
          * 경로 → 사이드바 항목. 테넌트 상세는 Tenants. 그 밖(조각·오류)은 null.
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ShellControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(ShellControllerTest)가 부른다.
          */
         internal fun navActive(path: String?): String? {
             if (path == null) return null

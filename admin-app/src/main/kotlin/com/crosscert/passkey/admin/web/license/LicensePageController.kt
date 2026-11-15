@@ -27,10 +27,10 @@ private const val REQUEST_STEP = "영업 담당자에게 갱신을 요청합니�
 private const val APPLY_STEP = "받은 라이선스 파일을 서버에 적용합니다."
 
 /**
- * 라이선스 화면(← pages/LicensePage.tsx, api/license.ts). PLATFORM 전용(App.tsx RequirePlatform): RP_ADMIN 은 홈(자기 tenant)으로 보낸다.
+ * 라이선스 화면. PLATFORM 전용: RP_ADMIN 은 페이지에서 홈(자기 tenant)으로 보내고, 다시 확인 조각은 403.
  * 데이터는 `LicenseController.get()` 하나. 설치 방식은 응답의 `deploymentMode` 를 따른다 — onprem 이 아니면(SaaS) 온프레미스 전용 안내만.
  *
- * "지금 다시 확인"은 `GET /admin/_/license/recheck` 로 상세 영역(#license-body)을 새 값으로 교체한다. 실패하면 원본처럼 이전 정보를 그대로 두고
+ * "지금 다시 확인"은 `GET /admin/_/license/recheck` 로 상세 영역(#license-body)을 새 값으로 교체한다. 실패하면 이전 정보를 그대로 두고
  * 경고만 보인다(200 + HX-Retarget #license-recheck-alert). 처음 불러오기 실패는 LoadError(다시 시도 = 화면 다시 받기). 알 수 없는 예외의 원문은 싣지 않는다.
  */
 @Controller
@@ -80,7 +80,8 @@ class LicensePageController(
     fun recheck(res: HttpServletResponse, model: Model): String {
         if (!me(model).platform) throw AccessDeniedException("platform only")
         model.addAttribute("recheckAttrs", recheckAttrs())
-        // nullable: 원 Java 는 null data 를 try 밖 toView 에서 NPE(500) — non-null 선언이면 try 안 검사로 바뀐다.
+        // nullable 로 둔다: data() 는 플랫폼 타입이라 non-null 로 선언하면 null 검사가 이 try 안에서 일어나 경고 조각으로 바뀐다.
+        // 지금은 null 이면 try 밖 toView 의 `v!!` 에서 NPE — WebExceptionAdvice 가 500 으로 답한다.
         val v: LicenseView?
         try {
             v = license.get().data()
@@ -110,7 +111,10 @@ class LicensePageController(
             return m
         }
 
-        /** 원 Java 는 v 를 그대로 역참조 — null 이면 첫 줄에서 NPE(page 의 catch 로 LoadError). */
+        /**
+         * `v!!`: LicenseController.get() 은 data 를 항상 채운다. null 이면 첫 줄에서 NPE — page 에선 try 안이라 loadError,
+         * recheck 에선 try 밖이라 WebExceptionAdvice 의 500 이다.
+         */
         private fun toView(v: LicenseView?, now: Instant): View {
             val onprem = "onprem" == v!!.deploymentMode
             if (!onprem) return View(false, null, null, null, null, null, null, null, java.util.List.of())

@@ -13,7 +13,7 @@ private val LOCAL_HOSTS: Set<String> = java.util.Set.of("localhost", "127.0.0.1"
 private val ONE: BigInteger = BigInteger.ONE
 private val MAX_TIMEOUT: BigInteger = BigInteger.valueOf(1440)
 
-/** 보안 정책(설정 › 보안 정책) 입력 검증(← admin-ui lib/policyValidation.ts). 저장 전에 형식 오류를 그 자리에서 알린다. */
+/** 보안 정책(설정 › 보안 정책) 입력 검증. 저장 전에 형식 오류를 그 자리에서 알린다. */
 object PolicyValidation {
 
     const val ORIGIN_FORMAT_ERROR = "형식이 올바르지 않습니다. https:// 로 시작하고 경로 없이 입력하세요. 예: https://admin.example.com"
@@ -74,7 +74,8 @@ object PolicyValidation {
             } else {
                 val accepted = ArrayList<String>()
                 for (element in list) {
-                    // 원소 타입은 non-null 이지만 원 Java 의 null 원소 판정을 그대로 둔다.
+                    // 원소 타입은 non-null 이고 UpdateRequest 가 List.copyOf 로 복사해 null 원소는 생성 시점에 NPE 로 막힌다.
+                    // 이 null 판정은 닿지 않는 방어다.
                     val origin: String? = element
                     val err = if (origin == null) ORIGIN_FORMAT_ERROR else validateOrigin(origin, accepted)
                     if (err != null) {
