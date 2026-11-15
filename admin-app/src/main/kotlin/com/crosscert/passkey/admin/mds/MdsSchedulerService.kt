@@ -114,10 +114,10 @@ class MdsSchedulerService(
                 }
             }
 
-            // Stale-key cleanup: only AAGUIDs present before this cycle but
-            // absent from the new BLOB (revoked/dropped entries) are removed —
-            // and only now, after every surviving/updated key has already
-            // been (re)written above.
+            // Stale-key cleanup: keys present before this cycle but not
+            // (re)written above are removed — entries dropped from the new BLOB,
+            // and entries still in it whose status list came out empty — and
+            // only now, after every surviving/updated key has been written.
             if (previousKeys != null && previousKeys.isNotEmpty()) {
                 val staleKeys = HashSet(previousKeys)
                 staleKeys.removeAll(freshKeys)
