@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.RestController
 /**
  * 비인증. 로그인 화면(LoginPageController)이 메서드로 불러 데모 계정 카드를 보일지 정하고,
  * 가입 화면(SignupPageController)이 PLATFORM_OPERATOR 즉시 가입 선택지를 보일지 정한다. 모든 화면 모델의 `profile`
- * (ViewModelAdvice)도 이 값이다. 활성 profile 이름만 노출하므로
- * 정보 유출 위험은 없다 (이미 README 등 공개 문서에 적힌 정보).
+ * (ViewModelAdvice)도 이 값이다. 노출하는 것은 활성 profile 이름, local 여부, PLATFORM_OPERATOR 즉시 가입 설정
+ * 여부([ProfileView])뿐이다.
  *
  * AdminSecurityConfig 의 permitAll 화이트리스트에 /admin/api/profile 추가됨.
  */

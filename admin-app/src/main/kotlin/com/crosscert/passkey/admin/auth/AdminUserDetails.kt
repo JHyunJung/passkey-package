@@ -17,7 +17,7 @@ import java.util.UUID
  * 세션(Spring Session Redis, JDK 직렬화)에 SecurityContext 째로 저장된다. 직렬화 형식은 필드 이름·타입
  * (id, email, passwordHash, role, allowedTenantIds, enabled, lockedUntil, clock)과 serialVersionUID 로
  * 정해진다 — serialVersionUID 나 필드 타입이 바뀌면 배포 전에 Redis 에 저장된 세션을 역직렬화하지 못하고,
- * 필드 이름이 바뀌면 그 값이 비어(null) 복원된다.
+ * 필드 이름이 바뀌면 그 값이 기본값(참조형은 null, `enabled` 는 false — 계정이 비활성으로 보인다)으로 복원된다.
  * serialVersionUID 는 이 클래스가 Java 로 작성돼 있던 시절의 기본 계산값(JDK `serialver`)을 고정한 것이다 —
  * 그 빌드가 써 둔 세션도 이 클래스로 읽힌다.
  *

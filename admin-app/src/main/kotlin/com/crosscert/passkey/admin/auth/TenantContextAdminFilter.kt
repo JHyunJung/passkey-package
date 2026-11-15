@@ -29,7 +29,8 @@ class TenantContextAdminFilter(private val tenantBoundary: TenantBoundary) : Onc
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
         try {
-            // scope() 는 PLATFORM_OPERATOR·미인증/미지원role·활성 RP 없는 RP_ADMIN 일 때만 null 을 반환(fail-closed).
+            // scope() 는 PLATFORM_OPERATOR·미인증/미지원role 일 때만 null 을 반환(fail-closed).
+            // 예외: 활성 RP 없는 RP_ADMIN 도 null 이다(아래 scope() KDoc — 이 경우는 fail-closed 가 아니다).
             // 그 외 예기치 못한 예외는 전파하여 unscoped 전체 조회를 차단한다.
             scope()?.let { TenantContextHolder.set(it) }
             chain.doFilter(req, res)
@@ -48,7 +49,9 @@ class TenantContextAdminFilter(private val tenantBoundary: TenantBoundary) : Onc
      * - 미인증/anonymous → `BusinessException(UNAUTHORIZED)` → null 반환.
      *   인증/인가는 보안 체인·엔드포인트가 책임진다.
      * - 미지원 role      → `BusinessException(ACCESS_DENIED)` → null 반환.
-     * - RP_ADMIN 인데 활성 RP 없음(매핑 0개) → `BusinessException(ACCESS_DENIED)` → 역시 null 반환(컨텍스트 없이 진행).
+     * - RP_ADMIN 인데 활성 RP 없음(매핑 0개) → `BusinessException(ACCESS_DENIED)` → 역시 null 반환.
+     *   이때 [TenantContextHolder] 가 비어 있으므로 그 요청에서는 Hibernate @Filter(TenantFilterAspect)가 켜지지 않는다 —
+     *   아래 fail-closed 원칙에서 벗어나는 경우다.
      *
      * **fail-closed:** 위 두 [ErrorCode] 외의 예외(NPE·DB오류·기타
      * [BusinessException])는 잡지 않고 전파한다. 인증된 RP_ADMIN 의 scope 해석이
@@ -61,7 +64,7 @@ class TenantContextAdminFilter(private val tenantBoundary: TenantBoundary) : Onc
         } catch (e: BusinessException) {
             val code = e.errorCode
             if (code == ErrorCode.UNAUTHORIZED || code == ErrorCode.ACCESS_DENIED) {
-                // unauthenticated / anonymous / unknown-role → no context.
+                // unauthenticated / anonymous / unknown-role / RP_ADMIN without an active tenant → no context.
                 return null
             }
             throw e // any other business error → fail-closed
