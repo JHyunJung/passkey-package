@@ -26,8 +26,12 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SigningKeyProviderTest {
@@ -169,7 +173,7 @@ class SigningKeyProviderTest {
 
     @Test
     void refreshIfRotated_sameKid_returnsFalseAndKeepsInstance() throws Exception {
-        KeyEnvelope spyEnvelope = org.mockito.Mockito.spy(envelope);
+        KeyEnvelope spyEnvelope = spy(envelope);
         SigningKeyProvider p = new SigningKeyProvider(repo, spyEnvelope, mapper, clock);
         SigningKey row = freshActiveKey("same");
         when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE")).thenReturn(Optional.of(row));
@@ -180,7 +184,7 @@ class SigningKeyProviderTest {
         assertThat(p.refreshIfRotated()).isFalse();
         assertThat(p.signingKey()).isSameAs(before);
         // 봉투 복호화는 init() 때 한 번뿐이어야 한다.
-        org.mockito.Mockito.verify(spyEnvelope, org.mockito.Mockito.times(1)).open(any());
+        verify(spyEnvelope, times(1)).open(any());
     }
 
     @Test
@@ -219,8 +223,9 @@ class SigningKeyProviderTest {
         provider.init();
         RSAKey before = provider.signingKey();
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(provider::refreshIfRotated)
-                .isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(provider::refreshIfRotated)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("kid=broken");
         assertThat(provider.signingKey()).isSameAs(before);
     }
 

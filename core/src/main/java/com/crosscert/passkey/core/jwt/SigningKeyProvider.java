@@ -45,13 +45,14 @@ import java.util.List;
  * even if envelope decryption is misconfigured.
  *
  * <p>Signing: uses the cached key — the ACTIVE row as of the last
- * {@link #init()} / {@link #reload()} in this process. KeyRotationService
+ * {@link #init()} / {@link #reload()} / {@link #refreshIfRotated()} in this process. KeyRotationService
  * calls {@link #reload()} after a rotation so the cache picks up the
  * new ACTIVE row.
  *
- * <p>reload 는 그 메서드를 부른 프로세스(admin-app)의 캐시만 바꾼다. passkey-app 은 {@link #init()} 에서만
- * ACTIVE 키를 읽으므로, 회전 뒤에도 재기동 전까지 이전 키(이제 ROTATED)로 ID Token 에 서명한다.
- * 그 키가 KeyExpirationJob 에서 REVOKED 가 되어 JWKS 에서 빠지면 RP 의 서명 검증이 실패한다.
+ * <p>reload 는 그 메서드를 부른 프로세스(admin-app)의 캐시만 바꾼다. passkey-app 은 SigningKeyRefreshJob 이
+ * 주기적으로(기본 1분) {@link #refreshIfRotated()} 를 불러 새 ACTIVE 키로 바꾼다. 그 사이(기본 최대 약 1분)에는
+ * ROTATED 가 된 옛 키로 서명하고, 그 키는 grace 동안 JWKS 에 남아 RP 검증이 통과한다. 그래서 갱신 주기는
+ * grace({@code passkey.key-rotation.grace}) 보다 짧아야 한다.
  */
 @Component
 public class SigningKeyProvider {
@@ -131,7 +132,8 @@ public class SigningKeyProvider {
         if (row == null) {
             return false;
         }
-        if (row.getKid().equals(cachedActive.getKeyID())) {
+        RSAKey current = cachedActive;
+        if (current != null && row.getKid().equals(current.getKeyID())) {
             return false;
         }
         RSAKey decoded = decodeWithPrivate(row);
