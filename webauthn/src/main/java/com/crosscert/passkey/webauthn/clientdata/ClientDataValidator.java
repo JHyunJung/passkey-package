@@ -13,7 +13,7 @@ import java.util.Set;
 public final class ClientDataValidator {
 
     /** clientDataJSON은 type/challenge/origin/crossOrigin뿐이라 작다.
-     *  거대 입력 파싱 DoS를 막는 보수적 상한 (codex P2). */
+     *  거대 입력 파싱 DoS를 막는 보수적 상한. */
     private static final int MAX_CLIENT_DATA_BYTES = 16 * 1024;
 
     private final ObjectMapper mapper;

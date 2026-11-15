@@ -12,7 +12,7 @@ import java.util.Map;
  * array, map, simple bool/null, tag).
  *
  * <p>불변 값 타입이다. byte 배열·컬렉션을 담는 record는 방어적 복사 +
- * 내용 기반 equals/hashCode로 호출자 변경에 노출되지 않게 한다 (codex P2).
+ * 내용 기반 equals/hashCode로 호출자 변경에 노출되지 않게 한다.
  */
 public sealed interface CborValue {
 

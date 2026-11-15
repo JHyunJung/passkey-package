@@ -25,7 +25,7 @@ import java.util.Arrays;
  * 요소(version INTEGER, securityLevel ENUMERATED, kmVersion INTEGER, kmSecurityLevel
  * ENUMERATED)를 순서대로 건너뛴 뒤, 5번째 요소가 OCTET STRING(tag 0x04)인지 확인하고 그
  * 값을 challenge로 사용한다. ("첫 OCTET STRING 찾기" 휴리스틱은 너무 관대하므로 실제
- * 필드 순서를 따라 엄격히 파싱한다 — codex P2.)
+ * 필드 순서를 따라 엄격히 파싱한다.)
  *
  * <p><b>모든 길이 검증은 뺄셈 형태({@code len > buf.length - off})로 한다</b> — 조작된
  * 4바이트 길이에서 {@code off + len}이 부호 있는 int 오버플로로 음수가 되어 검사를 통과하는
@@ -70,7 +70,7 @@ final class AndroidKeyExtension {
     /**
      * KeyDescription SEQUENCE(0x30)에서 5번째 요소(attestationChallenge OCTET STRING)의
      * value를 반환한다. 앞 4개 요소를 순서대로 건너뛰고 5번째가 OCTET STRING인지 확인한다.
-     * "첫 OCTET STRING 찾기"보다 엄격 — 실제 필드 순서를 따른다 (codex P2).
+     * "첫 OCTET STRING 찾기"보다 엄격 — 실제 필드 순서를 따른다.
      */
     private static byte[] attestationChallenge(byte[] der) {
         if (der.length < 2 || (der[0] & 0xff) != 0x30) {

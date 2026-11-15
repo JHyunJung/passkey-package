@@ -33,7 +33,7 @@ public final class AttestationObjectDecoder {
         try {
             parsed = AuthenticatorDataParser.parse(rawAuthData);
         } catch (RuntimeException e) {
-            // authData 파싱 실패도 decoder 경계의 일관된 예외 계약으로 정규화 (codex P2).
+            // authData 파싱 실패도 decoder 경계의 일관된 예외 계약으로 정규화.
             throw new AttestationException("attestationObject.authData parse failed: " + e.getMessage(), e);
         }
         return new AttestationObject(fmt.value(), rawAuthData, parsed, attStmt);

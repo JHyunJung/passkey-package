@@ -4,8 +4,9 @@ import java.security.cert.TrustAnchor;
 import java.util.Set;
 
 /**
- * attestation 체인 검증의 루트 신뢰 앵커 공급자. 본래 MDS에서 오지만
- * 이번 범위에서는 인터페이스만 두고, MDS 서브프로젝트가 구현해 끼운다.
+ * attestation 체인 검증(TRUST_CHAIN_REQUIRED)의 루트 신뢰 앵커 공급자.
+ * 구현은 EmptyTrustAnchorProvider 뿐이다 — passkey-app 은 withDefaults 로 구성하고
+ * 등록 때 SELF_ALLOWED 를 넘기므로, attestation 체인을 루트까지 검증하는 경로는 쓰이지 않는다.
  *
  * @param aaguid 등록 authenticator의 AAGUID (16바이트, nullable)
  * @param attestationFormat "packed", "tpm" 등

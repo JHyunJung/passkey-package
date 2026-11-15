@@ -4,7 +4,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** fmt 문자열 → AttestationVerifier 레지스트리. */
+/**
+ * fmt 문자열 → AttestationVerifier 레지스트리.
+ * NativeWebAuthnVerifier 는 테넌트 허용 포맷(acceptedAttestationFormats)을 먼저 확인한 뒤
+ * attestationObject.fmt 로 여기서 검증기를 고르고, 없으면 UNSUPPORTED_ATTESTATION_FORMAT 으로 거부한다.
+ */
 public final class AttestationVerifiers {
 
     private final Map<String, AttestationVerifier> byFormat;
@@ -12,7 +16,7 @@ public final class AttestationVerifiers {
     private AttestationVerifiers(List<AttestationVerifier> verifiers) {
         Map<String, AttestationVerifier> m = new LinkedHashMap<>();
         for (AttestationVerifier v : verifiers) m.put(v.format(), v);
-        // 생성 후 불변 — 동시 읽기 안전 보장 (codex 관찰). 조회만 하므로 순서 무관.
+        // 생성 후 불변 — 동시 읽기 안전 보장. 조회만 하므로 순서 무관.
         this.byFormat = Map.copyOf(m);
     }
 

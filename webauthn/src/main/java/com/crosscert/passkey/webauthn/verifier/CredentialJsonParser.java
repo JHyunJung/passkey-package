@@ -17,7 +17,7 @@ public final class CredentialJsonParser {
     private static final Base64.Decoder B64URL = Base64.getUrlDecoder();
 
     /** credentialJson은 attestationObject(보통 수 KB) 포함이라 ClientDataValidator(16KB)보다
-     *  큰 상한. 정상 등록 응답의 수배 여유 (codex P2, Task 6과 일관된 ingress 방어). */
+     *  큰 상한. 정상 등록 응답의 수배 여유. */
     private static final int MAX_CREDENTIAL_JSON_CHARS = 64 * 1024;
 
     public CredentialJsonParser(ObjectMapper mapper) {
