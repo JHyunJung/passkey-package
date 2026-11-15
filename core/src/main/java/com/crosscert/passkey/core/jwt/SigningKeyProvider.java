@@ -51,8 +51,9 @@ import java.util.List;
  *
  * <p>reload 는 그 메서드를 부른 프로세스(admin-app)의 캐시만 바꾼다. passkey-app 은 SigningKeyRefreshJob 이
  * 주기적으로(기본 1분) {@link #refreshIfRotated()} 를 불러 새 ACTIVE 키로 바꾼다. 그 사이(기본 최대 약 1분)에는
- * ROTATED 가 된 옛 키로 서명하고, 그 키는 grace 동안 JWKS 에 남아 RP 검증이 통과한다. 그래서 갱신 주기는
- * grace({@code passkey.key-rotation.grace}) 보다 짧아야 한다.
+ * ROTATED 가 된 옛 키로 서명하고, 그 키는 grace 동안 JWKS 에 남아 RP 검증이 통과한다. 갱신 직전에 옛 키로 서명한
+ * 토큰도 만료({@code passkey.id-token.ttl}, 기본 PT15M)까지 검증돼야 하므로 갱신 주기 + ID Token 수명이
+ * grace({@code passkey.key-rotation.grace}, 기본 PT30M) 이하여야 한다.
  */
 @Component
 public class SigningKeyProvider {

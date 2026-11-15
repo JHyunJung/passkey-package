@@ -200,6 +200,17 @@ class SigningKeyProviderTest {
     }
 
     @Test
+    void refreshIfRotated_beforeInit_loadsActiveRow() throws Exception {
+        when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
+                .thenReturn(Optional.of(freshActiveKey("first")));
+
+        // init() 을 부르지 않아 캐시가 비어 있다.
+        assertThat(provider.signingKey()).isNull();
+        assertThat(provider.refreshIfRotated()).isTrue();
+        assertThat(provider.signingKey().getKeyID()).isEqualTo("first");
+    }
+
+    @Test
     void refreshIfRotated_noActiveRow_returnsFalseAndKeepsCache() throws Exception {
         when(repo.findFirstByStatusOrderByCreatedAtDesc("ACTIVE"))
                 .thenReturn(Optional.of(freshActiveKey("first")))

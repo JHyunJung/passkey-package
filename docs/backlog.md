@@ -21,7 +21,7 @@
       sdk `IdTokenVerifier` 가 `Unknown or non-RSA kid` 로 실패했다.
       **해결**: passkey-app `SigningKeyRefreshJob` 이 인스턴스마다(lease 없음) 주기적으로 `SigningKeyProvider.refreshIfRotated()` 를 불러
       ACTIVE kid 가 바뀌었을 때만 키를 다시 읽는다(서명 경로에 DB 조회 없음, 실패 시 기존 키 유지). 설정 키
-      `passkey.signing-key.refresh.fixed-delay`·`passkey.signing-key.refresh.initial-delay`(둘 다 기본 PT1M, grace 보다 짧아야 함).
+      `passkey.signing-key.refresh.fixed-delay`·`passkey.signing-key.refresh.initial-delay`(둘 다 기본 PT1M, 주기 + ID Token 수명(`passkey.id-token.ttl`, PT15M) ≤ grace; fixed-delay 빈 값은 일회성 실행이 되므로 기동 거부).
       회전 뒤 재기동은 필요 없다. `SigningKeyProviderTest.refreshIfRotated_*`, `SigningKeyRefreshJobTest`,
       `SigningKeyRefreshIT.rotationIsPickedUpOnlyAfterRefreshJobRuns`(실제 Oracle) 로 고정. [2026-11-15]
 - [x] ~~**actuator `health.show-details: always` 미인증 노출**~~ — `when-authorized` 로 변경(무인증은 status 만,

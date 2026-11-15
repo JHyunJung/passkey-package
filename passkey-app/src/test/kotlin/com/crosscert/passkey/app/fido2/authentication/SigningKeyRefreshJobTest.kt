@@ -19,7 +19,7 @@ import org.springframework.scheduling.annotation.Scheduled
 class SigningKeyRefreshJobTest {
 
     private val keys: SigningKeyProvider = mock()
-    private val job = SigningKeyRefreshJob(keys)
+    private val job = SigningKeyRefreshJob(keys, "PT1M")
 
     @Test
     fun runOnce_providerThrows_doesNotPropagate() {
@@ -39,7 +39,7 @@ class SigningKeyRefreshJobTest {
 
         val unchanged: SigningKeyProvider = mock()
         whenever(unchanged.refreshIfRotated()).thenReturn(false)
-        SigningKeyRefreshJob(unchanged).runOnce()
+        SigningKeyRefreshJob(unchanged, "PT1M").runOnce()
         verify(unchanged, times(1)).refreshIfRotated()
         verify(unchanged, never()).signingKey()
     }
