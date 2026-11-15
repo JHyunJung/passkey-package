@@ -15,7 +15,7 @@ import java.util.HexFormat
 private val log = LoggerFactory.getLogger(CredentialSelfService::class.java)
 
 /**
- * P0-4: end-user self-service credential 관리. tenant 격리는 앱 레벨 @Filter 가 담당.
+ * end-user self-service credential 관리. tenant 격리는 앱 레벨 @Filter 가 담당.
  */
 @Service
 class CredentialSelfService(private val creds: CredentialRepository) {

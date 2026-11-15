@@ -23,8 +23,10 @@ import java.util.UUID;
  * - SchedulerLease: relies on Oracle's DEFAULT SYS_GUID() for raw-SQL inserts
  *
  * Those two entities declare createdAt/updatedAt and the callbacks directly
- * to preserve their PK contracts while satisfying the "every entity has
- * updated_at" policy (Phase 8).
+ * to preserve their PK contracts while keeping the same timestamp columns.
+ *
+ * <p>다른 PK 형태(SEQUENCE·tenant_id·복합 키·단일 행 id=1)이거나 updated_at 이 없는 테이블의
+ * 엔티티도 이 클래스를 상속하지 않는다.
  */
 @MappedSuperclass
 public abstract class BaseEntity {

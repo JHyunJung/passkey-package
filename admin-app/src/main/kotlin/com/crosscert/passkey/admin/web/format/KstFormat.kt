@@ -25,7 +25,7 @@ private val LOCAL_DATE: Pattern = Pattern.compile("^(\\d{4})-(\\d{2})-(\\d{2})$"
 private const val DAY_SECONDS = 86_400L
 
 /**
- * 화면 표시용 KST(Asia/Seoul) 포매터(← admin-ui lib/kst.ts, lib/formatDateTime.ts).
+ * 화면 표시용 KST(Asia/Seoul) 포매터.
  * 시간대는 항상 Asia/Seoul 을 명시한다(JVM 기본 시간대 사용 안 함). 문자열 입력은 ISO(Z 또는 +09:00),
  * 파싱할 수 없으면 원문을 그대로 돌려준다.
  */
@@ -51,7 +51,7 @@ object KstFormat {
 
     private fun kst(t: Instant): ZonedDateTime = t.atZone(KST)
 
-    // ── kst.ts ───────────────────────────────────────────────
+    // ── KST 표기 ─────────────────────────────────────────────
 
     /** KST 날짜 `YYYY-MM-DD`. */
     fun kstDate(iso: String?): String? {
@@ -115,7 +115,7 @@ object KstFormat {
 
     /** 피드 날짜 그룹 라벨. KST 기준 오늘/어제, 그 외 `YYYY-MM-DD`. KST 는 DST 가 없어 24h 빼기로 전날을 구한다. */
     fun dayLabel(iso: String?, now: Instant): String {
-        // !! : 원 Java 도 iso 가 null 이면(kstDate 가 원문 null 을 돌려줌) key.equals 에서 NPE.
+        // `!!`: kstDate(String) 은 iso 가 null 일 때만 null 을 돌려준다(파싱 실패는 원문) — null 이면 여기서 NPE.
         val key = kstDate(iso)!!
         if (key == kstDate(now)) return "오늘"
         if (key == kstDate(now.minusSeconds(DAY_SECONDS))) return "어제"
@@ -141,7 +141,7 @@ object KstFormat {
         return groups
     }
 
-    // ── formatDateTime.ts ───────────────────────────────────
+    // ── ko-KR 표기 ───────────────────────────────────────────
 
     /** ko-KR 날짜·시각 `2026. 05. 27. 12:00:00`. null·빈 값은 em-dash, 파싱 실패는 원문. */
     fun formatDateTime(iso: String?): String? {
@@ -165,7 +165,7 @@ object KstFormat {
 
     // ── 상대 시각 ────────────────────────────────────────────
 
-    /** "5분 전" / "55분 후" / "3시간 전" / "2일 후" (← LicensePage.relativeTime). */
+    /** "5분 전" / "55분 후" / "3시간 전" / "2일 후". */
     fun relative(t: Instant?, now: Instant): String {
         if (t == null) return DASH
         val diffMs = t.toEpochMilli() - now.toEpochMilli()
@@ -179,7 +179,7 @@ object KstFormat {
         return "${hours / 24}일 $suffix"
     }
 
-    /** "방금 전" / "5분 전" / "3시간 전" / "2일 전" / "1개월 전" (← AuditChainPage.timeAgo). */
+    /** "방금 전" / "5분 전" / "3시간 전" / "2일 전" / "1개월 전". */
     fun timeAgo(t: Instant?, now: Instant): String {
         if (t == null) return DASH
         val m = (now.toEpochMilli() - t.toEpochMilli()) / 60_000

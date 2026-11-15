@@ -4,7 +4,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * G12-deployMode fail-fast guard.
+ * deployMode fail-fast guard.
  *
  * <p>{@code passkey.deployment.mode} gates every onprem license component
  * ({@link LicenseGuardFilter}, {@link LicenseBootstrap}, {@link OnpremTenantPinFilter},

@@ -27,12 +27,12 @@ private const val PREFIX_HEADER = "pk_"
 private const val PREFIX_RANDOM_BYTES = 6 // 6 bytes → 8 b64url chars → 11-char prefix
 private const val SECRET_RANDOM_BYTES = 32 // 32 bytes → 43 b64url chars
 
-/** api_key_scope V21 CHECK 제약과 동일한 허용 scope 집합. */
+/** api_key_scope CHECK 제약(ck_aks_scope)과 동일한 허용 scope 집합. */
 private val ALLOWED_SCOPES: Set<String> = java.util.Set.of("registration", "authentication", "admin")
 
 /** scope 를 소문자 정규화 + whitelist 검증. 알 수 없는 값이면 BusinessException(400). */
 private fun normalizeScope(raw: String?): String {
-    // trim { it <= ' ' }: 원 Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
+    // trim { it <= ' ' }: Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
     val s = if (raw == null) "" else raw.trim { it <= ' ' }.lowercase(Locale.ROOT)
     if (!ALLOWED_SCOPES.contains(s)) {
         throw BusinessException(ErrorCode.INVALID_INPUT, "unknown api key scope: $raw")
@@ -51,15 +51,17 @@ class ApiKeyAdminService(
     private val tenants: TenantRepository,
 ) {
 
-    /** P1-5: 구 키가 살아있는 grace 창. 기본 24h. (필드 주입 유지 — 테스트가 이 필드명을 리플렉션으로 바꾼다) */
+    /** 구 키가 살아있는 grace 창. 기본 24h. (필드 주입 유지 — 테스트가 이 필드명을 리플렉션으로 바꾼다) */
     @field:Value("\${passkey.api-key.rotation.grace:PT24H}")
     private var rotationGrace: Duration = Duration.ofHours(24)
 
     @Transactional(readOnly = true)
     fun list(tenantId: String?): List<ApiKeyAdminDto.ApiKeyView> {
         val scopeTid: UUID? = tenantBoundary.currentTenantScope()
-        // 필터를 쿼리로 내린다(이전: findAll() 후 메모리 필터 — RP_ADMIN 도 전 테넌트 키를 읽었다).
-        // tenantId 는 이전처럼 정규 UUID 문자열과 정확히 같아야 한다(대문자·비정규 표기·잘못된 값 → 빈 목록).
+        // 테넌트 필터를 쿼리로 내린다 — RP_ADMIN 은 활성 RP(currentTenantScope)의 키만 읽고,
+        // 다른 테넌트를 지정하면 조회 없이 빈 목록이다.
+        // tenantId 는 정규 UUID 문자열과 정확히 같아야 한다(대문자·비정규 표기·잘못된 값 → 빈 목록,
+        // ApiKeyAdminServiceTest.listTenantFilterMustBeCanonicalUuidStringElseEmpty 가 고정).
         val requested: UUID? = if (tenantId == null) null else canonicalUuidOrNull(tenantId) ?: return emptyList()
         if (scopeTid != null && requested != null && requested != scopeTid) return emptyList()
         val target = scopeTid ?: requested
@@ -75,12 +77,13 @@ class ApiKeyAdminService(
     ): ApiKeyAdminDto.ApiKeyCreateResponse {
         tenantBoundary.assertCanAccessTenant(req.tenantId)
 
-        // P0-2 seam: suspended 테넌트엔 어떤 경로로도 새 키가 살아남으면 안 됨.
+        // suspended 테넌트엔 어떤 경로로도 새 키가 살아남으면 안 됨.
         // suspend() 가 기존 키를 일괄 revoke 하고 ceremony start 가 거부하더라도,
         // 운영자가 정지 상태에서 새 키를 발급하면 그 키로 finish/self-service 가 동작한다.
-        // Spring Data findById 는 non-null id 계약(JSpecify). req.tenantId 는 @NotNull 검증 대상 DTO 필드라 컨트롤러 경로에선
-        // null 이 오지 않는다. null 이면 리포지토리 호출 전에 SimpleJpaRepository 와 같은 문구의 IllegalArgumentException —
-        // 원 Java 는 findById(null) 안의 IAE 라 실제 Spring 컨텍스트에선 InvalidDataAccessApiUsageException 으로 번역됐다(도달 불가 경로).
+        // Spring Data findById 는 non-null id 계약(JSpecify). req.tenantId 는 @NotNull 검증 대상 DTO 필드라 정상 경로에선
+        // null 이 오지 않는다. null 이면(RP_ADMIN 은 위 boundary 검사가 먼저 NPE) 리포지토리 호출 전에
+        // SimpleJpaRepository 와 같은 문구의 IllegalArgumentException. REST(ApiKeyAdminController.issue 의 @Valid)와
+        // 화면(ApiKeysTabController 의 Validator)은 tenantId 누락을 검증에서 먼저 거부하므로, 검증 없이 이 빈을 직접 부를 때만 닿는다.
         val tenant = tenants.findById(req.tenantId ?: throw IllegalArgumentException("The given id must not be null"))
             .orElseThrow { BusinessException(ErrorCode.TENANT_NOT_FOUND) }
         if (tenant.isSuspended) {
@@ -94,11 +97,11 @@ class ApiKeyAdminService(
         val secret = b64url(SECRET_RANDOM_BYTES)
         val hash = encoder.encode(secret)
 
-        // P1-5 enforcement seam: scope 를 whitelist 검증 + 소문자 정규화한다.
+        // scope 를 whitelist 검증 + 소문자 정규화한다.
         // 필터가 exact match("registration") 로 enforce 하므로 "Registration"·오타가
         // verbatim 저장되면 200 받지만 모든 RP 호출이 403 인 silent dead key 가 된다.
         val normalized = LinkedHashSet<String>()
-        // 원 Java for-each 와 동일: scopes 가 null 이면 NPE(@NotEmpty 검증을 거친 컨트롤러 경로에선 불가).
+        // scopes 가 null 이면 NPE(@NotEmpty 검증을 거친 경로에선 불가).
         for (scope in req.scopes!!) {
             normalized.add(normalizeScope(scope))
         }
@@ -164,7 +167,7 @@ class ApiKeyAdminService(
     }
 
     /**
-     * P1-5 무중단 로테이션: 구 키의 tenant/name/scopes 를 복사한 새 키를 발급하고,
+     * 무중단 로테이션: 구 키의 tenant/name/scopes 를 복사한 새 키를 발급하고,
      * 구 키의 expiresAt 을 now+grace 로 설정한다. grace 창 동안 두 키 모두 동작하다가
      * 구 키가 자동 만료된다. 신규 키 plaintext 는 이 응답에서 단 한 번만 노출된다.
      */
@@ -241,7 +244,7 @@ class ApiKeyAdminService(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(buf)
     }
 
-    /** `UUID.toString()` 으로 되돌렸을 때 입력과 같을 때만 UUID — 이전 문자열 비교 의미를 그대로 유지한다. */
+    /** `UUID.toString()` 으로 되돌렸을 때 입력과 같을 때만 UUID — 정규 표기가 아니면 null(목록 필터가 빈 결과로 처리). */
     private fun canonicalUuidOrNull(s: String): UUID? =
         try {
             UUID.fromString(s).takeIf { it.toString() == s }

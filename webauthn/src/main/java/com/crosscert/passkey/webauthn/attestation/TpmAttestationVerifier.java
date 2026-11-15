@@ -36,7 +36,8 @@ import java.util.List;
  *       attestedName==nameAlg||hash_nameAlg(pubArea)</li>
  *   <li>AIK(x5c[0]) 공개키로 certInfo 서명 검증</li>
  *   <li>AIK cert 요구사항: basicConstraints CA=false, EKU 2.23.133.8.3 포함</li>
- *   <li>ATT_CA 반환 (체인 trust anchor 강제는 상위 책임)</li>
+ *   <li>ATT_CA 반환 (체인 trust anchor 강제는 상위가 TRUST_CHAIN_REQUIRED 이고 앵커가 있을 때만
+ *       — TrustAnchorProvider 참고)</li>
  * </ol>
  *
  * <p>문서화된 한계: AIK SAN(TPM manufacturer/model/version)과 TPM vendor root까지의
@@ -106,7 +107,7 @@ public final class TpmAttestationVerifier implements AttestationVerifier {
         // 5. AIK 공개키로 certInfo 서명 검증
         List<X509Certificate> chain = parseChain(arr);
         X509Certificate aik = chain.get(0);
-        // alg 핀을 입력(attStmt.alg)에서 인증서(AIK 공개키 타입)로 고정하는 방어심화(F33):
+        // alg 핀을 입력(attStmt.alg)에서 인증서(AIK 공개키 타입)로 고정하는 방어심화:
         // attStmt.alg가 가리키는 알고리즘과 AIK 공개키 종류가 어긋나면(예: alg=RS256인데
         // AIK가 EC 키) 명시적으로 거부한다. JCA도 키/alg 불일치를 거부하지만, 거부 경로를
         // 입력 검증 단계에서 분명히 한다(정상 TPM은 ES256↔EC, RS256↔RSA로 항상 통과).
@@ -148,7 +149,7 @@ public final class TpmAttestationVerifier implements AttestationVerifier {
             if (!(credKey instanceof ECPublicKey ec)) {
                 throw new AttestationException("tpm pubArea is ECC but credential key is not");
             }
-            // 곡선 일치 (codex P2). credential COSE 키는 CoseKeyParser가 이미 P-256만 허용하므로,
+            // 곡선 일치. credential COSE 키는 CoseKeyParser가 이미 P-256만 허용하므로,
             // pubArea도 P-256(TPM_ECC_NIST_P256)임을 확인하면 곡선 일치가 보장된다.
             if (pubArea.eccCurveId() != TpmStructures.TPM_ECC_NIST_P256) {
                 throw new AttestationException(
@@ -193,7 +194,7 @@ public final class TpmAttestationVerifier implements AttestationVerifier {
         if (aik.getVersion() != 3) {
             throw new AttestationException("tpm AIK cert must be X.509 v3");
         }
-        // basicConstraints extension이 존재하고 CA=false여야 함 (codex P2).
+        // basicConstraints extension이 존재하고 CA=false여야 함.
         // getBasicConstraints()==-1은 "CA=false" 또는 "BC extension 부재" 둘 다이므로,
         // getExtensionValue로 extension 존재를 먼저 확인한다 (2.5.29.19 = basicConstraints OID).
         if (aik.getExtensionValue("2.5.29.19") == null) {

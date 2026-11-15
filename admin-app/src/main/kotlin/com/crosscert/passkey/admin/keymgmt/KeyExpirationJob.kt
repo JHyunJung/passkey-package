@@ -41,6 +41,8 @@ class KeyExpirationJob(
     )
     fun runOnce() {
         val holder = ManagementFactory.getRuntimeMXBean().name
+        // release 하지 않는다 — 상태 기반(ROTATED 키를 REVOKED 로 바꾸는) 잡이라 해제해도 얻는 것이 없다.
+        // TTL 30초가 기본 주기(1분)보다 짧아 다음 tick 에는 어느 인스턴스든 다시 잡을 수 있다.
         if (!leases.tryAcquire(LEASE_NAME, holder, Duration.ofSeconds(30))) {
             log.debug("KeyExpirationJob skipped — another instance holds the lease")
             return
@@ -70,7 +72,7 @@ class KeyExpirationJob(
                 ),
             )
             // SigningKey is global (no tenant column) — emit tenantId=global
-            // to keep field shape consistent with spec's tenantId-keyed pattern.
+            // to keep field shape consistent with the tenantId-keyed log lines.
             log.warn("key expired: tenantId=global kid={} ageMs={}", k.kid, ageMs)
         }
     }

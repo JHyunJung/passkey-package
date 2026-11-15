@@ -15,8 +15,8 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 /**
- * actorId(UUID) — G04 audit trail anchor; actorEmail changes, actorId doesn't.
- * 원 Java 의 (AdminUserDetails) 캐스트 — 다른 principal 은 ClassCastException, null 은 NPE.
+ * actorId(UUID) — audit trail anchor; actorEmail changes, actorId doesn't.
+ * 다른 principal 은 ClassCastException, null 은 NPE(Kotlin `as`).
  */
 private fun actorId(auth: Authentication): UUID = (auth.principal as AdminUserDetails).id
 

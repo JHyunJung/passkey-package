@@ -3,6 +3,13 @@ package com.crosscert.passkey.core.entity;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 
+/**
+ * 관리 콘솔 운영자 계정(PLATFORM_OPERATOR / RP_ADMIN). tenant 소속은 {@link AdminUserTenant} 매핑으로 따로 둔다.
+ *
+ * <p>{@code @Version}·{@code @DynamicUpdate} 가 없어 dirty checking 의 UPDATE 가 모든 컬럼을 쓴다.
+ * 같은 행을 두 트랜잭션이 락 없이 읽어 고치면 나중에 flush 한 쪽이 앞 트랜잭션의 변경(실패 카운터·잠금·상태)을
+ * 읽었던 값으로 되돌린다.
+ */
 @Entity
 @Table(name = "ADMIN_USER")
 public class AdminUser extends BaseEntity {
@@ -37,7 +44,7 @@ public class AdminUser extends BaseEntity {
     @Column(name = "MFA_ENABLED", columnDefinition = "CHAR(1)", nullable = false)
     private String mfaEnabledFlag = "N";
 
-    // length=255 matches V37 (sealed "enc:v1:"+base64 secret ≈ 87 chars exceeds 64).
+    // length=255 matches the MFA_SECRET column (sealed "enc:v1:"+base64 secret ≈ 87 chars exceeds 64).
     @Column(name = "MFA_SECRET", length = 255)
     private String mfaSecret;
 
@@ -47,7 +54,7 @@ public class AdminUser extends BaseEntity {
     @Column(name = "LOCKED_UNTIL")
     private OffsetDateTime lockedUntil;
 
-    // G05: MFA-verify failures accrue against their own counter so a
+    // MFA-verify failures accrue against their own counter so a
     // password-only login success (recordSuccessfulLogin) cannot reset
     // brute-force progress made against the second factor. Both counters
     // still trip the SAME lockedUntil (defense-in-depth: an MFA-triggered
@@ -65,7 +72,7 @@ public class AdminUser extends BaseEntity {
 
     protected AdminUser() {}
 
-    /** No-arg constructor for programmatic creation via setters (e.g. invite flow). */
+    /** No-arg constructor for programmatic creation via setters (e.g. signup approval in SignupRequestService). */
     public static AdminUser create() {
         AdminUser u = new AdminUser();
         u.enabledFlag = "Y";
@@ -138,8 +145,8 @@ public class AdminUser extends BaseEntity {
     }
 
     /**
-     * Password-login success. Resets ONLY the password failure counter (G05:
-     * previously this also reset the counter MFA verify shared, letting a
+     * Password-login success. Resets ONLY the password failure counter
+     * (previously this also reset the counter MFA verify shared, letting a
      * password-holding attacker restart the second-factor brute-force cycle
      * indefinitely). {@code mfaFailedCount} is untouched — see
      * {@link #recordFailedMfa} / {@link #recordSuccessfulMfa}.
@@ -160,7 +167,7 @@ public class AdminUser extends BaseEntity {
     /**
      * MFA-verify failure. Accrues against its own counter (independent of
      * {@link #recordFailedLogin}) so a password-only login success cannot
-     * reset second-factor brute-force progress (G05). Trips the SAME
+     * reset second-factor brute-force progress. Trips the SAME
      * {@code lockedUntil} as the password counter on threshold — an
      * MFA-triggered lock still blocks primary login (defense-in-depth,
      * unchanged from before this fix).

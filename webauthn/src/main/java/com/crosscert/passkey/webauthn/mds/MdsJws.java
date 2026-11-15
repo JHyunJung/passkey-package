@@ -29,7 +29,7 @@ public final class MdsJws {
     private MdsJws(String alg, List<byte[]> x5c, byte[] signingInput,
                    byte[] payloadBytes, byte[] signature) {
         this.alg = alg;
-        // 방어적 깊은 복사 — 파싱 후 호출자가 체인/인증서 바이트를 변조하지 못하게 (codex P2).
+        // 방어적 깊은 복사 — 파싱 후 호출자가 체인/인증서 바이트를 변조하지 못하게.
         List<byte[]> copy = new ArrayList<>(x5c.size());
         for (byte[] c : x5c) copy.add(c.clone());
         this.x5c = java.util.Collections.unmodifiableList(copy);
@@ -39,7 +39,7 @@ public final class MdsJws {
     }
 
     public String alg() { return alg; }
-    /** 불변 리스트 + 복사본 — 호출자 변조 차단 (codex P2). */
+    /** 불변 리스트 + 복사본 — 호출자 변조 차단. */
     public List<byte[]> x5c() {
         List<byte[]> copy = new ArrayList<>(x5c.size());
         for (byte[] c : x5c) copy.add(c.clone());

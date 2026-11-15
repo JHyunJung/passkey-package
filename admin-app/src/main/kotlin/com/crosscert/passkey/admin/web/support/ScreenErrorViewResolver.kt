@@ -31,7 +31,7 @@ class ScreenErrorViewResolver : ErrorViewResolver {
     }
 
     companion object {
-        /** ErrorMessages(describeError.ts) 의 상태별 문구로 `admin/error`. 서버 내부 메시지는 싣지 않는다. */
+        /** [ErrorMessages] 의 상태별 문구로 `admin/error`. 서버 내부 메시지는 싣지 않는다. */
         internal fun errorView(status: Int): ModelAndView {
             val info = ErrorMessages.describe(status, null)
             val mav = ModelAndView(ErrorPage.VIEW)

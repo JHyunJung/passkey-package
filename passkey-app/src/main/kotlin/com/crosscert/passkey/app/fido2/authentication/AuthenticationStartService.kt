@@ -60,7 +60,8 @@ class AuthenticationStartService(
                 throw BusinessException(ErrorCode.TENANT_SUSPENDED, "tenant suspended: $tenantId")
             }
 
-            // 잘못된 base64url 은 디코더의 IllegalArgumentException 그대로 전파(원 동작).
+            // 잘못된 base64url 은 디코더의 IllegalArgumentException 을 감싸지 않고 전파한다 —
+            // GlobalExceptionHandler 가 400(INVALID_INPUT)으로 응답한다.
             val userHandle = req.userHandle?.let { Base64.getUrlDecoder().decode(it) }
 
             // The app-level @Filter scopes to this tenant; derived query avoids the findAll scan.

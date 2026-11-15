@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * G12-deployMode fail-fast guard, wired unconditionally (no
+ * deployMode fail-fast guard, wired unconditionally (no
  * {@code @ConditionalOnProperty}) so it runs regardless of what value
  * {@code passkey.deployment.mode} actually holds — see {@link DeploymentModeGuard}
  * for why an unrecognized value is dangerous rather than merely cosmetic.

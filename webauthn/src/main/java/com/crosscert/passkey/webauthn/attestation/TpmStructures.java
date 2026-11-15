@@ -59,7 +59,7 @@ final class TpmStructures {
         c.skip(8);                      // firmwareVersion (UINT64)
         byte[] attestedName = c.readTpm2b(); // attested.name (첫 TPM2B)
         c.readTpm2b();                       // attested.qualifiedName (소비만 — 검증엔 불필요)
-        // 공격자 바이너리이므로 정확히 끝까지 소비됐는지 확인 (trailing bytes 거부, codex P2).
+        // 공격자 바이너리이므로 정확히 끝까지 소비됐는지 확인 (trailing bytes 거부).
         c.requireExhausted("tpm certInfo");
         return new CertInfo(magic, type, extraData, attestedName);
     }
@@ -83,7 +83,7 @@ final class TpmStructures {
             c.readU16();                // keyBits
             long exponent = c.readU32();
             byte[] modulus = c.readTpm2b(); // unique = TPM2B_PUBLIC_KEY_RSA
-            // 정확히 끝까지 소비됐는지 확인 (trailing bytes 거부, codex P2).
+            // 정확히 끝까지 소비됐는지 확인 (trailing bytes 거부).
             c.requireExhausted("tpm pubArea");
             return new PubArea(type, nameAlg, modulus, exponent, null, null, 0, data);
         }
@@ -91,11 +91,11 @@ final class TpmStructures {
             // TPMS_ECC_PARMS: symmetric | scheme | curveID(UINT16) | kdf
             readSymmetric(c);
             readScheme(c);
-            int curveId = c.readU16();  // curveID (검증을 위해 보존, codex P2)
+            int curveId = c.readU16();  // curveID (검증을 위해 보존)
             readScheme(c);              // kdf (TPMT_KDF_SCHEME — NULL이면 2바이트)
             byte[] x = c.readTpm2b();   // unique.x
             byte[] y = c.readTpm2b();   // unique.y
-            // 정확히 끝까지 소비됐는지 확인 (trailing bytes 거부, codex P2).
+            // 정확히 끝까지 소비됐는지 확인 (trailing bytes 거부).
             c.requireExhausted("tpm pubArea");
             return new PubArea(type, nameAlg, null, 0, x, y, curveId, data);
         }

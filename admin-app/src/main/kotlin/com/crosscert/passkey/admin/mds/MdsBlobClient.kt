@@ -53,7 +53,7 @@ class MdsBlobClient(
             throw e
         } catch (e: Exception) {
             // HttpClient.send는 InterruptedException을 던질 수 있다. broad catch로 묶되
-            // 인터럽트 신호는 스레드 풀/스케줄러를 위해 복원한다 (codex 관찰).
+            // 인터럽트 신호는 스레드 풀/스케줄러를 위해 복원한다.
             if (e is InterruptedException) {
                 Thread.currentThread().interrupt()
             }

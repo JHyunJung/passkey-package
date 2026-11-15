@@ -27,7 +27,7 @@ private val EMAIL_RE: Pattern = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
 private const val PLATFORM_OPERATOR = "PLATFORM_OPERATOR"
 
 /**
- * 관리자 계정 가입 요청 화면(← pages/SignupRequestPage.tsx).
+ * 관리자 계정 가입 요청 화면.
  * [SignupRequestController.request] 를 메서드로 부르므로 `@Valid` 가 동작하지 않는다 —
  * [Validator] 로 [SignupRequestDto.Create] 를 직접 검증하고 오류를 필드 옆에 보인다(422).
  *
@@ -57,7 +57,7 @@ class SignupPageController(
     ): ModelAndView? {
         val view = if (Htmx.isHtmx(req)) "admin/auth/signup :: card" else "admin/auth/signup"
         val selfSignup = selfSignupAvailable()
-        // TSX: 역할은 즉시 가입이 켜졌고 Platform Operator 를 골랐을 때만 보낸다.
+        // 역할은 즉시 가입이 켜졌고 Platform Operator 를 골랐을 때만 보낸다.
         val effectiveRole: String? = if (selfSignup && PLATFORM_OPERATOR == role) PLATFORM_OPERATOR else null
         val em = if (email == null) "" else email.javaTrim().lowercase(Locale.ROOT)
         val pw = password ?: ""
@@ -118,7 +118,7 @@ class SignupPageController(
         if (!errors.containsKey("password") && !PasswordPolicy.accepts(pw)) {
             errors["password"] = passwordError(pw)
         }
-        // SignupRequestPage.tsx 의 EMAIL_RE: 점이 없는 주소(a@b)는 @Email 은 통과시키지만 화면은 거부한다.
+        // EMAIL_RE(auth.js 의 클라이언트 검사와 같은 식): 점이 없는 주소(a@b)는 @Email 은 통과시키지만 화면은 거부한다.
         if (!errors.containsKey("email") && !EMAIL_RE.matcher(email).matches()) {
             errors["email"] = "이메일 형식이 올바르지 않습니다. 예: you@company.com"
         }

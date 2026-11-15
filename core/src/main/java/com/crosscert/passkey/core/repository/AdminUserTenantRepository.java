@@ -19,9 +19,9 @@ public interface AdminUserTenantRepository
     List<UUID> findTenantIdsByAdminUserId(@Param("adminUserId") UUID adminUserId);
 
     /**
-     * G17 batch fix — AdminUserService.list()의 toView() N+1 제거용.
+     * AdminUserService.list()의 toView() N+1 제거용.
      * findAll()로 얻은 adminUserId 집합 전체의 매핑을 한 번의 IN 쿼리로 로드해
-     * 호출측에서 Map&lt;UUID,List&lt;UUID&gt;&gt;로 조립한다 (F09 activity feed의
+     * 호출측에서 Map&lt;UUID,List&lt;UUID&gt;&gt;로 조립한다 (ActivityService 의
      * findAllById 배치 패턴과 동일 계열).
      */
     @Query("select m from AdminUserTenant m where m.adminUserId in :adminUserIds")
@@ -35,7 +35,7 @@ public interface AdminUserTenantRepository
     long countByAdminUserId(UUID adminUserId);
 
     /**
-     * G08 fix — locks every mapping row for this admin (SELECT ... FOR UPDATE)
+     * Locks every mapping row for this admin (SELECT ... FOR UPDATE)
      * before the caller counts them. Two concurrent removeTenant calls for
      * different tenants of the SAME admin now serialize: the second
      * transaction's FOR UPDATE blocks until the first commits its DELETE, so

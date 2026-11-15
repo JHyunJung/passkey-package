@@ -12,7 +12,7 @@ import java.util.UUID
  * On-demand tamper detector for the audit_log SHA-256 hash chain.
  *
  * Walks all rows returned by [AuditLogRepository.findAllOrdered]
- * (ascending by id) and, for each row, checks:
+ * (append order: createdAt ASC, id ASC) and, for each row, checks:
  * 1. The stored `prev_hash` matches the hash of the preceding row
  *    (or is null for the genesis row).
  * 2. The stored `hash` matches the value recomputed from the row's
@@ -93,9 +93,9 @@ class AuditChainVerifier(
 
     /**
      * 이미 읽어 둔 tenant 행으로 체인을 검증한다. [rows] 는
-     * [AuditLogRepository.findAllByTenantOrdered] 가 돌려준 그대로(id ASC)여야 하며,
+     * [AuditLogRepository.findAllByTenantOrdered] 가 돌려준 그대로(createdAt ASC, id ASC)여야 하며,
      * 이 메서드는 리스트를 바꾸지 않는다. overview 가 같은 행을 버킷 집계에도 써서
-     * audit_log 를 tenant 당 한 번만 읽기 위해 분리했다(P3).
+     * audit_log 를 tenant 당 한 번만 읽기 위해 분리했다.
      *
      * @param tenantId tenant UUID, or null for rows with no tenant
      * @param rows     the tenant's rows in chain order

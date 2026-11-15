@@ -13,12 +13,12 @@ private const val SVG_NS = "http://www.w3.org/2000/svg"
 private const val MARGIN = 1
 
 /**
- * QR 코드(← shell/QrCode.tsx 의 qrcode 캔버스). ZXing 으로 모듈 행렬을 만들어 SVG 문자열로 그리고,
+ * QR 코드. ZXing 으로 모듈 행렬을 만들어 SVG 문자열로 그리고,
  * `<img th:src>` 에 바로 넣을 수 있는 `data:image/svg+xml;base64,…` 로 돌려준다(th:utext·인라인 SVG 없이).
  *
  * SVG 에는 외부 참조가 없다(href·image·url() 없음). 독립 SVG 문서가 그려지려면 SVG 이름공간 선언
  * (`xmlns="http://www.w3.org/2000/svg"`)이 꼭 있어야 하는데, 이는 가져오는 주소가 아니라 이름공간 식별자다.
- * 여백은 원본(qrcode `margin: 1`)처럼 1모듈, 오류 정정 수준은 qrcode 라이브러리 기본값과 같은 M.
+ * 여백은 1모듈([MARGIN]), 오류 정정 수준은 M.
  */
 object QrSvg {
 
@@ -27,7 +27,7 @@ object QrSvg {
         "data:image/svg+xml;base64," +
             Base64.getEncoder().encodeToString(svg(otpauthUri, sizePx).toByteArray(StandardCharsets.UTF_8))
 
-    /** SVG 문서 문자열(테스트·진단용). 원 Java 는 패키지 전용 — 같은 모듈 테스트(QrSvgTest)가 부르므로 internal. */
+    /** SVG 문서 문자열(테스트·진단용). internal: 같은 모듈 테스트(QrSvgTest)가 부른다. */
     internal fun svg(text: String?, sizePx: Int): String {
         if (text == null || text.isEmpty()) throw IllegalArgumentException("empty QR content")
         if (sizePx <= 0) throw IllegalArgumentException("size must be positive")

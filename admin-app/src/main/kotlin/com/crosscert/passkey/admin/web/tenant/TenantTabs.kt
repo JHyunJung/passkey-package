@@ -4,7 +4,7 @@ import com.crosscert.passkey.admin.tenant.TenantAdminController
 import com.crosscert.passkey.admin.tenant.TenantAdminDto
 
 /**
- * Tenant 상세의 탭 조각 컨트롤러(Task 10–13)가 공통으로 쓰는 도우미.
+ * Tenant 상세의 탭 조각 컨트롤러(WebAuthn·AAGUID·API 키·Credentials·감사 로그·인증 현황)가 공통으로 쓰는 도우미.
  *
  * 탭 조각은 `GET /admin/_/tenants/{id}/tab/<리터럴 탭 키>` 에 매핑하고(일반 `{tab}` 매핑보다 우선),
  * 데이터를 읽기 전에 반드시 [load] 로 접근 경계를 확인한다 — 일반 매핑의 보호는 리터럴 경로에 적용되지 않는다.

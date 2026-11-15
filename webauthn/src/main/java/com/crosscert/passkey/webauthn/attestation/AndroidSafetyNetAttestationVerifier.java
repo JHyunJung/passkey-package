@@ -43,7 +43,8 @@ import java.util.List;
  * <p><b>알려진 제한(Known limitation):</b>
  * <ul>
  *   <li>x5c 체인이 Google SafetyNet 루트(GlobalSign 등)로 연결되는지는 여기서 강제하지 않는다.
- *       이는 상위 단계(NativeWebAuthnVerifier / TrustAnchorProvider) 책임이다.</li>
+ *       상위 단계(NativeWebAuthnVerifier / TrustAnchorProvider)가 TRUST_CHAIN_REQUIRED 이고 앵커가
+ *       있을 때만 검증한다 — 기본 구성(passkey-app)에서는 아무 곳에서도 하지 않는다.</li>
  *   <li>payload.{@code timestampMs} 신선도(freshness)는 검사하지 않는다.</li>
  * </ul>
  */
@@ -72,7 +73,7 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
         if (parts.length != 3) {
             throw new AttestationException("android-safetynet response is not a 3-part JWS");
         }
-        // compact JWS 파트는 base64url no-padding 이어야 한다 ('=' 포함 시 거부) (codex P2)
+        // compact JWS 파트는 base64url no-padding 이어야 한다 ('=' 포함 시 거부)
         for (String p : parts) {
             if (p.indexOf('=') >= 0) {
                 throw new AttestationException("android-safetynet JWS part has base64 padding");
@@ -96,11 +97,11 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
         X509Certificate leaf = chain.get(0);
 
         // 3) JWS 서명 검증 (leaf 공개키, signingInput = ASCII(parts[0].parts[1]))
-        //    서명 검증 직전에 header.alg ↔ leaf 공개키 타입을 명시 매칭한다(방어심화, F32).
+        //    서명 검증 직전에 header.alg ↔ leaf 공개키 타입을 명시 매칭한다(방어심화).
         //    JCA(Signature)가 키/alg 불일치를 어차피 예외로 막지만, 그 예외는 verifyJws에서
         //    false로 흡수되어 "signature invalid"로만 보인다. alg-confusion(예: ES256 헤더에
         //    RSA leaf) 회귀를 명시 거부로 표면화해 정상 검증 결과는 그대로 두고 거부 경로만 핀한다.
-        //    ES256/RS256 외 alg는 verifyJws에서 미지원으로 거부되므로 여기서도 둘만 매칭한다.
+        //    ES256/RS256 외 alg는 둘 중 어느 쪽과도 맞지 않으므로 verifyJws에 닿기 전에 여기서 거부된다.
         PublicKey leafKey = leaf.getPublicKey();
         boolean algKeyMatch =
                 ("ES256".equals(alg) && leafKey instanceof java.security.interfaces.ECPublicKey)
@@ -121,7 +122,7 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
             throw new AttestationException("android-safetynet nonce mismatch");
         }
 
-        // 5) leaf CN == "attest.android.com" 정확 일치 (substring 우회 차단, codex P1)
+        // 5) leaf CN == "attest.android.com" 정확 일치 (substring 우회 차단)
         if (!hasExactCn(leaf, EXPECTED_HOSTNAME)) {
             throw new AttestationException("android-safetynet leaf CN is not " + EXPECTED_HOSTNAME);
         }
@@ -136,7 +137,7 @@ public final class AndroidSafetyNetAttestationVerifier implements AttestationVer
     }
 
     /**
-     * leaf subject DN을 파싱해 CN RDN 값이 {@code expected}와 정확히 일치하는지 확인 (codex P1).
+     * leaf subject DN을 파싱해 CN RDN 값이 {@code expected}와 정확히 일치하는지 확인.
      * {@code subject.contains("attest.android.com")} substring 검사는
      * {@code CN=evil-attest.android.com.example}나 {@code OU=attest.android.com,CN=evil}로 우회된다.
      * CN이 여러 개면 첫 CN으로 판단 — Android SafetyNet 인증서는 CN 하나뿐이다.

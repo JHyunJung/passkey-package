@@ -9,7 +9,7 @@ class CredentialAdminDto private constructor() {
         val userHandle: String?, // base64url, no padding
         val label: String?, // 사용자가 self-service 로 붙인 별칭. null 가능
         val aaguidHex: String?, // 32-char hex (HexFormat.formatHex). null 가능
-        val authenticatorName: String?, // MdsAaguidCache 룩업 결과. 없으면 null
+        val authenticatorName: String?, // MdsAaguidCache 의 status 목록을 ',' 로 이은 값(인증기 이름 아님). 없으면 null
         val attestationFormat: String?,
         val transports: String?,
         val signCount: Long,

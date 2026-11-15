@@ -30,6 +30,14 @@ import java.util.Set;
 /**
  * 자체 구현 WebAuthn 검증 오케스트레이터. CBOR/COSE/authData/clientData
  * 빌딩블록과 attestation 검증기를 spec 세리머니(WebAuthn §7.1/§7.2) 순서로 묶는다.
+ *
+ * <p>등록: credential JSON 분해 → clientData(type·challenge·origin) → attestationObject 디코드
+ * → rpIdHash → UP/UV·BE/BS 일관성 → rawId == credentialId → credential 알고리즘 허용 여부
+ * → 테넌트 허용 포맷 → 포맷별 attStmt 검증({@link AttestationVerifiers}) → trust 정책.
+ *
+ * <p>인증: credential JSON 분해 → clientData → rawId == 저장 credentialId → authData 파싱
+ * → rpIdHash → UP/UV → 저장 COSE 키로 서명 검증. 인증 경로는 BE/BS 플래그를 검사하지 않고,
+ * signCount 비교도 하지 않는다(값만 돌려주고 비교는 호출자 몫 — {@link WebAuthnVerifier} 참고).
  */
 public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
 
@@ -49,7 +57,11 @@ public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
         this.certPathVerifier = new CertPathVerifier();
     }
 
-    /** 기본 구성 — 등록된 모든 포맷 + 빈 trust anchor(self/none만 통과). */
+    /**
+     * 기본 구성 — 등록된 모든 포맷 + 빈 trust anchor. trust anchor 는 TRUST_CHAIN_REQUIRED 에서만
+     * 조회되므로, 이 구성에서 TRUST_CHAIN_REQUIRED 등록은 전부 ATTESTATION_UNTRUSTED 로 거부되고
+     * SELF_ALLOWED 는 모든 attestation 타입을 체인 검사 없이 통과시킨다(enforceTrust).
+     */
     public static NativeWebAuthnVerifier withDefaults(ObjectMapper mapper) {
         return new NativeWebAuthnVerifier(mapper, AttestationVerifiers.defaults(),
                 new EmptyTrustAnchorProvider());
@@ -105,7 +117,7 @@ public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
         // 클라이언트가 보낸 top-level rawId가 attested credentialId와 일치하는지 (WebAuthn §7.1).
         // 인증 경로(verifyAuthentication의 rawId↔storedCredential 대조, defense-in-depth)와
         // 대칭을 맞춘다 — 등록 경로만 이 대조가 빠져 있으면 클라이언트 구현 오류/변조를
-        // 조용히 통과시킨다 (codex F31).
+        // 조용히 통과시킨다.
         if (!MessageDigest.isEqual(parsed.rawId(), acd.credentialId())) {
             throw fail(Reason.MALFORMED_INPUT, "asserted rawId does not match attested credentialId");
         }
@@ -173,7 +185,7 @@ public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
 
         // assertion의 credential id가 저장된 credential과 일치하는지 (WebAuthn §7.2).
         // 호출자가 storedCredential을 id로 조회하지만, verifier가 경계의 단일 진실로서
-        // 자체 바인딩한다 (codex P1, defense-in-depth).
+        // 자체 바인딩한다 (defense-in-depth).
         if (!MessageDigest.isEqual(parsed.rawId(), input.storedCredential().credentialId())) {
             throw fail(Reason.MALFORMED_INPUT, "asserted credential id does not match stored credential");
         }
@@ -260,7 +272,7 @@ public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
                             trustAnchors.trustAnchors(aaguid, format);
                     trusted = certPathVerifier.verify(attResult.trustPath(), anchors);
                 } catch (RuntimeException e) {
-                    // trust anchor provider/path 검증 중 예외도 fail-closed로 정규화 (codex P2).
+                    // trust anchor provider/path 검증 중 예외도 fail-closed로 정규화.
                     throw fail(Reason.ATTESTATION_UNTRUSTED,
                             "trust anchor resolution/validation failed: " + e.getMessage(), e);
                 }

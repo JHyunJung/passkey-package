@@ -14,10 +14,10 @@ private val SINGLETON_HEX: String = MdsBlobCache.SINGLETON_ID.toString().replace
 
 /**
  * Persists the most recent verified MDS BLOB metadata into the singleton
- * row of `mds_blob_cache` (seeded by V19, id = SINGLETON_ID).
+ * row of `mds_blob_cache` (seeded by V1 baseline, id = SINGLETON_ID).
  *
  * The verifier path uses the parsed entries cached in Redis
- * (MdsSchedulerService T16); only version/next_update/fetched_at are stored here.
+ * (MdsSchedulerService); only version/next_update/fetched_at are stored here.
  */
 @Service
 class MdsBlobStore(
@@ -26,7 +26,7 @@ class MdsBlobStore(
     dbSchema: DbSchemaProperties,
 ) {
 
-    // 원 Java 처럼 생성 시 null 검증을 하지 않는다(DbSchemaProperties 가 검증; 슬라이스 테스트 mock 은 null 을 준다).
+    // String?: 생성 시 null 검사를 하지 않는다(mock 한 DbSchemaProperties 는 null 을 준다). 운영 값은 DbSchemaProperties 가 부팅 때 검증한다.
     private val schema: String? = dbSchema.schema()
 
     @Transactional

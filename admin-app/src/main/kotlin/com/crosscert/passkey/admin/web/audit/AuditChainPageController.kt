@@ -37,22 +37,23 @@ import java.util.UUID
 private val log = LoggerFactory.getLogger(AuditChainPageController::class.java)
 
 /**
- * 감사 체인 화면(← pages/AuditChainPage.tsx). PLATFORM 전용(App.tsx 의 RequirePlatform) — 페이지와 모든 조각·동작이 서버에서도 막는다.
+ * 감사 체인 화면. PLATFORM 전용 — RP_ADMIN 은 페이지에서 홈으로 보내고, 모든 조각·동작은 `requirePlatform` 이 403 으로 막는다.
  *
  * - 페이지(`GET /admin/audit-chain`)는 골격(스켈레톤)만 보내고 `#chain-root` 가 load 로 개요를 읽는다. 개요 호출은 서버가 전 tenant 체인을
- *   검증하는 긴 작업이라(원본도 같은 순서: 로딩 → 결과) 페이지 이동 자체를 막지 않는다.
- * - 개요·검증·백필·사건 변경은 모두 `#chain-root` 를 통째로 다시 그려 돌려준다(원본의 reverify). 요청은 `hx-sync="#chain-root:drop"` 라
- *   더블 클릭·동시 실행이 중복되지 않는다. 타임아웃은 원본 LONG_TIMEOUT_MS(120s).
- * - 재검증이 실패하면 원본처럼 이전 결과를 남기고(교체하지 않음) 경고만 보인다: 200/422 + `HX-Retarget #chain-warn`. 처음 불러오는 중의 실패는
- *   오류 카드(LoadError, 422)다.
- * - 백필(L3 확인, X-Confirm): 원본 runBackfill 의 가드 — 가장 최근 검증이 성공했고 위변조가 없을 때만 — 를 서버에서도 지킨다(요청마다 개요를 다시 검증해
- *   확인한 뒤에만 `backfill()`). 동시 실행 직렬화는 서비스의 DB 락이 한다.
- * - 사건 생성·해결: 컨트롤러 `@ExceptionHandler` 가 직접 호출에는 적용되지 않으므로 여기서 잡아 원본 문구로 바꾼다
+ *   검증하는 긴 작업이라 페이지 이동 자체를 막지 않는다.
+ * - 개요·검증·백필·사건 변경은 모두 `#chain-root` 를 통째로 다시 그려 돌려준다. 요청은 `hx-sync="#chain-root:drop"` 라
+ *   더블 클릭·동시 실행이 중복되지 않는다. 타임아웃은 [LONG_TIMEOUT_MS](120s).
+ * - 재검증이 실패하면 이전 결과를 남기고(교체하지 않음) 경고만 보인다: 200/422 + `HX-Retarget #chain-warn`. 처음 불러오는 중의 실패는
+ *   오류 카드(loadError 조각, 422)다.
+ * - 백필(L3 확인, X-Confirm): 가장 최근 검증이 성공했고 위변조가 없을 때만 실행한다 — 요청마다 개요를 다시 검증해
+ *   확인한 뒤에만 `backfill()`. 동시 실행 직렬화는 서비스의 DB 락이 한다.
+ * - 사건 생성·해결: 컨트롤러 `@ExceptionHandler` 가 직접 호출에는 적용되지 않으므로 여기서 잡아 화면 문구로 바꾼다
  *   (409 → 경고 토스트 + 목록 새로 그림, 422/404/그 밖의 실패 → 다이얼로그 안 인라인, 토스트 없음).
  * - 사용자 영향 값(tenant 이름·해결 메모·이메일)은 템플릿에서 th:text 로만 그린다.
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 `requirePlatform(model)`(403)이 먼저다. 넘기는 자리의 `auth!!` 는 원 Java 에서
- * Kotlin 피호출자(AuditChainMonitorController)의 파라미터 검사 NPE 가 나던 자리로, 같은 try 안이라 같은 catch(RuntimeException) 로 간다.
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 `requirePlatform(model)`(403)이 먼저 판정한다. 넘기는 자리의 `auth!!` 는
+ * requirePlatform 을 통과한 뒤(인증된 운영자)라 정상 경로에선 null 이 아니고, null 이면 같은 try 안의 NPE 라 catch(RuntimeException) 가
+ * 다이얼로그 안 인라인 오류로 바꾼다.
  */
 @Controller
 class AuditChainPageController(
@@ -123,7 +124,7 @@ class AuditChainPageController(
         return renderRoot(model, res, view, "1" == first, false)
     }
 
-    /** 한 tenant 검증(원본 handleVerifyTenant): 결과 토스트 + 재검증(reverify). */
+    /** 한 tenant 검증: 결과 토스트 + 전체 재검증(루트 다시 그림). */
     @GetMapping(VERIFY_PATH)
     fun verify(
         @RequestParam(name = "tenantId", defaultValue = "") tenantId: String,
@@ -156,7 +157,7 @@ class AuditChainPageController(
     }
 
     /**
-     * 체인 백필(L3 확인 — X-Confirm 필수). 가드: 가장 최근 검증이 성공했고 위변조가 없을 때만 실행한다(원본 backfillAllowed). 서버는 요청마다 전 tenant 를
+     * 체인 백필(L3 확인 — X-Confirm 필수). 가드: 가장 최근 검증이 성공했고 위변조가 없을 때만 실행한다. 서버는 요청마다 전 tenant 를
      * 다시 검증해 그것을 확인한다 — 위변조·검증 실패면 `backfill()` 을 부르지 않고 409 + confirmError(다이얼로그 안 인라인).
      */
     @PostMapping(BACKFILL_PATH)
@@ -191,14 +192,14 @@ class AuditChainPageController(
         return EMPTY_VIEW
     }
 
-    /** 사건 목록만 다시 읽기(원본 refreshIncidents) — 카드·배너 배지만 OOB 로 갱신한다. 개요(전 tenant 검증)는 다시 돌리지 않는다. */
+    /** 사건 목록만 다시 읽기 — 카드·배너 배지만 OOB 로 갱신한다. 개요(전 tenant 검증)는 다시 돌리지 않는다. */
     @GetMapping(INCIDENTS_PATH)
     fun incidents(res: HttpServletResponse, model: Model): String {
         requirePlatform(model)
         return refresh(model, res)
     }
 
-    /** 사건 생성(원본 handleCreateIncident). 서버가 위변조 재검증 결과에서 entry 를 도출한다 — 요청에는 tenantId 만 싣는다. */
+    /** 사건 생성. 서버가 위변조 재검증 결과에서 entry 를 도출한다 — 요청에는 tenantId 만 싣는다. */
     @PostMapping(INCIDENTS_PATH)
     fun createIncident(
         @RequestParam(name = "tenantId", defaultValue = "") tenantId: String,
@@ -211,7 +212,7 @@ class AuditChainPageController(
         val tid = parseUuid(tenantId) ?: throw IllegalArgumentException("invalid tenantId")
         val slot = "chain-ic-issue-$tid"
         try {
-            // !! : 원 Java 는 null auth 를 Kotlin 피호출자에 넘겨 파라미터 검사 NPE — 같은 try 안이라 아래 RuntimeException catch 로 간다.
+            // `!!`: 클래스 KDoc 참고 — null 이면 아래 RuntimeException catch 로 간다.
             chain.createIncident(IncidentDto.CreateRequest(tid.toString()), auth!!)
             Toasts.successTitled(res, "Incident 생성됨", "보안팀 대응 incident 가 등록되었습니다.")
             return renderRoot(model, res, view, false, true)
@@ -228,7 +229,7 @@ class AuditChainPageController(
         }
     }
 
-    /** 사건 해결(원본 handleResolveIncident). 다이얼로그는 하나를 공유하므로 대상 id 는 폼 값이다. */
+    /** 사건 해결. 다이얼로그는 하나를 공유하므로 대상 id 는 폼 값이다. */
     @PostMapping(RESOLVE_PATH)
     fun resolveIncident(
         @RequestParam(name = "id", defaultValue = "") id: String,
@@ -247,7 +248,7 @@ class AuditChainPageController(
             return issue(model, res, slot, "warn", "해결 메모를 확인하세요", "필수 · 감사 로그에 함께 기록됩니다. 최대 1024자입니다.", false)
         }
         try {
-            // !! : 원 Java 는 null auth 를 Kotlin 피호출자에 넘겨 파라미터 검사 NPE — 같은 try 안이라 아래 RuntimeException catch 로 간다.
+            // `!!`: 클래스 KDoc 참고 — null 이면 아래 RuntimeException catch 로 간다.
             chain.resolveIncident(iid.toString(), body, auth!!)
             Toasts.successTitled(res, "해결됨", "incident 가 RESOLVED 로 표시되었습니다.")
             return renderRoot(model, res, view, false, true)
@@ -267,7 +268,7 @@ class AuditChainPageController(
 
     // ── 렌더 ────────────────────────────────────────────────
 
-    /** 인라인 알림 조각(다이얼로그 안 슬롯으로 HX-Retarget). 원본은 어느 실패 경로든 사건 목록을 다시 읽는다 — 목록 카드를 OOB 로 함께 보낸다. */
+    /** 인라인 알림 조각(다이얼로그 안 슬롯으로 HX-Retarget). 어느 실패 경로든 사건 목록을 다시 읽어 목록 카드를 OOB 로 함께 보낸다. */
     private fun issue(model: Model, res: HttpServletResponse, slotId: String, tone: String, title: String, text: String?, gone: Boolean): String {
         res.setHeader("HX-Retarget", "#$slotId")
         res.setHeader("HX-Reswap", "innerHTML")
@@ -332,7 +333,7 @@ class AuditChainPageController(
             res.setHeader("HX-Retarget", "#chain-warn")
             res.setHeader("HX-Reswap", "innerHTML")
             if (!mutated) res.status = 422
-            // 앞선 변경은 성공했다 — 목록은 개요와 독립으로 다시 읽어 낡은 목록·열린 상태를 남기지 않는다(원본 refreshIncidents).
+            // 앞선 변경은 성공했다 — 목록은 개요와 독립으로 다시 읽어 낡은 목록·열린 상태를 남기지 않는다.
             model.addAttribute("incidentsOob", mutated)
             if (mutated) fillIncidentsOob(model)
             model.addAttribute("warnTitle", info.title)
@@ -357,7 +358,8 @@ class AuditChainPageController(
     private fun populate(model: Model, ov: AuditChainOverview, incidents: List<IncidentDto.IncidentView>?, view: String) {
         val now = clock.instant()
         val tampered = hasTampering(ov)
-        // !! : 원 Java 는 totals/tenants 가 null 이면 바로 위 hasTampering(또는 아래 for 루프)에서 NPE — 그 사이 모델 쓰기는 없다.
+        // `!!`: hasTampering 과 같은 근거(overview() 가 늘 채운다). totals 는 바로 위 hasTampering 이 먼저 읽지만, tenants 는
+        // tenantsTampered > 0 이면 `||` 단락으로 읽히지 않아 아래 줄이 처음 읽는 자리다.
         val t = ov.totals!!
         val tenants = ov.tenants!!
         val openTenants = HashSet<String?>()
@@ -468,7 +470,7 @@ class AuditChainPageController(
                 val isOpen = "OPEN" == i.status
                 if (isOpen) open++
                 val createdAt = i.createdAt
-                // !! : kstDateTime(String) 은 null 입력에만 null 을 돌려준다(파싱 실패는 원문) — 원 Java 의 created.length() NPE 는 도달 불가.
+                // `!!`: kstDateTime(String) 은 null 입력에만 null 을 돌려주고(파싱 실패는 원문) 이 분기에선 createdAt 이 null 이 아니다.
                 var created: String = if (createdAt == null) "—" else KstFormat.kstDateTime(createdAt)!!
                 if (created.length > 16) created = created.substring(0, 16)
                 out.add(
@@ -498,7 +500,7 @@ class AuditChainPageController(
                 false -> "모든 chain 이 정상입니다."
             },
         )
-        // 다시 시도 = 목록만 다시 읽기(원본 refreshIncidents). 응답은 OOB 뿐이라 swap none.
+        // 다시 시도 = 목록만 다시 읽기(`GET INCIDENTS_PATH`). 응답은 OOB 뿐이라 swap none.
         val retry = LinkedHashMap<String, Any?>()
         retry["hx-get"] = INCIDENTS_PATH
         retry["hx-swap"] = "none"
@@ -525,10 +527,10 @@ class AuditChainPageController(
         internal const val REFRESH_VIEW = "admin/audit-chain/incidents :: refresh"
         internal const val EMPTY_VIEW = "admin/fragments/shell/empty :: none"
 
-        /** AuditChainPage 의 `overview(24)`. */
+        /** 화면이 `overview()` 에 넘기는 windowHours(시간 단위 집계 창). */
         internal const val WINDOW_HOURS = 24
 
-        /** 원본 LONG_TIMEOUT_MS. 템플릿의 hx-request timeout 이 이 값에서 나온다. */
+        /** 루트 교체 요청([rootReq])의 hx-request timeout — 전 tenant 검증이 오래 걸린다. */
         internal const val LONG_TIMEOUT_MS = 120_000
 
         internal const val BLOCK_TAMPERED = "위변조 의심 tenant가 있으면 쓸 수 없습니다. 먼저 조사·해결하세요."
@@ -578,7 +580,12 @@ class AuditChainPageController(
 
         // ── 도우미 ──────────────────────────────────────────────
 
-        /** !! : 원 Java 는 totals/tenants 가 null 이면 여기서 NPE(백필 가드·populate 모두 try 밖). `||` 단락도 같다. */
+        /**
+         * `!!`: AuditChainOverview 의 필드 타입만 nullable 이고 overview() 는 totals·tenants 를 항상 채운다.
+         * null 이면 NPE 이고 받는 쪽은 경로마다 다르다. 백필 가드와 overview·verify·backfill 의 renderRoot → populate 는 try 밖이라
+         * WebExceptionAdvice 가 받는다. createIncident·resolveIncident 는 renderRoot 를 자기 try 안에서 부르므로
+         * catch(RuntimeException) 가 다이얼로그 안 인라인 오류(issue, 422)로 바꾼다.
+         */
         internal fun hasTampering(ov: AuditChainOverview): Boolean =
             ov.totals!!.tenantsTampered > 0 || ov.tenants!!.any { c: AuditChainTenantOverview -> !c.intact }
 

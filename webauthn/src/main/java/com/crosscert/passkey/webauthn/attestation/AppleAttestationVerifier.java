@@ -20,7 +20,7 @@ import java.util.List;
  *  2) nonce = SHA-256(nonceToHash)
  *  3) credCert(x5c[0])의 extension(OID 1.2.840.113635.100.8.2) 안의 nonce와 일치 확인
  *  4) credCert subject 공개키 == credential 공개키 확인
- *  5) ATT_CA 반환 (체인은 상위가 TrustAnchorProvider로 검증)
+ *  5) ATT_CA 반환 (체인은 상위가 TRUST_CHAIN_REQUIRED 이고 앵커가 있을 때만 TrustAnchorProvider로 검증)
  */
 public final class AppleAttestationVerifier implements AttestationVerifier {
 

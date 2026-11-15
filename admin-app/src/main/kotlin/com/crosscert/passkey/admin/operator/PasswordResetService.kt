@@ -21,12 +21,12 @@ private val TOKEN_TTL: Duration = Duration.ofHours(1)
 private const val URL_PREFIX = "/reset-password?token="
 
 /**
- * Admin self-service password reset (P1-6).
+ * Admin self-service password reset.
  *
  * sha-256 token_hash, MailSender, 1회용 토큰.
  * request 는 enumeration 방지를 위해 사용자 존재 여부와 무관하게 동일하게 동작
  * (없으면 조용히 no-op). 메일은 [AfterCommitMailDispatcher] 로 커밋 이후 전용
- * 스레드에서 보내 응답 시간이 SMTP 왕복에 좌우되지 않게 한다(S9). confirm 은 lockout 리셋.
+ * 스레드에서 보내 응답 시간이 SMTP 왕복에 좌우되지 않게 한다. confirm 은 lockout 리셋.
  */
 @Service
 class PasswordResetService(
@@ -38,14 +38,14 @@ class PasswordResetService(
     private val env: Environment,
 ) {
 
-    /** 원 Java 필드처럼 주입 전(new 로 만든 단위 테스트)에는 null — 링크는 "null/reset-password?..." 가 된다. */
+    /** 주입 전(new 로 만든 단위 테스트)에는 null — 링크는 "null/reset-password?..." 가 된다. */
     @field:Value("\${admin.invite.base-url:http://localhost:5173}")
     private var baseUrl: String? = null
 
     /**
-     * G11 fail-fast — see [BaseUrlValidation]. SignupRequestService 도 같은
+     * Fail-fast — see [BaseUrlValidation]. SignupRequestService 도 같은
      * admin.invite.base-url 속성으로 승인 메일의 로그인 링크를 만든다.
-     * 원 Java 는 package-private — 호출자는 Spring(@PostConstruct)뿐이라 internal.
+     * internal: 호출자는 Spring(@PostConstruct)뿐이다.
      */
     @PostConstruct
     internal fun validateBaseUrlForProd() {
@@ -69,7 +69,7 @@ class PasswordResetService(
         tokens.save(tok)
 
         val resetUrl = baseUrl + URL_PREFIX + plaintext
-        // S9: 커밋 이후 전용 스레드에서 발송 — 메일 실패해도 토큰은 발급됨(dispatcher 가 삼킴).
+        // 커밋 이후 전용 스레드에서 발송 — 메일 실패해도 토큰은 발급됨(dispatcher 가 삼킴).
         mail.sendAfterCommit(
             email, "비밀번호 재설정 — Passkey2",
             String.format(
@@ -80,7 +80,7 @@ class PasswordResetService(
         log.info("password reset token issued: email={} tokenPrefix={}", CryptoUtils.maskEmail(email), prefix)
     }
 
-    /** plaintext/newPassword nullable: 컨트롤러가 JSON 본문 값(누락 시 null)을 그대로 넘긴다 — 원 흐름 유지. */
+    /** plaintext/newPassword nullable: 컨트롤러가 JSON 본문 값(누락 시 null)을 그대로 넘긴다. */
     @Transactional
     fun confirm(plaintext: String?, newPassword: String?) {
         // 가입(SignupRequestDto)과 같은 규칙(PasswordPolicy: 12자 이상·72바이트 이하). REST 경로(/admin/api/password-reset/confirm)는
@@ -108,6 +108,6 @@ class PasswordResetService(
         )
     }
 
-    /** 원 Java 는 package-private(같은 패키지 테스트 전용) — 같은 모듈 테스트만 부르므로 internal. */
+    /** 같은 모듈 테스트(PasswordResetServiceTest) 전용이라 internal. */
     internal fun hashForTest(plaintext: String?): String = CryptoUtils.sha256Hex(plaintext)
 }

@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * fmt=packed (WebAuthn §8.2).
- *  - x5c 있음: leaf 인증서 공개키로 sig 검증 → BASIC (체인은 상위가 trust anchor로 검증)
+ *  - x5c 있음: leaf 인증서 공개키로 sig 검증 → BASIC (체인 검증은 상위가 TRUST_CHAIN_REQUIRED 이고 앵커가 있을 때만 — TrustAnchorProvider 참고)
  *  - x5c 없음(self): credential 공개키로 sig 검증, alg가 credential alg와 일치 → SELF
  */
 public final class PackedAttestationVerifier implements AttestationVerifier {

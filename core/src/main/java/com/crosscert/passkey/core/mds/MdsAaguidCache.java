@@ -13,11 +13,13 @@ import java.util.UUID;
 
 /**
  * Redis-backed AAGUID → MdsEntry cache. Keys follow the
- * {@code mds:aaguid:<UUID>} pattern so MdsSchedulerService can
- * invalidate the whole set on a new BLOB by DELing the matching key range.
+ * {@code mds:aaguid:<UUID>} pattern.
  *
- * <p>Phase 3 scope: status report list only. Future phases may expand
- * the cached value to include the full webauthn4j MetadataStatement.
+ * <p>값은 MDS status report 의 status 문자열을 ',' 로 이은 것뿐이다(인증기 이름 등 메타데이터 없음).
+ * 키를 채우는 쪽은 admin-app MdsSchedulerService 로, {@link #put} 을 거치지 않고 같은 형식으로 직접 쓴다
+ * (새 BLOB 의 키를 먼저 덮어쓰고, 이번 주기에 다시 쓰지 않은 기존 키를 나중에 지운다 — 새 BLOB 에 없는 항목뿐 아니라
+ * BLOB 에 있어도 status 가 비어 쓰지 않은 항목의 키도 지워진다). 키의 UUID 는
+ * 양쪽 모두 {@link #canonicalAaguid} 로 만들어야 조회가 맞는다.
  */
 @Component
 public class MdsAaguidCache {
@@ -37,9 +39,9 @@ public class MdsAaguidCache {
     }
 
     /**
-     * G15: batch lookup for N distinct AAGUIDs in a single Redis round-trip
+     * Batch lookup for N distinct AAGUIDs in a single Redis round-trip
      * (MGET), instead of the caller issuing one {@link #lookup} GET per row.
-     * Used by CredentialAdminService.toView when rendering a page of up to
+     * Used by CredentialAdminService (lookupAuthenticatorNames) when rendering a page of up to
      * 200 credentials — one round-trip regardless of page size.
      *
      * <p>Order-preserving: {@code aaguids} and the MGET result list share

@@ -1,7 +1,7 @@
 package com.crosscert.passkey.admin.web.format
 
 /**
- * 액션 코드 → 한글 라벨, 피드 행을 사람이 읽는 문장으로(← pages/activityLabels.ts, 1:1).
+ * 액션 코드 → 한글 라벨, 피드 행을 사람이 읽는 문장으로.
  * 매핑에 없는 코드는 원문 그대로 노출(fallback).
  */
 object ActivityLabels {
@@ -57,7 +57,6 @@ object ActivityLabels {
         val actor = if (actorEmail != null && truthy(actorEmail) && !actorEmail.javaIsBlank()) actorEmail else "system"
         val label = actionLabel(e.action)
         val tenant = if (truthy(e.tenantSlug)) e.tenantSlug + " 테넌트" else "플랫폼"
-        // e.targetType && e.targetId ? `${type} ${id}` : e.targetId ?? ''
         val target = if (truthy(e.targetType) && truthy(e.targetId)) {
             e.targetType + " " + e.targetId
         } else {

@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * Self-service password reset 엔드포인트 (P1-6).
+ * Self-service password reset 엔드포인트.
  *
  * 두 엔드포인트 모두 미인증(permitAll). request 는 항상 200(enumeration 방지).
- * confirm 실패는 PasswordResetService 가 IllegalArgumentException → 400 으로 매핑.
+ * confirm 실패는 PasswordResetService 의 IllegalArgumentException → GlobalExceptionHandler 가 400(INVALID_INPUT).
  */
 @RestController
 @RequestMapping("/admin/api/password-reset")
@@ -23,8 +23,8 @@ class PasswordResetController(
 ) {
 
     /**
-     * body 는 non-null(@RequestBody required — nullable 이면 Spring 이 선택 본문으로 본다). 원 Java 의
-     * `body == null` 분기는 Spring 경로에서 도달 불가였고, 유일한 다른 호출자(PasswordPagesController)도 새 객체를 넘긴다.
+     * body 는 non-null(@RequestBody required — nullable 이면 Spring 이 선택 본문으로 본다). 빈 본문은
+     * GlobalExceptionHandler 의 400 "Malformed JSON request" 이고, 다른 호출자(PasswordPagesController)는 새 객체를 넘긴다.
      */
     @PostMapping("/request")
     fun request(@RequestBody body: RequestBodyDto): ResponseEntity<*> {

@@ -16,7 +16,7 @@ import java.time.Duration
 private val log = LoggerFactory.getLogger(RateLimitFilter::class.java)
 
 /**
- * P0-4: self-service credential endpoints live under path variables
+ * Self-service credential endpoints live under path variables
  * (`/credentials/{credentialId}...`), so exact-match [LIMITS]
  * cannot reach them. They are matched by prefix + HTTP method instead:
  * - `DELETE /api/v1/rp/credentials/{id}` — 20/min (destructive,
@@ -81,16 +81,17 @@ private fun resolveTier(path: String?, method: String?): RateTier? {
  * Two buckets per endpoint per request — both must allow:
  * - **IP bucket** `(endpoint, remoteAddr)` — drops floods
  *   BEFORE any expensive auth work. Attackers cannot bypass this
- *   by spraying random `pk_` prefixes (codex P1 fix).
+ *   by spraying random `pk_` prefixes.
  * - **Key bucket** `(endpoint, X-API-Key prefix or "anon-IP")`
  *   — keeps a single API key from exhausting another tenant's
  *   share. Anonymous requests share the IP bucket only.
  *
- * Limits per spec §9:
+ * Limits:
  * - `/api/v1/rp/registration/start`    — 60/min
  * - `/api/v1/rp/registration/finish`   — 60/min
  * - `/api/v1/rp/authentication/start`  — 300/min
  * - `/api/v1/rp/authentication/finish` — 300/min
+ * - credentials 경로는 [CREDENTIALS_PREFIX] 참고 (60/min, DELETE 20/min)
  *
  * Order: `HIGHEST_PRECEDENCE + 2` — after [SecurityHeadersFilter] (HIGHEST, so 429s carry security headers) and core
  * `LicenseGuardFilter` (+1, cheap in-memory check; distinct values keep the order deterministic), BEFORE
@@ -117,7 +118,9 @@ class RateLimitFilter(private val proxy: ProxyManager<String>) : OncePerRequestF
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
         val startNs = System.nanoTime()
         // shouldNotFilter already guaranteed resolveTier(...) != null. `!!` 는 의도적:
-        // 원 Java 가 null tier 에서 NullPointerException 을 던지던 예외 흐름을 그대로 보존한다.
+        // tier 가 없으면 요청은 chain.doFilter 로 넘어가지 않고 여기서 NPE 로 멈춘다(제한 없이 통과시키지 않는다).
+        // `?: return` 이나 chain.doFilter 로 우회하는 식으로 바꾸지 않는다.
+        // RateLimitFilterCharacterizationTest 가 이 NPE 를 고정한다.
         val (uri, config) = resolveTier(req.servletPath, req.method)!!
 
         // IP bucket — fired on EVERY request. Attackers spraying prefixes

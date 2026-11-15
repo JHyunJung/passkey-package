@@ -25,7 +25,7 @@ private val log = LoggerFactory.getLogger(ApiKeyLookupService::class.java)
  *   work without one. A JdbcTemplate query does NOT pass through Hibernate's
  *   `@Filter` (the app-level tenant isolation mechanism), so it sees every
  *   tenant's rows — exactly what is needed to resolve a tenant-agnostic prefix.
- *   `key_prefix` is UNIQUE (V7), so at most one row matches.
+ *   `key_prefix` is UNIQUE, so at most one row matches.
  * - [touchLastUsed] — native UPDATE of `last_used_at` after successful
  *   authentication. The UPDATE is constrained by both `id` AND `tenant_id` so a
  *   missing context can never be treated as authority over another tenant's row.
@@ -38,9 +38,6 @@ private val log = LoggerFactory.getLogger(ApiKeyLookupService::class.java)
  * indirection is gone. Tenant isolation for the request path is provided by the
  * app-level Hibernate `@Filter`; this auth lookup runs before that filter
  * applies, by design.
- *
- * The [ApiKeyAuthRow] type and the RAW(16) ↔ UUID helpers are unchanged — the
- * public method signatures are stable, so `ApiKeyAuthFilter` needs no changes.
  */
 @Service
 class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) {
@@ -49,7 +46,7 @@ class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) 
     private val schema = dbSchema.schema()
 
     fun findByPrefix(keyPrefix: String): ApiKeyAuthRow? {
-        // 인증 시점에는 아직 tenant context 가 없다. key_prefix 는 전역 UNIQUE(V7)
+        // 인증 시점에는 아직 tenant context 가 없다. key_prefix 는 전역 UNIQUE
         // 이므로 tenant 없이 1행 룩업이 정확하다. JdbcTemplate 의 직접 SQL 은
         // Hibernate @Filter(ORM 레벨) 를 거치지 않으므로 모든 테넌트의 행을 본다.
         // 테이블은 PSK_APP_OWNER.api_key 로 명시 — hibernate.default_schema 는 ORM 에만
@@ -95,7 +92,7 @@ class ApiKeyLookupService(dataSource: DataSource, dbSchema: DbSchemaProperties) 
     data class ApiKeyAuthRow(
         val id: UUID,
         val tenantId: UUID,
-        // null 허용(원 record 와 동일): null 해시는 BCrypt matches=false → 401 bad-secret 경로.
+        // null 허용(DB 값을 그대로 담는다): null 해시는 BCrypt matches=false → 401 bad-secret 경로.
         val keyHash: String?,
         val expiresAt: Instant?,
         val revokedAt: Instant?,

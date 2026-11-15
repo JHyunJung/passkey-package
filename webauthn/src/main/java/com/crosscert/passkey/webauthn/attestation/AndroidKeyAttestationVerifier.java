@@ -27,7 +27,8 @@ import java.util.List;
  *   <li>credCert의 KeyDescription extension(OID 1.3.6.1.4.1.11129.2.1.17)에서
  *       attestationChallenge가 clientDataHash와 같은지 확인
  *       ({@link AndroidKeyExtension#challengeMatches}).</li>
- *   <li>BASIC 반환 (체인 trust anchor 검증은 상위 단계 책임).</li>
+ *   <li>BASIC 반환 (체인 trust anchor 검증은 상위 단계가 TRUST_CHAIN_REQUIRED 이고 앵커가 있을
+ *       때만 한다 — TrustAnchorProvider 참고).</li>
  * </ol>
  *
  * <p><b>알려진 제한(Known limitation):</b> WebAuthn §8.4는 추가로 KeyDescription의

@@ -32,7 +32,7 @@ import java.util.regex.Pattern
 private val log = LoggerFactory.getLogger(LoginPageController::class.java)
 
 /**
- * LoginPage.tsx DEMO_ACCOUNTS / selectDemo 의 데모 계정. TSX 와 같이 dev·local 프로필(또는 ProfileView.local)에서만
+ * 데모 계정(core db/seed-common 의 시드 운영자). dev·local 프로필(또는 ProfileView.local)에서만
  * DEV 카드와 이 값이 페이지에 들어가고, 입력란은 카드를 눌렀을 때 채운다(로드 시 미리 채우지 않음).
  */
 private const val DEMO_EMAIL = "alice@crosscert.com"
@@ -57,7 +57,7 @@ private const val HOME = "/admin"
 private val AMP = Pattern.compile("&")
 
 /**
- * 로그인 화면과 MFA 단계(← App.tsx 의 로그인 전후 분기, pages/LoginPage.tsx, pages/MfaChallenge.tsx).
+ * 로그인 화면과 MFA 단계. 세션 상태(MFA 대기·등록 필요)의 전이는 [MfaSessionState] 참고.
  *
  * - `GET /admin/login`: 미인증 → 로그인 화면, MFA 대기 세션 → MFA 단계, 인증 완료 → `/admin`.
  * - 로그인 제출(`POST /admin/login`)은 보안 체인의 폼 로그인이 받는다(이 컨트롤러가 아니다).
@@ -126,8 +126,8 @@ class LoginPageController(
         }
         val result: ResponseEntity<*>
         try {
-            // MfaChallenge.tsx: mfaApi.verify(value.trim())
-            // 원 Java 는 auth 를 그대로 넘기고 verify 안의 auth.getName() 이 NPE — `!!` 로 같은 try 안에서 같은 예외(500).
+            // `!!`: /admin/login/mfa 는 인증 필수(AdminSecurityConfig)라 auth 는 null 이 아니다. null 이면 이 try 안의 NPE 라
+            // 아래 catch 가 본문 없는 500 으로 끝낸다.
             result = mfa.verify(MfaController.VerifyRequest(if (code == null) null else code.javaTrim()), auth!!, req)
         } catch (e: RuntimeException) {
             log.error("admin mfa verify (screen) failed unexpectedly: {}", e.javaClass.simpleName, e)
@@ -264,7 +264,6 @@ class LoginPageController(
     }
 }
 
-/** LoginPage.tsx: `p.active?.includes('dev') || p.active?.includes('local') || p.local`. */
 private fun showDemoAccount(p: ProfileController.ProfileView?): Boolean {
     if (p == null) return false
     val active = p.active

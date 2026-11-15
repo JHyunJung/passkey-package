@@ -15,12 +15,13 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 /**
- * SPA bootstrap call. AdminUserDetails 에서 email/role/tenantId 추출.
+ * 로그인 운영자 정보. AdminUserDetails 에서 email/role/tenantId 추출.
+ * 화면은 HTTP 가 아니라 메서드로 부른다(ViewModelAdvice 의 화면 모델 `me`, HomeRedirectController).
+ * HTTP `GET /admin/api/me` 는 화면의 세션 연장(static/admin/js/app.js)이 쓴다.
  *
  * `mfaEnabled` 는 운영자 계정의 MFA 등록 여부(AdminUser flag),
  * `mfaRequired` 는 **이 세션**이 2차 인증 대기 상태인지(세션 속성
- * [MfaPendingFilter.MFA_PENDING_ATTR])를 나타낸다. SPA 는 로그인 직후
- * 이 두 값으로 MFA 챌린지 노출 여부를 분기한다.
+ * [MfaPendingFilter.MFA_PENDING_ATTR])를 나타낸다.
  */
 @RestController
 @RequestMapping("/admin/api")
@@ -28,7 +29,7 @@ class MeController(private val users: AdminUserRepository) {
 
     @GetMapping("/me")
     fun me(auth: Authentication, req: HttpServletRequest): ApiResponse<MeView> {
-        // 원 Java 의 (AdminUserDetails) 캐스트 — 다른 principal 은 ClassCastException, null 은 NPE.
+        // 다른 principal 은 ClassCastException, null 은 NPE — Kotlin `as` 는 Java 캐스트와 달리 null 을 통과시키지 않는다.
         val principal = auth.principal as AdminUserDetails
 
         val mfaEnabled: Boolean = users.findByEmail(principal.username)

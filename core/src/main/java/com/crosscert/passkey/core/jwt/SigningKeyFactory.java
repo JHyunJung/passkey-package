@@ -11,10 +11,9 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 
 /**
- * Single factory for fresh RS256 signing-key material. Extracted from
- * the byte-identical keygen previously duplicated in
- * {@code SigningKeyProvider.generate()} and
- * {@code KeyRotationService.generateFreshActive()}.
+ * Single factory for fresh RS256 signing-key material, shared by
+ * {@code SigningKeyProvider.generate()} (first boot) and
+ * {@code KeyRotationService.rotate()} (admin-app rotation).
  *
  * <p>Output contract (must stay invariant — signing-key wire format):
  * RSA-2048, KeyUse.SIGNATURE, JWSAlgorithm.RS256, kid = RFC7638

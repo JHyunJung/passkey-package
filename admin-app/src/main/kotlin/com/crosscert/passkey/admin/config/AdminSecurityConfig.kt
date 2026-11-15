@@ -101,7 +101,7 @@ class AdminSecurityConfig {
         csrfHandler.setCsrfRequestAttributeName(null) // emit token on every response
 
         http
-            // P0-6: security_policy.cors_allowlist 를 동적으로 적용. allowlist 가 비어
+            // security_policy.cors_allowlist 를 동적으로 적용. allowlist 가 비어
             // 있으면 corsSource 가 null 을 반환 → CORS 헤더 미발급(same-origin 만 허용).
             .cors { cors -> cors.configurationSource(corsSource) }
             // 기본 헤더(nosniff·X-Frame-Options DENY·HTTPS 요청의 HSTS·Cache-Control)에 CSP·Referrer-Policy 를 더한다.
@@ -132,7 +132,7 @@ class AdminSecurityConfig {
                         "/admin/_/**", "/admin/login/mfa", "/admin/login/mfa/enroll", "/admin/login/mfa/confirm",
                     ).authenticated()
                     .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                    // /admin/api/profile 은 active profile 만 노출. (React 시절 로그인 화면) 이 미인증 상태에서
+                    // /admin/api/profile 은 활성 profile 이름·local 여부·PLATFORM_OPERATOR 즉시 가입 설정 여부만 노출(ProfileController). (React 시절 로그인 화면) 이 미인증 상태에서
                     // local 여부를 알아 데모 계정 표시를 결정하는 데 쓰던 경로다. 지금 로그인 화면은 서버가 직접 판단한다.
                     // /admin/api/license 는 DEAD 상태에서도 운영자가 라이선스 진단에 접근할 수 있어야 한다.
                     .requestMatchers("/admin/api/profile", "/admin/api/license").permitAll()
@@ -179,6 +179,8 @@ class AdminSecurityConfig {
 
         // onprem 모드에서만 존재하는 빈 — Optional 주입으로 SaaS 모드에서 absent.
         // SecurityContextHolderFilter 전에 삽입해 인증 처리 이전에 라이선스를 검사한다.
+        // 같은 빈이 서블릿 필터(HIGHEST+1)로도 등록돼 이 체인(-100)보다 먼저 검사하므로, 체인 안의 통과는
+        // OncePerRequestFilter 의 이미 처리됨 요청 속성 때문에 건너뛴다.
         licenseGuard.ifPresent { filter ->
             http.addFilterBefore(filter, SecurityContextHolderFilter::class.java)
         }
@@ -485,7 +487,7 @@ class AdminSecurityConfig {
         /** Fallback idle timeout (minutes) when the policy is unreadable or invalid — matches application.yml PT30M. Also used by MeController as the no-session fallback. */
         internal const val DEFAULT_IDLE_MINUTES = 30
 
-        /** describeError.ts 의 403 문구. */
+        /** 403 문구. 화면의 다른 403 안내(web.format.ErrorMessages, static/admin/js/app.js)와 같은 문장이다. */
         internal const val FORBIDDEN_TITLE = "권한이 없습니다"
         internal const val FORBIDDEN_MESSAGE = "이 작업을 할 권한이 없습니다. 운영자에게 문의하세요."
 
@@ -494,20 +496,20 @@ class AdminSecurityConfig {
          * `document.cookie` 로 읽어 `X-XSRF-TOKEN` 헤더로 echo 하게 하고,
          * `Path=/admin` 으로 쿠키를 스코프한다.
          *
-         * **F-cookieSecure**: `Secure` 플래그는 명시적으로 세팅하지 않는다
+         * `Secure` 플래그는 명시적으로 세팅하지 않는다
          * (기본값 `null` → [CookieCsrfTokenRepository]
          * 가 매 요청마다 `request.isSecure()` 로 자동 판정). 이게 프로필별
-         * 하드코딩보다 root-cause: `server.forward-headers-strategy=framework`
-         * (G13 이 함께 적용) 가 켜지면 LB 뒤 TLS 종단 요청은 `X-Forwarded-Proto`
+         * 하드코딩보다 root-cause: `server.forward-headers-strategy=native`(application.yml)
+         * 가 켜져 있어 LB 뒤 TLS 종단 요청은 `X-Forwarded-Proto`
          * 로 `isSecure()=true` 가 정확히 반영되어 Secure 쿠키가 자동 발급되고,
          * dev/local 처럼 헤더가 없는 순수 http 환경은 `isSecure()=false` 라 로그인이
          * 깨지지 않는다. `SameSite=Lax` 는 `cookieCustomizer` 로 명시 설정
-         * (spring-security-web 6.5 에는 `setSameSite` 가 없다) — Spring Session 의
+         * (spring-security-web 7.1 의 CookieCsrfTokenRepository 에는 `setSameSite` 가 없다) — Spring Session 의
          * `DefaultCookieSerializer` 는 기본값이 이미 Lax 이지만 이 저장소는
          * 명시하지 않으면 SameSite 속성 자체가 빠진다(세션 쿠키와의 일관성 확보).
          * customizer 는 `.secure(...)` 를 건드리지 않으므로 위 자동판정은 그대로 유지된다.
          *
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트
+         * internal: 같은 모듈 테스트
          * (AdminSecurityConfigCsrfCookieTest)가 `AdminSecurityConfig.buildCsrfTokenRepository()` 로 부른다.
          */
         internal fun buildCsrfTokenRepository(): CookieCsrfTokenRepository {

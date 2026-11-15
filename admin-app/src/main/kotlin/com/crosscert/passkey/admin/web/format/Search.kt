@@ -3,9 +3,8 @@ package com.crosscert.passkey.admin.web.format
 import java.util.function.Function
 
 /**
- * 전역 검색의 매칭·정렬 규칙(← admin-ui lib/search.ts). 원본은 테넌트 목록을 30초 캐시한 뒤
- * name·slug·id 에 대한 대소문자 무시 부분 일치로 최대 8건을 돌려준다. 서버 렌더에서는 캐시가 필요 없고
- * 목록 조회는 화면 컨트롤러가 맡으므로, 여기서는 필터와 링크 규칙만 옮긴다.
+ * 전역 검색의 매칭·정렬 규칙: name·slug·id 에 대한 대소문자 무시 부분 일치로 최대 8건을 돌려준다.
+ * 목록 조회는 화면 컨트롤러(CommandPaletteController)가 맡고, 여기서는 필터와 링크 규칙만 둔다.
  */
 object Search {
 

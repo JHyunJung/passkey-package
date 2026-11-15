@@ -8,7 +8,7 @@ import tools.jackson.databind.ObjectMapper
 
 /**
  * 서버 → 브라우저 토스트. `HX-Trigger: {"toast":{"kind":"…","message":"…"}}` 헤더를 쓰고,
- * app.js(Task 4)가 이 이벤트를 받아 토스트로 띄운다. 같은 응답에 여러 번 부르면 마지막 것이 이긴다.
+ * app.js 가 이 이벤트를 받아 토스트로 띄운다. 같은 응답에 여러 번 부르면 마지막 것이 이긴다.
  *
  * HTTP 헤더 값은 Latin-1 로 전송되므로 한글을 그대로 넣으면 깨진다. 비 ASCII 문자는
  * JSON `\uXXXX` 이스케이프로 내보내고, 브라우저의 JSON 파싱이 원래 문자로 되돌린다.
@@ -36,7 +36,7 @@ object Toasts {
 
     /**
      * 오류 토스트. `detail`(예: `HTTP 409 · [CODE] 서버 메시지`)과 `traceId` 는
-     * 토스트의 접힌 "자세히" 안에만 보인다(errorToast.ts). 본문 `message` 에는 쉬운 문구만 둔다.
+     * 토스트의 접힌 "자세히" 안에만 보인다(toastHost 조각). 본문 `message` 에는 쉬운 문구만 둔다.
      */
     fun error(res: HttpServletResponse, message: String?, detail: String?, traceId: String?) {
         write(res, "error", message, detail, traceId)
@@ -65,13 +65,13 @@ object Toasts {
     }
 
     /**
-     * 제목이 있는 오류 토스트(errorToast.ts: title=무엇이 실패했는지, message=쉬운 문구). 토스트는 제목을 크게, message 를 작게 보인다.
+     * 제목이 있는 오류 토스트(title=무엇이 실패했는지, message=쉬운 문구). 토스트는 제목을 크게, message 를 작게 보인다.
      */
     fun errorTitled(res: HttpServletResponse, title: String?, message: String?, detail: String?, traceId: String?) {
         write(res, "error", title, message, detail, traceId)
     }
 
-    /** 제목이 있는 성공 토스트(예: NewTenant 의 "Tenant 생성 완료" / "<이름> · WebAuthn 설정으로 이동합니다"). */
+    /** 제목이 있는 성공 토스트(예: TenantsPageController 의 "Tenant 생성 완료" / "<이름> · WebAuthn 설정으로 이동합니다"). */
     fun successTitled(res: HttpServletResponse, title: String?, message: String?) {
         write(res, "success", title, message, null, null)
     }
@@ -96,7 +96,7 @@ object Toasts {
     }
 
     /**
-     * 동작 버튼이 있는 성공 토스트(원본 toast({action:{label,onClick}})). 버튼을 누르면 toastHost 가 window 이벤트 `event`(detail = `detail`)를 올린다.
+     * 동작 버튼이 있는 성공 토스트. 버튼을 누르면 toastHost 가 window 이벤트 `event`(detail = `detail`)를 올린다.
      * 이벤트를 듣는 쪽이 요청을 보낸다 — 서버가 준 주소만 쓰도록 듣는 쪽이 접두사를 확인해야 한다.
      */
     fun successTitledAction(
@@ -123,7 +123,7 @@ object Toasts {
         }
     }
 
-    /** 제목이 있는 경고 토스트(예: MfaChallenge 의 "복구 코드를 사용했습니다." / "남은 복구 코드: N개"). */
+    /** 제목이 있는 경고 토스트(예: MFA 단계(LoginPageController)의 "복구 코드를 사용했습니다." / "남은 복구 코드: N개"). */
     fun warnTitled(res: HttpServletResponse, title: String?, message: String?) {
         write(res, "warn", title, message, null, null)
     }

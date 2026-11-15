@@ -37,7 +37,7 @@ import java.util.UUID
 private val log = LoggerFactory.getLogger(ApiKeysTabController::class.java)
 
 /**
- * Tenant 상세의 API 키 탭(← pages/tenant/ApiKeysTab.tsx, apiKeyHelpers.ts, api/apiKeys.ts, ui/SecretBox.tsx, lib/apiKeyExpiry.ts).
+ * Tenant 상세의 API 키 탭.
  *
  * 접근 경계: 탭·발급은 [TenantTabs.load] 를 먼저 부른다. 회전·회수 주소는 키 id 로 되어 있어(REST 와 같다) 화면이 키의 tenant 를 함께 받는다
  * (`?tenantId=`): 그 tenant 를 [TenantTabs.load] 로 확인하고, 그 tenant 의 키 목록에 이 키가 있어야만 REST 를 부른다
@@ -46,8 +46,10 @@ private val log = LoggerFactory.getLogger(ApiKeysTabController::class.java)
  * 평문 키: 발급·회전의 평문은 그 응답 조각(발급 완료 다이얼로그의 SecretBox)에만 그린다. 세션·플래시·헤더(토스트 포함)·로그에 싣지 않고
  * 리다이렉트도 쓰지 않는다(ui.js 의 토스트 넘기기가 sessionStorage 를 쓰므로). 응답은 `Cache-Control: no-store`.
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 테넌트 조회·검증이 먼저다. 넘기는 자리의 `!!` 는 원 Java 에서
- * Kotlin 피호출자의 파라미터 검사 NPE 가 나던 자리(발급은 try 안 — 인라인 오류, 회전·회수는 try 밖).
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 테넌트 조회·경계 검사(403/404)가 먼저 판정한다(회전·회수는 그보다 앞서
+ * `requireConfirm` 이 확인 표시 없는 요청을 400 으로 거부한다). `/admin/_/` 는 인증 필수라
+ * (AdminSecurityConfig) 정상 경로에선 null 이 아니다. `auth!!` 는 REST 컨트롤러가 non-null `Authentication` 을 받기 때문이고,
+ * null 이면 NPE — 발급은 try 안이라 다이얼로그 안 인라인 오류(422), 회전·회수는 try 밖이라 WebExceptionAdvice 의 500.
  */
 @Controller
 class ApiKeysTabController(
@@ -59,12 +61,12 @@ class ApiKeysTabController(
 
     // ── 모델 ────────────────────────────────────────────────
 
-    /** 만료 열 배지(apiKeyHelpers.expiryBadge). tone: ok | warn | bad | neutral. */
+    /** 만료 열 배지. tone: ok | warn | bad | neutral. */
     data class ExpiryBadge(val tone: String?, val label: String?, val sub: String?)
 
     data class Scope(val value: String?, val label: String?)
 
-    /** 표의 한 줄(api/apiKeys.ts adapt). status: ACTIVE | EXPIRED | REVOKED. */
+    /** 표의 한 줄. status: ACTIVE | EXPIRED | REVOKED. */
     data class Row(
         val id: String?,
         val name: String?,
@@ -102,7 +104,8 @@ class ApiKeysTabController(
     @GetMapping(FRAG + "{id}/tab/apikeys")
     fun tab(@PathVariable id: String, model: Model): String {
         val v = TenantTabs.load(tenants, id)
-        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        // `!!`: TenantView.id 는 DB 에서 읽은 Tenant 의 id 라 null 이 오지 않는다(타입만 nullable). null 이면 NPE — try 밖이라
+        // WebExceptionAdvice 의 500.
         val tid = v.id!!.toString()
         fillForm(model, tid)
         try {
@@ -115,7 +118,7 @@ class ApiKeysTabController(
     }
 
     /**
-     * 발급(새 키 발급 다이얼로그의 발급). 검증 실패·REST 거절은 다이얼로그 안 인라인 경고(422, 입력 유지, 토스트 없음 — 원본과 같다).
+     * 발급(새 키 발급 다이얼로그의 발급). 검증 실패·REST 거절은 다이얼로그 안 인라인 경고(422, 입력 유지, 토스트 없음).
      * 성공하면 발급 완료 다이얼로그(평문은 여기에만) + 목록·탭 배지 OOB 갱신.
      */
     @PostMapping(FRAG + "{id}/api-keys")
@@ -129,7 +132,7 @@ class ApiKeysTabController(
         model: Model,
     ): String {
         val v = TenantTabs.load(tenants, id)
-        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        // `!!`: tab() 과 같다(try 밖 — 500).
         val tid = v.id!!.toString()
         noStore(res)
 
@@ -161,12 +164,12 @@ class ApiKeysTabController(
         model.addAttribute(
             "issued",
             Issued(
-                created.id.toString(), name, created.prefix, // id: 원 Java String.valueOf — null 이면 "null"
+                created.id.toString(), name, created.prefix, // id 가 null 이면 Any?.toString() 이 NPE 없이 "null"
                 if (expiresAt == null) "무기한" else KstFormat.kstDate(expiresAt), created.plainText, null,
             ),
         )
         refreshAfterChange(model, tid)
-        model.addAttribute("resetForm", true) // 발급 성공만 새 키 발급 폼을 비운다(원본: 성공했을 때만 초기화)
+        model.addAttribute("resetForm", true) // 발급 성공만 새 키 발급 폼을 비운다
         return ISSUED_VIEW
     }
 
@@ -196,7 +199,7 @@ class ApiKeysTabController(
         model.addAttribute(
             "issued",
             Issued(
-                r.id.toString(), o.key.name, r.prefix, expiry, r.plaintextKey, // id: 원 Java String.valueOf — null 이면 "null"
+                r.id.toString(), o.key.name, r.prefix, expiry, r.plaintextKey, // id 가 null 이면 "null"(발급과 같다)
                 oldKeyNotice(r.oldKeyExpiresAt, clock.instant()),
             ),
         )
@@ -231,7 +234,7 @@ class ApiKeysTabController(
     /** 키가 속한 tenant 를 경계 확인한 뒤(RP 다른 tenant → 403) 그 tenant 의 목록에서 키를 찾는다. 없으면 404(API_KEY_NOT_FOUND). */
     private fun owned(keyId: UUID, tenantId: String): Owned {
         val v = TenantTabs.load(tenants, tenantId)
-        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        // `!!`: tab() 과 같다. 부르는 rotate·revoke 모두 try 밖이다(500).
         val tid = v.id!!.toString()
         for (k in apiKeys.list(tid).data()) {
             if (keyId == k.id && v.id == k.tenantId) return Owned(tid, k)
@@ -263,7 +266,7 @@ class ApiKeysTabController(
         return "입력 값이 올바르지 않습니다"
     }
 
-    /** 변경 뒤 목록을 다시 읽어 목록·탭 배지(OOB)를 채운다. 다시 읽기가 실패하면 목록 자리에 LoadError. */
+    /** 변경 뒤 목록을 다시 읽어 목록·탭 배지(OOB)를 채운다. 다시 읽기가 실패하면 목록 자리에 loadError 조각. */
     private fun refreshAfterChange(model: Model, tid: String): List<ApiKeyAdminDto.ApiKeyView>? {
         fillForm(model, tid)
         refreshKeyCount(model, tid)
@@ -281,7 +284,7 @@ class ApiKeysTabController(
     }
 
     /**
-     * 정지 확인창의 "유효한 API 키 N개"(원본 onChanged → tenant 재조회). tenant 를 다시 읽어 `keyCount` 로 넘기고, 응답 조각이
+     * 정지 확인창의 "유효한 API 키 N개". tenant 를 다시 읽어 `keyCount` 로 넘기고, 응답 조각이
      * `#tenant-apikey-count` 를 OOB 로 바꾼다. 실패하면 조용히 생략(변경 자체는 성공했다).
      */
     private fun refreshKeyCount(model: Model, tid: String) {
@@ -357,7 +360,7 @@ class ApiKeysTabController(
         val scopes = ArrayList<Scope>()
         val ks = k.scopes
         if (ks != null) for (s in ks) scopes.add(Scope(s, SCOPE_LABEL.getOrDefault(s, s)))
-        val keyId = k.id.toString() // 원 Java String.valueOf — null 이면 "null"
+        val keyId = k.id.toString() // null 이면 "null"(Any?.toString)
         val q = "?tenantId=$tid"
         val rotateAttrs = LinkedHashMap<String, Any?>()
         rotateAttrs["hx-post"] = "$KEY_FRAG$keyId/rotate$q"
@@ -406,7 +409,7 @@ class ApiKeysTabController(
         /** 메뉴 항목이 여는 확인 다이얼로그(id 는 data-dialog). 템플릿 상수. */
         const val OPEN_DIALOG = "\$dispatch('dialog:open', { id: \$el.dataset.dialog })"
 
-        /** 접두사 복사 + 토스트(원본 copyPrefix). 접두사는 data-prefix 로 넘긴다. 템플릿 상수. internal: 같은 모듈 테스트가 읽는다. */
+        /** 접두사 복사 + 토스트. 접두사는 data-prefix 로 넘긴다. 템플릿 상수. internal: 같은 모듈 테스트가 읽는다. */
         internal const val COPY_PREFIX = "window.adminCopy(\$el.dataset.prefix).then((ok) => \$dispatch('toast', ok" +
             " ? { kind: 'success', title: '접두사를 복사했습니다.', message: \$el.dataset.prefix }" +
             " : { kind: 'warn', title: '복사 실패', message: '클립보드 복사에 실패했습니다.' }))"
@@ -427,7 +430,7 @@ class ApiKeysTabController(
 
         /**
          * `[title, detail.trim().replace(/[.。]$/, '')].filter(Boolean).join('. ') + '. 입력한 내용은 그대로 있습니다.'`
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ApiKeysTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(ApiKeysTabControllerTest)가 부른다.
          */
         internal fun issueErrorText(title: String?, detail: String?): String {
             val parts = ArrayList<String>()
@@ -448,9 +451,9 @@ class ApiKeysTabController(
             return m
         }
 
-        // ── apiKeyHelpers.ts ────────────────────────────────────
+        // ── 상태·만료 계산 ──────────────────────────────────────
 
-        /** api/apiKeys.ts adapt: revokedAt → REVOKED, 만료 시각이 지났으면 EXPIRED, 그 밖 ACTIVE. */
+        /** revokedAt → REVOKED, 만료 시각이 지났으면 EXPIRED, 그 밖 ACTIVE. */
         private fun status(k: ApiKeyAdminDto.ApiKeyView, now: Instant): String {
             if (k.revokedAt != null) return "REVOKED"
             val exp = k.expiresAt
@@ -484,7 +487,7 @@ class ApiKeysTabController(
 
         /**
          * 권장 회전 주기(90일)를 넘긴 ACTIVE 키 수. createdAt 기준(정확히 90일은 초과 아님).
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ApiKeysTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(ApiKeysTabControllerTest)가 부른다.
          */
         internal fun rotationOverdueCount(keys: List<ApiKeyAdminDto.ApiKeyView>, now: Instant): Int {
             var n = 0

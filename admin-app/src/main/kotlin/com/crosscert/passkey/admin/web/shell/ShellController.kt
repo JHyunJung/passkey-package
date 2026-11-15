@@ -96,7 +96,7 @@ class ShellController(
         return "admin/fragments/shell/chain-card :: card"
     }
 
-    /** RP 전환 목록. 허용 RP 가 2개 미만이거나 조회에 실패하면 빈 응답(스위처 없음, 실패는 삼킨다 — TSX). */
+    /** RP 전환 목록. 허용 RP 가 2개 미만이거나 current() 조회에 실패하면 빈 응답(스위처 없음, 조회 실패는 삼킨다). */
     @GetMapping("/admin/_/shell/tenant-switcher")
     fun tenantSwitcher(model: Model): String {
         val view: ActiveTenantController.ActiveTenantView?
@@ -116,7 +116,7 @@ class ShellController(
     }
 
     /**
-     * RP 전환. 성공이면 현재 화면을 새로 고친다(React 의 window.location.reload()): htmx 는 `HX-Refresh: true`,
+     * RP 전환. 성공이면 현재 화면을 새로 고친다: htmx 는 `HX-Refresh: true`,
      * 그 밖의 요청은 같은 출처 /admin 경로의 Referer 로, 없으면 선택한 RP 상세로 리다이렉트. 실패는 실제 오류 상태 + 오류 토스트(본문 없음)이고,
      * 활성 RP 는 바뀌지 않았으므로 화면도 그대로다.
      */
@@ -156,8 +156,8 @@ class ShellController(
 
     companion object {
         /**
-         * Sidebar.tsx 의 timeAgo: "방금" / "N분 전" / "N시간 전"(일 단위 없음).
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(ShellControllerTest)가 부른다.
+         * 감사 체인 카드의 경과 시간: "방금" / "N분 전" / "N시간 전"(일 단위 없음).
+         * internal: 같은 모듈 테스트(ShellControllerTest)가 부른다.
          */
         internal fun timeAgo(t: Instant?, now: Instant): String {
             if (t == null) return "—"
@@ -185,7 +185,11 @@ class ShellController(
             }
         }
 
-        /** 원 Java Collectors.toMap 그대로 — 이름이 null 인 항목은 HashMap.merge 의 NPE(호출자의 catch 로 간다). */
+        /**
+         * Collectors.toMap 은 값이 null 이면 HashMap.merge 에서 NPE 다. 이름은 displayName 이 없으면 slug 라
+         * (ActiveTenantController.view) 정상 데이터에선 null 이 아니다. NPE 가 나면 failSwitch 에선 그 catch 가 삼키고,
+         * tenantSwitcher 에선 try 밖이라 WebExceptionAdvice 가 500 으로 답한다.
+         */
         private fun names(view: ActiveTenantController.ActiveTenantView): Map<UUID?, String?> {
             val refs = view.allowedTenants ?: return java.util.Map.of()
             return refs.stream().collect(

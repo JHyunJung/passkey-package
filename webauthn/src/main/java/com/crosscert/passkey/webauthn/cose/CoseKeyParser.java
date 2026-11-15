@@ -15,7 +15,7 @@ import java.security.spec.RSAPublicKeySpec;
  * COSE_Key (RFC 9052) CBOR map을 java.security.PublicKey로 복원.
  *
  * 라벨: kty=1, alg=3, EC2: crv=-1, x=-2, y=-3 / RSA: n=-1, e=-2.
- * kty: 2=EC2, 3=RSA. 이번 범위는 ES256(EC2 P-256), RS256(RSA)만 지원.
+ * kty: 2=EC2, 3=RSA. ES256(EC2 P-256), RS256(RSA)만 지원.
  */
 public final class CoseKeyParser {
 

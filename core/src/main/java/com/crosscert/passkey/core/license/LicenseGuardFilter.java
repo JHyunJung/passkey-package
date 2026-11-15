@@ -22,14 +22,17 @@ import java.util.Set;
 
 /**
  * Filters every HTTP request against the current LicenseState.
- *  - DEAD     -> 503 JSON (except for admin license/health/login paths)
+ *  - DEAD     -> 503 JSON (except for the {@link #DEAD_EXEMPT} paths)
  *  - WARNING  -> pass through + X-License-Warning header
  *  - NETWORK_GRACE -> pass through + X-License-Warning header
  *  - VALID    -> pass through
  *
- * Registered as @Component so passkey-app picks it up via Spring Boot
- * servlet filter auto-registration. admin-app's Spring Security chain
- * adds it explicitly via addFilterBefore() (see AdminSecurityConfig).
+ * Registered as @Component, so Spring Boot auto-registers it as a servlet
+ * filter in both passkey-app and admin-app (no FilterRegistrationBean
+ * disables it). admin-app's Spring Security chain also adds the same bean
+ * via addFilterBefore() (see AdminSecurityConfig); the servlet-level pass
+ * runs first, and OncePerRequestFilter's already-filtered request
+ * attribute (derived from the filter name) makes the in-chain pass skip.
  *
  * Order = HIGHEST_PRECEDENCE + 1: runs after OnpremTenantPinFilter
  * (HIGHEST_PRECEDENCE) but before any auth filter, so license check
@@ -43,9 +46,12 @@ public class LicenseGuardFilter extends OncePerRequestFilter {
 
     /**
      * Paths exempt from the DEAD-state block. Keep operators able to
-     * read /license to diagnose the outage, and keep /actuator/health
+     * read /admin/api/license to diagnose the outage, and keep /actuator/health
      * + login functional so the system surfaces clearly as dead rather
      * than silently dropping all traffic.
+     *
+     * <p>Thymeleaf 라이선스 화면(/admin/license)과 정적 자원(/admin/css·/admin/js·/admin/img 등)은 목록에 없다 —
+     * DEAD 상태에서는 라이선스 화면과 로그인 화면이 쓰는 자원도 503 이 된다(docs/backlog.md 의 열린 항목).
      *
      * <p>Matched by {@link #isExempt}: exact path or {@code path + "/"} prefix,
      * against BOTH the raw request URI and the container-normalized
@@ -117,7 +123,7 @@ public class LicenseGuardFilter extends OncePerRequestFilter {
      * </ol>
      * For a plain request (no dot-segments, path params, escapes or forwarded
      * prefix, root context) the raw URI equals {@code servletPath + pathInfo},
-     * so the decision is identical to the previous raw-URI-only rule.
+     * so the decision is the same as matching the raw URI alone.
      */
     private boolean isExempt(HttpServletRequest req) {
         String raw = req.getRequestURI();

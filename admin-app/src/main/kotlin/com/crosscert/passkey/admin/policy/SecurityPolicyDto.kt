@@ -8,10 +8,10 @@ import java.time.OffsetDateTime
 import java.util.Objects
 
 /**
- * View·UpdateRequest 는 원 record 의 compact constructor(List 정규화)를 그대로 옮기기 위해
- * data class 대신 일반 class 로 두고 equals/hashCode/toString 을 record 와 같은 의미로 구현한다
+ * View·UpdateRequest 는 생성자에서 List 를 정규화(View 는 null → 빈 목록, 둘 다 불변 사본)하므로
+ * data class 대신 일반 class 로 두고 equals/hashCode/toString 을 Java record 와 같은 의미로 직접 구현한다
  * (data class 는 주 생성자 프로퍼티를 init 에서 다시 대입할 수 없다).
- * java.util.List.copyOf: 원 Java 처럼 null 요소면 NPE + 불변 사본.
+ * java.util.List.copyOf: null 요소면 NPE + 불변 사본.
  */
 class SecurityPolicyDto private constructor() {
 

@@ -47,8 +47,8 @@ public class LicenseCache {
             Entry e = M.readValue(bytes, Entry.class);
             return Optional.ofNullable(e);
         } catch (IOException | JacksonException e) {
-            // Jackson 3 예외는 unchecked(JacksonException) — Jackson 2 시절 IOException 으로 잡히던
-            // 파싱 실패를 같은 경로(경고 후 빈 값)로 처리한다.
+            // Jackson 3 의 파싱 예외는 IOException 이 아닌 unchecked JacksonException 이라 함께 잡는다 —
+            // 읽기 실패·파싱 실패 모두 경고 후 빈 값(디스크 토큰만 사용).
             log.warn("license cache read failed: path={} reason={}", path, e.getMessage());
             return Optional.empty();
         }

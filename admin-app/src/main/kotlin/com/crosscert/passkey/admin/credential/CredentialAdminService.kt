@@ -60,7 +60,7 @@ class CredentialAdminService(
             tenantId, page, cappedSize, q, rows.totalElements,
         )
 
-        // G15: collect the page's distinct AAGUIDs and resolve authenticatorName
+        // Collect the page's distinct AAGUIDs and resolve authenticatorName
         // for all of them in a single Redis round-trip (MGET), instead of
         // toView issuing one GET per row (up to 200 sequential round-trips per
         // page). Same batching shape as ActivityService.snapshot's
@@ -96,8 +96,9 @@ class CredentialAdminService(
         val c = creds.findByCredentialId(credId)
             .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND, "credential 없음") }
 
-        // VPD 제거됨 — admin-app 은 cross-tenant 조회를 하므로 tenantId 일치 검사가 누출 방어의 단일 layer
-        // (원 Java 와 같은 equals 호출 — 저장된 tenantId 가 null 이면 NPE)
+        // credential 이 경로 tenantId 소속인지 확인한다. 위 assertCanAccessTenant 는 경로 tenantId 만 보고,
+        // findByCredentialId 의 Hibernate @Filter 는 RP_ADMIN 의 활성 RP 로만 걸리며 PLATFORM_OPERATOR 에겐 없다 —
+        // 다른 테넌트 credential 을 걸러내는 것은 이 비교다. 저장된 tenantId 가 null 이면 equals 호출에서 NPE.
         if (!c.tenantId.equals(tenantId)) {
             throw BusinessException(ErrorCode.ACCESS_DENIED, "tenant boundary 위반")
         }
@@ -125,8 +126,7 @@ class CredentialAdminService(
         val c = creds.findByCredentialIdForUpdate(credId)
             .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND, "credential 없음") }
 
-        // VPD 제거됨 — admin-app 은 cross-tenant 조회를 하므로 tenantId 일치 검사가 누출 방어의 단일 layer
-        // (원 Java 와 같은 equals 호출 — 저장된 tenantId 가 null 이면 NPE)
+        // 위 listAuthEvents 와 같은 소속 확인(경로 tenantId 만 검사하는 boundary 를 보완). 저장된 tenantId 가 null 이면 NPE.
         if (!c.tenantId.equals(tenantId)) {
             log.warn(
                 "cross-tenant revoke attempt: pathTenant={} actualTenant={} credentialId={}",
@@ -159,7 +159,7 @@ class CredentialAdminService(
     private fun toView(c: Credential, authenticatorNames: Map<UUID, MdsAaguidCache.Entry>): CredentialView {
         val aaguid: ByteArray? = c.aaguid
         val aaguidHex = if (aaguid == null) null else HexFormat.of().formatHex(aaguid)
-        // Batched lookup (G15): authenticatorNames was resolved once for the whole
+        // Batched lookup: authenticatorNames was resolved once for the whole
         // page via MdsAaguidCache.multiLookup — no per-row Redis round-trip here.
         val entry: MdsAaguidCache.Entry? =
             if (aaguid == null) null else authenticatorNames[MdsAaguidCache.canonicalAaguid(aaguid)]
@@ -177,7 +177,7 @@ class CredentialAdminService(
     /**
      * base64url 시도 → 성공 시 hex 변환. 실패 시 q 그대로 (운영자가 hex 일부 직접 입력 가능).
      * LIKE wildcard 는 \ % _ → \\ \% \_ 로 escape (CredentialRepository 의 ESCAPE '\\' 절과 짝).
-     * 소문자화는 원 Java toLowerCase() 처럼 기본 로캘 기준.
+     * 소문자화는 기본 로캘 기준(Locale.getDefault()).
      */
     private fun normalizeQ(q: String): String {
         val hexOrRaw = try {

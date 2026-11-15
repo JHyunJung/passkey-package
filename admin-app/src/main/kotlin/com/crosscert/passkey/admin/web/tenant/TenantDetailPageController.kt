@@ -47,11 +47,11 @@ import java.util.regex.Pattern
 private val log = LoggerFactory.getLogger(TenantDetailPageController::class.java)
 
 /**
- * Tenant 상세 틀과 개요 탭(← pages/TenantDetailPage.tsx, pages/tenant/TenantOverview.tsx, tenantSignals.ts, recentActivityAdapter.ts).
+ * Tenant 상세 틀과 개요 탭.
  *
- * 전체 페이지 `GET /admin/tenants/{idOrSlug}?tab=` 는 헤더·탭 줄·개요 탭을 서버에서 그린다(R3'). 다른 탭이 골라지면 탭 컨테이너가
+ * 전체 페이지 `GET /admin/tenants/{idOrSlug}?tab=` 는 헤더·탭 줄·개요 탭을 서버에서 그린다. 다른 탭이 골라지면 탭 컨테이너가
  * `hx-trigger="load"` 로 `GET /admin/_/tenants/{id}/tab/{tab}` 를 불러온다. 이 일반 매핑은 개요를 돌려주고 모르는 탭 키도 개요로
- * 떨어진다. 이후 탭 task 는 같은 URL 규약의 **리터럴 경로**(`/admin/_/tenants/{id}/tab/webauthn` 등)를 각자의 컨트롤러에 매핑한다 —
+ * 떨어진다. 나머지 탭은 같은 URL 규약의 **리터럴 경로**(`/admin/_/tenants/{id}/tab/webauthn` 등)를 각 탭 컨트롤러가 매핑한다 —
  * Spring 은 `{tab}` 변수 패턴보다 리터럴 패턴을 우선하므로 이 매핑이 막지 않는다(테스트 `literalTabMappingWinsOverGeneric`).
  *
  * 접근 경계: 테넌트는 `TenantAdminController.get` 으로 읽는다(서비스가 TenantBoundary 를 적용). RP_ADMIN 이 다른 테넌트를 열면
@@ -59,8 +59,9 @@ private val log = LoggerFactory.getLogger(TenantDetailPageController::class.java
  * 정지·정지 해제는 PLATFORM 전용이다 — REST 메서드의 `@PreAuthorize` 는 Spring 프록시를 거치는 호출이라 직접 호출에도 적용되지만,
  * 그 기대에 기대지 않고 여기서도 역할을 검사한다.
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 `requirePlatform`(403)·테넌트 조회가 먼저다. 넘기는 자리의 `!!` 는 원 Java 에서
- * Kotlin 피호출자의 파라미터 검사 NPE 가 나던 자리.
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 `requirePlatform`(403)·테넌트 조회(403/404)가 먼저 판정한다. `/admin/_/` 는
+ * 인증 필수라(AdminSecurityConfig) 정상 경로에선 null 이 아니다. `auth!!` 는 `TenantAdminController.suspend`·`activate` 가
+ * non-null `Authentication` 을 받기 때문이고, null 이면 try 밖 NPE 라 WebExceptionAdvice 의 500.
  */
 @Controller
 class TenantDetailPageController(
@@ -76,7 +77,7 @@ class TenantDetailPageController(
 
     // ── 모델 ────────────────────────────────────────────────
 
-    /** 화면에 쓰는 Tenant(원본 adaptTenant: name=displayName, status 는 ACTIVE 아니면 SUSPENDED). */
+    /** 화면에 쓰는 Tenant(name=displayName, status 는 ACTIVE 아니면 SUSPENDED). */
     data class TenantDetail(
         val id: String,
         val name: String,
@@ -91,7 +92,6 @@ class TenantDetailPageController(
         val attestation: String?,
         val timeoutMs: Int,
     ) {
-        /** `tenant.name.slice(0, 1).toUpperCase()` */
         fun initial(): String = if (name.isEmpty()) "" else name.substring(0, 1).uppercase(Locale.ROOT)
 
         fun active(): Boolean = "ACTIVE" == status
@@ -99,17 +99,16 @@ class TenantDetailPageController(
         /** 헤더 "RP 사이트 열기" 주소. rpId 가 없으면 null. */
         fun rpSiteUrl(): String? = if (rpId == null || rpId.isEmpty()) null else "https://$rpId"
 
-        /** fmtDateKst */
         fun createdKst(): String = KstFormat.kstDate(createdAt)
 
-        /** 정지 확인 제목: `${name}${eulReul(name)} 정지할까요?` */
+        /** 정지 확인 제목("…을/를 정지할까요?"). */
         fun suspendTitle(): String = name + Josa.eulReul(name) + " 정지할까요?"
 
         companion object {
             internal fun from(v: TenantAdminDto.TenantView): TenantDetail {
                 val st = v.status
                 return TenantDetail(
-                    v.id.toString(), // 원 Java String.valueOf — null 이면 "null"
+                    v.id.toString(), // null 이면 "null"(Any?.toString)
                     v.displayName ?: "", v.slug ?: "", v.rpId,
                     if (st != null && st.equals("ACTIVE", ignoreCase = true)) "ACTIVE" else "SUSPENDED",
                     v.credentials, v.apiKeys, v.createdAt,
@@ -138,8 +137,8 @@ class TenantDetailPageController(
     // ── 화면 ────────────────────────────────────────────────
 
     /**
-     * 전체 페이지. 로드 실패는 boost 이동이 4xx/5xx 를 스왑하지 않으므로(htmx 규칙 A) htmx 요청이면 200 + 안내 카드로 그린다
-     * (Task 8 과 같은 규칙). 직접 접근이면 실제 상태(404)를 쓴다. 403 은 그대로 `WebExceptionAdvice` 가 맡는다.
+     * 전체 페이지. 로드 실패는 boost 이동이 4xx/5xx 를 스왑하지 않으므로(htmx 규칙 A) htmx 요청이면 200 + 안내 카드로 그린다.
+     * 직접 접근이면 실제 상태(404)를 쓴다. 403 은 그대로 `WebExceptionAdvice` 가 맡는다.
      */
     @GetMapping(PAGE_BASE + "{idOrSlug}")
     fun page(
@@ -201,7 +200,7 @@ class TenantDetailPageController(
     }
 
     /**
-     * 404 가 아닌 모든 조회 실패(403·5xx 포함)는 TSX 처럼 인라인 LoadError 로 그린다(데이터 없음, 다시 시도). 문구는 `ErrorMessages`
+     * 404 가 아닌 모든 조회 실패(403·5xx 포함)는 인라인 loadError 조각으로 그린다(데이터 없음, 다시 시도). 문구는 `ErrorMessages`
      * (알 수 없는 예외의 원문은 싣지 않는다). 상태: 직접 접근의 403 은 403, 그 밖에는 200(boost 가 4xx/5xx 를 스왑하지 않으므로).
      */
     private fun loadFailed(
@@ -230,7 +229,7 @@ class TenantDetailPageController(
     }
 
     /**
-     * 탭 조각. 이 일반 매핑은 개요를 돌려주고 모르는 탭 키도 개요로 떨어진다. 다른 탭 task 가 같은 URL 의 리터럴 경로를 각자 매핑한다.
+     * 탭 조각. 이 일반 매핑은 개요를 돌려주고 모르는 탭 키도 개요로 떨어진다. 다른 탭은 같은 URL 의 리터럴 경로를 각 탭 컨트롤러가 매핑한다.
      * 조회 실패(403·404·5xx)는 `WebExceptionAdvice` 의 실제 상태 + 토스트(본문 없음) — 데이터가 노출되지 않는다.
      */
     @GetMapping(FRAG_BASE + "{id}/tab/{tab}")
@@ -276,7 +275,7 @@ class TenantDetailPageController(
             log.warn("[tenant-detail] chain verify failed (manual={}): {}", isManual, e.toString())
             val info = ErrorMessages.describe(e)
             if (isManual) {
-                val status = info.httpStatus ?: HttpServletResponse.SC_INTERNAL_SERVER_ERROR // 원 Java: 상태를 모르면 500
+                val status = info.httpStatus ?: HttpServletResponse.SC_INTERNAL_SERVER_ERROR // 상태가 없는 실패(타임아웃·연결 오류 등)는 500
                 Toasts.errorTitled(res, "수동 검증 실패", info.toastMessage(), "HTTP $status", MDC.get("traceId"))
                 res.status = status
                 return EMPTY_VIEW
@@ -287,7 +286,7 @@ class TenantDetailPageController(
         return CHAIN_VIEW
     }
 
-    /** 정지(L3 확인 뒤). PLATFORM 전용 — `TenantAdminController.suspend`. 성공하면 같은 탭으로 다시 그린다(원본 onReload). */
+    /** 정지(L3 확인 뒤). PLATFORM 전용 — `TenantAdminController.suspend`. 성공하면 같은 탭으로 다시 그린다. */
     @PostMapping(FRAG_BASE + "{id}/suspend")
     fun suspend(
         @PathVariable id: String,
@@ -330,7 +329,7 @@ class TenantDetailPageController(
         model.addAttribute("t", t)
         model.addAttribute("platform", me.platform)
         model.addAttribute("credKpi", Kpi(fmt(t.credentials), null, null))
-        // 7일 증감(credentialsDelta7d)은 서버 TenantView 에 없어 원본도 항상 미표시다.
+        // 7일 증감은 TenantView 에 값이 없어 보이지 않는다.
         model.addAttribute(
             "keysKpi",
             Kpi(t.apiKeys.toString(), if (expiring == null) null else "만료 임박 $expiring", if (expiring != null && expiring > 0) "warn" else "default"),
@@ -374,7 +373,8 @@ class TenantDetailPageController(
     private fun rateKpi(f: FunnelDto.View?, error: Exception?, registration: Boolean): Kpi {
         val none = if (registration) "최근 7일 등록 시도 없음" else "최근 7일 인증 시도 없음"
         if (error != null) return Kpi("—", "불러오지 못했습니다", "warn")
-        // !!: 오류가 없으면 f 는 funnel.get 의 반환값 — 원 Java f.getRegistration() 의 NPE 자리. 단계가 null 이면 s.getAttempts() 의 NPE 자리.
+        // `!!`: 오류가 없으면 f 는 funnel.get 의 반환값(non-null)이고, FunnelService.compute 는 registration·authentication 을 늘 채운다.
+        // null 이면 NPE — 부르는 populateOverview 는 조회 try 밖이라 WebExceptionAdvice 의 500.
         val view = f!!
         val s = (if (registration) view.registration else view.authentication)!!
         if (s.attempts > 0) {
@@ -384,9 +384,9 @@ class TenantDetailPageController(
     }
 
     /**
-     * 최근 5건. PLATFORM: 활동 피드(PLATFORM 전용) 중 이 tenant 만 — 원본은 전체 피드를 받아 클라이언트에서 걸렀지만 REST 가
-     * tenantId 필터를 지원하므로 서버에서 건다(이 tenant 의 이벤트가 전체 피드의 최근 N건 밖이어도 보인다).
-     * RP_ADMIN: 이 tenant 의 감사 로그. 실패는 빈 목록(원본 catch).
+     * 최근 5건. PLATFORM: 활동 피드(PLATFORM 전용) 중 이 tenant 만 — REST 의 tenantId 필터로 서버에서 건다
+     * (이 tenant 의 이벤트가 전체 피드의 최근 N건 밖이어도 보인다).
+     * RP_ADMIN: 이 tenant 의 감사 로그. 실패는 빈 목록(권한 거부만 그대로 던진다).
      */
     private fun recentEvents(tid: UUID, me: CurrentAdmin): List<RecentEvent> {
         val now = clock.instant()
@@ -394,7 +394,7 @@ class TenantDetailPageController(
         try {
             if (me.platform) {
                 val view = activity.activity(null, null, null, null, tid).data()
-                // !!: 원 Java for-each 의 NPE 자리(try 안 — 빈 목록으로).
+                // `!!`: ActivityService.snapshot 은 feed 를 늘 채운다. null 이면 이 try 의 catch 가 빈 목록으로 바꾼다.
                 for (e in view.feed!!) {
                     if (tid != e.tenantId) continue
                     out.add(event(e.action, e.targetId, e.createdAt, now))
@@ -415,9 +415,9 @@ class TenantDetailPageController(
         return out
     }
 
-    // ── 탭 신호(tenantSignals.ts) ─────────────────────────
+    // ── 탭 신호 ─────────────────────────────────────────────
 
-    /** 30일 안에 만료되는 ACTIVE 키 수. 조회 실패는 null(원본: 조용히 무시). */
+    /** 30일 안에 만료되는 ACTIVE 키 수. 조회 실패는 조용히 null. */
     private fun expiringKeys(tid: UUID): Int? {
         try {
             val now = clock.instant()
@@ -431,7 +431,7 @@ class TenantDetailPageController(
     /** mode≠ANY 이고 mdsName==null 인 AAGUID 수(목록에 보이는 항목만). 조회 실패는 null. */
     private fun unverifiedAaguid(tid: UUID): Int? {
         try {
-            // nullable 로 받는다: 원 Java 의 p == null 검사(목 등에서 null) 를 그대로 둔다.
+            // 반환 타입은 non-null 이지만 nullable 로 받아 null 이면 0 으로 본다(스텁하지 않은 Mockito 목은 null 을 돌려준다).
             val p: AaguidPolicyDto.View? = aaguid.get(tid)
             val mode = p?.mode
             if (p == null || mode == null || "ANY" == mode.name) return 0
@@ -487,7 +487,7 @@ class TenantDetailPageController(
         private const val PAGE_BASE = "/admin/tenants/"
         private const val FRAG_BASE = "/admin/_/tenants/"
 
-        /** TenantDetailPage.tsx 의 TENANT_TABS (id, 라벨). 첫 항목이 기본이다. */
+        /** 탭 목록(id, 라벨). 첫 항목이 기본이다. */
         private val TABS: List<Array<String>> = java.util.List.of(
             arrayOf("overview", "개요"),
             arrayOf("webauthn", "WebAuthn"),
@@ -498,7 +498,7 @@ class TenantDetailPageController(
             arrayOf("funnel", "인증 현황"),
         )
 
-        /** 체인 검증 응답을 이 시간(초)까지 기다린 뒤 "확인 불가"로 바꾼다(CHAIN_TIMEOUT_MS = 15_000). 템플릿의 hx-request 와 같은 값. */
+        /** 체인 검증 응답을 이 시간(초)까지 기다린 뒤 "확인 불가"로 바꾼다. 템플릿(overview.html)의 hx-request 와 같은 값. */
         private const val CHAIN_TIMEOUT_SECONDS = 15
 
         private val FAILURE_TYPE: Pattern = Pattern.compile("FAIL|REVOKED|REGRESSION|TAMPER")
@@ -512,7 +512,7 @@ class TenantDetailPageController(
 
         /**
          * 이벤트 유형 점 색. 유형 이름 태그가 함께 표시되므로 색만으로 의미를 전달하지 않는다.
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(TenantDetailPageControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(TenantDetailPageControllerTest)가 부른다.
          */
         internal fun eventColor(type: String): String {
             if (FAILURE_TYPE.matcher(type).find()) return "var(--bad)"

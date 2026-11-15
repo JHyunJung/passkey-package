@@ -27,7 +27,11 @@ private const val SYNC_COUNTER = "passkey_mds_sync_total"
  * so the controller (admin force-sync) and the @Scheduled job can
  * both report status.
  *
- * T16 extends this to also write per-AAGUID entries back to Redis.
+ * It also writes per-AAGUID entries back to Redis.
+ *
+ * lease 는 일부러 release 하지 않는다 — 5분 TTL 은 거의 동시에 도는 실행을 걸러, 같이 기동한 인스턴스들이
+ * MDS BLOB 을 두 번 받지 않게 하는 창이다. 그동안 holder 가 다른 실행(스케줄·강제 동기화)은 SKIPPED 가 되고,
+ * holder 가 같으면(같은 JVM, 또는 passkey.mds.lease-holder 를 같은 값으로 준 인스턴스) 바로 다시 잡는다.
  */
 @Service
 class MdsSchedulerService(
@@ -65,7 +69,7 @@ class MdsSchedulerService(
             // BLOB 메타데이터(version/next_update/fetched_at) 저장.
             store.store(blob)
 
-            // G07: record the pre-cycle key set but do NOT delete it yet.
+            // Record the pre-cycle key set but do NOT delete it yet.
             // Deleting before repopulating opened a window where every
             // "mds:aaguid:*" key was absent from Redis — any lookup landing
             // in that window (registration/finish for an mdsRequired
@@ -190,7 +194,7 @@ class MdsSchedulerService(
 
     data class SyncResult(val status: String?, val version: Long?, val error: String?) {
 
-        /** 원 Java record 의 toString 형식 유지 — MdsSyncJob 이 "MdsSyncJob result: {}" 로 로그에 남긴다. */
+        /** data class 기본 `SyncResult(status=…)` 대신 `SyncResult[status=…]` 형식 — MdsSyncJob 이 "MdsSyncJob result: {}" 로 로그에 남긴다. */
         override fun toString(): String = "SyncResult[status=$status, version=$version, error=$error]"
 
         companion object {

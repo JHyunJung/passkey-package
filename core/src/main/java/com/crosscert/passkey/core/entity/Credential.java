@@ -10,6 +10,16 @@ import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * 등록된 패스키 1건. 이 파일의 {@code @FilterDef} 가 프로젝트 전체의 {@code tenantFilter} 정의이고,
+ * 다른 엔티티는 {@code @Filter} 로 같은 이름을 참조한다.
+ *
+ * <p>{@code @Version}·{@code @DynamicUpdate} 가 없어 dirty checking 의 UPDATE 가 SIGN_COUNT 를 포함한 모든 컬럼을 쓴다.
+ * 락 없이 읽어 label 등을 고치고 flush 하면 그사이 커밋된 {@code /authentication/finish} 의 signCount 갱신을
+ * 읽었던 값으로 되돌려 replay 방어가 약해진다. 그래서 수정 경로는
+ * {@link com.crosscert.passkey.core.repository.CredentialRepository#findByCredentialIdForUpdate}·
+ * {@link com.crosscert.passkey.core.repository.CredentialRepository#findOwnedForUpdate} 로 행을 잠근 뒤 고친다.
+ */
 @Entity
 @Table(name = "CREDENTIAL")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = UUID.class))

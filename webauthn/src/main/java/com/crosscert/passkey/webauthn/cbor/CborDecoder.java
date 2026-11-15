@@ -15,8 +15,10 @@ import java.util.Map;
  *  - 컬렉션 길이를 남은 바이트 수로 상한 (length-bomb 방어)
  *  - 최상위 디코드 후 잉여 바이트 거부 (trailing-data 방어)
  *
- * float·indefinite-length·bignum 등 WebAuthn에 불필요한 형식은
+ * float·indefinite-length 등 WebAuthn에 불필요한 형식은
  * 명시적으로 거부한다 (관용 파싱은 공격면을 늘린다).
+ * 태그(bignum 포함)는 해석하지 않고 CborTag로 감싸 돌려준다 — 정수·바이트 자리에
+ * 오면 소비 측이 타입 불일치로 거부한다. 정수·길이 인자가 최소 바이트로 인코딩됐는지는 검사하지 않는다.
  */
 public final class CborDecoder {
 
@@ -120,7 +122,11 @@ public final class CborDecoder {
         };
     }
 
-    /** 컬렉션/문자열 길이로 사용 — 음수·과대 길이는 즉시 거부. */
+    /**
+     * 컬렉션/문자열 길이로 사용 — 음수·과대 길이는 즉시 거부.
+     * {@code buf.length - pos}는 음수가 되지 않으므로, {@code pos + len}처럼 더해서 비교할 때와
+     * 달리 len이 아무리 커도 넘침 없이 비교된다. 이 검사가 {@code new byte[n]} 할당보다 먼저다.
+     */
     private int readLength(int minor) {
         long len = readUint(minor);
         if (len < 0 || len > buf.length - pos) {

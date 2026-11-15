@@ -24,7 +24,7 @@ private val log = LoggerFactory.getLogger(SecurityIncidentService::class.java)
  * audit chain 위변조 incident 의 생성/해결/목록 관리.
  *
  * 생성 시 [AuditChainVerifier] 로 위변조를 재검증(위조 요청으로 가짜 incident
- * 를 만드는 것을 차단)하고, 테넌트당 OPEN 1건 제약은 선체크 + V50 부분 유니크 인덱스로
+ * 를 만드는 것을 차단)하고, 테넌트당 OPEN 1건 제약은 선체크 + 부분 유니크 인덱스(ux_incident_open_per_tenant)로
  * 이중 방어한다. 생성/해결 모두 audit 로그를 남기며, 생성 시 CRITICAL
  * [SecurityAlertEvent] 를 발행한다.
  *
@@ -46,7 +46,7 @@ class SecurityIncidentService(
     @Transactional(readOnly = true)
     fun list(): List<SecurityIncident> = repo.findAllByOrderByCreatedAtDesc()
 
-    /** actorId·actorEmail 은 원 Java 처럼 nullable — null actorId 는 아래 requireNonNull 가드가 NPE 로 막는다. */
+    /** actorId·actorEmail 은 nullable — null actorId 는 아래 requireNonNull 가드가 NPE 로 막는다(SecurityIncidentServiceTest 가 고정). */
     @Transactional
     fun create(tenantId: UUID, actorId: UUID?, actorEmail: String?): SecurityIncident {
         // 0. actorId 가드 — created_by NOT NULL(서비스 경계 방어; 컨트롤러는 항상 non-null).
@@ -114,7 +114,7 @@ class SecurityIncidentService(
         return incident
     }
 
-    /** note·actorId 는 원 Java 처럼 nullable — 아래 가드가 각각 IAE·NPE 로 막는다. */
+    /** note·actorId 는 nullable — 아래 가드가 각각 IAE·NPE 로 막는다(SecurityIncidentServiceTest 가 고정). */
     @Transactional
     fun resolve(incidentId: UUID, note: String?, actorId: UUID?, actorEmail: String?): SecurityIncident {
         // 0. note 검증(서비스 레이어 가드) — blank 면 ck_security_incident_resolution(RESOLVED 시
@@ -151,11 +151,12 @@ class SecurityIncidentService(
     }
 
     /**
-     * incident detail 스냅샷을 canonical JSON 으로 직렬화한다. tenantName 이 자유 텍스트라
+     * incident detail 스냅샷을 JSON 으로 직렬화한다. tenantName 이 자유 텍스트라
      * 백슬래시/제어문자/따옴표가 들어와도 Jackson 이 안전하게 이스케이프한다. 직렬화 실패는
      * detail 이 audit/alert 본문이 아니라 부가 스냅샷이므로 빈 객체로 안전하게 폴백한다.
      *
-     * java.util.Map.of: 원 Java 와 같은 불변 맵(키 순회 순서 포함).
+     * java.util.Map.of 의 순회 순서는 JVM 실행마다 달라질 수 있고 전역 mapper 는 맵 키를 정렬하지 않으므로,
+     * detail 의 키 순서는 고정돼 있지 않다(audit 해시 입력이 아니다).
      */
     private fun serializeDetail(tenantName: String, tamperedEntryId: UUID?): String {
         val detailMap = java.util.Map.of<String, Any>(

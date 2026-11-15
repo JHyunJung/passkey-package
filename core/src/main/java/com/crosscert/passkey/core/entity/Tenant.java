@@ -105,7 +105,7 @@ public class Tenant extends BaseEntity {
 
     /**
      * WebAuthn options 의 attestation 값(소문자)으로 변환. DB 는 대문자 enum
-     * (NONE/INDIRECT/DIRECT/ENTERPRISE, V33 CHECK 제약)을 저장하지만 WebAuthn
+     * (NONE/INDIRECT/DIRECT/ENTERPRISE, CHECK 제약 ck_tenant_attestation)을 저장하지만 WebAuthn
      * 표준 conveyance preference 는 소문자다. 알 수 없는/누락 값은 안전 기본 "none".
      */
     public String getAttestationConveyanceLowercase() {

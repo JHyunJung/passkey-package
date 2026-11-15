@@ -64,14 +64,14 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     java.util.List<AuditLog> findAllOrdered();
 
     /**
-     * Phase B — per-tenant chain head 조회.
+     * per-tenant chain head 조회.
      * tenant_id 가 NULL 인 경우(PLATFORM_OPERATOR row)와 non-NULL 인 경우를
      * 모두 올바르게 처리하기 위해 JPQL is null 비교를 사용한다.
      *
      * <p>순서는 global chain({@link #findLatestForUpdate()})과 같은 createdAt DESC, id DESC.
      * 예전에는 id DESC 였는데, TIME 방식 UUID 는 앱을 재시작할 때마다 가운데 자리가 바뀌어
      * 재시작 뒤 row 가 이전 row 보다 작게 정렬될 수 있다 → 같은 직전 row 를 두 번 이어 체인이
-     * 갈라지고 검증이 위변조로 판정했다. 인덱스: audit_log_tenant_ix (tenant_id, created_at).
+     * 갈라지고 검증이 위변조로 판정했다. 인덱스: audit_log_tenant_ix (tenant_id, SYS_EXTRACT_UTC(created_at)).
      */
     @Query("""
             select a from AuditLog a
@@ -82,7 +82,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     List<AuditLog> findLatestByTenant(@Param("tenantId") UUID tenantId, Pageable limit);
 
     /**
-     * Phase B Task 4 — per-tenant chain 검증·백필용 전체 스캔 (append 순서 = createdAt ASC, id ASC).
+     * per-tenant chain 검증·백필용 전체 스캔 (append 순서 = createdAt ASC, id ASC).
      * tenantId 가 null 인 경우(PLATFORM_OPERATOR row) 와 non-null 인 경우를 모두 처리.
      * {@link #findLatestByTenant} 와 같은 순서여야 append 가 이은 체인을 검증이 같은 순서로 따라간다.
      */
@@ -95,7 +95,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     List<AuditLog> findAllByTenantOrdered(@Param("tenantId") UUID tenantId);
 
     /**
-     * Phase B Task 4 — 백필 및 검증에 필요한 distinct tenant_id 목록.
+     * 백필 및 검증에 필요한 distinct tenant_id 목록.
      * NULL tenant_id (PLATFORM_OPERATOR row) 도 포함된다.
      * NOTE: nativeQuery=true 는 Oracle RAW(16) 를 byte[] 로 반환하므로
      * JPQL (Hibernate 가 UUID 변환 처리) 을 사용한다.
@@ -104,7 +104,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     List<UUID> findDistinctTenantIds();
 
     /**
-     * Phase F2 — TenantAdminService.toView() 의 lastEventAt 집계용.
+     * TenantAdminService.toView() 의 lastEventAt 집계용.
      * tenant 별 가장 최근 audit log 1건 (createdAt DESC). Spring Data derived
      * query 가 select ... where tenant_id = :tenantId order by created_at desc fetch first 1 row only
      * 로 자동 변환된다.
@@ -112,7 +112,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     Optional<AuditLog> findFirstByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
     /**
-     * Phase QW-3 — TenantAdminService.list() N+1 제거용 배치 집계.
+     * TenantAdminService.list() N+1 제거용 배치 집계.
      * findFirstByTenantIdOrderByCreatedAtDesc(tenantId) 는 tenant 의 최신 audit row 를
      * 반환하고 toView 는 거기서 createdAt 만 읽는다. 따라서 배치 등가물은 tenant_id 별
      * MAX(createdAt). 결과는 Object[]{UUID tenantId, OffsetDateTime maxCreatedAt}. audit row 가
@@ -139,14 +139,16 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
                           Pageable page);
 
     /**
-     * Phase F3 — FunnelService stage attempt/success counters.
+     * Stage attempt/success counters.
+     * 아래 세 funnel 쿼리는 지금 호출처가 없다 — FunnelService 는 시그니처가 같은
+     * {@link CeremonyEventRepository} 메서드를 쓴다.
      * Spring Data derived query: select count(*) from audit_log
      *   where tenant_id = ? and action = ? and created_at > ?.
      */
     long countByTenantIdAndActionAndCreatedAtAfter(UUID tenantId, String action, OffsetDateTime since);
 
     /**
-     * Phase F3 — FunnelService daily series.
+     * Daily series.
      * Native query: groups by TRUNC(created_at) (day bucket in the DB session time zone, KST) and action.
      * Returns [day, action VARCHAR, count NUMBER] rows; day is an Oracle DATE that Hibernate 7 returns
      * as {@code LocalDateTime} — convert with {@code KstTime.dbDay}.
@@ -164,7 +166,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
             @Param("since") OffsetDateTime since);
 
     /**
-     * Phase F3 — FunnelService by-event-type breakdown.
+     * By-event-type breakdown.
      * Native query: groups by action.
      * Returns [action VARCHAR, count NUMBER] rows.
      */

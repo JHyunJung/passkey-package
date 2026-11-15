@@ -16,10 +16,12 @@ import java.util.UUID
  * tenantId is nullable — null represents a platform-wide action
  * (ADMIN_LOGIN / signing-key rotation / MDS sync). Stored in
  * audit_log.tenant_id for filtering; NOT included in the SHA-256 hash
- * input (V10 chain compatibility — payload's 'tenantId' key already
+ * input (chain compatibility — payload's 'tenantId' key already
  * provides tamper evidence).
+ * tenantId 를 해시 입력(AuditLogService.computeHash)에 추가하면 이미 저장된 row 의 hash 가 재계산 값과 달라져
+ * 기존 체인 검증이 깨진다.
  *
- * 모든 참조형 컴포넌트는 원 record 처럼 nullable(호출부·테스트가 null 을 넘긴다).
+ * 모든 참조형 컴포넌트는 nullable(호출부·테스트가 null 을 넘긴다).
  */
 data class AuditAppendRequest(
     val actorId: UUID?,

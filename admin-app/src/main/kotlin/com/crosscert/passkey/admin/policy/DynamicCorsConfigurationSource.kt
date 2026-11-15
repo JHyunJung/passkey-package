@@ -15,7 +15,7 @@ private const val SINGLETON_ID = 1L
 private const val TTL_NANOS = 10_000_000_000L // 10s
 
 /**
- * P0-6: security_policy.cors_allowlist 를 실제 CORS 정책으로 적용.
+ * security_policy.cors_allowlist 를 실제 CORS 정책으로 적용.
  *
  * Spring CorsFilter 는 health/asset 을 포함한 모든 요청마다
  * [getCorsConfiguration] 을 호출한다. allowlist 는 거의 바뀌지 않으므로
@@ -83,7 +83,7 @@ class DynamicCorsConfigurationSource(
             .orElse(java.util.List.of())
 
     /**
-     * 반환형 nullable: 저장값이 JSON `null` 이면 readValue 가 null 을 돌려주고, 원 Java 처럼
+     * 반환형 nullable: 저장값이 JSON `null` 이면 readValue 가 null 을 돌려주고,
      * loadAllowlist 의 Optional.map 이 이를 empty 로 바꿔 빈 목록(CORS 비활성)이 된다.
      */
     private fun parse(json: String?): List<String>? {

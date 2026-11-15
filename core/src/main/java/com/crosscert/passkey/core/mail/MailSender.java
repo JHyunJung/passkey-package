@@ -3,8 +3,8 @@ package com.crosscert.passkey.core.mail;
 /**
  * 메일 발송 추상화.
  *
- * <p>운영 환경에서는 SMTP/SendGrid 구현체로 교체 가능.
- * 개발/CI 환경에서는 {@link LogMailSender} 가 기본 빈으로 등록됨.
+ * <p>구현체는 {@link MailSenderConfiguration} 이 고른다: {@code spring.mail.host} 가 있으면
+ * {@link SmtpMailSender}, 없으면 {@link LogMailSender}(로그 출력만).
  */
 public interface MailSender {
 

@@ -36,6 +36,10 @@ import kotlin.jvm.optionals.getOrNull
 
 private val log = LoggerFactory.getLogger(AuthenticationFinishService::class.java)
 
+/**
+ * authentication/finish 처리 순서: 토큰으로 challenge 를 꺼냄 → issuedAt·테넌트 바인딩 확인 →
+ * credential 행을 락을 잡고 읽음 → assertion 검증 → signCount 증가 확인·저장 → ID Token 발급.
+ */
 @Service
 class AuthenticationFinishService(
     private val store: ChallengeStore,
@@ -59,7 +63,7 @@ class AuthenticationFinishService(
             val ch = req.authenticationToken?.let(store::takeAuthentication)?.getOrNull()
                 ?: throw IllegalArgumentException("authentication token missing or expired")
 
-            // F19 방어심화: challenge freshness 를 앱-레벨에서도 확인한다.
+            // 방어심화: challenge freshness 를 앱-레벨에서도 확인한다.
             // 평시에는 Redis TTL 이 만료 challenge 를 먼저 제거하므로 이 가드가
             // 추가로 거부하는 정상 요청은 없다(이중 방어). Redis 가 만료를 놓친
             // 경계 상황(시계 차이·키 잔존 등)에서만 issuedAt 기준으로 거부한다.
@@ -68,7 +72,7 @@ class AuthenticationFinishService(
                 throw BusinessException(ErrorCode.CHALLENGE_INVALID, "challenge expired")
             }
 
-            // codex P2: bind challenge tenant to current API-key tenant before
+            // Bind challenge tenant to current API-key tenant before
             // touching tenant config — defense-in-depth on top of the app-level @Filter.
             val ctxTenant = TenantContextHolder.get()?.toString()
             if (ctxTenant != ch.tenantId) {
@@ -100,13 +104,13 @@ class AuthenticationFinishService(
                 throw IllegalArgumentException("assertion rawId invalid")
             }
 
-            // codex P1: lock the row before the read-check-update on
+            // Lock the row before the read-check-update on
             // signCount to prevent two concurrent /finish calls from both
             // passing the strict-monotonic check. The app-level @Filter scopes by tenant.
             val cred = credentials.findByCredentialIdForUpdate(credentialId)
                 .orElseThrow { IllegalArgumentException("credential not registered") }
 
-            // codex P1: typed flow must bind the asserted credential to the
+            // Typed flow must bind the asserted credential to the
             // challenge's userHandle. Without this, server-side allowCredentials
             // is tautological (any same-tenant credential matching the
             // asserted ID would be accepted).
@@ -134,7 +138,7 @@ class AuthenticationFinishService(
                 verifier.verifyAuthentication(input)
             } catch (e: WebAuthnVerificationException) {
                 log.warn("assertion verify failed for tenant {}: {} ({})", ch.tenantId, e.message, e.reason())
-                // spec §6.1: credential 식별 이후의 검증 실패도 기록한다. newCounter 는
+                // credential 식별 이후의 검증 실패도 기록한다. newCounter 는
                 // 아직 검증 전이라 보존된 cred.signCount 를 signCount 로 남긴다.
                 // recordAfterRollback: cred 는 PESSIMISTIC_WRITE 로 락된 행이라 즉시
                 // REQUIRES_NEW INSERT 하면 FK 락 경합이 난다. outer 롤백 완료(락 해제) 후 기록.
@@ -148,11 +152,13 @@ class AuthenticationFinishService(
                 throw IllegalArgumentException("assertion verify failed")
             }
 
-            // codex P2: WebAuthn allows authenticators with no counter to
-            // return 0 forever. The verifier already rejects non-increasing
-            // counters when EITHER side is non-zero; only the (0,0) case
-            // is treated as "no-counter" and accepted. Mirror that here so
-            // we don't refuse legitimate passkeys.
+            // WebAuthn allows authenticators with no counter to
+            // return 0 forever, so only the (0,0) case is accepted as
+            // "no-counter"; otherwise the new counter must be strictly
+            // greater than the stored one. The verifier does not compare
+            // counters (it only returns the reported value — see
+            // WebAuthnVerifier), so this is the only replay /
+            // cloned-authenticator check.
             val newCounter = result.newSignCount()
             val storedCounter = cred.signCount
             val counterless = newCounter == 0L && storedCounter == 0L

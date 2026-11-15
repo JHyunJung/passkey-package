@@ -22,7 +22,7 @@ private const val MIN_LENGTH = 12
 private val TOKEN_WORD: Pattern = Pattern.compile("token", Pattern.CASE_INSENSITIVE)
 
 /**
- * 비밀번호 찾기·재설정 화면(← pages/ForgotPasswordPage.tsx, pages/ResetPasswordPage.tsx).
+ * 비밀번호 찾기·재설정 화면.
  * 로그인 전 화면이라 공통 틀 없이 auth 단독 페이지. REST 빈([PasswordResetController])을 메서드로 부른다.
  *
  * 비밀번호 찾기: 가입 여부와 상관없이 같은 완료 카드(계정 열거 방지). 4xx 성격의 예외도 같은 카드,
@@ -58,7 +58,7 @@ class PasswordPagesController(private val reset: PasswordResetController) {
         try {
             reset.request(PasswordResetController.RequestBodyDto(value))
         } catch (e: IllegalArgumentException) {
-            // ForgotPasswordPage.tsx: 4xx 는 성공과 같은 안내(enumeration 방지).
+            // 4xx 성격은 성공과 같은 안내(enumeration 방지).
         } catch (e: ResponseStatusException) {
             if (!e.statusCode.is4xxClientError) {
                 log.error("admin password-reset request (screen) failed: status={}", e.statusCode.value())
@@ -113,7 +113,7 @@ class PasswordPagesController(private val reset: PasswordResetController) {
             return card(view, "invalid", t, null, null, HttpStatus.UNPROCESSABLE_ENTITY)
         }
         val pw = password ?: ""
-        // 클라이언트가 막는 규칙(ResetPasswordPage.tsx canSubmit)을 서버에서도 확인한다. 비밀번호는 다시 그리지 않는다.
+        // 클라이언트가 막는 규칙(auth.js 의 canSubmit)을 서버에서도 확인한다. 비밀번호는 다시 그리지 않는다.
         if (pw.length < MIN_LENGTH) {
             return card(view, "form", t, java.util.Map.of("password", "12자 이상으로 입력하세요."), null, HttpStatus.UNPROCESSABLE_ENTITY)
         }

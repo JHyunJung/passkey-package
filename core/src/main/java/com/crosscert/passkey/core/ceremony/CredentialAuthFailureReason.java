@@ -8,7 +8,7 @@ package com.crosscert.passkey.core.ceremony;
 public final class CredentialAuthFailureReason {
     /** signCount 가 전진하지 않음(복제 authenticator 의심). */
     public static final String SIGN_COUNT_REPLAY = "SIGN_COUNT_REPLAY";
-    /** webauthn4j 서명/검증 실패(manager.verify 예외). */
+    /** assertion 검증 실패(verifier.verifyAuthentication 의 WebAuthnVerificationException). 서명 외 사유도 이 값이다. */
     public static final String SIGNATURE_INVALID = "SIGNATURE_INVALID";
 
     private CredentialAuthFailureReason() {}

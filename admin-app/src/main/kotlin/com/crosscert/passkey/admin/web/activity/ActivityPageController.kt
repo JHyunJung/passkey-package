@@ -47,7 +47,7 @@ import java.util.regex.Pattern
 private val log = LoggerFactory.getLogger(ActivityPageController::class.java)
 
 /**
- * 활동 화면(← pages/ActivityPage.tsx, api/activity.ts). PLATFORM 전용 — RP_ADMIN 은 [HomeRedirectController] 와 같은 규칙으로
+ * 활동 화면. PLATFORM 전용 — RP_ADMIN 은 [HomeRedirectController] 와 같은 규칙으로
  * 자기 홈으로 보내고(전체 페이지), 조각·CSV 는 403 이다. REST 의 `@PreAuthorize` 도 함께 막는다.
  *
  * 구조: 전체 페이지 `GET /admin/activity`, 목록 교체 `/admin/_/activity/rows`(필터 변경·다시 시도),
@@ -55,13 +55,14 @@ private val log = LoggerFactory.getLogger(ActivityPageController::class.java)
  * CSV `/admin/_/activity/export`. 서버는 상태가 없다 — 화면에 보이는 목록(DOM)이 상태이고, 요청마다 현재 필터와
  * 숨은 입력(가장 새 행 id, 가장 오래된 행의 커서, 날짜 머리글 라벨)이 실린다.
  *
- * - 폴링은 원본처럼 최신 한 쪽만 받아 "아직 없는 행만" 앞에 붙인다(OOB afterbegin). 더 보기로 불러온 행·펼친 상세·스크롤은 그대로다.
- * - 필터(카테고리·tenant)가 바뀌면 목록을 통째로 교체한다. 액션 검색(q)은 원본처럼 서버가 아니라 클라이언트(Alpine)가 읽어 온 행을 거른다.
+ * - 폴링은 최신 한 쪽만 받아 "아직 없는 행만" 앞에 붙인다(OOB afterbegin). 더 보기로 불러온 행·펼친 상세·스크롤은 그대로다.
+ * - 필터(카테고리·tenant)가 바뀌면 목록을 통째로 교체한다. 액션 검색(q)은 서버가 아니라 클라이언트(Alpine)가 읽어 온 행을 거른다.
  *   날짜 그룹은 KST 날짜 키(id=day-KEY)로 이어 붙는다.
  * - 사용자 입력(행위자·tenant 이름·payload 값)은 템플릿에서 th:text 로만 그린다. 상세의 diff 도 문자열이다.
  *
- * `!!` 는 원 Java 가 nullable 값(`ActivityView.Event.id`·`TopTenant.tenantId`·`TenantView.id` 의 `toString()`, `kpi`·`top5` 역참조)에서
- * NPE 를 내던 자리에만 둔다 — 모두 try 밖(원 Java 와 같은 쪽)이다.
+ * 이 파일의 `!!` 는 타입만 nullable 이고 실제로는 채워지는 값에만 둔다: ActivityService.snapshot 이 늘 넣는 `kpi`·`top5`,
+ * DB 에서 읽은 id(`ActivityView.Event.id`·`TenantView.id`), top5 쿼리가 tenant_id NULL 행을 빼고 고르는 `TopTenant.tenantId`,
+ * `TenantAdminController.list()` 의 data. 모두 조회 try 밖이라 null 이면 NPE 가 WebExceptionAdvice(500)로 간다.
  */
 @Controller
 class ActivityPageController(
@@ -73,14 +74,14 @@ class ActivityPageController(
 
     // ── 모델 ────────────────────────────────────────────────
 
-    /** 조회 조건. category: all|ops|security, tenantId: 없으면 null, q: 입력 그대로(필터 때만 trim). */
+    /** 조회 조건. category: all|ops|security, tenantId: 없으면 null. 액션 검색어(q)는 서버로 오지 않는다. */
     internal data class Filter(val category: String, val tenantId: UUID?) {
         fun categoryParam(): String? = if (CAT_ALL == category) null else category
 
         fun hasServerApplied(): Boolean = CAT_ALL != category || tenantId != null
     }
 
-    /** 피드 한 줄(원본 adaptFeedItems 의 DisplayEvent + 화면 값). */
+    /** 피드 한 줄의 화면 값. */
     data class Ev(
         val id: String,
         val type: String,
@@ -96,7 +97,7 @@ class ActivityPageController(
         val detailAttrs: Map<String, Any?>,
     )
 
-    /** 원본 groupByDay 의 그룹. key = KST 날짜(yyyy-MM-dd) — 폴링·더 보기가 이 키로 기존 그룹에 이어 붙는다. */
+    /** 날짜 그룹. key = KST 날짜(yyyy-MM-dd) — 폴링·더 보기가 이 키로 기존 그룹에 이어 붙는다. */
     data class Day(val label: String, val key: String?, val events: List<Ev>)
 
     data class TopRow(
@@ -144,7 +145,7 @@ class ActivityPageController(
     /**
      * 목록 교체(필터 변경·다시 시도). 목록 영역(`#activity-main`)과 OOB 로 KPI·적용된 필터·활발한 tenant·숨은 상태를 돌려준다.
      * `reset` 은 서버가 값을 되돌려 써야 하는 컨트롤(category,tenant,q — 칩 제거·모두 지우기·활발한 tenant 클릭)이다. 사용자가 방금 친 입력과
-     * 선택은 되돌려 쓰지 않는다(포커스·타이핑 보존). 조회 실패는 422 + 같은 영역의 오류 카드(원본의 LoadError, 토스트 없음).
+     * 선택은 되돌려 쓰지 않는다(포커스·타이핑 보존). 조회 실패는 422 + 같은 영역의 오류 카드(loadError 조각, 토스트 없음).
      */
     @GetMapping(ROWS_PATH)
     fun rows(
@@ -167,7 +168,7 @@ class ActivityPageController(
             error = e
             res.status = 422
         }
-        // 필터는 URL 이 단일 출처 — 새로고침·링크 공유에도 유지(원본 setSearchParams replace). 검색어는 주소에 두지 않는다.
+        // 필터는 URL 이 단일 출처 — 새로고침·링크 공유에도 유지(HX-Replace-Url). 검색어는 주소에 두지 않는다.
         res.setHeader("HX-Replace-Url", canonicalUrl(f))
         // Kotlin split 은 끝의 빈 토큰을 남기지만(Java split 은 제거) 비어 있지 않은 이름의 contains 판정은 같다.
         val resets = reset.split(",")
@@ -179,7 +180,7 @@ class ActivityPageController(
 
     /**
      * 폴링·새로고침. 최신 한 쪽을 받아 `top`(화면의 가장 새 행 id) 앞의 행만 앞에 붙이고 KPI·활발한 tenant 를 맞춘다.
-     * 응답 본문은 OOB 조각뿐이다(`hx-swap="none"`). 조회 실패는 503 + 빈 본문 + 토스트 없음 — 화면은 "연결 끊김"으로만 알린다(원본 disconnected).
+     * 응답 본문은 OOB 조각뿐이다(`hx-swap="none"`). 조회 실패는 503 + 빈 본문 + 토스트 없음 — 화면은 "연결 끊김"으로만 알린다.
      */
     @GetMapping(POLL_PATH)
     fun poll(
@@ -205,7 +206,7 @@ class ActivityPageController(
             return EMPTY_VIEW
         }
         if ("0" == loaded) {
-            // 첫 조회(또는 필터를 바꾼 조회)가 실패한 상태에서 폴링이 성공했다 — 원본은 이때 목록을 통째로 보인다(replace). 목록 영역을 교체한다.
+            // 첫 조회(또는 필터를 바꾼 조회)가 실패한 상태에서 폴링이 성공했다 — 이때는 목록 영역을 통째로 교체한다.
             res.setHeader("HX-Retarget", "#activity-main")
             res.setHeader("HX-Reswap", "innerHTML")
             model.addAttribute("resetCategory", false)
@@ -222,14 +223,13 @@ class ActivityPageController(
         splitDays(model, days, day, "fresh")
         model.addAttribute("hasFresh", !fresh.isEmpty())
         model.addAttribute("clearEmpty", wasEmpty && !fresh.isEmpty())
-        // !! : 원 Java feed.get(0).getId().toString() NPE 자리.
         model.addAttribute("topId", if (fresh.isEmpty()) null else feed[0].id!!.toString())
         model.addAttribute("topDay", if (fresh.isEmpty()) null else dayKey(feed[0]))
         // 비어 있던 목록이 처음 채워지면 더 보기·CSV 가 쓸 아래쪽 커서도 정한다.
         model.addAttribute("bottomState", wasEmpty && !feed.isEmpty())
         fillBottomState(model, feed)
         fillKpis(model, view, true)
-        val topRows = topRows(view!!, f) // !! : 원 Java topRows 안 view.getTop5() NPE 자리(그 전 응답 헤더 쓰기 없음)
+        val topRows = topRows(view!!, f) // `!!`: ActivityController.activity() 는 data 를 늘 채운다
         val sig = topSig(topRows, f)
         model.addAttribute("topChanged", sig != topSig)
         model.addAttribute("top", topRows)
@@ -238,7 +238,7 @@ class ActivityPageController(
         return POLL_VIEW
     }
 
-    /** 더 보기: 가장 오래된 행(커서 `before`/`beforeId`, 튜플 커서 F07) 이전 한 쪽을 아래에 붙인다. */
+    /** 더 보기: 가장 오래된 행(`before`/`beforeId` 튜플 커서) 이전 한 쪽을 아래에 붙인다. */
     @GetMapping(MORE_PATH)
     fun more(
         @RequestParam(name = "category", defaultValue = "") category: String,
@@ -251,7 +251,7 @@ class ActivityPageController(
     ): String {
         requirePlatform(model)
         val f = filter(category, tenantId)
-        val cursor = parseCursor(before) ?: return EMPTY_VIEW // 읽어 온 행이 없다 — 원본도 아무 것도 하지 않는다
+        val cursor = parseCursor(before) ?: return EMPTY_VIEW // 읽어 온 행이 없다 — 아무 것도 하지 않는다
         val now = clock.instant()
         val view: ActivityView? // 위 poll 과 같은 이유로 nullable(feedOf 가 null 을 받는다)
         try {
@@ -312,7 +312,7 @@ class ActivityPageController(
     }
 
     /**
-     * CSV(원본 downloadCsv: activity-{KST 오늘}.csv, 열 timestamp·tenant·type·category·actor·subject). 원본은 화면에 읽어 온 행 전부(액션 검색은
+     * CSV(activity-{KST 오늘}.csv, 열 timestamp·tenant·type·category·actor·subject). 화면에 읽어 온 행 전부(액션 검색은
      * 거르지 않음)를 내보낸다 — 서버는 최신 쪽부터 경계 행(`beforeId` = 화면의 가장 오래된 행)이 나올 때까지 이어 읽는다(커서가 없으면 최신 한 쪽).
      * 화면의 더 보기는 쪽 수 상한이 없으므로 내보내기도 경계까지 읽되 [ExportLimit.MAX_PAGES] 쪽 안에 닿지 못하면 422(이유 문구).
      * 그 사이 위에 새 행이 생겨도 경계는 id 로 찾으므로 영향이 없다(새 행은 폴링이 화면 맨 위에도 붙인다).
@@ -388,7 +388,6 @@ class ActivityPageController(
         model.addAttribute("topChanged", true)
 
         // 숨은 상태: 가장 새 행·아래쪽 커서·날짜 머리글(이후 폴링·더 보기가 이어 받는다)
-        // !! : 원 Java feed.get(0).getId().toString() NPE 자리.
         model.addAttribute("topId", if (feed.isEmpty()) "" else feed[0].id!!.toString())
         model.addAttribute("topDay", if (feed.isEmpty()) "" else dayKey(feed[0]))
         model.addAttribute("bottomState", true)
@@ -408,7 +407,6 @@ class ActivityPageController(
         val tenantOpts = ArrayList<Option>()
         for (t in tenantList) {
             val name = t.displayName ?: ""
-            // !! : 원 Java t.getId().toString() NPE 자리.
             val tid = t.id!!
             tenantOpts.add(Option(tid.toString(), name + " (" + t.slug + ")", tid == f.tenantId))
         }
@@ -427,17 +425,15 @@ class ActivityPageController(
         )
         var slug: String? = null
         if (f.tenantId != null) {
-            // 원 Java t.getId().equals(...) 의 NPE 는 위 tenantOpts 루프에서 이미 났다 — 여기선 null id 가 올 수 없다.
             for (t in tenantList) if (t.id == f.tenantId) slug = t.slug
-            // !! : 원 Java for (t : view.getTop5()) 는 top5 가 null 이면 NPE.
             if (slug == null && view != null) for (t in view.top5!!) if (f.tenantId == t.tenantId) slug = t.slug
             if (slug == null) slug = f.tenantId.toString()
         }
         model.addAttribute("tenantSlug", slug)
         model.addAttribute("chipCategoryAttrs", rowsReq("$ROWS_PATH?category=all&reset=category", "#activity-tenant"))
         model.addAttribute("chipTenantAttrs", rowsReq("$ROWS_PATH?tenantId=&reset=tenant", "#activity-cat"))
-        // 액션 검색은 원본처럼 이미 읽어 온 행을 클라이언트에서 거른다 — 검색어 칩 제거·모두 지우기의 검색어 부분은 Alpine(clearQ)이 한다.
-        // 모두 지우기는 서버 필터(카테고리·tenant)가 있을 때만 목록을 다시 읽는다(원본 clearFilters 는 바뀌는 서버 필터가 없으면 다시 조회하지 않는다).
+        // 액션 검색은 이미 읽어 온 행을 클라이언트에서 거른다 — 검색어 칩 제거·모두 지우기의 검색어 부분은 Alpine(clearQ)이 한다.
+        // 모두 지우기는 서버 필터(카테고리·tenant)가 있을 때만 목록을 다시 읽는다(없으면 clearAttrs 가 null).
         model.addAttribute(
             "clearAttrs",
             if (f.hasServerApplied()) rowsReq("$ROWS_PATH?category=all&tenantId=&reset=category,tenant", null) else null,
@@ -453,14 +449,12 @@ class ActivityPageController(
     private fun fillBottomState(model: Model, rawFeed: List<ActivityView.Event>) {
         val last = if (rawFeed.isEmpty()) null else rawFeed[rawFeed.size - 1]
         model.addAttribute("beforeIso", if (last == null) "" else iso(last))
-        // !! : 원 Java last.getId().toString() NPE 자리.
         model.addAttribute("beforeId", if (last == null) "" else last.id!!.toString())
         model.addAttribute("lastDay", if (last == null) "" else dayKey(last))
     }
 
     private fun fillKpis(model: Model, view: ActivityView?, oob: Boolean) {
         if (view != null) {
-            // !! : 원 Java k.getEvents24h() 는 kpi 가 null 이면 NPE(첫 역참조 자리, 그 전 모델 쓰기 없음).
             val k = view.kpi!!
             model.addAttribute("kpiEvents", fmt(k.events24h))
             model.addAttribute("kpiOps", fmt(k.ops24h))
@@ -472,7 +466,7 @@ class ActivityPageController(
             model.addAttribute("kpiSecurity", "—")
             model.addAttribute("kpiSecurityBad", false)
         }
-        // §6: 서버가 p95Ms 를 주지 않으면(현재 항상 null) KPI 를 그리지 않는다.
+        // 서버가 p95Ms 를 주지 않으면(현재 항상 null) KPI 를 그리지 않는다.
         val p95: Long? = view?.kpi?.p95Ms
         model.addAttribute("kpiP95", if (p95 == null) null else "${p95}ms")
         model.addAttribute("kpiP95Hint", if (p95 == null) null else "p95 ${p95}ms")
@@ -481,7 +475,7 @@ class ActivityPageController(
 
     // ── 피드 → 화면 값 ───────────────────────────────────────
 
-    /** KST 날짜(yyyy-MM-dd)별로 묶는다(원본 groupByDay). 입력은 최신순. */
+    /** KST 날짜(yyyy-MM-dd)별로 묶는다(KstFormat.groupByDay). 입력은 최신순. */
     private fun days(feed: List<ActivityView.Event>, now: Instant): List<Day> {
         val evs = ArrayList<Ev>()
         for (e in feed) evs.add(ev(e))
@@ -494,7 +488,7 @@ class ActivityPageController(
 
     private fun ev(e: ActivityView.Event): Ev {
         val type = nz(e.action)
-        val tenantName = if (e.tenantSlug != null) e.tenantSlug else if (e.tenantId != null) e.tenantId.toString() else "—" // adaptFeedItems
+        val tenantName = if (e.tenantSlug != null) e.tenantSlug else if (e.tenantId != null) e.tenantId.toString() else "—"
         val actor = e.actorEmail
         val subject = e.targetId ?: "—"
         val sentence = ActivityLabels.eventSentence(ActivityLabels.EventSentenceInput(type, actor ?: "", e.tenantSlug, null, subject))
@@ -506,7 +500,6 @@ class ActivityPageController(
         attrs["hx-sync"] = "#activity-detail:replace"
         attrs["data-quiet"] = true // 네트워크 실패는 패널 안에서 알린다(전역 토스트 없음)
         return Ev(
-            // !! : 원 Java e.getId().toString() NPE 자리.
             e.id!!.toString(), type, type.uppercase(Locale.ROOT), ActivityLabels.actionLabel(type), TONE_VAR[eventTone(type, nz(e.category))],
             KstFormat.kstTime(e.createdAt), iso(e), if (e.tenantId == null) null else e.tenantId.toString(), tenantName,
             if (e.tenantId == null) null else "/admin/tenants/" + e.tenantId, sentence, attrs,
@@ -523,7 +516,6 @@ class ActivityPageController(
             val attrs = rowsReq(ROWS_PATH + "?tenantId=" + t.tenantId + "&reset=tenant", "#activity-cat")
             rows.add(
                 TopRow(
-                    // !! : 원 Java t.getTenantId().toString() NPE 자리.
                     t.tenantId!!.toString(), slug, slug, if (slug.isEmpty()) "" else slug.substring(0, 1).uppercase(Locale.ROOT),
                     fmt(t.count), Math.round(t.count * 100.0 / max).toInt(), t.tenantId == f.tenantId, attrs,
                 ),
@@ -588,7 +580,7 @@ class ActivityPageController(
         )
     }
 
-    /** parsePayload(raw) ? JSON.stringify(payload, null, 2) : raw. JS 의 falsy(null·0·false·"")는 원문 그대로. */
+    /** payload 를 들여쓴 JSON 으로. 파싱에 실패하거나 값이 null·0·false·빈 문자열이면 원문 그대로. */
     private fun prettyPayload(raw: String?): String {
         if (raw == null) return ""
         try {
@@ -601,7 +593,7 @@ class ActivityPageController(
         }
     }
 
-    /** 원본 CSV 의 timestamp: 서버가 직렬화한 createdAt 문자열 그대로(앱 ObjectMapper). */
+    /** CSV 의 timestamp: 앱 ObjectMapper 로 직렬화한 createdAt 문자열(실패하면 toString). */
     private fun rawTs(e: ActivityView.Event): String {
         val createdAt = e.createdAt ?: return ""
         try {
@@ -617,10 +609,10 @@ class ActivityPageController(
             tenants.list().data()
         } catch (e: RuntimeException) {
             if (denied(e)) throw e
-            log.warn("[activity] tenant list for filter failed: {}", e.toString()) // 원본: catch → []
+            log.warn("[activity] tenant list for filter failed: {}", e.toString())
             return java.util.List.of()
         }
-        // !! : data() 는 플랫폼 타입 — 원 Java 는 null 을 그대로 돌려 populate 의 for 루프(같은 try 밖)에서 NPE. 그 사이 응답 쓰기는 없다.
+        // `!!`: list() 는 data 를 늘 채운다. null 이면 여기서 NPE — 부르는 쪽(page·rows·poll)의 조회 try 밖이다.
         return list!!
     }
 
@@ -639,7 +631,7 @@ class ActivityPageController(
         internal const val DETAIL_VIEW = "admin/activity/detail :: panel"
         internal const val EMPTY_VIEW = "admin/fragments/shell/empty :: none"
 
-        /** ActivityPage.tsx 의 POLL_MS. 템플릿의 `hx-trigger="every Ns"` 가 이 값에서 나온다. */
+        /** 폴링 주기. [pollReq] 의 `hx-trigger="every Ns"` 와 모델의 pollMs·pollSec 이 이 값에서 나온다. */
         internal const val POLL_MS = 5000
 
         /** 서버 피드 한 쪽 크기(ActivityService.FEED_PAGE). CSV 가 불러온 행까지 이어 읽을 때 쓴다. */
@@ -655,7 +647,6 @@ class ActivityPageController(
         private fun feedOf(v: ActivityView?): List<ActivityView.Event> = if (v == null || v.feed == null) java.util.List.of() else v.feed
 
         private fun indexOfId(feed: List<ActivityView.Event>, id: String): Int {
-            // !! : 원 Java feed.get(i).getId().toString() NPE 자리.
             for (i in feed.indices) if (feed[i].id!!.toString() == id) return i
             return -1
         }

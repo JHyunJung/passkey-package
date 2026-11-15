@@ -13,16 +13,16 @@ import java.util.UUID;
 public class SchedulerLease {
 
     /**
-     * UUID primary key. Oracle's DEFAULT SYS_GUID() in V19 assigns the id
+     * UUID primary key. Oracle's DEFAULT SYS_GUID() on the ID column assigns the id
      * when the row is inserted without an explicit id (e.g. raw-SQL IT inserts).
      * When inserting via JPA, the caller must set id explicitly via the constructor
      * or the service must generate one before persisting. No @UuidGenerator here
-     * because the V19 schema retains DEFAULT SYS_GUID() to keep IT test raw-SQL
+     * because the schema retains DEFAULT SYS_GUID() to keep IT test raw-SQL
      * inserts (which omit the id column) valid.
+     * V1 의 AUDIT_CHAIN_LOCK 시드 행도 id 를 생략하고 INSERT 한다.
      *
      * For the same reason this entity does NOT extend BaseEntity.
-     * createdAt/updatedAt are declared here directly to satisfy the
-     * Phase 8 "every entity has updated_at" policy.
+     * createdAt/updatedAt are declared here directly (the table has both columns).
      */
     @Id
     @JdbcTypeCode(SqlTypes.UUID)

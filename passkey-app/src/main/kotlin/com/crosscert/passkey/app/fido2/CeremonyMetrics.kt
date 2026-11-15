@@ -3,7 +3,7 @@ package com.crosscert.passkey.app.fido2
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.stereotype.Component
 
-/** WebAuthn ceremony 메트릭 (P1-2). counter 이름·태그 키를 한 곳에 응집. */
+/** WebAuthn ceremony 메트릭. counter 이름·태그 키를 한 곳에 응집. */
 @Component
 class CeremonyMetrics(private val registry: MeterRegistry) {
 

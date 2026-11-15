@@ -19,8 +19,8 @@ import org.springframework.web.filter.OncePerRequestFilter
  *
  * Allow-listed while pending so the user can complete the second factor:
  * - `/admin/api/mfa/verify` — verify endpoint only.
- * - `/admin/api/me` — so the SPA can read its own session state
- *   (notably `mfaRequired`) and decide to show the MFA challenge.
+ * - `/admin/api/me` — so a client can read its own session state
+ *   (notably `mfaRequired`).
  * - `/admin/logout` — let the operator abandon the half-finished login.
  * - `GET /admin/login`, `POST /admin/login/mfa` — the server-rendered MFA step.
  * - `/admin/css/\*\*`, `/admin/js/\*\*`, `/admin/fonts/\*\*`, `/admin/img/\*\*` — static assets.

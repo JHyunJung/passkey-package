@@ -16,8 +16,10 @@ import java.time.Duration
  * GET /admin/api/license — returns the current LicenseView.
  *
  * Always available; in SaaS mode it returns a sentinel view
- * (deploymentMode=saas, state=null) so the SPA can use the same
- * fetch on both modes.
+ * (deploymentMode=saas, state=null) so callers can use the same
+ * call on both modes.
+ * 화면(LicensePageController, ShellController, ShellAdvice)은 HTTP 가 아니라 [get] 을 직접 부른다.
+ * LicenseStateMachine 빈은 passkey.deployment.mode=onprem 일 때만 있다(core LicenseBootstrap) — 없으면 위 sentinel.
  */
 @RestController
 @RequestMapping("/admin/api/license")
@@ -52,7 +54,7 @@ class LicenseController(
                 s.token().jti(),
                 s.token().expiresAt(),
                 daysLeft,
-                // List.copyOf: null 요소면 NPE(원 Java 와 동일) + 불변 사본.
+                // List.copyOf: 불변 사본(null 요소면 NPE).
                 java.util.List.copyOf(s.token().features()),
                 s.lastVerifiedAt(),
                 graceLeft,

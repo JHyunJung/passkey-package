@@ -17,10 +17,10 @@ import org.springframework.context.annotation.Primary;
  * {@code spring.datasource.hikari.*} onto the resulting HikariDataSource
  * directly so pool tuning takes effect.
  *
- * <p>Tenant isolation is provided entirely by the app-level Hibernate
- * {@code @Filter} activated by
- * {@link com.crosscert.passkey.core.tenant.TenantFilterAspect}. There is
- * no DB-kernel VPD layer.
+ * <p>The app-level Hibernate {@code @Filter} activated by
+ * {@link com.crosscert.passkey.core.tenant.TenantFilterAspect} is the only
+ * tenant isolation mechanism; there is no DB-kernel VPD layer. See
+ * TenantFilterAspect for the queries it does not cover.
  */
 @Configuration
 public class CoreDataSourceConfig {

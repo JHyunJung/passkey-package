@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component
 private const val UNMAPPED_RP_SCOPE = "__unmapped_rp__"
 
 /**
- * RP-facing 요청 경로를 요구 API key scope 로 매핑 (P1-5).
+ * RP-facing 요청 경로를 요구 API key scope 로 매핑.
  *
  * scope 값은 api_key_scope 테이블의 enum(registration/authentication/admin)과
  * 일치. 이 resolver 는 현재 registration/authentication 만 매핑(admin 은 RP-facing
@@ -24,9 +24,9 @@ class ApiKeyScopeResolver {
             path.isUnder("/api/v1/rp/registration") -> "registration"
             path.isUnder("/api/v1/rp/authentication") -> "authentication"
             // self-service credential 관리(목록/이름변경/삭제)는 등록 계열 — registration scope.
-            // 주의: DELETE(기존 패스키 삭제)도 이 scope로 허용된다 — 파괴적 작업의 scope 분리는
-            // 향후 정책 논의 대상(docs/backlog.md §2 "credential DELETE 가 registration scope 를 공유").
-            // 현재는 등록 계열로 통일.
+            // 주의: DELETE(기존 패스키 삭제)도 이 scope로 허용된다. 별도 scope 로 나누면 이미 발급된 키의
+            // 삭제 요청이 모두 403 이 되므로 등록 계열로 유지하기로 결정했다
+            // (docs/backlog.md "credential DELETE 가 registration scope 를 공유").
             path.isUnder("/api/v1/rp/credentials") -> "registration"
             // fail-closed: /api/v1/rp/ 하위인데 매핑 안 된 경로는 어떤 키도 보유 불가능한
             // sentinel scope 를 요구해 403. 새 RP 엔드포인트가 scope 매핑 없이 추가돼도

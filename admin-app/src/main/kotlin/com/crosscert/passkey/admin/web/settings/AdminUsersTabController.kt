@@ -49,21 +49,26 @@ private const val PLATFORM_ROLE = "PLATFORM_OPERATOR"
 private const val RP_ROLE = "RP_ADMIN"
 
 /**
- * 설정 › Admin 사용자 탭(← pages/settings/AdminUsersTab.tsx, api/adminUsers.ts, api/signupRequests.ts). PLATFORM 전용 — 모든 엔드포인트가 PLATFORM 을 먼저 확인한다
+ * 설정 › Admin 사용자 탭. PLATFORM 전용 — 모든 엔드포인트가 PLATFORM 을 먼저 확인한다
  * (RP_ADMIN → 403, REST 미호출). 일반 탭 매핑보다 이 리터럴 경로가 우선한다.
  *
  * 화면: 가입 요청 카드(#au-signups) + 콘솔 운영자 카드(#au-users). 승인·거절은 `SignupRequestController`, 정지·활성화는 `AdminUserController`.
- * 원본에 없는 동작은 만들지 않는다: `addTenant`/`removeTenant` 는 원본 탭이 부르지 않아 화면에도 없다.
- * - 정지: 행의 "정지…" → L1 확인 다이얼로그. 본인·마지막 활성 PLATFORM 은 버튼을 막고 이유를 보인다(원본 suspendBlock). 확인 때 서버가 목록을 다시 읽어
- *   ACTIVE 인지·막힘 규칙(본인·마지막 PLATFORM)을 한 번 더 본다(원본 staleReason/suspendBlock) — 어긋나면 REST 를 부르지 않고 확인창 안에 409 사유.
- * - 활성화: 확인 없이 바로(원본 handleActivate). 행 버튼은 요청 동안 비활성(hx-disabled-elt, hx-sync=this:drop).
- * - 승인: "승인…" → 대화상자(GET) → 제출. RP_ADMIN 인데 tenant 를 안 고르면 422 + 대화상자 안 오류(ruling G). 409(다른 관리자가 먼저)는 경고 토스트 후 목록 갱신.
+ * 운영자의 tenant 추가·제거(`addTenant`/`removeTenant`)는 이 탭에 없다.
+ * - 정지: 행의 "정지…" → L1 확인 다이얼로그. 본인·마지막 활성 PLATFORM 은 버튼을 막고 이유를 보인다(`suspendBlock`). 확인 때 서버가 목록을 다시 읽어
+ *   ACTIVE 인지·막힘 규칙(본인·마지막 PLATFORM)을 한 번 더 본다 — 어긋나면 REST 를 부르지 않고 확인창 안에 409 사유.
+ * - 활성화: 확인 없이 바로. 행 버튼은 요청 동안 비활성(hx-disabled-elt, hx-sync=this:drop).
+ * - 승인: "승인…" → 대화상자(GET) → 제출. RP_ADMIN 인데 tenant 를 안 고르면 422 + 대화상자 안 오류. 409(다른 관리자가 먼저)는 경고 토스트 후 목록 갱신.
  * - 거절: L1 확인. 409 는 경고 토스트 후 목록 갱신. 승인·거절 뒤 탭 줄의 가입 요청 수 배지를 OOB 로 갱신한다.
  *
  * 이메일·tenant 이름·가입 사유는 사용자가 정한 값이라 템플릿에서 th:text 로만 그린다.
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 `platform(model)` 판정(403)이 먼저다. 넘기는 자리의 `!!` 는 원 Java 에서
- * Kotlin 피호출자의 파라미터 검사 NPE 가 나던 자리(try 안팎도 같다).
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 `SettingsSupport.platform(model)` 판정(403)이 먼저다. `/admin/_/` 는 인증 필수라
+ * (AdminSecurityConfig) 정상 경로에선 null 이 아니다. `auth!!` 는 REST 컨트롤러가 non-null `Authentication` 을 받기 때문이고,
+ * null 이면 NPE 를 받는 쪽은 자리마다 다르다: 정지는 try 밖(WebExceptionAdvice 500), 활성화·승인은 각자의 catch 가
+ * 실패 응답(SettingsSupport.fail, 되돌리기는 오류 토스트 + 카드)으로, 거절은 409 가 아니므로 catch 가 다시 던져 WebExceptionAdvice 500.
+ *
+ * id·email 의 `!!`: 운영자(admin_user)·가입 요청(admin_signup_request)의 id·email 과 Tenant 의 id 는 NOT NULL 열에서 읽는다
+ * (타입만 nullable).
  */
 @Controller
 class AdminUsersTabController(
@@ -75,7 +80,7 @@ class AdminUsersTabController(
 
     // ── 모델 ────────────────────────────────────────────────
 
-    /** Tenant 열(원본 TenantCell): ALL=전체 tenant, NONE=—, NAME=이름(+외 N개), ID=이름을 모를 때 id 꼬리. */
+    /** Tenant 열: ALL=전체 tenant, NONE=—, NAME=이름(+외 N개), ID=이름을 모를 때 id 꼬리. */
     data class TenantCell(val kind: String?, val text: String?, val title: String?, val more: Int)
 
     data class OpRow(
@@ -121,7 +126,7 @@ class AdminUsersTabController(
         return TAB_VIEW
     }
 
-    /** 승인 대화상자: 활성 tenant 목록을 지금 읽어 그린다(원본 ApproveDialog 가 열릴 때 tenantsApi.list). */
+    /** 승인 대화상자: 활성 tenant 목록을 열 때마다 새로 읽어 그린다. */
     @GetMapping(SIGNUP_BASE + "{id}/approve")
     fun approveDialog(@PathVariable id: UUID, model: Model): String {
         SettingsSupport.platform(model)
@@ -133,7 +138,7 @@ class AdminUsersTabController(
                 if ("ACTIVE" == t.status) {
                     opts.add(
                         TenantOpt(
-                            // !!: 원 Java t.getId().toString() 의 NPE 와 같은 자리(try 안 — 빈 목록으로).
+                            // `!!`: 클래스 KDoc 참고. null 이면 아래 catch 가 삼켜 그때까지 담은 tenant 만 보인다.
                             t.id!!.toString(), t.displayName, t.slug,
                             (t.displayName + " " + t.slug).lowercase(Locale.ROOT),
                         ),
@@ -142,7 +147,7 @@ class AdminUsersTabController(
             }
         } catch (e: RuntimeException) {
             if (e is AccessDeniedException) throw e
-            log.debug("[settings] tenants for approve dialog failed: {}", e.javaClass.simpleName) // non-critical: 빈 목록
+            log.debug("[settings] tenants for approve dialog failed: {}", e.javaClass.simpleName) // non-critical: 그때까지 담은 tenant 만(첫 항목 전 실패면 빈 목록)
         }
         model.addAttribute("req", signupRow(req, Instant.now(clock)))
         model.addAttribute("tenantOpts", opts)
@@ -165,7 +170,7 @@ class AdminUsersTabController(
         val me = SettingsSupport.platform(model)
         val list = users.list()
         val row = list.firstOrNull { id == it.id }
-        // 원본 confirmSuspend: 목록이 낡았거나(상태 바뀜) 막힌 대상이면 REST 를 부르지 않고 사유를 확인창 안에 보인다.
+        // 목록이 낡았거나(상태 바뀜) 막힌 대상이면 REST 를 부르지 않고 사유를 확인창 안에 보인다.
         if (row == null || "ACTIVE" != row.status) {
             return SettingsSupport.blocked(res, "운영자 상태가 바뀌었습니다. $STALE_REASON", Toasts.isConfirm(req))
         }
@@ -179,8 +184,8 @@ class AdminUsersTabController(
     }
 
     /**
-     * 활성화. 행의 "활성화" 버튼은 확인 없이 바로 호출한다(원본 handleActivate — 호출 전에 목록을 읽지 않는다; 토스트의 이메일은 버튼이 보낸 그 행의 이메일).
-     * `undo=1` 은 정지 토스트의 "되돌리기"(원본 undoSuspend): 지금 정지 상태인지 확인하고(아니면 REST 미호출 + 경고), 원본의 성공·실패 문구를 쓴다.
+     * 활성화. 행의 "활성화" 버튼은 확인 없이 바로 호출한다(호출 전에 목록을 읽지 않는다; 토스트의 이메일은 버튼이 보낸 그 행의 이메일).
+     * `undo=1` 은 정지 토스트의 "되돌리기": 지금 정지 상태인지 확인하고(아니면 REST 미호출 + 경고), 되돌리기 전용 성공·실패 문구를 쓴다.
      */
     @PostMapping(USER_BASE + "{id}/activate")
     fun activate(
@@ -209,7 +214,7 @@ class AdminUsersTabController(
         } catch (e: RuntimeException) {
             if (e is AccessDeniedException) throw e
             if (!isUndo) return SettingsSupport.fail(res, "활성화하지 못했습니다", e, Toasts.isConfirm(req))
-            // 되돌리기 실패(사전 확인·활성화): 원본은 실패 뒤에도 목록을 다시 읽는다 → 오류 토스트 + 갱신된 카드(200)
+            // 되돌리기 실패(사전 확인·활성화): 실패 뒤에도 목록을 다시 읽는다 → 오류 토스트 + 갱신된 카드(200)
             val info = ErrorMessages.describe(e)
             Toasts.errorTitled(
                 res, "정지를 되돌리지 못했습니다", info.title + ". 목록에서 “활성화”를 눌러 다시 시도하세요.",
@@ -218,15 +223,15 @@ class AdminUsersTabController(
             return usersResult(model, res, me)
         }
         val ok = loadUsers(model, me, loadTenantNames())
-        // 토스트의 이메일(원본 u.email): 되돌리기는 사전 확인에서 읽은 행, 행의 "활성화"는 버튼이 함께 보낸 그 행의 이메일(활성화 전에 화면이 알던 값 —
+        // 토스트의 이메일: 되돌리기는 사전 확인에서 읽은 행, 행의 "활성화"는 버튼이 함께 보낸 그 행의 이메일(활성화 전에 화면이 알던 값 —
         // 다시 읽기에 실패해도 남는다). 둘 다 없으면 다시 읽은 목록에서 찾는다. 토스트 문구에만 쓰고 th:text/x-text 로만 그린다.
-        // !!: 원 Java 의 known.isEmpty() 는 행 이메일이 null 이면 NPE(try 밖) — 같은 자리.
+        // `!!`: known 은 "" 이거나 사전 확인에서 읽은 row.email(NOT NULL 열)이다. null 이면 NPE — try 밖이라 500(활성화는 이미 끝난 뒤).
         var email: String = if (known!!.isEmpty()) rowEmail.javaTrim() else known
         if (email.isEmpty() && ok) {
             @Suppress("UNCHECKED_CAST")
             val ops = model.getAttribute("ops") as List<OpRow>
             val match = ops.firstOrNull { id.toString() == it.id }
-            // !!: 원 Java Stream.map(OpRow::email).findFirst() 는 첫 일치 행의 이메일이 null 이면 NPE — 같은 자리.
+            // `!!`: OpRow.email 은 운영자 email(NOT NULL 열)이다. null 이면 위와 같이 500.
             email = if (match == null) "" else match.email!!
         }
         if (isUndo) Toasts.successTitled(res, "$email 운영자의 정지를 되돌렸습니다.", "")
@@ -234,7 +239,7 @@ class AdminUsersTabController(
         return if (ok) USERS_VIEW else warnUsers(model, res)
     }
 
-    /** 변경 성공 뒤 운영자 카드 응답: 다시 읽기에 성공하면 카드를 교체, 실패하면 화면은 그대로 두고 경고 자리만 채운다(원본 StaleWarning). */
+    /** 변경 성공 뒤 운영자 카드 응답: 다시 읽기에 성공하면 카드를 교체, 실패하면 화면은 그대로 두고 경고 자리만 채운다. */
     private fun usersResult(model: Model, res: HttpServletResponse, me: CurrentAdmin): String =
         if (loadUsers(model, me, loadTenantNames())) USERS_VIEW else warnUsers(model, res)
 
@@ -252,7 +257,7 @@ class AdminUsersTabController(
     // ── 가입 요청 ───────────────────────────────────────────
 
     /**
-     * 승인. role 은 PLATFORM_OPERATOR | RP_ADMIN, RP_ADMIN 은 tenant 1개 이상(원본 formValid). PLATFORM 은 tenant 를 보내지 않는다(원본 tenantIds: []).
+     * 승인. role 은 PLATFORM_OPERATOR | RP_ADMIN, RP_ADMIN 은 tenant 1개 이상. PLATFORM 은 tenant 를 보내지 않는다(빈 목록).
      * 검증 실패는 422 + 대화상자 안 오류(HX-Retarget). 성공·409 는 가입 요청·운영자 카드와 탭 배지를 새로 그리고 대화상자 자리를 비운다.
      */
     @PostMapping(SIGNUP_BASE + "{id}/approve")
@@ -305,7 +310,7 @@ class AdminUsersTabController(
         var email = ""
         try {
             val match = signups.list().firstOrNull { id == it.id }
-            // !!: 원 Java Stream.map(View::getEmail).findFirst() 는 이메일이 null 이면 NPE(이 try 가 삼켜 email 은 "") — 같은 자리.
+            // `!!`: 클래스 KDoc 참고. null 이면 이 try 가 삼켜 email 은 "" 로 남는다.
             email = if (match == null) "" else match.email!!
         } catch (e: RuntimeException) {
             if (e is AccessDeniedException) throw e
@@ -357,7 +362,7 @@ class AdminUsersTabController(
     private fun loadTenantNames(): Map<String, String?> {
         val names = HashMap<String, String?>()
         try {
-            // !!: 원 Java t.getId().toString() 의 NPE 와 같은 자리(try 안 — 이름 없이 id 꼬리로).
+            // `!!`: 클래스 KDoc 참고. null 이면 catch 가 삼켜 그때까지 읽은 이름만 남고, 나머지는 id 꼬리로 보인다.
             for (t in tenants.list().data()) names[t.id!!.toString()] = t.displayName
         } catch (e: RuntimeException) {
             if (e is AccessDeniedException) throw e
@@ -428,7 +433,7 @@ class AdminUsersTabController(
         }
 
         private fun signupRow(r: SignupRequestDto.View, now: Instant): SignupRow {
-            // !!: 원 Java r.getId().toString() 의 NPE 와 같은 자리.
+            // `!!`: 클래스 KDoc 참고. null 이면 NPE — loadSignups 에서는 try 안이라 가입 요청 카드 오류, approveDialog 에서는 try 밖이라 500.
             val id = r.id!!.toString()
             val approve = LinkedHashMap<String, Any?>()
             approve["hx-get"] = "$SIGNUP_BASE$id/approve"
@@ -440,7 +445,7 @@ class AdminUsersTabController(
             reject["hx-target"] = "#au-signups"
             reject["hx-swap"] = "outerHTML"
             reject["hx-sync"] = "this:drop"
-            val at = r.requestedAt?.toInstant() // 원 Java: null 이면 null(그대로 timeAgo 로)
+            val at = r.requestedAt?.toInstant() // null 이면 timeAgo 가 "—"
             return SignupRow(id, r.email, initial(r.email), r.reason, KstFormat.timeAgo(at, now), "au-reject-$id", approve, reject)
         }
 
@@ -454,7 +459,7 @@ class AdminUsersTabController(
         }
 
         private fun opRow(u: AdminUserDto.View, all: List<AdminUserDto.View>, meEmail: String?, names: Map<String, String?>, now: Instant): OpRow {
-            // !!: 원 Java u.getId().toString() 의 NPE 와 같은 자리.
+            // `!!`: 클래스 KDoc 참고. 부르는 loadUsers 의 try 안이라 null 이면 운영자 카드 오류.
             val id = u.id!!.toString()
             val platform = PLATFORM_ROLE == u.role
             val block = if ("ACTIVE" == u.status) suspendBlock(u, all, meEmail) else null
@@ -469,7 +474,7 @@ class AdminUsersTabController(
             activate["hx-swap"] = "outerHTML"
             activate["hx-sync"] = "this:drop"
             activate["hx-disabled-elt"] = "this"
-            val last = u.lastLoginAt?.toInstant() // 원 Java: null 이면 null → "미접속"
+            val last = u.lastLoginAt?.toInstant()
             return OpRow(
                 id, u.email, initial(u.email), tail(id, 10), u.role, if (platform) "PLATFORM" else "RP_ADMIN", platform,
                 tenantCell(u, names), u.mfaEnabled, if (last == null) "미접속" else KstFormat.timeAgo(last, now), u.status, filterStatus(u),
@@ -480,8 +485,8 @@ class AdminUsersTabController(
         private fun filterStatus(u: AdminUserDto.View): String = if ("SUSPENDED" == u.status) "SUSPENDED" else ""
 
         /**
-         * 원본 suspendBlock: 본인, 또는 마지막 활성 PLATFORM 운영자.
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AdminUsersTabControllerTest)가 부른다.
+         * 정지를 막는 이유: 본인, 또는 마지막 활성 PLATFORM 운영자. 막지 않으면 null.
+         * internal: 같은 모듈 테스트(AdminUsersTabControllerTest)가 부른다.
          */
         internal fun suspendBlock(u: AdminUserDto.View, all: List<AdminUserDto.View>, meEmail: String?): String? {
             val email = u.email

@@ -25,16 +25,16 @@ import java.util.Set;
  * <p>{@code actorEmail} MDC is populated in the finally block from the
  * request attribute {@link #ACTOR_EMAIL_ATTR} (set by an in-Spring-Security
  * filter — see {@code AdminMdcFilter} in admin-app), not directly from
- * {@link SecurityContextHolder}. By the time this filter's finally block
+ * {@code SecurityContextHolder}. By the time this filter's finally block
  * runs, Spring Security's outermost filter has already cleared the
- * {@link SecurityContextHolder}, so reading it here would always see
+ * {@code SecurityContextHolder}, so reading it here would always see
  * {@code null}. Request attributes survive into the finally because they
  * are attached to {@code HttpServletRequest}, not a thread-local.
  *
  * <p>This indirection keeps core decoupled from {@code spring-security-config}
  * (which would be required to register a filter inside the security chain)
  * while still letting the log pattern include {@code actorEmail}. Apps
- * without authenticated sessions (passkey-app, rp-app's public pages)
+ * without authenticated sessions (passkey-app)
  * simply do not set the attribute, and the MDC slot stays empty.
  */
 @Slf4j

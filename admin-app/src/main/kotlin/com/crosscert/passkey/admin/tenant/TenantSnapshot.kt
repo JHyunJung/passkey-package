@@ -6,7 +6,7 @@ import java.util.TreeSet
 /**
  * Tenant 의 변경 추적용 스냅샷. update() before/after 비교에 쓰인다.
  * audit log payload 의 before/after 키로 직렬화 가능 (data class + 기본 타입).
- * 직렬화 필드 순서는 생성자 선언 순서 — 원 record 컴포넌트 순서와 같다(AuditPayloadCanonicalFormTest 가 고정).
+ * 직렬화 필드 순서는 생성자 선언 순서이고, 감사 payload 문자열과 해시가 이 순서를 따른다(AuditPayloadCanonicalFormTest 가 고정).
  */
 data class TenantSnapshot(
     val displayName: String?,

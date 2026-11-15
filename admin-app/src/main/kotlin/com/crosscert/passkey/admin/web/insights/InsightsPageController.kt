@@ -132,7 +132,8 @@ class InsightsPageController(
         val period = PERIOD_LABEL[w]
         model.addAttribute("period", period)
 
-        // 원 Java 는 totals 를 바로 역참조 — null 이면 같은 지점에서 NPE.
+        // 이 메서드의 `!!`: PlatformInsightsService.compute 가 totals·alerts·thresholds·tenants 를 항상 채우고(필드 타입만 nullable)
+        // alert 의 kind 도 늘 넣는다. tenantId 는 DB 에서 읽은 Tenant 의 id 다. null 이면 NPE — 조회 try 밖이라 WebExceptionAdvice 의 500.
         val t = v.totals!!
         val authRate = FunnelHelpers.rate(t.authSuccess, t.authAttempts)
         val regRate = FunnelHelpers.rate(t.regSuccess, t.regAttempts)
@@ -159,7 +160,6 @@ class InsightsPageController(
         )
 
         val alerts = ArrayList<AlertView>()
-        // 원 Java 의 for-each·switch(String)·toString() 역참조 — null 이면 같은 지점에서 NPE.
         for (a in v.alerts!!) {
             val k: Array<String> = when (a.kind!!) {
                 "RISK" -> arrayOf("위험 인증", "badge--danger")
@@ -169,7 +169,6 @@ class InsightsPageController(
             alerts.add(AlertView(k[0], k[1], a.name, tenantHref(a.tenantId!!.toString()), a.message))
         }
         model.addAttribute("alerts", alerts)
-        // 원 Java 는 thresholds 를 바로 역참조 — null 이면 같은 지점에서 NPE.
         val th = v.thresholds!!
         model.addAttribute(
             "thresholdText",
@@ -180,7 +179,6 @@ class InsightsPageController(
             ),
         )
 
-        // 원 Java new ArrayList<>(null) 의 NPE 를 같은 지점에서.
         val rows = ArrayList<PlatformInsightsDto.TenantRow>(v.tenants!!)
         rows.sortWith(comparator(sort))
         val tenants = ArrayList<TenantView>()
@@ -188,7 +186,7 @@ class InsightsPageController(
             val active = "active".equals(r.status, ignoreCase = true)
             tenants.add(
                 TenantView(
-                    r.name, r.slug, tenantHref(r.tenantId!!.toString()), // 원 Java getTenantId().toString() NPE 지점
+                    r.name, r.slug, tenantHref(r.tenantId!!.toString()),
                     if (active) "활성" else (if ("suspended".equals(r.status, ignoreCase = true)) "정지" else r.status.toString()),
                     if (active) "badge--success" else "badge--warning",
                     num(r.activeUsers), num(r.authSuccess),
@@ -231,7 +229,8 @@ class InsightsPageController(
         val rows = ArrayList<List<String?>>()
         val csv: ByteArray
         val filename: String
-        // 행은 java.util.List.of — 원 Java 와 같이 null 칸(slug·day·month 등)은 NPE. 목록 null 도 for-each 의 NPE 지점에서 `!!`.
+        // 행은 java.util.List.of 라 null 칸(slug·day·month 등)이 있으면 NPE 다. 목록의 `!!` 는 populate 와 같은 이유(compute 가 채운다).
+        // 어느 쪽이든 WebExceptionAdvice 가 500 으로 답한다.
         when (kind) {
             "tenants" -> {
                 for (r in v.tenants!!) {

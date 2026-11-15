@@ -3,7 +3,7 @@ package com.crosscert.passkey.admin.operator
 import org.springframework.core.env.Environment
 
 /**
- * G11 fail-fast guard shared by [PasswordResetService] and
+ * Fail-fast guard shared by [PasswordResetService] and
  * [SignupRequestService] — both read `admin.invite.base-url`
  * and both mail out live links built from it (reset-password / signup approval).
  *
@@ -16,7 +16,7 @@ import org.springframework.core.env.Environment
  * instead: only the "prod" profile is guarded (this is where the localhost
  * default is actually unsafe; dev/local/qa intentionally rely on it).
  *
- * 원 Java 는 package-private final 클래스 — Kotlin 에 package-private 이 없어 internal 로 둔다.
+ * Kotlin 에는 package-private 이 없어 internal(같은 모듈 한정)로 둔다.
  */
 internal object BaseUrlValidation {
 

@@ -28,7 +28,7 @@ import java.util.UUID
 
 private val log = LoggerFactory.getLogger(SignupRequestService::class.java)
 
-// trim { it <= ' ' }: 원 Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
+// trim { it <= ' ' }: Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
 private fun normalize(email: String): String = email.trim { it <= ' ' }.lowercase(Locale.ROOT)
 
 /**
@@ -55,7 +55,7 @@ class SignupRequestService(
 
     /**
      * 승인 메일의 로그인 URL 앞부분. PasswordResetService 와 같은 속성을 읽는다.
-     * 원 Java 필드처럼 주입 전(new 로 만든 단위 테스트)에는 null — 링크는 "null/admin" 이 된다.
+     * 주입 전(new 로 만든 단위 테스트)에는 null — 링크는 "null/admin" 이 된다.
      */
     @field:Value("\${admin.invite.base-url:http://localhost:5173}")
     private var baseUrl: String? = null
@@ -69,8 +69,8 @@ class SignupRequestService(
     private var autoApprovePlatformOperator: Boolean = false
 
     /**
-     * G11 fail-fast — prod 에서 localhost 기본값으로 뜨면 승인 메일 링크가 깨진다.
-     * 원 Java 는 package-private — 호출자는 Spring(@PostConstruct)뿐이라 internal.
+     * Fail-fast — prod 에서 localhost 기본값으로 뜨면 승인 메일 링크가 깨진다.
+     * internal: 호출자는 Spring(@PostConstruct)뿐이다.
      */
     @PostConstruct
     internal fun validateBaseUrlForProd() {
@@ -88,7 +88,7 @@ class SignupRequestService(
      * @return 승인 없이 계정이 바로 만들어졌으면 true(자동 승인), 그 외(대기 등록·스킵)는 false
      */
     fun request(req: SignupRequestDto.Create): Boolean {
-        // 원 Java 의 email.trim() 과 같은 지점의 NPE(@NotBlank 검증을 거친 컨트롤러 경로에선 불가).
+        // `!!`: REST(@Valid)·화면(SignupPageController 의 Validator) 모두 @NotBlank 검증을 거쳐 null 이 오지 않는다.
         val email = normalize(req.email!!)
         val masked = CryptoUtils.maskEmail(email)
 
@@ -170,12 +170,12 @@ class SignupRequestService(
         actorId: UUID?,
         actorEmail: String?,
     ): AdminUserDto.View {
-        // 1. 역할 규칙 — 초대 흐름의 검증을 그대로 옮김.
+        // 1. 역할 규칙
         if ("PLATFORM_OPERATOR" != body.role && "RP_ADMIN" != body.role) {
             throw IllegalArgumentException("Invalid role: " + body.role)
         }
         val tenantIds: List<UUID> = if (body.tenantIds == null) java.util.List.of() else body.tenantIds
-        // 원 Java 와 같이 Objects::isNull 로 판정(Jackson 역직렬화가 JSON null 원소를 넣을 수 있다).
+        // 타입은 List<UUID> 여도 Jackson 역직렬화가 JSON null 원소를 넣을 수 있어 Objects::isNull 로 확인한다.
         if (tenantIds.stream().anyMatch(Objects::isNull)) {
             throw IllegalArgumentException("tenantIds must not contain null")
         }
@@ -295,7 +295,7 @@ class SignupRequestService(
     }
 
     companion object {
-        /** 승인 대기 상한. 도달하면 새 요청을 조용히 받지 않는다(폭주 방지). 원 Java 는 package-private static final. */
+        /** 승인 대기 상한. 도달하면 새 요청을 조용히 받지 않는다(폭주 방지). */
         internal const val MAX_PENDING = 100
     }
 }

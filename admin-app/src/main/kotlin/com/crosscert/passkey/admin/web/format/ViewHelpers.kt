@@ -14,14 +14,16 @@ import java.time.OffsetDateTime
  * 템플릿에서 `${@fmt.status(x)}`, `${@fmt.kst(t)}`, `${@fmt.josa(name,'을/를')}` 처럼 쓰는 표시 도우미 빈.
  * 현재 시각이 필요한 것은 주입된 [Clock] 만 쓴다.
  *
- * 템플릿(SpEL)이 이름·인자 수·인자 타입으로 고르므로 오버로드는 원 Java 와 같은 순서·같은 JVM 시그니처로 둔다
- * (기본 인자·`@JvmOverloads` 없음, 가변 인자는 `vararg`).
+ * 템플릿(SpEL)이 이름·인자 수·인자 타입으로 메서드를 고르므로 오버로드는 하나씩 따로 선언한다
+ * (기본 인자·`@JvmOverloads` 없음, 가변 인자는 `vararg`). 템플릿이 부르는 멤버는 public 이어야 한다 —
+ * Kotlin `internal` 함수는 JVM 이름에 모듈명이 붙어(예: ShellAdvice 의 `navActive$com_crosscert_passkey_admin_app`)
+ * SpEL 이 이름으로 찾지 못한다.
  */
 @Component("fmt")
 class ViewHelpers {
 
     // 주 생성자를 두지 않는다: 스프링은 Kotlin 주 생성자가 있으면 그것만 후보로 본다(BeanUtils.findPrimaryConstructor).
-    // 원 Java 처럼 공개 생성자 두 개를 후보로 두어야 ObjectMapper 빈이 없는 컨텍스트(registerBean)에서 (Clock) 생성자로 뜬다.
+    // 공개 생성자 두 개를 후보로 두어야 ObjectMapper 빈이 없는 컨텍스트(UiFragmentsRenderTest 의 registerBean)에서 (Clock) 생성자로 뜬다.
     private val clock: Clock
     private val json: ObjectMapper
 
@@ -47,7 +49,7 @@ class ViewHelpers {
 
     fun mdsTrust(v: String?): Labels.MdsTrustMode? = if (v == null) null else Labels.MDS_TRUST_MODES[v]
 
-    /** 상태 배지 톤(StatusBadge 의 MAP). */
+    /** 상태 배지 톤(statusBadge 조각). */
     fun statusTone(v: String?): String {
         if (v == null) return "neutral"
         return when (v) {
@@ -77,7 +79,7 @@ class ViewHelpers {
     fun kstTime(t: OffsetDateTime?): String = KstFormat.kstTime(t)
     fun kstTime(t: Instant?): String = KstFormat.kstTime(t)
 
-    /** ko-KR `2026. 05. 27. 12:00:00` (formatDateTime.ts). */
+    /** ko-KR `2026. 05. 27. 12:00:00`. */
     fun dateTime(t: OffsetDateTime?): String = KstFormat.formatDateTime(t)
     fun dateTime(t: Instant?): String = KstFormat.formatDateTime(t)
     fun dateTime(iso: String?): String? = KstFormat.formatDateTime(iso)
@@ -129,7 +131,7 @@ class ViewHelpers {
 
     fun errorInfo(e: Throwable?): ErrorMessages.Info = ErrorMessages.describe(e)
 
-    /** 오류 정보 복사용 여러 줄 문구: 대상, 제목, 설명, HTTP 상태(LoadError 의 복사 내용). */
+    /** 오류 정보 복사용 여러 줄 문구: 대상, 제목, 설명, HTTP 상태(loadError 조각의 복사 내용). */
     fun errorText(what: String, e: Throwable?): String {
         val i = ErrorMessages.describe(e)
         val sb = StringBuilder(what).append('\n').append(i.title)

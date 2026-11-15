@@ -26,7 +26,7 @@ internal object SettingsSupport {
         ErrorMessages.describe(e).httpStatus ?: HttpServletResponse.SC_INTERNAL_SERVER_ERROR
 
     /**
-     * 제목 있는 오류 응답(원본 errorToast(e, title)): 실제 상태 + 오류 토스트 + 빈 본문. 확인 요청이면 토스트가 아니라 다이얼로그 안 인라인(confirmError).
+     * 제목 있는 오류 응답: 실제 상태 + 오류 토스트 + 빈 본문. 확인 요청이면 토스트가 아니라 다이얼로그 안 인라인(confirmError).
      * 알 수 없는 예외의 원문은 싣지 않는다(ErrorMessages).
      */
     fun fail(res: HttpServletResponse, title: String, e: RuntimeException, confirm: Boolean): String {
@@ -41,7 +41,7 @@ internal object SettingsSupport {
     }
 
     /**
-     * 화면 상태(낡은 목록·막힌 대상) 때문에 REST 를 부르지 않은 동작: 원본 `blocked()` 가 만든 ApiError 처럼 "요청을 처리하지 못했습니다. <사유>" + 409.
+     * 화면 상태(낡은 목록·막힌 대상) 때문에 REST 를 부르지 않은 동작: "요청을 처리하지 못했습니다. <사유>" + 409.
      * 확인 요청이면 다이얼로그 안 인라인(confirmError), 아니면 오류 토스트. 본문 없음.
      */
     fun blocked(res: HttpServletResponse, reason: String, confirm: Boolean): String {

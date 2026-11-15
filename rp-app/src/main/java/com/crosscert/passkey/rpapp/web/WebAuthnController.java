@@ -178,8 +178,10 @@ public class WebAuthnController {
             throw e;
         }
 
-        // sub(opaque userHandle)로 사용자를 조회한다. sub 가 없으면(null) 조회가 비어
-        // unknown sub(P004)로 거부된다 — fail-closed.
+        // sub(opaque userHandle)로 사용자를 조회한다. 모르는 sub 는 unknown sub(P004)로 거부한다.
+        // Passkey 서버가 발급한 ID Token 에는 sub 가 항상 들어 있다. 저장소를 자사 DB 로 바꿀 때는
+        // sub 가 null 이면 어떤 사용자와도 맞지 않게 한다(이 샘플의 InMemoryUserStore 는 null 키에서
+        // 예외를 던져 GlobalExceptionHandler 가 500(C999)으로 응답한다 — 로그인은 거부된다).
         RpAppUser user = users.findByUserHandle(claims.sub())
                 .orElseThrow(() -> {
                     log.warn("login/complete failed: reason=unknown-sub subTail={}", idTail(claims.sub()));

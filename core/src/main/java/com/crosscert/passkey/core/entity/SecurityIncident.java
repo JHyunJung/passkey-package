@@ -9,7 +9,8 @@ import java.util.UUID;
 
 /**
  * audit chain 위변조 incident. OPEN 으로 생성되어 RESOLVED 로 종결된다.
- * 테넌트당 OPEN 1건은 DB 부분 유니크 인덱스(V50)로 강제된다.
+ * 테넌트당 OPEN 1건은 DB 함수 기반 유니크 인덱스 ux_incident_open_per_tenant
+ * ({@code CASE status WHEN 'OPEN' THEN tenant_id END})로 강제된다.
  */
 @Entity
 @Table(name = "SECURITY_INCIDENT")
