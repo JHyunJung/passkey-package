@@ -15,6 +15,12 @@
       XFF 를 덮어써야** 위조가 막힌다. QA 번들 nginx(맨 앞단)는 `$remote_addr` 로 덮어쓰도록 바꿨고, `deploy/` nginx 는 LB 뒤라 이어 붙이므로
       LB 가 덮어쓰거나 `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` 를 nginx·LB 주소로 좁혀야 한다. 앞단 프록시가 공인 IP 면 `SERVER_TOMCAT_REMOTEIP_TRUSTED_PROXIES` 로 추가. admin-app 을 프록시 없이
       사내망에 직접 바인딩하면 사설 IP 클라이언트는 신뢰 프록시로 보이므로 감사 IP 는 사내망 기준 best-effort. `ProxiedSameOriginPostTest`(실제 Tomcat).
+- [ ] **서명 키 회전 뒤 passkey-app 이 옛 키로 계속 서명한다 → grace 뒤 RP 의 ID Token 검증 실패** [2026-11-15 주석 정비 중 발견, 코드 추적 확인]
+      `SigningKeyProvider` 는 기동 시 한 번 ACTIVE 키를 읽어 캐시하고(`@PostConstruct init`), `reload()` 를 부르는 운영 코드는
+      admin-app `KeyRotationService` 뿐이다. passkey-app 에는 갱신 경로가 없어 회전 뒤에도 ROTATED 가 된 키로 서명한다.
+      grace(기본 PT30M) 뒤 `KeyExpirationJob` 이 그 키를 REVOKED 로 바꾸면 `JwksAssembler`(ACTIVE·ROTATED 만 제공)에서 빠지고,
+      sdk `IdTokenVerifier` 가 `Unknown or non-RSA kid` 로 실패한다. passkey-app 을 여러 대 띄워도 전부 해당.
+      **수정 전 운영 절차**: 회전 직후(grace 안에) passkey-app 전 인스턴스를 재기동한다. 코드 수정은 별도 spec.
 - [x] ~~**actuator `health.show-details: always` 미인증 노출**~~ — `when-authorized` 로 변경(무인증은 status 만,
       admin-app 운영자만 상세). `ApiContractIT.actuatorHealth_unauthenticated_exposesStatusOnly` 로 고정. [2026-11-11]
 - [x] ~~**passkey-app SecurityFilterChain 부재**~~ — **Spring Security 는 들이지 않음**(결정): JSON API 이고 인증은 ApiKeyAuthFilter 가 맡아
@@ -103,7 +109,36 @@
       기동 차단(`RelayKeyGuard` 와 같은 기준). [2026-11-11]
 - [ ] **F30 `NativeWebAuthnVerifier` BE/BS 플래그 검사 · F35 `CborDecoder` non-minimal int 거부** [zero-base 2026-07-04]
 - [ ] **alert throttle/dedup 미구현** — 고빈도 이벤트 폭주 시 알림 스톰. 훅만 존재. [observability-C 2026-05-31]
-- [ ] **SDK 429 → 500 오분류** — `PasskeyClientContractIT` 의 429 path 보강. [sdk-and-sample-rp 2026-05-27]
+- [x] ~~**SDK 429 → 500 오분류**~~ — 낡은 항목: `PasskeyResponseErrorHandler` 가 429 를 `PasskeyRateLimitException` 으로 매핑하고
+      `PasskeyClientContractIT`·`PasskeyClientWireFormatIT` 가 이를 고정한다. [sdk-and-sample-rp 2026-05-27, 2026-11-15 확인]
+- [ ] **attestation 인증서 체인이 운영 구성에서 루트까지 검증되지 않는다** [2026-11-15 주석 정비 중 발견, 코드 추적 확인]
+      `TrustAnchorProvider` 구현은 `EmptyTrustAnchorProvider` 뿐이고 passkey-app 은 `NativeWebAuthnVerifier.withDefaults` +
+      `AttestationTrustPolicy.SELF_ALLOWED` 고정(`RegistrationFinishService`)이라 모든 attestation 유형이 체인 검사 없이 통과한다.
+      `MdsVerifier` 는 인증기가 스스로 보고한 AAGUID 의 MDS 상태만 조회하므로 AAGUID 기반 허용 정책의 신뢰 근거가 약하다.
+      서명 검증·등록 자체는 정상. MDS 루트로 앵커를 채우고 `TRUST_CHAIN_REQUIRED` 를 켤지는 제품 결정(등록 가능한 인증기가 줄어든다).
+- [ ] **등록 검증의 예외 누수 → 400 대신 500** — `NativeWebAuthnVerifier.verifyRegistration` 의 attestation 단계가
+      `AttestationException` 만 잡아 `CoseException`·fido-u2f `ClassCastException`·SHA-256 헬퍼의 `IllegalStateException` 이 새고,
+      `RegistrationFinishService` 는 `WebAuthnVerificationException` 만 잡는다. 등록은 거부되므로 fail-open 은 아니다. [2026-11-15, 코드 추적 확인]
+- [ ] **테넌트 `@Filter` 가 걸리지 않는 경로** [2026-11-15, 코드 추적 확인 — 호출자 전수 점검은 안 함]
+      ① 활성 RP 가 없는(매핑 0개) RP_ADMIN 은 `TenantContextAdminFilter` 가 ACCESS_DENIED 를 삼켜 그 요청의 필터가 꺼진다
+      ② 필터는 `@Transactional` 진입 시에만 켜진다 — 트랜잭션 밖 리포지토리 호출·native SQL·PK 조회(`findById`, Hibernate
+      `applyToLoadByKey` 기본 false)는 필터 없음. 지금은 서비스의 `TenantBoundary` 검사가 막는 구조이므로, 그 검사가 없는 호출자가 있는지 점검이 필요하다.
+- [ ] **감사 체인 backfill REST 경로에 변조 재확인이 없다** — 화면(`AuditChainPageController`)은 backfill 전에 다시 검증해 변조가 있으면 막지만
+      `AuditChainMonitorController.backfill` 은 바로 실행한다. 재연결이 삭제된 row 를 테넌트 체인에서 가릴 수 있다. [2026-11-15, 코드 추적 확인]
+- [ ] **RP_ADMIN 이 404/403 차이로 다른 테넌트·API 키의 존재를 알 수 있다** — 테넌트 get/update, API 키 revoke/rotate 가 경계 검사보다
+      조회를 먼저 한다. 활성 RP 가 아닌 매핑 테넌트는 경계 검사를 통과한 뒤 `@Filter`(활성 RP 기준) 때문에 404 가 날 수 있다. [2026-11-15, 구현자 관찰]
+- [ ] **감사 탭 더보기·내보내기가 nullable tenant id 를 목록 조회에 그대로 넘긴다** — null 이면 PLATFORM_OPERATOR 에게 필터 없는 감사 로그.
+      정상 경로에서 null 이 될 수 있는지 확인 필요. [2026-11-15, 구현자 관찰·미검증]
+- [ ] **`KeyRotation` 리스 TTL 이 획득 시점 기준** — 회전이 느리면 쿨다운(30초)이 커밋 전에 소진돼 직후 재회전이 가능하다.
+      `KeyExpirationJob` 은 읽기·저장이 한 트랜잭션이 아니라 겹친 실행이 같은 키를 두 번 revoke 할 수 있다.
+      `SchedulerLeaseService.tryAcquire` 의 중복 키 catch 가 실제로 동작하는지도 미확인. [2026-11-15, 구현자 관찰·일부 미검증]
+- [ ] **`AaguidPolicyController.update` 에 `@Valid` 없음 + `mode` nullable** — null 이 400 대신 flush 시점 실패로 보인다(미실행). [2026-11-15]
+- [ ] **감사 체인 화면 인시던트 생성·해결의 오류 문구** — 서비스 호출이 성공한 뒤 재렌더가 실패하면 "생성하지 못했습니다"를 보여 주지만
+      실제로는 처리됐다. `ShellController.tenantSwitcher` 의 `names(view)` 는 try 밖이라 이름이 null 이면 사이드바 조각이 500. [2026-11-15]
+- [ ] **`AdminSecurityConfig` 의 "credential-spray rate limiting upstream" 주석에 대응하는 앱 코드가 없다** — nginx 에 기대는 것이면
+      §0 의 배포 전제로 옮겨 적어야 한다. [2026-11-15]
+- [ ] **rp-app: `sub` 없는 토큰이 P004 대신 500** — `InMemoryUserStore` 의 `ConcurrentHashMap.get(null)` NPE. 서버 토큰에는 `sub` 가 항상 있어
+      실제 경로는 아니지만 고객이 복사하는 샘플이다. sdk: 서버 401 에 봉투가 없어 `PasskeyAuthException.code` 가 항상 `C999`. [2026-11-15]
 - [ ] **F14 onprem license grace 정수절단 · F15 cache-vs-disk tenantId 미검증** [zero-base 2026-07-04]
 - [ ] **Oracle `FOR UPDATE` write-skew · Set-Cookie 실증** — write-skew 는 **실증 완료**(`AdminLockWriteSkewIT`: 두 번째 트랜잭션이
       첫 커밋까지 대기, `@Lock` 제거 시 재현). Set-Cookie 쪽은 원 지적의 범위가 기록에 남아 있지 않아 미착수. [zero-base 2026-07-04]
@@ -210,7 +245,13 @@
       [master-backlog 2026-05-31, admin-ui-followup-screens 2026-05-31, admin-ui-mfa-suspend 2026-05-30]
 - [ ] **`PasskeyResponseErrorHandler` deprecation** — Spring major bump 시 필수.
       `sdk-java/.../internal/PasskeyResponseErrorHandler.java` 존재. [monorepo-merge 2026-05-28]
-- [ ] **`JwksCache` thundering herd** — sdk-java. [sdk-and-sample-rp 2026-05-27]
+- [ ] **`JwksCache` thundering herd** — sdk-java. 첫 JWKS fetch 가 실패하면 backoff 가 기록되지 않아 대기 스레드가 차례로 재시도한다
+      (2026-11-15 관찰). [sdk-and-sample-rp 2026-05-27]
+- [ ] **죽은 코드·낡은 문자열** — `AuditLogRepository` 의 funnel 쿼리 3개는 호출자가 없다(`FunnelService` 는 `CeremonyEventRepository` 사용),
+      admin-app `VERIFY_TIMEOUT_MS` 미사용, 예외 메시지 `"V31 not applied?"` 는 squash 로 없어진 마이그레이션을 가리킨다,
+      테넌트 CSV 가 rpId 없을 때 문자열 `"null"` 을 쓴다. [2026-11-15 주석 정비 중 발견]
+- [ ] **rp-app 주석에 서버 클래스명이 남아 있다** — `JacksonLimitsConfig.java:11`(`PasskeyAppJacksonConfig`),
+      `RegisterStartReq.java:11`(`passkey-app RegistrationStartRequest`). 고객사 샘플이므로 지울지 결정 필요. [2026-11-15]
 - [ ] **Tenant rpId 변경 워크플로우 미구현** [admin-tenant-detail 2026-05-27]
 - [ ] **ceremony metrics 4xx/5xx 미구분 · `ApiKeyAuthFilter` malformed header 미계측(6분기 산재)
       · ~~`AlertConfig` 로그 라벨 오기~~(2026-11-12 해결: queueSize·queueCapacity 분리) · `MailAlertChannel` 테스트 미커버 · `SECURITY_ALERT` 마커 라우팅 미설정** [observability-C 2026-05-31]

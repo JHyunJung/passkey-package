@@ -29,7 +29,7 @@ passkey-app Java→Kotlin 전환(2026-11-06, 브랜치 `feat/passkey-app-kotlin`
 | 함정 | 해결 |
 |---|---|
 | record 접근자 `x()` → Kotlin 프로퍼티 `getX()` 로 바뀌어 Java 호출부 컴파일 실패 | `compileTestJava` 필수. Java 테스트는 접근자 이름만 수정 |
-| Bean Validation 애너테이션이 생성자 파라미터에 붙어 검증이 안 됨 | `@field:NotBlank` 등 `@field:` 타깃(javap 로 필드에 붙었는지 확인) |
+| Bean Validation 애너테이션이 어디에 붙는지가 컴파일러 기본 타깃 규칙에 달림 | `@field:NotBlank` 등 `@field:` 타깃으로 명시(javap 로 필드에 붙었는지 확인). **정정(2026-11-15)**: 지금 쓰는 Kotlin 2.4.21 은 타깃이 없어도 생성자 파라미터와 필드 양쪽에 붙인다(컴파일·javap 확인) — "`@field:` 를 빼면 검증이 조용히 빠진다"는 이 버전에서는 사실이 아니다. `@field:` 는 기본 규칙에 기대지 않으려는 명시로 유지한다 |
 | 요청 DTO 를 non-null 로 두면 누락 필드가 Jackson 역직렬화 실패로 바뀌어 에러 봉투 계약 변경 | 검증 대상 필드는 **nullable + 같은 제약**. `JsonNode?` 는 기본값 없이(명시적 JSON null 은 `NullNode` 로 들어옴) |
 | `@RequestBody`/`@RequestParam` 을 nullable 로 두면 Spring 이 optional 로 보고 required 검사를 건너뜀 | 컨트롤러 파라미터는 non-null, DTO 필드만 nullable |
 | † Java 호출 가능한 public 멤버를 non-null 로 바꾸면 null 입력의 예외 흐름이 바뀜(NPE→파라미터 체크, 0행 no-op→NPE) | **혼합 단계 전용**(§2-5 로 해제). 범위 규칙: HTTP/Redis/DB 데이터나 서비스 호출자에서 도달 가능한 입력은 원 흐름 유지(nullable 파라미터). 불가능한 값으로 data carrier 를 만드는 경우는 제외하고 문서화 |
