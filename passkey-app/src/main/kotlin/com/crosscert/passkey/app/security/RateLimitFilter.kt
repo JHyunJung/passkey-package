@@ -118,7 +118,8 @@ class RateLimitFilter(private val proxy: ProxyManager<String>) : OncePerRequestF
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
         val startNs = System.nanoTime()
         // shouldNotFilter already guaranteed resolveTier(...) != null. `!!` 는 의도적:
-        // tier 가 없으면 rate limit 없이 체인을 잇지 않고 NPE 로 멈춘다 — `?: return` 류로 바꾸지 않는다.
+        // tier 가 없으면 요청은 chain.doFilter 로 넘어가지 않고 여기서 NPE 로 멈춘다(제한 없이 통과시키지 않는다).
+        // `?: return` 이나 chain.doFilter 로 우회하는 식으로 바꾸지 않는다.
         // RateLimitFilterCharacterizationTest 가 이 NPE 를 고정한다.
         val (uri, config) = resolveTier(req.servletPath, req.method)!!
 

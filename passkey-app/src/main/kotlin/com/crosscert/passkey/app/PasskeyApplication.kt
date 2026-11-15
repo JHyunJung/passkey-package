@@ -19,9 +19,11 @@ import java.util.TimeZone
 // across all sub-packages of com.crosscert.passkey (including :core).
 //
 // 요청 흐름(서블릿 필터는 @Order 값이 작은 것부터):
-//   SecurityHeadersFilter·core TraceIdFilter(HIGHEST) → core LicenseGuardFilter(+1, onprem 모드만)
-//   → RateLimitFilter(+2) → ApiKeyAuthFilter(+5, X-API-Key 검증 후 TenantContextHolder 설정)
-//   → api.v1.rp 컨트롤러 → fido2 서비스.
+//   SecurityHeadersFilter·core TraceIdFilter·core OnpremTenantPinFilter(HIGHEST, 마지막은 onprem 모드만)
+//   → core LicenseGuardFilter(+1, onprem 모드만) → RateLimitFilter(+2)
+//   → ApiKeyAuthFilter(+5, X-API-Key 검증 후 TenantContextHolder 설정)
+//   → core RequestLoggingFilter(+10, 항상) → api.v1.rp 컨트롤러 → fido2 서비스.
+//   (local/dev/test 프로필에서는 core DevTenantHeaderFilter(+10)도 끼지만 /api/v1/rp/** 는 건너뛴다.)
 // 등록·인증은 같은 2단계다: start 가 challenge 를 ChallengeStore(Redis)에 넣고 토큰을 돌려주면,
 // finish 가 그 토큰으로 challenge 를 한 번만 꺼내 검증한다. 인증 finish 가 발급한 ID Token 은
 // RP 가 JwksController(/.well-known/jwks.json, API 키 불필요)의 공개키로 검증한다.

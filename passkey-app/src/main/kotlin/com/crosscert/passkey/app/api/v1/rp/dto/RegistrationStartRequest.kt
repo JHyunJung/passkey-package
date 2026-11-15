@@ -8,8 +8,7 @@ import jakarta.validation.constraints.Size
  * fieldError 로 거부되도록(에러 봉투 계약 유지). 제약은 `@field:` 로 필드에 건다.
  *
  * 요청 DTO 전체에 같은 규칙이다. non-null 로 바꾸면 누락 필드가 Jackson 역직렬화 실패가 되어
- * 400 "Malformed JSON request"(fieldErrors 없음)로 응답이 바뀐다. `@field:` 를 빼면 Kotlin 은
- * 애너테이션을 생성자 파라미터에 붙이고, 필드 기준으로 도는 `@Valid` 검증은 조용히 빠진다.
+ * 400 "Malformed JSON request"(fieldErrors 없음)로 응답이 바뀐다.
  * 이 응답 계약은 RequestDtoMissingFieldContractIT 가 스냅샷으로 고정한다.
  */
 data class RegistrationStartRequest(
