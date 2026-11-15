@@ -15,15 +15,16 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * Phase 0 / dev-only request filter that copies the {@code X-Tenant-Id}
- * header into {@link TenantContextHolder} for downstream JDBC use.
+ * Dev-only request filter that copies the {@code X-Tenant-Id}
+ * header into {@link TenantContextHolder}, so that {@link TenantFilterAspect}
+ * enables the Hibernate tenant filter for this request.
  *
  * <p>Registered ONLY in known dev / test profiles (allow-list, not
  * "anything not prod") so that an unconfigured deployment without an
  * active profile cannot accidentally accept caller-supplied tenant
  * identifiers.
  *
- * <p>Phase 1 codex P1: this filter MUST skip the RP API paths
+ * <p>This filter MUST skip the RP API paths
  * ({@code /api/v1/rp/**}) so it does not clear or overwrite the tenant
  * context that {@link com.crosscert.passkey.app.security.ApiKeyAuthFilter}
  * has just set from a validated X-API-Key. Without the skip, a valid

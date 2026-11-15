@@ -23,7 +23,6 @@ public interface SecurityIncidentRepository extends JpaRepository<SecurityIncide
      *
      * <p>{@code clearAutomatically=true} 로 UPDATE 후 영속성 컨텍스트를 비운다 — 같은 트랜잭션에서
      * 이어지는 {@code findById} 가 1차 캐시의 stale(OPEN) 엔티티 대신 항상 fresh DB read 를 보게 한다.
-     * (코드베이스의 다른 @Modifying UPDATE 6개와 동일 패턴.)
      *
      * @return 영향받은 행 수(1=전이 성공, 0=OPEN 아님/없음)
      */

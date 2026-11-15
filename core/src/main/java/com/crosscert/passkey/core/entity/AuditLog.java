@@ -40,7 +40,7 @@ public class AuditLog extends BaseEntity {
     @Column(name = "TENANT_ID", columnDefinition = "RAW(16)")
     private UUID tenantId;
 
-    // Phase B — per-tenant hash chain (V25)
+    // per-tenant hash chain
     @Column(name = "TENANT_PREV_HASH", length = 32)
     private byte[] tenantPrevHash;
 
@@ -83,7 +83,7 @@ public class AuditLog extends BaseEntity {
      *      must survive @PrePersist (which uses OffsetDateTime.now(KstTime.ZONE)
      *      by default).
      *   2. BaseEntity intentionally exposes no setters for createdAt/updatedAt
-     *      to keep the lifecycle contract uniform across the other 9 entities.
+     *      to keep the lifecycle contract uniform across the other BaseEntity subclasses.
      * @PrePersist's null-check ({@code if (createdAt == null) createdAt = now})
      * then leaves the seeded value alone.
      */
@@ -108,7 +108,7 @@ public class AuditLog extends BaseEntity {
     public String getTargetType() { return targetType; }
     public String getTargetId() { return targetId; }
     public UUID getTenantId() { return tenantId; }
-    // Phase B — per-tenant chain
+    // per-tenant chain
     public byte[] getTenantPrevHash() { return tenantPrevHash; }
     public byte[] getTenantHash() { return tenantHash; }
     /** 백필 endpoint 전용 setter — BackfillService 는 다른 패키지이므로 public */

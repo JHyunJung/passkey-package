@@ -15,9 +15,11 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
 
     /**
      * Look up an API key by its prefix. The app-level Hibernate {@code @Filter}
-     * isolates by tenant, so this JPA call only returns a row once the calling
-     * session has set {@code TenantContextHolder} to the tenant that owns the
-     * key. Useful from admin endpoints (Phase 2) and test fixtures.
+     * isolates by tenant: when {@code TenantContextHolder} holds a tenant, this
+     * JPA call only returns that tenant's key; with no tenant context the filter
+     * is off and any tenant's key is returned.
+     * admin-app ApiKeyAdminService 가 새 prefix 의 중복 확인에 쓴다. tenant context 가 있는 요청에서는
+     * 다른 테넌트의 같은 prefix 가 보이지 않으므로, 전역 유일성의 최종 판정은 uq_api_key_prefix 제약이다.
      *
      * <p>The auth filter does NOT use this — authentication runs before any
      * tenant context exists, so it cannot rely on the {@code @Filter}. It
@@ -28,7 +30,7 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
     Optional<ApiKey> findByKeyPrefix(String keyPrefix);
 
     /**
-     * Phase F2 — TenantAdminService.toView() 의 KPI 집계용.
+     * TenantAdminService.toView() 의 KPI 집계용.
      * ApiKey 엔티티는 별도의 STATUS 컬럼을 두지 않고 revokedAt + expiresAt 로
      * "active" 여부를 파생한다 ({@link ApiKey#isActive(OffsetDateTime)} 참고). 따라서
      * "활성 API 키 수" 카운트는 revokedAt IS NULL AND (expiresAt IS NULL OR
@@ -43,7 +45,7 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
     long countActiveByTenantId(@Param("tenantId") UUID tenantId, @Param("now") OffsetDateTime now);
 
     /**
-     * Phase QW-3 — TenantAdminService.list() N+1 제거용 배치 집계.
+     * TenantAdminService.list() N+1 제거용 배치 집계.
      * countActiveByTenantId(tenantId, now) 와 **동일한 active 판정**을 tenant 전체에
      * 대해 한 번에 계산한다. where 절은 countActiveByTenantId 와 바이트 단위로 같아야
      * 한다(revokedAt IS NULL AND (expiresAt IS NULL OR expiresAt > :now)). 결과는

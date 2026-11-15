@@ -14,12 +14,12 @@ import java.util.UUID;
 public class MdsBlobCache {
 
     /**
-     * The singleton row id seeded by V19 migration.
+     * The singleton row id seeded by the V1 baseline migration.
      * Matches HEXTORAW('00000000000000000000000000000001').
      * No @UuidGenerator — this id is fixed; the app never inserts another row.
      * For the same reason this entity does NOT extend BaseEntity (which would
      * impose a TIME-ordered UUID generator). createdAt/updatedAt are declared
-     * here directly to satisfy the Phase 8 "every entity has updated_at" policy.
+     * here directly (the table has both columns).
      */
     public static final UUID SINGLETON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 

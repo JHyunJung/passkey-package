@@ -14,12 +14,12 @@ public interface AdminUserRepository extends JpaRepository<AdminUser, UUID> {
 
     /**
      * Used by AdminUserDetailsService at login time. Email is unique
-     * (V9 constraint), so this returns at most one row.
+     * (uq_admin_user_email constraint), so this returns at most one row.
      */
     Optional<AdminUser> findByEmail(String email);
 
     /**
-     * G06 fix — locks every currently-ACTIVE PLATFORM_OPERATOR row (SELECT
+     * Locks every currently-ACTIVE PLATFORM_OPERATOR row (SELECT
      * ... FOR UPDATE) before the caller counts them, serializing the
      * last-operator lockout guard. Two concurrent suspend() calls targeting
      * distinct operators now block on each other here: the second

@@ -17,8 +17,17 @@ import java.util.UUID;
  * Hibernate {@code tenantFilter}를 enable 한다. context가 null 이면 enable 하지
  * 않는다(=cross-tenant; admin PLATFORM_OPERATOR 케이스).
  *
- * <p>앱 레벨 tenant 격리의 중앙 hook. Oracle VPD 제거 후 유일한 격리 메커니즘으로,
- * 모든 Oracle 에디션(EE/XE/SE2)에서 이 Aspect 가 tenant 격리를 보장한다.
+ * <p>앱 레벨 tenant 격리의 중앙 hook. Oracle VPD 제거 후 유일한 격리 메커니즘이라 DB 에디션(EE/XE/SE2)과
+ * 무관하게 같은 방식으로 동작한다. 다만 이 필터가 거르지 않는 조회가 있고, 그 경우 tenant 조건은 호출측 몫이다.
+ * <ul>
+ *   <li>context 가 비어 있는 요청 — 필터를 켜지 않으므로 전 테넌트 행이 보인다.</li>
+ *   <li>native 쿼리·JdbcTemplate SQL — Hibernate 필터는 HQL/JPQL·Criteria 조회에만 붙는다. tenant 조건은 SQL 에
+ *       직접 쓴다({@code CredentialRepository#searchByTenantId}). passkey-app ApiKeyLookupService 의 prefix 조회처럼
+ *       일부러 전 테넌트를 보는 곳도 있다.</li>
+ *   <li>PK 조회({@code findById}·{@code em.find}) — {@code Credential} 의 {@code @FilterDef} 가
+ *       {@code applyToLoadByKey} 를 켜지 않아(기본 false) 필터가 붙지 않는다.</li>
+ *   <li>{@code @Filter} 가 없는 엔티티 — {@code Tenant}, {@code AuditLog}, {@code AdminUser} 등.</li>
+ * </ul>
  *
  * <h2>@Order 결정: {@code Ordered.LOWEST_PRECEDENCE}</h2>
  *

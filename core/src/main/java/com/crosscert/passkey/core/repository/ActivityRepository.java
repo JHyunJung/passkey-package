@@ -65,7 +65,7 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
         return feedRaw(sinceId, null, PageRequest.of(0, n));
     }
 
-    /** Phase F5 — sinceId polling restricted to a single tenant. */
+    /** sinceId polling restricted to a single tenant. */
     default List<AuditLog> feed(UUID sinceId, UUID tenantId, int n) {
         return feedRaw(sinceId, tenantId, PageRequest.of(0, n));
     }
@@ -89,13 +89,13 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
         return feedFilteredRaw(actions, sinceId, null, PageRequest.of(0, n));
     }
 
-    /** Phase F5 — sinceId+category polling restricted to a single tenant. */
+    /** sinceId+category polling restricted to a single tenant. */
     default List<AuditLog> feedFiltered(Set<String> actions, UUID sinceId, UUID tenantId, int n) {
         return feedFilteredRaw(actions, sinceId, tenantId, PageRequest.of(0, n));
     }
 
     /**
-     * Phase F5 — backward pagination + tenant scoping for the Activity feed.
+     * Backward pagination + tenant scoping for the Activity feed.
      *
      * <p>Both filters are nullable so a single query covers four combinations:
      * <ul>
@@ -109,7 +109,7 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
      *   <li>both: combined.</li>
      * </ul>
      *
-     * <p><b>F07 fix:</b> when {@code beforeId} is supplied (the id of the last row
+     * <p>When {@code beforeId} is supplied (the id of the last row
      * on the previous page), the WHERE clause compares against the
      * {@code (createdAt, id)} tuple of that row — mirroring {@link #feedRaw}'s
      * sinceId subquery approach — instead of the strict {@code createdAt < before}
@@ -143,15 +143,15 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
         return feedPageRaw(tenantId, before, null, PageRequest.of(0, n));
     }
 
-    /** F07 — tuple-cursor variant. Prefer this over {@link #feedPage(UUID, OffsetDateTime, int)}. */
+    /** Tuple-cursor variant. Prefer this over {@link #feedPage(UUID, OffsetDateTime, int)}. */
     default List<AuditLog> feedPage(UUID tenantId, OffsetDateTime before, UUID beforeId, int n) {
         return feedPageRaw(tenantId, before, beforeId, PageRequest.of(0, n));
     }
 
     /**
-     * Phase F5 — {@link #feedPage(UUID, OffsetDateTime, int)} with action category filter.
+     * {@link #feedPage(UUID, OffsetDateTime, int)} with action category filter.
      * Mirrors {@link #feedFilteredRaw} but uses the (before, tenantId) cursor
-     * pattern instead of (sinceId). See {@link #feedPageRaw} for the F07
+     * pattern instead of (sinceId). See {@link #feedPageRaw} for the
      * {@code beforeId} tuple-cursor rationale.
      */
     @Query("""
@@ -175,7 +175,7 @@ public interface ActivityRepository extends Repository<AuditLog, UUID> {
         return feedFilteredPageRaw(actions, tenantId, before, null, PageRequest.of(0, n));
     }
 
-    /** F07 — tuple-cursor variant. Prefer this over {@link #feedFilteredPage(Set, UUID, OffsetDateTime, int)}. */
+    /** Tuple-cursor variant. Prefer this over {@link #feedFilteredPage(Set, UUID, OffsetDateTime, int)}. */
     default List<AuditLog> feedFilteredPage(Set<String> actions, UUID tenantId, OffsetDateTime before, UUID beforeId, int n) {
         return feedFilteredPageRaw(actions, tenantId, before, beforeId, PageRequest.of(0, n));
     }

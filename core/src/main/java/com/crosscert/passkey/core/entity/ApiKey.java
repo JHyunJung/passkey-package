@@ -90,7 +90,7 @@ public class ApiKey extends BaseEntity {
     /**
      * 만료 시각을 설정한다. 두 용도:
      * (1) 발급 시 now+N개월 만료(ApiKeyAdminService.issue),
-     * (2) P1-5 rotation 의 구 키 grace 만료.
+     * (2) rotation 시 구 키의 grace 만료(ApiKeyAdminService.rotate).
      */
     public void expireAt(OffsetDateTime when) {
         this.expiresAt = when;
