@@ -8,7 +8,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * P1: API 키 secret 의 BCrypt 검증 *성공*만 짧게 기억해, 같은 키의 반복
+ * API 키 secret 의 BCrypt 검증 *성공*만 짧게 기억해, 같은 키의 반복
  * 요청에서 BCrypt-12 를 생략한다.
  *
  * 항목은 apiKeyId 별로 (검증 당시 keyHash, SHA-256(secret), verifiedAt) 이다.
@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal class VerifiedSecretCache(private val ttl: Duration, private val maxEntries: Int) {
 
     // 일반 class: ByteArray 필드가 있으므로 data class 의 구조적 equals 를 쓰지 않는다.
-    // remove(key, value) 는 참조 동일성(같은 Entry 인스턴스)으로 비교한다 — 원본과 동일.
+    // remove(key, value) 는 참조 동일성(같은 Entry 인스턴스)으로 비교한다.
     private class Entry(val keyHash: String?, val secretDigest: ByteArray, val verifiedAt: Instant)
 
     private val entries = ConcurrentHashMap<UUID, Entry>()

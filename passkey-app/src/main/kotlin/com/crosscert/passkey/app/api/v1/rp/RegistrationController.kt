@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 // @RequestBody 파라미터는 non-null 로 둔다 — Kotlin nullable 이면 Spring 이 파라미터를
-// optional 로 보고 빈/`null` 바디를 거부하지 않아 원 Java(required=true)와 동작이 달라진다.
+// optional 로 보고 빈/`null` 바디를 거부하지 않는다. 지금은 400 "Malformed JSON request" 로 거부된다.
 @RestController
 @RequestMapping("/api/v1/rp/registration")
 class RegistrationController(

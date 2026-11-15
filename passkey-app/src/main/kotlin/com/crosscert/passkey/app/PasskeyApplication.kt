@@ -17,6 +17,14 @@ import java.util.TimeZone
 // repositories in :core would not be discovered.
 // @ConfigurationPropertiesScan registers @ConfigurationProperties records
 // across all sub-packages of com.crosscert.passkey (including :core).
+//
+// 요청 흐름(서블릿 필터는 @Order 값이 작은 것부터):
+//   SecurityHeadersFilter·core TraceIdFilter(HIGHEST) → core LicenseGuardFilter(+1, onprem 모드만)
+//   → RateLimitFilter(+2) → ApiKeyAuthFilter(+5, X-API-Key 검증 후 TenantContextHolder 설정)
+//   → api.v1.rp 컨트롤러 → fido2 서비스.
+// 등록·인증은 같은 2단계다: start 가 challenge 를 ChallengeStore(Redis)에 넣고 토큰을 돌려주면,
+// finish 가 그 토큰으로 challenge 를 한 번만 꺼내 검증한다. 인증 finish 가 발급한 ID Token 은
+// RP 가 JwksController(/.well-known/jwks.json, API 키 불필요)의 공개키로 검증한다.
 @SpringBootApplication(scanBasePackages = ["com.crosscert.passkey"])
 @ConfigurationPropertiesScan("com.crosscert.passkey")
 @EntityScan("com.crosscert.passkey.core.entity")
@@ -30,8 +38,8 @@ fun main(args: Array<String>) {
     // runApplication 이전에 호출해야 모든 빈/스케줄러가 KST 로 초기화된다.
     TimeZone.setDefault(TimeZone.getTimeZone(KstTime.ZONE))
     runApplication<PasskeyApplication>(*args) {
-        // 기본 추론은 main 이 있는 PasskeyApplicationKt 를 잡아 시작 로그 카테고리·문구
-        // ("Started PasskeyApplicationKt")가 바뀐다 — 원 Java 와 같은 클래스로 고정한다.
+        // main 이 최상위 함수라 Boot 의 기본 추론은 PasskeyApplicationKt 를 잡아 시작 로그 카테고리·문구가
+        // "Started PasskeyApplicationKt" 가 된다 — 로그가 "Started PasskeyApplication" 으로 남도록 고정한다.
         setMainApplicationClass(PasskeyApplication::class.java)
     }
 }

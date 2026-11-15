@@ -18,6 +18,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 import java.time.Clock
 import java.time.Duration
 
+// 파일 최상위 private val/const 는 이 파일 안에서만 보이는 static 필드다(ApiKeyAuthFilterKt 클래스로 컴파일됨).
+// 로거 이름은 ApiKeyAuthFilter 이므로 로그 레벨 설정은 클래스 이름 기준 그대로다. 이 모듈의 다른 파일도 같은 방식.
 private val log = LoggerFactory.getLogger(ApiKeyAuthFilter::class.java)
 
 private const val HEADER = "X-API-Key"
@@ -35,10 +37,10 @@ private const val DUMMY_HASH = "\$2a\$12\$KIXxA7B0NQI8YzCq0RZ.7eN5lUucl0wH0G3jWv
 
 private const val AUTH_COUNTER = "passkey_apikey_auth_total"
 
-/** P1: BCrypt 검증 성공을 기억하는 시간. 짧게 두어 운영상 변경이 곧 반영되게 한다. */
+/** BCrypt 검증 성공을 기억하는 시간. 짧게 두어 운영상 변경이 곧 반영되게 한다. */
 internal val VERIFIED_SECRET_TTL: Duration = Duration.ofSeconds(30)
 
-/** P1: 검증 캐시 상한(활성 키 수보다 넉넉히). 넘치면 저장하지 않고 BCrypt 로 검증한다. */
+/** 검증 캐시 상한(활성 키 수보다 넉넉히). 넘치면 저장하지 않고 BCrypt 로 검증한다. */
 internal const val VERIFIED_SECRET_MAX_ENTRIES = 10_000
 
 /**
@@ -58,13 +60,13 @@ internal const val VERIFIED_SECRET_MAX_ENTRIES = 10_000
  *   whether the prefix existed, the secret matched, or the key
  *   was revoked.
  * - Unknown-prefix path runs BCrypt against a fixed dummy hash to
- *   equalize timing with the wrong-secret path. Phase 1 acceptable
+ *   equalize timing with the wrong-secret path. Acceptable
  *   trade-off: removes the simple "does this prefix exist" oracle
  *   at the cost of one BCrypt op per invalid request — already
  *   rate-limited by RateLimitFilter.
  * - Only headers starting with the canonical `"pk_"` prefix
  *   are processed; any other shape is rejected before any DB call.
- * - P1: a successful BCrypt verification is remembered for
+ * - A successful BCrypt verification is remembered for
  *   [VERIFIED_SECRET_TTL] in [VerifiedSecretCache], bound to
  *   (apiKeyId, keyHash, SHA-256(secret)). The DB lookup and the
  *   active/expiry checks still run on every request; any cache miss
@@ -106,7 +108,7 @@ class ApiKeyAuthFilter(
     }
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
-        // Defense-in-depth (sec-apikeyfilter-no-defensive-clear): clear any
+        // Defense-in-depth: clear any
         // stale ThreadLocal value before we read the request. Reuse of a
         // Tomcat worker thread that exited a prior request via an unusual
         // path should never leak the previous tenant into this one. Mirrors
@@ -136,7 +138,7 @@ class ApiKeyAuthFilter(
 
         val now = clock.instant()
         if (!row.isActive(now)) {
-            // P1: 폐기·만료된 키의 이전 검증 기록은 버린다(판정은 아래 그대로).
+            // 폐기·만료된 키의 이전 검증 기록은 버린다(판정은 아래 그대로).
             verifiedSecrets.invalidate(row.id)
             // Same timing equalization for revoked/expired keys.
             encoder.matches(secret, DUMMY_HASH)
@@ -146,7 +148,7 @@ class ApiKeyAuthFilter(
             unauthorized(res)
             return
         }
-        // P1: 같은 apiKeyId·keyHash 로 TTL 안에 BCrypt 를 통과한 바로 그 secret 이면
+        // 같은 apiKeyId·keyHash 로 TTL 안에 BCrypt 를 통과한 바로 그 secret 이면
         // BCrypt 를 생략한다. 그 밖의 모든 경우(없음·만료·keyHash 변경·secret 불일치)는
         // 기존 BCrypt 경로 그대로 — 수락·거부 판정과 실패 시 로그·메트릭·경보는 같다.
         if (!verifiedSecrets.isVerified(row.id, row.keyHash, secret, now)) {
@@ -169,7 +171,7 @@ class ApiKeyAuthFilter(
 
         TenantContextHolder.set(row.tenantId)
         try {
-            // P1-5: 경로가 scope 를 요구하면 키 보유 scope 와 대조. 키는 유효하나
+            // 경로가 scope 를 요구하면 키 보유 scope 와 대조. 키는 유효하나
             // 권한 부족이면 403(401 과 구분). 매핑 없는 경로는 scope 검사 생략.
             // 검사는 TenantContextHolder 가 설정된 상태에서 수행 — 앱 레벨 @Filter 조회가
             // 해당 키의 테넌트를 본다. getServletPath() 는 shouldNotFilter 의 인증

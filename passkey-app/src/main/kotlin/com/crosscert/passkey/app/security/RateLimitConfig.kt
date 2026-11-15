@@ -39,7 +39,7 @@ class RateLimitConfig {
     fun bucket4jRedisClient(props: DataRedisProperties): RedisClient {
         // Prefer the full spring.data.redis.url if set — covers
         // username/password/database/SSL/timeout that host+port alone
-        // can't express. Falls back to host+port for the Phase 0
+        // can't express. Falls back to host+port for the
         // docker-compose default which only sets those two.
         val uri = props.url?.takeIf(StringUtils::hasText)?.let(RedisURI::create)
             ?: buildUriFromHostPort(props)
@@ -51,7 +51,6 @@ class RateLimitConfig {
         client.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE))
 
     // Bucket4j 8.18 은 builderFor/withExpirationStrategy 를 Bucket4jLettuce 빌더로 대체 예고(deprecated)했다.
-    // 원 Java 구현과 동일한 API 를 유지해 동작을 보존한다 — 신 API 이관은 별도 작업.
     @Suppress("DEPRECATION")
     @Bean
     fun bucket4jProxyManager(connection: StatefulRedisConnection<String, ByteArray>): ProxyManager<String> =

@@ -15,10 +15,10 @@ private val BLOCKING_STATUSES = setOf(
 )
 
 /**
- * Real MDS verifier (Phase 3 T15) — replaces Phase 1's MdsStubVerifier.
+ * Real MDS verifier.
  *
  * When the tenant policy has `mdsRequired=false`, always
- * returns true (same as Phase 1). When `mdsRequired=true`, the
+ * returns true. When `mdsRequired=true`, the
  * AAGUID's *last* (most recent) status report must NOT be in the
  * blocking set, and the AAGUID must be present in the cached MDS BLOB
  * (fail-closed on absence).
@@ -32,7 +32,8 @@ class MdsVerifier(private val cache: MdsAaguidCache) {
 
     /**
      * [aaguid] 는 nullable — 인증기가 AAGUID 를 주지 않으면 null 이 온다. `mdsRequired=false` 면
-     * 그대로 통과, `true` 면 캐시 조회/정규화([MdsAaguidCache.canonicalAaguid])가 원 동작대로 처리한다.
+     * 그대로 통과, `true` 면 [MdsAaguidCache.canonicalAaguid] 가 16바이트가 아닌 값(null 포함)에
+     * IllegalArgumentException 을 던지고, registration/finish 에서는 GlobalExceptionHandler 가 400 으로 응답한다.
      */
     fun verify(mdsRequired: Boolean, aaguid: ByteArray?): Boolean {
         if (!mdsRequired) return true

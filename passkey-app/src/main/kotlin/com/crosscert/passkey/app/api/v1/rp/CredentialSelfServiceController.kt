@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.Base64
 
 /**
- * P0-4: RP 백엔드가 X-API-Key 인증 상태에서 특정 user(userHandle)의 passkey 를 관리.
+ * RP 백엔드가 X-API-Key 인증 상태에서 특정 user(userHandle)의 passkey 를 관리.
  * tenant 격리는 ApiKeyAuthFilter 가 set 한 context + 앱 레벨 @Filter 가 담당.
  *
  * 응답은 다른 RP 컨트롤러(RegistrationController 등)와 동일하게 [ApiResponse] envelope 로 감싼다.
@@ -30,7 +30,7 @@ import java.util.Base64
  * 400 (INVALID_INPUT) 으로 매핑 (ConstraintViolationException / MethodArgumentNotValidException).
  *
  * `@RequestParam`·`@RequestBody` 파라미터는 non-null — Kotlin nullable 이면 Spring 이 optional 로
- * 취급해 누락 시 거부(MISSING_PARAMETER / 바디 누락)하지 않으므로 원 Java(required=true)와 달라진다.
+ * 취급해 누락을 거부하지 않는다. non-null 이라 지금은 누락이 400(MISSING_PARAMETER / "Malformed JSON request")이다.
  */
 @RestController
 @RequestMapping("/api/v1/rp/credentials")
@@ -61,7 +61,7 @@ class CredentialSelfServiceController(private val service: CredentialSelfService
 
     /**
      * base64url decode — 형식이 잘못되면 400 (INVALID_INPUT).
-     * 인자가 nullable 인 것은 RenameRequest 필드 때문(@Valid 로 null 은 이미 거부됨) — 원 Java 와 같이
+     * 인자가 nullable 인 것은 RenameRequest 필드 때문(@Valid 로 null 은 이미 거부됨) — 별도 null 검사 없이
      * 그대로 디코더에 넘긴다.
      */
     private fun decode(b64url: String?): ByteArray =

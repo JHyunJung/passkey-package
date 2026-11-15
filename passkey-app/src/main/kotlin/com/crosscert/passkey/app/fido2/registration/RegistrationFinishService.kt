@@ -35,6 +35,11 @@ import kotlin.jvm.optionals.getOrNull
 
 private val log = LoggerFactory.getLogger(RegistrationFinishService::class.java)
 
+/**
+ * registration/finish 처리 순서: 토큰으로 challenge 를 꺼냄 → issuedAt·테넌트 바인딩 확인 →
+ * attestation 검증 → 형식·MDS·AAGUID 정책 → credential 저장. 실패는 모두 예외로 끝나고
+ * 바깥 catch 가 실패 메트릭만 남긴 뒤 다시 던진다(응답 변환은 GlobalExceptionHandler).
+ */
 @Service
 class RegistrationFinishService(
     private val store: ChallengeStore,
@@ -57,7 +62,7 @@ class RegistrationFinishService(
             val ch = req.registrationToken?.let(store::takeRegistration)?.getOrNull()
                 ?: throw IllegalArgumentException("registration token missing or expired")
 
-            // F19 방어심화: challenge freshness 를 앱-레벨에서도 확인한다.
+            // 방어심화: challenge freshness 를 앱-레벨에서도 확인한다.
             // 평시에는 Redis TTL 이 만료 challenge 를 먼저 제거하므로 이 가드가
             // 추가로 거부하는 정상 요청은 없다(이중 방어). Redis 가 만료를 놓친
             // 경계 상황(시계 차이·키 잔존 등)에서만 issuedAt 기준으로 거부한다.
@@ -66,7 +71,7 @@ class RegistrationFinishService(
                 throw BusinessException(ErrorCode.CHALLENGE_INVALID, "challenge expired")
             }
 
-            // codex P2: bind challenge tenant to current API-key tenant
+            // Bind challenge tenant to current API-key tenant
             // before touching tenant config — defense-in-depth on top of
             // the app-level @Filter. Mirrors AuthenticationFinishService.
             val ctxTenant = TenantContextHolder.get()?.toString()
@@ -130,7 +135,7 @@ class RegistrationFinishService(
                 cred.transports = transports.joinToString(",")
             }
             try {
-                // G01: saveAndFlush 로 INSERT 를 즉시 flush 해 unique 제약 위반(동일
+                // saveAndFlush 로 INSERT 를 즉시 flush 해 unique 제약 위반(동일
                 // credentialId 재등록)을 이 catch 안에서 잡는다. save 만 쓰면 INSERT 가
                 // commit 까지 지연돼 이 try/catch 를 벗어난 뒤 위반이 터질 수 있다.
                 credentials.saveAndFlush(cred)

@@ -30,6 +30,7 @@ class ChallengeStore(
     // Atomic GETDEL ensures one-shot semantics under concurrent
     // /finish calls: even if two requests arrive with the same
     // token, only one observes the value; the other sees null.
+    // 꺼내는 즉시 지워지므로 finish 가 뒤 단계에서 실패해도 같은 토큰은 다시 쓸 수 없다 — start 부터 다시 한다.
     fun takeRegistration(token: String): Optional<RegistrationChallenge> {
         val json = redis.opsForValue().getAndDelete(REG_PREFIX + token) ?: return Optional.empty()
         return Optional.of(deserialize(json))
@@ -52,7 +53,7 @@ class ChallengeStore(
         }
 
     // 결과는 nullable: JSON 리터럴 `null` 이면 null 을 돌려주고, 호출부 Optional.of 가 try 밖에서
-    // NPE 로 거부한다(원 Java 와 같은 예외 흐름 — IllegalStateException 으로 감싸지 않는다).
+    // NPE 로 거부한다. 아래 catch 의 IllegalStateException 으로 감싸이지 않게 하려는 것이다(ChallengeStoreTest 가 NPE 를 고정).
     private inline fun <reified T : Any> deserialize(json: String): T? =
         try {
             mapper.readValue(json, T::class.java)
@@ -62,8 +63,8 @@ class ChallengeStore(
 
     companion object {
         /**
-         * Challenge 의 Redis 만료 기간. /finish 경로의 앱-레벨 freshness 가드
-         * (F19)도 이 값을 기준으로 issuedAt 을 검증하므로 두 방어가 동일한
+         * Challenge 의 Redis 만료 기간. /finish 경로의 앱-레벨 freshness 가드도
+         * 이 값을 기준으로 issuedAt 을 검증하므로 두 방어가 동일한
          * 만료 경계를 공유하도록 public 으로 노출한다.
          */
         val TTL: Duration = Duration.ofMinutes(5)

@@ -11,7 +11,7 @@ private const val MAX_STRING_LENGTH = 256 * 1024 // 256KB
 private const val MAX_DOCUMENT_LENGTH = 1024L * 1024 // 1MB
 
 /**
- * G02 방어심화: /registration/finish 등의 `publicKeyCredential` 은 컨트롤러
+ * 방어심화: /registration/finish 등의 `publicKeyCredential` 은 컨트롤러
  * 진입 전 Jackson 이 `JsonNode` 트리로 완전 파싱한다. RegistrationFinishService
  * 의 64KB 문자열 재직렬화 상한(verifyRegistration 내부)은 트리가 이미 다 만들어진
  * *이후*에만 적용되므로, 트리 구성 자체의 파싱 비용(깊은 중첩·거대 문자열)은

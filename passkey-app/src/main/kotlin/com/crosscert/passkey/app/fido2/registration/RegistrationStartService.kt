@@ -124,7 +124,7 @@ class RegistrationStartService(
 }
 
 /**
- * G18: WebAuthn 스펙상 `user.id`(userHandle) 는 1..64 바이트여야 한다
+ * WebAuthn 스펙상 `user.id`(userHandle) 는 1..64 바이트여야 한다
  * (https://www.w3.org/TR/webauthn-3/#dom-publickeycredentialuserentity-id).
  * 검증 없이 디코드만 하면 65바이트+ userHandle 도 start 를 통과해 finish 저장 시
  * Oracle `credential.user_handle RAW(64)` 컬럼 오버플로(ORA-12899)로
