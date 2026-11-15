@@ -24,15 +24,18 @@ import java.time.OffsetDateTime
 private val log = LoggerFactory.getLogger(MfaController::class.java)
 
 /**
- * Second-factor (TOTP) endpoints for the admin SPA.
+ * Second-factor (TOTP) endpoints.
  *
- * Both endpoints require an authenticated session (`/admin/api/\*\*` is
+ * All endpoints require an authenticated session (`/admin/api/\*\*` is
  * `authenticated()` in `AdminSecurityConfig`). While a session is
  * MFA-pending, `MfaPendingFilter` allow-lists only
- * `/admin/api/mfa/verify` (exact match); enroll/confirm/disable are
- * rejected until MFA is satisfied. CSRF stays enabled for both — the SPA already
+ * `/admin/api/mfa/verify` (exact match); the others are
+ * rejected until MFA is satisfied. CSRF stays enabled for all — the client already
  * holds the `XSRF-TOKEN` cookie from the (pending) session, so adding
  * these to the CSRF ignore list would needlessly weaken the surface.
+ *
+ * 화면은 이 엔드포인트를 HTTP 로 부르지 않고 메서드로 직접 부른 뒤 ResponseEntity 의 상태·본문을 해석한다
+ * (로그인 MFA 단계·등록은 LoginPageController, 설정 › 내 계정 탭은 AccountTabController).
  */
 @RestController
 @RequestMapping("/admin/api/mfa")
@@ -55,7 +58,7 @@ class MfaController(
      * code) without distinguishing the two, to avoid leaking enrollment state.
      *
      * `body` non-null: `@RequestBody` 파라미터를 nullable 로 두면 Spring 이 optional 로 보고 빈 본문을
-     * 400 대신 null 로 넘긴다. HTTP 경로에서 원 Java 의 `body == null` 분기는 도달 불가(required)라 뺀다.
+     * 400 대신 null 로 넘긴다. 지금은 빈 본문이 GlobalExceptionHandler 의 400 "Malformed JSON request" 다.
      */
     @PostMapping("/verify")
     fun verify(
@@ -67,7 +70,7 @@ class MfaController(
         val u: AdminUser? = users.findByEmail(email).orElse(null)
 
         // Brute-force lockout: MFA failures accrue against their OWN counter
-        // (mfaFailedCount, G05) so a password-only login success can never
+        // (mfaFailedCount) so a password-only login success can never
         // reset second-factor brute-force progress — only trips the shared
         // lockedUntil field on threshold. A locked account is refused before
         // any code check (fail-closed). The lock also gates primary login via
@@ -103,9 +106,8 @@ class MfaController(
                 .body(java.util.Map.of("error", "invalid_code"))
         }
         // 여기 도달 = totpOk(validCode 가 u != null 확인) 또는 recoveryOk(u != null 일 때만 계산) — u 는 non-null.
-        // 원 Java 도 같은 지점(u.recordSuccessfulMfa())에서 null 이면 NPE 였다.
         val user = u!!
-        user.recordSuccessfulMfa() // reset only the MFA counter on success (G05)
+        user.recordSuccessfulMfa() // reset only the MFA counter on success
         users.save(user)
         val session = req.getSession(false)
         session?.removeAttribute(MfaPendingFilter.MFA_PENDING_ATTR)
@@ -297,12 +299,12 @@ class MfaController(
     data class VerifyRequest(val code: String?)
 
     /**
-     * Shared TOTP gate for verify/confirm/disable: true only when the user row
+     * Shared TOTP gate for verify/confirm/disable/recovery-codes: true only when the user row
      * exists, has an enrolled secret, a code was supplied, the code matches
      * the current time window, AND the matched time-step has not already been
-     * consumed by an earlier successful check (RFC 6238 §5.2 replay guard —
-     * F02). Centralised so the security-critical predicate cannot drift
-     * between the three call sites.
+     * consumed by an earlier successful check (RFC 6238 §5.2 replay guard).
+     * Centralised so the security-critical predicate cannot drift
+     * between the call sites.
      *
      * On a fresh match this advances `u.mfaLastTotpStep` in memory;
      * callers persist it via the `users.save(u)` they already perform on
@@ -326,7 +328,7 @@ class MfaController(
 }
 
 /**
- * Reject enroll/confirm/disable while the session is still MFA-pending.
+ * Reject enroll/confirm/disable/recovery-codes while the session is still MFA-pending.
  * Defense-in-depth behind MfaPendingFilter (which already blocks these
  * paths) — if the filter is ever bypassed or reordered, the handler still
  * refuses to mutate the secret from a password-only session.

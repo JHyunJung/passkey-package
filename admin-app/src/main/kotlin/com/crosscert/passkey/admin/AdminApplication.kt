@@ -17,6 +17,13 @@ import java.util.TimeZone
 // repositories in :core would not be discovered.
 // @ConfigurationPropertiesScan registers @ConfigurationProperties records
 // across all sub-packages of com.crosscert.passkey (including :core).
+//
+// 요청 흐름(서블릿 필터는 @Order 값이 작은 것부터):
+//   core TraceIdFilter·core OnpremTenantPinFilter(HIGHEST, 뒤는 onprem 모드만) → core LicenseGuardFilter(+1, onprem 모드만)
+//   → core RequestLoggingFilter(+10, 항상) → Spring Session(+50, Redis 에서 세션을 읽는다)
+//   → Spring Security 체인(-100, AdminSecurityConfig: CSRF·폼 로그인·인가 → AdminMdcFilter → MfaPendingFilter → TenantContextAdminFilter)
+//   → 컨트롤러: `/admin/api/` 아래는 JSON REST, 그 밖의 `/admin` 화면은 admin.web 의 Thymeleaf 컨트롤러.
+//   (local/dev/test 프로필에서는 core DevTenantHeaderFilter(+10)도 낀다.)
 @SpringBootApplication(scanBasePackages = ["com.crosscert.passkey"])
 @ConfigurationPropertiesScan("com.crosscert.passkey")
 @EntityScan("com.crosscert.passkey.core.entity")
@@ -33,7 +40,7 @@ fun main(args: Array<String>) {
     TimeZone.setDefault(TimeZone.getTimeZone(KstTime.ZONE))
     runApplication<AdminApplication>(*args) {
         // 기본 추론은 main 이 있는 AdminApplicationKt 를 잡아 시작 로그 카테고리·문구
-        // ("Started AdminApplicationKt")가 바뀐다 — 원 Java 와 같은 클래스로 고정한다
+        // ("Started AdminApplicationKt")가 바뀐다 — AdminApplication 으로 고정한다
         // (scripts/init-dev-db.sh·init-db-external.sh·docs/dev-setup.md 가 "Started AdminApplication" 에 의존).
         setMainApplicationClass(AdminApplication::class.java)
     }

@@ -53,13 +53,14 @@ class ActiveTenantController(
         val allowedIds: List<UUID> = me.allowedTenantIds.stream().sorted().toList()
         val refs: List<TenantRef> = tenants.findAllById(allowedIds).stream()
             .map { t -> TenantRef(t.id, if (t.displayName != null) t.displayName else t.slug) }
-            // 원 Java Comparator.comparing(TenantRef::id): null 키는 비교 시점에 NPE — `!!` 가 같은 지점에서 같은 예외.
+            // `!!`: DB 에서 읽은 Tenant 의 id 라 null 이 오지 않는다(null 이면 정렬 비교 시점에 NPE).
             .sorted(Comparator.comparing { r: TenantRef -> r.id!! })
             .toList()
         return ActiveTenantView(resolver.resolve(me), allowedIds, refs)
     }
 
     private fun principal(): AdminUserDetails =
-        // 원 Java 의 (AdminUserDetails) 캐스트 — 인증 없음은 NPE, 다른 principal 은 ClassCastException.
+        // 인증 없음은 NPE, 다른 principal 은 ClassCastException. 부르는 경로(/admin/api/active-tenant, 셸 조각 /admin/_/…)가
+        // 모두 인증 필수라(AdminSecurityConfig) 정상 경로에선 나지 않는다.
         SecurityContextHolder.getContext().authentication!!.principal as AdminUserDetails
 }

@@ -34,8 +34,7 @@ class AdminUserService(
     @Transactional(readOnly = true)
     fun list(): List<AdminUserDto.View> {
         val users = userRepo.findAll()
-        // G17: single IN-query for all mappings instead of one query per user
-        // (F09 activity-feed findAllById batch pattern).
+        // Single IN-query for all mappings instead of one query per user.
         val userIds = users.map { it.id }
         val tenantIdsByUser = HashMap<UUID, MutableList<UUID>>()
         for (m in mappingRepo.findByAdminUserIdIn(userIds)) {
@@ -46,8 +45,7 @@ class AdminUserService(
     }
 
     /**
-     * tenantId nullable: 컨트롤러가 TenantRef.tenantId(@NotNull 검증)를 그대로 넘긴다. null 이면 원 Java 처럼
-     * 감사 payload 의 tenantId.toString() 지점에서 NullPointerException.
+     * tenantId nullable: 컨트롤러가 TenantRef.tenantId(@NotNull 검증)를 그대로 넘긴다.
      */
     @Transactional
     fun addTenant(adminUserId: UUID, tenantId: UUID?, actorId: UUID?, actor: String?) {
@@ -64,7 +62,7 @@ class AdminUserService(
             AuditAppendRequest(
                 actorId, actor, "ADMIN_USER_TENANT_ADD",
                 "ADMIN_USER", adminUserId.toString(), tenantId,
-                // 원 Java 의 tenantId.toString() 과 같은 지점의 NPE(@NotNull 검증을 거친 컨트롤러 경로에선 불가).
+                // `!!`: @NotNull 검증을 거친 컨트롤러 경로에선 null 이 오지 않는다.
                 java.util.Map.of<String, Any?>("tenantId", tenantId!!.toString()),
             ),
         )
@@ -75,7 +73,7 @@ class AdminUserService(
     fun removeTenant(adminUserId: UUID, tenantId: UUID, actorId: UUID?, actor: String?) {
         val u = userRepo.findById(adminUserId)
             .orElseThrow { IllegalStateException("admin not found: $adminUserId") }
-        // G08: lock every mapping row for this admin BEFORE counting so a
+        // Lock every mapping row for this admin BEFORE counting so a
         // concurrent removeTenant on a different tenant of the same admin
         // serializes against this one (write-skew fix — see repository
         // Javadoc for the full concurrency argument).
@@ -101,7 +99,7 @@ class AdminUserService(
         user.status = "SUSPENDED"
         user.suspendedAt = OffsetDateTime.now(clock)
         user.suspendedBy = byUser
-        // G03: STATUS alone is not read by the login gate — DaoAuthenticationProvider's
+        // STATUS alone is not read by the login gate — DaoAuthenticationProvider's
         // DefaultPreAuthenticationChecks only consults isEnabled()/isAccountNonLocked().
         // Flip ENABLED so a suspended operator is actually rejected at /admin/login,
         // not just cosmetically flagged.
@@ -132,14 +130,14 @@ class AdminUserService(
     }
 
     private fun assertNotLockingOut(user: AdminUser, byUser: String?, action: String) {
-        // 원 Java 의 user.getEmail().equals(byUser) — email 이 null 이면 NPE(== 는 null-safe 라 쓰지 않는다).
+        // Java 의 user.getEmail().equals(byUser) 와 같다 — email 이 null 이면 NPE(== 는 null-safe 라 쓰지 않는다).
         if (user.email.equals(byUser)) {
             throw IllegalStateException("Cannot $action yourself")
         }
         if ("PLATFORM_OPERATOR" == user.role &&
             "ACTIVE" == (if (user.status != null) user.status else "ACTIVE")
         ) {
-            // G06: lock every active-PLATFORM_OPERATOR row BEFORE counting so a
+            // Lock every active-PLATFORM_OPERATOR row BEFORE counting so a
             // concurrent suspend of a different operator serializes against
             // this one instead of both observing a stale pre-suspend count
             // (write-skew fix — see repository Javadoc for the full argument).
@@ -150,7 +148,7 @@ class AdminUserService(
         }
     }
 
-    /** 원 Java 는 package-private(호출자 없음) — internal 로 둔다. */
+    /** 본 코드·테스트에 호출자가 없다. */
     internal fun toView(u: AdminUser): AdminUserDto.View {
         val tids = mappingRepo.findTenantIdsByAdminUserId(u.id)
         return toView(u, tids)

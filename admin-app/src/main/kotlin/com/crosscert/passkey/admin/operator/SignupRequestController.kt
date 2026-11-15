@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
-/** 원 Java 의 (AdminUserDetails) 캐스트 — 다른 principal 은 ClassCastException, null 은 NPE. */
+/** 다른 principal 은 ClassCastException, null 은 NPE(Kotlin `as`). */
 private fun actorId(auth: Authentication): UUID = (auth.principal as AdminUserDetails).id
 
 /**
@@ -33,7 +33,7 @@ class SignupRequestController(
 
     /**
      * activated 는 PLATFORM_OPERATOR 자동 승인(QA 전용 설정)으로 계정이 바로 만들어졌을 때만 true.
-     * 그 설정이 꺼져 있으면 항상 false 라 기존처럼 응답이 같다.
+     * 그 설정이 꺼져 있으면 항상 false 라 이메일과 무관하게 응답이 같다.
      */
     @PostMapping
     fun request(@Valid @RequestBody body: SignupRequestDto.Create): ResponseEntity<Map<String, Boolean>> {

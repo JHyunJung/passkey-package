@@ -14,7 +14,7 @@ import java.util.concurrent.Executor
 private val log = LoggerFactory.getLogger(AfterCommitMailDispatcher::class.java)
 
 /**
- * 비밀번호 재설정 메일을 트랜잭션 커밋 이후 전용 스레드에서 발송한다 (S9).
+ * 비밀번호 재설정 메일을 트랜잭션 커밋 이후 전용 스레드에서 발송한다.
  *
  * 요청 스레드가 SMTP 왕복을 기다리지 않으므로 "존재하는 계정만 메일 전송" 차이가
  * 응답 시간으로 드러나지 않는다. 메일 수신자·제목·본문은 호출자가 만든 값을 그대로 쓰고,

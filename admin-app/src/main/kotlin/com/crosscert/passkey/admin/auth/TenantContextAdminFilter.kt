@@ -23,13 +23,13 @@ import java.util.UUID
  *
  * `finally` 에서 **무조건** [TenantContextHolder.clear] 를 호출한다.
  * set 여부와 무관하게 clear 해야 이전 요청이 스레드에 남긴 stale context 가 누출되지
- * 않는다(HIGH BUG fix).
+ * 않는다.
  */
 class TenantContextAdminFilter(private val tenantBoundary: TenantBoundary) : OncePerRequestFilter() {
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
         try {
-            // scope() 는 PLATFORM_OPERATOR·미인증/미지원role 일 때만 null 을 반환(fail-closed).
+            // scope() 는 PLATFORM_OPERATOR·미인증/미지원role·활성 RP 없는 RP_ADMIN 일 때만 null 을 반환(fail-closed).
             // 그 외 예기치 못한 예외는 전파하여 unscoped 전체 조회를 차단한다.
             scope()?.let { TenantContextHolder.set(it) }
             chain.doFilter(req, res)
@@ -48,6 +48,7 @@ class TenantContextAdminFilter(private val tenantBoundary: TenantBoundary) : Onc
      * - 미인증/anonymous → `BusinessException(UNAUTHORIZED)` → null 반환.
      *   인증/인가는 보안 체인·엔드포인트가 책임진다.
      * - 미지원 role      → `BusinessException(ACCESS_DENIED)` → null 반환.
+     * - RP_ADMIN 인데 활성 RP 없음(매핑 0개) → `BusinessException(ACCESS_DENIED)` → 역시 null 반환(컨텍스트 없이 진행).
      *
      * **fail-closed:** 위 두 [ErrorCode] 외의 예외(NPE·DB오류·기타
      * [BusinessException])는 잡지 않고 전파한다. 인증된 RP_ADMIN 의 scope 해석이

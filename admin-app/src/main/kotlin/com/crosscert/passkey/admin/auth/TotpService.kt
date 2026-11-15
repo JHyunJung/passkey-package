@@ -72,7 +72,7 @@ class TotpService {
      */
     fun matchedCounter(secretBase32: String?, code: String?, epochMillis: Long): OptionalLong {
         if (code == null) return OptionalLong.empty()
-        // trim { it <= ' ' }: 원 Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
+        // trim { it <= ' ' }: Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
         val trimmed = code.trim { it <= ' ' }
         if (trimmed.length != DIGITS) return OptionalLong.empty()
         val key: ByteArray
@@ -160,7 +160,7 @@ private fun base32Encode(data: ByteArray): String {
 
 private fun base32Decode(s: String?): ByteArray {
     if (s == null) throw IllegalArgumentException("null secret")
-    // trim { it <= ' ' }: 원 Java String.trim 과 같은 판정.
+    // trim { it <= ' ' }: Java String.trim 과 같은 판정.
     val clean = s.trim { it <= ' ' }.replace("=", "").replace(" ", "").uppercase(Locale.ROOT)
     if (clean.isEmpty()) throw IllegalArgumentException("empty secret")
     val out = ByteArrayOutputStream(clean.length * 5 / 8 + 1)

@@ -21,7 +21,7 @@ class ActiveTenantResolver {
     fun resolve(me: AdminUserDetails): UUID? {
         val allowed = me.allowedTenantIds
         if (allowed.isEmpty()) return null
-        // 원 Java 의 (UUID) 캐스트: UUID 가 아닌 값이면 ClassCastException.
+        // `as UUID?`: UUID 가 아닌 값이면 ClassCastException(이 속성은 이 클래스만 UUID 로 넣는다).
         val fromSession = getAttr(ACTIVE_TENANT_ATTR) as UUID?
         if (fromSession != null && allowed.contains(fromSession)) {
             return fromSession
@@ -34,7 +34,7 @@ class ActiveTenantResolver {
     /**
      * 활성 RP 변경. allowedTenantIds 밖이면 ACCESS_DENIED.
      *
-     * tenantId nullable: 요청 JSON 에서 오는 값. null 이면 원 Java 와 같이 불변 Set 의 contains(null) 이
+     * tenantId nullable: 요청 JSON 에서 오는 값. null 이면 불변 Set(AdminUserDetails.allowedTenantIds)의 contains(null) 이
      * NullPointerException 을 던진다(Iterable.contains 확장 → java.util.Set.contains 위임).
      */
     fun setActive(me: AdminUserDetails, tenantId: UUID?) {

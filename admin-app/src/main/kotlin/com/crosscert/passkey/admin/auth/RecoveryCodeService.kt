@@ -24,13 +24,13 @@ private val RNG = SecureRandom()
 private const val PEPPER_PURPOSE = "passkey/admin-recovery-code/v1"
 
 /**
- * Admin MFA 1회용 recovery code 발급/소비 (P0 잔여 A).
+ * Admin MFA 1회용 recovery code 발급/소비.
  *
  * 발급(generate): 기존 코드 전량 폐기 후 N 개 평문 생성 → HMAC-SHA256 hex 만 저장 →
  * 평문 List 를 1회 반환(이후 평문 복구 불가). 소비(consume): 미사용 매칭 코드 1개를
  * used_at 마킹(one-shot). 평문은 Base32 4-4 형식("xxxx-xxxx")으로 입력 편의 제공.
  *
- * 매칭은 평문이 아닌 HMAC hex(전환 전 코드는 sha-256 hex)를 DB 조건(markUsed 의 WHERE)으로 비교한다 — 앱 코드에 문자열 비교 없음.
+ * 매칭은 평문이 아닌 HMAC hex(HMAC 도입 전에 발급된 코드는 sha-256 hex)를 DB 조건(markUsed 의 WHERE)으로 비교한다 — 앱 코드에 문자열 비교 없음.
  */
 @Service
 class RecoveryCodeService(
@@ -80,7 +80,7 @@ class RecoveryCodeService(
     fun remaining(adminUserId: UUID?): Long = repo.countByAdminUserIdAndUsedAtIsNull(adminUserId)
 }
 
-// trim { it <= ' ' }: 원 Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
+// trim { it <= ' ' }: Java String.trim 과 같은 판정(Kotlin trim() 은 유니코드 공백까지 자른다).
 private fun normalize(code: String): String =
     code.trim { it <= ' ' }.uppercase(Locale.ROOT).replace(" ", "")
 

@@ -18,7 +18,7 @@ private val log = LoggerFactory.getLogger(TenantBoundary::class.java)
  *
  *   tenantBoundary.assertCanAccessTenant(tenantId);
  *
- * PLATFORM_OPERATOR 는 무제한. RP_ADMIN 은 자기 tenantId 와 일치할 때만.
+ * PLATFORM_OPERATOR 는 무제한. RP_ADMIN 은 자기에게 매핑된 tenant(allowedTenantIds)일 때만.
  */
 @Component
 class TenantBoundary(
@@ -41,7 +41,7 @@ class TenantBoundary(
 
     /**
      * tenantId nullable: 호출자가 요청 DTO·응답 DTO 의 nullable 필드를 그대로 넘긴다. RP_ADMIN 분기에서 null 이면
-     * 원 Java 와 같이 불변 Set 의 contains(null) 이 NullPointerException 을 던진다
+     * 불변 Set(AdminUserDetails.allowedTenantIds)의 contains(null) 이 ACCESS_DENIED 가 아니라 NullPointerException 을 던진다
      * (Iterable.contains 확장 → java.util.Set.contains 위임). PLATFORM_OPERATOR 는 null 이어도 통과.
      */
     fun assertCanAccessTenant(tenantId: UUID?) {
@@ -81,7 +81,7 @@ class TenantBoundary(
     }
 
     /**
-     * list 분기 — PLATFORM_OPERATOR 는 null (모든 tenant, 원 Java `Optional.empty()`), RP_ADMIN 은 자기 tenantId.
+     * list 분기 — PLATFORM_OPERATOR 는 null (모든 tenant), RP_ADMIN 은 활성 tenantId.
      */
     fun currentTenantScope(): UUID? {
         val me = currentPrincipal()

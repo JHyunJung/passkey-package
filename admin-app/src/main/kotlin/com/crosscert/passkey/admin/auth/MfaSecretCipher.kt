@@ -8,10 +8,10 @@ import java.util.Base64
 private const val PREFIX = "enc:v1:"
 
 /**
- * admin_user.mfa_secret 의 at-rest 봉투 암호화 (P0 잔여 B).
+ * admin_user.mfa_secret 의 at-rest 봉투 암호화.
  *
  * 저장 형식: `"enc:v1:" + base64(KeyEnvelope.seal(utf8(base32)))`.
- * [open]은 프리픽스가 없으면 평문으로 간주해 그대로 반환 — V37 이전에
+ * [open]은 프리픽스가 없으면 평문으로 간주해 그대로 반환 — 암호화 도입 전에
  * 평문으로 저장된 기존 secret 을 무중단으로 읽기 위한 마이그레이션 경로다.
  * 평문→암호문 전환은 다음 enroll/confirm 시 seal 된 값을 저장하며 자연 발생한다.
  *
