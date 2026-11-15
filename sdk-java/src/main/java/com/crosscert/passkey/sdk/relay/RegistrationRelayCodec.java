@@ -20,7 +20,7 @@ import javax.crypto.spec.SecretKeySpec;
  *
  * <p>서명이 맞아야 payload 를 신뢰하므로 클라이언트가 userHandle 을 조작할 수 없다. 토큰이
  * 자기완결적이라 서버에 pending 상태를 두지 않고도 finish 단계에서 사용자를 확정할 수 있다
- * (무상태 설계). passkey-app 의 challenge 만료(기본 5분)에 맞춰 ttl 을 설정하라.
+ * (무상태 설계). Passkey 서버의 등록 challenge 유효시간(5분)에 맞춰 ttl 을 설정하라.
  *
  * <p>Spring 비의존 순수 클래스다. secret 의 출처·보호(데모키 거부 등)는 호출자(RP) 책임이다.
  */

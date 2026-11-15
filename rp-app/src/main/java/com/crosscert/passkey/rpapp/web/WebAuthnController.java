@@ -178,8 +178,9 @@ public class WebAuthnController {
             throw e;
         }
 
-        // sub(opaque userHandle)로 사용자를 조회한다. sub 가 없으면(null) 조회가 비어
-        // unknown sub(P004)로 거부된다 — fail-closed.
+        // sub(opaque userHandle)로 사용자를 조회한다. 모르는 sub 는 unknown sub(P004)로 거부한다.
+        // sub 가 없으면(null) InMemoryUserStore 의 ConcurrentHashMap.get 이 NPE 를 던져
+        // GlobalExceptionHandler 가 500(C999)으로 응답한다 — 어느 쪽이든 로그인은 거부된다.
         RpAppUser user = users.findByUserHandle(claims.sub())
                 .orElseThrow(() -> {
                     log.warn("login/complete failed: reason=unknown-sub subTail={}", idTail(claims.sub()));

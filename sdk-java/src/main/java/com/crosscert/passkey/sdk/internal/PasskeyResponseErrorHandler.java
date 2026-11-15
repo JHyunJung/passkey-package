@@ -100,7 +100,7 @@ public class PasskeyResponseErrorHandler implements ResponseErrorHandler {
      * RFC 7231 Section 7.1.3 은 Retry-After 값으로 delay-seconds(정수 초) 뿐 아니라
      * HTTP-date(예: "Wed, 21 Oct 2025 07:28:00 GMT")도 허용한다. Long.parseLong 을 그대로
      * 쓰면 HTTP-date 형식에서 NumberFormatException 이 발생해 handleError 를 탈출하고
-     * 429 의미가 소실된 채 상위(rp-app)에서 500 으로 관측된다 — 어떤 경우에도 예외 없이
+     * 429 의미(PasskeyRateLimitException)가 소실된다 — 어떤 경우에도 예외 없이
      * 안전한 정수(초)를 반환한다.
      */
     private long parseRetryAfterSeconds(String retryAfter) {

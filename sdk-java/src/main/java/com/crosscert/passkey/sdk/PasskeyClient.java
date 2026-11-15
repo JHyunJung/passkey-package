@@ -31,6 +31,15 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.Instant;
 
+/**
+ * Passkey 서버 RP API 클라이언트. {@link #of} 로 만든다. JWKS 캐시가 인스턴스마다 따로 있으므로
+ * 요청마다 새로 만들지 않고 하나를 공유한다.
+ *
+ * <p>서버가 4xx/5xx 를 돌려주거나, HTTP 200 이라도 응답 봉투가 success=false 면 {@link PasskeyApiException}
+ * 을 던진다(401 은 {@link com.crosscert.passkey.sdk.exception.PasskeyAuthException}, 429 는
+ * {@link com.crosscert.passkey.sdk.exception.PasskeyRateLimitException}). 연결 실패·타임아웃은 이 예외가 아니라
+ * Spring 의 {@code ResourceAccessException} 으로 나온다.
+ */
 public class PasskeyClient {
 
     private static final Logger log = LoggerFactory.getLogger(PasskeyClient.class);
@@ -93,6 +102,11 @@ public class PasskeyClient {
                 new TypeReference<ApiResponseEnvelope<AuthenticationFinishResponse>>() {});
     }
 
+    /**
+     * 서명(RS256)·exp·nbf·iat 만 검증하고 iss/aud 는 보지 않는다. 같은 서버가 다른 테넌트에 발급한
+     * 토큰도 통과하므로, 로그인 판정에는 {@link #verifyIdToken(String, String, String)} 을 쓴다.
+     * 검증 실패 시 {@link com.crosscert.passkey.sdk.exception.PasskeyIdTokenException}.
+     */
     public IdTokenClaims verifyIdToken(String compactJwt) {
         return idTokenVerifier.verify(compactJwt);
     }

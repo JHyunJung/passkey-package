@@ -22,10 +22,9 @@ public class IdTokenVerifier {
     private static final java.util.regex.Pattern HEX32 = java.util.regex.Pattern.compile("(?i)[0-9a-f]{32}");
 
     /**
-     * G20: nbf/iat 미래-시각 검증에 허용하는 clock skew. exp 검증(zero-leeway, 기존
-     * 동작 보존)과 달리 nbf/iat는 "미래 시각"을 판정하는 검사이므로, 발급자·검증자
-     * 간 정상적인 시계 오차로 인한 오탐(false reject)을 흡수하기 위한 소액의 여유가
-     * 필요하다.
+     * nbf/iat 미래-시각 검증에 허용하는 clock skew. exp 검증(zero-leeway)과 달리
+     * nbf/iat는 "미래 시각"을 판정하는 검사이므로, 발급자·검증자 간 정상적인 시계
+     * 오차로 인한 오탐(false reject)을 흡수하기 위한 소액의 여유가 필요하다.
      */
     private static final Duration CLOCK_SKEW_LEEWAY = Duration.ofSeconds(60);
 
@@ -52,12 +51,12 @@ public class IdTokenVerifier {
             String kid = jwt.getHeader().getKeyID();
             JWK key = jwks.get().getKeyByKeyId(kid);
             if (key == null) {
-                // F26: kid-miss는 캐시된 JWKS가 TTL 이내라도 (키 회전 직후처럼)
+                // kid-miss는 캐시된 JWKS가 TTL 이내라도 (키 회전 직후처럼)
                 // 최신이 아닐 수 있다는 신호다. 1회 강제 refetch 후 재조회한다.
                 // JwksCache.getForceRefresh() 자체에 쿨다운이 있어 unknown-kid를
                 // 미끼로 한 refetch storm은 캐시 레벨에서 억제된다.
                 // action=force-refresh-attempt: 쿨다운 중이면 JwksCache가 내부적으로
-                // 실제 refetch를 생략하고 스냅샷을 그대로 반환할 수 있어(F26 쿨다운),
+                // 실제 refetch를 생략하고 스냅샷을 그대로 반환할 수 있어,
                 // 이 로그 시점에는 아직 실제 refetch 여부가 확정되지 않는다.
                 log.warn("id-token verify failed: reason=kid-miss kid={} action=force-refresh-attempt", kid);
                 key = jwks.getForceRefresh().getKeyByKeyId(kid);
@@ -79,7 +78,7 @@ public class IdTokenVerifier {
                 log.warn("id-token verify failed: reason=expired exp={} now={}", exp, now);
                 throw new PasskeyIdTokenException("ID Token expired (exp=" + exp + ", now=" + now + ")");
             }
-            // G20: nbf(있으면)가 아직 도래하지 않았으면 거부 — not-before 미검증 시
+            // nbf(있으면)가 아직 도래하지 않았으면 거부 — not-before 미검증 시
             // pre-minted(미래에 유효화되도록 서명된) 토큰이 조기 수용될 수 있다.
             Date nbfDate = c.getNotBeforeTime();
             if (nbfDate != null) {
@@ -89,7 +88,7 @@ public class IdTokenVerifier {
                     throw new PasskeyIdTokenException("ID Token not yet valid (nbf=" + nbf + ", now=" + now + ")");
                 }
             }
-            // G20: iat가 (허용 clock skew를 넘어) 미래면 거부 — future-issuance 토큰은
+            // iat가 (허용 clock skew를 넘어) 미래면 거부 — future-issuance 토큰은
             // 발급자 시계 조작 또는 손상된 서명 키에 의한 사전 발급 가능성을 시사한다.
             Date iatDateForCheck = c.getIssueTime();
             if (iatDateForCheck != null) {
@@ -99,8 +98,8 @@ public class IdTokenVerifier {
                     throw new PasskeyIdTokenException("ID Token issued in the future (iat=" + iat + ", now=" + now + ")");
                 }
             }
-            // 원본 Kotlin 의 `as? List<String>` 와 동일한 lenient 의도: amr 이 List 가
-            // 아니면(또는 없으면) 예외 없이 null 로 폴백 → 아래에서 emptyList() 로 치환.
+            // amr 은 관대하게 읽는다: List 가 아니면(또는 없으면) 예외 없이 null 로
+            // 폴백 → 아래에서 빈 목록(List.of())으로 치환.
             // List 인 경우 각 원소를 String 으로 정규화한다. 무조건 캐스트는 (1) 비-List
             // amr 에서 ClassCastException → parse 실패로 의미가 바뀌고, (2) List 라도
             // 비-String 원소(숫자 등)가 섞이면 heap pollution → 첫 String 사용 지점에서

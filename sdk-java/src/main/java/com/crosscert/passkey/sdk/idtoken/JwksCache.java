@@ -28,7 +28,7 @@ public class JwksCache {
     private static final Duration STALE_GRACE = Duration.ofMinutes(10);
 
     /**
-     * F26: kid-miss 강제 refetch(getForceRefresh)의 쿨다운. kid-miss 자체는 fetch
+     * kid-miss 강제 refetch(getForceRefresh)의 쿨다운. kid-miss 자체는 fetch
      * 실패가 아니므로 BACKOFF(실패 백오프)와는 별도 트랙으로 관리한다. 이 쿨다운이
      * 없으면 공격자가 무작위/회전된 kid를 계속 흘려보내 매 요청마다 강제 refetch를
      * 유발하는 refetch storm(JWKS 오리진 부하 유발 DoS)이 가능해진다.
@@ -53,7 +53,7 @@ public class JwksCache {
     private final Object refreshLock = new Object();
     /** 직전 fetch 실패 시 이 시각 이전에는 재시도하지 않고 stale 스냅샷을 반환. */
     private volatile Instant nextRetryAfter = Instant.MIN;
-    /** F26: 이 시각 이전에는 kid-miss 강제 refetch를 다시 시도하지 않는다(폭주 방지). */
+    /** 이 시각 이전에는 kid-miss 강제 refetch를 다시 시도하지 않는다(폭주 방지). */
     private volatile Instant nextKidMissRefetchAfter = Instant.MIN;
 
     /** 하위 호환: timeout 미지정 시 SDK 기본값(connect 3s/read 10s)을 적용. */
@@ -62,10 +62,9 @@ public class JwksCache {
     }
 
     /**
-     * G19: JWKS fetch에 connect/read timeout을 강제한다. hung JWKS 엔드포인트가
-     * (timeout=0=무제한이던 이전 동작처럼) single-flight 락을 쥔 채 전체 id-token
-     * 검증을 무한 차단하지 않도록, 유한 시간 내에 fail-fast 시켜 stale-if-error
-     * 경로(F27)가 정상적으로 개입할 수 있게 한다.
+     * JWKS fetch에 connect/read timeout을 강제한다. hung JWKS 엔드포인트가
+     * single-flight 락을 쥔 채 전체 id-token 검증을 무한 차단하지 않도록, 유한 시간
+     * 내에 fail-fast 시켜 stale-if-error 경로가 정상적으로 개입할 수 있게 한다.
      */
     public JwksCache(URI baseUrl, Duration ttl, Clock clock,
                       Duration connectTimeout, Duration readTimeout) {
@@ -94,7 +93,7 @@ public class JwksCache {
     public JWKSet get() {
         Snapshot cur = snapshot.get();
         Instant now = clock.instant();
-        // Happy path: 유효 스냅샷이 있으면 락 없이 그대로 반환(현행과 동일).
+        // Happy path: 유효 스냅샷이 있으면 락 없이 그대로 반환.
         if (cur != null && cur.fetchedAt().plus(ttl).isAfter(now)) {
             return cur.jwks();
         }
@@ -102,7 +101,7 @@ public class JwksCache {
     }
 
     /**
-     * F26: kid-miss 강제 refetch 전용 진입점. TTL이 아직 유효해도(회전 직후 stale
+     * kid-miss 강제 refetch 전용 진입점. TTL이 아직 유효해도(회전 직후 stale
      * 캐시가 새 kid를 못 가진 경우) 강제로 refresh를 시도한다. 단, single-flight
      * 락과 기존 실패 백오프(nextRetryAfter)는 {@link #get()}과 동일하게 존중하고,
      * 여기에 더해 kid-miss 전용 쿨다운(KID_MISS_REFETCH_COOLDOWN)을 적용한다 —
@@ -135,7 +134,7 @@ public class JwksCache {
     }
 
     /**
-     * 만료 경로(및 F26 강제 refetch)의 공유 로직: single-flight — 한 스레드만
+     * 만료 경로(및 kid-miss 강제 refetch)의 공유 로직: single-flight — 한 스레드만
      * fetch, 나머지는 락 안에서 재확인.
      *
      * @param force true면 "락 대기 중 남이 이미 갱신"한 유효 스냅샷이 있어도
@@ -177,7 +176,7 @@ public class JwksCache {
                 // 직전 유효 스냅샷이 있고 stale-if-error 상한(TTL+grace) 이내면 가용성 보존을
                 // 위해 그것을 반환하고 백오프 기록. 만료된 JWKS가 아니라 *직전 유효* JWKS이므로
                 // 토큰 검증 의미는 보존된다.
-                Instant failedAt = clock.instant(); // 실패가 반환된 그 순간(P2와 동일 기준)
+                Instant failedAt = clock.instant(); // 실패가 반환된 그 순간.
                 if (again != null && withinStaleGrace(again, failedAt)) {
                     // 백오프 기준은 fetch 시작 전 시각(n2)이 아니라 실패 시각. fetch(블로킹 I/O)가
                     // BACKOFF보다 오래 걸려 실패하면 n2+BACKOFF는 이미 과거가 돼 negative-cache가
