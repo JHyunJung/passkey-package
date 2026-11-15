@@ -7,9 +7,9 @@ import java.time.temporal.ChronoUnit
 import java.util.regex.Pattern
 
 /**
- * 감사 로그 탭의 순수 규칙(← pages/tenant/auditHelpers.ts). 화면·REST 와 무관하게 1:1 로 옮겼다.
+ * 감사 로그 탭의 순수 규칙(화면·REST 와 무관).
  *
- * 이벤트 타입을 받는 함수는 non-null 파라미터 — 이 eventType 함수들의 유일한 호출자(AuditTabController)가 DB 값을 `action ?: ""` 로 넘긴다.
+ * 이벤트 타입을 받는 함수는 non-null 파라미터 — 본 코드의 호출자는 AuditTabController 뿐이고(그 밖은 AuditHelpersTest), DB 값을 `action ?: ""` 로 넘긴다.
  */
 object AuditHelpers {
 
@@ -49,7 +49,7 @@ object AuditHelpers {
 
     // ── 실패·톤 ─────────────────────────────────────────────
 
-    /** ActivityPage 의 FAILURE_TYPES 와 같은 기준. */
+    /** ActivityPageController 의 FAILURE_TYPES 와 같은 목록. */
     val FAILURE_TYPES: Set<String> = java.util.Set.of("SIGNATURE_COUNTER_REGRESSION", "ATTESTATION_TRUST_FAILED", "ADMIN_LOGIN_FAILED")
     private val FAILURE_NAME: Pattern = Pattern.compile("_(FAILED|FAIL|REGRESSION)$")
     private val WARN_NAME: Pattern = Pattern.compile("_(UPDATED|ROTATED|REVOKED|ISSUED|SUSPENDED|DELETED)$")

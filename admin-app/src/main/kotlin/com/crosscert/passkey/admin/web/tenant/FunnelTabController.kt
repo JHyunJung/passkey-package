@@ -41,7 +41,9 @@ private val log = LoggerFactory.getLogger(FunnelTabController::class.java)
  * — 색은 CSS 클래스. 실패 원인 코드·이름은 th:text/th:title 로만 쓴다.
  * 기간 전환·다시 시도는 `#funnel-root` 만 교체한다.
  *
- * `v.id!!`·`s!!`·`series!!` 는 원 Java 의 NPE 자리(`toString()`·Kotlin non-null 파라미터로 넘김·역참조)다.
+ * 이 파일의 `!!` 는 타입만 nullable 이고 실제로는 채워지는 값에만 둔다: TenantView.id(DB 에서 읽은 Tenant 의 id),
+ * FunnelService.compute 가 늘 채우는 registration·authentication, 호출자가 null 을 넘기지 않는 series.
+ * 모두 조회 try 밖이라 null 이면 WebExceptionAdvice 의 500.
  */
 @Controller
 class FunnelTabController(
@@ -99,7 +101,7 @@ class FunnelTabController(
         val v = TenantTabs.load(tenants, id)
         val w = window(win)
         val now = clock.instant()
-        // !!: 원 Java tid.toString() 의 NPE 와 같은 자리.
+        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val tid = v.id!!
         model.addAttribute("tid", tid.toString())
         model.addAttribute("win", w.toString())
@@ -228,7 +230,7 @@ class FunnelTabController(
         val w = window(win)
         val today = KstFormat.kstToday(clock.instant())
         if ("monthly" == kind || "devices" == kind) return adoptionCsv(v, w, kind, today)
-        // !!: 원 Java funnel.get(v.getId()) — Kotlin non-null 파라미터의 NPE 와 같은 자리.
+        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val data = funnel.get(v.id!!, w)
         val csv: ByteArray
         val filename: String
@@ -244,7 +246,7 @@ class FunnelTabController(
                 val rows = ArrayList<List<String?>>()
                 for (p in orEmpty(if ("auth" == kind) data.authenticationSeries else data.registrationSeries)) {
                     val r = FunnelHelpers.rate(p.success, p.attempts)
-                    // java.util.List.of: 원 Java 와 같이 day 가 null 이면 NPE.
+                    // java.util.List.of 는 null 원소면 NPE 다 — day 는 FunnelService 가 "MM-DD" 로 늘 채운다.
                     rows.add(java.util.List.of(p.day, p.attempts.toString(), p.success.toString(), if (r == null) "" else FunnelHelpers.toFixed(r, 4)))
                 }
                 csv = CsvWriter.write(java.util.List.of("day", "attempts", "success", "successRate"), rows)
@@ -268,14 +270,14 @@ class FunnelTabController(
 
     /** 도입·사용 CSV 2종: 월간 사용량(최근 3개월), 기기 분포. */
     private fun adoptionCsv(v: TenantAdminDto.TenantView, w: Int, kind: String, today: String): ResponseEntity<ByteArray> {
-        // !!: 원 Java adoption.get(v.getId()) — Kotlin non-null 파라미터의 NPE 와 같은 자리.
+        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val a = adoption.get(v.id!!, w)
         val rows = ArrayList<List<String?>>()
         val csv: ByteArray
         val filename: String
         if ("monthly" == kind) {
             for (m in orEmpty(a.months)) {
-                // java.util.List.of: 원 Java 와 같이 month 가 null 이면 NPE.
+                // java.util.List.of 는 null 원소면 NPE 다 — month 는 AdoptionService 가 "yyyy-MM" 으로 늘 채운다.
                 rows.add(
                     java.util.List.of(
                         m.month, if (m.current) "Y" else "N", m.authSuccess.toString(), m.activeUsers.toString(), m.newCredentials.toString(),
@@ -382,13 +384,13 @@ class FunnelTabController(
             val label = if (s != null && MONTH_RE.matcher(s).matches()) {
                 s.substring(0, 4) + "년 " + Integer.parseInt(s.substring(5)) + "월"
             } else {
-                s.toString() // 원 Java String.valueOf — null 이면 "null"
+                s.toString() // null 이면 "null"(Any?.toString)
             }
             return if (m.current) "$label (진행 중)" else label
         }
 
         private fun rateKpi(label: String, stage: FunnelDto.Stage?, delta: Double?): RateKpi {
-            // !!: 원 Java s.getAttempts() 의 NPE 와 같은 자리.
+            // `!!`: 클래스 KDoc 참고 — tab() 이 조회 try 뒤에 부른다.
             val s = stage!!
             if (s.attempts == 0L) return RateKpi(label, "—", "시도 없음")
             var hint = "성공 " + num(s.success) + " / 시도 " + num(s.attempts)
@@ -398,7 +400,8 @@ class FunnelTabController(
 
         /** series: 플랫폼 현황(InsightsPageController)이 nullable DTO 값을 그대로 넘긴다. */
         fun seriesCard(key: String?, title: String?, series: List<FunnelDto.DailyPoint>?, csv: String?): SeriesCard {
-            // !!: 원 Java 의 첫 순회(for (p : series)) NPE 와 같은 자리.
+            // `!!`: 탭은 orEmpty 로 감싸 넘기고, InsightsPageController 는 PlatformInsightsService 가 늘 채우는 authSeries 를 넘긴다.
+            // 두 호출 모두 조회 try 밖이라 null 이면 500.
             val ss = series!!
             var smax = 1L
             for (p in ss) smax = Math.max(smax, Math.max(p.attempts, p.success))
@@ -425,7 +428,7 @@ class FunnelTabController(
         private fun <T> orEmpty(l: List<T>?): List<T> = l ?: java.util.List.of()
 
         private fun summaryRow(code: String, label: String, stage: FunnelDto.Stage?): List<String?> {
-            // !!: 원 Java s.getSuccess() 의 NPE 와 같은 자리.
+            // `!!`: 클래스 KDoc 참고 — export 에는 try 가 없다.
             val s = stage!!
             val r = FunnelHelpers.rate(s.success, s.attempts)
             return java.util.List.of(code, label, s.attempts.toString(), s.success.toString(), if (r == null) "" else FunnelHelpers.toFixed(r, 4))
@@ -442,7 +445,7 @@ class FunnelTabController(
             }
         }
 
-        /** SeriesCard axisLabels. java.util.List.of: 원 Java 와 같이 day 가 null 이면 NPE. */
+        /** 축 라벨(첫 날·가운데·오늘). java.util.List.of 라 day 가 null 이면 NPE 다. */
         private fun axisLabels(s: List<FunnelDto.DailyPoint>): List<String?> {
             if (s.isEmpty()) return java.util.List.of()
             if (s.size == 1) return java.util.List.of("오늘")

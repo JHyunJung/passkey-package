@@ -42,20 +42,21 @@ import java.util.UUID
 private val log = LoggerFactory.getLogger(AuditTabController::class.java)
 
 /**
- * Tenant 상세의 감사 로그 탭(← pages/tenant/AuditTab.tsx, auditHelpers.ts, api/audit.ts, lib/csvExport.ts).
+ * Tenant 상세의 감사 로그 탭.
  *
  * 모든 엔드포인트가 [TenantTabs.load] 를 먼저 부른다(RP 다른 tenant → 403, CSV 포함).
  *
- * 원본에는 자동 갱신(폴링)이 없다(setInterval 은 체인 검증 경과 시간뿐) — 그래서 hx-trigger every 도 두지 않는다(브리프와 다름, 원본이 이긴다).
- * 기간 전환·다시 시도는 카드를 새로 그린다(구간 끝 to 를 새로 잡고 첫 쪽). "더 보기"는 원본 loadMore 처럼 같은 구간(win·to)의 다음 한 쪽만 읽어
+ * 자동 갱신(폴링)은 없다 — hx-trigger every 를 두지 않는다.
+ * 기간 전환·다시 시도는 카드를 새로 그린다(구간 끝 to 를 새로 잡고 첫 쪽). "더 보기"는 같은 구간(win·to)의 다음 한 쪽만 읽어
  * 표 끝에 붙인다(OOB beforeend) — 다음 쪽 번호·마지막 날짜 키는 카드 안 숨은 입력(#audit-state)이 들고 다니고 응답이 갱신한다. 쪽 수 상한은 없다.
- * 이벤트 종류·실패만 필터는 원본처럼 "읽어 온 행 안에서" 클라이언트(Alpine auditFilter)가 거른다 — REST 에 그 파라미터가 없고,
- * 더 보기로 붙인 행에도 같은 필터가 적용된다. 필터 상태는 카드 밖(#audit-root)에 있어 기간 전환으로 카드가 바뀌어도 유지된다(원본과 같다).
+ * 이벤트 종류·실패만 필터는 "읽어 온 행 안에서" 클라이언트(Alpine auditFilter)가 거른다 — REST 에 그 파라미터가 없고,
+ * 더 보기로 붙인 행에도 같은 필터가 적용된다. 필터 상태는 카드 밖(#audit-root)에 있어 기간 전환으로 카드가 바뀌어도 유지된다.
  * CSV 는 화면이 불러온 쪽 수(pages)만큼 같은 구간을 다시 읽어 같은 필터로 거른다([ExportLimit.MAX_PAGES] 초과는 422 — 일부만 담은 파일 금지).
  *
  * 감사 로그 payload·행위자·대상은 사용자가 정할 수 있는 값이다 — 템플릿은 th:text 만 쓰고 속성의 JS 평가 위치에는 넣지 않는다.
  *
- * `v.id!!` 는 원 Java `v.getId().toString()` 의 NPE 자리다(더 보기·CSV 는 원 Java 도 id 를 문자열 연결·nullable 파라미터로만 써서 NPE 가 없다 — 그대로 nullable).
+ * `v.id!!`: TenantView.id 는 DB 에서 읽은 Tenant 의 id 라 null 이 오지 않는다(타입만 nullable). 탭·카드는 try 밖이라 null 이면
+ * WebExceptionAdvice 의 500, 체인 검증은 try 안이라 실패 토스트다. 더 보기·CSV 는 id 를 문자열 연결·nullable 파라미터로만 써서 `!!` 가 없다.
  */
 @Controller
 class AuditTabController(
@@ -97,7 +98,7 @@ class AuditTabController(
         }
     }
 
-    /** 표의 한 줄(api/audit.ts adapt + 열 계산). group·fail·dayKey 는 클라이언트 필터·날짜 머리글이 읽는 data-* 값(서버 상수). */
+    /** 표의 한 줄. group·fail·dayKey 는 클라이언트 필터·날짜 머리글이 읽는 data-* 값(서버 상수). */
     data class Ev(
         val id: String?,
         val eventType: String?,
@@ -142,7 +143,7 @@ class AuditTabController(
         val v = TenantTabs.load(tenants, id)
         val me = me(model)
         val now = clock.instant()
-        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val tid = v.id!!
         model.addAttribute("tid", tid.toString())
         model.addAttribute("platform", me.platform)
@@ -162,7 +163,7 @@ class AuditTabController(
     ): String {
         val v = TenantTabs.load(tenants, id)
         val now = clock.instant()
-        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        // `!!`: tab() 과 같다(try 밖 — 500).
         val tid = v.id!!
         model.addAttribute("tid", tid.toString())
         fillCard(model, tid, Span(AuditHelpers.window(win).key, now), now)
@@ -170,7 +171,7 @@ class AuditTabController(
     }
 
     /**
-     * 더 보기(원본 loadMore): 같은 구간(win·to)의 `page` 쪽 하나만 읽어 표 끝에 붙인다(OOB). 다음 쪽 번호·마지막 날짜 키·버튼을 OOB 로 갱신한다.
+     * 더 보기: 같은 구간(win·to)의 `page` 쪽 하나만 읽어 표 끝에 붙인다(OOB). 다음 쪽 번호·마지막 날짜 키·버튼을 OOB 로 갱신한다.
      * 실패는 실제 오류 상태 + 토스트(본문 없음) — 붙인 행과 숨은 상태는 그대로라 같은 쪽을 다시 누를 수 있다.
      */
     @GetMapping(FRAG + "{id}/tab/audit/more")
@@ -203,12 +204,12 @@ class AuditTabController(
         model.addAttribute("nextPage", p + 1)
         model.addAttribute("lastDay", if (evs.isEmpty()) lastDay else evs[evs.size - 1].dayKey)
         model.addAttribute("hasMore", items.size == PAGE_SIZE)
-        model.addAttribute("moreUrl", FRAG + v.id + "/tab/audit/more") // 원 Java 문자열 연결 — null 이면 "null"
+        model.addAttribute("moreUrl", FRAG + v.id + "/tab/audit/more") // 문자열 연결이라 id 가 null 이면 "null"(NPE 없음)
         return MORE_VIEW
     }
 
     /**
-     * 체인 검증(PLATFORM 전용). 성공하면 카드 전체를 결과로 교체하고(열린 다이얼로그도 함께 사라진다 — 원본 setShowVerify(false)),
+     * 체인 검증(PLATFORM 전용). 성공하면 카드 전체를 결과로 교체하고(열린 다이얼로그도 함께 사라진다),
      * 실패하면 실제 오류 상태 + 토스트(본문 없음)라 카드·다이얼로그가 그대로 남고 버튼이 다시 풀린다.
      */
     @GetMapping(FRAG + "{id}/audit/verify")
@@ -217,7 +218,7 @@ class AuditTabController(
         val me = me(model)
         if (!me.platform) throw AccessDeniedException("platform operator only")
         try {
-            // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리(try 안 — 검증 실패 토스트).
+            // `!!`: 클래스 KDoc 참고. try 안이라 null 이면 아래 catch 가 "체인 검증에 실패했습니다" 토스트(500)로 바꾼다.
             val r = chain.verifyTenant(v.id!!.toString())
             val tampered = if (r.tamperedEntryId == null) 0 else 1
             val verifiedAt = r.verifiedAt
@@ -231,7 +232,7 @@ class AuditTabController(
             res.status = status
             return EMPTY_VIEW
         }
-        // 위 try 의 v.id!! 를 통과했다(smart cast 로 non-null) — 원 Java 의 두 번째 v.getId().toString() 도 여기서는 NPE 가 나지 않는다.
+        // 위 try 의 v.id!! 를 통과했으므로 smart cast 로 non-null 이다(실패했으면 catch 에서 이미 돌아갔다).
         val tid = v.id
         model.addAttribute("tid", tid.toString())
         model.addAttribute("platform", true)
@@ -241,7 +242,7 @@ class AuditTabController(
     }
 
     /**
-     * 화면이 불러온 행의 CSV(원본 downloadCsv: audit-{slug}-{KST 오늘}.csv). 같은 구간(win·to)의 0..pages-1 쪽을 다시 읽어 화면과 같은 필터(g·failures)로 거른다.
+     * 화면이 불러온 행의 CSV(audit-{slug}-{KST 오늘}.csv). 같은 구간(win·to)의 0..pages-1 쪽을 다시 읽어 화면과 같은 필터(g·failures)로 거른다.
      * pages 가 [ExportLimit.MAX_PAGES] 를 넘으면 422(이유 문구). 어느 쪽이든 읽기에 실패하면 부분 파일 없이 오류.
      */
     @GetMapping(PAGE + "{id}/audit.csv")
@@ -292,7 +293,7 @@ class AuditTabController(
 
     // ── 조회 ────────────────────────────────────────────────
 
-    /** 구간의 한 쪽. 실패는 그대로 던진다(권한 거부 포함). tid: 원 Java 와 같이 nullable 그대로 REST 에 넘긴다. */
+    /** 구간의 한 쪽. 실패는 그대로 던진다(권한 거부 포함). tid 는 nullable 그대로 REST 에 넘긴다. */
     private fun readPage(tid: UUID?, span: Span, page: Int): List<Item> {
         val r = span.range()
         val rows: List<AuditLogView>? = audit.list(null, null, tid, r[0], r[1], page, PAGE_SIZE).data()
@@ -390,7 +391,7 @@ class AuditTabController(
         val targetId = a.targetId
         val diff = AuditHelpers.payloadDiff(p).map { d -> Diff(d.field, AuditHelpers.diffValue(d.from), AuditHelpers.diffValue(d.to)) }
         return Ev(
-            a.id.toString(), type, AuditHelpers.eventTone(type, null), // id: 원 Java String.valueOf — null 이면 "null"
+            a.id.toString(), type, AuditHelpers.eventTone(type, null), // id 가 null 이면 "null"(Any?.toString)
             if (kst.length > 11) kst.substring(11) else kst, KstFormat.timeAgo(at, now), actorType, actorId,
             if (actorId == null) null else "…" + tail(actorId, 10),
             a.targetType ?: "—", targetId, if (targetId == null) null else "…" + tail(targetId, 12),
@@ -411,18 +412,18 @@ class AuditTabController(
 
         private const val PAGE_SIZE = 50
 
-        /** 체인 검증 클라이언트 시간 제한(LONG_TIMEOUT_MS). 템플릿의 hx-request 와 같은 값. */
+        /** 체인 검증 클라이언트 시간 제한. 템플릿(audit.html)의 hx-request 와 같은 값. */
         private const val VERIFY_TIMEOUT_MS = 120_000
 
         private val UNSAFE_FILENAME = Regex("[^A-Za-z0-9._-]")
 
-        /** JSON.stringify(payload) — null 은 "null". orEmpty 면 payload ?? {} (CSV). */
+        /** payload 의 JSON 문자열(JsonNode.toString). null 은 "null", orEmpty(CSV)면 "{}". */
         private fun payloadCompact(p: JsonNode?, orEmpty: Boolean): String {
             if (p == null) return if (orEmpty) "{}" else "null"
             return p.toString()
         }
 
-        /** KST 날짜(키)별 연속 구간으로 묶는다(원본 DataTable groupBy dayLabel). 첫 그룹의 키가 prevKey 와 같으면 머리글을 그리지 않는다. */
+        /** KST 날짜(키)별 연속 구간으로 묶는다. 첫 그룹의 키가 prevKey 와 같으면 머리글을 그리지 않는다. */
         private fun days(evs: List<Ev>, prevKey: String, now: Instant): List<Day> {
             val out = ArrayList<Day>()
             var cur: MutableList<Ev>? = null

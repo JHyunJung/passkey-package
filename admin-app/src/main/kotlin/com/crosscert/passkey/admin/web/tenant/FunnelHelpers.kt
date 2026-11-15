@@ -5,7 +5,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * 인증 현황 탭의 성공률 계산. 0/0 은 null(비율 없음)이며 숫자 모양은 원본 JS 와 같다
+ * 인증 현황 탭의 성공률 계산. 0/0 은 null(비율 없음)이며 숫자 모양은 JS `Number.toFixed` 와 같다
  * (toFixed 는 double 의 정확한 이진 값을 반올림하므로 [BigDecimal] (double) 생성자로 맞춘다).
  */
 object FunnelHelpers {

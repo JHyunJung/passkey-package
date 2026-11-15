@@ -27,7 +27,7 @@ private val log = LoggerFactory.getLogger(MdsTabController::class.java)
 private const val VIEW = "admin/settings/mds :: tab"
 private const val WARN_VIEW = "admin/settings/mds :: reloadWarning"
 
-/** 원본 MDS_HISTORY_STRIP_LIMIT, TABLE_ROWS. */
+/** 읽어 오는 이력 수(막대 칸 수)와 표에 보이는 줄 수. */
 private const val HISTORY_LIMIT = 30
 private const val TABLE_ROWS = 6
 private const val ERROR_PREVIEW_MAX = 80
@@ -39,15 +39,15 @@ private val SEED_CUTOFF: Instant = Instant.parse("2000-01-01T00:00:00Z")
 private val WHITESPACE: Pattern = Pattern.compile("\\s+")
 
 /**
- * 설정 › MDS Status 탭(← pages/settings/MdsStatusTab.tsx, api/mdsStatus.ts). PLATFORM 전용 — 모든 엔드포인트가 PLATFORM 을 먼저 확인한다(RP_ADMIN → 403, REST 미호출).
- * 키 관리(`KeyMgmtController`)는 원본 설정 화면 어디에도 없어 이 탭에 두지 않는다.
+ * 설정 › MDS Status 탭. PLATFORM 전용 — 모든 엔드포인트가 PLATFORM 을 먼저 확인한다(RP_ADMIN → 403, REST 미호출).
+ * 키 관리(`KeyMgmtController`)는 이 탭에 두지 않는다.
  *
- * 상태(`MdsAdminController.status`)와 이력(`history(30)`)을 함께 읽고 둘 다 끝난 뒤에 그린다. 상태 조회 실패는 로드 실패(LoadError),
- * 이력 조회 실패는 "이력 없음"이 아니라 이력 카드만 LoadError 다(이 경우 헤드라인은 중립 "이력 확인 불가").
+ * 상태(`MdsAdminController.status`)와 이력(`history(30)`)을 함께 읽고 둘 다 끝난 뒤에 그린다. 상태 조회 실패는 로드 실패(loadError 조각),
+ * 이력 조회 실패는 "이력 없음"이 아니라 이력 카드만 loadError 조각이다(이 경우 헤드라인은 중립 "이력 확인 불가").
  *
- * 즉시 갱신(`POST …/mds/sync` → `MdsAdminController.sync`): 긴 작업이라 요청 시간 제한 120초(원본 LONG_TIMEOUT_MS)이고, 요청 중에는 버튼이 비활성 +
- * hx-sync=this:drop 라 겹쳐 보내지 못한다(원본 syncingRef). 결과 SYNCED/SKIPPED/FAILED 별 토스트 후 탭을 다시 읽어 바꾼다. 서버 원문(error)은 싣지 않는다.
- * 폴링은 없다(원본도 없음).
+ * 즉시 갱신(`POST …/mds/sync` → `MdsAdminController.sync`): 긴 작업이라 요청 시간 제한 120초(템플릿 mds.html 의 hx-request)이고, 요청 중에는 버튼이 비활성 +
+ * hx-sync=this:drop 라 겹쳐 보내지 못한다. 결과 SYNCED/SKIPPED/FAILED 별 토스트 후 탭을 다시 읽어 바꾼다. 서버 원문(error)은 싣지 않는다.
+ * 폴링은 없다.
  */
 @Controller
 class MdsTabController(
@@ -102,14 +102,16 @@ class MdsTabController(
     @PostMapping(SYNC_PATH)
     fun sync(res: HttpServletResponse, model: Model): String {
         SettingsSupport.platform(model)
-        // nullable: 원 Java 는 null data 를 try 밖 r.getStatus() 에서 NPE(500) — non-null 선언이면 try 안 검사로 바뀐다.
+        // nullable 로 받는다: data() 는 Java 플랫폼 타입이라 non-null 로 선언하면 대입 자리(try 안)에 null 검사가 생겨 null 이
+        // 아래 catch(갱신 실패 토스트)로 간다. 지금은 null 이면 아래 `r!!`(try 밖)에서 NPE — WebExceptionAdvice 의 500.
+        // sync() 는 data 를 늘 채운다.
         val r: MdsSchedulerService.SyncResult?
         try {
             r = mds.sync().data()
         } catch (e: RuntimeException) {
             return SettingsSupport.fail(res, "MDS 갱신 실패", e, false) // 오류 상태 + 토스트, 본문 없음(탭은 그대로)
         }
-        // !!: 원 Java 의 r.getStatus() NPE 와 같은 자리(try 밖).
+        // `!!`: 위 선언 주석 참고.
         if ("SYNCED" == r!!.status) {
             Toasts.successTitled(res, "MDS 즉시 갱신 완료", "버전 " + r.version)
         } else if ("SKIPPED" == r.status) {
@@ -118,7 +120,7 @@ class MdsTabController(
             // 서버 원문(r.error())은 화면에 싣지 않는다.
             Toasts.errorTitled(res, "MDS 갱신 실패", "갱신하지 못했습니다. 잠시 후 다시 시도하세요.", null, null)
         }
-        // 갱신은 성공했다. 다시 읽기(상태·이력 모두)에 실패하면 화면은 그대로 두고 경고만 보인다(원본: 이전 상태·이력을 유지 + 다시 시도).
+        // 갱신은 성공했다. 다시 읽기(상태·이력 모두)에 실패하면 화면은 그대로 두고 경고만 보인다.
         if (load(model, true)) return VIEW
         res.setHeader("HX-Reswap", "none")
         model.addAttribute(
@@ -138,7 +140,7 @@ class MdsTabController(
         model.addAttribute("loadError", null)
         model.addAttribute("historyError", null)
         model.addAttribute("v", null)
-        // nullable: 원 Java 는 null data 를 try 밖 view() 에서 NPE — non-null 선언이면 try 안 검사로 바뀐다.
+        // nullable: sync 와 같은 이유 — non-null 로 선언하면 null 이 아래 catch(로드 실패 카드)로 간다. status() 는 data 를 늘 채운다.
         val status: MdsStatusView?
         try {
             status = mds.status().data()
@@ -158,7 +160,7 @@ class MdsTabController(
             log.warn("[settings] mds history load failed: {}", e.javaClass.simpleName)
             model.addAttribute("historyError", e)
         }
-        // !!: 원 Java 는 view() 첫 줄 s.getVersion() 에서 NPE(try 밖) — 같은 자리.
+        // `!!`: 위 선언 주석 참고. null 이면 NPE — 부르는 tab·sync 모두 try 밖이라 500.
         model.addAttribute("v", view(status!!, history, Instant.now(clock)))
         return history != null || !strict
     }
@@ -178,7 +180,7 @@ class MdsTabController(
             return m
         }
 
-        // ── 화면 모델 계산(원본 MdsStatusTab 본문) ───────────────
+        // ── 화면 모델 계산 ───────────────────────────────────────
 
         private fun view(s: MdsStatusView, history: List<MdsHistoryView>?, now: Instant): View {
             val historyOk = history != null
@@ -248,7 +250,7 @@ class MdsTabController(
 
         /**
          * 실패 사유(서버 errorMessage)를 한 줄 평문으로. 길면 줄이고(80자) 전체는 title 툴팁(템플릿).
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(MdsTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(MdsTabControllerTest)가 부른다.
          */
         internal fun failureReason(message: String): String {
             val flat = WHITESPACE.matcher(message).replaceAll(" ").javaTrim()
@@ -281,7 +283,7 @@ class MdsTabController(
         }
 
         /**
-         * 원본 timeAgo(초 단위): n초 전 / n분 전 / n시간 전 / n일 전.
+         * 초 단위 상대 시각: n초 전 / n분 전 / n시간 전 / n일 전.
          * internal: 같은 모듈 테스트(MdsTabControllerTest)가 부른다.
          */
         internal fun timeAgo(iso: String?, now: Instant): String {

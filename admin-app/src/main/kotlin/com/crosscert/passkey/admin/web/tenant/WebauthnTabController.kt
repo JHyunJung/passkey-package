@@ -35,18 +35,21 @@ import java.nio.charset.StandardCharsets
 private val log = LoggerFactory.getLogger(WebauthnTabController::class.java)
 
 /**
- * Tenant 상세의 WebAuthn 설정 탭(← pages/tenant/WebauthnConfigTab.tsx, api/webauthn.ts).
+ * Tenant 상세의 WebAuthn 설정 탭.
  *
  * 모든 엔드포인트는 [TenantTabs.load] 로 접근 경계를 먼저 확인한다(RP_ADMIN 의 다른 테넌트 → 403). 화면에 없는 값(rpId·displayName·
- * acceptedFormats·`mdsRequired`)은 요청에서 받지 않고 그때 서버에서 읽은 현재 값을 그대로 다시 보낸다 — api/webauthn.ts 의 adaptConfig·역변환과
- * 같은 결과이면서 오래된 값으로 다른 관리자의 변경을 되돌리지 않고 클라이언트가 위조할 수도 없다.
+ * acceptedFormats·`mdsRequired`)은 요청에서 받지 않고 그때 서버에서 읽은 현재 값을 그대로 다시 보낸다 — 오래된 값으로
+ * 다른 관리자의 변경을 되돌리지 않고 클라이언트가 위조할 수도 없다.
  *
  * 흐름: 폼 제출 = 미리보기(`POST …/webauthn/diff`: 검증 → 서버 diff + 로컬 diff 병합 → 확인 다이얼로그 조각) → 다이얼로그 확인 =
  * 저장(`PUT …/webauthn`: 비교한 바로 그 값, 성공하면 탭을 새 값으로 다시 그림). 검증 실패는 422 + 필드 옆 오류(OOB, 입력·변경 상태 유지),
  * 저장 단계 거절은 확인 다이얼로그 안 인라인 오류다.
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 테넌트 조회·검증이 먼저다. 넘기는 자리의 `!!` 는 원 Java 에서
- * Kotlin 피호출자(`TenantAdminController.update`)의 파라미터 검사 NPE 가 나던 자리(try 밖).
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 테넌트 조회(403/404)·검증(400)이 먼저 판정한다. `/admin/_/` 는 인증 필수라
+ * (AdminSecurityConfig) 정상 경로에선 null 이 아니다. `auth!!` 는 `TenantAdminController.update` 가 non-null `Authentication` 을
+ * 받기 때문이고, null 이면 try 밖 NPE 라 WebExceptionAdvice 의 500.
+ *
+ * `v.id!!`: TenantView.id 는 DB 에서 읽은 Tenant 의 id 라 null 이 오지 않는다(타입만 nullable).
  */
 @Controller
 class WebauthnTabController(
@@ -69,14 +72,14 @@ class WebauthnTabController(
     ) {
         companion object {
             fun of(v: TenantAdminDto.TenantView): Form = Form(
-                // List.copyOf: 원 Java 와 같이 null 목록·원소면 NPE.
+                // java.util.List.copyOf 는 null 목록·원소면 NPE 다 — allowedOrigins 는 Tenant 의 origin 행 목록이라 null 이 아니다.
                 v.rpId, v.rpName, v.webauthnTimeoutMs.toString(), java.util.List.copyOf(v.allowedOrigins),
                 if (v.requireUserVerification) "REQUIRED" else "PREFERRED", v.attestationConveyance,
             )
         }
     }
 
-    /** 한 줄 변경(원본 Change). 배열 필드의 from/to 는 List<String>. */
+    /** 한 줄 변경. 배열 필드의 from/to 는 List<String>. */
     data class Change(val key: String?, val from: Any?, val to: Any?)
 
     /** 변경 비교 한 줄(화면용). */
@@ -105,7 +108,7 @@ class WebauthnTabController(
         } catch (e: AccessDeniedException) {
             throw e
         } catch (e: RuntimeException) {
-            // 그 밖의 조회 실패는 인라인 LoadError(원본: 스켈레톤에 멈추지 않고 다시 시도)
+            // 그 밖의 조회 실패는 인라인 loadError 조각(다시 시도 버튼)
             log.warn("[webauthn-tab] load failed: {}", e.toString())
             model.addAttribute("loadError", e)
             model.addAttribute("retryAttrs", TenantTabs.requesterAttrs("$FRAG$id/tab/webauthn"))
@@ -170,7 +173,7 @@ class WebauthnTabController(
 
         val merged = try {
             val local = diffObjects(Form.of(v), draft)
-            // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리(try 안 — 비교 실패 토스트).
+            // `!!`: 클래스 KDoc 참고. try 안이라 null 이면 아래 catch 가 "변경 사항을 비교하지 못했습니다" 토스트(500)로 바꾼다.
             val server = tenants.diff(
                 v.id!!.toString(),
                 WebauthnDiffRequest(v.rpId, draft.rpName, draft.origins, v.acceptedFormats, "REQUIRED" == draft.uv, v.mdsRequired),
@@ -227,7 +230,7 @@ class WebauthnTabController(
             Toasts.confirmError(res, errors.values.iterator().next(), null, null)
             return EMPTY_VIEW
         }
-        // !!: 원 Java v.getId().toString() 의 NPE, auth 는 Kotlin 피호출자 파라미터 검사 NPE 와 같은 자리(인자 평가 순서 그대로).
+        // `!!`: v.id·auth 모두 클래스 KDoc 참고. try 밖이라 null 이면 500(인자는 왼쪽부터 평가되어 v.id 가 먼저다).
         val updated = tenants.update(v.id!!.toString(), request(v, draft), auth!!).data()
         val n = parseCount(changes)
         Toasts.successSaved(res, "WebAuthn 설정을 저장했습니다", n.toString() + "개 항목이 바뀌었습니다.")
@@ -240,7 +243,7 @@ class WebauthnTabController(
     /** 필드 이름 → 오류 문구(비면 통과). 서버(REST)가 거절할 값을 미리 걸러 필드 옆에 보인다. */
     private fun validate(v: TenantAdminDto.TenantView, f: Form): Map<String, String> {
         val e = LinkedHashMap<String, String>()
-        // !!: 원 Java f.rpName().isBlank() 의 NPE 와 같은 자리(초안의 rpName 은 요청 파라미터라 null 이 아니다).
+        // `!!`: validate 는 diff·save 의 초안만 받고, 초안의 rpName 은 요청 파라미터(기본값 "")라 null 이 아니다.
         if (f.rpName!!.javaIsBlank()) e["rpName"] = "RP 표시 이름을 입력하세요."
         val ms = parseMs(f.timeoutMs)
         if (ms == null || ms < 1000 || ms > 600000) e["timeoutMs"] = "대기 시간은 1000–600000ms 범위의 숫자여야 합니다."
@@ -252,7 +255,7 @@ class WebauthnTabController(
             if (bad.isNotEmpty()) e["origins"] = bad.joinToString(" ")
         }
         if (!UV_VALUES.contains(f.uv)) e["userVerification"] = "사용자 검증은 필수 또는 권장만 고를 수 있습니다."
-        // !!: 원 Java List.of(..).contains(null) 의 NPE 와 같은 자리(초안의 at 은 요청 파라미터라 null 이 아니다).
+        // `!!`: rpName 과 같다(초안의 at 도 요청 파라미터).
         if (!AT_VALUES.contains(f.at!!)) e["attestationConveyance"] = "인증기 증명 값이 올바르지 않습니다."
         if (e.isEmpty()) {
             // 길이 제한 등 나머지 제약은 REST 와 같은 Bean Validation 으로.
@@ -276,7 +279,7 @@ class WebauthnTabController(
 
     private fun fill(model: Model, v: TenantAdminDto.TenantView, f: Form) {
         val base = FRAG + v.id + "/webauthn"
-        // !!: 원 Java v.getId().toString() 의 NPE 와 같은 자리.
+        // `!!`: 클래스 KDoc 참고. 부르는 tab·save 모두 try 밖이라 null 이면 500.
         model.addAttribute("tid", v.id!!.toString())
         model.addAttribute("f", f)
         model.addAttribute("diffUrl", "$base/diff")
@@ -301,7 +304,7 @@ class WebauthnTabController(
         private val AT_LABELS: Map<String, String> =
             java.util.Map.of("NONE", "요청 안 함", "INDIRECT", "익명 허용", "DIRECT", "직접", "ENTERPRISE", "기업용")
 
-        /** '요구 안 함'(DISCOURAGED)은 서버가 boolean 만 저장해 되돌아오지 않으므로 숨긴다(스펙 §8). */
+        /** '요구 안 함'(DISCOURAGED)은 서버가 boolean 만 저장해 되돌아오지 않으므로 숨긴다. */
         private val UV_VALUES: List<String> = java.util.List.of("REQUIRED", "PREFERRED")
         private val AT_VALUES: List<String> = java.util.List.of("NONE", "INDIRECT", "DIRECT", "ENTERPRISE")
 
@@ -331,7 +334,7 @@ class WebauthnTabController(
         private val FIELD_ORDER: List<String> =
             java.util.List.of("rpName", "timeoutMs", "origins", "userVerification", "attestationConveyance", "formats")
 
-        /** api/webauthn.ts update 의 역변환. 화면에 없는 값은 읽어 온 현재 값(mdsRequired 포함)을 그대로 쓴다. */
+        /** 폼 값 → 수정 요청. 화면에 없는 값은 읽어 온 현재 값(mdsRequired 포함)을 그대로 쓴다. */
         private fun request(v: TenantAdminDto.TenantView, f: Form): TenantAdminDto.TenantUpdateRequest {
             val ms = parseMs(f.timeoutMs)
             return TenantAdminDto.TenantUpdateRequest(
@@ -342,7 +345,7 @@ class WebauthnTabController(
 
         // ── diff ────────────────────────────────────────────────
 
-        /** diffObjects: 화면에 보이는 필드 중 처음 값과 달라진 것(rpId·formats 는 편집하지 않는다). */
+        /** 화면에 보이는 필드 중 처음 값과 달라진 것(rpId·formats 는 편집하지 않는다). */
         private fun diffObjects(a: Form, b: Form): List<Change> {
             val out = ArrayList<Change>()
             if (a.rpName != b.rpName) out.add(Change("rpName", a.rpName, b.rpName))
@@ -355,10 +358,10 @@ class WebauthnTabController(
             return out
         }
 
-        /** adaptDiffChanges: 배열 필드는 서버가 from/to 대신 added/removed 를 채운다(from=removed, to=added 로 옮긴다). */
+        /** 서버 diff → Change. 배열 필드는 서버가 from/to 대신 added/removed 를 채운다(from=removed, to=added 로 옮긴다). */
         private fun adaptDiff(diff: WebauthnConfigDiff): List<Change> {
             val out = ArrayList<Change>()
-            // !!: 원 Java diff.getChanges() 순회의 NPE 와 같은 자리.
+            // `!!`: WebauthnDiffService.diff 는 changes 를 늘 채운다(타입만 nullable). null 이면 NPE — diff() 의 try 가 비교 실패 토스트로 바꾼다.
             for (c in diff.changes!!) {
                 val added = c.added
                 val removed = c.removed
@@ -373,7 +376,7 @@ class WebauthnTabController(
 
         /**
          * L2 확인 목록 = 서버 diff + 로컬 diff 중 서버가 비교하지 않는 필드(timeoutMs·attestationConveyance). 화면 순서로 정렬(안정).
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다.
          */
         internal fun mergeChanges(server: List<Change>, local: List<Change>): List<Change> {
             val covered = LinkedHashSet<String?>()
@@ -388,7 +391,8 @@ class WebauthnTabController(
         private fun norm(k: String?): String? = if ("requireUserVerification" == k) "userVerification" else k
 
         private fun rank(k: String?): Int {
-            // !!: 원 Java List.of(..).indexOf(null) 의 NPE 와 같은 자리.
+            // `!!`: key 는 로컬 diff 의 상수거나 WebauthnDiffService 가 문자열 상수로 채운 field 라 null 이 아니다.
+            // null 이면 NPE — diff() 에서는 try 안이라 비교 실패 토스트.
             val i = FIELD_ORDER.indexOf(norm(k)!!)
             return if (i < 0) FIELD_ORDER.size else i
         }
@@ -407,7 +411,7 @@ class WebauthnTabController(
         /** DiffRow 한 줄(원시 값 대신 사람이 읽는 값). */
         @Suppress("UNCHECKED_CAST")
         private fun row(c: Change): DiffRow {
-            // !!: 원 Java Map.of(..).getOrDefault(null, ..) 의 NPE 와 같은 자리.
+            // `!!`: rank 와 같은 근거로 null 이 아니다.
             val key = c.key!!
             val label = FIELD_LABELS.getOrDefault(key, key)
             val f = c.from
@@ -425,13 +429,13 @@ class WebauthnTabController(
             )
         }
 
-        /** internal: 원 Java 는 package-private static — 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다. */
+        /** internal: 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다. */
         internal fun showValue(key: String?, v: Any?): String? {
             if ("timeoutMs" == key && v is Number) {
                 return BigDecimal.valueOf(v.toDouble() / 1000.0).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "초"
             }
             if ("userVerification" == key && v is String) return UV_LABELS.getOrDefault(v, v)
-            // 서버 diff 의 boolean: 탭은 true→필수, false→권장 으로 매핑한다(webauthn.ts adaptConfig).
+            // 서버 diff 의 boolean: 폼(Form.of)과 같게 true→필수, false→권장 으로 보인다.
             if ("requireUserVerification" == key && v is Boolean) return UV_LABELS[if (v) "REQUIRED" else "PREFERRED"]
             if ("mdsRequired" == key && v is Boolean) return if (v) "필수" else "필수 아님"
             if ("attestationConveyance" == key && v is String) return AT_LABELS.getOrDefault(v, v)
@@ -440,7 +444,7 @@ class WebauthnTabController(
 
         private fun saveAttrs(v: TenantAdminDto.TenantView): Map<String, Any?> {
             val m = LinkedHashMap<String, Any?>()
-            m["hx-put"] = FRAG + v.id + "/webauthn" // 원 Java 문자열 연결 — null 이면 "null"
+            m["hx-put"] = FRAG + v.id + "/webauthn" // 문자열 연결이라 id 가 null 이면 "null"(NPE 없음)
             m["hx-target"] = "#" + TenantTabs.TARGET_ID
             m["hx-swap"] = "innerHTML"
             m["hx-sync"] = TenantTabs.SYNC
@@ -481,8 +485,8 @@ class WebauthnTabController(
         }
 
         /**
-         * timeoutGuide: 권장 범위 60000–120000ms. 벗어나면 warn 톤(ui.js timeoutHint 와 같은 문구).
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다.
+         * 권장 범위 60000–120000ms. 벗어나면 warn 톤(ui.js timeoutHint 와 같은 문구).
+         * internal: 같은 모듈 테스트(WebauthnTabControllerTest)가 부른다.
          */
         internal fun timeoutGuide(msBox: Int?): Guide {
             val ms = msBox ?: 0

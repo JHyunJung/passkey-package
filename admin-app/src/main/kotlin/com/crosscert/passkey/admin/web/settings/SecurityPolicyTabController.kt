@@ -33,9 +33,9 @@ private const val RESULT_VIEW = "admin/settings/security :: result"
 private const val SAVE_FAILED_TITLE = "보안 정책을 저장하지 못했습니다"
 
 /**
- * 설정 › 보안 정책 탭(← pages/settings/SecurityPolicyTab.tsx, api/securityPolicy.ts, lib/policyValidation.ts). PLATFORM 전용 — 모든 엔드포인트가 PLATFORM 을 먼저 확인한다.
+ * 설정 › 보안 정책 탭. PLATFORM 전용 — 모든 엔드포인트가 PLATFORM 을 먼저 확인한다.
  *
- * 흐름(원본 handleSave): 저장 바의 저장 = 폼 제출 = `PUT /admin/_/settings/security`.
+ * 흐름: 저장 바의 저장 = 폼 제출 = `PUT /admin/_/settings/security`.
  * 1. 검증([PolicyValidation], 서버에 이미 저장된 idle timeout 을 손대지 않았으면 오류로 막지 않는다): 실패는 422 + 필드 옆 오류(OOB, 입력·변경 상태 유지, 토스트 없음).
  * 2. 지금 쓰는 콘솔 주소(요청의 origin)가 저장된 CORS 허용 목록에 있는데 새 목록에서 빠지면 L2 확인 다이얼로그를 돌려준다. 저장이 아니므로
  *    **422** 로 응답한다 — 저장 바가 2xx 를 "저장됨"으로 세어 변경 표시를 지우지 않게 하기 위함이다(본문은 인라인 조각이라 스왑된다).
@@ -43,7 +43,7 @@ private const val SAVE_FAILED_TITLE = "보안 정책을 저장하지 못했습�
  * 3. 저장: `SecurityPolicyController.update`. 성공하면 탭을 새 값으로 다시 그리고 `saved` + 성공 토스트("보안 정책 저장됨").
  *    REST 거절·실패는 저장 바 경로면 오류 토스트("보안 정책을 저장하지 못했습니다" + "…입력한 내용은 그대로 있습니다."), 확인 다이얼로그 경로면 다이얼로그 안 인라인.
  *
- * 저장 바의 취소는 폼 reset 이 아니라 `GET …/tab/security?revert=1` 로 서버 값을 다시 읽어 탭을 바꾼다(원본 handleCancel).
+ * 저장 바의 취소는 폼 reset 이 아니라 `GET …/tab/security?revert=1` 로 서버 값을 다시 읽어 탭을 바꾼다.
  * 허용 목록의 origin 검증은 칩 추가 때 `GET …/security/origin-check` 가 [PolicyValidation.validateOrigin] 으로 한다.
  */
 @Controller
@@ -72,9 +72,9 @@ class SecurityPolicyTabController(
         } catch (e: AccessDeniedException) {
             throw e
         } catch (e: RuntimeException) {
-            // 저장 바의 취소(원본 handleCancel): 다시 읽기에 실패하면 화면·입력을 그대로 두고 오류만 알린다(스왑 없는 오류 상태 + 토스트).
+            // 저장 바의 취소: 다시 읽기에 실패하면 화면·입력을 그대로 두고 오류만 알린다(스왑 없는 오류 상태 + 토스트).
             if ("1" == revert) return SettingsSupport.fail(res, "되돌리지 못했습니다", e, false)
-            // 로드 실패를 기본값(30분·MFA 켜짐)처럼 보이지 않게: 입력칸·저장 없이 LoadError.
+            // 로드 실패를 기본값(30분·MFA 켜짐)처럼 보이지 않게: 입력칸·저장 없이 loadError 조각.
             log.warn("[settings] security policy load failed: {}", e.javaClass.simpleName)
             model.addAttribute("loadError", e)
             model.addAttribute("sp", null)
@@ -138,7 +138,7 @@ class SecurityPolicyTabController(
         val listErr = PolicyValidation.validate(SecurityPolicyDto.UpdateRequest(1, true, cors))["corsAllowlist"]
         if (listErr != null) errors["corsAllowlist"] = listErr
 
-        // !!: errors 가 비었으면 idleMin 은 채워져 있다 — 원 Java 는 이 자리의 Integer 언박싱(UpdateRequest(int, …))에서 NPE.
+        // `!!`: errors 가 비었으면 idleMin 은 채워져 있다(손대지 않았으면 저장값, 아니면 검증을 통과한 입력).
         val body = if (errors.isEmpty()) SecurityPolicyDto.UpdateRequest(idleMin!!, mfa, cors) else null
         if (body != null) {
             for (cv in validator.validate(body)) {
@@ -147,7 +147,7 @@ class SecurityPolicyTabController(
                 errors.putIfAbsent("form", "저장할 수 없는 값이 있습니다. 입력을 확인한 뒤 다시 시도하세요.")
             }
         }
-        // body 가 null 이면 errors 는 비어 있지 않다(오류는 늘기만 한다) — 원 Java 의 !errors.isEmpty() 와 같은 판정.
+        // body 가 null 이면 errors 는 비어 있지 않다(오류는 늘기만 한다).
         if (body == null || !errors.isEmpty()) {
             if (confirm) {
                 // 확인 단계에서의 검증 실패는 위조·경합: 다이얼로그 안 인라인 오류.
@@ -176,7 +176,8 @@ class SecurityPolicyTabController(
 
         val updated: SecurityPolicyDto.View
         try {
-            // !!: 원 Java 는 null auth 를 그대로 넘겨 Kotlin 피호출자의 파라미터 검사 NPE(같은 try 안). platform(model) 이 먼저라 도달하지 않는다.
+            // `!!`: SecurityPolicyController.update 가 non-null `Authentication` 을 받는다. `auth` 는 nullable 이라 PLATFORM 판정(403)이
+            // 먼저고, `/admin/_/` 는 인증 필수라 정상 경로에선 null 이 아니다. null 이면 같은 try 의 catch 가 저장 실패(500)로 알린다.
             updated = policy.update(body, auth!!)
         } catch (e: RuntimeException) {
             if (e is AccessDeniedException) throw e
@@ -222,7 +223,7 @@ class SecurityPolicyTabController(
         internal const val SAVE_PATH = "/admin/_/settings/security"
         internal const val ORIGIN_CHECK_PATH = "/admin/_/settings/security/origin-check"
 
-        /** 이 콘솔의 origin(scheme://host[:port]) — 원본 window.location.origin. */
+        /** 이 콘솔의 origin(scheme://host[:port]) — 요청 주소에서 경로·쿼리를 뺀 값. */
         private fun consoleOrigin(req: HttpServletRequest): String =
             ServletUriComponentsBuilder.fromRequest(req).replacePath(null).replaceQuery(null).build().toUriString()
 
@@ -230,8 +231,8 @@ class SecurityPolicyTabController(
             list.stream().anyMatch { o -> o.equals(console, ignoreCase = true) }
 
         /**
-         * 원본 removesConsole: 저장된 목록엔 콘솔 주소가 있고 새 목록엔 없다.
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(SecurityPolicyTabControllerTest)가 부른다.
+         * 저장된 목록엔 콘솔 주소가 있고 새 목록엔 없다(대소문자 무시).
+         * internal: 같은 모듈 테스트(SecurityPolicyTabControllerTest)가 부른다.
          */
         internal fun removesConsole(saved: List<String>, next: List<String>, console: String): Boolean =
             hasConsole(saved, console) && !hasConsole(next, console)

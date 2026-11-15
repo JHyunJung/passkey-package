@@ -15,9 +15,9 @@ private val log = LoggerFactory.getLogger(SystemInfoTabController::class.java)
 private const val VIEW = "admin/settings/system :: content"
 
 /**
- * 설정 › 시스템 탭(← pages/settings/SystemInfoTab.tsx, api/systemInfo.ts). PLATFORM 전용 — `SystemInfoController.get()`.
- * 일반 탭 매핑(`/admin/_/settings/tab/{tab}`)보다 이 리터럴 경로가 우선한다. RP_ADMIN 이 직접 부르면 403(원본엔 탭 자체가 없다).
- * 조회 실패는 200 + LoadError(다시 시도 = 이 조각을 탭 영역에 다시 받기). 알 수 없는 예외의 원문은 싣지 않는다(ErrorMessages).
+ * 설정 › 시스템 탭. PLATFORM 전용 — `SystemInfoController.get()`.
+ * 일반 탭 매핑(`/admin/_/settings/tab/{tab}`)보다 이 리터럴 경로가 우선한다. RP_ADMIN 이 직접 부르면 403(RP_ADMIN 의 탭 줄에는 이 탭이 없다).
+ * 조회 실패는 200 + loadError 조각(다시 시도 = 이 조각을 탭 영역에 다시 받기). 알 수 없는 예외의 원문은 싣지 않는다(ErrorMessages).
  */
 @Controller
 class SystemInfoTabController(private val systemInfo: SystemInfoController) {
@@ -52,7 +52,9 @@ class SystemInfoTabController(private val systemInfo: SystemInfoController) {
         val me = AccountTabController.me(model)
         if (!me.platform) throw AccessDeniedException("platform only")
         model.addAttribute("retryAttrs", SettingsPageController.tabRequesterAttrs(TAB_PATH))
-        // nullable: 원 Java 는 null data 를 try 밖 toInfo 에서 NPE(500) — non-null 선언이면 try 안 검사로 바뀐다.
+        // nullable 로 받는다: data() 는 Java 플랫폼 타입이라 non-null 로 선언하면 대입 자리(try 안)에 null 검사가 생겨 null 이
+        // 아래 catch(로드 실패 카드)로 간다. 지금은 null 이면 아래 `v!!`(try 밖)에서 NPE — WebExceptionAdvice 의 500.
+        // get() 은 data 를 늘 채운다.
         val v: SystemInfoView?
         try {
             v = systemInfo.get().data()
@@ -65,7 +67,7 @@ class SystemInfoTabController(private val systemInfo: SystemInfoController) {
             return VIEW
         }
         model.addAttribute("loadError", null)
-        // !!: 원 Java 는 toInfo 첫 줄 v.getComponents() 에서 NPE(try 밖) — 같은 자리.
+        // `!!`: 위 선언 주석 참고.
         model.addAttribute("info", toInfo(v!!))
         return VIEW
     }
@@ -90,7 +92,7 @@ class SystemInfoTabController(private val systemInfo: SystemInfoController) {
             // 전체 상태 = 가장 나쁜 컴포넌트 상태.
             val overall = Status.of(if (down) "DOWN" else if (degraded) "DEGRADED" else "OK")
             val deployed = deployedKst(v.deployedAt)
-            val hostEnv = v.host?.environment // host 가 null 이어도 "" (원 Java 의 두 null 검사)
+            val hostEnv = v.host?.environment // host·environment 어느 쪽이 null 이어도 ""
             val env = hostEnv ?: ""
             val profiles = env.split(",").map { it.javaTrim() }.filter { it.isNotEmpty() }
             return Info(
@@ -102,7 +104,7 @@ class SystemInfoTabController(private val systemInfo: SystemInfoController) {
 
         /**
          * 해석 가능한 시각만 KST 로. 없거나 깨진 값은 null.
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(SystemInfoTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(SystemInfoTabControllerTest)가 부른다.
          */
         internal fun deployedKst(iso: String?): String? {
             if (iso == null || iso.isEmpty()) return null

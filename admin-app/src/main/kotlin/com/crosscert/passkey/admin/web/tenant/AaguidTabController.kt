@@ -32,15 +32,16 @@ import java.util.regex.Pattern
 private val log = LoggerFactory.getLogger(AaguidTabController::class.java)
 
 /**
- * Tenant 상세의 AAGUID 정책 탭(← pages/tenant/AaguidPolicyTab.tsx, api/aaguidPolicy.ts, tenantSignals.ts unverifiedAaguidCount).
+ * Tenant 상세의 AAGUID 정책 탭.
  *
  * 모든 엔드포인트는 [TenantTabs.load] 로 접근 경계를 먼저 확인한다. 흐름은 WebAuthn 탭과 같다: 폼 제출 = 미리보기
  * (`POST …/aaguid/preview`: 검증 → 저장 확인 등급 L3/L2 결정 → 확인 다이얼로그) → 확인 = 저장(`PUT …/aaguid` →
- * `AaguidPolicyController.update`). 항목 메모는 이 화면이 편집하지 않으므로 저장할 때 서버의 현재 메모를 항목별로 되돌려 보낸다
- * (원본은 불러온 항목의 note 를 그대로 보냄). 저장 성공은 탭을 새 정책으로 다시 그리고 탭 줄의 "확인 필요" 배지를 OOB 로 갱신한다(원본 onSaved).
+ * `AaguidPolicyController.update`). 항목 메모는 이 화면이 편집하지 않으므로 저장할 때 서버의 현재 메모를 항목별로 되돌려 보낸다.
+ * 저장 성공은 탭을 새 정책으로 다시 그리고 탭 줄의 "확인 필요" 배지를 OOB 로 갱신한다.
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 테넌트 조회·검증이 먼저다. 넘기는 자리의 `!!` 는 원 Java 에서
- * Kotlin 피호출자의 파라미터 검사 NPE 가 나던 자리.
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 테넌트 조회·경계 검사(403/404)가 먼저 판정한다. `/admin/_/` 는 인증 필수라
+ * (AdminSecurityConfig) 정상 경로에선 null 이 아니다. `auth!!` 는 REST 컨트롤러가 non-null `Authentication` 을 받기 때문이고,
+ * null 이면 try 밖 NPE 라 WebExceptionAdvice 의 500.
  */
 @Controller
 class AaguidTabController(
@@ -58,7 +59,8 @@ class AaguidTabController(
             internal fun of(v: AaguidPolicyDto.View): Policy {
                 val es = ArrayList<Entry>()
                 for (e in v.entries) es.add(Entry(if (e.aaguid == null) "" else e.aaguid.toString(), e.note, e.mdsName))
-                // !!: 원 Java v.getMode().name() 의 NPE 와 같은 자리.
+                // `!!`: mode 는 NOT NULL 열(POLICY_MODE)에서 읽어 null 이 오지 않는다(타입만 nullable). null 이면 NPE —
+                // 부르는 tab·preview·save 모두 조회 try 밖이라 WebExceptionAdvice 의 500.
                 return Policy(v.mode!!.name, v.mdsStrict, es)
             }
         }
@@ -89,7 +91,8 @@ class AaguidTabController(
         val policy: AaguidPolicyDto.View
         try {
             v = TenantTabs.load(tenants, id)
-            // !!: 원 Java aaguid.get(v.getId()) — null 이면 Kotlin 피호출자 파라미터 검사 NPE(이 try 가 받아 로드 실패 카드). 같은 자리.
+            // `!!`: TenantView.id 는 DB 에서 읽은 Tenant 의 id 라 null 이 오지 않는다(타입만 nullable). null 이면 NPE 를
+            // 아래 RuntimeException catch 가 받아 로드 실패 카드로 그린다.
             policy = aaguid.get(v.id!!)
         } catch (e: BusinessException) {
             throw e
@@ -101,7 +104,7 @@ class AaguidTabController(
             model.addAttribute("retryAttrs", TenantTabs.requesterAttrs("$FRAG$id/tab/aaguid"))
             return TAB_VIEW
         }
-        // v.id 는 위 try 에서 non-null 로 확인됐다(원 Java v.getId().toString()).
+        // 여기 오면 위 try 의 v.id!! 를 통과했다 — v.id 는 non-null.
         fill(model, v.id.toString(), Policy.of(policy))
         return TAB_VIEW
     }
@@ -133,7 +136,7 @@ class AaguidTabController(
             res.status = 422
             return RESULT_VIEW
         }
-        // !!: 원 Java aaguid.get(v.getId()) — null 이면 Kotlin 피호출자 파라미터 검사 NPE. 같은 자리.
+        // `!!`: tab() 과 같은 근거. 여기는 try 밖이라 null 이면 500.
         val saved = Policy.of(aaguid.get(v.id!!))
         val draft = draft(saved, mode, aaguids, mdsStrict)
         val changes = policyChanges(saved, draft)
@@ -175,7 +178,7 @@ class AaguidTabController(
             Toasts.confirmError(res, errors.values.iterator().next(), null, null)
             return EMPTY_VIEW
         }
-        // !!: 원 Java aaguid.get(v.getId()) — null 이면 Kotlin 피호출자 파라미터 검사 NPE. 같은 자리.
+        // `!!`: tab() 과 같은 근거. 여기는 try 밖이라 null 이면 500.
         val tid = v.id!!
         val saved = Policy.of(aaguid.get(tid))
         val draft = draft(saved, mode, aaguids, mdsStrict)
@@ -254,7 +257,7 @@ class AaguidTabController(
             return e
         }
 
-        /** 편집 중 정책: 목록 순서를 유지하고, 저장된 항목은 메모·MDS 이름을 그대로(원본 draft 와 같다), 새 항목은 둘 다 null. */
+        /** 편집 중 정책: 목록 순서를 유지하고, 저장된 항목은 메모·MDS 이름을 그대로, 새 항목은 둘 다 null. */
         private fun draft(saved: Policy, mode: String, aaguids: List<String?>?, mdsStrict: String): Policy {
             val byId = LinkedHashMap<String?, Entry>()
             for (e in saved.entries) byId[e.aaguid] = e
@@ -272,7 +275,7 @@ class AaguidTabController(
             return Policy(mode, "true".equals(mdsStrict, ignoreCase = true), entries)
         }
 
-        /** 입력에서 16진수만 남기고(최대 32자) 8-4-4-4-12 위치에 하이픈을 넣는다(formatAaguid). */
+        /** 입력에서 16진수만 남기고(최대 32자) 8-4-4-4-12 위치에 하이픈을 넣는다. */
         fun formatAaguid(raw: String?): String {
             var hex = if (raw == null) "" else raw.lowercase(Locale.ROOT).replace(NON_HEX, "")
             if (hex.length > 32) hex = hex.substring(0, 32)
@@ -323,7 +326,7 @@ class AaguidTabController(
 
         /**
          * SaveBar 요약용 변경 필드 이름(저장 바의 필드 이름과 같은 키: mode / aaguid / mdsStrict).
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AaguidTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(AaguidTabControllerTest)가 부른다.
          */
         internal fun changedFields(saved: Policy, draft: Policy): List<String> {
             val cs = policyChanges(saved, draft)
@@ -336,7 +339,7 @@ class AaguidTabController(
 
         /**
          * mode≠ANY 이고 mdsName==null 인 AAGUID 수(목록에 보이는 항목만).
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AaguidTabControllerTest)가 부른다.
+         * internal: 같은 모듈 테스트(AaguidTabControllerTest)가 부른다.
          */
         internal fun unverifiedCount(p: Policy): Int {
             if ("ANY" == p.mode) return 0

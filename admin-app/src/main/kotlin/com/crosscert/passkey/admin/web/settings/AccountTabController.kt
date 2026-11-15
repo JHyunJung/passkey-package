@@ -32,10 +32,10 @@ private const val CODES_VIEW = "admin/settings/account :: recoveryCodes"
 private const val CODE_ERROR_VIEW = "admin/settings/account :: codeError"
 private const val EMPTY_VIEW = "admin/fragments/shell/empty :: none"
 
-/** AccountTab.tsx CODE_MISMATCH */
+/** 코드 불일치(401 invalid_code) 안내. */
 private const val CODE_MISMATCH = "코드가 맞지 않습니다. 앱에 표시된 새 코드(30초마다 바뀜)를 입력하세요."
 
-/** 원본 QrCode size(AccountTab.tsx: `<QrCode size={152} />`). */
+/** QR 이미지 한 변(px). */
 private const val QR_SIZE = 152
 
 /** MFA 필수 정책 동안 끄기 불가 안내(화면 설명·409 오류 공용). */
@@ -49,11 +49,11 @@ private const val DISABLE_ERROR_ID = "mfa-disable-err"
 private const val REGEN_ERROR_ID = "mfa-regen-err"
 
 /**
- * 설정 › 내 계정 탭(← pages/settings/AccountTab.tsx, RecoveryCodesModal.tsx, shell/QrCode.tsx, api/mfa.ts).
+ * 설정 › 내 계정 탭.
  *
  * 2단계 인증(MFA) 켜기·끄기는 [MfaController] 의 enroll/confirm/disable 을 메서드로 부른다(ResponseEntity 의 상태·본문을 그대로 해석).
  * - 켜기 1–2단계: `POST /admin/_/settings/mfa/enroll` → 응답 본문이 켜기 다이얼로그(QR = [QrSvg] data URI, Base32 secret).
- *   실패는 원본 errorToast 처럼 "2단계 인증을 시작하지 못했습니다" 오류 토스트 + 실제 상태 + 빈 본문.
+ *   실패는 "2단계 인증을 시작하지 못했습니다" 오류 토스트 + 실제 상태 + 빈 본문.
  * - 확인: `POST …/mfa/confirm` → 성공 응답이 복구 코드 다이얼로그(3/3)다. 코드는 이 응답 본문에만 있다 — 세션·플래시·헤더·토스트·리다이렉트
  *   없음, `Cache-Control: no-store`, 다이얼로그 루트 `hx-history="false"`. .txt 다운로드·복사는 브라우저(Alpine)가 화면의 코드로 한다.
  *   실패는 토스트 없이 입력칸 아래 인라인(422 + HX-Retarget): 401 invalid_code 만 "코드가 맞지 않습니다…", 그 밖은 쉬운 오류 문구.
@@ -61,11 +61,12 @@ private const val REGEN_ERROR_ID = "mfa-regen-err"
  *   실패는 확인창 안 인라인(#mfa-regen-err).
  * - 끄기: `POST …/mfa/disable` → 성공하면 계정 카드를 다시 그린다(경고 토스트 "2단계 인증이 꺼졌습니다."). 실패는 확인 다이얼로그 안 인라인.
  *
- * 켜기·끄기가 성공하면 원본의 `onMeChange(await getMe())` 처럼 [MeController.me] 로 계정 정보를 다시 읽어 카드를 그린다(실패하면
+ * 켜기·끄기가 성공하면 [MeController.me] 로 계정 정보를 다시 읽어 카드를 그린다(실패하면
  * "계정 정보를 새로고침하지 못했습니다." 경고). 코드·secret 은 어떤 로그에도 남기지 않는다(예외는 클래스 이름만).
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 `me(model)` 판정(403)이 먼저다. 넘기는 자리의 `!!` 는 원 Java 에서
- * Kotlin 피호출자의 파라미터 검사 NPE 가 나던 자리(모두 같은 try 안)다.
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 `me(model)` 판정(403)이 먼저다. `/admin/_/` 는 인증 필수라(AdminSecurityConfig)
+ * 정상 경로에선 null 이 아니다. `auth!!` 는 MfaController·MeController 가 non-null `Authentication` 을 받기 때문이고, 모두 try 안이라
+ * null 이면 그 catch 가 실패 응답으로 바꾼다(켜기는 오류 토스트, 확인·다시 받기·끄기는 입력칸 아래 422, 계정 다시 읽기는 새로고침 경고).
  */
 @Controller
 class AccountTabController(
@@ -75,7 +76,7 @@ class AccountTabController(
     private val policy: SecurityPolicyService,
 ) {
 
-    /** 계정 카드 모델. enrolledAt 은 서버(MeView)가 아직 내려주지 않아 늘 null — 원본처럼 그 줄을 그리지 않는다. */
+    /** 계정 카드 모델. enrolledAt 은 서버(MeView)가 아직 내려주지 않아 늘 null — 그 줄을 그리지 않는다. */
     data class AccountView(val email: String?, val mfaEnabled: Boolean, val enrolledAt: String?, val disableLocked: Boolean = false) {
         internal companion object {
             fun of(me: CurrentAdmin, disableLocked: Boolean = false): AccountView = AccountView(me.email, me.mfaEnabled, null, disableLocked)
@@ -239,7 +240,7 @@ class AccountTabController(
 
         val fresh = reloadMe(auth, req)
         if (fresh == null) {
-            // 카드는 그대로 두고(원본도 me 가 안 바뀐다) 다이얼로그만 닫힌다(요청 성공).
+            // 카드는 그대로 두고 다이얼로그만 닫힌다(요청 성공).
             res.setHeader("HX-Reswap", "none")
             meRefreshFailed(res)
             return EMPTY_VIEW
@@ -280,9 +281,9 @@ class AccountTabController(
         internal const val CONTENT_VIEW = "admin/settings/account :: content"
 
         /**
-         * 원본 codeErrorText: 서버의 코드 불일치 응답(401 {"error":"invalid_code"})만 코드 불일치, 그 밖(403 권한·429·5xx 등)은 describeError 의
-         * `${title}. ${detail}`.
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(AccountTabControllerTest)가 부른다.
+         * 서버의 코드 불일치 응답(401 {"error":"invalid_code"})만 코드 불일치, 409 mfa_policy_required·mfa_already_enabled 는 각 안내,
+         * 그 밖(403 권한·429·5xx 등)은 ErrorMessages 의 "제목. 설명".
+         * internal: 같은 모듈 테스트(AccountTabControllerTest)가 부른다.
          */
         internal fun codeErrorText(status: Int, error: String?): String {
             if (status == 401 && "invalid_code" == error) return CODE_MISMATCH
@@ -298,7 +299,7 @@ class AccountTabController(
             return if (d == null || d.isEmpty()) info.title + "." else info.title + ". " + d
         }
 
-        /** 실패 문구를 입력칸 아래 자리(slotId)에 422 로 넣는다. 토스트 없음(원본: 입력칸 아래에만). */
+        /** 실패 문구를 입력칸 아래 자리(slotId)에 422 로 넣는다. 토스트 없음. */
         private fun codeError(res: HttpServletResponse, model: Model, slotId: String, text: String): String {
             res.status = 422
             res.setHeader("HX-Retarget", "#$slotId")
@@ -321,7 +322,7 @@ class AccountTabController(
             return codes
         }
 
-        /** mfaApi 의 ApiError(code): 본문의 `error` 값, 없으면 'error'. */
+        /** 응답 본문의 `error` 값, 없으면 "error". */
         internal fun errorOf(r: ResponseEntity<*>): String {
             val m = r.body
             if (m is Map<*, *> && m["error"] != null) return m["error"].toString()
@@ -329,7 +330,8 @@ class AccountTabController(
         }
 
         /**
-         * 원본은 성공 토스트 뒤에 이 경고를 하나 더 띄운다. HX-Trigger 토스트는 응답마다 하나라 더 중요한 이 경고만 보낸다(성공은 화면 변화로 알 수 있다).
+         * 계정 정보를 다시 읽지 못하면 성공 토스트 대신 이 경고만 보낸다 — Toasts 는 HX-Trigger 헤더를 덮어써 응답마다 토스트가
+         * 하나다(성공은 화면 변화로 알 수 있다).
          */
         private fun meRefreshFailed(res: HttpServletResponse) {
             Toasts.warnTitled(res, "계정 정보를 새로고침하지 못했습니다.", "페이지를 새로고침해 주세요.")

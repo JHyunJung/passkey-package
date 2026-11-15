@@ -41,18 +41,19 @@ import java.util.regex.Pattern
 private val log = LoggerFactory.getLogger(TenantsPageController::class.java)
 
 /**
- * Tenant 목록과 신규 생성(← pages/TenantsListPage.tsx, api/tenants.ts).
+ * Tenant 목록과 신규 생성.
  *
- * 화면 구조(이후 화면 task 의 본보기): 전체 페이지는 `GET /admin/tenants`(레이아웃 안), 같은 화면의 부분 갱신은
+ * 화면 구조: 전체 페이지는 `GET /admin/tenants`(레이아웃 안), 같은 화면의 부분 갱신은
  * `GET /admin/_/tenants/list`(레이아웃 없는 조각, 목록 영역 + OOB 로 KPI·필터 컨트롤)다. 두 경로가 같은 조각
  * (`admin/tenants/list-rows`)을 그려서 결과가 항상 같다. 조각 응답은 `HX-Push-Url` 로 주소창을 화면 주소로 바꾼다.
  *
- * 검색·필터·페이징은 원본이 클라이언트에서 하던 그대로 서버에서 한다: 정렬은 하지 않고 `TenantAdminController.list()` 가
- * 준 순서를 유지하며, 검색은 name(대소문자 무시)·slug 부분 일치다(원본 `t.slug.includes(q.toLowerCase())`).
+ * 검색·필터·페이징은 서버에서 한다: 정렬은 하지 않고 `TenantAdminController.list()` 가
+ * 준 순서를 유지하며, 검색은 name(대소문자 무시)·slug 부분 일치다(slug 쪽은 검색어만 소문자로 바꿔 비교).
  * 기존 REST 컨트롤러 빈을 메서드로 호출한다(HTTP 아님).
  *
- * `auth` 는 nullable: 원 Java 는 null 이어도 메서드에 들어와 `requirePlatform(model)`(403)이 먼저다. 넘기는 자리의 `!!` 는 원 Java 에서
- * Kotlin 피호출자의 파라미터 검사 NPE 가 나던 자리(try 안팎도 같다).
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 `requirePlatform(model)`(403)이 먼저 판정한다. `/admin/_/` 는 인증 필수라
+ * (AdminSecurityConfig) 정상 경로에선 null 이 아니다. `auth!!` 는 `TenantAdminController.create` 가 non-null `Authentication` 을
+ * 받기 때문이고, null 이면 같은 try 의 catch(RuntimeException) 가 다이얼로그 안 경고(422)로 바꾼다.
  */
 @Controller
 class TenantsPageController(
@@ -64,7 +65,7 @@ class TenantsPageController(
 
     // ── 모델 ────────────────────────────────────────────────
 
-    /** 화면에 쓰는 Tenant 한 줄(원본 adaptTenant: name=displayName, status 는 ACTIVE 아니면 SUSPENDED). */
+    /** 화면에 쓰는 Tenant 한 줄(name=displayName, status 는 ACTIVE 아니면 SUSPENDED). */
     data class TenantRow(
         val id: String,
         val name: String,
@@ -76,10 +77,8 @@ class TenantsPageController(
         val lastEventAt: OffsetDateTime?,
         val createdAt: OffsetDateTime?,
     ) {
-        /** `t.name.slice(0, 1).toUpperCase()` */
         fun initial(): String = if (name.isEmpty()) "" else name.substring(0, 1).uppercase(Locale.ROOT)
 
-        /** `…${tail(id, 8)}` */
         fun idTail(): String = "…" + (if (id.length > 8) id.substring(id.length - 8) else id)
 
         fun detailUrl(): String = "$PAGE_PATH/$id?tab=overview"
@@ -88,7 +87,7 @@ class TenantsPageController(
             internal fun from(v: TenantAdminDto.TenantView): TenantRow {
                 val st = v.status
                 return TenantRow(
-                    v.id.toString(), // 원 Java String.valueOf — null 이면 "null"
+                    v.id.toString(), // null 이면 "null"(Any?.toString)
                     v.displayName ?: "", v.slug ?: "", v.rpId,
                     if (st != null && st.equals(ACTIVE, ignoreCase = true)) ACTIVE else SUSPENDED,
                     v.credentials, v.apiKeys, v.lastEventAt, v.createdAt,
@@ -120,7 +119,7 @@ class TenantsPageController(
     // ── 화면 ────────────────────────────────────────────────
 
     /**
-     * 전체 페이지. PLATFORM 전용이다(RequirePlatform): RP_ADMIN 은 [HomeRedirectController] 와 같은 규칙으로 자기 테넌트로
+     * 전체 페이지. PLATFORM 전용이다: RP_ADMIN 은 [HomeRedirectController] 와 같은 규칙으로 자기 테넌트로
      * 보내고, 테넌트가 없는 RP_ADMIN(데이터 이상)은 "계정 구성 오류"를 본다. 목록 조회가 실패하면 200 으로 오류 카드를 그린다
      * (hx-boost 이동은 4xx/5xx 를 스왑하지 않아 오류 화면이 비어 보이므로).
      */
@@ -166,7 +165,7 @@ class TenantsPageController(
         retry["hx-swap"] = "innerHTML"
         retry["hx-push-url"] = "false"
         model.addAttribute("retryAttrs", retry)
-        // 새로 고침·뒤로 가기에서 다시 열리지 않게 new 를 주소에서 지운다(원본 setParams replace). 다이얼로그를 처음부터 열어 둔다.
+        // 새로 고침·뒤로 가기에서 다시 열리지 않게 new 를 주소에서 지운다. 다이얼로그를 처음부터 열어 둔다.
         val open = "1" == openNew
         model.addAttribute("cleanUrl", canonicalUrl(q, st, page, sz))
         model.addAttribute("openNew", open)
@@ -217,7 +216,7 @@ class TenantsPageController(
         return ROWS_VIEW
     }
 
-    /** 필터를 적용한 목록의 CSV(원본 downloadCsv: tenants-{KST 오늘}.csv, 필터 적용 행 전체 — 페이지 무시). */
+    /** 필터를 적용한 목록의 CSV(tenants-{KST 오늘}.csv, 필터 적용 행 전체 — 페이지 무시). */
     @GetMapping(EXPORT_PATH)
     fun export(
         @RequestParam(name = "q", defaultValue = "") q: String,
@@ -230,7 +229,7 @@ class TenantsPageController(
         for (t in rows) {
             body.add(
                 java.util.List.of(
-                    t.name, t.slug, t.rpId.toString(), t.status, // rpId: 원 Java String.valueOf — null 이면 "null"
+                    t.name, t.slug, t.rpId.toString(), t.status, // rpId 가 null 이면 "null" 이 그대로 칸에 들어간다(Any?.toString)
                     t.credentials.toString(), t.apiKeys.toString(),
                     if (t.createdAt == null) "" else t.createdAt.toInstant().toString(),
                 ),
@@ -248,8 +247,8 @@ class TenantsPageController(
 
     /**
      * 신규 Tenant(`TenantAdminController.create`). PLATFORM 전용. 성공이면 새 tenant 의 WebAuthn 설정 탭으로 이동하고
-     * (원본 navigate(`/tenants/${id}?tab=webauthn`)) 토스트를 띄운다(HX-Redirect 로 페이지가 바뀌므로 ui.js 가 토스트를 다음 화면에 넘긴다).
-     * 입력 검증 오류와 서버 거절은 모두 422 + 다이얼로그 폼 조각이다 — 열린 채 입력값을 유지하고(원본: 오류 토스트 없이 인라인 경고),
+     * 토스트를 띄운다(HX-Redirect 로 페이지가 바뀌므로 ui.js 가 토스트를 다음 화면에 넘긴다).
+     * 입력 검증 오류와 서버 거절은 모두 422 + 다이얼로그 폼 조각이다 — 열린 채 입력값을 유지하고(오류 토스트 없이 인라인 경고),
      * 서버 거절은 경고 안에 HTTP 상태·trace 를 보인다.
      */
     @PostMapping("/admin/_/tenants")
@@ -300,7 +299,7 @@ class TenantsPageController(
         return null
     }
 
-    // ── 검색·필터·페이징(원본 TenantsListPage 와 같은 결과) ──────────
+    // ── 검색·필터·페이징 ─────────────────────────────────────
 
     private fun populate(model: Model, all: List<TenantRow>, q: String, status: String, page: Int, size: Int) {
         val filtered = filter(all, q, status)
@@ -333,7 +332,7 @@ class TenantsPageController(
         options.add(option(SUSPENDED, "정지 $suspended", listUrl(SUSPENDED, 1, size)))
         model.addAttribute("statusOptions", options)
 
-        // 활성 KPI 클릭 = ACTIVE 토글(applyStatus(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')).
+        // 활성 KPI 클릭 = ACTIVE 토글(이미 ACTIVE 면 ALL).
         val kpiUrl = listUrl(if (ACTIVE == status) ALL else ACTIVE, 1, size)
         val kpi = swap(kpiUrl, true)
         kpi["id"] = "tenants-kpi-active"
@@ -354,7 +353,7 @@ class TenantsPageController(
         val creds = all.sumOf { it.credentials }
         val keys = all.sumOf { it.apiKeys }
         model.addAttribute("kpiCredValue", fmt(creds))
-        // 원본의 credentialsDelta7d 는 서버 TenantView 에 없어 항상 미표시("모든 tenant 합산").
+        // 7일 증감은 TenantView 에 값이 없어 보이지 않는다(보조 줄은 "모든 tenant 합산").
         model.addAttribute("kpiCredHint", "모든 tenant 합산")
         model.addAttribute("kpiKeysValue", fmt(keys))
         model.addAttribute("expiring", expiringKeys())
@@ -383,7 +382,7 @@ class TenantsPageController(
         private const val LIST_PATH = "/admin/_/tenants/list"
         private const val EXPORT_PATH = "/admin/_/tenants/export"
 
-        /** 원본 PAGE_SIZES. 첫 값이 기본이다. */
+        /** 첫 값이 기본이다. */
         private val PAGE_SIZES: List<Int> = java.util.List.of(50, 100)
         private const val ALL = "ALL"
         private const val ACTIVE = "ACTIVE"
@@ -392,7 +391,7 @@ class TenantsPageController(
         /** 검색 입력의 id. 조각 요청의 `HX-Trigger` 요청 헤더가 이 값이면 사용자가 타이핑 중이라 입력칸을 되돌려 쓰지 않는다. */
         private const val SEARCH_INPUT_ID = "tenant-q"
 
-        // NewTenantDialog 의 정규식 그대로.
+        // REST 요청 DTO(TenantCreateRequest.slug)의 @Pattern 과 같은 정규식.
         private val SLUG_RE: Pattern = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$")
 
         // rpId 는 WebAuthn RP ID — registrable domain(hostname). 스킴/포트/경로 없이 점이 포함된 호스트명. placeholder(example.com) 저장 방지.
@@ -425,7 +424,10 @@ class TenantsPageController(
             return m
         }
 
-        /** NewTenantDialog 의 onCreate → tenantsApi.create 본문과 같은 값. */
+        /**
+         * 화면이 받지 않는 값은 고정이다: rpName = 표시 이름, origin = `https://{rpId}`, 형식 none·packed, UV 필수, MDS 끔,
+         * attestation NONE, 타임아웃 60000ms.
+         */
         private fun toRequest(name: String, slug: String, rpId: String): TenantAdminDto.TenantCreateRequest =
             TenantAdminDto.TenantCreateRequest(
                 slug, name, rpId, name,
@@ -451,9 +453,9 @@ class TenantsPageController(
         }
 
         /**
-         * 원본 filtered: `!q || name.toLowerCase().includes(q.toLowerCase()) || slug.includes(q.toLowerCase())` 와
-         * `status === 'ALL' || t.status === status`. q 는 trim 하지 않는다. 순서는 입력 그대로.
-         * internal: 원 Java 는 package-private static — 같은 모듈 테스트(TenantsPageControllerTest)가 부른다.
+         * q 가 비었거나 name(소문자로)·slug 가 소문자 q 를 포함하고, status 가 ALL 이거나 같으면 남긴다.
+         * q 는 trim 하지 않는다. 순서는 입력 그대로.
+         * internal: 같은 모듈 테스트(TenantsPageControllerTest)가 부른다.
          */
         internal fun filter(tenants: List<TenantRow>, q: String, status: String?): List<TenantRow> {
             val lower = q.lowercase(Locale.ROOT)
@@ -471,7 +473,7 @@ class TenantsPageController(
         /** internal: 같은 모듈 테스트(TenantsPageControllerTest)가 부른다. */
         internal fun normStatus(s: String?): String = if (ACTIVE == s) ACTIVE else if (SUSPENDED == s) SUSPENDED else ALL
 
-        /** 숫자가 아닌 page/size 는 400 이 아니라 기본값(원본은 select·버튼으로만 바뀌어 잘못된 값이 없다). */
+        /** 숫자가 아닌 page/size 는 400 이 아니라 기본값. */
         private fun parseInt(v: String, def: Int): Int =
             try {
                 Integer.parseInt(v.javaTrim())
@@ -524,7 +526,7 @@ class TenantsPageController(
         private fun me(model: Model): CurrentAdmin =
             model.getAttribute("me") as? CurrentAdmin ?: throw AccessDeniedException("no authenticated admin")
 
-        /** 조각·변경 엔드포인트는 PLATFORM 전용(원본은 RequirePlatform 이 화면째 막았다). 보안 경계는 REST 의 @PreAuthorize 도 함께. */
+        /** 조각·변경 엔드포인트는 PLATFORM 전용. 보안 경계는 REST 의 @PreAuthorize 도 함께. */
         private fun requirePlatform(model: Model) {
             if (!me(model).platform) throw AccessDeniedException("PLATFORM_OPERATOR only")
         }
