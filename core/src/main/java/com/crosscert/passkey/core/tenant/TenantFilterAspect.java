@@ -21,6 +21,9 @@ import java.util.UUID;
  * 무관하게 같은 방식으로 동작한다. 다만 이 필터가 거르지 않는 조회가 있고, 그 경우 tenant 조건은 호출측 몫이다.
  * <ul>
  *   <li>context 가 비어 있는 요청 — 필터를 켜지 않으므로 전 테넌트 행이 보인다.</li>
+ *   <li>{@code @Transactional} 메서드 밖에서 부른 리포지토리 조회 — 아래 pointcut 이 잡는 진입점이 없어 context 가
+ *       있어도 필터가 꺼진 채 실행된다. passkey-app RegistrationStartService.start 가 이 때문에 {@code @Transactional}
+ *       이고, TenantFilterAspectIT 도 같은 이유로 {@code @Transactional} 서비스를 거쳐 조회한다.</li>
  *   <li>native 쿼리·JdbcTemplate SQL — Hibernate 필터는 HQL/JPQL·Criteria 조회에만 붙는다. tenant 조건은 SQL 에
  *       직접 쓴다({@code CredentialRepository#searchByTenantId}). passkey-app ApiKeyLookupService 의 prefix 조회처럼
  *       일부러 전 테넌트를 보는 곳도 있다.</li>
