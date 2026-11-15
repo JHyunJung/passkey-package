@@ -18,7 +18,8 @@ import java.util.UUID
  * audit_log.tenant_id for filtering; NOT included in the SHA-256 hash
  * input (chain compatibility — payload's 'tenantId' key already
  * provides tamper evidence).
- * 해시 입력(AuditLogService.computeHash)에 넣으면 이미 저장된 row 를 검증이 다시 계산한 값과 hash 가 달라진다.
+ * tenantId 를 해시 입력(AuditLogService.computeHash)에 추가하면 이미 저장된 row 의 hash 가 재계산 값과 달라져
+ * 기존 체인 검증이 깨진다.
  *
  * 모든 참조형 컴포넌트는 nullable(호출부·테스트가 null 을 넘긴다).
  */

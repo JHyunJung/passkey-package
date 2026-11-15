@@ -101,7 +101,6 @@ class FunnelTabController(
         val v = TenantTabs.load(tenants, id)
         val w = window(win)
         val now = clock.instant()
-        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val tid = v.id!!
         model.addAttribute("tid", tid.toString())
         model.addAttribute("win", w.toString())
@@ -230,7 +229,6 @@ class FunnelTabController(
         val w = window(win)
         val today = KstFormat.kstToday(clock.instant())
         if ("monthly" == kind || "devices" == kind) return adoptionCsv(v, w, kind, today)
-        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val data = funnel.get(v.id!!, w)
         val csv: ByteArray
         val filename: String
@@ -270,7 +268,6 @@ class FunnelTabController(
 
     /** 도입·사용 CSV 2종: 월간 사용량(최근 3개월), 기기 분포. */
     private fun adoptionCsv(v: TenantAdminDto.TenantView, w: Int, kind: String, today: String): ResponseEntity<ByteArray> {
-        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val a = adoption.get(v.id!!, w)
         val rows = ArrayList<List<String?>>()
         val csv: ByteArray

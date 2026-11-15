@@ -120,7 +120,7 @@ class MdsTabController(
             // 서버 원문(r.error())은 화면에 싣지 않는다.
             Toasts.errorTitled(res, "MDS 갱신 실패", "갱신하지 못했습니다. 잠시 후 다시 시도하세요.", null, null)
         }
-        // 갱신은 성공했다. 다시 읽기(상태·이력 모두)에 실패하면 화면은 그대로 두고 경고만 보인다.
+        // 갱신 호출은 끝났다(SYNCED·SKIPPED·실패 결과는 위 토스트). 다시 읽기(상태·이력 모두)에 실패하면 화면은 그대로 두고 경고만 보인다.
         if (load(model, true)) return VIEW
         res.setHeader("HX-Reswap", "none")
         model.addAttribute(
@@ -140,7 +140,8 @@ class MdsTabController(
         model.addAttribute("loadError", null)
         model.addAttribute("historyError", null)
         model.addAttribute("v", null)
-        // nullable: sync 와 같은 이유 — non-null 로 선언하면 null 이 아래 catch(로드 실패 카드)로 간다. status() 는 data 를 늘 채운다.
+        // nullable: sync 와 같은 이유 — non-null 로 선언하면 null 이 아래 catch 로 가 false 를 돌려준다(tab 에서는 로드 실패 카드,
+        // sync 에서는 `HX-Reswap: none` 과 reloadWarning 조각). status() 는 data 를 늘 채운다.
         val status: MdsStatusView?
         try {
             status = mds.status().data()

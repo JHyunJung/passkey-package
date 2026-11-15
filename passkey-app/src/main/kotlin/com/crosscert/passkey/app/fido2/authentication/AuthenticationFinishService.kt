@@ -153,10 +153,12 @@ class AuthenticationFinishService(
             }
 
             // WebAuthn allows authenticators with no counter to
-            // return 0 forever. The verifier already rejects non-increasing
-            // counters when EITHER side is non-zero; only the (0,0) case
-            // is treated as "no-counter" and accepted. Mirror that here so
-            // we don't refuse legitimate passkeys.
+            // return 0 forever, so only the (0,0) case is accepted as
+            // "no-counter"; otherwise the new counter must be strictly
+            // greater than the stored one. The verifier does not compare
+            // counters (it only returns the reported value — see
+            // WebAuthnVerifier), so this is the only replay /
+            // cloned-authenticator check.
             val newCounter = result.newSignCount()
             val storedCounter = cred.signCount
             val counterless = newCounter == 0L && storedCounter == 0L

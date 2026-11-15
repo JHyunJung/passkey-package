@@ -44,7 +44,8 @@ import java.util.List;
  * public JWK column directly so the JWKS endpoint stays available
  * even if envelope decryption is misconfigured.
  *
- * <p>Signing: always uses the cached ACTIVE key. KeyRotationService
+ * <p>Signing: uses the cached key — the ACTIVE row as of the last
+ * {@link #init()} / {@link #reload()} in this process. KeyRotationService
  * calls {@link #reload()} after a rotation so the cache picks up the
  * new ACTIVE row.
  *

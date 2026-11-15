@@ -23,7 +23,8 @@ import java.util.UUID;
 /**
  * 인증 성공 시 RP 에 돌려주는 ID Token(RS256 JWS)을 만든다. 호출자는 passkey-app AuthenticationFinishService.
  * iss = issuer-base + "/" + tenantId, aud = tenantId, sub = userHandle(base64url), 그 밖에 amr·cred_id·aaguid.
- * 헤더 kid 는 {@link SigningKeyProvider} 가 캐시한 ACTIVE 키 — RP(sdk-java IdTokenVerifier)는
+ * 서명 키·헤더 kid 는 {@link SigningKeyProvider} 가 init()/reload() 때 읽어 캐시한 ACTIVE 키다. passkey-app 에서는
+ * 재기동 전까지 기동 시점의 키이고, 회전 뒤에는 ROTATED 가 된 그 키로 계속 서명한다. RP(sdk-java IdTokenVerifier)는
  * /.well-known/jwks.json({@link JwksAssembler})의 공개키로 서명을 검증하고 iss·aud 를 자기 설정과 맞춰 본다.
  */
 @Slf4j

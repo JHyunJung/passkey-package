@@ -131,7 +131,6 @@ class CredentialsTabController(
     ): String {
         val v = TenantTabs.load(tenants, id)
         val st = St.of(page, size, q, aaguid, status)
-        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val tid = v.id!!
         model.addAttribute("tid", tid.toString())
         fillList(model, tid, st, false, null)
@@ -159,7 +158,6 @@ class CredentialsTabController(
         if ("aaguid" == reset || "all" == reset) st = St(st.page, st.size, st.q, "", st.status)
         if ("status" == reset || "all" == reset) st = St(st.page, st.size, st.q, st.aaguid, ALL)
         if ("all" == reset) st = St(1, st.size, "", st.aaguid, st.status)
-        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val tid = v.id!!
         model.addAttribute("tid", tid.toString())
         fillList(model, tid, st, false, reset)
@@ -302,7 +300,6 @@ class CredentialsTabController(
     ): ResponseEntity<ByteArray> {
         val v = TenantTabs.load(tenants, id)
         val st = St.of(page, size, q, aaguid, status)
-        // `!!`: 클래스 KDoc 참고(try 밖 — 500).
         val l = load(v.id!!, st)
         val body = ArrayList<List<String?>>()
         for (c in applyClientFilter(l.pv.content(), l.st)) {

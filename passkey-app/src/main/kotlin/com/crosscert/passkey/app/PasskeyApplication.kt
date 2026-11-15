@@ -19,7 +19,7 @@ import java.util.TimeZone
 // across all sub-packages of com.crosscert.passkey (including :core).
 //
 // 요청 흐름(서블릿 필터는 @Order 값이 작은 것부터):
-//   SecurityHeadersFilter·core TraceIdFilter·core OnpremTenantPinFilter(HIGHEST, 마지막은 onprem 모드만)
+//   SecurityHeadersFilter(HIGHEST)·core TraceIdFilter(HIGHEST)·core OnpremTenantPinFilter(HIGHEST, onprem 모드만)
 //   → core LicenseGuardFilter(+1, onprem 모드만) → RateLimitFilter(+2)
 //   → ApiKeyAuthFilter(+5, X-API-Key 검증 후 TenantContextHolder 설정)
 //   → core RequestLoggingFilter(+10, 항상) → api.v1.rp 컨트롤러 → fido2 서비스.

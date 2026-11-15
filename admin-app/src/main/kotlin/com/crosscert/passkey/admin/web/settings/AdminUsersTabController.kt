@@ -147,7 +147,7 @@ class AdminUsersTabController(
             }
         } catch (e: RuntimeException) {
             if (e is AccessDeniedException) throw e
-            log.debug("[settings] tenants for approve dialog failed: {}", e.javaClass.simpleName) // non-critical: 빈 목록
+            log.debug("[settings] tenants for approve dialog failed: {}", e.javaClass.simpleName) // non-critical: 그때까지 담은 tenant 만(첫 항목 전 실패면 빈 목록)
         }
         model.addAttribute("req", signupRow(req, Instant.now(clock)))
         model.addAttribute("tenantOpts", opts)

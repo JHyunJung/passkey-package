@@ -77,7 +77,8 @@ class TenantAdminService(
     /**
      * PLATFORM_OPERATOR 는 전체 테넌트, RP_ADMIN 은 활성 RP 하나만([TenantBoundary.currentTenantScope] — 활성 RP 가
      * 없으면 ACCESS_DENIED). get/update 의 [TenantBoundary.assertCanAccessTenant] 는 활성 여부와 무관하게
-     * 매핑된 테넌트(allowedTenantIds) 전부를 허용한다.
+     * 매핑된 테넌트(allowedTenantIds) 전부를 허용한다. 다만 RP_ADMIN 요청의 Hibernate @Filter 는 여전히 활성 RP 로
+     * 걸려 있다([com.crosscert.passkey.admin.auth.TenantContextAdminFilter]).
      */
     @Transactional(readOnly = true)
     fun list(): List<TenantAdminDto.TenantView> {

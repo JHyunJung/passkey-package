@@ -17,7 +17,8 @@ import java.util.UUID;
  *
  * <p>값은 MDS status report 의 status 문자열을 ',' 로 이은 것뿐이다(인증기 이름 등 메타데이터 없음).
  * 키를 채우는 쪽은 admin-app MdsSchedulerService 로, {@link #put} 을 거치지 않고 같은 형식으로 직접 쓴다
- * (새 BLOB 의 키를 먼저 덮어쓰고, 새 BLOB 에 없는 키만 나중에 지운다). 키의 UUID 는
+ * (새 BLOB 의 키를 먼저 덮어쓰고, 이번 주기에 다시 쓰지 않은 기존 키를 나중에 지운다 — 새 BLOB 에 없는 항목뿐 아니라
+ * BLOB 에 있어도 status 가 비어 쓰지 않은 항목의 키도 지워진다). 키의 UUID 는
  * 양쪽 모두 {@link #canonicalAaguid} 로 만들어야 조회가 맞는다.
  */
 @Component

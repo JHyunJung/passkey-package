@@ -92,6 +92,7 @@ class TenantBoundary(
             // empty 를 반환하면 @Filter 가 꺼져 전체 테넌트가 노출된다(fail-open). RP_ADMIN 은
             // 매핑 ≥1 이 앱 레벨 불변식이므로 여기 도달은 비정상 — 전체 노출 대신 차단한다.
             // (assertCanAccessTenant 의 RP_ADMIN 분기와 동일하게 fail-closed.)
+            // 단 TenantContextAdminFilter 는 이 ACCESS_DENIED 를 삼켜 그 요청의 @Filter 를 켜지 않는다(그쪽 scope() KDoc).
             if (active == null) {
                 log.warn(
                     "tenant boundary violation: actor={} role=RP_ADMIN scope=list active=none",

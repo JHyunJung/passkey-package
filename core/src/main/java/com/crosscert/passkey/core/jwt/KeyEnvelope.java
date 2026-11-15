@@ -20,7 +20,9 @@ import java.util.Base64;
  * <p>Sealed format: {@code nonce(12) || ciphertext || tag(16)}.
  *
  * <p>Master key comes from {@code passkey.key-envelope.master-key}
- * property. Local profile hard-codes a dev value; production sets
+ * property. admin-app's local profile hard-codes a dev value, and the dev
+ * profile of both admin-app and passkey-app falls back to the same value
+ * when the env var is unset; production sets
  * {@code PASSKEY_KEY_ENVELOPE_MASTER_KEY} env var.
  *
  * <p>prod·qa yml 은 이 환경변수의 기본값이 빈 문자열이라, 설정을 빠뜨리면 생성자의 32바이트 검사에서 기동이 실패한다.

@@ -11,7 +11,7 @@ import java.util.Map;
  *
  * <p>{@code [%X{traceId:-}] [%X{tenantId:-}] ...} 처럼 슬롯을 따로 찍으면 값이 비었을 때 {@code [] [] [] []}
  * 가 남는다 — 그 대신 쓴다. logback-spring.xml 에
- * {@code <conversionRule conversionWord="compactMdc" converterClass="...CompactMdcConverter"/>}
+ * {@code <conversionRule conversionWord="compactMdc" class="...CompactMdcConverter"/>}
  * 로 등록해 패턴에서 {@code %compactMdc} 로 쓴다.
  *
  * <p>SecretMaskingConverter 와 마찬가지로 rp-app 에 같은 역할의 Java 사본이 있다(rp-app 은

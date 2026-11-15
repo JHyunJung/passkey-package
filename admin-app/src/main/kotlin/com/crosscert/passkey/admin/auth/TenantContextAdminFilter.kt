@@ -10,8 +10,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 import java.util.UUID
 
 /**
- * 인증된 admin 요청에서 RP_ADMIN 이면 자기 tenantId 를 [TenantContextHolder] 에
- * set 하여 Hibernate @Filter(TenantFilterAspect)가 자기 tenant 만 보게 한다(defense in depth).
+ * 인증된 admin 요청에서 RP_ADMIN 이면 활성 RP 의 tenantId([TenantBoundary.currentTenantScope])를 [TenantContextHolder] 에
+ * set 하여 Hibernate @Filter(TenantFilterAspect)가 그 tenant 만 보게 한다(defense in depth).
  * PLATFORM_OPERATOR 는 scope 가 null 이므로 set 하지 않음 → 전체 조회(의도).
  *
  * Security filter chain 내부의 [MfaPendingFilter] 이후에
@@ -29,8 +29,8 @@ class TenantContextAdminFilter(private val tenantBoundary: TenantBoundary) : Onc
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
         try {
-            // scope() 는 PLATFORM_OPERATOR·미인증/미지원role 일 때만 null 을 반환(fail-closed).
-            // 예외: 활성 RP 없는 RP_ADMIN 도 null 이다(아래 scope() KDoc — 이 경우는 fail-closed 가 아니다).
+            // scope() 는 PLATFORM_OPERATOR·미인증/미지원role, 그리고 활성 RP 없는 RP_ADMIN 일 때 null 을 반환한다
+            // (마지막 경우는 fail-closed 가 아니다 — 아래 scope() KDoc).
             // 그 외 예기치 못한 예외는 전파하여 unscoped 전체 조회를 차단한다.
             scope()?.let { TenantContextHolder.set(it) }
             chain.doFilter(req, res)

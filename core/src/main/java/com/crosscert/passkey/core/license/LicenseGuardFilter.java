@@ -27,9 +27,12 @@ import java.util.Set;
  *  - NETWORK_GRACE -> pass through + X-License-Warning header
  *  - VALID    -> pass through
  *
- * Registered as @Component so passkey-app picks it up via Spring Boot
- * servlet filter auto-registration. admin-app's Spring Security chain
- * adds it explicitly via addFilterBefore() (see AdminSecurityConfig).
+ * Registered as @Component, so Spring Boot auto-registers it as a servlet
+ * filter in both passkey-app and admin-app (no FilterRegistrationBean
+ * disables it). admin-app's Spring Security chain also adds the same bean
+ * via addFilterBefore() (see AdminSecurityConfig); the servlet-level pass
+ * runs first, and OncePerRequestFilter's already-filtered request
+ * attribute (derived from the filter name) makes the in-chain pass skip.
  *
  * Order = HIGHEST_PRECEDENCE + 1: runs after OnpremTenantPinFilter
  * (HIGHEST_PRECEDENCE) but before any auth filter, so license check

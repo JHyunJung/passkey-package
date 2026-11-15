@@ -82,7 +82,8 @@ class ApiKeyAdminService(
         // 운영자가 정지 상태에서 새 키를 발급하면 그 키로 finish/self-service 가 동작한다.
         // Spring Data findById 는 non-null id 계약(JSpecify). req.tenantId 는 @NotNull 검증 대상 DTO 필드라 정상 경로에선
         // null 이 오지 않는다. null 이면(RP_ADMIN 은 위 boundary 검사가 먼저 NPE) 리포지토리 호출 전에
-        // SimpleJpaRepository 와 같은 문구의 IllegalArgumentException — REST 호출이면 GlobalExceptionHandler 가 400(INVALID_INPUT).
+        // SimpleJpaRepository 와 같은 문구의 IllegalArgumentException. REST(ApiKeyAdminController.issue 의 @Valid)와
+        // 화면(ApiKeysTabController 의 Validator)은 tenantId 누락을 검증에서 먼저 거부하므로, 검증 없이 이 빈을 직접 부를 때만 닿는다.
         val tenant = tenants.findById(req.tenantId ?: throw IllegalArgumentException("The given id must not be null"))
             .orElseThrow { BusinessException(ErrorCode.TENANT_NOT_FOUND) }
         if (tenant.isSuspended) {

@@ -37,8 +37,9 @@ import java.time.Instant;
  *
  * <p>서버가 4xx/5xx 를 돌려주거나, HTTP 200 이라도 응답 봉투가 success=false 면 {@link PasskeyApiException}
  * 을 던진다(401 은 {@link com.crosscert.passkey.sdk.exception.PasskeyAuthException}, 429 는
- * {@link com.crosscert.passkey.sdk.exception.PasskeyRateLimitException}). 연결 실패·타임아웃은 이 예외가 아니라
- * Spring 의 {@code ResourceAccessException} 으로 나온다.
+ * {@link com.crosscert.passkey.sdk.exception.PasskeyRateLimitException}). RP API 호출의 연결 실패·타임아웃은 이 예외가 아니라
+ * Spring 의 {@code ResourceAccessException} 으로 나온다. {@code verifyIdToken} 안에서 JWKS 를 받아오다 실패하면
+ * (캐시한 JWKS 로 대신할 수 없을 때) {@link com.crosscert.passkey.sdk.exception.PasskeyIdTokenException} 이 된다.
  */
 public class PasskeyClient {
 
@@ -112,7 +113,7 @@ public class PasskeyClient {
     }
 
     /**
-     * 서명·exp 검증에 더해 iss/aud 시맨틱 검증까지 수행한다.
+     * 1-인자 {@link #verifyIdToken(String)} 의 서명(RS256)·exp·nbf·iat 검증에 더해 iss/aud 시맨틱 검증까지 수행한다.
      * expectedIssuer 는 {@code <issuerBase>/<tenantId>} 전체 문자열, expectedAudience 는 tenantId.
      * 검증 실패 시 {@link com.crosscert.passkey.sdk.exception.PasskeyIdTokenException}.
      */

@@ -100,6 +100,7 @@ class RegistrationFinishService(
                 tenant.isRequireUserVerification,
                 setOf(COSEAlgorithm.ES256, COSEAlgorithm.RS256),
                 tenant.acceptedFormatValues,
+                // SELF_ALLOWED: 포맷별 attStmt 서명만 검증하고 인증서 체인을 루트까지 검증하지 않는다(webauthn TrustAnchorProvider).
                 AttestationTrustPolicy.SELF_ALLOWED,
             )
 

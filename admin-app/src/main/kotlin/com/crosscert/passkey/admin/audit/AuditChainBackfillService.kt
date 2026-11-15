@@ -52,9 +52,10 @@ class AuditChainBackfillService(
             val rows = repo.findAllByTenantOrdered(tenantId)
             var prev: ByteArray? = null
             for (row in rows) {
-                // Skip only when *both* tenantHash and tenantPrevHash are present —
-                // a partial-completion row (hash set, prev_hash null) would otherwise
-                // leave the chain broken on re-run.  Recomputing is idempotent.
+                // Skip only when tenantHash is set and tenantPrevHash links to the previous
+                // row's hash (null for the tenant's first row) — a row whose prev_hash does not
+                // link (e.g. hash set, prev_hash null on a later row) would otherwise leave the
+                // chain broken on re-run.  Recomputing is idempotent.
                 if (row.tenantHash != null &&
                     (if (prev == null) row.tenantPrevHash == null else Arrays.equals(prev, row.tenantPrevHash))
                 ) {

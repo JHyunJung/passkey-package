@@ -46,7 +46,8 @@ private val log = LoggerFactory.getLogger(ApiKeysTabController::class.java)
  * 평문 키: 발급·회전의 평문은 그 응답 조각(발급 완료 다이얼로그의 SecretBox)에만 그린다. 세션·플래시·헤더(토스트 포함)·로그에 싣지 않고
  * 리다이렉트도 쓰지 않는다(ui.js 의 토스트 넘기기가 sessionStorage 를 쓰므로). 응답은 `Cache-Control: no-store`.
  *
- * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 테넌트 조회·경계 검사(403/404)가 먼저 판정한다. `/admin/_/` 는 인증 필수라
+ * `auth` 는 nullable 이라 null 이어도 메서드에 들어와 테넌트 조회·경계 검사(403/404)가 먼저 판정한다(회전·회수는 그보다 앞서
+ * `requireConfirm` 이 확인 표시 없는 요청을 400 으로 거부한다). `/admin/_/` 는 인증 필수라
  * (AdminSecurityConfig) 정상 경로에선 null 이 아니다. `auth!!` 는 REST 컨트롤러가 non-null `Authentication` 을 받기 때문이고,
  * null 이면 NPE — 발급은 try 안이라 다이얼로그 안 인라인 오류(422), 회전·회수는 try 밖이라 WebExceptionAdvice 의 500.
  */
