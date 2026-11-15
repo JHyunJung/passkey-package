@@ -29,8 +29,9 @@ private const val SYNC_COUNTER = "passkey_mds_sync_total"
  *
  * It also writes per-AAGUID entries back to Redis.
  *
- * lease 는 release 하지 않는다. 5분 TTL 이 지나기 전에는 다른 인스턴스의 실행(스케줄·강제 동기화)이
- * SKIPPED 가 되고, 같은 JVM 은 holder 가 같아 바로 다시 잡는다.
+ * lease 는 일부러 release 하지 않는다 — 5분 TTL 은 거의 동시에 도는 실행을 걸러, 같이 기동한 인스턴스들이
+ * MDS BLOB 을 두 번 받지 않게 하는 창이다. 그동안 holder 가 다른 실행(스케줄·강제 동기화)은 SKIPPED 가 되고,
+ * holder 가 같으면(같은 JVM, 또는 passkey.mds.lease-holder 를 같은 값으로 준 인스턴스) 바로 다시 잡는다.
  */
 @Service
 class MdsSchedulerService(

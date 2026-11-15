@@ -174,8 +174,8 @@ class ActivityService(
     ): List<AuditLog> {
         if (sinceId != null) {
             // Forward polling path. tenantId composes — null means global,
-            // non-null restricts polling to a single tenant (e.g. TenantDetail's
-            // Activity tab calling /admin/api/activity?sinceId=X&tenantId=Y).
+            // non-null restricts polling to a single tenant.
+            // 지금 화면(ActivityPageController·TenantDetailPageController)은 sinceId 를 보내지 않는다 — REST 클라이언트용 경로.
             return if (actionFilter.isEmpty()) {
                 activity.feed(sinceId, tenantId, FEED_PAGE)
             } else {

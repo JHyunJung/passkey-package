@@ -48,8 +48,10 @@ private val LEASE_TTL: Duration = Duration.ofSeconds(30)
  * piggy-back on a still-held lease (SchedulerLeaseService permits
  * `holder=?` re-acquisition for owner refresh).
  *
- * lease 는 release 하지 않는다. tryAcquire 가 이 @Transactional 에 합류하므로 회전이 롤백되면 lease 변경도
- * 롤백되고, 커밋되면 LEASE_TTL(30초) 동안 남아 그사이 다른 회전 요청은 KEY_ROTATION_CONFLICT 가 된다.
+ * lease 는 일부러 release 하지 않는다 — TTL 이 연속 클릭으로 두 번 회전하는 것을 막는 쿨다운이다(해제하면 첫 커밋
+ * 직후의 두 번째 클릭이 또 회전한다). 만료 시각은 tryAcquire 를 시작한 시각 + LEASE_TTL(30초)이라 커밋 뒤에는
+ * 회전에 걸린 시간을 뺀 나머지만 남고, 그동안 다른 회전 요청은 KEY_ROTATION_CONFLICT 가 된다.
+ * tryAcquire 가 이 @Transactional 에 합류하므로 회전이 롤백되면 lease 변경도 롤백된다.
  */
 @Service
 class KeyRotationService(

@@ -27,8 +27,9 @@ import java.util.UUID
  *
  * 사용처: RetentionPurgeJob("retention-purge")만 끝나면 [release] 한다. KeyExpirationJob("key-expiration", TTL 30초)·
  * MdsSchedulerService("mds-sync", TTL 5분)·KeyRotationService("key-rotation", TTL 30초)는 release 하지 않아
- * TTL 이 지나야 다른 holder 가 잡는다(holder 가 같으면 바로 다시 잡는다). `AUDIT_CHAIN_LOCK` 행은 lease 가 아니라
- * AuditLogService 가 FOR UPDATE 로 잡는 락 행이다.
+ * TTL 이 지나야 다른 holder 가 잡는다. 같은 holder 는 만료 전에도 다시 잡는데, KeyRotationService 는 호출마다
+ * holder 가 새 UUID 라 그런 일이 없다. `AUDIT_CHAIN_LOCK` 행은 lease 가 아니라
+ * AuditLogService·AuditChainBackfillService 가 FOR UPDATE 로 잡는 락 행이다.
  */
 @Service
 class SchedulerLeaseService(
