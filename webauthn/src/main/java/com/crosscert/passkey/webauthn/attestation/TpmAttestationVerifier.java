@@ -36,7 +36,8 @@ import java.util.List;
  *       attestedName==nameAlg||hash_nameAlg(pubArea)</li>
  *   <li>AIK(x5c[0]) 공개키로 certInfo 서명 검증</li>
  *   <li>AIK cert 요구사항: basicConstraints CA=false, EKU 2.23.133.8.3 포함</li>
- *   <li>ATT_CA 반환 (체인 trust anchor 강제는 상위 책임)</li>
+ *   <li>ATT_CA 반환 (체인 trust anchor 강제는 상위가 TRUST_CHAIN_REQUIRED 이고 앵커가 있을 때만
+ *       — TrustAnchorProvider 참고)</li>
  * </ol>
  *
  * <p>문서화된 한계: AIK SAN(TPM manufacturer/model/version)과 TPM vendor root까지의

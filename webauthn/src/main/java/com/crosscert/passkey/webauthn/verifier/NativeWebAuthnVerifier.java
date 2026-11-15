@@ -57,7 +57,11 @@ public final class NativeWebAuthnVerifier implements WebAuthnVerifier {
         this.certPathVerifier = new CertPathVerifier();
     }
 
-    /** 기본 구성 — 등록된 모든 포맷 + 빈 trust anchor(self/none만 통과). */
+    /**
+     * 기본 구성 — 등록된 모든 포맷 + 빈 trust anchor. trust anchor 는 TRUST_CHAIN_REQUIRED 에서만
+     * 조회되므로, 이 구성에서 TRUST_CHAIN_REQUIRED 등록은 전부 ATTESTATION_UNTRUSTED 로 거부되고
+     * SELF_ALLOWED 는 모든 attestation 타입을 체인 검사 없이 통과시킨다(enforceTrust).
+     */
     public static NativeWebAuthnVerifier withDefaults(ObjectMapper mapper) {
         return new NativeWebAuthnVerifier(mapper, AttestationVerifiers.defaults(),
                 new EmptyTrustAnchorProvider());

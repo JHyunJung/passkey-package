@@ -43,7 +43,8 @@ import java.util.List;
  * <p><b>알려진 제한(Known limitation):</b>
  * <ul>
  *   <li>x5c 체인이 Google SafetyNet 루트(GlobalSign 등)로 연결되는지는 여기서 강제하지 않는다.
- *       이는 상위 단계(NativeWebAuthnVerifier / TrustAnchorProvider) 책임이다.</li>
+ *       상위 단계(NativeWebAuthnVerifier / TrustAnchorProvider)가 TRUST_CHAIN_REQUIRED 이고 앵커가
+ *       있을 때만 검증한다 — 기본 구성(passkey-app)에서는 아무 곳에서도 하지 않는다.</li>
  *   <li>payload.{@code timestampMs} 신선도(freshness)는 검사하지 않는다.</li>
  * </ul>
  */
