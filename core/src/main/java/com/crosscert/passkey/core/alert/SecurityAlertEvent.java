@@ -3,7 +3,7 @@ package com.crosscert.passkey.core.alert;
 import java.util.Map;
 
 /**
- * 보안 이벤트 알림 (P1-3). 발행 지점은 ApplicationEventPublisher 로 이 이벤트를 publish 하고,
+ * 보안 이벤트 알림. 발행 지점은 ApplicationEventPublisher 로 이 이벤트를 publish 하고,
  * AlertDispatcher 가 @Async @EventListener 로 수신해 AlertChannel 들에 fan-out 한다.
  * context 에는 마스킹된 값만 담는다(평문 secret/전체 이메일 금지).
  */

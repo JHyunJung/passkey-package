@@ -23,7 +23,7 @@ import java.time.Clock;
 import java.util.List;
 
 /**
- * DB-backed signing-key provider (Phase 3 rewrite).
+ * DB-backed signing-key provider.
  *
  * <p>Boot: load the single ACTIVE row. If none exists (fresh install,
  * first boot of either app), generate a new RSA-2048 key, envelope-seal
@@ -31,9 +31,9 @@ import java.util.List;
  * the persisted row.
  *
  * <p>Concurrent first boots are race-tolerant via the definer-rights
- * PL/SQL package {@code PSK_APP_OWNER.signing_key_bootstrap_pkg} (V18),
+ * PL/SQL package {@code PSK_APP_OWNER.signing_key_bootstrap_pkg},
  * which only allows INSERT when no ACTIVE row exists. The
- * function-based {@code signing_key_one_active_uix} unique index (V15)
+ * function-based {@code signing_key_one_active_uix} unique index
  * is a belt-and-suspenders safety net at the storage layer.
  *
  * <p>JWKS: returns ACTIVE + ROTATED keys so RPs still verify JWTs
@@ -47,6 +47,10 @@ import java.util.List;
  * <p>Signing: always uses the cached ACTIVE key. KeyRotationService
  * calls {@link #reload()} after a rotation so the cache picks up the
  * new ACTIVE row.
+ *
+ * <p>reload 는 그 메서드를 부른 프로세스(admin-app)의 캐시만 바꾼다. passkey-app 은 {@link #init()} 에서만
+ * ACTIVE 키를 읽으므로, 회전 뒤에도 재기동 전까지 이전 키(이제 ROTATED)로 ID Token 에 서명한다.
+ * 그 키가 KeyExpirationJob 에서 REVOKED 가 되어 JWKS 에서 빠지면 RP 의 서명 검증이 실패한다.
  */
 @Component
 public class SigningKeyProvider {
@@ -124,11 +128,11 @@ public class SigningKeyProvider {
                             + "already exists in the mocked repository.");
         }
         SigningKey generated = generate();
-        // Call the definer-rights PL/SQL package PSK_APP_OWNER.signing_key_bootstrap_pkg
-        // (V18). It allows the caller (PSK_APP_ADMIN or PSK_APP_RUNTIME) to
+        // Call the definer-rights PL/SQL package PSK_APP_OWNER.signing_key_bootstrap_pkg.
+        // It allows the caller (PSK_APP_ADMIN or PSK_APP_RUNTIME) to
         // INSERT the first ACTIVE row ONLY when none exists. This
         // narrows the runtime DB principal's attack surface compared
-        // to a plain GRANT INSERT (codex review T6-followup Medium).
+        // to a plain GRANT INSERT.
         jdbc.execute((java.sql.Connection conn) -> {
             try (java.sql.CallableStatement cs = conn.prepareCall(
                     "{ call " + schema + ".signing_key_bootstrap_pkg.bootstrap_active(?,?,?,?,?) }")) {

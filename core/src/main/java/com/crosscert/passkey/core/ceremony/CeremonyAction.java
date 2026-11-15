@@ -3,7 +3,8 @@ package com.crosscert.passkey.core.ceremony;
 /**
  * ceremony_event.action 의 문자열 단일 출처.
  * CeremonyEventRecorder(기록)와 admin FunnelService(집계)가 같은 값을 참조해
- * 문자열 불일치로 인한 집계 누락을 막는다. 값은 기존 FunnelService 상수와 동일.
+ * 문자열 불일치로 인한 집계 누락을 막는다. 값은 이미 쌓인 ceremony_event 행의 action 과 같아야 하므로
+ * 바꾸면 과거 행이 집계에서 빠진다.
  */
 public final class CeremonyAction {
     public static final String REGISTRATION_BEGIN     = "REGISTRATION_BEGIN";

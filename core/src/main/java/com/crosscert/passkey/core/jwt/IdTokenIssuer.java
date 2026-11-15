@@ -20,6 +20,12 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 인증 성공 시 RP 에 돌려주는 ID Token(RS256 JWS)을 만든다. 호출자는 passkey-app AuthenticationFinishService.
+ * iss = issuer-base + "/" + tenantId, aud = tenantId, sub = userHandle(base64url), 그 밖에 amr·cred_id·aaguid.
+ * 헤더 kid 는 {@link SigningKeyProvider} 가 캐시한 ACTIVE 키 — RP(sdk-java IdTokenVerifier)는
+ * /.well-known/jwks.json({@link JwksAssembler})의 공개키로 서명을 검증하고 iss·aud 를 자기 설정과 맞춰 본다.
+ */
 @Slf4j
 @Component
 public class IdTokenIssuer {
@@ -85,8 +91,8 @@ public class IdTokenIssuer {
         }
         if (log.isDebugEnabled()) {
             // Metadata only — no JWT body, no subject, no userHandle.
-            // sub/aud are already INFO-logged at the call site
-            // (AuthenticationFinishService) per Phase G2.
+            // The sub tail and aud are INFO-logged at the call site
+            // (AuthenticationFinishService).
             log.debug("id-token issued: kid={} alg=RS256",
                     signingKeys.signingKey().getKeyID());
         }

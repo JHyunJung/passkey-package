@@ -15,13 +15,19 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * AES-256-GCM envelope for sealed PKCS8 private keys (Phase 3 T5).
+ * AES-256-GCM envelope for sealed PKCS8 private keys.
  *
  * <p>Sealed format: {@code nonce(12) || ciphertext || tag(16)}.
  *
  * <p>Master key comes from {@code passkey.key-envelope.master-key}
  * property. Local profile hard-codes a dev value; production sets
  * {@code PASSKEY_KEY_ENVELOPE_MASTER_KEY} env var.
+ *
+ * <p>prod·qa yml 은 이 환경변수의 기본값이 빈 문자열이라, 설정을 빠뜨리면 생성자의 32바이트 검사에서 기동이 실패한다.
+ * 같은 master key 에 기대는 것: signing_key 의 봉인된 개인키({@link SigningKeyProvider}),
+ * admin MFA secret(MfaSecretCipher 가 seal/open), admin recovery code 의 HMAC 키({@link #deriveSubkey}).
+ * passkey-app·admin-app 이 같은 값을 써야 하고, 값을 바꾸면 기존 서명 키를 열지 못해
+ * {@code SigningKeyProvider.init()} 에서 기동이 실패한다 — MFA secret 과 recovery code 도 다시 만들어야 한다.
  *
  * <p>The seal/open API never logs or throws the master key. Tag
  * mismatch (tamper or wrong key) becomes a generic

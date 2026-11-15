@@ -14,7 +14,8 @@ import org.springframework.util.StringUtils;
  * <p>{@code spring.mail.host} 가 설정되면 {@link SmtpMailSender}(JavaMailSender 위임),
  * 아니면 {@link LogMailSender}(로그 전용)를 등록한다. MailSender 타입 빈 정의가 항상
  * 정확히 하나만 생성되므로, 컴포넌트 스캔 순서나 조건부 빈 평가 타이밍과 무관하게
- * 결정적이다(이전 @ConditionalOnMissingBean 방식의 NoUniqueBeanDefinitionException 위험 제거).
+ * 결정적이다. 구현체마다 @ConditionalOnMissingBean 을 다는 방식은
+ * NoUniqueBeanDefinitionException 위험이 있어 쓰지 않는다.
  */
 @Configuration
 public class MailSenderConfiguration {

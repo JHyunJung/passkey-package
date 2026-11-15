@@ -17,6 +17,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
+/**
+ * 컨트롤러에서 올라온 예외를 {@link ApiResponse} 오류 봉투로 바꾼다(passkey-app·admin-app 공통).
+ * 의도한 오류는 {@link BusinessException} 으로 던지면 그 ErrorCode 의 HTTP 상태와 예외 메시지가 그대로 나가고,
+ * 어디에도 안 걸린 예외는 500(INTERNAL_SERVER_ERROR, C999)이 된다.
+ * admin-app 화면 컨트롤러(admin.web 패키지)는 우선순위가 더 높은 WebExceptionAdvice 가 먼저 잡는다.
+ * 서블릿 필터에서 난 예외나 필터가 직접 쓴 응답(LicenseGuardFilter 의 503 등)은 여기를 거치지 않는다.
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {

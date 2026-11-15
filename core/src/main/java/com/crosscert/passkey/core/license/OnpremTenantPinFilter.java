@@ -19,7 +19,7 @@ import java.util.UUID;
  * Per-request tenant pinning in on-prem (single-tenant) mode.
  * Pins TenantContextHolder to the licensed tenantId at request entry,
  * clears in finally. Runs even before LicenseGuardFilter so the
- * 503 response path (rendered by ApiResponse / GlobalExceptionHandler)
+ * 503 response path (an ApiResponse written directly by LicenseGuardFilter)
  * also sees the right tenant context if any DB lookup is needed.
  *
  * Order = HIGHEST_PRECEDENCE: must run before any DB-touching filter.

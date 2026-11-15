@@ -51,7 +51,7 @@ public class LicenseHeartbeatScheduler {
     static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     /**
      * 정상 응답 시간보다 훨씬 길고, 기본 heartbeat 간격(PT1H)보다는 훨씬 짧게 잡는다.
-     * Spring 6.2 JDK 팩토리에서는 요청 전송 시점부터 재므로 사실상 교환 전체(connect 포함)의 상한이다.
+     * Spring 7 JDK 팩토리(JdkClientHttpRequest)에서는 요청 전송 시점부터 재므로 사실상 교환 전체(connect 포함)의 상한이다.
      */
     static final Duration READ_TIMEOUT = Duration.ofSeconds(60);
 

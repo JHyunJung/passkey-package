@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 보안 알림 fan-out (P1-3). @Async @EventListener 로 SecurityAlertEvent 를 수신해
+ * 보안 알림 fan-out. @Async @EventListener 로 SecurityAlertEvent 를 수신해
  * supports 통과 채널에 per-channel 격리(try/catch)로 발송한다. 한 채널 실패가
  * 다른 채널·발행 스레드(요청)를 막지 않는다. @Async 라 발행 지점 지연 없음.
  */

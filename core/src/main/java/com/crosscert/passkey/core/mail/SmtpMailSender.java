@@ -36,7 +36,8 @@ public class SmtpMailSender implements MailSender {
             log.info("[MAIL] sent to={} subject=\"{}\" body-length={}", to, subject,
                     body == null ? 0 : body.length());
         } catch (Exception e) {
-            // 호출자(PasswordResetService/SignupRequestService 등)의 catch(Exception) 가 fallback 처리.
+            // 호출자가 잡아 흘려보낸다: admin-app AfterCommitMailDispatcher·SignupRequestService.sendQuietly,
+            // 보안 알림은 AlertDispatcher 의 채널별 catch.
             log.warn("[MAIL] send failed to={} subject=\"{}\" reason={}", to, subject,
                     e.getMessage());
             throw new RuntimeException("mail send failed", e);
