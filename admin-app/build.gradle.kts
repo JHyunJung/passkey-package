@@ -50,7 +50,7 @@ dependencies {
     // Boot 4 는 RestTemplate 지원이 별도 모듈(spring-boot-restclient)이다.
     testImplementation("org.springframework.boot:spring-boot-restclient")
     // 화면 HTML 응답 파싱용.
-    testImplementation("org.jsoup:jsoup:1.18.1")
+    testImplementation("org.jsoup:jsoup:1.24.1")
     // T24 AdminFlowIT (Phase 2 acceptance gate) brings up a Testcontainers
     // Oracle XE 21 + Redis 7 and exercises admin flows end-to-end. Same
     // dependency shape as :passkey-app for Phase 1's Fido2EndToEndIT.

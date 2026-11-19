@@ -283,14 +283,26 @@
 
 취약점 조회 근거와 "우리 코드가 왜 안전한가"를 보존한다. 삭제하면 다음 감사에서 같은 CVE 를 다시 조사하게 된다.
 
-### nimbus-jose-jwt **9.40 — KEEP**
+### nimbus-jose-jwt ~~9.40 — KEEP~~ → **10.10 전환 완료** [2026-11-19]
 
-- 취약점: CVE-2025-53864 / GHSA-xwmg-2g98-w7v9.
-- 9.x 내 forward fix 없음 — 9.37.4 는 백포트이고 전향 수정은 major `10.0.2` 다.
-  (`gradle/libs.versions.toml:8` = `"9.40"`)
-- 노출이 gated 인 이유: `IdTokenVerifier`·`LicenseVerifier` 둘 다 `jwt.verify()` 가 성공한 **뒤에만**
-  `getJWTClaimsSet()` 을 호출한다. 우리/벤더 키로 서명된 토큰만 파서에 도달한다.
-- **재평가 트리거**: Spring Boot major bump, 또는 SDK 를 외부 배포할 때 `10.0.2` 전환. [QW-3 2026-05-31]
+- 취약점: CVE-2025-53864 / GHSA-xwmg-2g98-w7v9. 9.x 내 forward fix 없음(9.37.4 는 백포트, 전향 수정은 `10.0.2`).
+- 종전 KEEP 근거: `IdTokenVerifier`·`LicenseVerifier` 둘 다 `jwt.verify()` 성공 **뒤에만** `getJWTClaimsSet()` 을
+  호출해 서명된 토큰만 파서에 도달한다(노출 gated).
+- 재평가 트리거 두 가지(Spring Boot major bump, SDK 외부 배포)가 모두 충족되어 `10.10` 으로 올렸다.
+  sdk-java 는 이 변경으로 1.2.0. [QW-3 2026-05-31 → 2026-11-19]
+
+### sdk-java Jackson 2 — Boot 3.5 BOM 값 덮어쓰기 [2026-11-19]
+
+- Boot 3.5.16 BOM 이 관리하는 Jackson 2.21.4 에 알려진 취약점(HIGH 포함, 2.21.7 에서 수정)이 있어
+  카탈로그 `jackson2-sdk`(2.21.8)로 jackson-core·databind·jsr310 을 고정한다(`sdk-java/build.gradle.kts`
+  의 `dependencyManagement` — 배포 POM 에도 실린다).
+- **재평가 트리거**: Boot 3.5 BOM 이 2.21.7 이상을 관리하면 고정 블록과 카탈로그 항목을 지운다.
+
+### 테스트 전용 잔존 — sdk-java `log4j-api` 2.24.3
+
+- CVE-2026-49844(MODERATE, MapMessage 인코딩). Boot 3.5 BOM 의 `spring-boot-starter-test` 로깅 경유로
+  **테스트 classpath 에만** 있고 배포 jar 의 의존에는 없다. MapMessage 를 쓰지 않는다.
+- **재평가 트리거**: Boot 3.5 BOM 이 log4j 2.25.5 이상을 관리하면 자동 해소. [2026-11-19]
 
 ### vite **^5.4.6 — KEEP**
 

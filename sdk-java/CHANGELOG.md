@@ -2,6 +2,24 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/), 버전은 [SemVer](https://semver.org/lang/ko/) 를 따른다.
 
+## [1.2.0] — 2026-11-19
+
+의존성 보안 갱신. SDK 자체 공개 API(클래스·메서드 시그니처)는 그대로다.
+
+### 보안
+- `nimbus-jose-jwt` 9.40 → **10.10** — CVE-2025-53864(깊게 중첩된 JSON 을 처리할 때의 DoS). 9.x 계열에는
+  전향 수정이 없어 major 를 올렸다.
+- `jackson-databind`·`jackson-core`·`jackson-datatype-jsr310` 2.21.4 → **2.21.8** — 2.21.5~2.21.7 에서 수정된
+  취약점(HIGH 포함: CVE-2026-89425, CVE-2026-89407, CVE-2026-91777, CVE-2026-68497, CVE-2026-91776 등).
+
+### 동작 변화 (업그레이드 시 확인)
+- `nimbus-jose-jwt` 가 major 10 으로 올라간다. SDK 는 이 라이브러리를 전이 의존(`api`)으로 노출하고
+  `JwksCache.get()` 이 `JWKSet` 을 돌려주므로, RP 코드가 nimbus 를 **직접** 쓰고 있다면 10.x 에서 컴파일·동작을
+  확인한다. SDK 만 쓰는 RP 는 영향이 없다.
+- jar 를 직접 받아 전이 의존을 손으로 선언한 RP 는 `nimbus-jose-jwt` 와 Jackson 버전을 위 값 이상으로 올린다.
+  Spring Boot BOM 을 쓰는 RP 는 Jackson 버전을 BOM 이 정하므로, BOM 이 관리하는 Jackson 2 가 2.21.7 미만이면
+  Boot 패치 버전을 올리거나 `jackson-bom.version`(Boot 4 는 `jackson-2-bom.version`)을 덮어쓴다.
+
 ## [1.1.0] — 2026-11-11
 
 1.0.0 이후 누적된 변경. 기존 공개 API 는 그대로 유지되며(제거·시그니처 변경 없음), 아래 **동작 변화**만 확인하면 된다.
