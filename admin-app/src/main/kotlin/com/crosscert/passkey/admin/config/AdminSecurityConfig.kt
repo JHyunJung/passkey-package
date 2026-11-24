@@ -132,7 +132,7 @@ class AdminSecurityConfig {
                         "/admin/_/**", "/admin/login/mfa", "/admin/login/mfa/enroll", "/admin/login/mfa/confirm",
                     ).authenticated()
                     .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                    // /admin/api/profile 은 활성 profile 이름·local 여부·PLATFORM_OPERATOR 즉시 가입 설정 여부만 노출(ProfileController). (React 시절 로그인 화면) 이 미인증 상태에서
+                    // /admin/api/profile 은 활성 profile 이름·local 여부·PLATFORM_OPERATOR 즉시 가입 설정 여부만 노출(ProfileController). 예전 로그인 화면이 미인증 상태에서
                     // local 여부를 알아 데모 계정 표시를 결정하는 데 쓰던 경로다. 지금 로그인 화면은 서버가 직접 판단한다.
                     // /admin/api/license 는 DEAD 상태에서도 운영자가 라이선스 진단에 접근할 수 있어야 한다.
                     .requestMatchers("/admin/api/profile", "/admin/api/license").permitAll()

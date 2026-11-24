@@ -5,7 +5,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
 
-/** ← admin-ui/src/lib/csvExport.ts (원본에 vitest 없음 — 파일 머리 주석의 규칙을 확인) */
+/** CSV 내보내기 규칙(CsvWriter 파일 머리 주석의 규칙을 확인). */
 class CsvWriterTest {
 
     companion object {

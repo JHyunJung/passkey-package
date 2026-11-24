@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, crumbs, content)">
 <!--
-  공통 레이아웃(← App.tsx AuthenticatedApp). 모든 인증 후 화면이 이 안에서 그려진다.
+  공통 레이아웃. 모든 인증 후 화면이 이 안에서 그려진다.
 
   페이지 템플릿 규약 — 화면 템플릿은 정확히 이 한 줄로 시작한다.
     <html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}">

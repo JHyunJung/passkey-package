@@ -54,7 +54,7 @@ import java.util.UUID
 import java.util.function.Function
 
 /**
- * AAGUID 정책 탭. 원본: AaguidPolicyTab.test.ts, AaguidPolicyTab.view.test.tsx, api/aaguidPolicy.ts, tenantSignals.ts.
+ * AAGUID 정책 탭.
  * 브라우저에서 도는 부분(방식 카드 선택·목록 개수에 따른 경고·saveBar 개수·다이얼로그 열기)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) nullable jsoup 결과(`selectFirst`·`first`·`parent`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
@@ -115,7 +115,7 @@ class AaguidTabControllerTest {
             return JSON.readTree(h)
         }
 
-        // ── 순수 함수(AaguidPolicyTab.test.ts) ──────────────────
+        // ── 순수 함수 ──────────────────────────────────────────
 
         private fun e(a: String): Entry = Entry(a, null, null)
         private fun e(a: String, note: String?, mds: String?): Entry = Entry(a, note, mds)
@@ -212,7 +212,7 @@ class AaguidTabControllerTest {
         assertThat(AaguidTabController.unverifiedCount(p("ALLOWLIST", false, e("a", null, "X"), e("b")))).isEqualTo(1)
     }
 
-    // ── 화면(AaguidPolicyTab.view.test.tsx 'V2') ─────────────
+    // ── 화면 ────────────────────────────────────────────────
 
     @Test
     @DisplayName("mode radiogroup(3개, 허용 목록 선택), 원문 title 툴팁, MDS 확인/미확인, 경고 제목, MDS strict 스위치 — 변경 전에는 변경 표시 없음")
@@ -449,7 +449,7 @@ class AaguidTabControllerTest {
     }
 
     @Test
-    @DisplayName("저장 뒤 탭 줄의 AAGUID 배지가 새 정책 기준으로 갱신된다(OOB, 원본 onSaved) — 미확인이 있으면 '확인 필요 N', 없으면 비움")
+    @DisplayName("저장 뒤 탭 줄의 AAGUID 배지가 새 정책 기준으로 갱신된다(OOB) — 미확인이 있으면 '확인 필요 N', 없으면 비움")
     fun badgeRefreshedAfterSave() {
         whenever(aaguid.update(eq(T1), anyOrNull(), anyOrNull())).thenReturn(policy(TenantAaguidPolicy.Mode.ALLOWLIST, true, yubi(), unknown()))
         val d = doc(mvc.perform(saveReq("ALLOWLIST", "true", YUBI.toString(), UNKNOWN.toString())).andReturn())

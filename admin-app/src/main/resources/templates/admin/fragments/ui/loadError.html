@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  LoadError (← ui/LoadError.tsx) — Alpine.data('loadError')
+  LoadError — Alpine.data('loadError')
   th:replace="~{admin/fragments/ui/loadError :: loadError(what, error, retryAttrs, retrying, compact)}"
     what       불러오지 못한 대상 문자열(예: '목록') — '<what>을/를 불러오지 못했습니다' (조사는 @fmt.josa)
     error      Throwable 또는 null(@fmt.errorInfo 로 쉬운 문구)

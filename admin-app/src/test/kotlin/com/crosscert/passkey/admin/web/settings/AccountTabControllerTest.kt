@@ -49,7 +49,7 @@ import java.util.Optional
 import java.util.UUID
 
 /**
- * 설정 › 내 계정 탭(MFA). 원본: AccountTab.test.tsx, RecoveryCodesModal.test.tsx, api/mfa.ts.
+ * 설정 › 내 계정 탭(MFA).
  * 다이얼로그 열기·OTP 입력·포커스·복사·다운로드는 Alpine 이라 속성·마크업까지만 본다(브라우저 미확인).
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`first`·`last`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.

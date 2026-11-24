@@ -2,7 +2,7 @@
 @contentType: text/html;charset=UTF-8
 
 
-  <!-- 이벤트 종류·실패만 필터 상태(Alpine auditFilter)는 카드 밖 여기 있다 — 기간 전환·다시 시도로 카드가 바뀌어도 유지되고(원본과 같다),
+  <!-- 이벤트 종류·실패만 필터 상태(Alpine auditFilter)는 카드 밖 여기 있다 — 기간 전환·다시 시도로 카드가 바뀌어도 유지되고,
        카드 교체·더 보기로 행이 들어오면(htmx after-swap/settle) 다시 거른다. -->
   <div class="stack-6" id="audit-root" x-data="auditFilter" x-on:htmx:after-settle="apply()" x-on:htmx:after-swap="apply()">
     

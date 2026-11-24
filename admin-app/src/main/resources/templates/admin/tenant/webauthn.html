@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  WebAuthn 설정 탭(← pages/tenant/WebauthnConfigTab.tsx). 탭 조각 GET /admin/_/tenants/{id}/tab/webauthn 과 저장(PUT) 성공 응답이 같은 조각을 쓴다.
+  WebAuthn 설정 탭. 탭 조각 GET /admin/_/tenants/{id}/tab/webauthn 과 저장(PUT) 성공 응답이 같은 조각을 쓴다.
   모델: tid, f(Form: rpId, rpName, timeoutMs, origins, uv, at), diffUrl, originCheckUrl, apkUrl, originPlaceholder, timeoutGuide, uvOptions/atOptions, uvGuides/atGuides, saveLabels(JSON), helpLinks
   흐름: 폼 제출(저장 바의 저장…) = 미리보기 POST(data-preview, 저장으로 세지 않음) → #wa-confirm-slot 에 확인 다이얼로그. 확인 = PUT(탭 교체).
   필드 오류 자리 #wa-err-<필드>: 미리보기 응답이 OOB 로 채우거나 비운다. 변경됨 표시(.chg)·경고 테두리는 saveBar 가 [data-field] 에 data-changed 를 달아 CSS 로 켠다.

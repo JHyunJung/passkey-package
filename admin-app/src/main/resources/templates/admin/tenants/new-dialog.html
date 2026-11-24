@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  신규 Tenant 생성 다이얼로그(← TenantsListPage.tsx 의 NewTenantDialog).
+  신규 Tenant 생성 다이얼로그.
     dialog      Task 3 dialog 조각(id=new-tenant). 열기: window 이벤트 dialog:open {id:'new-tenant'}, 또는 모델 ntOpts={open:true}(?new=1)
     formFields  폼 안쪽. 검증 오류·서버 거절은 422 로 이 조각을 돌려주고 htmx 가 #nt-form 안쪽만 교체한다(다이얼로그는 열린 채, 입력값은 nt 로 되돌려 쓴다)
   모델: nt = NewTenantForm(name, slug, rpId, nameError, slugError, rpIdError, failure)

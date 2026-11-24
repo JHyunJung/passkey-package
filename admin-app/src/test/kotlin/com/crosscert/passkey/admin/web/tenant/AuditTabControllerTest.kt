@@ -54,8 +54,8 @@ import java.util.UUID
 import java.util.regex.Pattern
 
 /**
- * 감사 로그 탭. 원본: AuditTab.test.tsx, auditHelpers.test.ts(→ AuditHelpersTest), api/audit.ts, lib/csvExport.ts.
- * 원본에는 자동 갱신(폴링)이 없다 — 그래서 "폴링이 필터를 유지한다" 대신 "자동 갱신 트리거가 없고 모든 컨트롤이 현재 필터를 싣는다"를 본다.
+ * 감사 로그 탭. 행 분류·표시 규칙은 AuditHelpersTest 가 따로 본다.
+ * 자동 갱신(폴링)이 없는 화면이다 — 그래서 "폴링이 필터를 유지한다" 대신 "자동 갱신 트리거가 없고 모든 컨트롤이 현재 필터를 싣는다"를 본다.
  * 브라우저에서 도는 부분(행 펼침·다이얼로그 열기·체인 검증 타이머)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) nullable jsoup 결과(`selectFirst`·`first`·`parent`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
@@ -387,7 +387,7 @@ class AuditTabControllerTest {
     }
 
     @Test
-    @DisplayName("자동 갱신(폴링)은 없다(원본에 없음) — every 트리거가 없다. 카드 요청의 대상은 #tenant-tab 이 아니라 카드(this), 필터 상태는 카드 밖(#audit-root)")
+    @DisplayName("자동 갱신(폴링)은 없다 — every 트리거가 없다. 카드 요청의 대상은 #tenant-tab 이 아니라 카드(this), 필터 상태는 카드 밖(#audit-root)")
     fun pollingKeepsFilters() {
         val r = hget("$BASE/tab/audit?win=7d", platform())
         val d = doc(r)
@@ -582,7 +582,7 @@ class AuditTabControllerTest {
         assertThat(lines[2]).contains(",AUTH_SUCCESS,SYSTEM,,CREDENTIAL,credAAAAAAAAAAAAAAAAAAAA1,{}")
         assertThat(lines[3]).endsWith(",ATTESTATION_TRUST_FAILED,SYSTEM,,CREDENTIAL,c3,\"{\"\"reason\"\":\"\"bad\"\"}\"")
         assertThat(lines[4]).contains("API_KEY_ROTATED,ADMIN,ops@x.com").endsWith("\"{\"\"raw\"\":\"\"not json\"\"}\"")
-        assertThat(lines[1]).startsWith("2026-10-10T23:") // 서버 JSON 의 ts 문자열(원본 e.ts)
+        assertThat(lines[1]).startsWith("2026-10-10T23:") // 서버 JSON 의 ts 문자열
 
         // 필터: 현재 화면과 같은 행만
         val filtered = String(

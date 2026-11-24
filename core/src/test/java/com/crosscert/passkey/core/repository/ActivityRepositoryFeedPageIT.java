@@ -229,7 +229,7 @@ class ActivityRepositoryFeedPageIT {
     /**
      * F07 fix proof for the category-filtered path: {@code feedFilteredPageRaw}
      * mirrors {@link #feedPageRaw_tupleCursor_includesBoundaryRow} but is what
-     * admin-ui actually calls when the Activity feed has a category filter
+     * the admin console actually calls when the Activity feed has a category filter
      * applied and the user pages backward. Rows outside the filtered action
      * set are interleaved at the exact same {@code createdAt} to prove the
      * tuple cursor's boundary-row fix survives the {@code action IN :actions}

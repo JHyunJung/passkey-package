@@ -5,7 +5,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
-/** ← admin-ui/src/lib/apkKeyHash.test.ts */
+/** Android apk-key-hash 변환·검증. */
 class ApkKeyHashTest {
 
     companion object {

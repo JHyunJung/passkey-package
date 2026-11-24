@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  ConfirmByTyping (← ui/ConfirmByTyping.tsx) — Alpine.data('confirmByTyping')
+  ConfirmByTyping — Alpine.data('confirmByTyping')
   th:replace="~{admin/fragments/ui/confirmByTyping :: confirmByTyping(id, expected, label, actionLabel)}"
     id          필수(입력·힌트 id), expected 정확히 입력해야 하는 문자열, label 문자열, actionLabel 확인 버튼 이름(null 이면 '실행')
   일치 여부가 바뀔 때마다 `match-change` 이벤트(detail: true/false)가 올라간다. 정확히 일치할 때만 true(공백 포함 비교).

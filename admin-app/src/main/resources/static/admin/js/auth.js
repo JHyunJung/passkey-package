@@ -1,4 +1,4 @@
-/* 로그인·MFA 단계 화면 스크립트(← pages/LoginPage.tsx, pages/MfaChallenge.tsx).
+/* 로그인·MFA 단계 화면 스크립트.
  * 로드 순서: htmx → ui.js → auth.js → alpine(마지막). 공통 틀의 app.js 는 싣지 않는다.
  * 비밀번호·인증 코드는 어디에도 저장하지 않는다. 로그인 실패 뒤 이메일만 sessionStorage 로 한 번 넘긴다(입력 유지). */
 (function () {
@@ -21,7 +21,7 @@
     return null;
   }
 
-  /** lib/recoveryCode.ts formatRecoveryCode — 백엔드 알파벳(I·O·0·1 제외) 대문자 "XXXX-XXXX". */
+  /** 복구 코드 표기 — 백엔드 알파벳(I·O·0·1 제외) 대문자 "XXXX-XXXX". */
   function formatRecoveryCode(input) {
     const ascii = String(input || '').replace(/[^A-Za-z0-9]/g, '');
     const cleaned = ascii.toUpperCase().replace(/[^ABCDEFGHJKLMNPQRSTUVWXYZ2-9]/g, '').slice(0, 8);

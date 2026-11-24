@@ -61,7 +61,7 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * Tenant 상세 틀과 개요 탭. 원본: pages/TenantDetailPage.test.tsx, pages/tenant/TenantOverview.test.tsx, tenantSignals.test.ts, tabFormat.test.ts.
+ * Tenant 상세 틀과 개요 탭.
  * 브라우저에서 도는 부분(Alpine·htmx 의 실제 교체·포커스·메뉴·다이얼로그 열기)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) nullable jsoup 결과(`selectFirst`·`first`)와 응답 헤더의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.

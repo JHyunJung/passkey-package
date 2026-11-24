@@ -3,9 +3,9 @@
 <head><title>감사 체인 모니터</title></head>
 <body>
 <!--
-  감사 체인 화면(← pages/AuditChainPage.tsx). PLATFORM 전용. 화면 템플릿 규약: layout 한 줄 + title / crumbs / main.
+  감사 체인 화면. PLATFORM 전용. 화면 템플릿 규약: layout 한 줄 + title / crumbs / main.
   골격만 보낸다: #chain-root 가 load 로 개요(GET /admin/_/audit-chain/overview?first=1)를 읽어 자기 자신을 결과로 교체한다
-  (개요 호출 = 서버가 전 tenant 체인을 검증하는 긴 작업. 원본도 로딩 스켈레톤 → 결과). 실패하면 오류 카드 + 다시 시도.
+  (개요 호출 = 서버가 전 tenant 체인을 검증하는 긴 작업이라 로딩 스켈레톤 → 결과). 실패하면 오류 카드 + 다시 시도.
   모델: loadAttrs(위 요청 속성). 결과 조각은 overview.html(root/loadFailed/warn), 사건 카드·다이얼로그는 incidents.html.
 -->
 <th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>

@@ -50,7 +50,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /**
- * WebAuthn 설정 탭. 원본: WebauthnConfigTab.test.ts(validateOrigin → OriginValidationTest), WebauthnConfigTab.view.test.tsx, api/webauthn.ts.
+ * WebAuthn 설정 탭. origin 검증 규칙은 OriginValidationTest 가 따로 본다.
  * 브라우저에서 도는 부분(Alpine 상태·saveBar 개수·htmx 교체·다이얼로그 열기·포커스)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) nullable jsoup 결과(`selectFirst`·`first`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
@@ -142,7 +142,7 @@ class WebauthnTabControllerTest {
         return b
     }
 
-    // ── 화면(WebauthnConfigTab.view.test.tsx 'V2') ───────────
+    // ── 화면 ────────────────────────────────────────────────
 
     @Test
     @DisplayName("설명 좌/컨트롤 우 행, rpId 는 읽기 전용 + 변경 불가, 라벨 title 툴팁, 사용자 검증은 필수·권장만, 저장 바는 변경 후에만(서버 렌더는 폼 + 저장 바 조각)")
@@ -255,7 +255,7 @@ class WebauthnTabControllerTest {
         assertThat(d.select("form")).isEmpty()
     }
 
-    // ── 저장: 숨은 값 보존(api/webauthn.ts adaptConfig + 역변환) ──
+    // ── 저장: 숨은 값 보존(서버 값 ↔ 폼 값 변환) ──
 
     @Test
     @DisplayName("hiddenMdsRequiredPreservedOnSave: 화면에 없는 값(mdsRequired·acceptedFormats·rpId·displayName)은 서버의 현재 값 그대로 REST 에 간다 — 요청에 실려 와도 무시")
@@ -361,7 +361,7 @@ class WebauthnTabControllerTest {
     }
 
     @Test
-    @DisplayName("diff REST 요청 본문은 api/webauthn.ts diff 와 같다(rpId·rpName·origins·formats·uv boolean·mdsRequired=서버 값)")
+    @DisplayName("diff REST 요청 본문(rpId·rpName·origins·formats·uv boolean·mdsRequired=서버 값)")
     fun diffRequestBody() {
         whenever(tenants.diff(eq(T1.toString()), anyOrNull())).thenReturn(diff())
         mvc.perform(diffReq("Acme 2", "60000", "PREFERRED", "NONE", "https://passkey.acme.com", "https://a.passkey.acme.com")).andReturn()

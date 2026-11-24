@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  ConfirmDialog (← ui/ConfirmDialog.tsx) — Alpine.data('dialog') 의 L1/L2/L3 확인 절차
+  ConfirmDialog — Alpine.data('dialog') 의 L1/L2/L3 확인 절차
   th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog(id, level, title, verb, sub, body, danger, expected, typeLabel, acknowledge, confirmAttrs)}"
     id           필수. 열기: $dispatch('dialog:open', {id})
     level        'L1' | 'L2' | 'L3' (L3 만 확인 절차가 있다)
@@ -29,7 +29,7 @@
           <div class="dialog__sub" th:if="${sub}" th:text="${sub}">설명</div>
         </div>
         <div class="dialog__body">
-          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <!-- 실패 표시(Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
           <div class="banner banner--danger banner--top" role="alert" th:id="${id + '-error'}" x-show="error" x-cloak>
             <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"/></span>
             <div class="banner__body">

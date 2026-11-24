@@ -5,7 +5,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
-/** pages/activityLabels.test.ts 의 케이스를 1:1 로 옮긴 것. */
+/** 활동 액션 코드의 표시 라벨·분류 규칙. */
 class ActivityLabelsTest {
 
     @Test

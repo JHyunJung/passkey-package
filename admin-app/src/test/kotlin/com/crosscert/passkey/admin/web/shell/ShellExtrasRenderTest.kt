@@ -27,7 +27,7 @@ import java.util.regex.Pattern
 
 /**
  * 레이아웃에 들어가는 명령 팔레트·단축키 시트·유휴 세션 모달 조각의 렌더 검사.
- * 원본: extras/ShortcutSheet.test.tsx(행·문구), IdleSessionModal.test.tsx(마크업), CommandPalette.test.tsx(ARIA).
+ * 단축키 시트는 행·문구, 유휴 세션 모달은 마크업, 명령 팔레트는 ARIA 를 본다.
  * 키 입력·타이머·포커스는 브라우저에서 도는 코드라 여기서는 마크업·속성만 본다(parity 문서의 "브라우저: 미확인").
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`first`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.

@@ -39,7 +39,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /**
- * 설정 화면 틀. 원본: SettingsPage.test.tsx(resolveTab, 역할별 탭, 가입 요청 배지, ?tab= 진입).
+ * 설정 화면 틀(탭 결정, 역할별 탭, 가입 요청 배지, ?tab= 진입).
  * 탭 클릭 뒤 활성 표시는 ui.js(htmx:afterRequest) 몫이라 속성까지만 본다.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.

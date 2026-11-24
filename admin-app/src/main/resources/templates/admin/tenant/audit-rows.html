@@ -2,13 +2,13 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  감사 로그 카드(← AuditTab.tsx 의 Card). 탭(audit.html)과 GET …/tab/audit/card 가 같은 조각을 그린다.
+  감사 로그 카드. 탭(audit.html)과 GET …/tab/audit/card 가 같은 조각을 그린다.
     response  카드 한 벌(#audit-card). 기간 전환·다시 시도는 카드를 outerHTML 로 교체한다(hx-target=this, 구간 끝을 새로 잡고 첫 쪽).
     more      더 보기 응답(hx-swap=none): 같은 구간의 다음 한 쪽 행을 #audit-rows 끝에 붙이고(OOB beforeend) 숨은 상태·더 보기 버튼을 갱신.
               htmx 는 응답을 <template> 로 파싱한다 — 표 조각(<tbody>)이 맨 앞이어야 tr 이 버려지지 않는다.
   모델: tid, win, days[{label, key, head, events[Ev]}], total, loadError/retryAttrs, chips, windows, countText, csvLabel/csvBase/csvUrl,
         hasMore/moreUrl, toIso/nextPage/lastDay
-  이벤트 종류·실패만 필터는 클라이언트(Alpine auditFilter, 상태는 카드 밖 #audit-root)가 읽어 온 행의 data-g·data-fail 로 거른다(원본 filtered).
+  이벤트 종류·실패만 필터는 클라이언트(Alpine auditFilter, 상태는 카드 밖 #audit-root)가 읽어 온 행의 data-g·data-fail 로 거른다.
   건수·CSV 라벨·빈 목록 문구도 그 컴포넌트가 다시 센다(서버 값은 필터 없는 처음 값).
   행위자·대상·payload 는 사용자가 정할 수 있는 값이라 th:text 로만 쓴다. 속성 중 JS 로 평가되는 곳에는 서버가 만든 값(UUID·그룹 id·날짜 키)만 data-* 로 들어간다.
 -->

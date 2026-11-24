@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  라이선스 배너(← components/LicenseBanner.tsx).
+  라이선스 배너.
   host   : hx-preserve 로 boost 이동에도 유지(폴링 계속). 레이아웃 맨 위의 폴링 자리. load 직후와 5분(300초)마다 GET /admin/_/shell/license-banner 로 안쪽을 교체한다.
            조회 실패(비 2xx)는 스왑되지 않아 마지막 상태가 남고, 처음부터 실패면 비어 있다(TSX 와 같다).
   banner : 컨트롤러가 SaaS·VALID·조회 실패를 걸러 내고, 온프렘의 WARNING / NETWORK_GRACE / DEAD 만 이 조각으로 그린다.

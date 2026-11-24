@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  설정 › MDS Status 탭(← pages/settings/MdsStatusTab.tsx). 컨트롤러: MdsTabController(GET /admin/_/settings/tab/mds, POST /admin/_/settings/mds/sync; PLATFORM 전용).
+  설정 › MDS Status 탭. 컨트롤러: MdsTabController(GET /admin/_/settings/tab/mds, POST /admin/_/settings/mds/sync; PLATFORM 전용).
   모델: v(MdsTabController.View) 또는 loadError(상태 조회 실패), historyError(이력만 실패), retryAttrs(탭 다시 받기), syncAttrs(즉시 갱신 버튼)
   즉시 갱신 = POST(120초 제한, 요청 중 비활성·hx-sync=this:drop) → 응답이 #mds-root 를 통째로 바꾼다. 서버가 준 문자열(실패 사유·변경 요약)은 th:text 로만 그린다.
 -->

@@ -2,18 +2,18 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  API 키 탭(← pages/tenant/ApiKeysTab.tsx). 탭 조각 GET /admin/_/tenants/{id}/tab/apikeys.
+  API 키 탭. 탭 조각 GET /admin/_/tenants/{id}/tab/apikeys.
   모델: tid, issueUrl, nameMax, rotationDays, scopeOptions, expiryOptions, expiryPreviews, rows(Row), kpis(Kpis), loadError/retryAttrs, helpLinks(ShellAdvice)
         변경 응답만 listOob(목록을 OOB 로), badgeOob/badgeText/badgeReason(탭 줄 "확인 필요" 배지 OOB).
   #ak-root 안: #ak-list(KPI·표·행별 회전/회수 확인 다이얼로그), 새 키 발급 다이얼로그(ak-new), #ak-issued-slot(발급·회전 응답 = 발급 완료 다이얼로그).
-  발급·회전·회수는 같은 hx-sync 그룹(#ak-root:drop)이라 동시에 돌지 않는다(원본 공용 가드).
+  발급·회전·회수는 같은 hx-sync 그룹(#ak-root:drop)이라 동시에 돌지 않는다.
 -->
 <th:block th:fragment="tab">
   <div id="ak-root">
     <th:block th:replace="~{admin/tenant/api-keys :: list}"></th:block>
 
-    <!-- 새 키 발급(원본 NewKeyDialog). 폼 상태(apiKeyForm)는 다이얼로그(x-if) 바깥이라 취소 후 다시 열어도 남고, 발급 성공 응답(ak-form-reset)만 비운다.
-         요청 중에는 바깥 dialog 의 busy 를 켜 Escape·스크림·취소로 닫히지 않는다(원본 onClose={busy ? noop : onClose}).
+    <!-- 새 키 발급. 폼 상태(apiKeyForm)는 다이얼로그(x-if) 바깥이라 취소 후 다시 열어도 남고, 발급 성공 응답(ak-form-reset)만 비운다.
+         요청 중에는 바깥 dialog 의 busy 를 켜 Escape·스크림·취소로 닫히지 않는다.
          실패: 검증·REST 거절은 #ak-new-error(422 OOB), 네트워크 오류·권한 거부 등 스왑 없는 실패는 netErr 인라인(폼 data-quiet + X-Confirm → confirmError, 전역 토스트 없음). -->
     <div ui:xdata="${@fmt.xdata('apiKeyForm', 'months', '24', 'previews', expiryPreviews, 'rotationDays', rotationDays, 'nameMax', nameMax, 'errorId', 'ak-new-error')}"
          x-on:dialog:open.window="onDialogOpen($event)" x-on:ak-form-reset.window="reset()">
@@ -153,7 +153,7 @@
     </div>
   </section>
 
-  <!-- 행별 확인 다이얼로그(ACTIVE 키만). 회전: L2 영향 요약(primary), 회수: L2 영향 요약(입력 확인 없음, danger) — 원본과 같다. -->
+  <!-- 행별 확인 다이얼로그(ACTIVE 키만). 회전: L2 영향 요약(primary), 회수: L2 영향 요약(입력 확인 없음, danger). -->
   <th:block th:each="r : ${rows}" th:if="${r.active}">
     <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog(${'ak-rotate-' + r.id}, 'L2', 'API 키를 회전할까요?', '회전', null, ~{admin/tenant/api-keys :: akRotateBody}, false, null, null, null, ${r.rotateAttrs})}"></th:block>
     <th:block th:replace="~{admin/fragments/ui/confirmDialog :: confirmDialog(${'ak-revoke-' + r.id}, 'L2', 'API 키를 회수할까요?', '회수', null, ~{admin/tenant/api-keys :: akRevokeBody}, null, null, null, null, ${r.revokeAttrs})}"></th:block>

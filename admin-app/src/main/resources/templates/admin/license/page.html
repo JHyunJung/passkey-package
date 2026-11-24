@@ -3,7 +3,7 @@
 <head><title>라이선스</title></head>
 <body>
 <!--
-  라이선스 화면(← pages/LicensePage.tsx). PLATFORM 전용(RP 는 컨트롤러가 홈으로 보낸다). 컨트롤러: LicensePageController.
+  라이선스 화면. PLATFORM 전용(RP 는 컨트롤러가 홈으로 보낸다). 컨트롤러: LicensePageController.
   모델: view(View: onprem 이 false 면 SaaS 안내) 또는 loadError(+ retryAttrs), recheckAttrs
   licenseBody   #license-body: 오류 알림 자리 + 상태 카드 + 할 일 카드 + 상세. "지금 다시 확인"(GET /admin/_/license/recheck) 성공 응답이 통째로 바꾼다.
   recheckAlert  다시 확인 실패: 이전 정보를 그대로 두고 #license-recheck-alert 에만 경고(HX-Retarget).

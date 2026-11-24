@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  CopyBtn (← ui/CopyBtn.tsx) — Alpine.data('copyBtn')
+  CopyBtn — Alpine.data('copyBtn')
   th:replace="~{admin/fragments/ui/copyBtn :: copyBtn(value, label, iconOnly)}"
     value 복사할 문자열, label 버튼 이름(null 이면 '복사'), iconOnly true 면 아이콘 버튼(label 은 aria-label·title)
   복사하면 1.5초간 체크 아이콘/'복사됨'. 클릭은 상위 행 클릭으로 전파되지 않는다.

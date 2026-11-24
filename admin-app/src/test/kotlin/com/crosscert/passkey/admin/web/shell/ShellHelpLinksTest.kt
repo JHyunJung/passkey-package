@@ -21,7 +21,7 @@ import java.time.Clock
 import java.util.UUID
 
 /**
- * 도움말 메뉴: 주소가 설정되면 문서 항목은 새 창, 운영자 문의 링크(Header.test.tsx '도움말: 주소가 있으면 …').
+ * 도움말 메뉴: 주소가 설정되면 문서 항목은 새 창, 운영자 문의 링크.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
  */

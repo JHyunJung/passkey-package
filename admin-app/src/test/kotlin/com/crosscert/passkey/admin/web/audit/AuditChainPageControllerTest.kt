@@ -53,7 +53,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /**
- * 감사 체인 화면. 원본: pages/AuditChainPage.test.tsx, AuditChainPage.backfillGuard.test.tsx.
+ * 감사 체인 화면.
  * 브라우저에서 도는 부분(Alpine 상태·htmx 의 실제 교체·타이머·다운로드)은 속성·소스 수준까지만 본다 — parity 문서 참조.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`first`)와 `trigger()` 의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
@@ -431,7 +431,7 @@ class AuditChainPageControllerTest {
     }
 
     @Test
-    @DisplayName("백필 다이얼로그는 L3 확인(체크) + X-Confirm 요청, 원본 문구·긴 타임아웃·동기화")
+    @DisplayName("백필 다이얼로그는 L3 확인(체크) + X-Confirm 요청, 안내 문구·긴 타임아웃·동기화")
     fun backfillDialogMarkup() {
         val r = getFrag(OVERVIEW, platform())
         val d = doc(r)
@@ -519,7 +519,7 @@ class AuditChainPageControllerTest {
     // ── Incident ────────────────────────────────────────────
 
     @Test
-    @DisplayName("Incident 생성 다이얼로그: tenantId 만 싣는 요청 요소(다이얼로그 밖), 원본 문구")
+    @DisplayName("Incident 생성 다이얼로그: tenantId 만 싣는 요청 요소(다이얼로그 밖), 안내 문구")
     fun createDialogMarkup() {
         whenever(chain.overview(anyInt())).thenReturn(tampered())
         val r = getFrag(OVERVIEW, platform())
@@ -565,7 +565,7 @@ class AuditChainPageControllerTest {
         assertThat(toast.get("kind").asString()).isEqualTo("warn")
         assertThat(toast.get("title").asString()).isEqualTo("이미 진행 중")
         assertThat(toast.get("message").asString()).isEqualTo("해당 tenant 에 OPEN 상태 incident 가 이미 있습니다.")
-        // 목록만 다시 읽는다(원본 refreshIncidents) — 개요 재검증 없음, 본문은 OOB(swap none), 배너 배지도 갱신
+        // 목록만 다시 읽는다 — 개요 재검증 없음, 본문은 OOB(swap none), 배너 배지도 갱신
         verify(chain).listIncidents()
         verify(chain, never()).overview(anyInt())
         assertThat(r.response.getHeader("HX-Reswap")).isEqualTo("none")

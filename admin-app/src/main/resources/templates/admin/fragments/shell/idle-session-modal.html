@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  유휴 세션 모달(← extras/IdleSessionModal.tsx)
+  유휴 세션 모달
   th:replace="~{admin/fragments/shell/idle-session-modal :: modal}"   (레이아웃에 한 번, 로그인 상태에서만)
   모델: me.sessionIdleTimeoutMinutes. 타이머·카운트다운·연장·만료 로그아웃은 app.js 의 Alpine.data('idleSession').
   경고 시점 = max(전체 - 60초, 10초) 뒤, 카운트다운 = 전체 - 경고 시점(최소 1초). "세션 연장"은 GET /admin/api/me.

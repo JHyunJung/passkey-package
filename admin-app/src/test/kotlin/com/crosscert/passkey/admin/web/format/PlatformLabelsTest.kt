@@ -4,7 +4,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
-/** ← admin-ui/src/lib/platform.test.ts */
+/** 플랫폼 표시 라벨. */
 class PlatformLabelsTest {
 
     @Test

@@ -56,7 +56,7 @@ import java.util.UUID
 import java.util.regex.Pattern
 
 /**
- * 자격 증명 탭. 원본: CredentialsTab.test.tsx, CredentialDetailDialog.test.tsx, credentialHelpers.test.ts, api/credentials.ts.
+ * 자격 증명 탭.
  * 브라우저에서 도는 부분(행 클릭 이벤트·다이얼로그 열기/닫기·입력 확인 게이트·디바운스)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) nullable jsoup 결과(`selectFirst`·`first`·`last`)와 `trigger()` 의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.

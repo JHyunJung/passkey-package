@@ -76,7 +76,7 @@ class PasswordPagesController(private val reset: PasswordResetController) {
     }
 
     /**
-     * 재설정 메일의 링크는 `admin.invite.base-url + /reset-password?token=…` 이다(PasswordResetService — React 시절 SPA 경로, base-url 기본값은 바꾸지 않는다).
+     * 재설정 메일의 링크는 `admin.invite.base-url + /reset-password?token=…` 이다(PasswordResetService — 경로와 base-url 기본값은 바꾸지 않는다).
      * base-url 이 콘솔 주소면 그 경로는 /admin 밖이라 화면이 없으므로 쿼리(토큰)를 그대로 붙여 `/admin/reset-password` 로 보낸다.
      * 이동할 곳은 고정 경로라 열린 리다이렉트가 아니다. 토큰이 든 주소라 응답은 캐시·리퍼러를 남기지 않는다.
      */

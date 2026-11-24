@@ -32,7 +32,7 @@ import org.springframework.web.server.ResponseStatusException
 import java.util.regex.Pattern
 
 /**
- * 비밀번호 찾기·재설정 화면(← ForgotPasswordPage.test.tsx, ResetPasswordPage.test.tsx).
+ * 비밀번호 찾기·재설정 화면.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`first`·`parent`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
  */

@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  ToastHost (← ui/ToastHost.tsx) — Alpine.data('toastHost')
+  ToastHost — Alpine.data('toastHost')
   th:replace="~{admin/fragments/ui/toastHost :: toastHost}"     (레이아웃에 한 번)
   서버가 HX-Trigger: {"toast": {"kind": "success|error|warn", "message": "…", "title": "…"(선택)}} 로 보낸 이벤트를 받는다.
   (Toasts.success/error 가 이 헤더를 쓴다.) 오류는 role=alert 로 남고, 그 밖은 role=status 로 5초 뒤 닫힌다.

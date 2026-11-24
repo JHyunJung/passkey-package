@@ -26,8 +26,8 @@ import java.util.function.Supplier
 import java.util.regex.Pattern
 
 /**
- * 공통 UI 조각(templates/admin/fragments)을 Thymeleaf 로 렌더링해, 원본 컴포넌트(admin-ui/src/ui 의 각 .test.tsx)가
- * 확인하던 클래스명·ARIA 속성이 같은 마크업으로 나오는지 본다. 브라우저에서 도는 Alpine 동작은 여기서 다루지 않고
+ * 공통 UI 조각(templates/admin/fragments)을 Thymeleaf 로 렌더링해, 조각마다
+ * 정해진 클래스명·ARIA 속성이 마크업에 나오는지 본다. 브라우저에서 도는 Alpine 동작은 여기서 다루지 않고
  * 속성(x-data, x-on:…)이 붙었는지만 본다.
  *
  * `trim { it <= ' ' }` 는 Java `String.trim()` 과 같은 판정(U+0020 이하만 제거)을 유지한다.
@@ -150,7 +150,7 @@ class UiFragmentsRenderTest {
         assertThat(count(html, "cy=\"12\"")).isEqualTo(3)
     }
 
-    // ── basics.test.tsx ──────────────────────────────────
+    // ── 기본 조각 ────────────────────────────────────────
 
     @Test
     @DisplayName("Badge tone 이 기존 클래스 체계로 매핑된다")
@@ -272,7 +272,7 @@ class UiFragmentsRenderTest {
         assertThat(html).contains("alt=\"\"").contains("src=\"/admin/img/empty-tenants.webp\"").contains("class=\"empty__title\">없음<")
     }
 
-    // ── forms.test.tsx ───────────────────────────────────
+    // ── 폼 조각 ──────────────────────────────────────────
 
     @Test
     @DisplayName("Switch: Alpine 상태(switchToggle)가 aria-checked 와 제출용 hidden input 을 정한다")
@@ -343,7 +343,7 @@ class UiFragmentsRenderTest {
         assertThat(help).contains("class=\"hint\">도움말<").doesNotContain("field__error").contains("for=\"em\"")
     }
 
-    // ── Dialog.test.tsx ──────────────────────────────────
+    // ── Dialog ───────────────────────────────────────────
 
     @Test
     @DisplayName("Dialog: 제목으로 라벨링되고 aria-modal, 포커스 트랩, Escape·스크림")
@@ -402,7 +402,7 @@ class UiFragmentsRenderTest {
         assertThat(l1).doesNotContain("confirm__ack").doesNotContain("input mono")
     }
 
-    // ── Tabs.test.tsx / table.test.tsx ───────────────────
+    // ── Tabs / DataTable ─────────────────────────────────
 
     @Test
     @DisplayName("Tabs: tablist, aria-selected, 선택된 탭만 tabindex=0(로빙)")
@@ -442,7 +442,7 @@ class UiFragmentsRenderTest {
         assertThat(engineHost("<p th:replace=\"~{" + UI + "dataTable :: tableExpandedRow(3, ~{::.exp})}\"></p><div class=\"exp\">detail-b</div>")).contains("table__expanded").contains("detail-b")
     }
 
-    // ── Pagination (table.test.tsx) ──────────────────────
+    // ── Pagination ───────────────────────────────────────
 
     @Test
     @DisplayName("Pagination: 범위 텍스트와 경계 비활성")
@@ -479,7 +479,7 @@ class UiFragmentsRenderTest {
             .contains("<option value=\"100\">100</option>")
     }
 
-    // ── misc.test.tsx ────────────────────────────────────
+    // ── 기타 조각 ────────────────────────────────────────
 
     @Test
     @DisplayName("Menu: 트리거(aria-haspopup), 메뉴/항목 role, 위험 구획")
@@ -570,7 +570,7 @@ class UiFragmentsRenderTest {
         assertThat(btn).contains("class=\"btn btn--sm\"").contains("copied ? '복사됨' : label").contains(">복사<")
     }
 
-    // ── Skeleton.test.tsx ────────────────────────────────
+    // ── Skeleton ─────────────────────────────────────────
 
     @Test
     @DisplayName("Skeleton: status 역할과 aria-busy, 줄 수")
@@ -582,7 +582,7 @@ class UiFragmentsRenderTest {
         assertThat(count(ui("skeleton", "skeleton(null, '표')", mapOf()), "skeleton-block__line")).isEqualTo(4)
     }
 
-    // ── LoadError.test.tsx ───────────────────────────────
+    // ── LoadError ────────────────────────────────────────
 
     @Test
     @DisplayName("LoadError: role=alert, 조사, 오류 문구, 다시 시도·복사, HTTP 상태")
@@ -597,7 +597,7 @@ class UiFragmentsRenderTest {
         assertThat(tag(josa, "btn btn--primary")).contains("disabled")
     }
 
-    // ── OtpInput.test.tsx ────────────────────────────────
+    // ── OtpInput ─────────────────────────────────────────
 
     @Test
     @DisplayName("OtpInput: 6칸, 접근 가능한 이름, 첫 칸 one-time-code")
@@ -612,7 +612,7 @@ class UiFragmentsRenderTest {
         assertThat(count(ui("otpInput", "otpInput('c', 8, '복구 코드', false, true)", mapOf()), "otp__cell\"")).isEqualTo(8)
     }
 
-    // ── unsaved.test.tsx / ToastHost.test.tsx ────────────
+    // ── unsavedGuard / ToastHost ─────────────────────────
 
     @Test
     @DisplayName("SaveBar: region, 저장·되돌리기, 변경 개수")

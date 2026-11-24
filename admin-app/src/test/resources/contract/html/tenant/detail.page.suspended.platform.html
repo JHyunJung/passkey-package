@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <!--
-  공통 레이아웃(← App.tsx AuthenticatedApp). 모든 인증 후 화면이 이 안에서 그려진다.
+  공통 레이아웃. 모든 인증 후 화면이 이 안에서 그려진다.
 
   페이지 템플릿 규약 — 화면 템플릿은 정확히 이 한 줄로 시작한다.
     <html th:replace="~{admin/layout :: page(title=~{::title}, crumbs=~{::crumbs}, content=~{::main})}">
@@ -116,7 +116,7 @@
 </nav>
   <div class="spacer"></div>
   
-  <!-- 문구는 실제 검색 범위(lib/search.ts: tenant 이름·slug)만 약속한다. -->
+  <!-- 문구는 실제 검색 범위(tenant 이름·slug)만 약속한다. -->
   <button aria-label="tenant 이름 · slug 검색 (Ctrl K)" class="topbar__search" type="button" x-bind:aria-label="'tenant 이름 · slug 검색 (' + key + ')'"
           x-data="platformKey" x-on:click="$dispatch('open-palette')">
     <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="15"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>tenant 이름 · slug 검색</span><kbd x-text="key">Ctrl K</kbd>
@@ -326,7 +326,7 @@
     
   </a>
 </div>
-      <!-- 유효 API 키 수: 정지 확인창(x-if 템플릿 안)이 열 때 읽는다. API 키 탭의 발급·회전·회수 응답이 OOB 로 바꾼다(원본 onChanged → tenant 재조회). -->
+      <!-- 유효 API 키 수: 정지 확인창(x-if 템플릿 안)이 열 때 읽는다. API 키 탭의 발급·회전·회수 응답이 OOB 로 바꾼다. -->
       <span data-count="0" hidden id="tenant-apikey-count"></span>
     </div>
 
@@ -352,7 +352,7 @@
           <div class="dialog__sub">베타 의 정지를 해제합니다.</div>
         </div>
         <div class="dialog__body">
-          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <!-- 실패 표시(Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
           <div class="banner banner--danger banner--top" id="activate-tenant-error" role="alert" x-cloak x-show="error">
             <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
             <div class="banner__body">

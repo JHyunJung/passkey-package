@@ -94,7 +94,7 @@ class MfaPendingFilterTest {
 
     @Test
     fun pending_mePath_passesThrough() {
-        // The SPA must read /admin/api/me even while MFA-pending so it can
+        // The console must be able to read /admin/api/me even while MFA-pending so it can
         // discover it needs to show the MFA challenge.
         authenticate()
         val req = requestWithSession("/admin/api/me", true)

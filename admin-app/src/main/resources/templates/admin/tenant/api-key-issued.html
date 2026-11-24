@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  발급 완료 다이얼로그(← ApiKeysTab.tsx IssuedKeyDialog). 발급(POST …/api-keys)·회전(POST /admin/_/api-keys/{id}/rotate) 성공 응답이 #ak-issued-slot 에 넣는다.
+  발급 완료 다이얼로그. 발급(POST …/api-keys)·회전(POST /admin/_/api-keys/{id}/rotate) 성공 응답이 #ak-issued-slot 에 넣는다.
   모델: issued(Issued: id, name, prefix, expiry(null 이면 줄 숨김), plaintext, oldKeyNotice), 그리고 목록 OOB(listOob)·배지 OOB(badgeOob) 용 api-keys 모델.
   평문 키는 이 조각에만 그려진다(세션·헤더·토스트·리다이렉트 없음, 응답은 Cache-Control: no-store). hx-history=false 로 htmx 이력 저장도 막는다.
   Escape·스크림으로 닫히지 않고, "안전한 장소에 복사했습니다." 체크 뒤에만 닫힌다. 닫으면 자리를 비워 DOM 에서도 평문을 지운다.

@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  명령 팔레트(← extras/CommandPalette.tsx, usePaletteShortcut.ts)
+  명령 팔레트
   palette : 레이아웃에 한 번. Alpine.data('commandPalette')(app.js). ⌘K / Ctrl+K 는 app.js 가 `palette-toggle` 로, 상단 바 버튼은 `open-palette` 로 연다.
             열릴 때마다 검색칸을 비우고 결과를 새로 받는다(GET /admin/_/palette, 입력 150ms 뒤 다시). 화살표·Enter·Esc 는 app.js 의 commandPalette.onKey.
             열려 있을 때만 aria-modal="true" 가 붙는다(단축키가 모달을 구분하는 기준: useGoShortcuts 의 [aria-modal="true"]).

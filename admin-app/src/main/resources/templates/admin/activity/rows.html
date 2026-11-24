@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  활동 화면의 조각(← ActivityPage.tsx). 전체 페이지(page.html)와 GET /admin/_/activity/** 가 같은 조각을 그린다.
+  활동 화면의 조각. 전체 페이지(page.html)와 GET /admin/_/activity/** 가 같은 조각을 그린다.
     rows      필터 변경·다시 시도 응답: #activity-main 안쪽(main) + OOB(KPI·적용된 필터·활발한 tenant·숨은 상태) + reset 된 컨트롤
     poll      폴링·새로고침 응답(hx-swap=none): OOB 만 — 새 행을 #activity-feed 앞에 붙이고 KPI·(바뀌었을 때만) 활발한 tenant·숨은 상태
     more      더 보기 응답(hx-swap=none): 오래된 행을 #activity-feed 뒤에 붙이고 아래쪽 커서를 갱신
@@ -77,7 +77,7 @@
   </select>
 </div>
 
-<!-- 액션 검색: 원본처럼 읽어 온 행을 클라이언트에서 거른다(서버 왕복 없음, 더 보기로 불러온 행 유지). 응답이 다시 그리지 않는다. -->
+<!-- 액션 검색: 읽어 온 행을 클라이언트에서 거른다(서버 왕복 없음, 더 보기로 불러온 행 유지). 응답이 다시 그리지 않는다. -->
 <div th:fragment="qInput(oob)" id="activity-q-wrap" style="display: contents">
   <input id="activity-q" type="search" class="input" aria-label="액션 검색" placeholder="액션 검색…" autocomplete="off"
          x-on:input="applyFilter()" x-on:search="applyFilter()">
@@ -129,7 +129,7 @@
   </section>
 </th:block>
 
-<!-- 날짜 그룹(원본 groupByDay: KST 날짜). role=group aria-label=라벨, 키는 KST yyyy-MM-dd 라 폴링·더 보기가 같은 날짜 그룹의 행 목록에 이어 붙는다. -->
+<!-- 날짜 그룹(KST 날짜). role=group aria-label=라벨, 키는 KST yyyy-MM-dd 라 폴링·더 보기가 같은 날짜 그룹의 행 목록에 이어 붙는다. -->
 <th:block th:fragment="groups(days)">
   <div th:each="g : ${days}" class="feed-group" role="group" th:attr="aria-label=${g.label}, data-day=${g.key}" th:id="${'day-' + g.key}">
     <div class="t-over feed-day" th:text="${g.label}">오늘</div>

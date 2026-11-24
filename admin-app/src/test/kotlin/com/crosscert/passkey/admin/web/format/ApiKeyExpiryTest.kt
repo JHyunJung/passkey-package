@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.OffsetDateTime
 
-/** ← admin-ui/src/lib/apiKeyExpiry.test.ts (isExpiringSoon 30일) */
+/** API 키 만료 임박 판정(isExpiringSoon 30일). */
 class ApiKeyExpiryTest {
 
     companion object {

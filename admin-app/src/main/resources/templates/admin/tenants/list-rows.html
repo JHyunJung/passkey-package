@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  Tenant 목록의 부분 갱신 조각(← TenantsListPage.tsx 의 표·필터·페이지네이션).
+  Tenant 목록의 부분 갱신 조각.
   전체 페이지(list.html)와 GET /admin/_/tenants/list 가 같은 조각을 그린다.
     rows            조각 응답 한 벌: #tenants-results(htmx 의 교체 대상) + OOB 로 필터 컨트롤·활성 KPI·(선택) 검색 입력
     results         #tenants-results — 적용된 필터 칩, 표, 페이지네이션, 다음 요청이 이어 받을 숨은 상태값

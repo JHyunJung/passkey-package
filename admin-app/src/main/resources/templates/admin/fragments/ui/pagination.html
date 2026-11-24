@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  Pagination (← ui/Pagination.tsx) — 링크 기반
+  Pagination — 링크 기반
   th:replace="~{admin/fragments/ui/pagination :: pagination(page, pageSize, total, baseUrl, pageSizeOptions, unit)}"
     page 현재 페이지(1부터, 범위를 넘으면 마지막으로 보정), pageSize, total 전체 건수
     baseUrl  page·size 를 뺀 경로+쿼리(예: '/admin/activity?type=AUTH'). 이동은 baseUrl 에 page=N&size=S 를 붙인 링크.

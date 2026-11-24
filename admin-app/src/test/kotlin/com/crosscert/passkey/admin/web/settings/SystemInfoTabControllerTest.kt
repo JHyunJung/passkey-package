@@ -31,7 +31,7 @@ import java.time.Clock
 import java.util.UUID
 
 /**
- * 설정 › 시스템 탭. 원본: SystemInfoTab.test.tsx.
+ * 설정 › 시스템 탭.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`nextElementSibling`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
  */

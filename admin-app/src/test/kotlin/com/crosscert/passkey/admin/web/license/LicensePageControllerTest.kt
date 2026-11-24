@@ -31,7 +31,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /**
- * 라이선스 화면. 원본: LicensePage.test.tsx, App.tsx(RequirePlatform).
+ * 라이선스 화면(PLATFORM 전용).
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`parent`·`nextElementSibling`)의 `!!` 는
  * 원 Java 의 NPE 실패 지점과 같다(`dd` 는 호출부의 `.text()` 대신 도우미 안에서 실패).
