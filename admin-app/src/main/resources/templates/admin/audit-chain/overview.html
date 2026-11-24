@@ -2,10 +2,10 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  감사 체인 개요(← pages/AuditChainPage.tsx). 조각:
-    root        #chain-root 전체(헤더·전체 상태·위변조 배너·KPI·Tenant 표·사건 카드·다이얼로그). 개요·검증·백필·사건 변경 응답이 이 요소를 통째로 교체한다(원본 reverify).
+  감사 체인 개요. 조각:
+    root        #chain-root 전체(헤더·전체 상태·위변조 배너·KPI·Tenant 표·사건 카드·다이얼로그). 개요·검증·백필·사건 변경 응답이 이 요소를 통째로 교체한다.
     loadFailed  처음 불러오기 실패(오류 카드 + 다시 시도, 422).
-    warn        다시 검증 실패(이전 결과는 그대로, HX-Retarget #chain-warn) — 원본의 "다시 검증하지 못했습니다" 경고.
+    warn        다시 검증 실패(이전 결과는 그대로, HX-Retarget #chain-warn) — "다시 검증하지 못했습니다" 경고.
     header      제목 + 오른쪽 버튼(골격에서는 버튼 없음)
   상태(Alpine, root 요소): busy(체인 검증 요청 중 — data-chain-verify 요소의 요청), vid(검증 중인 tenant), failed(다시 검증 실패), view(표 필터, 클라이언트).
   요청은 요소마다 hx-* 를 가진다(hx-sync="#chain-root:drop"). 사용자 영향 값(tenant 이름·메모·이메일)은 th:text 로만.

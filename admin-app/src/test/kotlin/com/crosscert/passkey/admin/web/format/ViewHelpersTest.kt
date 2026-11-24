@@ -9,7 +9,7 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
-/** @fmt 빈의 위임 동작(새 테스트 — 원본 vitest 없음). */
+/** @fmt 빈의 위임 동작. */
 class ViewHelpersTest {
 
     private val fmt = ViewHelpers(Clock.fixed(Instant.parse("2026-10-11T00:00:00Z"), ZoneOffset.UTC))

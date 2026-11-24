@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  Dialog (← ui/Dialog.tsx, ui/useFocusTrap.ts) — Alpine.data('dialog')
+  Dialog — Alpine.data('dialog')
   th:replace="~{admin/fragments/ui/dialog :: dialog(id, title, sub, body, footer, footerStart, headerIcon, opts)}"
     id          필수. 열기: window 이벤트 dialog:open {id} (예: x-on:click="$dispatch('dialog:open', {id: 'x'})"),
                 닫기: dialog:close {id} 또는 안쪽에서 close()

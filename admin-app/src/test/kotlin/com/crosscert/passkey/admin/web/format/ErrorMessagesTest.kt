@@ -11,7 +11,7 @@ import java.io.IOException
 import java.net.ConnectException
 
 /**
- * ← admin-ui/src/lib/describeError.test.ts (describeError / ActionBlockedError / josa), lib/transientError.test.ts.
+ * 오류 문구 변환(describeError / ActionBlockedError / josa)과 일시 오류 판정.
  * ApiError(httpStatus) → 서버 측 상태를 가진 예외(ResponseStatusException·BusinessException),
  * TypeError('Failed to fetch') → IOException.
  */
@@ -70,7 +70,7 @@ class ErrorMessagesTest {
         assertThat(i.httpStatus).isNull()
     }
 
-    // ── josa (describeError.test.ts 안의 describe) ──
+    // ── josa ──
     @Test
     @DisplayName("받침 유무로 을/를, 이/가")
     fun josaByBatchim() {

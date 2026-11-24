@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  보안 Incident(← AuditChainPage.tsx 의 사건 카드·생성/해결 다이얼로그). 조각:
+  보안 Incident. 조각:
     card(oob)   #chain-incidents 카드. oob=true 면 hx-swap-oob 로 이 카드만 교체(다이얼로그는 건드리지 않는다).
     dialogs     #chain-dialogs — 위변조 tenant 마다 "Incident 생성" + 공유 "Incident 해결" 다이얼로그 하나(대상은 해결 버튼의 data-* 로 정해 폼의 id 값으로 간다 —
                 목록이 바뀌어도 다이얼로그 정의를 다시 그릴 필요가 없다).
@@ -10,7 +10,7 @@
     refresh     목록만 새로 읽은 응답(OOB): 카드 + 배너 동작 + incidentsKnown 알림. swap none.
     issue       다이얼로그 안 인라인 알림(HX-Retarget 슬롯) + 같은 OOB. 422 로 오므로 스왑된다(토스트 없음).
   요청 요소는 다이얼로그 밖(래퍼 div/form)이고 버튼은 ic-submit/rs-submit 이벤트만 올린다. 래퍼의 요청 상태는 reqBusy 다 — 안쪽 공유 dialog 컴포넌트가 자기 busy 를 가지므로
-  다이얼로그 본문의 x-effect 가 reqBusy 를 dialog 의 busy 로 비춘다(진행 중 Escape·스크림·취소로 닫히지 않음, 원본 onClose={busy ? noop : onClose}).
+  다이얼로그 본문의 x-effect 가 reqBusy 를 dialog 의 busy 로 비춘다(진행 중 Escape·스크림·취소로 닫히지 않음).
   요청이 성공(2xx)하면 래퍼가 다이얼로그를 닫는다. 이름·메모·이메일은 th:text/data-* 로만.
   모델: incidentsKnown, incidentList(Incident), openCount/openLabel, emptyDesc, incidentColumns, incidentRetryAttrs, tamperedRows(Tampered), actionsOob
 -->
@@ -53,7 +53,7 @@
   </form>
 </div>
 
-<!-- action: 배너 행의 동작. 생성 버튼은 목록을 확인하기 전(incidentsKnown=false)에는 비활성(원본: Incident 목록을 확인한 뒤 생성할 수 있습니다). -->
+<!-- action: 배너 행의 동작. 생성 버튼은 목록을 확인하기 전(incidentsKnown=false)에는 비활성(안내: Incident 목록을 확인한 뒤 생성할 수 있습니다). -->
 <span th:fragment="action(t, oob)" th:id="${'chain-act-' + (t.tenantId ?: 'platform')}" th:attr="hx-swap-oob=${oob == true} ? 'outerHTML'" style="display: contents">
   <span class="badge badge--warning badge--dot" th:if="${t.hasOpen}">Incident 처리 중</span>
   <button type="button" class="btn btn--sm btn--danger-solid" th:if="${!t.hasOpen and t.createId == null}" disabled th:title="${t.createTitle}">Incident 생성</button>

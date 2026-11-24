@@ -1,4 +1,4 @@
-// 공통 UI 조각의 Alpine 컴포넌트 (← admin-ui/src/ui/*.tsx). 템플릿: templates/admin/fragments/ui/*.html
+// 공통 UI 조각의 Alpine 컴포넌트. 템플릿: templates/admin/fragments/ui/*.html
 // Alpine 보다 먼저 로드한다(alpine:init 에서 등록). 포커스 트랩은 @alpinejs/focus 의 x-trap 을 쓴다.
 
 // HX-Redirect 와 함께 온 토스트는 이 페이지를 곧 떠나므로 sessionStorage 로 다음 화면에 넘긴다(toastHost.init 이 한 번 꺼내 띄운다).
@@ -32,7 +32,7 @@ document.addEventListener('htmx:afterRequest', function (e) {
   if (cur && a.dataset.label) cur.textContent = a.dataset.label;
 });
 document.addEventListener('alpine:init', () => {
-  /** 클립보드 복사(lib/clipboard.ts). secure context 가 아니면 execCommand 폴백. */
+  /** 클립보드 복사. secure context 가 아니면 execCommand 폴백. */
   async function copyToClipboard(text) {
     if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
       try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* 폴백 */ }
@@ -94,7 +94,7 @@ document.addEventListener('alpine:init', () => {
     typed: false,
     acked: false,
     verb: cfg.verb || '실행',
-    // ConfirmDialog 실패 표시(ConfirmDialog.tsx): 닫지 않고 안에서 `<verb>하지 못했습니다` + 쉬운 설명을 보여 주고 재시도하게 한다.
+    // ConfirmDialog 실패 표시: 닫지 않고 안에서 `<verb>하지 못했습니다` + 쉬운 설명을 보여 주고 재시도하게 한다.
     error: null,
     get gateOk() { return this.level !== 'L3' || (this.typing ? this.typed : this.ack ? this.acked : true); },
     init() {
@@ -396,7 +396,7 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
-  // ── API 키 탭(ApiKeysTab.tsx) ──────────────────────────
+  // ── API 키 탭 ──────────────────────────────────────────
   // 새 키 발급 폼 상태: 이름·권한 범위·만료 프리셋. 다이얼로그(x-if) 바깥 요소에 두어 취소 후 다시 열어도 남고, 발급 성공 응답의 `ak-form-reset` 만 비운다.
   // 만료일 미리보기는 서버가 프리셋별로 계산해 넘긴다(previews: {"6": "YYYY-MM-DD", …}). months 는 문자열('' = 무기한).
   // 요청 중 잠금·닫기 차단은 안쪽 dialog 의 busy 를 쓰고(템플릿이 켜고 끈다), 여기 issuing 은 canSubmit 용이다.
@@ -433,7 +433,7 @@ document.addEventListener('alpine:init', () => {
     },
     // 전송 실패·시간 초과(afterRequest 와 겹쳐도 같은 문구): 응답이 없으므로 status 0 문구.
     netFail() { this.issuing = false; this.netErr = this.failText({ status: 0 }); },
-    // 원본: 다이얼로그를 열 때 이전 오류만 지운다(입력은 유지).
+    // 다이얼로그를 열 때 이전 오류만 지운다(입력은 유지).
     onDialogOpen(e) { if (e && e.detail && e.detail.id === 'ak-new') this.netErr = ''; },
     reset() { this.name = ''; this.scopes = [...AK_DEFAULT_SCOPES]; this.months = cfg.months == null ? '' : String(cfg.months); this.netErr = ''; this.issuing = false; },
   }));
@@ -460,7 +460,7 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
-  // ── 설정 › 내 계정(MFA) — AccountTab.tsx, RecoveryCodesModal.tsx ──
+  // ── 설정 › 내 계정(MFA) ────────────────────────────────
   // 세 컴포넌트 모두 바깥 dialog 범위 안(x-if)에 있다: open·busy 는 dialog 의 것이다(busy 는 템플릿의 x-effect 가 요청 상태로 비춘다).
   // 서버 실패(코드 불일치·권한 등)는 422 + HX-Retarget 로 입력칸 아래에 그려진다. 응답이 없는 실패(전송 실패·시간 초과)와 그 밖의 상태는 netErr.
   const MFA_NET = '네트워크에 연결할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도하세요.';
@@ -472,7 +472,7 @@ document.addEventListener('alpine:init', () => {
   function removeWrapLater(wrap) { setTimeout(() => { if (wrap && wrap.isConnected) wrap.remove(); }, 0); }
 
   // 켜기 1–2 / 3: 진행 표시(코드를 한 자리라도 넣으면 QR 스캔 완료 → 코드 확인 중), 6자리여야 확인, 요청 중 입력·취소·Escape 잠금.
-  // 실패하면 코드를 비우고 첫 칸에 포커스(원본 focusKey). 다시 입력하면 오류가 사라진다.
+  // 실패하면 코드를 비우고 첫 칸에 포커스. 다시 입력하면 오류가 사라진다.
   Alpine.data('mfaEnroll', () => ({
     code: '',
     confirming: false,
@@ -756,7 +756,7 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
-  // ── WebAuthn 설정 탭: 대기 시간 안내(WebauthnConfigTab.tsx timeoutGuide) ──
+  // ── WebAuthn 설정 탭: 대기 시간 안내 ────────────────────
   // 입력이 바뀔 때마다 환산·권장 범위 안내를 다시 계산한다(서버가 처음 값을 같은 문구로 그린다). form reset 이면 처음 값으로.
   function timeoutGuide(raw) {
     const ms = parseInt(raw || '0', 10);
@@ -911,9 +911,9 @@ document.addEventListener('alpine:init', () => {
   }));
 
   // ── 설정 › Admin 사용자 ──
-  // 운영자 목록 필터(원본 matchesOperator): 역할 선택(segmented-change 가 filter 를 바꾼다)과 이메일·ID 검색을 이미 그려진 행에 적용한다.
+  // 운영자 목록 필터: 역할 선택(segmented-change 가 filter 를 바꾼다)과 이메일·ID 검색을 이미 그려진 행에 적용한다.
   Alpine.data('operatorFilter', () => ({
-    stale: false, // 변경 뒤 다시 읽기에 실패하면 서버가 경고 자리에 x-init="stale = true" 를 OOB 로 심는다: 행 동작 비활성(원본 usersStale). 다음 성공 렌더가 카드를 새로 그려 해제
+    stale: false, // 변경 뒤 다시 읽기에 실패하면 서버가 경고 자리에 x-init="stale = true" 를 OOB 로 심는다: 행 동작 비활성. 다음 성공 렌더가 카드를 새로 그려 해제
     filter: 'all',
     q: '',
     match(el) {
@@ -934,7 +934,7 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
-  // 가입 요청 승인 대화상자(원본 ApproveDialog): 역할 선택, RP Admin 이면 tenant 1개 이상(없으면 제출 막고 오류), 검색, 요청 중 닫기·중복 제출 막기.
+  // 가입 요청 승인 대화상자: 역할 선택, RP Admin 이면 tenant 1개 이상(없으면 제출 막고 오류), 검색, 요청 중 닫기·중복 제출 막기.
   // 서버가 같은 규칙을 다시 검증한다(422 + #au-approve-err). 요청 중에는 바깥 dialog 의 busy 를 비춰 Escape·스크림·취소로 닫히지 않게 한다.
   Alpine.data('signupApprove', () => ({
     role: 'RP_ADMIN',
@@ -962,7 +962,7 @@ document.addEventListener('alpine:init', () => {
   }));
 
   // ── 설정 › 보안 정책 ──
-  // idle timeout 즉시 검증(원본 timeoutError: 손대지 않았으면 오류 아님), 콘솔 주소 제거 경고·삭제 되돌리기(원본 removesConsole / restoreConsoleOrigin).
+  // idle timeout 즉시 검증(손대지 않았으면 오류 아님), 콘솔 주소 제거 경고·삭제 되돌리기.
   // 칩 목록의 변경은 chips-change 로 받는다. 되돌리기는 삭제한 주소를 chip-add 로 다시 넣는다(저장 바는 이 목록을 순서 없이 비교하므로 변경 0건이 된다).
   const SEC_TIMEOUT_ERROR = '1–1440 사이의 분을 입력하세요. 비워 둘 수 없습니다.';
   const SEC_RESTORE_FULL = '목록이 가득 찼습니다(최대 64개). 다른 origin 을 지운 뒤 되돌리세요.';

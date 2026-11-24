@@ -46,7 +46,7 @@ import java.util.UUID
 import java.util.regex.Pattern
 
 /**
- * 활동 화면. 원본: pages/ActivityPage.test.tsx, activityDiff.test.ts, activityLabels.test.ts(후 둘은 format/ 테스트).
+ * 활동 화면. diff·라벨 규칙은 format/ 테스트가 따로 본다.
  * 브라우저에서 도는 부분(Alpine 상태·htmx 의 실제 교체·폴링 타이머)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`first`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
@@ -204,7 +204,7 @@ class ActivityPageControllerTest {
     fun groupsByKstDay() {
         val d = page("/admin/activity")
         assertThat(d.select("title").text()).contains("Activity")
-        // 원본 groupByDay: KST 날짜 그룹(role=group, aria-label=라벨), 머리글 + 그 날짜의 행 목록
+        // KST 날짜 그룹(role=group, aria-label=라벨), 머리글 + 그 날짜의 행 목록
         assertThat(d.select("#activity-feed > .feed-group").eachAttr("aria-label")).containsExactly("오늘", "어제", "2026-10-08")
         assertThat(d.select("#activity-feed > .feed-group").eachAttr("data-day")).containsExactly("2026-10-11", "2026-10-10", "2026-10-08")
         assertThat(d.select("#activity-feed > .feed-group[role=group]")).hasSize(3)
@@ -264,7 +264,7 @@ class ActivityPageControllerTest {
     }
 
     @Test
-    @DisplayName("tenant 목록 조회 실패는 선택 상자만 비운다(원본 catch → [])")
+    @DisplayName("tenant 목록 조회 실패는 선택 상자만 비운다")
     fun tenantListFailureIsSilent() {
         whenever(tenants.list()).thenThrow(BusinessException(ErrorCode.INTERNAL_SERVER_ERROR))
         val d = page("/admin/activity")
@@ -790,7 +790,7 @@ class ActivityPageControllerTest {
     }
 
     @Test
-    @DisplayName("CSV 링크는 공통 헬퍼(data-csv-download, hx-boost=false), 읽은 행이 없으면 원본처럼 경고(JS)")
+    @DisplayName("CSV 링크는 공통 헬퍼(data-csv-download, hx-boost=false), 읽은 행이 없으면 경고(JS)")
     fun csvLinkAttributes() {
         val a = page("/admin/activity").select("#activity-export").first()!!
         assertThat(a.attr("href")).isEqualTo("/admin/_/activity/export?category=all")

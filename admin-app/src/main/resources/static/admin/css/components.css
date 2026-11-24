@@ -331,7 +331,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .idle-progress__bar { display: block; height: 100%; transition: width 1s linear; }
 
 /* ── thymeleaf port ── */
-/* React TSX 의 인라인 style 을 공통 조각(templates/admin/fragments/ui)이 쓰는 클래스로 옮긴 것. 위의 기존 규칙은 바꾸지 않는다. */
+/* 공통 조각(templates/admin/fragments/ui)이 쓰는 클래스. 위의 기존 규칙은 바꾸지 않는다. */
 [x-cloak] { display: none !important; }
 .hint--flush { margin: 0; }
 .page__head-main { min-width: 0; }
@@ -359,7 +359,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .stepper__over { display: block; padding: 0 6px 8px; }
 .stepper__text { display: flex; flex-direction: column; gap: 0; }
 .toast__body { flex: 1; min-width: 0; }
-/* Skeleton 줄 너비: 100% 92% 96% 70% 88% 80% 순환(원본 WIDTHS) */
+/* Skeleton 줄 너비: 100% 92% 96% 70% 88% 80% 순환 */
 .skeleton-block__line:nth-child(6n+1) { width: 100%; }
 .skeleton-block__line:nth-child(6n+2) { width: 92%; }
 .skeleton-block__line:nth-child(6n+3) { width: 96%; }
@@ -373,7 +373,7 @@ textarea.input { padding: 10px 12px; min-height: 80px; resize: vertical; }
 .crumbs__item { text-decoration: none; }
 a.menu__item { text-decoration: none; }
 .menu form { margin: 0; }
-/* 명령 팔레트(CommandPalette.tsx 의 인라인 스타일) · 유휴 세션 모달 */
+/* 명령 팔레트 · 유휴 세션 모달 */
 .palette { max-width: 640px; margin-top: 10vh; max-height: 70vh; display: flex; flex-direction: column; overflow: hidden; }
 .palette__search { display: flex; align-items: center; flex-wrap: nowrap; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
 .palette__input { flex: 1; border: 0; font: inherit; font-size: 15px; background: transparent; outline: none; }
@@ -388,7 +388,7 @@ a.menu__item { text-decoration: none; }
 .idle-ring { position: relative; display: block; width: 64px; height: 64px; flex: none; }
 .idle-ring__arc { transition: stroke-dashoffset 1s linear; }
 .idle-ring__text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
-.idle-copy { margin: 0; font-size: 13px; line-height: 1.6; } /* 색은 .dialog__text 가 준다(첫 문단만 ink-2, 굵은 문단은 본문색 — IdleSessionModal.tsx) */
+.idle-copy { margin: 0; font-size: 13px; line-height: 1.6; } /* 색은 .dialog__text 가 준다(첫 문단만 ink-2, 굵은 문단은 본문색) */
 /* Tenant 목록·생성 다이얼로그 */
 .dialog__form { display: flex; flex-direction: column; gap: 16px; }
 .nt-step { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--brand-700); color: var(--brand-700); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
@@ -542,7 +542,7 @@ a.menu__item { text-decoration: none; }
 
 /* 빈 자리 요소(경고 슬롯·상세 패널 자리)는 flex gap 에 끼지 않게 한다. */
 #chain-warn:empty, #activity-detail:empty { display: none; }
-/* MDS 동기화 설정의 endpoint 값: 원본(MdsStatusTab.tsx)은 한 줄 — .kv dd 의 overflow-wrap:anywhere 를 풀어 준다. */
+/* MDS 동기화 설정의 endpoint 값은 한 줄로 보인다 — .kv dd 의 overflow-wrap:anywhere 를 풀어 준다. */
 .kv dd.kv__nowrap { overflow-wrap: normal; white-space: nowrap; }
 /* 적용된 필터 래퍼(OOB 교체 대상)는 상자를 만들지 않는다 — 안의 행이 숨겨져 있을 때 빈 블록이 카드의 flex gap 을 차지하지 않게. */
 #activity-applied { display: contents; }

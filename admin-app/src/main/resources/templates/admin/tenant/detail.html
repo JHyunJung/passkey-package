@@ -3,7 +3,7 @@
 <head><title>Tenant</title></head>
 <body>
 <!--
-  Tenant 상세 틀(← pages/TenantDetailPage.tsx): 헤더(이름·상태·RP 사이트·더보기) + 속성 칩 + 탭 줄 + 탭 내용.
+  Tenant 상세 틀: 헤더(이름·상태·RP 사이트·더보기) + 속성 칩 + 탭 줄 + 탭 내용.
   전체 페이지는 개요 탭을 인라인으로 그린다. 다른 탭(?tab=webauthn 등)은 #tenant-tab 이 hx-trigger=load 로 GET /admin/_/tenants/{id}/tab/{tab} 를 불러온다(스켈레톤).
   모델: platform, notFound, loadError/retryAttrs, t(TenantDetail), tabs, activeTab, tabLazy/tabAttrsLoad, suspendAttrs/activateAttrs, menuSuspend/menuActivate + overview 모델
   정지·정지 해제 버튼과 다이얼로그는 PLATFORM 에게만 그린다(서버도 같은 역할을 요구한다).
@@ -48,7 +48,7 @@
         <th:block th:replace="~{admin/fragments/ui/propChip :: propChip('생성', ${t.createdKst}, false)}"></th:block>
       </div>
       <th:block th:replace="~{admin/fragments/ui/tabs :: tabs(${tabs}, ${activeTab}, 'Tenant 탭')}"></th:block>
-      <!-- 유효 API 키 수: 정지 확인창(x-if 템플릿 안)이 열 때 읽는다. API 키 탭의 발급·회전·회수 응답이 OOB 로 바꾼다(원본 onChanged → tenant 재조회). -->
+      <!-- 유효 API 키 수: 정지 확인창(x-if 템플릿 안)이 열 때 읽는다. API 키 탭의 발급·회전·회수 응답이 OOB 로 바꾼다. -->
       <span id="tenant-apikey-count" hidden th:data-count="${t.apiKeys}"></span>
     </div>
 

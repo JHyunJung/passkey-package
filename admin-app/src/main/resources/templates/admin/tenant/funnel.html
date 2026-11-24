@@ -21,7 +21,7 @@
       <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>내보내기</button>
   </div>
 
-  <!-- 기간 전환 중에는 이전 결과를 숨기고 스켈레톤(원본: 전환 중 data 를 쓰지 않음). 요청이 교체 없이 실패하면(네트워크·서버 오류 토스트)
+  <!-- 기간 전환 중에는 이전 결과를 숨기고 스켈레톤. 요청이 교체 없이 실패하면(네트워크·서버 오류 토스트)
        after-request 가 결과를 다시 보이고 세그먼트 선택도 보이는 기간(data-win)으로 되돌린다(funnelTab) — CSV 링크·숫자와 선택이 어긋나지 않는다. -->
   <div x-show="pending" x-cloak><th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(6, '인증 현황 불러오는 중')}"></th:block></div>
   <div class="stack-6" x-show="!pending">

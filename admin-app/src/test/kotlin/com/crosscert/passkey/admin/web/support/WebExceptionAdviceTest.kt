@@ -89,7 +89,7 @@ class WebExceptionAdviceTest {
             .andReturn()
         val toast = ObjectMapper().readTree(r.response.getHeader("HX-Trigger")).get("toast")
         assertThat(toast.get("message").asString()).isEqualTo("찾을 수 없습니다. 삭제되었거나 주소가 바뀌었을 수 있습니다.")
-        // 원문은 본문 메시지가 아니라 detail("자세히")로만 간다(errorToast.ts).
+        // 원문은 본문 메시지가 아니라 detail("자세히")로만 간다.
         assertThat(toast.get("message").asString()).doesNotContain("HTTP")
         assertThat(toast.get("detail").asString()).startsWith("HTTP 404 · [").contains(ErrorCode.TENANT_NOT_FOUND.code)
     }

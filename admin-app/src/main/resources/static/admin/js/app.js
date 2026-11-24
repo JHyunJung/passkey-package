@@ -53,7 +53,7 @@
   });
 
   // ── 라이선스 배너 링크: 이미 /license 화면이면 숨긴다 ──
-  // 배너는 hx-preserve 로 이동 사이에 유지되므로 서버가 아니라 현재 주소로 판단한다(LicenseBanner.tsx: pathname !== '/license').
+  // 배너는 hx-preserve 로 이동 사이에 유지되므로 서버가 아니라 현재 주소로 판단한다(pathname !== '/license').
   function syncHiddenLinks() {
     document.querySelectorAll('[data-hide-on-path]').forEach(function (a) {
       const hide = a.getAttribute('data-hide-on-path');
@@ -243,7 +243,7 @@
 
   // ── 로그아웃·세션 연장 ─────────────────────────────────
   // 로그아웃은 Spring Security 의 POST /admin/logout(CSRF 포함)이다. 숨은 폼(유휴 모달 조각)을 제출하고, 곧 떠나므로 저장 안 한 변경 경고는 끈다
-  // (React 의 handleLogout 도 확인 없이 즉시 로그아웃한다). 폼이 없으면(드문 경우) 로그인 화면으로 이동.
+  // (확인 없이 즉시 로그아웃한다). 폼이 없으면(드문 경우) 로그인 화면으로 이동.
   function logoutNow() {
     if (window.Alpine) Alpine.store('dirty').disarm();
     const f = document.getElementById('idle-logout-form');
@@ -262,7 +262,7 @@
       throw err;
     }
   }
-  // describeError.ts 와 같은 문구.
+  // 서버의 ErrorMessages 와 같은 문구.
   function describeFetchError(e) {
     const st = e && e.httpStatus;
     // 로그인 화면으로 리다이렉트된 응답(세션 만료) — htmx 요청은 서버가 401 + HX-Redirect 로 로그인 화면으로 보낸다.
@@ -287,8 +287,8 @@
   }
 
   // ── CSV 다운로드 공통 처리(ruling L) ────────────────────
-  // `a[data-csv-download]` 클릭을 가로채 fetch → Blob → 임시 링크로 저장한다. 실패(HTTP 오류·네트워크)는 토스트로 알린다
-  // (원본은 CSV 를 클라이언트에서 만들고 로드 오류를 토스트했다). href 는 그대로라 JS 가 없으면 일반 다운로드. 파일명은 Content-Disposition.
+  // `a[data-csv-download]` 클릭을 가로채 fetch → Blob → 임시 링크로 저장한다. 실패(HTTP 오류·네트워크)는 토스트로 알린다.
+  // href 는 그대로라 JS 가 없으면 일반 다운로드. 파일명은 Content-Disposition.
   function csvFilename(res, a) {
     const cd = res.headers.get('Content-Disposition') || '';
     const m = /filename="?([^";]+)"?/i.exec(cd);
@@ -307,7 +307,7 @@
     a.setAttribute('aria-busy', 'true');
     csvEvent(a, 'start');
     let state = 'fail';
-    // 선택: data-download-timeout(ms) 가 있으면 그 시간 안에 받지 못할 때 중단한다(PDF = 원본 LONG_TIMEOUT_MS). CSV 링크는 그대로.
+    // 선택: data-download-timeout(ms) 가 있으면 그 시간 안에 받지 못할 때 중단한다(PDF 처럼 오래 걸리는 받기용). CSV 링크는 그대로.
     const ms = parseInt(a.getAttribute('data-download-timeout') || '0', 10);
     const ctrl = ms > 0 && window.AbortController ? new AbortController() : null;
     const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, ms) : null;
@@ -366,7 +366,7 @@
     if (input) input.value = st;
   });
 
-  // 감사 로그 탭(AuditTab.tsx filtered): 이벤트 종류·실패만 필터로 표의 행을 거른다. rows 는 tbody 의 tr 들.
+  // 감사 로그 탭: 이벤트 종류·실패만 필터로 표의 행을 거른다. rows 는 tbody 의 tr 들.
   // 이벤트 행(data-ev)은 data-g(그룹 id)·data-fail('1') 로 판정, 펼침 행(table__expanded)은 같은 data-id 의 이벤트 행을 따르고,
   // 날짜 머리글(table__group)은 같은 data-day 에 보이는 이벤트 행이 있을 때만 보인다. 반환: 읽어 온 행 수·보이는 행 수.
   function auditApply(rows, groups, failures) {
@@ -394,7 +394,7 @@
 
   // ── Alpine 컴포넌트 ───────────────────────────────────
   document.addEventListener('alpine:init', function () {
-    // 감사 로그 탭의 필터(#audit-root). 상태는 카드 밖이라 기간 전환·다시 시도로 카드가 바뀌어도 남는다(원본 groups/onlyFailures 와 같다).
+    // 감사 로그 탭의 필터(#audit-root). 상태는 카드 밖이라 기간 전환·다시 시도로 카드가 바뀌어도 남는다.
     // apply() 는 카드 교체·더 보기 응답(htmx after-swap/settle) 뒤에도 불려 새 행을 같은 필터로 거른다.
     // pages = 불러온 쪽 수(#audit-page, 더 보기 응답이 OOB 로 올린다) — CSV 가 같은 구간의 그만큼을 다시 읽는다.
     Alpine.data('auditFilter', function () {
@@ -494,7 +494,7 @@
       needsUnloadPrompt() { return this.needsGuard() && !this.saving(); },
     });
 
-    // 명령 팔레트(CommandPalette.tsx). 결과는 서버 조각(GET /admin/_/palette)이고, 이 컴포넌트는 열기·선택·키보드·실행을 맡는다.
+    // 명령 팔레트. 결과는 서버 조각(GET /admin/_/palette)이고, 이 컴포넌트는 열기·선택·키보드·실행을 맡는다.
     Alpine.data('commandPalette', function () {
       return {
         open: false,
@@ -502,7 +502,7 @@
         sel: 0,
         count: 0,
         options() { return Array.from(this.$refs.list.querySelectorAll('[role="option"]')); },
-        // 포커스 규칙(CommandPalette.tsx · useFocusTrap): 열기 전 포커스를 가진 요소(opener)를 기억해 닫을 때 돌려준다.
+        // 포커스 규칙: 열기 전 포커스를 가진 요소(opener)를 기억해 닫을 때 돌려준다.
         // x-trap 은 .noreturn — 트랩은 15ms 뒤에 켜져 그때의 activeElement(이미 입력칸)를 기억하므로 복귀는 여기서 직접 한다.
         opener: null,
         show() {
@@ -622,7 +622,7 @@
       };
     });
 
-    // 유휴 세션 모달(IdleSessionModal.tsx). 경고 시점·카운트다운 길이는 전체 유휴 시간에서 파생한다
+    // 유휴 세션 모달. 경고 시점·카운트다운 길이는 전체 유휴 시간에서 파생한다
     // (짧은 정책에서도 모달 표시 시점 + 카운트다운 = 전체 유휴 시간). 연장 요청 중 만료되면 10초까지만 기다린다.
     Alpine.data('idleSession', function () {
       const WARN_LEAD_SECONDS = 60;
@@ -754,7 +754,7 @@
       };
     });
 
-    // 단축키 표기(lib/platform.ts): Mac·iOS 는 ⌘K, 그 밖은 Ctrl K. 서버 렌더는 Ctrl K.
+    // 단축키 표기: Mac·iOS 는 ⌘K, 그 밖은 Ctrl K. 서버 렌더는 Ctrl K.
     Alpine.data('platformKey', function () {
       const nav = typeof navigator === 'undefined' ? null : navigator;
       const mac = !!nav && /Mac|iPhone|iPad|iPod/.test(nav.platform || nav.userAgent || '');
@@ -792,7 +792,7 @@
       };
     });
 
-    // ── 활동 화면(ActivityPage.tsx) ───────────────────────────
+    // ── 활동 화면 ────────────────────────────────────────────
     // 공유 1초 틱: 구독자가 있을 때만 interval 하나가 돈다(행마다 interval 을 두지 않는다). 구독 해제는 컴포넌트 destroy(요소가 교체·이동으로 사라질 때).
     const activityTicker = {
       subs: new Set(),
@@ -895,7 +895,7 @@
           const el = document.getElementById('activity-cat');
           if (el && e.target && e.target.closest && e.target.closest('#activity-seg') && e.detail) el.value = e.detail.value;
         },
-        // 액션 검색(원본 actionQuery): 이미 읽어 온 행을 클라이언트에서 거른다 — 코드(대소문자 무시) 또는 한글 라벨에 검색어(trim) 포함.
+        // 액션 검색: 이미 읽어 온 행을 클라이언트에서 거른다 — 코드(대소문자 무시) 또는 한글 라벨에 검색어(trim) 포함.
         // 행이 하나도 안 보이는 날짜 그룹은 머리글째 숨긴다. 폴링·더 보기·필터 교체가 행을 바꾼 뒤(after-settle)에도 다시 적용한다.
         rowMatches(r, t) {
           return !t || (r.dataset.type || '').indexOf(t.toUpperCase()) >= 0 || (r.dataset.label || '').indexOf(t) >= 0;
@@ -955,7 +955,7 @@
           this.detailState = 'loading';
           htmx.ajax('GET', this.detailUrl, { source: '#activity-detail', target: '#activity-detail', swap: 'innerHTML' }); // source: 요청 이벤트·hx-sync(this:replace)·data-quiet 가 이 요소 기준
         },
-        // CSV: 화면에 읽어 온 행(가장 오래된 행의 커서까지)을 내보낸다. 읽은 행이 없으면 원본처럼 경고만.
+        // CSV: 화면에 읽어 온 행(가장 오래된 행의 커서까지)을 내보낸다. 읽은 행이 없으면 경고만.
         exportClick(e) {
           const el = e.currentTarget;
           const newest = document.getElementById('activity-newest');
@@ -977,7 +977,7 @@
       };
     });
 
-    // 사이드바 감사 체인 카드 상태(Sidebar.tsx). 성공 응답은 서버가 그린 조각(#chain-card-body)이 보이고,
+    // 사이드바 감사 체인 카드 상태. 성공 응답은 서버가 그린 조각(#chain-card-body)이 보이고,
     // 첫 응답 전이거나 "다시 시도" 직후엔 "검증 중… N초째 확인 중", 실패(비 2xx·네트워크·시간 초과)는 "검증 상태 확인 불가".
     // 경과 초는 검증 중일 때만 1초마다 갱신한다.
     Alpine.data('chainCard', function () {

@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  키보드 단축키 시트(← extras/ShortcutSheet.tsx, useHelpShortcut.ts)
+  키보드 단축키 시트
   th:replace="~{admin/fragments/shell/shortcut-sheet :: sheet}"   (레이아웃에 한 번)
   `open-shortcuts` 이벤트(상단 바 도움말 메뉴·팔레트 항목, `?` 키는 app.js)를 받아 Task 3 의 dialog(id=shortcut-sheet)를 연다.
   실제로 동작하는 단축키만 나열한다. G 이동 4줄은 PLATFORM 에게만(useGoShortcuts 도 PLATFORM 에게만 켜진다 — app.js 는 data-go-shortcuts 로 판단).

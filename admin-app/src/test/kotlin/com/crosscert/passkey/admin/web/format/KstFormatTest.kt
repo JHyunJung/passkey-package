@@ -5,7 +5,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
-/** ← admin-ui/src/lib/kst.test.ts (+ formatDateTime 표기 확인) */
+/** KST 날짜·시각 표기(+ formatDateTime 표기 확인). */
 class KstFormatTest {
 
     private data class Item(val id: String, val ts: String)
@@ -107,7 +107,7 @@ class KstFormatTest {
         assertThat(KstFormat.kstPrevMonthRange(Instant.parse("2026-01-10T00:00:00Z"))).isEqualTo(KstFormat.DateRange("2025-12-01", "2025-12-31"))
     }
 
-    // ── formatDateTime.ts (원본에 vitest 없음 — 주석의 예시를 확인) ──
+    // ── formatDateTime (주석의 예시를 확인) ──
     @Test
     @DisplayName("formatDateTime ko-KR 표기, null 은 em-dash, 날짜만은 시간 계산 없음")
     fun formatDateTimeKoKr() {

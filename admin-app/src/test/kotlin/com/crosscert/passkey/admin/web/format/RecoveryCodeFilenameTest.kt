@@ -5,7 +5,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
 
-/** ← admin-ui/src/lib/recoveryCodeFilename.test.ts */
+/** 복구 코드 파일 이름. */
 class RecoveryCodeFilenameTest {
 
     companion object {

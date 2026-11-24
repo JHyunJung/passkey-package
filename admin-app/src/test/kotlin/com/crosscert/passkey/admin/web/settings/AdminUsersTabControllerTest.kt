@@ -51,7 +51,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /**
- * 설정 › Admin 사용자 탭. 원본: AdminUsersTab.test.tsx.
+ * 설정 › Admin 사용자 탭.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
  */
@@ -166,7 +166,7 @@ class AdminUsersTabControllerTest {
         assertThat(approve.attr("hx-target")).isEqualTo("#au-dialog-slot")
         assertThat(card.select("button").eachText()).contains("거절…")
         assertThat(d.selectFirst("#au-dialog-slot")).isNotNull()
-        assertThat(d.text()).doesNotContain("초대") // 초대 버튼은 없다(원본 'no invite button remains')
+        assertThat(d.text()).doesNotContain("초대") // 초대 버튼은 없다
     }
 
     @Test
@@ -616,7 +616,7 @@ class AdminUsersTabControllerTest {
     }
 
     @Test
-    @DisplayName("정지 되돌리기(?undo=1): 정지 상태일 때만 activate, 원본 문구('정지를 되돌렸습니다'), 상태가 바뀌었으면 REST 미호출 + 경고, 실패는 원본 안내")
+    @DisplayName("정지 되돌리기(?undo=1): 정지 상태일 때만 activate, 성공 문구('정지를 되돌렸습니다'), 상태가 바뀌었으면 REST 미호출 + 경고, 실패는 오류 안내")
     fun undoSuspend() {
         val ok = send(post("$BASE/admins/$SUSPENDED/activate").param("undo", "1"), platform(), false)
         assertThat(ok.response.status).isEqualTo(200)
@@ -632,7 +632,7 @@ class AdminUsersTabControllerTest {
 
         doThrow(IllegalStateException("db-secret")).whenever(users).activate(eq(SUSPENDED), anyOrNull())
         val fail = send(post("$BASE/admins/$SUSPENDED/activate").param("undo", "1"), platform(), false)
-        // 원본은 실패 뒤에도 목록을 다시 읽는다: 오류 토스트 + 갱신된 운영자 카드(200)
+        // 실패 뒤에도 목록을 다시 읽는다: 오류 토스트 + 갱신된 운영자 카드(200)
         assertThat(fail.response.status).isEqualTo(200)
         assertThat(trigger(fail)).contains("정지를 되돌리지 못했습니다").contains("목록에서 “활성화”를 눌러 다시 시도하세요.").contains("error").doesNotContain("db-secret")
         assertThat(html(fail).selectFirst("section#au-users")).isNotNull()
@@ -667,7 +667,7 @@ class AdminUsersTabControllerTest {
     }
 
     @Test
-    @DisplayName("일반 활성화 토스트의 이메일은 행 버튼이 함께 보낸 그 행의 이메일(원본 u.email) — 재조회가 실패해도 남는다")
+    @DisplayName("일반 활성화 토스트의 이메일은 행 버튼이 함께 보낸 그 행의 이메일 — 재조회가 실패해도 남는다")
     fun activateToastUsesRowEmailWhenReloadFails() {
         val btn = row(html(send(get("$BASE/tab/admins"), platform(), false)), "gone@x.com").selectFirst("button")!!
         assertThat(btn.attr("name")).isEqualTo("email")

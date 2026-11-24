@@ -3,7 +3,7 @@
 <head><title>Activity</title></head>
 <body>
 <!--
-  활동 화면(← pages/ActivityPage.tsx). 화면 템플릿 규약: layout 한 줄 + title / crumbs / main.
+  활동 화면. 화면 템플릿 규약: layout 한 줄 + title / crumbs / main.
   구조: #activity-root(Alpine activityLive — 상태 표시·상세 선택·폴링 이벤트) 아래
     헤더(실시간 상태·새로고침·CSV) · 연결 끊김 배너 · KPI(#activity-kpis) · 필터 카드 · #activity-main(목록 영역, rows 조각)
     · aside(#activity-detail, 활발한 Tenant) · 숨은 상태(#activity-state) · 폴링 자리(#activity-poll).

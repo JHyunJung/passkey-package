@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  설정 › Admin 사용자 탭(← pages/settings/AdminUsersTab.tsx). 컨트롤러: AdminUsersTabController(GET /admin/_/settings/tab/admins, PLATFORM 전용).
+  설정 › Admin 사용자 탭. 컨트롤러: AdminUsersTabController(GET /admin/_/settings/tab/admins, PLATFORM 전용).
   구성: #au-content = 가입 요청 카드(#au-signups) + 콘솔 운영자 카드(#au-users), #au-dialog-slot = 승인 대화상자 자리.
   변경 응답: 정지·활성화 = #au-users 교체, 거절 = #au-signups 교체 + 탭 줄 개수 OOB, 승인 = #au-content 교체 + 자리 비움 + 개수 OOB.
   모델: pending/pendingCount/signupsError, ops/opsSummary/roleOptions/usersError, retryAttrs
@@ -273,7 +273,7 @@
   <th:block th:replace="~{admin/settings/admins :: countOob}"></th:block>
 </th:block>
 
-<!-- 같은 화면에서 다시 읽기가 실패했을 때(원본 StaleWarning) — 데이터는 그대로 두고 마지막 확인 결과임을 알린다. 다시 시도 = 탭 다시 받기 -->
+<!-- 같은 화면에서 다시 읽기가 실패했을 때 — 데이터는 그대로 두고 마지막 확인 결과임을 알린다. 다시 시도 = 탭 다시 받기 -->
 <div th:fragment="staleWarning(err, what)" class="stack-3" style="padding: 10px 20px">
   <div class="banner banner--warning banner--top" role="status">
     <span class="banner__icon"><th:block th:replace="~{admin/fragments/icons :: alert(18)}"></th:block></span>

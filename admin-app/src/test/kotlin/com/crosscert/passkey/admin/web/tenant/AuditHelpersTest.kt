@@ -9,7 +9,7 @@ import tools.jackson.databind.ObjectMapper
 import java.time.Instant
 import java.util.function.Function
 
-/** 원본: pages/tenant/auditHelpers.test.ts 의 모든 케이스. */
+/** 감사 로그 행 분류·표시 규칙. */
 class AuditHelpersTest {
 
     companion object {

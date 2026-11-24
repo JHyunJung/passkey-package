@@ -2,10 +2,10 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  상단 바(← shell/Header.tsx)
+  상단 바
   th:replace="~{admin/fragments/shell/header :: topbar(${crumbs})}"   (레이아웃이 호출한다)
     crumbs: 페이지가 넘긴 브레드크럼 조각(없으면 비어 있음)
-  모델: me(CurrentAdmin), helpLinks(apiDocs, rpGuide, support — 비어 있는 항목은 숨긴다. config/links.ts)
+  모델: me(CurrentAdmin), helpLinks(apiDocs, rpGuide, support — 비어 있는 항목은 숨긴다)
   명령 팔레트·키보드 단축키 시트는 Task 5 가 맡는다. 이 바는 window 로 `open-palette` / `open-shortcuts` 이벤트만 올린다.
   메뉴 동작(열기·바깥 클릭·Esc·화살표 이동)은 app.js 의 shellMenu, 단축키 표기(⌘K / Ctrl K)는 platformKey.
 -->
@@ -13,7 +13,7 @@
   <th:block th:if="${crumbs != null}"><th:block th:replace="${crumbs}"></th:block></th:block>
   <div class="spacer"></div>
   <div th:if="${me != null and me.role == 'RP_ADMIN'}" id="tenant-switcher" hx-preserve data-quiet th:attr="hx-get=@{/admin/_/shell/tenant-switcher}" hx-trigger="load" hx-swap="innerHTML"></div>
-  <!-- 문구는 실제 검색 범위(lib/search.ts: tenant 이름·slug)만 약속한다. -->
+  <!-- 문구는 실제 검색 범위(tenant 이름·slug)만 약속한다. -->
   <button type="button" class="topbar__search" x-data="platformKey" x-on:click="$dispatch('open-palette')"
           aria-label="tenant 이름 · slug 검색 (Ctrl K)" x-bind:aria-label="'tenant 이름 · slug 검색 (' + key + ')'">
     <th:block th:replace="~{admin/fragments/icons :: search(15)}"></th:block><span>tenant 이름 · slug 검색</span><kbd x-text="key">Ctrl K</kbd>

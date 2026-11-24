@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
-/** pages/activityDiff.test.ts 의 케이스를 1:1 로 옮긴 것. */
+/** 활동 상세의 변경 전후(diff) 표시 규칙. */
 class ActivityDiffTest {
 
     companion object {

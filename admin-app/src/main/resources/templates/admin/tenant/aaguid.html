@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  AAGUID 정책 탭(← pages/tenant/AaguidPolicyTab.tsx). 탭 조각 GET /admin/_/tenants/{id}/tab/aaguid 와 저장(PUT) 성공 응답이 같은 조각(tab)을 쓴다.
+  AAGUID 정책 탭. 탭 조각 GET /admin/_/tenants/{id}/tab/aaguid 와 저장(PUT) 성공 응답이 같은 조각(tab)을 쓴다.
   모델: tid, p(Policy: mode, mdsStrict, entries), modes, modeLabel, values, meta(aaguid → MDS 이름), known, unknownCount, previewUrl, entryCheckUrl, listLabel,
         emptyAllow/emptyDeny, strictHint, impact, saveLabels(JSON). 저장 성공 응답만 badgeOob/badgeText/badgeReason(탭 줄 배지 OOB 갱신)
   화면 상태(방식·목록 개수·MDS 엄격)는 Alpine policyForm 이 따라간다(ui.js). 폼 제출 = 미리보기(POST, data-preview) → #ag-confirm-slot 에 확인 다이얼로그, 확인 = PUT(탭 교체).
@@ -125,7 +125,7 @@
   </form>
   <div id="ag-confirm-slot"></div>
 
-  <!-- 저장 성공: 탭 줄의 AAGUID "확인 필요" 배지를 새 정책 기준으로 바꾼다(원본 onSaved). 배지 자리는 tabs 조각의 <elId>-badge. -->
+  <!-- 저장 성공: 탭 줄의 AAGUID "확인 필요" 배지를 새 정책 기준으로 바꾼다. 배지 자리는 tabs 조각의 <elId>-badge. -->
   <span th:if="${badgeOob}" id="tenant-tab-aaguid-badge" class="tabs__badgeslot" hx-swap-oob="true">
     <span class="badge badge--warning tabs__badge" th:if="${badgeText}" th:title="${badgeReason}" th:text="${badgeText}">확인 필요</span>
   </span>

@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  설정 › 보안 정책 탭(← pages/settings/SecurityPolicyTab.tsx). 컨트롤러: SecurityPolicyTabController(GET /admin/_/settings/tab/security, PUT /admin/_/settings/security; PLATFORM 전용).
+  설정 › 보안 정책 탭. 컨트롤러: SecurityPolicyTabController(GET /admin/_/settings/tab/security, PUT /admin/_/settings/security; PLATFORM 전용).
   모델: sp(Form: idle, mfa, cors, consoleOrigin, consoleSaved), savePath, originCheckUrl 또는 loadError/retryAttrs
   흐름: 저장 바의 저장 = 폼 제출 = PUT. 검증 실패 → 422 + 필드 옆 오류(#sec-err-*, OOB). 콘솔 주소를 목록에서 빼면 422 + L2 확인 다이얼로그(#sec-confirm-slot) → 확인 = 같은 PUT(confirmLockout=1).
   성공 응답은 탭 전체(#settings-tab)를 새 값으로 바꾼다(HX-Retarget). 콘솔 주소 경고·되돌리기와 idle 즉시 검증은 Alpine(securityPolicy).

@@ -2,9 +2,9 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  활동 상세 패널(← ActivityPage.tsx DetailPanel). GET /admin/_/activity/{id} 가 #activity-detail 안쪽을 이 조각으로 바꾼다.
+  활동 상세 패널. GET /admin/_/activity/{id} 가 #activity-detail 안쪽을 이 조각으로 바꾼다.
   모델: d(DetailVm — 성공) 또는 loadError(+ detailUrl — 패널 안 오류, 다시 시도).
-  액션 코드·행위자·tenant 이름·payload·diff 값은 사용자가 정할 수 있는 값이라 전부 th:text. diff 는 문자열 칩(원본 HTML 없음).
+  액션 코드·행위자·tenant 이름·payload·diff 값은 사용자가 정할 수 있는 값이라 전부 th:text. diff 는 문자열 칩(HTML 을 그대로 넣지 않는다).
   닫기·선택 해제는 Alpine(activityLive.closeDetail)이 한다.
 -->
 <section th:fragment="panel" class="card" aria-label="이벤트 상세">

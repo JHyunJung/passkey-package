@@ -40,7 +40,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * 설정 › 보안 정책 탭. 원본: SecurityPolicyTab.test.tsx, lib/policyValidation.ts. MockMvc 의 콘솔 origin 은 http://localhost.
+ * 설정 › 보안 정책 탭. MockMvc 의 콘솔 origin 은 http://localhost.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
  */

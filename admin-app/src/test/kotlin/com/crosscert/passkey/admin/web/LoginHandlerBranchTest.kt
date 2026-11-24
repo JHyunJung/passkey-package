@@ -34,7 +34,7 @@ import java.util.UUID
 
 /**
  * 로그인 성공·실패 핸들러의 응답 분기. 화면 요청(htmx 또는 `_csrf` 파라미터)은 리다이렉트,
- * `X-XSRF-TOKEN` 헤더 방식(SPA·기존 통합 테스트)은 기존 JSON 그대로.
+ * `X-XSRF-TOKEN` 헤더 방식(REST 클라이언트·기존 통합 테스트)은 기존 JSON 그대로.
  */
 @AdminWebSliceTest
 class LoginHandlerBranchTest {

@@ -3,7 +3,7 @@
 <head><title>설정</title></head>
 <body>
 <!--
-  설정 화면 틀(← pages/SettingsPage.tsx): 머리글 + 탭 줄(설정 탭) + 탭 내용(#settings-tab).
+  설정 화면 틀: 머리글 + 탭 줄(설정 탭) + 탭 내용(#settings-tab).
   내 계정 탭은 인라인, 다른 탭(?tab=admins|mds|system|security, PLATFORM 만)은 #settings-tab 이 hx-trigger=load 로 GET /admin/_/settings/tab/{tab} 를 불러온다.
   탭 링크는 hx-get 조각 + hx-push-url + 같은 hx-sync 그룹(#settings-tab:replace) + data-guard-dirty(저장 안 한 변경·복구 코드 표시 중이면 이동 확인).
   컨테이너는 hx-sync/hx-swap/hx-target 을 물려주지 않는다(탭 안의 요청은 자기 속성을 쓴다).

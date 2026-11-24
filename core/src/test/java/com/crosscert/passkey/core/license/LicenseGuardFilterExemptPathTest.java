@@ -171,7 +171,7 @@ class LicenseGuardFilterExemptPathTest {
     /**
      * 원본에 ';'(경로 파라미터, 예: ;jsessionid) 나 '..' 가 있으면 정규화 결과가
      * 예외 경로여도 예외로 보지 않는다(스펙 S8). 정상 클라이언트(healthcheck wget,
-     * admin-ui fetch, formLogin)는 이런 형태를 보내지 않는다.
+     * 콘솔 화면의 요청, formLogin)는 이런 형태를 보내지 않는다.
      */
     @ParameterizedTest
     @ValueSource(strings = {

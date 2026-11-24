@@ -51,7 +51,7 @@ import java.util.function.Function
 import java.util.regex.Pattern
 
 /**
- * Tenant 목록·생성 다이얼로그. 원본: pages/TenantsListPage.test.tsx, NewTenantDialog.test.tsx(= TenantsListPage.tsx 의 NewTenantDialog).
+ * Tenant 목록·생성 다이얼로그.
  * 브라우저에서 도는 부분(Alpine·htmx 의 실제 교체·포커스)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) nullable jsoup 결과(`first`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
@@ -197,7 +197,7 @@ class TenantsPageControllerTest {
     // ── 목록·KPI ───────────────────────────────────────────
 
     @Test
-    @DisplayName("서버가 준 순서를 그대로 유지한다(정렬 없음): 원본도 정렬하지 않는다")
+    @DisplayName("서버가 준 순서를 그대로 유지한다(정렬 없음)")
     fun keepsServiceOrder() {
         tenants(tv(1, "beta", "beta", "ACTIVE"), tv(2, "Alpha", "alpha", "ACTIVE"), tv(3, "가나다", "gnd", "SUSPENDED"), tv(4, "alpha2", "alpha2", "ACTIVE"))
         assertThat(rowNames(page("/admin/tenants"))).containsExactly("beta", "Alpha", "가나다", "alpha2")
@@ -344,7 +344,7 @@ class TenantsPageControllerTest {
         tenants(tv(1, "Acme Corp", "acme", "ACTIVE"), tv(2, "Beta", "BETA-X", "ACTIVE"), tv(3, "크로스서트 Inc", "crosscert", "ACTIVE"), tv(4, "Delta", "delta", "ACTIVE"))
         assertThat(rowNames(page("/admin/tenants?q=ACME"))).containsExactly("Acme Corp")
         assertThat(rowNames(page("/admin/tenants?q=acme%20c"))).containsExactly("Acme Corp")
-        // slug 는 소문자로 저장되는 값 — 질의는 소문자로 바꿔 slug 와 비교한다(원본 t.slug.includes(q.toLowerCase()))
+        // slug 는 소문자로 저장되는 값 — 질의는 소문자로 바꿔 slug 와 비교한다
         assertThat(rowNames(page("/admin/tenants?q=CROSSCERT"))).containsExactly("크로스서트 Inc")
         assertThat(rowNames(page("/admin/tenants?q=%ED%81%AC%EB%A1%9C%EC%8A%A4"))).containsExactly("크로스서트 Inc")
         assertThat(rowNames(page("/admin/tenants?q=%20acme"))).isEmpty() // 앞 공백은 그대로 비교
@@ -637,7 +637,7 @@ class TenantsPageControllerTest {
             .param("name", name).param("slug", slug).param("rpId", rpId)
 
     @Test
-    @DisplayName("생성 성공: REST 요청 본문(원본 tenantsApi.create 와 같은 값), 새 tenant WebAuthn 탭으로 HX-Redirect, 제목 있는 성공 토스트")
+    @DisplayName("생성 성공: REST 요청 본문, 새 tenant WebAuthn 탭으로 HX-Redirect, 제목 있는 성공 토스트")
     fun createSuccess() {
         whenever(tenants.create(anyOrNull(), anyOrNull())).thenReturn(ApiResponse.ok("Tenant created", tv(5, "Acme", "acme", "ACTIVE")))
         val r = mvc.perform(createReq("Acme", "acme", "passkey.acme.com")).andReturn()
@@ -710,7 +710,7 @@ class TenantsPageControllerTest {
             // 오류가 있으면 RP ID 잠금 안내는 오류로 대체(Field: error 가 help 를 대신)
             assertThat(d.text()).doesNotContain("생성 후에는 변경할 수 없습니다")
         }
-        // example.com 자체가 아닌 비슷한 이름은 허용(원본 정규식과 같다)
+        // example.com 자체가 아닌 비슷한 이름은 허용
         whenever(tenants.create(anyOrNull(), anyOrNull())).thenReturn(ApiResponse.ok(tv(5, "Acme", "acme", "ACTIVE")))
         assertThat(mvc.perform(createReq("Acme", "acme", "passkey.notexample.com")).andReturn().response.status).isEqualTo(200)
         verify(tenants, never()).create(eq(expected("Acme", "acme", "passkey.example.com")), anyOrNull())

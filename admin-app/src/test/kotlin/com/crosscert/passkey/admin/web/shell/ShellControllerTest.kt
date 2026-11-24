@@ -45,7 +45,7 @@ import java.util.stream.Collectors
 
 /**
  * 공통 틀(레이아웃·사이드바·상단 바·브레드크럼·라이선스 배너·체인 카드·RP 전환) 렌더와 조각 엔드포인트.
- * 원본: shell/Sidebar.test.tsx, Header.test.tsx, useCrumbTenant.test.tsx, components/LicenseBanner.test.tsx.
+ *
  * 브라우저에서 도는 Alpine·htmx 동작(메뉴 열기, 폴링 타이머, 포커스)은 속성만 본다.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`first`·`parent`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
@@ -115,7 +115,7 @@ class ShellControllerTest {
         return Jsoup.parse(r.response.contentAsString)
     }
 
-    // ── 사이드바 (Sidebar.test.tsx) ─────────────────────────
+    // ── 사이드바 ────────────────────────────────────────────
 
     @Test
     @DisplayName("PLATFORM: 플랫폼/관리 그룹, tenants·activity·audit-chain·license·settings 링크, 활성 항목 aria-current")
@@ -258,7 +258,7 @@ class ShellControllerTest {
         assertThat(d.select("[x-data=toastHost]")).hasSize(1)
         assertThat(d.select("[x-data=unsavedGuard]")).hasSize(1)
         assertThat(d.select("#license-banner")).hasSize(1)
-        // 라이선스 배너는 .app 위(App.tsx: LicenseBanner → .app)
+        // 라이선스 배너는 .app 위
         assertThat(d.body().children().first()!!.id()).isEqualTo("license-banner")
     }
 
@@ -279,7 +279,7 @@ class ShellControllerTest {
         assertThat(d.select("main #page-content")).hasSize(1)
     }
 
-    // ── 브레드크럼 (Breadcrumb.tsx, App.tsx buildBreadcrumb, useCrumbTenant) ──
+    // ── 브레드크럼 ──────────────────────────────────────────
 
     @Test
     @DisplayName("브레드크럼: 마지막은 현재 위치(aria-current=page), 앞은 링크, 칸 사이 화살표")
@@ -329,7 +329,7 @@ class ShellControllerTest {
         assertThat(ShellAdvice.navActive("/admin/tenantsfoo")).isNull()
     }
 
-    // ── 상단 바 (Header.test.tsx) ──────────────────────────
+    // ── 상단 바 ────────────────────────────────────────────
 
     @Test
     @DisplayName("상단 바: 검색 버튼은 실제 검색 범위를 말하고 팔레트 이벤트를 올린다, 단축키 표기는 클라이언트(Ctrl K 기본)")
@@ -402,7 +402,7 @@ class ShellControllerTest {
 
     // ── 도움말 링크 설정은 ShellHelpLinksTest ──
 
-    // ── RP 전환 (Header.tsx RpSwitcher) ────────────────────
+    // ── RP 전환 ────────────────────────────────────────────
 
     private fun twoTenants(): ActiveTenantController.ActiveTenantView =
         ActiveTenantController.ActiveTenantView(
@@ -523,7 +523,7 @@ class ShellControllerTest {
         assertThat(toast.get("message").asString()).isEqualTo("권한이 없습니다. 지금 보고 있는 RP(Acme)는 그대로입니다.")
     }
 
-    // ── 라이선스 배너 (LicenseBanner.test.tsx) ─────────────
+    // ── 라이선스 배너 ──────────────────────────────────────
 
     private fun banner(a: Authentication, currentUrl: String?): String {
         val req = get("/admin/_/shell/license-banner").header("HX-Request", "true").with(authentication(a))
@@ -605,7 +605,7 @@ class ShellControllerTest {
         assertThat(r.response.getHeader("HX-Trigger")).isNull()
     }
 
-    // ── 감사 체인 카드 (Sidebar.test.tsx) ──────────────────
+    // ── 감사 체인 카드 ─────────────────────────────────────
 
     private fun overview(tampered: Int, rows: Long, verifiedAt: Instant): AuditChainOverview =
         AuditChainOverview(

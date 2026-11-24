@@ -16,7 +16,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.util.stream.IntStream
 
-/** ← admin-ui/src/lib/policyValidation.test.ts (+ validate(UpdateRequest) 추가 검증) */
+/** 보안 정책 입력 검증(+ validate(UpdateRequest) 추가 검증). */
 class PolicyValidationTest {
 
     companion object {

@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  설정 › 내 계정 탭(← pages/settings/AccountTab.tsx, RecoveryCodesModal.tsx). 컨트롤러: AccountTabController.
+  설정 › 내 계정 탭. 컨트롤러: AccountTabController.
   content       탭 내용: #mfa-account(카드 + 끄기 확인창) + 켜기 다이얼로그 자리(#mfa-enroll-slot) + 복구 코드 자리(#mfa-rc-slot)
   account       #mfa-account (끄기 성공 응답·켜기 성공 OOB 가 이 조각으로 바꾼다)
   enroll        켜기 다이얼로그(1–2 / 3: QR + 수동 입력 키 + 코드 확인). POST /admin/_/settings/mfa/enroll 응답 → #mfa-enroll-slot

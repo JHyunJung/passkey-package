@@ -15,7 +15,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.Clock
 import java.util.UUID
 
-/** 홈·옛 주소 리다이렉트(← App.tsx `<Route path="*">`, roles.test.ts rpTenantId, RequirePlatform.test.tsx). */
+/** 홈·옛 주소 리다이렉트. */
 @AdminWebSliceTest(controllers = [HomeRedirectController::class])
 class HomeRedirectControllerTest {
 
@@ -55,7 +55,7 @@ class HomeRedirectControllerTest {
 
     @Test
     fun rpAdminWithoutTenantGoesToTenantsListNot500() {
-        // App.tsx: rpTenantId(me) 가 null 이면 /tenants(그 화면의 RequirePlatform 이 "계정 구성 오류")
+        // 허용 tenant 가 없는 RP_ADMIN 은 /tenants 로 보낸다(그 화면이 "계정 구성 오류"를 보인다)
         mvc.perform(get("/admin").with(authentication(user("RP_ADMIN", setOf()))))
             .andExpect(status().isFound())
             .andExpect(redirectedUrl("/admin/tenants"))

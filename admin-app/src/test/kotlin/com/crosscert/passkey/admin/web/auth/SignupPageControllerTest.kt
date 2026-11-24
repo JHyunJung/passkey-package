@@ -34,7 +34,7 @@ import org.springframework.web.server.ResponseStatusException
 import java.util.regex.Pattern
 
 /**
- * 가입 요청 화면(← SignupRequestPage.test.tsx).
+ * 가입 요청 화면.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`first`·`parent`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
  */

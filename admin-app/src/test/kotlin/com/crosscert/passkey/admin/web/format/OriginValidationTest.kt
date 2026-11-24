@@ -4,7 +4,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
-/** 원본: WebauthnConfigTab.test.ts (validateOrigin 15). origin host 는 rpId 와 같거나 rpId 의 서브도메인이어야 한다. */
+/** origin 검증(validateOrigin). origin host 는 rpId 와 같거나 rpId 의 서브도메인이어야 한다. */
 class OriginValidationTest {
 
     companion object {

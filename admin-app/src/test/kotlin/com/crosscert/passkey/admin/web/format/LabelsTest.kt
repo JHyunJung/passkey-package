@@ -4,7 +4,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
-/** ← admin-ui/src/i18n/labels.test.ts */
+/** 상태·역할 등 표시 라벨. */
 class LabelsTest {
 
     @Test

@@ -67,16 +67,16 @@
 - [ ] **다른 운영자의 MFA 초기화 기능이 없다** — `auth/mfa.html`(로그인 2단계)·`settings/account.html`(복구 코드 안내)이
       "운영자에게 MFA 초기화를 요청하세요" 라고 안내하지만, 운영자 관리(AdminUsersTab)에 MFA 초기화 동작이 없다. 휴대폰과 복구 코드를
       모두 잃으면 DB 수동 조작 외에 복구 경로가 없다. 권한(PLATFORM_OPERATOR 만?)·본인 재등록 강제·감사 설계 필요. [2026-11-13 발견]
-- [ ] **NAV_RP dead code 해소** — (React 시절 `admin-ui/src/shell/Sidebar.tsx`; Thymeleaf 이식 후 위치는 `templates/admin/fragments/shell/sidebar.html`). RP_ADMIN 네비게이션이 정의돼 있으나
-      호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. (Thymeleaf 포트에서 RP_ADMIN 은 [관리] 설정만 노출 — 재확인 후 종결 후보) [rp-admin-role-gating 2026-05-31]
+- [ ] **NAV_RP dead code 해소** — `templates/admin/fragments/shell/sidebar.html`. RP_ADMIN 네비게이션이 정의돼 있으나
+      호출부가 `tenant` 를 채워주지 않아 도달하지 않는다. (현재 RP_ADMIN 은 [관리] 설정만 노출 — 재확인 후 종결 후보) [rp-admin-role-gating 2026-05-31]
 - [ ] **Activity 시간 윈도우 선택(24h/7d/30d)** — `ActivityService.kt:36` = `Duration.ofHours(24)` 하드코딩. [activity-page 2026-05-28]
 - [ ] **p95 응답 metric** — Activity KPI 가 'N/A'. admin-app 에 p95 산출 0건. [activity-page 2026-05-28]
-- [ ] **Activity 실시간 갱신을 push 로** — (React 시절 `ActivityPage.tsx`; 현재 `templates/admin/activity/*.html` + `web/activity/ActivityPageController`) 가 5초 htmx 폴링이다.
+- [ ] **Activity 실시간 갱신을 push 로** — 활동 화면(`templates/admin/activity/*.html` + `web/activity/ActivityPageController`)이 5초 htmx 폴링이다.
       WebSocket/SSE 로 바꾸면 유휴 부하와 지연이 함께 줄어든다. 서버 측 이벤트 발행 설계가 선행돼야 한다.
       [activity-page 2026-05-28]
-- [ ] **Activity KPI·topTenants 초기값이 fixture** — (React 시절 `ActivityPage.tsx` 의 `activityFixture` 초기 state — Thymeleaf 포트(`templates/admin/activity/`, `ActivityPageController`)는 서버 렌더라 fixture 초기값이 없다. 갱신 실패·부분 응답 시 이전 값 잔존 여부만 재확인 필요). 원래 기록: 첫 로딩·첫 오류는 가드가 막지만,
-      **갱신 실패(2회차 이후)나 KPI 만 비는 부분 응답에서는 이전 fixture 값이 그대로 남는다**.
-      초기값을 null 로 두고 KPI 영역에도 로딩·오류 표시를 따로 두는 편이 안전하다. [master-backlog 2026-05-31]
+- [ ] **Activity KPI·topTenants 갱신 실패 시 이전 값 잔존 여부 재확인** — 활동 화면(`templates/admin/activity/`, `ActivityPageController`)은 서버 렌더라 초기값 문제는 없다.
+      **갱신 실패(2회차 이후)나 KPI 만 비는 부분 응답에서 이전 값이 그대로 남는지**만 확인하면 된다.
+      남는다면 KPI 영역에도 로딩·오류 표시를 따로 둔다. [master-backlog 2026-05-31]
 - [x] ~~**`ADMIN_LOGIN` 감사 로그에 tenantId 가 없다**~~ — **현행 유지**(결정) [2026-11-13]
       작성 당시(운영자↔RP 1:1) 전제가 N:M(`allowedTenantIds` + RP 스위처)으로 바뀌어, 로그인 시점에는 귀속 RP 가 정해지지 않는다
       (활성 RP 는 로그인 후 세션에서 고르는 값). 로그인은 RP 리소스에 대한 행위가 아니라 운영자 본인의 이벤트이므로
@@ -152,12 +152,12 @@
       legacy 평문 판별이 프리픽스 부재에만 의존하는 것도 함께. [admin-account-security 2026-05-31, master-backlog 2026-05-31]
 - [ ] **signing key 자동 회전 스케줄러 부재** — `KeyRotationService` 는 수동, `KeyExpirationJob` 은 만료 전용. [master-backlog 2026-05-31]
 - [ ] **`AuthenticationStartRequest.userHandle` 길이 검증 일관화 · unknown-prefix 타이밍 오라클** [zero-base 2026-07-04, master-backlog 2026-05-31]
-- [ ] **라이선스 DEAD 상태 예외 경로가 React 시절 그대로** — `LicenseGuardFilter` 예외 목록에 Thymeleaf `/admin/license` 화면과
+- [ ] **라이선스 DEAD 상태 예외 경로에 콘솔 화면·정적 자원 누락** — `LicenseGuardFilter` 예외 목록에 Thymeleaf `/admin/license` 화면과
       `/admin/css`·`/admin/js` 정적 자원이 없어 DEAD 상태에서 로그인 화면 자원과 라이선스 페이지가 503 이 된다(main 기존 결함,
       S8 경로 정규화와는 별개). [audit-top10-kotlin 2026-11-10]
 - [ ] **탭 조각 로드 실패 시 재시도 URL 을 경로의 원본 id 로 이어 붙임** — `AaguidTabController.kt:101`·`ApiKeysTabController.kt:300`·
       `WebauthnTabController.kt:111`. 같은 사용자의 same-origin GET 이라 영향은 미미하지만 `@{}`/UriComponents 로 인코딩해 만들 것
-      (React 시절 S23 의 Thymeleaf 잔여분). [audit-top10-kotlin 2026-11-10]
+      (S23 의 잔여분). [audit-top10-kotlin 2026-11-10]
 
 ## 3. 성능 (P2/P3)
 
@@ -175,7 +175,7 @@
       Hibernate 잠금 래퍼(`id in (… fetch first 1) for update`)가 STOPKEY 를 잃는다. ROWNUM 네이티브 쿼리
       (`where id in (select id from (… order by sys_extract_utc(created_at) desc, id desc) where rownum <= 1) for update`)는
       5 gets(O(1)) — 네이티브 쿼리 도입 승인 필요. [audit-top10-kotlin 2026-11-10]
-- [ ] **사이드바 chain-card 가 숨은 탭에서도 30초마다 폴링** — `sidebar.html` htmx `every 30s`. React 시절 수정(97c08e53·b0506e3e:
+- [ ] **사이드바 chain-card 가 숨은 탭에서도 30초마다 폴링** — `sidebar.html` htmx `every 30s`. 예전 수정(97c08e53·b0506e3e:
       숨은 탭 중지 + 가벼운 `/admin/api/me` keep-alive 로 세션 유지)을 Thymeleaf/Alpine 으로 옮길 때 세션 keep-alive 의미를
       브라우저로 실검증할 것. [audit-top10-kotlin 2026-11-10]
 - [x] ~~**`ApiKeyAdminService.list()` 가 `findAll()` + scopes N+1 + ORDER BY 부재**~~ — `findAllForAdminList[ByTenantId]`
@@ -189,7 +189,6 @@
       (ORDER BY 제거 시 실패 확인). [2026-11-11]
 - [x] ~~**audit chain overview/verify 가 전체 스캔 + 중복 수행**~~ — overview 가 tenant 당 한 번만 읽어 검증·버킷 집계에 재사용(P3).
       [master-backlog 2026-05-31, audit-top10-kotlin 2026-11-10]
-- [ ] **(superseded: Thymeleaf 포트로 해당 없음) admin-ui 코드 스플리팅 부재** — React 시절 372KB 단일 청크. 번들러가 없어졌다(htmx + Alpine vendor 파일). [master-backlog 2026-05-31]
 - [x] ~~**F04 `KeyRotationService` 리스 미해제 · G07 lease 하트비트 부재**~~ — **재판정: 의도된 동작, 손대지 않음** [2026-11-12]
       rotate 는 `@Transactional` 안에서 lease 를 잡아 커밋까지 행 락이 걸리고, 해제하지 않는 30초 TTL 이 **연속 클릭 이중 회전**을 막는
       쿨다운 역할을 한다(해제하면 첫 커밋 직후 두 번째 클릭이 또 회전). 하트비트는 작업이 TTL 보다 짧아(키 1개 생성) 불필요. [zero-base 2026-07-04]
@@ -199,7 +198,7 @@
       작업이 길어(배치 분할) 해제가 의미 있다. [data-retention-D 2026-05-31]
 - [ ] **F10 `FunnelService` rolling-window vs day-bucket 불일치 · F11 `MdsHistoryService` WITH TIME ZONE 왕복이 JVM TZ 의존**
       — KST 전환(`988d909`) 이후 재확인 필요. [zero-base 2026-07-04]
-- [ ] **(React 시절 항목, Thymeleaf 포트에서 재평가 필요) 가상화/디바운스/폰트 CSS/license 3중 fetch/chain overview 중복/idle 리스너 재바인딩** (6건) [master-backlog 2026-05-31]
+- [ ] **(서버 렌더 전환 전 기록 — 현재 화면 기준 재평가 필요) 가상화/디바운스/폰트 CSS/license 3중 fetch/chain overview 중복/idle 리스너 재바인딩** (6건) [master-backlog 2026-05-31]
 - [ ] (하위) AAGUID 정책 등록마다 DB 조회, rate-limit Redis 2 RTT, 로그 마스킹 정규식 short-circuit 부재,
       onprem 매 요청 `LicenseStateMachine.recompute()`, CORS negative cache, alert executor 포화. [master-backlog 2026-05-31]
 
@@ -242,9 +241,7 @@
       **보류(2026-11-11)**: 보안 체인 안이라 `StrictHttpFirewall` 이 비정규 URI(`..`·`;`·인코딩 슬래시)를 먼저 거부하고, 허용 판정이
       정확일치라 우회 경로가 없다. servletPath 로 바꾸면 MockMvc/MockHttpServletRequest 테스트에서 servletPath 가 "" 라 판정이
       조용히 바뀔 위험이 더 크다 — 일관성 외 이득이 없어 손대지 않는다. [master-backlog 2026-05-31]
-- [ ] **(superseded: React 제거로 해당 없음) `TweaksPanel` 이 prod 에서도 무조건 렌더 + `as any`** — `:125` 에 `as any` 잔존, `import.meta.env.DEV` 가드 0건.
-      `App.tsx` 의 `handleSwitchRole` stub·잔여 `as any` 도 함께. [master-backlog 2026-05-31, rp-admin-role-gating 2026-05-31]
-- [ ] **(React 시절 항목, Thymeleaf 포트에서 재평가 필요) 거대 컴포넌트 분리, 확인 다이얼로그 double-submit 가드(Rotate/Revoke), Header '내 계정' 링크, `/admin/favicon.ico` 500(현재 favicon 은 `/admin/img/favicon.png`)**
+- [ ] **(서버 렌더 전환 전 기록 — 현재 화면 기준 재평가 필요) 확인 다이얼로그 double-submit 가드(Rotate/Revoke), Header '내 계정' 링크, `/admin/favicon.ico` 500(현재 favicon 은 `/admin/img/favicon.png`)**
       [master-backlog 2026-05-31, admin-ui-followup-screens 2026-05-31, admin-ui-mfa-suspend 2026-05-30]
 - [ ] **`PasskeyResponseErrorHandler` deprecation** — Spring major bump 시 필수.
       `sdk-java/.../internal/PasskeyResponseErrorHandler.java` 존재. [monorepo-merge 2026-05-28]
@@ -292,13 +289,6 @@
   `getJWTClaimsSet()` 을 호출한다. 우리/벤더 키로 서명된 토큰만 파서에 도달한다.
 - **재평가 트리거**: Spring Boot major bump, 또는 SDK 를 외부 배포할 때 `10.0.2` 전환. [QW-3 2026-05-31]
 
-### vite **^5.4.6 — KEEP**
-
-- 취약점: GHSA-67mh-4wv8-2f99 (esbuild 0.21.5 경유). 수정은 Vite 6(major).
-  (React 시절 `admin-ui/package.json` = `"^5.4.6"`; admin-ui 는 삭제됨)
-- prod 는 `vite build` 정적 산출물만 서빙하므로 **dev-server-only** 이고 운영 노출은 0 이다.
-- **재평가 트리거**: (admin-ui 삭제로 **superseded** — Vite 사용 안 함) [QW-3 2026-05-31]
-
 ### 추적만 (조치 불요)
 
 - flyway 핀 `10.20.1`(`libs.versions.toml:6`) 이 Boot BOM 11.7.2 로 무시된다 — 핀이 무의미하다는 인지. [master-backlog 2026-05-31]
@@ -313,8 +303,6 @@
   누락·null 을 `MALFORMED_PAYLOAD` 예외로 먼저 막는다. 검증기의 null 분기는 도달 불가.
   파서를 우회하는 새 경로를 만들 때만 재검토. [2026-09-13 문서 감사에서 확인]
 
-- **`NavBtn` React.memo 미적용** — map 내부 인라인 `onClick` 때문에 memo 효과가 0. nav 항목이 폭증하면 재검토. [qw5 2026-05-31]
-- **`AuditTab` 행당 `JSON.stringify`** — payload 가 큰 테넌트에서 측정상 병목이 확인되면 재검토. [qw5 2026-05-31]
 - **lockout lost-update** — defender-favorable 방향이라 변경 불요. **pwreset confirm TOCTOU** — 1회용·operator-initiated. [admin-account-security 2026-05-31]
 - **audit_log purge 제외** — 이중 hash-chain 때문. 감사 보존기간 단축 요구가 생기면 anchor-based purge 를 별도 phase 로. [data-retention-D 2026-05-31]
 - **credential soft-delete 미도입** — revoke 즉시 hard-delete, 이력은 audit_log 로 남긴다. [data-retention-D 2026-05-31, admin-tenant-detail 2026-05-27]

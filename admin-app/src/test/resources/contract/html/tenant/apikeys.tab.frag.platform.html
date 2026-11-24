@@ -144,7 +144,7 @@
     </div>
   </section>
 
-  <!-- 행별 확인 다이얼로그(ACTIVE 키만). 회전: L2 영향 요약(primary), 회수: L2 영향 요약(입력 확인 없음, danger) — 원본과 같다. -->
+  <!-- 행별 확인 다이얼로그(ACTIVE 키만). 회전: L2 영향 요약(primary), 회수: L2 영향 요약(입력 확인 없음, danger). -->
   
     <div x-data="dialog({&quot;id&quot;:&quot;ak-rotate-00000000-0000-0000-0000-0000000000c1&quot;,&quot;level&quot;:&quot;L2&quot;,&quot;verb&quot;:&quot;회전&quot;,&quot;closeOnScrim&quot;:false,&quot;typing&quot;:false,&quot;ack&quot;:false})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">
   <template x-if="open">
@@ -157,7 +157,7 @@
           
         </div>
         <div class="dialog__body">
-          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <!-- 실패 표시(Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
           <div class="banner banner--danger banner--top" id="ak-rotate-00000000-0000-0000-0000-0000000000c1-error" role="alert" x-cloak x-show="error">
             <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
             <div class="banner__body">
@@ -201,7 +201,7 @@
           
         </div>
         <div class="dialog__body">
-          <!-- 실패 표시(ConfirmDialog.tsx 의 Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
+          <!-- 실패 표시(Alert tone=bad): 다이얼로그는 열어 둔 채 재시도할 수 있다 -->
           <div class="banner banner--danger banner--top" id="ak-revoke-00000000-0000-0000-0000-0000000000c1-error" role="alert" x-cloak x-show="error">
             <span class="banner__icon"><svg aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 18h.01"/></svg></span>
             <div class="banner__body">
@@ -247,8 +247,8 @@
   
 </div>
 
-    <!-- 새 키 발급(원본 NewKeyDialog). 폼 상태(apiKeyForm)는 다이얼로그(x-if) 바깥이라 취소 후 다시 열어도 남고, 발급 성공 응답(ak-form-reset)만 비운다.
-         요청 중에는 바깥 dialog 의 busy 를 켜 Escape·스크림·취소로 닫히지 않는다(원본 onClose={busy ? noop : onClose}).
+    <!-- 새 키 발급. 폼 상태(apiKeyForm)는 다이얼로그(x-if) 바깥이라 취소 후 다시 열어도 남고, 발급 성공 응답(ak-form-reset)만 비운다.
+         요청 중에는 바깥 dialog 의 busy 를 켜 Escape·스크림·취소로 닫히지 않는다.
          실패: 검증·REST 거절은 #ak-new-error(422 OOB), 네트워크 오류·권한 거부 등 스왑 없는 실패는 netErr 인라인(폼 data-quiet + X-Confirm → confirmError, 전역 토스트 없음). -->
     <div x-data="apiKeyForm({&quot;months&quot;:&quot;24&quot;,&quot;previews&quot;:{&quot;6&quot;:&quot;2027-04-13&quot;,&quot;12&quot;:&quot;2027-10-13&quot;,&quot;24&quot;:&quot;2028-10-13&quot;,&quot;36&quot;:&quot;2029-10-13&quot;},&quot;rotationDays&quot;:90,&quot;nameMax&quot;:64,&quot;errorId&quot;:&quot;ak-new-error&quot;})" x-on:ak-form-reset.window="reset()" x-on:dialog:open.window="onDialogOpen($event)">
     <div x-data="dialog({&quot;id&quot;:&quot;ak-new&quot;})" x-on:dialog:close.window="onClose($event)" x-on:dialog:open.window="onOpen($event)" x-on:keydown.escape.window="onEscape()">

@@ -27,7 +27,7 @@ import java.time.Clock
 import java.util.UUID
 
 /**
- * 명령 팔레트 결과 조각(GET /admin/_/palette). 원본: extras/CommandPalette.test.tsx.
+ * 명령 팔레트 결과 조각(GET /admin/_/palette).
  * 이 테스트는 서버가 그리는 결과(항목·그룹·순서·비활성·범위)를 지킨다. 화살표 이동·Enter·Esc·포커스·150ms 디바운스는 브라우저 동작이라 JUnit 으로 확인할 수 없다(parity 문서).
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.

@@ -56,7 +56,7 @@ import java.util.UUID
 import java.util.function.Function
 
 /**
- * API 키 탭. 원본: ApiKeysTab.test.tsx, apiKeyHelpers.test.ts, apiKeyExpiry.test.ts, api/apiKeys.ts.
+ * API 키 탭.
  * 브라우저에서 도는 부분(다이얼로그 열기·체크 뒤 닫기·이동 막기·클립보드)은 속성·소스 수준까지만 본다.
  *
  * (Kotlin 전환) nullable jsoup 결과(`selectFirst`·`first`·`last`·`parent`·`closest`)와 `trigger()` 의 `!!` 는
@@ -595,7 +595,7 @@ class ApiKeysTabControllerTest {
     // ── 회수 ────────────────────────────────────────────────
 
     @Test
-    @DisplayName("회수 확인: 원본과 같은 L2 영향 요약 — 입력 확인(ConfirmByTyping) 없음, danger 버튼, 기본 포커스 취소")
+    @DisplayName("회수 확인: L2 영향 요약 — 입력 확인(ConfirmByTyping) 없음, danger 버튼, 기본 포커스 취소")
     fun revokeIsL2WithoutTypedConfirm() {
         val d = tab(platform())
         val dlg = d.selectFirst("[aria-labelledby=ak-revoke-$KA-title]")!!

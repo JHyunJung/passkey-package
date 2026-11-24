@@ -52,7 +52,7 @@ import java.util.Optional
 import java.util.UUID
 
 /**
- * 로그인 화면·MFA 단계(← LoginPage.test.tsx, MfaChallenge.test.tsx, App.tsx 의 로그인 전후 분기).
+ * 로그인 화면·MFA 단계.
  *
  * (Kotlin 전환) 즉시 역참조하는 nullable jsoup 결과(`selectFirst`·`first`·`parent`·`closest`)의 `!!` 는 원 Java 의 NPE 실패 지점과 같다.
  */
@@ -213,7 +213,7 @@ class LoginPageControllerTest {
 
     @Test
     fun devProfileShowsDemoCardFilledOnClick() {
-        // LoginPage.tsx: active 에 dev 또는 local, 또는 local=true
+        // 데모 계정 표시 조건: active 에 dev 또는 local, 또는 local=true
         profile(listOf("dev"), false)
         assertDemoCard(page("/admin/login"))
     }
