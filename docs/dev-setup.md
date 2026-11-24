@@ -27,13 +27,13 @@
 ```
 /Users/jhyun/Git/10-work/crosscert/
 └── Passkey2/        # 모든 코드 (단일 저장소)
-    ├── core/        # JPA entity + repository + 테넌트 격리(Hibernate @Filter) + Flyway
+    ├── core/        # JPA entity + repository + 테넌트 격리(Hibernate @Filter)
     ├── webauthn/    # WebAuthn 검증 코어 (attestation 포맷 + MDS) — 자체 구현
     ├── passkey-app/ # FIDO2 server (port 8080) — Kotlin
     ├── admin-app/   # 운영 콘솔 (Thymeleaf 서버 렌더링, port 8081)
     ├── sdk-java/    # 패스키 SDK (Java) — rp-app 가 의존
     ├── rp-app/      # 데모 RP 앱 (port 9090)
-    ├── scripts/     # DB 부트스트랩·초기화·리셋 스크립트 (Docker 로컬 + 외부 Oracle)
+    ├── scripts/     # DB 부트스트랩·스키마·시드·초기화·리셋 스크립트 (Docker 로컬 + 외부 Oracle)
     ├── deploy/      # 컨테이너 배포 (docker-compose + nginx) — deploy/README.md
     └── qa-bundle/   # 폐쇄망 QA 반입 번들 (amd64 이미지 + 설치 스크립트)
 ```
@@ -48,15 +48,17 @@ docker ps  # passkey-oracle (1521) + passkey-redis (6379) 가 healthy
 ```
 
 `docker-compose.yml` 은 인프라만 제공. 앱은 로컬에서 직접 실행.
+스키마와 시드는 컨테이너가 만들어 주지 않는다 — §3.1 의 `scripts/init-dev-db.sh` 로 넣는다.
 
 ---
 
 ## 2. 프로필별 시드가 제공하는 것
 
-Flyway seed locations 는 프로필별로 분리돼 있다.
+시드는 앱이 넣지 않는다. `scripts/init-dev-db.sh`(또는 `scripts/apply-schema.sh`)가 `PROFILE`
+값에 따라 `scripts/seed/` 의 SQL 을 적용한다. 시드 SQL 은 프로필별로 분리돼 있다.
 
-- **local** (`SPRING_PROFILES_ACTIVE=local`): `db/migration,db/seed-common,db/local` — 완전 로컬 개발용. rpId=`localhost` 라 **로컬 브라우저에서 패스키 ceremony 가 그대로 동작**한다.
-- **dev** (`SPRING_PROFILES_ACTIVE=dev`): `db/migration,db/seed-common,db/dev` — 서버 배포(dev-passkey.crosscert.com)용. rpId=도메인이라 로컬 localhost 에서는 rpId 불일치로 ceremony 불가.
+- **local** (`PROFILE=local`, 앱은 `SPRING_PROFILES_ACTIVE=local`): `operators.sql` + `local-tenant.sql` — 완전 로컬 개발용. rpId=`localhost` 라 **로컬 브라우저에서 패스키 ceremony 가 그대로 동작**한다.
+- **dev** (`PROFILE=dev` — 스크립트 기본값, 앱은 `SPRING_PROFILES_ACTIVE=dev`): `operators.sql` + `dev-tenant.sql` — 서버 배포(dev-passkey.crosscert.com)용. rpId=도메인이라 로컬 localhost 에서는 rpId 불일치로 ceremony 불가.
 
 로컬 개발자가 패스키를 직접 테스트하려면 **`local` 프로필**을 사용한다.
 dev 도 datasource URL, credential, Redis host, dev key-envelope master 를 self-contained 로
@@ -65,8 +67,7 @@ dev 도 datasource URL, credential, Redis host, dev key-envelope master 를 self
 동작하고 서버 배포 시에는 환경변수로 덮어쓸 수 있다. 해당 환경변수를 셸에 export 해 둔
 상태면 로컬에서도 그 값이 우선하니 주의한다.
 
-admin-app 을 부팅하면 Flyway repeatable migration 이 자동 적용되어 다음 시드 데이터가
-DB 에 들어간다.
+`PROFILE=<프로필> scripts/init-dev-db.sh` 를 실행하면 다음 시드 데이터가 DB 에 들어간다.
 
 ### 2.1 시드 tenant (프로필별 1개)
 
@@ -99,14 +100,14 @@ scope: `registration` + `authentication` (양쪽 다 허용).
 
 | email | password | role | tenant | MFA | 출처 |
 |---|---|---|---|---|---|
-| `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) | 꺼짐(비번만, 설정에서 TOTP 등록 가능) | `db/seed-common` (local·dev 공통) |
-| `bob@crosscert.com` | `bob-temp-pw` | RP_ADMIN | `dev-passkey`※ | 꺼짐(비번만) | `db/dev` (**dev 프로필 한정**) |
+| `alice@crosscert.com` | `alice-temp-pw` | PLATFORM_OPERATOR | (전체) | 꺼짐(비번만, 설정에서 TOTP 등록 가능) | `scripts/seed/operators.sql` (local·dev·qa 공통) |
+| `bob@crosscert.com` | `bob-temp-pw` | RP_ADMIN | `dev-passkey`※ | 꺼짐(비번만) | `scripts/seed/dev-tenant.sql` (**dev 시드 한정**) |
 
-bob 은 `dev` 프로필에서만 시드된다 — `local` 프로필에는 없다.
+bob 은 `dev` 시드에서만 들어간다 — `local` 시드에는 없다.
 
 > ※ `admin_user` 에는 tenant 컬럼이 없다. 운영자 ↔ RP 는 **N:M 매핑 테이블
 > `admin_user_tenant`** 로 연결되며, bob 의 소속은 시드 SQL 이 넣는 매핑 행
-> (`R__seed_dev_tenant.sql` 의 `INSERT INTO admin_user_tenant`) 하나로 결정된다.
+> (`scripts/seed/dev-tenant.sql` 의 `INSERT INTO admin_user_tenant`) 하나로 결정된다.
 > `PLATFORM_OPERATOR`(alice)는 매핑 행이 0개이고 전체 테넌트에 접근한다.
 
 **두 계정 모두 MFA 가 꺼진 상태로 시드**되어 비밀번호만으로 콘솔에 들어갈 수 있다.
@@ -122,12 +123,22 @@ bob 은 시드 SQL 이 `mfa_enabled='N'` 을 명시하고, alice 는 INSERT 에 
 
 ## 3. 기동 순서
 
-### 3.1 컨테이너
+### 3.1 컨테이너 + 스키마·시드
+
+처음이거나 DB 를 새로 만들 때 (⚠️ 기존 Oracle 볼륨의 데이터를 모두 지운다):
 
 ```bash
 cd /Users/jhyun/Git/10-work/crosscert/Passkey2
+PROFILE=local scripts/init-dev-db.sh   # 컨테이너·볼륨 재생성 → 부트스트랩 → 스키마 + local 시드 (dev 시드는 PROFILE=dev)
+```
+
+이미 초기화된 DB 를 다시 띄울 때:
+
+```bash
 docker compose up -d
 ```
+
+앱은 스키마를 만들거나 바꾸지 않는다. 기동할 때 Hibernate 가 테이블·컬럼이 맞는지 검증만 한다.
 
 ### 3.2 admin-app (port 8081)
 
@@ -144,8 +155,6 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun
 부팅 로그에서 다음을 확인:
 
 ```
-INFO ... DbMigrate : Migrating schema "PSK_APP_OWNER" with repeatable migration "seed ..."
-INFO ... DbMigrate : Successfully applied N migrations to schema "PSK_APP_OWNER"
 INFO ... AdminApplication : Started AdminApplication in N seconds
 ```
 
@@ -156,8 +165,8 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :passkey-app:bootRun \
   --args="--passkey.id-token.issuer-base=http://localhost:8080"
 ```
 
-passkey-app 에는 `local` 프로필이 없다(`application-local.yml` 부재) — 프로필별 시드가
-없어 `dev` 하나가 local/dev 를 겸한다(시드 분리는 admin-app 의 Flyway locations 담당).
+passkey-app 에는 `local` 프로필이 없다(`application-local.yml` 부재) — `dev` 하나가
+local/dev 를 겸한다(시드 분리는 `scripts/init-dev-db.sh` 의 `PROFILE` 담당).
 base `application.yml` 에는 datasource·Redis 설정이 없으므로 `local` 로 띄우면 기동에
 실패한다.
 
@@ -283,38 +292,23 @@ curl -X POST http://localhost:8080/api/v1/rp/registration/start \
 
 ### 5.1 `Schema-validation: missing column [...]`
 
-admin-app 을 먼저 `local` (또는 `dev`) profile 로 띄워서 Flyway 가 versioned migration +
-repeatable seed migration 까지 모두 적용하게 한다. 그 다음 passkey-app 을 띄운다.
+DB 스키마가 없거나 현재 코드와 어긋난다. 앱은 스키마를 만들지 않으므로
+`PROFILE=local scripts/reset-app-owner.sh`(컨테이너 유지, 스키마만 다시 생성) 또는
+`PROFILE=local scripts/init-dev-db.sh`(볼륨까지 재생성)로 스키마를 다시 만든 뒤 앱을 띄운다.
+둘 다 기존 데이터를 지운다.
 
-### 5.2 `Detected failed repeatable migration: seed ...`
-
-```bash
-docker exec passkey-oracle bash -c 'echo "
-DELETE FROM PSK_APP_OWNER.\"flyway_schema_history\"
- WHERE \"description\" LIKE '\''%seed%'\'' OR \"success\" = 0;
-COMMIT;
-EXIT;" | sqlplus -S system/"${ORACLE_PASSWORD:-oracle}"@//localhost:1521/"${ORA_SERVICE:-XEPDB1}"'
-```
-
-`ORACLE_PASSWORD` 는 루트 `docker-compose.yml` 이 컨테이너에 넣어주는 이름 그대로라
-(`environment: ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle}`), 컨테이너 안에서 자동으로
-해석된다. 반면 `ORA_SERVICE` 는 컨테이너 환경에 없으므로 PDB 명이 `XEPDB1` 이 아니면
-`docker exec -e ORA_SERVICE=<PDB명> ...` 로 직접 넘겨야 한다(안 넘기면 `XEPDB1` 폴백).
-
-그 후 admin-app 재기동.
-
-### 5.3 `401 Unauthorized` (RP API 호출 시)
+### 5.2 `401 Unauthorized` (RP API 호출 시)
 
 - X-API-Key 헤더에 콜론 없이 `prefix + secret` 가 이어붙어 있는지 확인
 - prefix 가 정확히 11자 (`pk_` + 8자) 인지 확인
 - API key 가 revoked 되지 않았는지
 
-### 5.4 `ID token issuer mismatch`
+### 5.3 `ID token issuer mismatch`
 
 passkey-app 의 `--passkey.id-token.issuer-base` 와 rp-app 의 `PASSKEY_ISSUER_BASE`
 가 동일한지 확인.
 
-### 5.5 port 충돌
+### 5.4 port 충돌
 
 ```bash
 lsof -ti :8080 -ti :8081 -ti :9090 | xargs kill
@@ -325,21 +319,21 @@ lsof -ti :8080 -ti :8081 -ti :9090 | xargs kill
 ## 6. 시드 데이터 재설정 (clean slate)
 
 ```bash
-docker compose down -v   # volumes 삭제 → Oracle 데이터 완전 초기화
-docker compose up -d
-SPRING_PROFILES_ACTIVE=local ./gradlew :admin-app:bootRun   # 또는 dev
+PROFILE=local scripts/init-dev-db.sh      # 볼륨 삭제 → 컨테이너 재생성 → 부트스트랩 → 스키마 + 시드 (또는 PROFILE=dev)
+PROFILE=local scripts/reset-app-owner.sh  # 컨테이너는 두고 PSK_APP_OWNER 스키마만 다시 생성 (더 빠르다)
+SEED_ONLY=1 PROFILE=local scripts/apply-schema.sh   # 스키마는 두고 시드만 다시 적용 (시드는 멱등)
 ```
 
-⚠️ 컨테이너 시작 후 Oracle XE 가 ready 되기까지 30~60초 걸린다.
+⚠️ `init-dev-db.sh` 는 Oracle XE 가 ready 될 때까지 기다린다(30~60초).
 
 ---
 
 ## 7. 참고
 
 - **RP 서버 API 명세서**: [rp-server-api.md](rp-server-api.md) — 클라이언트(웹/앱)가 RP 서버(rp-app)의 `/passkey/**` 를 호출하는 정식 레퍼런스(무상태 릴레이 토큰/DTO/에러). RP 서버 구현자용 절에 Passkey 서버 `/api/v1/rp/**` 온보딩·ID Token 검증도 포함
-- 시드 SQL (local): [`core/src/main/resources/db/local/R__seed_local_tenant.sql`](../core/src/main/resources/db/local/R__seed_local_tenant.sql)
-- 시드 SQL (dev): [`core/src/main/resources/db/dev/R__seed_dev_tenant.sql`](../core/src/main/resources/db/dev/R__seed_dev_tenant.sql)
-- 공통 운영자 시드: [`core/src/main/resources/db/seed-common/R__seed_operators.sql`](../core/src/main/resources/db/seed-common/R__seed_operators.sql)
+- 시드 SQL (local): [`scripts/seed/local-tenant.sql`](../scripts/seed/local-tenant.sql)
+- 시드 SQL (dev): [`scripts/seed/dev-tenant.sql`](../scripts/seed/dev-tenant.sql)
+- 공통 운영자 시드: [`scripts/seed/operators.sql`](../scripts/seed/operators.sql)
 - ApiKey 인증 필터: `passkey-app/src/main/kotlin/com/crosscert/passkey/app/security/ApiKeyAuthFilter.kt`
 - SDK 모듈: [`sdk-java/`](../sdk-java/) — `project(":sdk-java")` 로 직접 의존
 - 데모 RP: [`rp-app/`](../rp-app/) — `SPRING_PROFILES_ACTIVE=local ./gradlew :rp-app:bootRun`(프로필 필수 — §위 실행 절)

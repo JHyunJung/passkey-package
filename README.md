@@ -35,7 +35,7 @@ SaaS 멀티테넌트가 기본 (`passkey.deployment.mode=saas`). 설치형 싱�
 - **JVM**: Java 17, Spring Boot 4.1 (Spring Framework 7 · Spring Security 7), JPA/Hibernate 7, Jackson 3 — 단 `rp-app` 은 Jackson 2, `sdk-java` 는 외부 RP 배포용이라 Spring Boot 3.5 BOM(Spring 6 · Jackson 2)으로 컴파일하며 Spring 6·7 양쪽에서 동작
 - **언어**: `passkey-app`·`admin-app` 은 Kotlin 2.4 (JVM target 17, `kotlin-spring` 플러그인, jackson-module-kotlin) — 나머지 모듈(core·webauthn·sdk-java·rp-app)은 Java
 - **Build**: Gradle 9 (wrapper 9.7.0, Kotlin DSL)
-- **DB**: Oracle — 로컬 dev 는 XE 21 컨테이너, 운영은 외부 Oracle. Flyway 마이그레이션 `V1__baseline_schema.sql`(squash baseline) + 증분 V2~ (`core/src/main/resources/db/migration`). 테넌트 격리는 앱 레벨 Hibernate `@Filter`
+- **DB**: Oracle — 로컬 dev 는 XE 21 컨테이너, 운영은 외부 Oracle. 스키마의 단일 기준은 `scripts/full-schema-part1-accounts.sql`(롤·계정) + `scripts/full-schema-part2-schema.sql`(테이블·인덱스·뷰·패키지·권한·필수 초기 행) — 앱은 스키마를 만들거나 바꾸지 않고 기동할 때 Hibernate 가 검증만 한다(`ddl-auto: validate`). 테넌트 격리는 앱 레벨 Hibernate `@Filter`
 - **Cache**: Redis 7 (rate limit, ceremony state, 관리자 세션 — Spring Session)
 - **Auth**:
   - 클라이언트 ↔ RP: 무상태 릴레이 토큰 — `regRelayToken` 은 rp-app 이 HMAC(SHA-256) 서명한 등록 릴레이 토큰, `authenticationToken` 은 passkey-app 이 발급한 ceremony 토큰을 rp-app 이 그대로 중계 — 서버 세션 없음
@@ -62,14 +62,20 @@ docker compose up -d
 # 첫 부팅 시 스키마/유저 부트스트랩 (정본 러너 — PDB 명 주입을 대신 처리한다)
 scripts/run-bootstrap.sh
 # 기본 PDB 가 XEPDB1 이 아니면: ORA_SERVICE=<PDB명> scripts/run-bootstrap.sh
+# 스키마 전체 + dev 시드 적용 (빈 PSK_APP_OWNER 스키마 전제. local 시드는 PROFILE=local)
+scripts/apply-schema.sh
 ```
+
+앱은 스키마를 만들거나 바꾸지 않는다 — 기동할 때 Hibernate 가 테이블·컬럼이 맞는지 검증만
+하므로, 스키마(`scripts/full-schema-part2-schema.sql`)와 시드(`scripts/seed/`)는 위
+`apply-schema.sh` 로 먼저 넣어 둔다.
 
 `bootstrap-schema.sql` 을 sqlplus 로 직접 파이프하지 마세요 — 이 SQL 은 `&ora_service`
 치환에 의존하는데 in-file `DEFINE` 이 없어 호출측(`run-bootstrap.sh`)의 주입이 유일한
 정의입니다.
 
 > 한 번에 깨끗이 초기화하려면 위 블록 대신 `scripts/init-dev-db.sh` 를 쓴다.
-> 컨테이너·볼륨 재생성부터 부트스트랩까지 자동화한다 ([5) DB 스크립트](#5-db-스크립트) 참고).
+> 컨테이너·볼륨 재생성부터 부트스트랩, 스키마·시드 적용까지 자동화한다 ([5) DB 스크립트](#5-db-스크립트) 참고).
 
 ### 프로필
 
@@ -79,7 +85,10 @@ scripts/run-bootstrap.sh
 |---|---|---|
 | `dev` | 로컬 개발 (localhost Oracle/Redis + 시드 데이터) | 환경변수 (미주입 시 localhost 기본값) |
 | `qa` | 내부 QA / 통합 테스트 | 환경변수 필수 |
-| `prod` | 프로덕션 (SaaS 또는 on-prem) | 환경변수 필수 + Flyway 안전장치 |
+| `prod` | 프로덕션 (SaaS 또는 on-prem) | 환경변수 필수 |
+
+어느 프로필도 스키마나 시드를 적용하지 않는다. 시드 데이터는
+`PROFILE=dev|local|qa|none scripts/init-dev-db.sh`(또는 `scripts/apply-schema.sh`)가 넣는다.
 
 `deployment.mode` (saas/onprem) 는 프로필과 독립적인 별도 옵션
 (`PASSKEY_DEPLOYMENT_MODE` 환경변수, [docs/onprem-deployment.md](docs/onprem-deployment.md) 참고).
@@ -87,7 +96,7 @@ scripts/run-bootstrap.sh
 ### 2) 3 서버 기동 (dev profile)
 
 ```bash
-# 1) admin-app — schema migration 책임 (Flyway 자동 적용)
+# 1) admin-app — 운영 콘솔
 SPRING_PROFILES_ACTIVE=dev ./gradlew :admin-app:bootRun
 
 # 2) passkey-app — ID Token issuer-base 명시 필요
@@ -115,8 +124,8 @@ PASSKEY_ISSUER_BASE="http://localhost:8080" \
 | `alice@crosscert.com` | `alice-temp-pw` | `PLATFORM_OPERATOR` | — (플랫폼 전역) | 꺼짐(비번만, 설정에서 TOTP 등록 가능) |
 | `bob@crosscert.com` | `bob-temp-pw` | `RP_ADMIN` | `dev-passkey` | 꺼짐(비번만) |
 
-> `alice` 는 `db/seed-common`(local·dev 공통), `bob` 은 `db/dev`(**dev 프로필 한정**,
-> dev-passkey 테넌트에 바인딩)에서 시드된다. dev/local 전용 — 비프로덕션 배포 전 반드시
+> `alice` 는 `scripts/seed/operators.sql`(local·dev·qa 공통), `bob` 은
+> `scripts/seed/dev-tenant.sql`(**dev 시드 한정**, dev-passkey 테넌트에 바인딩)에서 시드된다. dev/local 전용 — 비프로덕션 배포 전 반드시
 > 로테이션.
 >
 > 두 계정 모두 MFA 가 꺼진 상태다 — bob 은 시드 SQL 이 `mfa_enabled='N'` 을 명시하고,
@@ -132,9 +141,11 @@ PASSKEY_ISSUER_BASE="http://localhost:8080" \
 
 | 스크립트 | 용도 | 언제 |
 |---|---|---|
-| `init-dev-db.sh` | 컨테이너·볼륨 재생성 → 부트스트랩까지 풀 초기화 (분 단위) | 처음부터 깨끗이 / 볼륨까지 갈아엎을 때 |
-| `reset-app-owner.sh` | 컨테이너는 두고 PSK_APP_OWNER 스키마 객체만 DROP+재생성 (초 단위) | 데이터만 비우고 빠르게 다시 시작할 때 |
-| `bootstrap-schema.sql` | PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER + role 부트스트랩. **Testcontainers IT 의 single source of truth** | 위 스크립트가 내부 호출 (수동 실행은 1) 인프라 기동 참고) |
+| `init-dev-db.sh` | 컨테이너·볼륨 재생성 → 부트스트랩 → 스키마·시드 적용까지 풀 초기화 (분 단위) | 처음부터 깨끗이 / 볼륨까지 갈아엎을 때 |
+| `reset-app-owner.sh` | 컨테이너는 두고 PSK_APP_OWNER 스키마 객체만 DROP 후 스키마·시드 재적용 (초 단위) | 데이터만 비우고 빠르게 다시 시작할 때 |
+| `apply-schema.sh` | 빈 PSK_APP_OWNER 스키마에 `full-schema-part2-schema.sql` + `seed/` 시드를 sqlplus 로 적용. `PROFILE=dev\|local\|qa\|none` 으로 시드 선택(기본 dev), `SEED_ONLY=1` 이면 시드만 다시 적용(시드는 멱등), `ORA_HOST=...` 를 주면 호스트 sqlplus 로 외부 Oracle 에 적용 | 위 스크립트가 내부 호출 / 부트스트랩 직후 스키마를 올리거나 시드만 다시 넣을 때 |
+| `full-schema-part1-accounts.sql` · `full-schema-part2-schema.sql` | 스키마의 단일 기준 — part1(SYSDBA, 롤·계정) + part2(PSK_APP_OWNER, 테이블·인덱스·뷰·패키지·권한·필수 초기 행) | 신규 환경에 DBA 가 스키마를 올릴 때 / 스키마를 바꿀 때 고치는 파일 |
+| `bootstrap-schema.sql` | PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER + role 부트스트랩. **통합 테스트도 이 파일 + `full-schema-part2-schema.sql` 을 그대로 실행해 DB 를 만든다** | 위 스크립트가 내부 호출 (수동 실행은 1) 인프라 기동 참고) |
 | `run-bootstrap.sh` · `wait-for-oracle.sh` · `reset-app-owner.sql` | 부트스트랩 실행 러너 / healthcheck 대기 / PSK_APP_OWNER 객체 DROP(SYS) | 위 스크립트가 내부 호출 (직접 실행 불필요) |
 
 ```bash
@@ -149,7 +160,7 @@ PROFILE=dev scripts/reset-app-owner.sh   # dev 시드로 리셋
 
 | 스크립트 | 용도 | 언제 |
 |---|---|---|
-| `init-db-external.sh` | sqlplus 로 부트스트랩 + Flyway 적용 (도커 미사용) | 외부 Oracle 에 스키마를 처음 올릴 때 |
+| `init-db-external.sh` | sqlplus 로 부트스트랩 + 스키마·시드 적용 (도커·JDK 미사용) | 외부 Oracle 에 스키마를 처음 올릴 때 |
 | `bootstrap-external.sql` (+ `bootstrap-external-body.sql`) | DBeaver 등 DEFINE 미지원 클라이언트용 부트스트랩 wrapper | sqlplus 없이 GUI 로 부트스트랩할 때 |
 | `reset-app-owner-external.sql` | 외부 SE 의 PSK_APP_OWNER 스키마를 DBeaver 에서 PSK_APP_OWNER 계정으로 비움 (SYSDBA·sqlplus 불필요) | 외부 dev DB 를 리셋할 때 |
 
@@ -159,7 +170,7 @@ PROFILE=dev scripts/reset-app-owner.sh   # dev 시드로 리셋
 ADMIN_PW=... APP_OWNER_PW=... RUNTIME_PW=... \
   ORA_HOST=db.example.com ORA_SERVICE=XEPDB1 scripts/init-db-external.sh
 
-# 이미 부트스트랩된 외부 DB 에 Flyway 만 재적용 (bootstrap 비번 불필요)
+# 이미 부트스트랩된 외부 DB(빈 스키마)에 스키마·시드만 적용 (필요한 비번은 APP_OWNER_PW 뿐)
 SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ```
 
@@ -190,7 +201,7 @@ SKIP_BOOTSTRAP=1 APP_OWNER_PW=... scripts/init-db-external.sh
 ## 멀티 테넌트 격리
 
 - **앱 레벨 Hibernate `@Filter`** — `TenantContextHolder` 에 바인딩된 tenantId 로 `TenantFilterAspect` 가 `tenantFilter` 를 활성화해 모든 tenant-scoped 엔티티 조회에 `tenant_id` 술어를 적용한다 (`core/src/main/java/com/crosscert/passkey/core/tenant/`).
-- **DB 롤은 권한 분리용** — `PSK_APP_RUNTIME`(passkey-app, DDL 없음 — DML + 부트스트랩 패키지 EXECUTE) / `PSK_APP_ADMIN`(admin-app), 스키마 소유자 `PSK_APP_OWNER` 는 Flyway 전용 (`scripts/bootstrap-schema.sql`). 행 필터링은 DB 가 아니라 앱이 한다.
+- **DB 롤은 권한 분리용** — `PSK_APP_RUNTIME`(passkey-app, DDL 없음 — DML + 부트스트랩 패키지 EXECUTE) / `PSK_APP_ADMIN`(admin-app), 스키마 소유자 `PSK_APP_OWNER` 는 스키마 생성·변경 전용이며 앱은 이 계정으로 접속하지 않는다 (`scripts/bootstrap-schema.sql`). 행 필터링은 DB 가 아니라 앱이 한다.
 - 과거 Oracle 의 row-level security 기반 격리는 전면 제거됐다(SE2 호환). 앱 런타임은 그런 DB 세션 컨텍스트 설정을 읽지 않는다.
 
 ## Audit Chain

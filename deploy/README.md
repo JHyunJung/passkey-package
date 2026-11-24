@@ -34,8 +34,12 @@
   중간에 challenge 를 잃는다.
 - admin-app 은 **서버 A 에만 1개**만 둔다 — 스케줄러(MDS 갱신 등)가 DB 리스로
   단일 소유자를 가정한다.
-- Oracle DB 는 이 스택 밖의 기존 외부 인프라를 그대로 쓴다. 여기서는 부트스트랩되어
-  있다고 전제한다.
+- Oracle DB 는 이 스택 밖의 기존 외부 인프라를 그대로 쓴다. 여기서는 계정과 스키마가
+  이미 만들어져 있다고 전제한다. 앱은 스키마를 만들거나 바꾸지 않고, 기동할 때 Hibernate 가
+  테이블·컬럼이 맞는지 검증만 한다(`ddl-auto: validate`). 스키마는 DBA 가
+  `scripts/full-schema-part1-accounts.sql`(SYSDBA) → `scripts/full-schema-part2-schema.sql`
+  (PSK_APP_OWNER)로 만들고, 스키마가 바뀌는 릴리스에서는 그 차이만 담은 변경 SQL 을
+  **배포 전에** 직접 적용한다.
 
 | 구성요소 | 위치 | 개수 |
 |---|---|---|
@@ -158,8 +162,7 @@ cp .env.example .env && chmod 600 .env
 | 그룹 | 변수 | 비고 |
 |---|---|---|
 | 이미지 | `IMAGE_TAG` | 기본 `0.0.1-SNAPSHOT` |
-| DB | `DB_URL`, `DB_RUNTIME_USER/PASSWORD`, `DB_ADMIN_USER/PASSWORD` | passkey-app/admin-app 런타임 계정 |
-| DB (Flyway) | `DB_OWNER_USER/PASSWORD` | **admin-app 에만** 주입 — passkey-app 은 `--scale` 로 여러 개 뜨므로 마이그레이션을 동시에 시도하면 안 된다 |
+| DB | `DB_URL`, `DB_RUNTIME_USER/PASSWORD`, `DB_ADMIN_USER/PASSWORD` | passkey-app/admin-app 런타임 계정. 스키마 소유자(`PSK_APP_OWNER`) 계정은 넣지 않는다 — 앱 컨테이너에는 스키마 소유자 비밀번호가 들어가지 않는다 |
 | Redis | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | 서버 C 를 가리킨다 |
 | 시크릿 | `MASTER_KEY` | `openssl rand -base64 32`. **서버 A·B 가 반드시 동일**해야 한다 — 다르면 한쪽이 암호화한 데이터를 다른 쪽이 복호화하지 못한다 |
 | 도메인 | `PASSKEY_SERVER_NAME`, `ISSUER_BASE` | nginx `server_name` + ID Token issuer. `ISSUER_BASE` 는 compose 배포에서는 passkey-app·admin-app 양쪽 필수 — 비면 두 앱 모두 기동 거부(fail-fast). (compose 밖 `bootRun`: passkey-app `prod`/`qa` 프로필은 yml 기본이 빈 문자열(`${PASSKEY_ID_TOKEN_ISSUER_BASE:}`)이라 변수 없이는 **기동을 거부**한다. `IdTokenIssuer` 의 코드 기본값 `https://dev-passkey.crosscert.com` 이 살아남는 건 이 키가 yml 에 없는 admin-app 과 passkey-app `dev` 프로필뿐이다.) |
@@ -185,7 +188,7 @@ compose 기본값으로 동작한다:
 | QA (rp-app) | `WK_IOS_APPID` | `LTPC88ZFE8.com.crosscert.sample.passkey` | `/.well-known/apple-app-site-association` 의 `<TeamID>.<BundleID>` |
 | SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. `docker-compose.yml` 의 admin-app 에 패스스루됨 — **빈 값 금지**(`SPRING_MAIL_HOST=` 처럼 두면 빈 값도 '설정됨' 으로 취급돼 mail health 가 DOWN 이 된다). 쓰지 않으면 주석 처리로 끈다 |
 | actuator | `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE` | `health,info` | prometheus 를 켜려면 `health,info,prometheus`. passkey-app 은 인증이 없으니 내부망 스크레이퍼만 접근 가능하게 둔다 |
-| DB 풀 | `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | passkey-app `20`, admin-app `10` | 컨테이너당 DB 커넥션 상한. `.env` 에 넣으면 **두 앱 모두** 이 값이 된다. Oracle 최대 세션 = (서버별 passkey-app 인스턴스 수 × 서버 수, 롤링 업데이트 피크 `--scale passkey-app=6` 포함) × passkey 풀 + admin 풀 + Flyway. 올리기 전에 `SELECT name, value FROM v$parameter WHERE name IN ('processes','sessions')` 로 여유를 확인한다 |
+| DB 풀 | `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | passkey-app `20`, admin-app `10` | 컨테이너당 DB 커넥션 상한. `.env` 에 넣으면 **두 앱 모두** 이 값이 된다. Oracle 최대 세션 = (서버별 passkey-app 인스턴스 수 × 서버 수, 롤링 업데이트 피크 `--scale passkey-app=6` 포함) × passkey 풀 + admin 풀. 올리기 전에 `SELECT name, value FROM v$parameter WHERE name IN ('processes','sessions')` 로 여유를 확인한다 |
 | DB 풀 | `SERVER_TOMCAT_THREADS_MAX` | `19` | passkey-app 요청 워커 상한. **반드시 풀 상한 − 1 이하** — 아니면 동시 ceremony 가 몰릴 때 이벤트 기록이 풀을 고갈시켜 30초 정지할 수 있다. 풀을 바꾸면 함께 바꾼다 |
 | 서명 키 | `PASSKEY_SIGNING_KEY_REFRESH_FIXED_DELAY` | `PT1M` | passkey-app 이 admin 콘솔에서 회전한 서명 키(ACTIVE kid 변경)를 확인하는 주기. 회전 뒤 이 시간 동안은 옛(ROTATED) 키로 서명하고 그 토큰은 ID Token 수명(`passkey.id-token.ttl`, 기본 `PT15M`) 동안 검증돼야 하므로 **주기 + ID Token 수명 ≤ 회전 grace(admin-app `passkey.key-rotation.grace`, 기본 `PT30M`)** — 기본값에서 주기는 `PT15M` 이하. 회전 뒤 재기동은 필요 없다. 변수를 빼면 `PT1M`, **빈 값(`=`)은 금지** — 일회성 실행이 되므로 기동을 거부한다 |
 | 서명 키 | `PASSKEY_SIGNING_KEY_REFRESH_INITIAL_DELAY` | `PT1M` | passkey-app 기동 후 첫 확인까지의 지연. 변수를 빼면 `PT1M` |
@@ -252,7 +255,10 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 ## 6. 배포 체크리스트
 
 - [ ] 외부 Oracle 에 PSK_APP_OWNER / PSK_APP_RUNTIME_USER / PSK_APP_ADMIN_USER 부트스트랩 완료
-      (`scripts/init-db-external.sh` 또는 `scripts/bootstrap-external.sql`)
+      (`PROFILE=none scripts/init-db-external.sh` — 부트스트랩 + 스키마, 시드 없음 — 또는 `scripts/bootstrap-external.sql`)
+- [ ] 스키마가 `scripts/full-schema-part2-schema.sql` 과 일치 — 새 환경은 이 파일로 생성,
+      운영 중인 DB 는 이번 릴리스의 변경 SQL 을 DBA 가 적용 완료(어긋나면 두 앱이 기동 시
+      `Schema-validation: missing table/column` 으로 멈춘다)
 - [ ] 서버 A·B 의 `MASTER_KEY` 가 **동일한 값**인지 확인
 - [ ] 앞단 LB 가 클라이언트발 `X-Forwarded-*` 헤더를 스트립하는지 확인
 - [ ] LB → nginx 로 `X-Forwarded-Proto: https` 가 전달되는지 확인
@@ -321,7 +327,7 @@ nginx 는 `/actuator;x/health` 를 `;` 까지 포함한 하나의 경로로 보�
 
 ### MFA 필수 정책 (F01)
 
-- 베이스라인이 `security_policy.mfa_required='Y'` 로 시드한다.
+- 스키마 SQL(`scripts/full-schema-part2-schema.sql`)이 필수 초기 행으로 `security_policy.mfa_required='Y'` 를 넣는다.
   - **기존 설치(업그레이드)**: 이 릴리스부터 **MFA 를 등록하지 않은 모든 운영자는 다음 로그인에서 TOTP 등록을 마쳐야
     콘솔을 쓸 수 있다**. 원치 않으면 롤아웃(이미지 교체) **전에** 설정 › 보안 정책 › "모든 운영자에게 MFA 필수"를 끈다.
   - **새 설치**: 정책이 처음부터 켜져 있다. 첫 운영자도 첫 로그인에서 TOTP 등록을 마쳐야 콘솔에 들어가 정책을 끌 수 있다.
@@ -345,7 +351,10 @@ nginx 는 `/actuator;x/health` 를 `;` 까지 포함한 하나의 경로로 보�
   `rp-data` 볼륨에 쓰지 못한다. `rp-data` 볼륨은 비어 있는 상태로 시작하므로 **기존
   컨테이너 내부의 `users.json` 은 이관되지 않는다** — QA 데모 데이터라 재등록하면 그만이다.
 
-- **V5 (`admin_signup_request` 도입 + 초대 테이블 제거) 적용 후**: 기존 초대
+- **Flyway 로 만들어진 기존 DB**: 그대로 쓸 수 있다. `flyway_schema_history` 테이블(과 관련
+  인덱스)이 남아 있어도 무해하다 — 앱은 그 테이블을 보지 않는다. 원하면 DBA 가 DROP 해도 된다.
+
+- **`admin_signup_request` 도입 + 초대 테이블 제거 변경을 적용한 뒤**: 기존 초대
   흐름이 남긴 미완료 계정(`admin_user.status='PENDING'`, `bcrypt_hash IS NULL`)은
   초대 테이블이 사라져 더 이상 완료할 방법이 없다. `admin_user_tenant.admin_user_id`
   FK 가 `ON DELETE CASCADE` 이므로 `admin_user` 행만 지우면 연결된 테넌트 매핑도
