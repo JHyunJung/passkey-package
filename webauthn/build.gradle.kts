@@ -15,8 +15,9 @@ dependencies {
     testImplementation(rootProject.libs.webauthn4j.metadata)
 
     // 테스트 전용 — TestCa가 attestation 체인 검증용 self-signed CA/leaf를 발급. 프로덕션엔 BC 없음.
-    // jdk15to18 1.84로 정렬: webauthn4j-test가 bcprov/bcutil-jdk15to18:1.84를 전이로 끌어오므로
-    // bcpkix도 같은 artifact family(jdk15to18)·같은 버전으로 맞춘다. jdk18on을 섞으면 Gradle이
-    // 별개 모듈로 보아 두 BC family가 classpath에 공존(클래스 충돌·NoSuchFieldError) (codex P2).
-    testImplementation("org.bouncycastle:bcpkix-jdk15to18:1.84")
+    // jdk18on 1.86으로 정렬: webauthn4j-test(0.31.11)가 bcprov/bcpkix/bcutil-jdk18on:1.86을 전이로 끌어오므로
+    // 같은 artifact family(jdk18on)·같은 버전으로 맞춘다. jdk15to18을 섞으면 Gradle이
+    // 별개 모듈로 보아 두 BC family가 classpath에 공존(클래스 충돌·NoSuchFieldError)한다.
+    // webauthn4j 버전을 올릴 때는 전이 BC family·버전을 다시 확인한다.
+    testImplementation("org.bouncycastle:bcpkix-jdk18on:1.86")
 }
