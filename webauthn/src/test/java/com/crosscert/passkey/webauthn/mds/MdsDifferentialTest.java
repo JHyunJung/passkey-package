@@ -3,6 +3,7 @@ package com.crosscert.passkey.webauthn.mds;
 import org.junit.jupiter.api.Test;
 
 import java.security.cert.TrustAnchor;
+import java.time.Instant;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class MdsDifferentialTest {
 
+    // 검증 시각을 고정한다. asOf 없는 오버로드는 현재 시각 기준이라, 아래 nextUpdate(2026-09-15)가 지나면 STALE 로 실패한다.
+    private static final Instant AS_OF = Instant.parse("2026-06-01T00:00:00Z");
+
     private final NativeMetadataBlobVerifier nativeVerifier = new NativeMetadataBlobVerifier();
     private final Webauthn4jMetadataBlobVerifier w4j = new Webauthn4jMetadataBlobVerifier();
 
@@ -35,7 +39,7 @@ class MdsDifferentialTest {
         MdsTestBlob tb = MdsTestBlob.rs256(payload);
         Set<TrustAnchor> anchors = Set.of(new TrustAnchor(tb.root, null));
 
-        MdsBlob nativeBlob = nativeVerifier.verify(tb.jws, anchors);
+        MdsBlob nativeBlob = nativeVerifier.verify(tb.jws, anchors, AS_OF);
         MdsBlob w4jBlob = w4j.parse(tb.jws);
 
         // 베이스라인 non-trivial 보장 — 두 구현이 모두 빈/null로 회귀해도 통과하는
