@@ -86,7 +86,7 @@ BEGIN
     END;
   END LOOP;
 
-  -- 2) 테이블: FK 무시(CASCADE CONSTRAINTS), 휴지통 우회(PURGE). flyway_schema_history 포함.
+  -- 2) 테이블: FK 무시(CASCADE CONSTRAINTS), 휴지통 우회(PURGE). 옛 Flyway 이력 테이블(flyway_schema_history)이 남아 있으면 함께 지워진다.
   --    MV 컨테이너 테이블은 제외(DROP TABLE 시 ORA-12083 → try_ddl 무시목록 밖이라 RAISE).
   --    MV 자체는 아래 객체 DROP 루프의 'MATERIALIZED VIEW' 분기가 처리한다.
   FOR t IN (

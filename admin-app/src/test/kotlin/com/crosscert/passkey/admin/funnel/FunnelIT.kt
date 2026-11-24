@@ -59,8 +59,8 @@ class FunnelIT {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @Container
@@ -74,11 +74,11 @@ class FunnelIT {
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba " +
-                    "@/tmp/bootstrap-schema.sql",
+                    "@/tmp/test-db-init.sql",
             )
             if (exec.exitCode != 0) {
                 throw IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.exitCode + ")\n" +
+                    "test-db-init.sql failed (exit=" + exec.exitCode + ")\n" +
                         "STDOUT:\n" + exec.stdout + "\n" +
                         "STDERR:\n" + exec.stderr,
                 )
@@ -149,11 +149,11 @@ class FunnelIT {
 
     @Test
     fun getFunnelReturnsShapeWithZeroOrMoreCounts() {
-        // Alice = PLATFORM_OPERATOR (test seed V9001; V23 role rename) — may create/see any tenant.
+        // Alice = PLATFORM_OPERATOR (test seed) — may create/see any tenant.
         val auth = loginAs("alice@crosscert.com", "alice-temp-pw")
 
         // Production tenant seed was stripped (profile separation); only admin users are
-        // restored in test (V9001). Create a fresh tenant so this IT is self-sufficient.
+        // seeded in test (test-seed.sql). Create a fresh tenant so this IT is self-sufficient.
         val tenantId = createTenant(auth, "funnel-shape")
         val body = fetchFunnel(auth, tenantId, 7)
 

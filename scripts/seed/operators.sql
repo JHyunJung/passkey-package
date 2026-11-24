@@ -1,17 +1,17 @@
 -- ============================================================
--- R__seed_operators.sql — local·dev·qa 공통 운영자 계정 시드 (repeatable)
+-- operators.sql — local·dev·qa 공통 운영자 계정 시드
 --
--- ⚠️ prod 는 이 디렉터리를 flyway.locations 에 포함하지 않는다.
+-- scripts/apply-schema.sh 가 PSK_APP_OWNER 로 적용한다(앱은 시드를 넣지 않는다).
+-- ⚠️ 운영 DB 에는 적용하지 않는다.
 --    임시 비번(alice-temp-pw)은 git 공개 plaintext — 비-운영 전용.
 --
--- alice 만 시드. PLATFORM_OPERATOR(tenant_id NULL). bob 은 시드하지 않음
--- (RP_ADMIN 테스트는 db/testfix 가 별도 복원).
+-- alice 만 시드. PLATFORM_OPERATOR(tenant_id NULL). bob 은 여기서 시드하지 않는다
+-- (dev 는 dev-tenant.sql, 통합 테스트는 admin-app/src/test/db/test-seed.sql).
 --
 -- Idempotent: email UNIQUE 기준 NOT EXISTS 가드.
--- bcrypt strength 12, plaintext "alice-temp-pw" (기존 V11 해시 재사용).
+-- bcrypt strength 12, plaintext "alice-temp-pw".
 --
--- id: V19 이후 admin_user.id 는 RAW(16). admin_user_seq 는 더 이상 쓰지 않고
---     결정적 고정 RAW(V19 의 alice = 0x...0010)를 재사용한다.
+-- id: admin_user.id 는 RAW(16). 시퀀스 없이 결정적 고정 RAW(alice = 0x...0010)를 쓴다.
 -- ============================================================
 
 INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, created_at)

@@ -3,7 +3,7 @@
 -- 컨테이너/볼륨/유저(PSK_APP_OWNER, PSK_APP_RUNTIME_USER, PSK_APP_ADMIN_USER)/role 은 건드리지
 -- 않는다. 스키마 안의 테이블·시퀀스·패키지·컨텍스트·트리거·뷰·과거 EE 잔재 VPD 정책만 비운다.
 -- 테넌트 격리는 앱 레벨 Hibernate @Filter(TenantFilterAspect) 전담 (VPD/DBMS_RLS 미사용, SE2 호환).
--- 실행 후에는 run-bootstrap.sh 로 스키마/role 을 재생성하고 Flyway 로 다시 마이그레이션한다.
+-- 실행 후에는 run-bootstrap.sh 로 role 을 재생성하고 apply-schema.sh 로 스키마·시드를 다시 적용한다.
 --
 -- 멱등성(idempotent): 객체가 없어도 실패하지 않도록 모든 DROP 을 데이터 딕셔너리
 -- 기반 동적 루프로 감싸고, "이미 없음" 류 오류는 무시한다. 여러 번 재실행해도 안전.
@@ -28,7 +28,7 @@ DECLARE
 
   -- 동적 DDL 한 건 실행 + "이미 없음" 류 오류만 무시.
   -- 그 외 예상 못 한 오류(lock, 미지원 종속 등)는 RAISE 해서 스크립트가 성공
-  -- 종료하지 않게 한다. 조용히 삼키면 stale 객체를 남긴 채 부트스트랩·Flyway 가
+  -- 종료하지 않게 한다. 조용히 삼키면 stale 객체를 남긴 채 부트스트랩·스키마 적용이
   -- 이어져 "초기화됐다"는 거짓 성공이 난다(codex P1).
   PROCEDURE try_ddl(p_sql IN VARCHAR2) IS
   BEGIN
@@ -73,7 +73,7 @@ BEGIN
   END LOOP;
 
   -- 2) 테이블: FK 제약을 무시하도록 CASCADE CONSTRAINTS, 휴지통 거치지 않게 PURGE.
-  --    flyway_schema_history 도 함께 비워야 재마이그레이션이 가능하다.
+  --    (옛 Flyway 이력 테이블 flyway_schema_history 가 남아 있으면 함께 지워진다.)
   FOR t IN (
     SELECT table_name FROM dba_tables WHERE owner = v_owner
   ) LOOP
@@ -122,7 +122,7 @@ BEGIN
   END LOOP;
 
   -- 8) 최종 검증: PSK_APP_OWNER 에 사용자 객체나 VPD 정책이 남아 있으면 실패로 종료.
-  --    조용히 넘어가면 stale 상태 위에 부트스트랩·Flyway 가 돌아 거짓 성공이 난다
+  --    조용히 넘어가면 stale 상태 위에 부트스트랩·스키마 적용이 돌아 거짓 성공이 난다
   --    (codex P1). 객체(SYS_*/BIN$* 제외)와 정책 양쪽을 확인한다.
   SELECT COUNT(*) INTO v_cnt
   FROM   dba_objects

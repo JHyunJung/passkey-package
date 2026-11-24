@@ -40,13 +40,13 @@ import javax.sql.DataSource
 
 /**
  * Phase 2 acceptance gate (T24). Boots the full admin-app context against
- * a Testcontainers Oracle XE 21 (with V1..V14 migrations applied by Flyway
- * on context start) and a Testcontainers Redis 7, then exercises the
+ * a Testcontainers Oracle XE 21 (schema created by test-db-init.sql before
+ * context start) and a Testcontainers Redis 7, then exercises the
  * full admin operator flow end-to-end over real HTTP.
  *
  * 11-step scenario in [operatorFlowEndToEnd]:
- *  1. (① implicit) Application starts, Flyway runs all migrations
- *     including V11 seed of alice@/bob@.
+ *  1. (① implicit) Application starts against the schema and the
+ *     alice@/bob@ test seed that test-db-init.sql created.
  *  2. ② Alice (ADMIN) logs in via POST /admin/login (form).
  *  3. ③ Alice creates tenant "acme" (slug) via POST /admin/api/tenants.
  *  4. ④ Alice issues an API Key via POST /admin/api/api-keys (tenantId = UUID from ③).
@@ -88,8 +88,8 @@ class AdminFlowIT {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @Container
@@ -100,34 +100,29 @@ class AdminFlowIT {
         @JvmStatic
         @DynamicPropertySource
         fun registerProps(reg: DynamicPropertyRegistry) {
-            // Run scripts/bootstrap-schema.sql before Spring opens its first
+            // Run scripts/test-db-init.sql before Spring opens its first
             // pool connection — PSK_APP_ADMIN_USER must exist before Hikari
             // tries to authenticate. Same pattern as :passkey-app's
             // Fido2EndToEndIT and :core's AppLevelIsolationIT.
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba " +
-                    "@/tmp/bootstrap-schema.sql",
+                    "@/tmp/test-db-init.sql",
             )
             if (exec.exitCode != 0) {
                 throw IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.exitCode + ")\n" +
+                    "test-db-init.sql failed (exit=" + exec.exitCode + ")\n" +
                         "STDOUT:\n" + exec.stdout + "\n" +
                         "STDERR:\n" + exec.stderr,
                 )
             }
-            // admin-app's runtime DataSource → PSK_APP_ADMIN_USER (Flyway + DML on
+            // admin-app's runtime DataSource → PSK_APP_ADMIN_USER (DML on
             // platform-scoped tables). admin-app does NOT enable the app-level
             // @Filter on the request path (it intentionally manages cross-tenant
             // resources), so we don't need a separate runtime user like passkey-app.
             reg.add("spring.datasource.url", ORACLE::getJdbcUrl)
             reg.add("spring.datasource.username") { "PSK_APP_ADMIN_USER" }
             reg.add("spring.datasource.password") { "admin_pw" }
-            // Flyway runs as the schema OWNER (PSK_APP_OWNER), runtime as PSK_APP_ADMIN_USER.
-            // Finding #3 (Approach A): the runtime user no longer holds DDL power.
-            reg.add("spring.flyway.url", ORACLE::getJdbcUrl)
-            reg.add("spring.flyway.user") { "PSK_APP_OWNER" }
-            reg.add("spring.flyway.password") { SYS_PASSWORD } // PSK_APP_OWNER pw == SYS_PASSWORD
 
             reg.add("spring.data.redis.host", REDIS::getHost)
             reg.add("spring.data.redis.port") { REDIS.getMappedPort(6379) }
@@ -603,7 +598,7 @@ class AdminFlowIT {
      * action UPDATE and DELETE/DROP remain denied (V10 append-only). This is the
      * regression guard for finding #3.
      *
-     * Originally this test was *intentionally RED* while bootstrap-schema.sql
+     * Originally this test was *intentionally RED* while test-db-init.sql
      * contained `GRANT ALL PRIVILEGES TO PSK_APP_ADMIN_USER` (finding #3).
      * Task B3 removed that GRANT, which turned this test GREEN.
      *

@@ -7,7 +7,8 @@
 --   ⚠️ 선행 조건: scripts/full-schema-part1-accounts.sql 이 먼저 실행돼
 --      PSK_APP_OWNER / PSK_APP_RUNTIME / PSK_APP_ADMIN 롤·유저가 있어야 한다.
 --
---   출처: V1__baseline_schema.sql (전체) + V2/V3 (ALTER) + V4 (GRANT) + V5 (admin_signup_request, 초대 테이블 DROP) + V6 (audit_log 복합 인덱스)
+--   이 파일이 스키마의 단일 기준이다(머리말은 full-schema-part1-accounts.sql 참고).
+--   로컬 개발 DB 는 scripts/apply-schema.sh 가, 통합 테스트는 test-db-init.sql 이 이 파일을 그대로 실행한다.
 --
 -- ############################################################################
 -- ############################################################################
@@ -61,7 +62,7 @@ CREATE TABLE signing_key (
     CONSTRAINT uq_signing_key_kid           UNIQUE (kid)
 );
 
--- 1-3. MDS_BLOB_CACHE (독립 — id=RAW(16), blob_jwt dropped by V47)
+-- 1-3. MDS_BLOB_CACHE (독립 — id=RAW(16))
 CREATE TABLE mds_blob_cache (
     id          RAW(16)                     NOT NULL,
     version     NUMBER(19,0)                NOT NULL,
@@ -98,7 +99,7 @@ CREATE TABLE scheduler_lease (
     CONSTRAINT uq_scheduler_lease_name UNIQUE (name)
 );
 
--- 1-6. SECURITY_POLICY (독립 — singleton id=1; password_min_length dropped by V51)
+-- 1-6. SECURITY_POLICY (독립 — singleton id=1)
 CREATE TABLE security_policy (
     id                          NUMBER(1,0)                  NOT NULL,
     session_idle_timeout_minutes NUMBER(5,0)                 NOT NULL,
@@ -443,7 +444,7 @@ CREATE UNIQUE INDEX ux_incident_open_per_tenant ON security_incident (CASE statu
 
 
 -- ============================================================
--- 4. CREATE VIEW (8개 — v_admin_user 등 V40 UUID 디버깅 뷰)
+-- 4. CREATE VIEW (8개 — v_admin_user 등 UUID 디버깅 뷰)
 -- ============================================================
 
 CREATE OR REPLACE FORCE VIEW v_admin_user (
@@ -774,7 +775,7 @@ GRANT SELECT ON v_tenant_allowed_origin TO PSK_APP_RUNTIME;
 GRANT SELECT ON v_tenant_webauthn_snapshot TO PSK_APP_ADMIN;
 GRANT SELECT ON v_tenant_webauthn_snapshot TO PSK_APP_RUNTIME;
 
--- 컬럼 스코프 UPDATE GRANT (원본 V7/V15/V19/V22/V46/V50 — 최소권한 유지, 테이블 전체로 넓히지 말 것)
+-- 컬럼 스코프 UPDATE GRANT (최소권한 유지 — 테이블 전체로 넓히지 말 것)
 GRANT UPDATE(status, rotated_at, revoked_at) ON signing_key TO PSK_APP_ADMIN;
 GRANT UPDATE(updated_at) ON signing_key TO PSK_APP_ADMIN;
 GRANT UPDATE(last_used_at) ON api_key TO PSK_APP_RUNTIME;
@@ -787,7 +788,7 @@ GRANT UPDATE (status, resolved_at, resolved_by, resolution_note) ON security_inc
 -- 7. 인프라 시드 (환경 무관 3개)
 -- ============================================================
 
--- 7-1. scheduler_lease AUDIT_CHAIN_LOCK sentinel (V14 원본)
+-- 7-1. scheduler_lease AUDIT_CHAIN_LOCK sentinel
 -- AuditLogService.append 의 직렬화 게이트: SELECT FOR UPDATE 타깃 행.
 -- MERGE 로 멱등 보장.
 MERGE INTO scheduler_lease tgt
@@ -798,7 +799,7 @@ WHEN NOT MATCHED THEN
     VALUES ('AUDIT_CHAIN_LOCK', 'audit-system',
             TIMESTAMP '1970-01-01 00:00:00 UTC');
 
--- 7-2. mds_blob_cache singleton row (V19 UUID 마이그레이션 버전 — id=RAW(16))
+-- 7-2. mds_blob_cache singleton row (id=RAW(16))
 -- MdsBlobStore 가 매 스케줄러 실행 시 MERGE 하는 타깃 행.
 -- 최초 FIDO MDS3 fetch 성공 시 version/next_update/fetched_at 덮어씀.
 MERGE INTO mds_blob_cache USING dual
@@ -809,7 +810,7 @@ WHEN NOT MATCHED THEN
             0, DATE '1970-01-01',
             TIMESTAMP '1970-01-01 00:00:00 +00:00');
 
--- 7-3. security_policy singleton row id=1 (V31 원본 — password_min_length 제외, V51 삭제됨)
+-- 7-3. security_policy singleton row id=1
 MERGE INTO security_policy t
 USING (SELECT 1 AS id FROM dual) s
 ON (t.id = s.id)
@@ -820,14 +821,14 @@ WHEN NOT MATCHED THEN
 COMMIT;
 
 -- ============================================================
--- 7. V2~V4, V6 증분 (baseline 이후 추가된 변경; V5 는 위 본문에 병합됨)
+-- 8. 추가 컬럼·권한·인덱스
 --
--- V1 의 CREATE TABLE 에 병합하지 않고 순차 적용 형태로 둔다 — 실제 마이그레이션
--- 파일과 1:1 대조가 가능해야 두 소스가 어긋났을 때 바로 드러난다.
+-- 위 CREATE TABLE 에 합치지 않고 ALTER/GRANT/CREATE INDEX 로 둔다 — 합치면 컬럼 순서가
+-- 이미 운영 중인 DB 와 달라진다.
 -- ============================================================
 
 -- ------------------------------------------------------------
--- V2 — admin_user.mfa_last_totp_step: TOTP 재사용(replay) 차단
+-- admin_user.mfa_last_totp_step: TOTP 재사용(replay) 차단
 --
 -- 같은 30초 스텝의 코드를 두 번 쓰지 못하게 마지막 성공 스텝을 기록한다.
 -- 기존 행은 NULL 로 시작(첫 검증 시 채워짐).
@@ -835,7 +836,7 @@ COMMIT;
 ALTER TABLE admin_user ADD (mfa_last_totp_step NUMBER(19,0));
 
 -- ------------------------------------------------------------
--- V3 — admin_user.mfa_failed_count: MFA 전용 실패 카운터 분리
+-- admin_user.mfa_failed_count: MFA 전용 실패 카운터 분리
 --
 -- 1차 로그인(비밀번호) 성공이 failed_login_count 를 0 으로 리셋하는데, MFA
 -- 실패도 같은 컬럼을 쓰면 공격자가 올바른 비밀번호로 재로그인해 카운터를
@@ -845,7 +846,7 @@ ALTER TABLE admin_user ADD (mfa_last_totp_step NUMBER(19,0));
 ALTER TABLE admin_user ADD (mfa_failed_count NUMBER DEFAULT 0 NOT NULL);
 
 -- ------------------------------------------------------------
--- V4 — security_incident 를 PSK_APP_RUNTIME 에 SELECT GRANT
+-- security_incident 를 PSK_APP_RUNTIME 에 SELECT GRANT
 --
 -- passkey-app 은 이 테이블을 읽지 않지만, @EntityScan 이 core.entity 를 통째로
 -- 스캔하고 hibernate.ddl-auto=validate 가 그 전부의 테이블 존재를 검증한다.
@@ -858,23 +859,20 @@ ALTER TABLE admin_user ADD (mfa_failed_count NUMBER DEFAULT 0 NOT NULL);
 GRANT SELECT ON security_incident TO PSK_APP_RUNTIME;
 
 -- ------------------------------------------------------------
--- V6 — audit_log (created_at, id) 복합 인덱스
+-- audit_log (created_at, id) 복합 인덱스
 --
 -- 감사 append 가 전역 체인 락을 쥔 채 실행하는 체인 헤드 조회가 전체 정렬
 -- 없이 끝나게 한다. 효과는 정렬식을 인덱스 식과 같은 SYS_EXTRACT_UTC(created_at)
 -- 로 쓸 때만 난다(findLatestForUpdate 가 그렇게 정렬한다). 평범한
 -- ORDER BY created_at 은 이 인덱스로 정렬이 사라지지 않는다. 결과는 정렬 없는
--- 인덱스 내림차순 전체 스캔이라 비용은 여전히 O(n) 이다(V6 헤더 참고).
+-- 인덱스 내림차순 전체 스캔이라 비용은 여전히 O(n) 이다.
 -- 인덱스라 GRANT 는 없다.
 -- ------------------------------------------------------------
 CREATE INDEX audit_log_created_id_ix ON audit_log (SYS_EXTRACT_UTC(created_at), id);
 
 PROMPT
 PROMPT ============================================================
-PROMPT  PART 2 완료 — 스키마 생성됨 (V1~V6 반영).
-PROMPT
-PROMPT  Flyway 를 함께 쓴다면 baseline 처리를 잊지 말 것:
-PROMPT    flyway baseline -baselineVersion=6
+PROMPT  PART 2 완료 — 스키마 생성됨.
 PROMPT ============================================================
 PROMPT
 

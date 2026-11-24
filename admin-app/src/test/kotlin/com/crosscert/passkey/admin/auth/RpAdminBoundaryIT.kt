@@ -67,8 +67,8 @@ class RpAdminBoundaryIT {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @Container
@@ -81,11 +81,11 @@ class RpAdminBoundaryIT {
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba " +
-                    "@/tmp/bootstrap-schema.sql",
+                    "@/tmp/test-db-init.sql",
             )
             if (exec.exitCode != 0) {
                 throw IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.exitCode + ")\n" +
+                    "test-db-init.sql failed (exit=" + exec.exitCode + ")\n" +
                         "STDOUT:\n" + exec.stdout + "\n" +
                         "STDERR:\n" + exec.stderr,
                 )

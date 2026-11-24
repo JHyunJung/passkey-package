@@ -76,7 +76,7 @@ class AuditChainBackfillService(
                 )
                 val computed = AuditLogService.computeHash(prev, req, row.payload, row.createdAt)
                 // Use native SQL UPDATE targeting only tenant_hash + tenant_prev_hash so that
-                // we need only the column-level UPDATE grant on those two columns (V1 baseline),
+                // we need only the column-level UPDATE grant on those two columns (schema SQL),
                 // not a full-row UPDATE. This avoids triggering ORA-01031 on the other columns
                 // that PSK_APP_ADMIN intentionally cannot update (append-only design).
                 em.createNativeQuery(

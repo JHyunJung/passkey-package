@@ -2,8 +2,9 @@
 #
 # 활성화: SPRING_PROFILES_ACTIVE=local
 #
-# dev 와 동일한 localhost Oracle/Redis + dev key-envelope master 를 쓰되,
-# flyway 는 db/local 시드(demo-rp, rpId=localhost)를 적용한다. rpId=localhost
+# dev 와 동일한 localhost Oracle/Redis + dev key-envelope master 를 쓴다.
+# DB 시드는 앱이 넣지 않는다 — PROFILE=local scripts/init-dev-db.sh 가
+# scripts/seed/local-tenant.sql(demo-rp, rpId=localhost)을 적용한다. rpId=localhost
 # 라 완전 로컬(http://localhost:9090)에서 패스키 등록/인증 ceremony 가 동작한다.
 # (dev 는 rpId=dev-passkey.crosscert.com 서버 배포용 — local 과 별개 테넌트.)
 
@@ -17,8 +18,6 @@ spring:
     redis:
       host: localhost
       port: 6379
-  flyway:
-    locations: classpath:db/migration,classpath:db/seed-common,classpath:db/local
 
 passkey:
   key-envelope:

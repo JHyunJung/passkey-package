@@ -90,8 +90,8 @@ class MultiTenantOperatorIT {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @Container
@@ -104,11 +104,11 @@ class MultiTenantOperatorIT {
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba " +
-                    "@/tmp/bootstrap-schema.sql",
+                    "@/tmp/test-db-init.sql",
             )
             if (exec.exitCode != 0) {
                 throw IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.exitCode + ")\n" +
+                    "test-db-init.sql failed (exit=" + exec.exitCode + ")\n" +
                         "STDOUT:\n" + exec.stdout + "\n" +
                         "STDERR:\n" + exec.stderr,
                 )
@@ -116,9 +116,6 @@ class MultiTenantOperatorIT {
             reg.add("spring.datasource.url", ORACLE::getJdbcUrl)
             reg.add("spring.datasource.username") { "PSK_APP_ADMIN_USER" }
             reg.add("spring.datasource.password") { "admin_pw" }
-            reg.add("spring.flyway.url", ORACLE::getJdbcUrl)
-            reg.add("spring.flyway.user") { "PSK_APP_OWNER" }
-            reg.add("spring.flyway.password") { SYS_PASSWORD }
             reg.add("spring.data.redis.host", REDIS::getHost)
             reg.add("spring.data.redis.port") { REDIS.getMappedPort(6379) }
         }

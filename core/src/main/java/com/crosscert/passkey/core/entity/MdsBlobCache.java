@@ -14,7 +14,7 @@ import java.util.UUID;
 public class MdsBlobCache {
 
     /**
-     * The singleton row id seeded by the V1 baseline migration.
+     * The singleton row id seeded by the schema SQL.
      * Matches HEXTORAW('00000000000000000000000000000001').
      * No @UuidGenerator — this id is fixed; the app never inserts another row.
      * For the same reason this entity does NOT extend BaseEntity (which would

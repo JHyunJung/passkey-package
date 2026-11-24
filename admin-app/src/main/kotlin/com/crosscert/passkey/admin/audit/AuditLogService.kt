@@ -52,7 +52,7 @@ internal fun canonicalCopy(baseMapper: ObjectMapper): ObjectMapper {
  * This row-level exclusive lock serializes all concurrent appenders within
  * Oracle. Only one transaction can hold the lock at a time; the second blocks
  * until the first commits. The lock is released automatically at commit.
- * The sentinel row is seeded by V1 (baseline).
+ * The sentinel row is seeded by the schema SQL (scripts/full-schema-part2-schema.sql).
  * 같은 락을 AuditChainBackfillService 도 tenant chain 컬럼을 다시 쓰기 전에 잡는다.
  *
  * The repository's `@Lock(PESSIMISTIC_WRITE)` on

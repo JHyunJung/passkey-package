@@ -1,4 +1,4 @@
-# admin-app — 운영 콘솔 + Flyway 마이그레이션 책임. 1개만 기동한다(스케줄러 리스).
+# admin-app — 운영 콘솔. 1개만 기동한다(스케줄러 리스).
 # syntax 지시자를 쓰지 않는 이유는 passkey-app/Dockerfile 주석 참고.
 #   docker build --platform linux/amd64 -t admin-app:0.0.1-SNAPSHOT -f admin-app/Dockerfile .
 

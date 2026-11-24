@@ -48,23 +48,20 @@ class ApiKeyAdminListIT {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
-                "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba @/tmp/bootstrap-schema.sql");
+                "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba @/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
-            throw new IllegalStateException("bootstrap-schema.sql failed\n" + exec.getStdout() + "\n" + exec.getStderr());
+            throw new IllegalStateException("test-db-init.sql failed\n" + exec.getStdout() + "\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired ApiKeyRepository keys;

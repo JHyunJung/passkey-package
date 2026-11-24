@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code createdAt}. This IT proves {@code feedPageRaw} needs the same tuple
  * treatment via a {@code beforeId} cursor.
  *
- * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-schema.sql pattern
+ * <p>Uses the same Testcontainers Oracle XE 21 / test-db-init.sql pattern
  * as {@code TenantFilterAspectIT} / {@code AppLevelIsolationIT}.
  */
 @SpringBootTest
@@ -77,27 +77,24 @@ class ActivityRepositoryFeedPageIT {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
+                        + "@/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "test-db-init.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired

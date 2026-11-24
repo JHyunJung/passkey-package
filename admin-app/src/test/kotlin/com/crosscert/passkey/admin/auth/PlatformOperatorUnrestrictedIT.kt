@@ -62,8 +62,8 @@ class PlatformOperatorUnrestrictedIT {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @Container
@@ -76,11 +76,11 @@ class PlatformOperatorUnrestrictedIT {
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba " +
-                    "@/tmp/bootstrap-schema.sql",
+                    "@/tmp/test-db-init.sql",
             )
             if (exec.exitCode != 0) {
                 throw IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.exitCode + ")\n" +
+                    "test-db-init.sql failed (exit=" + exec.exitCode + ")\n" +
                         "STDOUT:\n" + exec.stdout + "\n" +
                         "STDERR:\n" + exec.stderr,
                 )
@@ -212,8 +212,8 @@ class PlatformOperatorUnrestrictedIT {
             """.trimIndent(),
         )
         // Ensure alice is PLATFORM_OPERATOR with no tenant. (MFA is disabled
-        // for the seed users by the test-only migration V9000 so logins here
-        // are not gated by MfaPendingFilter; see db/testfix.)
+        // for the seed users by the test-only seed so logins here are not
+        // gated by MfaPendingFilter; see src/test/db/test-seed.sql.)
         // alice 는 PLATFORM_OPERATOR — 매핑 0개(전체 접근). tenant_id 컬럼 제거됨(N:M 전환).
         jdbc.update(
             """

@@ -14,7 +14,7 @@ private val SINGLETON_HEX: String = MdsBlobCache.SINGLETON_ID.toString().replace
 
 /**
  * Persists the most recent verified MDS BLOB metadata into the singleton
- * row of `mds_blob_cache` (seeded by V1 baseline, id = SINGLETON_ID).
+ * row of `mds_blob_cache` (seeded by the schema SQL, id = SINGLETON_ID).
  *
  * The verifier path uses the parsed entries cached in Redis
  * (MdsSchedulerService); only version/next_update/fetched_at are stored here.
@@ -44,7 +44,7 @@ class MdsBlobStore(
         )
         if (updated != 1) {
             throw IncorrectUpdateSemanticsDataAccessException(
-                "mds_blob_cache sentinel row missing — V19 migration may not have run",
+                "mds_blob_cache sentinel row missing — schema SQL (full-schema-part2-schema.sql) may not have been applied",
             )
         }
     }

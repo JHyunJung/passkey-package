@@ -29,7 +29,7 @@ subprojects {
 
     extensions.configure<DependencyManagementExtension> {
         // sdk-java 는 외부 RP 에 배포되는 라이브러리라 Spring Boot 3.5 BOM(Spring 6 / Jackson 2)
-        // 을 유지한다. 나머지 모듈은 Spring Boot 4 BOM — Testcontainers(2.x)·Flyway·Oracle JDBC·
+        // 을 유지한다. 나머지 모듈은 Spring Boot 4 BOM — Testcontainers(2.x)·Oracle JDBC·
         // Jackson(2.21.x + 3.x) 버전까지 이 BOM 이 관리하므로 별도 BOM import 나 버전 강제가 없다.
         // (구 jackson-annotations:2.21 강제는 webauthn4j 의 Jackson 3 가 2.20+ 어노테이션을
         //  요구해서였는데, Boot 4 BOM 의 jackson-bom 2.21.x 가 이미 2.21 을 관리한다.)
@@ -65,6 +65,37 @@ subprojects {
         // (Boot 4.1 BOM: JUnit 6.0.x, sdk-java 의 Boot 3.5 BOM: 1.12.x). Gradle 9 는 테스트
         // 런타임에 launcher 를 자동 주입하지 않으므로 명시 선언이 필수이며, 버전은 BOM 이 맞춘다.
         "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
+    }
+
+    // Oracle 통합 테스트가 쓰는 DB 초기화 스크립트(test-db-init.sql)를 테스트 클래스패스에 만든다.
+    // 배포에 쓰는 scripts/ 의 SQL 을 그대로 이어 붙이므로 테스트가 곧 그 스크립트의 검증이다.
+    //   1) bootstrap-schema.sql          — SYS 로 롤·계정 생성
+    //   2) full-schema-part2-schema.sql  — PSK_APP_OWNER 로 다시 접속해 스키마 전체 생성
+    //   3) src/test/db/test-seed.sql     — 모듈에 있을 때만(테스트 전용 시드)
+    // 각 IT 는 이 파일 하나를 컨테이너에 복사해 sqlplus(SYS)로 실행한다. 접속 정보는 IT 들이
+    // 공통으로 쓰는 값(XEPDB1, PSK_APP_OWNER 비밀번호 app_owner_pw)과 같아야 한다.
+    if (project.name in setOf("core", "admin-app", "passkey-app")) {
+        val dbInitParts = listOf(
+            rootProject.file("scripts/bootstrap-schema.sql"),
+            rootProject.file("scripts/full-schema-part2-schema.sql"),
+            project.file("src/test/db/test-seed.sql"),
+        ).filter { it.exists() }
+        tasks.named<Copy>("processTestResources") {
+            inputs.files(dbInitParts)
+            val outFile = destinationDir.resolve("test-db-init.sql")
+            doLast {
+                // 각 스크립트 끝의 EXIT 는 떼고(다음 스크립트가 실행되지 않으므로) 맨 끝에 한 번만 둔다.
+                val exitLine = Regex("(?im)^EXIT;?[ \\t]*$")
+                val bodies = dbInitParts.map { exitLine.replace(it.readText(), "") }
+                outFile.writeText(buildString {
+                    appendLine("DEFINE ora_service = XEPDB1")
+                    appendLine(bodies[0])
+                    appendLine("CONNECT PSK_APP_OWNER/app_owner_pw@localhost:1521/XEPDB1")
+                    bodies.drop(1).forEach { appendLine(it) }
+                    appendLine("EXIT;")
+                })
+            }
+        }
     }
 
     tasks.withType<Test> {
