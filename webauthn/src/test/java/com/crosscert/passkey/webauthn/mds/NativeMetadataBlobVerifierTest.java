@@ -21,8 +21,10 @@ class NativeMetadataBlobVerifierTest {
                 + "\"statusReports\":[{\"status\":\"FIDO_CERTIFIED_L1\"}]}]}";
         MdsTestBlob tb = MdsTestBlob.rs256(payload);
         Set<TrustAnchor> anchors = Set.of(new TrustAnchor(tb.root, null));
+        // 검증 시각 고정 — 현재 시각 기준이면 nextUpdate(2026-12-31)가 지난 뒤 STALE 로 실패한다.
+        Instant asOf = LocalDate.of(2026, 6, 1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
-        MdsBlob blob = verifier.verify(tb.jws, anchors);
+        MdsBlob blob = verifier.verify(tb.jws, anchors, asOf);
 
         assertEquals(5, blob.no());
         assertEquals(LocalDate.of(2026, 12, 31), blob.nextUpdate());
