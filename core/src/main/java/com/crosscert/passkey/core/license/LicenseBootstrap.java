@@ -59,9 +59,8 @@ public class LicenseBootstrap {
         }
 
         // No boot-thread tenant pin: nothing executed synchronously after this
-        // @Bean returns reads TenantContextHolder. Flyway migrations run via raw
-        // JDBC and the signing-key bootstrap uses a definer-rights PL/SQL package
-        // — neither consults the Hibernate tenantFilter. The only boot-time
+        // @Bean returns reads TenantContextHolder. The signing-key bootstrap uses a
+        // definer-rights PL/SQL package, which does not consult the Hibernate tenantFilter. The only boot-time
         // @PostConstruct (SigningKeyProvider) reads the non-tenant signing_key
         // table. Per-request pinning is handled by OnpremTenantPinFilter, so
         // request threads always see the licensed tenant. Setting (and never

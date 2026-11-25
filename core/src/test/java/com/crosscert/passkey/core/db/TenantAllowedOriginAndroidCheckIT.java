@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Follows the {@code @SpringBootTest + @Testcontainers} shape of
  * {@code AppLevelIsolationIT} / {@code BaseEntityCallbackIT}: real Oracle XE 21,
- * {@code bootstrap-schema.sql} run as SYS, Flyway applies V1–V48 as PSK_APP_OWNER, and
+ * {@code test-db-init.sql} creates the accounts (as SYS) and the schema (as PSK_APP_OWNER), and
  * the Spring datasource connects as PSK_APP_ADMIN_USER (INSERT grant on the table),
  * so direct JDBC INSERTs exercise the CHECK constraint. With Oracle VPD removed
  * there is no DB-kernel row filter — the app-level @Filter is ORM-only and does
@@ -83,8 +83,8 @@ class TenantAllowedOriginAndroidCheckIT {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
@@ -93,10 +93,10 @@ class TenantAllowedOriginAndroidCheckIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
+                        + "@/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "test-db-init.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
@@ -105,11 +105,6 @@ class TenantAllowedOriginAndroidCheckIT {
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Flyway runs as the schema OWNER (PSK_APP_OWNER) so migrations can GRANT
-        // on PSK_APP_OWNER objects. PSK_APP_OWNER pw == SYS_PASSWORD in the container.
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired

@@ -3,7 +3,10 @@
 # 활성화: SPRING_PROFILES_ACTIVE=dev
 #
 # 포함: localhost Oracle/Redis + PSK_APP_ADMIN_USER credential + dev key-envelope
-#       master + DEBUG 로깅 + db/seed-common(alice) + db/dev 시드(dev-passkey 테넌트)
+#       master + DEBUG 로깅
+#
+# DB 스키마·시드는 앱이 만들지 않는다 — scripts/init-dev-db.sh 가 스키마와
+# scripts/seed/operators.sql(alice) + dev-tenant.sql(dev-passkey 테넌트)을 적용한다.
 #
 # 기존 local / local-shared 가 흡수됨 — 더 이상 spring.config.import chain 사용 안 함.
 #
@@ -20,8 +23,6 @@ spring:
     redis:
       host: localhost
       port: 6379
-  flyway:
-    locations: classpath:db/migration,classpath:db/seed-common,classpath:db/dev
 
 passkey:
   key-envelope:

@@ -32,7 +32,7 @@ import java.util.regex.Pattern
 private val log = LoggerFactory.getLogger(LoginPageController::class.java)
 
 /**
- * 데모 계정(core db/seed-common 의 시드 운영자). dev·local 프로필(또는 ProfileView.local)에서만
+ * 데모 계정(scripts/seed 의 시드 운영자). dev·local 프로필(또는 ProfileView.local)에서만
  * DEV 카드와 이 값이 페이지에 들어가고, 입력란은 카드를 눌렀을 때 채운다(로드 시 미리 채우지 않음).
  */
 private const val DEMO_EMAIL = "alice@crosscert.com"

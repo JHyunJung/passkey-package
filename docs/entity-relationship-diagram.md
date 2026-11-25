@@ -2,8 +2,8 @@
 
 Crosscert Passkey Platform 의 JPA 엔티티(`core/src/main/java/com/crosscert/passkey/core/entity/`) 간
 연관관계입니다. `@Entity` 클래스는 21개이며(그 외 `BaseEntity` = mapped superclass,
-`AdminUserTenantId` = 복합 PK 클래스), Flyway baseline
-(`core/src/main/resources/db/migration/V1__baseline_schema.sql` + 증분 V2~V5)이 만드는
+`AdminUserTenantId` = 복합 PK 클래스), 스키마 SQL
+(`scripts/full-schema-part2-schema.sql`)이 만드는
 테이블과 대응합니다. 두 개의 집합(aggregate)으로 나뉩니다.
 
 - **TENANT 집합** — 패스키 운영 데이터 (credential, api_key, 정책·설정, ceremony/인증 이벤트)
@@ -14,12 +14,11 @@ Crosscert Passkey Platform 의 JPA 엔티티(`core/src/main/java/com/crosscert/p
 
 > **FK 와 "(soft)" 표기**: 대부분의 테이블에는 **DB 레벨 FK 제약이 실재합니다**
 > (`fk_credential_tenant`·`fk_api_key_tenant`·`fk_aut_admin_user`(CASCADE)·`fk_aut_tenant`·
-> `fk_pwd_reset_admin_user`·`fk_recovery_admin_user`·`fk_cred_auth_event_credential` 등
-> V1 에 14건이 선언되고, 그중 `admin_user_invitation` 것이 V5 의 `DROP TABLE` 과 함께 사라져 현행 13건).
+> `fk_pwd_reset_admin_user`·`fk_recovery_admin_user`·`fk_cred_auth_event_credential` 등 13건).
 > FK 제약이 **없는** 테이블은 루트 테이블(`tenant`·`admin_user` — 참조할 상위가 없다)과,
 > tenant 를 참조하지 않는 독립 테이블(`signing_key`·`mds_blob_cache`·
 > `mds_sync_history`·`scheduler_lease`·`security_policy`)과, tenant 컬럼을 갖되 제약을 걸지 않은
-> `audit_log`·`ceremony_event`·`security_incident`, 그리고 V5 의 `admin_signup_request` 입니다.
+> `audit_log`·`ceremony_event`·`security_incident`, 그리고 `admin_signup_request` 입니다.
 > `admin_user` 도 tenant 를 직접 참조하지 않습니다(위 N:M 매핑 참조).
 >
 > 아래 다이어그램의 **"(soft)" 는 "JPA 연관 어노테이션(`@ManyToOne`/`@OneToMany`)이 없고
@@ -66,7 +65,7 @@ erDiagram
     TENANT_ALLOWED_ORIGIN {
         RAW16 id PK
         RAW16 tenant_id FK
-        string origin "http(s):// 또는 android:apk-key-hash: (V1 ck_tao_origin_format)"
+        string origin "http(s):// 또는 android:apk-key-hash: (ck_tao_origin_format)"
         number sort_order
     }
     TENANT_ACCEPTED_FORMAT {
@@ -142,8 +141,8 @@ erDiagram
         string mfa_secret "AES-GCM enc"
         number failed_login_count
         instant locked_until
-        number mfa_failed_count "V3"
-        number mfa_last_totp_step "V2, replay guard"
+        number mfa_failed_count
+        number mfa_last_totp_step "replay guard"
         instant last_login_at
         string created_by
         instant suspended_at
@@ -208,12 +207,11 @@ erDiagram
 | `MDS_SYNC_HISTORY` | MDS 동기화 이력 | **JPA 엔티티 없음** — `admin-app` 의 `MdsHistoryService` 가 raw JDBC 로 읽고 쓴다 |
 | `SECURITY_POLICY` | 전역 보안 설정 | 싱글톤(`id = 1` CHECK). 세션 타임아웃·CORS allowlist·MFA 필수 |
 | `SCHEDULER_LEASE` | 배치 리더 선출 lease | `name`(UK)·`holder`·`expires_at` |
-| `ADMIN_SIGNUP_REQUEST` | 승인 대기 중인 가입 요청 | V5 로 추가. FK 없음(독립). 승인/거절 시 삭제(이력은 `audit_log`) |
+| `ADMIN_SIGNUP_REQUEST` | 승인 대기 중인 가입 요청 | FK 없음(독립). 승인/거절 시 삭제(이력은 `audit_log`) |
 
 `SECURITY_INCIDENT` 는 `tenant_id` 를 갖지만 FK 제약 없이 컬럼만 두므로 위 다이어그램에
-soft 로만 표기합니다. `ADMIN_USER_INVITATION` 테이블(초대 흐름)은 V5 에서 시퀀스와 함께 **DROP** 되어
-더 이상 존재하지 않습니다 — V1 baseline 에만 남아 있는 이유는 squash baseline 이 당시
-스키마를 그대로 담고 있기 때문입니다.
+soft 로만 표기합니다. `ADMIN_USER_INVITATION` 테이블(초대 흐름)은 시퀀스와 함께 제거되어
+더 이상 존재하지 않습니다.
 
 ## 관계 요약표
 

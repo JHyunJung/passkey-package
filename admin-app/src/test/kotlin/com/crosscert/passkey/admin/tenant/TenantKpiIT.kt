@@ -57,8 +57,8 @@ class TenantKpiIT {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @Container
@@ -72,11 +72,11 @@ class TenantKpiIT {
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba " +
-                    "@/tmp/bootstrap-schema.sql",
+                    "@/tmp/test-db-init.sql",
             )
             if (exec.exitCode != 0) {
                 throw IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.exitCode + ")\n" +
+                    "test-db-init.sql failed (exit=" + exec.exitCode + ")\n" +
                         "STDOUT:\n" + exec.stdout + "\n" +
                         "STDERR:\n" + exec.stderr,
                 )
@@ -129,8 +129,8 @@ class TenantKpiIT {
     lateinit var ds: DataSource
 
     /**
-     * 목록에 테넌트 한 건을 심는다. 예전엔 V11/V19 시드 마이그레이션이 테넌트를 넣었지만 Flyway squash 이후
-     * 테넌트 시드는 db/local·db/dev 에만 있고 test 프로필(db/migration + db/testfix)엔 없다 — 다른 IT
+     * 목록에 테넌트 한 건을 심는다. 테넌트 시드는 로컬 개발용(scripts/seed)에만 있고
+     * 테스트 DB(스키마 + src/test/db/test-seed.sql)엔 없다 — 다른 IT
      * (RpAdminBoundaryIT 등)처럼 직접 넣는다. attestation_conveyance / webauthn_timeout_ms 는 일부러 빼서
      * 아래 단언이 DB 기본값(NONE / 60000)을 검증하게 둔다.
      */

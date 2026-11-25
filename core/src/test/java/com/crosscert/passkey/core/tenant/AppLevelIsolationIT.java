@@ -81,7 +81,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * at the {@code @Transactional} boundary of these helper methods, reading the
  * context that the test set BEFORE calling into the service.
  *
- * <p>Uses the same Testcontainers Oracle XE 21 / bootstrap-schema.sql /
+ * <p>Uses the same Testcontainers Oracle XE 21 / test-db-init.sql /
  * application-test.yml pattern as {@link TenantFilterAspectIT}. The test
  * connects as PSK_APP_ADMIN_USER; with VPD removed there is no DB-level isolation,
  * so the Hibernate filter is the ONLY active isolation mechanism.
@@ -116,29 +116,24 @@ class AppLevelIsolationIT {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
+                        + "@/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "test-db-init.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Finding #3 (Approach A): Flyway runs as PSK_APP_OWNER (schema owner)
-        // so that migrations can GRANT on PSK_APP_OWNER objects without error.
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     // ── Test dependencies ────────────────────────────────────────────────────

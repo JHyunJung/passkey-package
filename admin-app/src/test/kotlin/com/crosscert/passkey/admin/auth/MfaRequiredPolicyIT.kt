@@ -34,7 +34,7 @@ import javax.sql.DataSource
  * F01 — MFA 필수 정책 강제화 통합 테스트.
  *
  * 정책 on 에서 MFA 미등록 운영자(alice)는 콘솔 API 가 막히고, 로그인 화면의 등록 흐름
- * (enroll → TOTP confirm)을 마쳐야 쓸 수 있다. 테스트 DB 는 testfix V9002 로 정책이 'N' 이라
+ * (enroll → TOTP confirm)을 마쳐야 쓸 수 있다. 테스트 DB 는 test-seed.sql 로 정책이 'N' 이라
  * 이 IT 가 owner JDBC 로 'Y' 로 올렸다가 끝나면 'N'·alice 의 MFA 컬럼을 원복한다.
  */
 // classes 명시: auth 패키지의 MfaController*Test$SliceConfig 자동탐색 충돌 회피(MultiTenantOperatorIT 참고).
@@ -61,8 +61,8 @@ class MfaRequiredPolicyIT {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @Container
@@ -75,11 +75,11 @@ class MfaRequiredPolicyIT {
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba " +
-                    "@/tmp/bootstrap-schema.sql",
+                    "@/tmp/test-db-init.sql",
             )
             if (exec.exitCode != 0) {
                 throw IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.exitCode + ")\n" +
+                    "test-db-init.sql failed (exit=" + exec.exitCode + ")\n" +
                         "STDOUT:\n" + exec.stdout + "\n" +
                         "STDERR:\n" + exec.stderr,
                 )

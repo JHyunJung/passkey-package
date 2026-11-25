@@ -29,7 +29,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      * every JVM start, so ids from a restarted app can sort before older rows.
      *
      * <p>The sort key is written as {@code SYS_EXTRACT_UTC(createdAt)} so it
-     * matches the V6 function-based index
+     * matches the function-based index (audit_log_created_id_ix)
      * {@code audit_log_created_id_ix (SYS_EXTRACT_UTC(created_at), id)} exactly.
      * Oracle cannot use that index to satisfy a plain {@code ORDER BY created_at}
      * on a TIMESTAMP WITH TIME ZONE column (measured: full scan + WINDOW SORT even

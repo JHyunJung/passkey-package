@@ -65,11 +65,3 @@ tasks.named<Test>("test") {
     // 기본값 false = 비교만 하고 없거나 다르면 실패(ApiContractIT, ChallengeStoreFormatCompatTest).
     systemProperty("contract.record", providers.gradleProperty("contract.record").getOrElse("false"))
 }
-
-// Copy scripts/bootstrap-schema.sql onto the test classpath so
-// Fido2EndToEndIT can ship it into the Testcontainers Oracle via
-// MountableFile (same pattern as core/build.gradle.kts — scripts/ is
-// the single source of truth used by docker-compose).
-tasks.named<Copy>("processTestResources") {
-    from(rootProject.file("scripts/bootstrap-schema.sql"))
-}

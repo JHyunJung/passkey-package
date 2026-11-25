@@ -30,8 +30,7 @@ spring:
       # The app connects as PSK_APP_RUNTIME_USER (passkey) or PSK_APP_ADMIN_USER
       # (admin). All entity tables live in PSK_APP_OWNER schema, so Hibernate
       # must validate and issue DML against PSK_APP_OWNER, not the login
-      # user's default schema. This mirrors Flyway's default-schema
-      # setting (admin-app application.yml).
+      # user's default schema.
       hibernate.default_schema: ${passkey.db.schema}
       # Phase QW-3: JDBC 배치 + 배치 페치 사이징.
       # batch_size: 같은 flush 에 쌓인 동종 INSERT/UPDATE 를 30개 단위로 한 번에

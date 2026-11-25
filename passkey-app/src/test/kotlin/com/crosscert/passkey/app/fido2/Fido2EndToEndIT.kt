@@ -65,8 +65,8 @@ private val USER_HANDLE_A: String = Base64.getUrlEncoder().withoutPadding()
 
 /**
  * Phase 1 acceptance gate (T26). Boots the full passkey-app context
- * against a Testcontainers Oracle XE 21 (with the V1–V8 migrations
- * applied by Flyway on context start) and a Testcontainers Redis 7,
+ * against a Testcontainers Oracle XE 21 (schema created by
+ * test-db-init.sql before context start) and a Testcontainers Redis 7,
  * then exercises the FIDO2 RP API end-to-end over real HTTP.
  *
  * Scenarios:
@@ -102,8 +102,7 @@ class Fido2EndToEndIT @Autowired constructor(
         // ------------------------------------------------------------
 
         // 컨테이너 설정·부트스트랩·프로퍼티 등록 절차는 PasskeyAppItSupport 공용
-        // (bootstrap-schema.sql 을 SYS 로 실행 → 런타임 DataSource 는 PSK_APP_RUNTIME_USER,
-        // Flyway 는 application-test.yml 의 spring.flyway.user=PSK_APP_OWNER).
+        // (test-db-init.sql 로 계정·스키마 생성 → 런타임 DataSource 는 PSK_APP_RUNTIME_USER).
         // 컨테이너 인스턴스와 수명주기는 이 클래스가 소유한다.
         @Container
         @JvmField

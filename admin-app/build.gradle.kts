@@ -90,11 +90,3 @@ tasks.named<Test>("test") {
     // 기본값 false = 비교만 하고 없거나 다르면 실패(AuditChainJacksonCompatTest).
     systemProperty("contract.record", providers.gradleProperty("contract.record").getOrElse("false"))
 }
-
-// Copy scripts/bootstrap-schema.sql onto the test classpath so
-// AdminFlowIT can ship it into the Testcontainers Oracle via
-// MountableFile (same pattern as core / passkey-app — scripts/ is
-// the single source of truth used by docker-compose).
-tasks.named<Copy>("processTestResources") {
-    from(rootProject.file("scripts/bootstrap-schema.sql"))
-}

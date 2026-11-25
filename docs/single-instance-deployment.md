@@ -82,12 +82,20 @@ docker compose up -d
 # 첫 부팅 시 스키마/유저 부트스트랩 (정본 러너 — PDB 명 주입을 대신 처리한다)
 scripts/run-bootstrap.sh
 # 기본 PDB 가 XEPDB1 이 아니면: ORA_SERVICE=<PDB명> scripts/run-bootstrap.sh
+# 스키마 전체 + 시드 적용 (빈 PSK_APP_OWNER 스키마 전제)
+# PROFILE=qa — 운영자 alice 만 넣는다(이 문서의 로그인 예시가 alice 를 쓴다). 테넌트는 콘솔에서 만든다.
+# ⚠️ alice 의 임시 비밀번호는 저장소에 공개돼 있다 — 외부에 노출되는 서버라면 첫 로그인 뒤 바로 바꾼다.
+#    시드 없이 스키마만: PROFILE=none
+PROFILE=qa scripts/apply-schema.sh
 ```
+
+앱은 스키마를 만들거나 바꾸지 않습니다 — 기동할 때 Hibernate 가 테이블·컬럼이 맞는지 검증만
+하므로, 스키마는 위 `apply-schema.sh` 로 먼저 넣어 둡니다.
 
 `bootstrap-schema.sql` 을 sqlplus 로 직접 파이프하지 마세요 — 이 SQL 은 `&ora_service`
 치환에 의존하는데 in-file `DEFINE` 이 없어 호출측(`run-bootstrap.sh`)의 주입이 유일한
 정의입니다. 컨테이너부터 새로 만드는 경우는 `scripts/init-dev-db.sh` 가 compose 재생성 →
-healthy 대기 → 부트스트랩 → Flyway 시드까지 한 번에 처리합니다.
+healthy 대기 → 부트스트랩 → 스키마·시드 적용까지 한 번에 처리합니다.
 
 Oracle XE가 ready 되기까지 30~60초 걸립니다.
 

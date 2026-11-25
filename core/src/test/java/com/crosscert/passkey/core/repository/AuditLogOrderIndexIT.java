@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 이 5개는 통계 없는 소규모 테이블이라 전체 스캔 경로를 탄다. 인덱스 경로의 결과는
  * {@code chainHeadLookup_usesCompositeIndexWithoutSort_andKeepsOrder} 가 고정한다.
  *
- * <p>Testcontainers Oracle XE 21 / bootstrap-schema.sql / owner pool 패턴은
+ * <p>Testcontainers Oracle XE 21 / test-db-init.sql / owner pool 패턴은
  * {@code ActivityRepositoryFeedPageIT} 와 같다. PSK_APP_ADMIN_USER 는 audit_log 에
  * DELETE 권한이 없어 픽스처 삽입·정리·통계는 스키마 OWNER 커넥션으로 한다.
  */
@@ -76,27 +76,24 @@ class AuditLogOrderIndexIT {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
+                        + "@/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "test-db-init.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
         reg.add("spring.jpa.properties.hibernate.session_factory.statement_inspector",
                 SqlCapture.class::getName);
     }

@@ -128,10 +128,10 @@ sudo firewall-cmd --reload
 | `PSK_APP_ADMIN_USER` | admin-app 런타임 |
 | `PSK_APP_RUNTIME_USER` | passkey-app 런타임 |
 
-> **Flyway 미사용** — QA 번들은 admin-app 의 Flyway 를 끈다(`SPRING_FLYWAY_ENABLED=false`).
-> 앱은 스키마를 만들거나 바꾸지 않고, 스키마 이력(`flyway_schema_history`)도 검사하지 않는다.
-> 스키마는 DBA 가 `V1`~`V6`(정본: `ls core/src/main/resources/db/migration`) 기준으로 미리
-> 만들어 두고, 스키마 소유자(`PSK_APP_OWNER`) 계정 비밀번호는 번들에 필요 없다.
+> **앱은 스키마를 만들지 않는다** — 두 앱은 스키마를 만들거나 바꾸지 않고, 기동할 때
+> 테이블·컬럼이 맞는지 검증만 한다. 스키마는 DBA 가 리포지토리의
+> `scripts/full-schema-part1-accounts.sql`(SYSDBA) → `scripts/full-schema-part2-schema.sql`
+> (`PSK_APP_OWNER`)로 미리 만들어 두고, 스키마 소유자(`PSK_APP_OWNER`) 계정 비밀번호는 번들에 필요 없다.
 > 테이블·컬럼이 빠져 있으면 두 앱이 기동 시 `Schema-validation: missing table/column` 으로 멈춘다.
 
 ### 5. 환경 설정
@@ -352,7 +352,7 @@ API Keys 탭에서 `registration`, `authentication` scope 키를 발급한다.
 
 ## 운영 안내 — MFA 필수 정책 (F01)
 
-- 베이스라인이 `security_policy.mfa_required='Y'` 로 시드한다.
+- 스키마 SQL(`scripts/full-schema-part2-schema.sql`)이 필수 초기 행으로 `security_policy.mfa_required='Y'` 를 넣는다.
   - **기존 설치(업그레이드)**: 이 릴리스부터 **MFA 를 등록하지 않은 모든 운영자는 다음 로그인에서 TOTP 등록을 마쳐야
     콘솔을 쓸 수 있다**. 원치 않으면 롤아웃(이미지 교체) **전에** 설정 › 보안 정책 › "모든 운영자에게 MFA 필수"를 끈다.
   - **새 설치**: 정책이 처음부터 켜져 있다. 첫 운영자도 첫 로그인에서 TOTP 등록을 마쳐야 콘솔에 들어가 정책을 끌 수 있다.

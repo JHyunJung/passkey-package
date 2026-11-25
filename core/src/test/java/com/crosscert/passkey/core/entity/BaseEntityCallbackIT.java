@@ -30,9 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Phase 8 T3 acceptance gate for the new {@link BaseEntity} superclass.
  *
- * <p>Boots a real Testcontainers Oracle XE 21, runs {@code scripts/bootstrap-schema.sql}
- * via {@code sqlplus} as SYS, lets Flyway apply V1–V22 (V22 adds the
- * {@code updated_at} columns required by Hibernate's {@code validate} mode),
+ * <p>Boots a real Testcontainers Oracle XE 21, runs {@code test-db-init.sql}
+ * via {@code sqlplus} (accounts as SYS, then the full schema as PSK_APP_OWNER),
  * then exercises the JPA lifecycle callbacks through {@link AdminUser} —
  * the first entity migrated to extend {@link BaseEntity}.
  *
@@ -45,8 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>We deliberately follow the {@code @SpringBootTest + @Testcontainers}
  * shape of {@code AppLevelIsolationIT} rather than {@code @DataJpaTest} so the
- * bootstrap-as-SYS step and full {@code application-test.yml} (Flyway +
- * Hibernate validate + Redis exclusion) apply identically across :core ITs.
+ * bootstrap-as-SYS step and full {@code application-test.yml} (Hibernate validate + Redis exclusion) apply identically across :core ITs.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -80,8 +78,8 @@ class BaseEntityCallbackIT {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
@@ -90,25 +88,19 @@ class BaseEntityCallbackIT {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
+                        + "@/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "test-db-init.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
 
         // Connect as PSK_APP_ADMIN_USER — runtime user.
-        // V22 (and subsequent migrations) will have run before Hibernate
-        // validates ADMIN_USER's new updated_at column.
+        // The schema already exists (test-db-init.sql) when Hibernate validates it.
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Finding #3 (Approach A): Flyway runs as PSK_APP_OWNER (schema owner)
-        // so that migrations can GRANT on PSK_APP_OWNER objects without error.
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired

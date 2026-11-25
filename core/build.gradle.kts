@@ -22,10 +22,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-aspectj")
 
     api(rootProject.libs.oracle.jdbc)
-    // Boot 4 는 flyway-core 만으로 Flyway 자동설정이 켜지지 않는다 — 전용 스타터 필요.
-    api("org.springframework.boot:spring-boot-starter-flyway")
-    api(rootProject.libs.flyway.core)
-    api(rootProject.libs.flyway.oracle)
 
     api(rootProject.libs.nimbus.jose.jwt)
     api(rootProject.libs.spring.security.crypto)
@@ -58,13 +54,4 @@ tasks.named<Test>("test") {
     // Oracle Testcontainer boot does not fail on the first /info call.
     // See: https://github.com/testcontainers/testcontainers-java/issues/9434
     systemProperty("api.version", "1.43")
-}
-
-// Copy scripts/bootstrap-schema.sql onto the test classpath so the Oracle ITs
-// (AppLevelIsolationIT, TenantFilterAspectIT, etc.) can read it as a classpath
-// resource and ship it into the Testcontainers
-// Oracle via MountableFile. Sourcing from scripts/ (the single source of
-// truth used by docker-compose) prevents drift between local dev and CI.
-tasks.named<Copy>("processTestResources") {
-    from(rootProject.file("scripts/bootstrap-schema.sql"))
 }

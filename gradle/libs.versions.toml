@@ -28,9 +28,7 @@ lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 oracle-jdbc = { module = "com.oracle.database.jdbc:ojdbc11" }
 # NLS(National Language Support) — Oracle 문자셋/날짜·언어 변환 등에 필요. ojdbc 와 동일 버전(Boot BOM oracle-database.version).
 oracle-nls = { module = "com.oracle.database.nls:orai18n" }
-# Flyway·Oracle JDBC·Testcontainers 는 Spring Boot BOM 이 버전 관리(4.1.2: flyway 12.4.0, oracle-database 23.26.3.0.0, testcontainers 2.0.5).
-flyway-core = { module = "org.flywaydb:flyway-core" }
-flyway-oracle = { module = "org.flywaydb:flyway-database-oracle" }
+# Oracle JDBC·Testcontainers 는 Spring Boot BOM 이 버전 관리(4.1.2: oracle-database 23.26.3.0.0, testcontainers 2.0.5).
 # Testcontainers 2.x 아티팩트명(testcontainers- 접두사).
 testcontainers-oracle = { module = "org.testcontainers:testcontainers-oracle-xe" }
 testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }

@@ -1,15 +1,15 @@
 -- ============================================================
--- R__seed_local_tenant.sql — local 프로필 전용 테넌트 시드 (repeatable)
+-- local-tenant.sql — local 프로필 전용 테넌트 시드 (PROFILE=local scripts/apply-schema.sh)
 --
 -- ⚠️ local 전용. rpId=localhost 라 완전 로컬(http://localhost:9090)에서
---    패스키 등록/인증 ceremony 가 동작한다. dev/qa/prod 는 이 디렉터리 미포함.
+--    패스키 등록/인증 ceremony 가 동작한다. dev/qa/운영에는 적용하지 않는다.
 --
 -- 테넌트 demo-rp (tenantId 0000...C0DE — 테스트 픽스처와 동일 값).
 -- API key: pk_devlocal + plaintext "dev_local_secret_known_plaintext_for_test_only".
 --   전체 X-API-Key: pk_devlocaldev_local_secret_known_plaintext_for_test_only
 --
--- aaguid_policy(ANY)·snapshot 도 직접 시드 — V26/V27 백필은 이미 적용 완료라
--- 새 tenant 를 따라오지 않으므로.
+-- aaguid_policy(ANY)·snapshot 도 직접 시드한다 — 콘솔로 만든 테넌트는 앱이 함께
+-- 만들어 주지만, SQL 로 넣는 테넌트에는 생기지 않으므로.
 --
 -- api_key 는 tenant_id 를 명시 INSERT 한다(VPD 제거됨 — CTX_PKG 컨텍스트 불필요).
 -- Idempotent: 모든 INSERT NOT EXISTS 가드.
@@ -61,7 +61,7 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE slug = 'demo-rp')
      WHERE tenant_id = (SELECT id FROM tenant WHERE slug = 'demo-rp') AND format = 'packed'
   );
 
--- 4. aaguid_policy (ANY) — V26 백필 대체
+-- 4. aaguid_policy (ANY)
 INSERT INTO tenant_aaguid_policy (tenant_id, policy_mode, mds_strict, created_at, updated_at, updated_by)
 SELECT (SELECT id FROM tenant WHERE slug = 'demo-rp'), 'ANY', 'N',
        SYSTIMESTAMP, SYSTIMESTAMP, 'seed:local'
@@ -72,7 +72,7 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE slug = 'demo-rp')
      WHERE tenant_id = (SELECT id FROM tenant WHERE slug = 'demo-rp')
   );
 
--- 5. webauthn_snapshot — V27 백필 대체 (컬럼명/구조 V27 동일)
+-- 5. webauthn_snapshot
 INSERT INTO tenant_webauthn_snapshot (
   id, tenant_id, rp_id, rp_name, allowed_origins, accepted_formats,
   require_user_verification, mds_required, taken_at, taken_by

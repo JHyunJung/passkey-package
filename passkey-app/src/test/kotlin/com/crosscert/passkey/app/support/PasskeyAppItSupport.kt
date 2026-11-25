@@ -12,7 +12,7 @@ import org.testcontainers.utility.MountableFile
  *
  * 컨테이너와 수명주기(@Testcontainers, @BeforeEach/@AfterEach/@AfterAll)는 각 테스트 클래스가 갖고,
  * 이 객체는 그 안에서 호출하는 절차만 모은다. 절차는 `Fido2EndToEndIT` 와 같다:
- * SYS 로 `bootstrap-schema.sql` 실행 → 런타임 DataSource 는 PSK_APP_RUNTIME_USER,
+ * SYS 로 `test-db-init.sql` 실행 → 런타임 DataSource 는 PSK_APP_RUNTIME_USER,
  * 시드/정리는 별도 PSK_APP_ADMIN_USER 풀(런타임 유저는 tenant 에 SELECT 만 가짐).
  */
 object PasskeyAppItSupport {
@@ -28,8 +28,8 @@ object PasskeyAppItSupport {
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
     /** docker-compose 와 같은 Redis 7 컨테이너. */
@@ -43,10 +43,10 @@ object PasskeyAppItSupport {
     fun bootstrapAndRegister(reg: DynamicPropertyRegistry, oracle: OracleContainer, redis: GenericContainer<*>) {
         val exec = oracle.execInContainer(
             "bash", "-c",
-            "sqlplus -S sys/$SYS_PASSWORD@localhost:1521/XEPDB1 as sysdba @/tmp/bootstrap-schema.sql",
+            "sqlplus -S sys/$SYS_PASSWORD@localhost:1521/XEPDB1 as sysdba @/tmp/test-db-init.sql",
         )
         check(exec.exitCode == 0) {
-            "bootstrap-schema.sql failed (exit=${exec.exitCode})\nSTDOUT:\n${exec.stdout}\nSTDERR:\n${exec.stderr}"
+            "test-db-init.sql failed (exit=${exec.exitCode})\nSTDOUT:\n${exec.stdout}\nSTDERR:\n${exec.stderr}"
         }
         reg.add("spring.datasource.url", oracle::getJdbcUrl)
         reg.add("spring.datasource.username") { "PSK_APP_RUNTIME_USER" }

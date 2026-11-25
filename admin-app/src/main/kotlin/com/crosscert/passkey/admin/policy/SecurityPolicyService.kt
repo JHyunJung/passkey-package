@@ -24,14 +24,14 @@ class SecurityPolicyService(
     @Transactional(readOnly = true)
     fun get(): SecurityPolicyDto.View {
         val p = repo.findById(SINGLETON_ID)
-            .orElseThrow { IllegalStateException("security_policy singleton row missing — V31 not applied?") }
+            .orElseThrow { IllegalStateException("security_policy singleton row missing — schema SQL (full-schema-part2-schema.sql) not applied?") }
         return toView(p)
     }
 
     @Transactional
     fun update(req: SecurityPolicyDto.UpdateRequest, updatedBy: String?): SecurityPolicyDto.View {
         val p = repo.findById(SINGLETON_ID)
-            .orElseThrow { IllegalStateException("security_policy singleton row missing — V31 not applied?") }
+            .orElseThrow { IllegalStateException("security_policy singleton row missing — schema SQL (full-schema-part2-schema.sql) not applied?") }
         p.sessionIdleTimeoutMinutes = req.sessionIdleTimeoutMinutes
         p.isMfaRequired = req.mfaRequired == true
         p.corsAllowlistJson = serialize(req.corsAllowlist)

@@ -37,9 +37,8 @@
       (봉인 서명 키·MFA secret 과 같이) 코드도 재발급 필요. [2026-11-12]
 - [x] ~~**`X-Trace-Id` 무검증 → 로그 인젝션**~~ — core·rp-app `TraceIdFilter` 가 `[A-Za-z0-9._-]{1,64}` 일 때만 수용,
       아니면 새 ID 발급(요청은 거부하지 않음). 양쪽 `TraceIdFilterTest` 에 CRLF·길이·문자집합 케이스. [2026-11-11]
-- [x] ~~**시드 평문 비번이 prod 에 실리지 않는지 확인**~~ — 확인 완료(코드 변경 없음): `application-prod.yml` locations =
-      `db/migration,db/prod`(seed-common 미포함). qa 는 의도적으로 seed-common 포함이나 QA 번들은
-      `SPRING_FLYWAY_ENABLED=false`. [2026-11-11]
+- [x] ~~**시드 평문 비번이 prod 에 실리지 않는지 확인**~~ — 확인 완료: 앱은 어느 프로필에서도 시드를 넣지 않는다. 시드는
+      `scripts/seed/` 에만 있고 `scripts/apply-schema.sh`(`PROFILE=dev|local|qa`)로 직접 적용할 때만 들어간다. [2026-11-11]
 - [x] ~~**(릴리스 차단) QA 번들 이미지가 아직 Spring Boot 3.5 빌드**~~ — `scripts/build-images.sh`(NO_SAVE 없이)로
       main `aa28f5e7` 기준 amd64 이미지 3개 재빌드, `SHA256SUMS` 갱신. 이미지 내부 jar 에서 Boot 4.1.2·나눔고딕·
       `show-details: when-authorized` 확인. infra.tar.gz 는 불변. tar.gz 는 커밋 대상이 아니므로 반출 시 이 머신의
@@ -171,7 +170,7 @@
       [master-backlog 2026-05-31, audit-top10-kotlin 2026-11-10]
 - [ ] **`VerifiedSecretCache` 상한(10,000)이 근사값** — 용량 확인과 삽입이 원자적이지 않아 동시 삽입 시 잠깐 넘을 수 있다.
       인증 판정에는 영향 없음. 원자적 admission 이나 문서 수정. [audit-top10-kotlin 2026-11-10]
-- [ ] **P5 체인 헤드 조회가 아직 O(n) 인덱스 전체 스캔** — `findLatestForUpdate` 는 V6 인덱스로 정렬은 없어졌지만(20,005행 376→92 gets)
+- [ ] **P5 체인 헤드 조회가 아직 O(n) 인덱스 전체 스캔** — `findLatestForUpdate` 는 `audit_log_created_id_ix` 인덱스로 정렬은 없어졌지만(20,005행 376→92 gets)
       Hibernate 잠금 래퍼(`id in (… fetch first 1) for update`)가 STOPKEY 를 잃는다. ROWNUM 네이티브 쿼리
       (`where id in (select id from (… order by sys_extract_utc(created_at) desc, id desc) where rownum <= 1) for update`)는
       5 gets(O(1)) — 네이티브 쿼리 도입 승인 필요. [audit-top10-kotlin 2026-11-10]
@@ -225,7 +224,7 @@
 - [x] ~~**`LogRedact` 죽은 헬퍼 정리**~~ — 클래스·테스트 삭제, `SecretMaskingConverter` Javadoc·로깅 문서 2종을 `CryptoUtils.maskEmail` 관례로 정정. [2026-11-12]
 
 - [ ] **core 엔티티 23개가 단일 패키지** → passkey-app 이 쓰지 않는 엔티티까지 스키마 검증·권한을 요구한다.
-      `SchedulerLease`(2026-05-25) → `SecurityIncident`(2026-08-07) 로 재발했고 V4 GRANT 로 우회 중. **구조적 미해소.**
+      `SchedulerLease`(2026-05-25) → `SecurityIncident`(2026-08-07) 로 재발했고 `security_incident` SELECT GRANT 로 우회 중. **구조적 미해소.**
       [prod-hardening 2026-05-25, docker-deployment 2026-08-07]
 - [ ] **`AdminITBase` 공통 추출** — admin-app 테스트에 `*ITBase*` 0건. 3회 반복 지적.
       [admin-role-separation 2026-05-27, admin-tenant-detail 2026-05-27]
@@ -248,7 +247,7 @@
 - [ ] **`JwksCache` thundering herd** — sdk-java. 첫 JWKS fetch 가 실패하면 backoff 가 기록되지 않아 대기 스레드가 차례로 재시도한다
       (2026-11-15 관찰). [sdk-and-sample-rp 2026-05-27]
 - [ ] **죽은 코드·낡은 문자열** — `AuditLogRepository` 의 funnel 쿼리 3개는 호출자가 없다(`FunnelService` 는 `CeremonyEventRepository` 사용),
-      admin-app `VERIFY_TIMEOUT_MS` 미사용, 예외 메시지 `"V31 not applied?"` 는 squash 로 없어진 마이그레이션을 가리킨다,
+      admin-app `VERIFY_TIMEOUT_MS` 미사용,
       테넌트 CSV 가 rpId 없을 때 문자열 `"null"` 을 쓴다. [2026-11-15 주석 정비 중 발견]
 - [ ] **rp-app 주석에 서버 클래스명이 남아 있다** — `JacksonLimitsConfig.java:11`(`PasskeyAppJacksonConfig`),
       `RegisterStartReq.java:11`(`passkey-app RegistrationStartRequest`). 고객사 샘플이므로 지울지 결정 필요. [2026-11-15]
@@ -303,7 +302,6 @@
 
 ### 추적만 (조치 불요)
 
-- flyway 핀 `10.20.1`(`libs.versions.toml:6`) 이 Boot BOM 11.7.2 로 무시된다 — 핀이 무의미하다는 인지. [master-backlog 2026-05-31]
 - testcontainers `1.20.4` + `api.version=1.43` 핀(`libs.versions.toml:5`). [prod-hardening 2026-05-25]
 - pdfbox/fontbox 2.0.24 transitive(openhtmltopdf 경유) — 미확인. [master-backlog 2026-05-31]
 
@@ -322,19 +320,17 @@
 ## 7. 운영 지식 (코드 백로그 아님)
 
 - `/actuator/prometheus` 기본 비노출 — 이미 [deploy/README.md](../deploy/README.md) 의 환경변수 표에 기재돼 있다. [observability-C 2026-05-31]
-- **최초 기동 순서**: admin-app(Flyway) 이 healthy 가 된 뒤 passkey-app. 반대면 passkey-app 의 validate 실패 로그가 정상이다. [docker-deployment 2026-08-07]
 - **빌드 전 `docker pull eclipse-temurin:17-jre` 선행** — VM 내부 네트워크에서 타임아웃이 난다. [docker-deployment 2026-08-07]
-- **dev 시드가 남은 DB 에 prod 프로필로 기동하면 Flyway 가 거부한다**(의도된 동작). 볼륨을 재생성한다. [docker-deployment 2026-08-07]
 - **GRANT 누락 전수 조사**: `user_tab_privs_made` 안티조인 쿼리. 컬럼 GRANT 는 `user_col_privs_made` 를 따로 봐야 한다. [docker-deployment 2026-08-07]
 - **`MASTER_KEY` 는 정확히 32바이트** — `openssl rand -base64 32`. [docker-deployment 2026-08-07]
 - **감사 Top 10 배포 노트** [audit-top10-kotlin 2026-11-10]
   - **배포 전 게이트 — Oracle 세션 여유**: passkey-app DB 풀 기본값이 10→20. 대상 DB 에서
     `SELECT name, value FROM v$parameter WHERE name IN ('processes','sessions')` 와 계정 `SESSIONS_PER_USER` 를 확인한다.
-    필요 세션 ≈ (롤링 피크 포함 passkey-app 인스턴스 수) × 20 + admin 10 + Flyway + DBA·모니터링(README 구성 기준 약 251, 변경 전 약 131).
+    필요 세션 ≈ (롤링 피크 포함 passkey-app 인스턴스 수) × 20 + admin 10 + DBA·모니터링(README 구성 기준 약 251, 변경 전 약 131).
     여유가 없으면 `.env` 의 `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE`·`SERVER_TOMCAT_THREADS_MAX` 를 **워커 ≤ 풀 − 1** 로 함께 낮춘다
     (기동 시 이 관계를 검사하지 않으므로 풀만 낮추면 30초 정지 문제가 되살아난다).
   - **Tomcat 워커 200→19(passkey-app)**: 처리량이 바뀌는 변경 — 목표 동시성으로 부하 테스트.
-  - **V6 인덱스**: SE2 라 ONLINE 빌드 불가 → audit_log 테이블 락. admin-app 한 대로, 관리 작업이 적은 시간에. ORA-00054 로
-    실패하면 막는 세션 정리 후 `flyway repair` → 재기동. QA 번들(Flyway off)은 DBA 가 `scripts/full-schema-part2-schema.sql` 의
-    V6 문장을 수동 실행. 앱·DB 배포 순서는 무관(V6 없이도 결과 동일).
+  - **`audit_log_created_id_ix` 인덱스**: SE2 라 ONLINE 빌드 불가 → audit_log 테이블 락. 이 인덱스가 없는 기존 DB 에는 DBA 가
+    `scripts/full-schema-part2-schema.sql` 의 해당 `CREATE INDEX` 문장을 관리 작업이 적은 시간에 직접 실행한다. ORA-00054 로
+    실패하면 막는 세션 정리 후 다시 실행. 앱·DB 배포 순서는 무관(인덱스 없이도 결과 동일).
   - **S16 세션**: 강제 로그아웃 불필요 — 기존 Redis 세션은 만료·재로그인 전까지 해시 보유, 새 로그인부터 미보유. 롤백 안전.

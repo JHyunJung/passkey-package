@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code OffsetDateTime.now(KstTime.ZONE)})로 채워지는 {@code TIMESTAMP(6) WITH TIME ZONE} 컬럼.
  * 컬럼 값은 네이티브 SQL({@code TO_CHAR ... TZH:TZM})로 Hibernate 를 거치지 않고 읽는다.
  *
- * <p>구성은 {@code BaseEntityCallbackIT} 와 같다(Oracle Testcontainers + bootstrap SQL + Flyway).
+ * <p>구성은 {@code BaseEntityCallbackIT} 와 같다(Oracle Testcontainers + test-db-init.sql).
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -64,27 +64,24 @@ class KstPersistenceIT {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
+                        + "@/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "test-db-init.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired AdminUserRepository adminUsers;

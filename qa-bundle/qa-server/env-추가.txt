@@ -20,4 +20,4 @@ RP_PASSKEY_BASE_URL=http://passkey-app:8080
 
 # ── 쓰지 않음 (있어도 무해, 지워도 됨) ──
 # ADMIN_SERVER_NAME, ADMIN_TLS_CERT_NAME, ADMIN_TLS_KEY_NAME, RP_SERVER_NAME,
-# DB_OWNER_USER, DB_OWNER_PASSWORD, ADMIN_FLYWAY_ENABLED (Flyway 는 compose 에서 항상 꺼져 있다)
+# DB_OWNER_USER, DB_OWNER_PASSWORD, ADMIN_FLYWAY_ENABLED (앱이 스키마를 만들지 않으므로 쓰이지 않는다)

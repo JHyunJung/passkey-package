@@ -1,5 +1,5 @@
 -- ============================================================
--- R__seed_dev_tenant.sql — dev 프로필 전용 테넌트 시드 (repeatable)
+-- dev-tenant.sql — dev 프로필 전용 테넌트 시드 (PROFILE=dev scripts/apply-schema.sh)
 --
 -- ⚠️ dev(서버 배포) 전용. rpId=dev-passkey.crosscert.com.
 --    브라우저가 https://dev-passkey.crosscert.com 으로 접속할 때 패스키 동작.
@@ -13,7 +13,7 @@
 --   PLATFORM_OPERATOR(alice) 처럼 별도 수동 INSERT 없이 바로 로그인 가능.
 --   bob@crosscert.com / "bob-temp-pw", mfa_enabled='N'(편의상 TOTP 생략).
 --   ⚠️ RP_ADMIN 은 admin_user_tenant 매핑이 필요 → 테넌트 INSERT 뒤에 와야
---      하므로 seed-common 이 아니라 이 파일(같은 트랜잭션 순서)에 둔다.
+--      하므로 operators.sql 이 아니라 이 파일(같은 트랜잭션 순서)에 둔다.
 --
 -- aaguid_policy(ANY)·snapshot 직접 시드. (VPD 제거됨 — tenant_id 명시 INSERT, 컨텍스트 불필요.)
 -- Idempotent: NOT EXISTS 가드.
@@ -76,7 +76,7 @@ WHERE EXISTS (SELECT 1 FROM tenant WHERE slug = 'dev-passkey')
      WHERE tenant_id = (SELECT id FROM tenant WHERE slug = 'dev-passkey')
   );
 
--- 5. webauthn_snapshot (컬럼명/구조 V27 동일)
+-- 5. webauthn_snapshot
 INSERT INTO tenant_webauthn_snapshot (
   id, tenant_id, rp_id, rp_name, allowed_origins, accepted_formats,
   require_user_verification, mds_required, taken_at, taken_by
@@ -139,7 +139,7 @@ WHERE EXISTS (SELECT 1 FROM api_key WHERE id = HEXTORAW('7F00DEAD000000000000000
 
 -- 8. admin_user: bob (RP_ADMIN, dev-passkey 테넌트 바인딩)
 --    alice(PLATFORM_OPERATOR)와 동급으로 dev 어드민에 바로 로그인.
---    고정 RAW id 0x...0011 (testfix V9001 의 bob 과 동일), bcrypt "bob-temp-pw".
+--    고정 RAW id 0x...0011 (통합 테스트 시드의 bob 과 동일), bcrypt "bob-temp-pw".
 --    mfa_enabled='N' — 비밀번호만으로 admin/api 접근(MfaPendingFilter 우회).
 INSERT INTO admin_user (id, email, bcrypt_hash, role, enabled, mfa_enabled, created_at)
 SELECT HEXTORAW('00000000000000000000000000000011'), 'bob@crosscert.com',

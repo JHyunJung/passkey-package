@@ -128,8 +128,7 @@ rp-app 으로 넘기도록 nginx.conf 에 들어 있다.
 | nginx 컨테이너가 계속 재시작 | `docker compose logs nginx` — `cannot load certificate` 는 `.env` 의 `TLS_*_NAME` 파일명 오타, `bad password read` 는 암호 걸린 키(2단계), `Permission denied` 는 SELinux — compose 의 두 마운트 끝을 `:ro,z` 로 바꾼다 |
 | 502 Bad Gateway | 해당 앱 컨테이너가 안 떠 있다 — `docker compose ps` |
 | passkey-app·admin-app 이 함께 재시작 반복 | Redis 가 꺼져 있다 — `docker ps -a \| grep redis` 로 확인, `docker compose -f docker-compose.redis.yml up -d` |
-| admin-app 로그에 Flyway(`flywayInitializer`, `Validate failed`)가 보임 | Flyway 가 꺼지지 않았다 — compose 의 admin-app 에 `SPRING_FLYWAY_ENABLED=false` 가 있는지 보고 `docker compose up -d admin-app` |
-| 로그에 `Schema-validation: missing table/column` | 스키마가 덜 만들어졌다 — DBA 가 빠진 DDL 을 적용한다(Flyway 를 쓰지 않으므로 앱이 만들지 않는다) |
+| 로그에 `Schema-validation: missing table/column` | 스키마가 덜 만들어졌다 — DBA 가 빠진 DDL 을 적용한다(앱은 스키마를 만들지 않는다) |
 | RP 에서 패스키 요청이 403 | rp-app 에 forward headers 설정이 없다 — `docker compose config rp-app \| grep FORWARD` 가 `native` 여야 한다 |
 | 서버 안 curl 은 되는데 PC 브라우저에서 8443 안 열림 | 서버·네트워크 방화벽에서 8443 허용 |
 | 패스키 등록 시 origin 오류 | 테넌트 `allowedOrigins` 에 `:8443` 까지 들어 있는지 |

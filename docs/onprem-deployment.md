@@ -174,7 +174,7 @@ docker compose -f docker-compose.redis.yml exec -T redis sh -c '
 **모든 호스트의 4.1 admin-app 을 전부 중지 → 위 정리 블록을 그대로 실행(`OK:` 확인) → 3.5 빌드 기동**.
 admin 콘솔 사용자는 이때도 전원 다시 로그인한다.
 
-그 밖에는 되돌려도 문제가 없다. 이 업그레이드에는 DB 스키마 변경(Flyway 마이그레이션)이 없고,
+그 밖에는 되돌려도 문제가 없다. 이 업그레이드에는 DB 스키마 변경이 없고,
 passkey-app 이 Redis 에 쓰는 챌린지 JSON 형식은 두 버전이 서로 읽을 수 있다
 (업그레이드 전 기록한 픽스처를 신버전이 읽고·같은 바이트로 쓰는지 `ChallengeStoreFormatCompatTest` 가 고정).
 passkey-app·rp-app 은 별도 절차 없이 이전 이미지로 교체하면 된다.

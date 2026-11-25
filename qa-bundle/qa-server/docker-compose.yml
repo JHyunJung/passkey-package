@@ -65,8 +65,7 @@ services:
       - SPRING_DATASOURCE_URL=${DB_URL}
       - SPRING_DATASOURCE_USERNAME=${DB_ADMIN_USER}
       - SPRING_DATASOURCE_PASSWORD=${DB_ADMIN_PASSWORD}
-      # Flyway 미사용 — 스키마는 DBA 가 관리한다. 테이블·컬럼 존재는 JPA 가 기동 시 검사한다.
-      - SPRING_FLYWAY_ENABLED=false
+      # 스키마는 DBA 가 관리한다(앱은 만들거나 바꾸지 않는다). 테이블·컬럼 존재는 JPA 가 기동 시 검사한다.
       # QA 전용 — 가입 화면에서 Platform Operator 를 고르면 승인 없이 바로 계정이 만들어진다.
       - ADMIN_SIGNUP_AUTO_APPROVE_PLATFORM_OPERATOR=true
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST}

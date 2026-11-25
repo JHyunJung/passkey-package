@@ -2,25 +2,6 @@ spring:
   config:
     import: classpath:application-common.yml
   application.name: admin-app-it
-  flyway:
-    enabled: true
-    # db/testfix carries test-only fixups applied AFTER the real migrations
-    # (e.g. V9000 disables the V32 alice MFA seed so the many role/tenant ITs
-    # that log in as alice are not gated by MfaPendingFilter). This location
-    # exists only under src/test/resources, so it never ships to prod.
-    locations: classpath:db/migration,classpath:db/testfix
-    # 스키마명 단일 출처는 common yml 의 passkey.db.schema — main application.yml 과 동일 규약.
-    schemas: ${passkey.db.schema}
-    default-schema: ${passkey.db.schema}
-    baseline-on-migrate: true
-    baseline-version: 0
-    # Finding #3 (Approach A): Flyway runs as the schema OWNER (PSK_APP_OWNER), not
-    # the runtime datasource user (PSK_APP_ADMIN_USER, which now holds ZERO DDL).
-    # url is omitted → Flyway falls back to spring.datasource.url (the per-IT
-    # Testcontainers URL). All ITs share the same PSK_APP_OWNER password because the
-    # OracleContainer uses it as both SYS and PSK_APP_OWNER secret.
-    user: PSK_APP_OWNER
-    password: app_owner_pw
   datasource:
     driver-class-name: oracle.jdbc.OracleDriver
   session:

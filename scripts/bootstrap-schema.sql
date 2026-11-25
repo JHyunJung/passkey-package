@@ -39,7 +39,7 @@ END;
 GRANT CREATE SESSION TO PSK_APP_RUNTIME;
 
 -- PSK_APP_ADMIN: admin-app runtime + scheduler. Cross-tenant admin queries are
--- handled at the app layer (explicit tenant_id checks); Flyway runs as PSK_APP_OWNER.
+-- handled at the app layer (explicit tenant_id checks); schema DDL is applied as PSK_APP_OWNER.
 BEGIN
   EXECUTE IMMEDIATE 'CREATE ROLE PSK_APP_ADMIN';
 EXCEPTION WHEN OTHERS THEN

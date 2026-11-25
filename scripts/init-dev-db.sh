@@ -8,7 +8,7 @@
 #   2. wait-for-oracle               — healthcheck 가 healthy 될 때까지 대기
 #   3. run-bootstrap.sh              — PSK_APP_ADMIN/PSK_APP_RUNTIME role + 스키마 생성
 #                                      (VPD 제거됨 — CTX_PKG/APP_CTX/VPD GRANT 안 만듦)
-#   4. admin-app(dev) 부팅           — Flyway 가 V1~ 마이그레이션 + dev 시드(R__) 적용 후 종료
+#   4. apply-schema.sh               — 스키마 전체(full-schema-part2-schema.sql) + dev 시드 적용
 #
 # 결과: dev 프로필 시드(테넌트 dev-passkey, 운영자 alice, API key pk_devsrv01)가
 #       들어간 깨끗한 DB. 이후 ./gradlew :admin-app:bootRun --args='--spring.profiles.active=dev'
@@ -23,7 +23,7 @@
 # git worktree 에서도 메인 체크아웃과 같은 개발 볼륨(passkey2_oracle-data)을 지운다.
 # worktree 에서 --yes 로 돌리려면 INIT_DEV_DB_FORCE=1 을 함께 지정해야 한다.
 #
-# 다른 프로필(local/qa)로 초기화하려면 PROFILE 환경변수로:
+# 다른 시드(local/qa/none)로 초기화하려면 PROFILE 환경변수로:
 #   PROFILE=local scripts/init-dev-db.sh
 #
 set -euo pipefail
@@ -87,34 +87,10 @@ bash "${SCRIPT_DIR}/wait-for-oracle.sh"
 echo "==> [3/4] role/스키마 부트스트랩"
 bash "${SCRIPT_DIR}/run-bootstrap.sh"
 
-echo "==> [4/4] Flyway 마이그레이션 + ${PROFILE} 시드 적용 (admin-app 부팅 후 자동 종료)"
-# admin-app 을 부팅하면 Flyway 가 마이그레이션+시드를 적용한다. 마이그레이션이
-# 끝나고 'Started AdminApplication' 이 뜨면 목적 달성 — 백그라운드로 띄우고
-# 그 로그를 확인한 뒤 종료시킨다.
-LOG="$(mktemp -t init-dev-db.XXXXXX.log)"
-./gradlew :admin-app:bootRun --args="--spring.profiles.active=${PROFILE}" > "${LOG}" 2>&1 &
-GRADLE_PID=$!
+echo "==> [4/4] 스키마 + ${PROFILE} 시드 적용"
+PROFILE="${PROFILE}" bash "${SCRIPT_DIR}/apply-schema.sh"
 
-# 부팅 완료(Started) 또는 실패 신호를 폴링
-ok=false
-for _ in $(seq 1 80); do
-  if grep -q "Started AdminApplication" "${LOG}" 2>/dev/null; then ok=true; break; fi
-  if grep -qE "APPLICATION FAILED TO START|BUILD FAILED|Migration.*failed|ORA-[0-9]" "${LOG}" 2>/dev/null; then break; fi
-  sleep 3
-done
-
-# admin-app 종료(마이그레이션은 이미 끝남)
-kill "${GRADLE_PID}" 2>/dev/null || true
-pkill -f "admin-app.*bootRun" 2>/dev/null || true
-
-if [ "${ok}" = "true" ]; then
-  echo "==> ✅ 완료. ${PROFILE} 시드가 적용된 깨끗한 DB 준비됨."
-  echo "    로그: ${LOG}"
-  echo "    이제 서버를 띄우세요:"
-  echo "      ./gradlew :admin-app:bootRun  --args='--spring.profiles.active=${PROFILE}'"
-  echo "      ./gradlew :passkey-app:bootRun --args='--spring.profiles.active=${PROFILE}'"
-else
-  echo "==> ❌ 마이그레이션/부팅 실패. 로그 확인: ${LOG}" >&2
-  tail -30 "${LOG}" >&2 || true
-  exit 1
-fi
+echo "==> ✅ 완료. ${PROFILE} 시드가 적용된 깨끗한 DB 준비됨."
+echo "    이제 서버를 띄우세요:"
+echo "      ./gradlew :admin-app:bootRun  --args='--spring.profiles.active=${PROFILE}'"
+echo "      ./gradlew :passkey-app:bootRun --args='--spring.profiles.active=${PROFILE}'"

@@ -19,7 +19,7 @@ public class SchedulerLease {
      * or the service must generate one before persisting. No @UuidGenerator here
      * because the schema retains DEFAULT SYS_GUID() to keep IT test raw-SQL
      * inserts (which omit the id column) valid.
-     * V1 의 AUDIT_CHAIN_LOCK 시드 행도 id 를 생략하고 INSERT 한다.
+     * 스키마 SQL 의 AUDIT_CHAIN_LOCK 시드 행도 id 를 생략하고 INSERT 한다.
      *
      * For the same reason this entity does NOT extend BaseEntity.
      * createdAt/updatedAt are declared here directly (the table has both columns).

@@ -26,8 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@link AdminUserTenantRepository} acceptance gate.
  *
- * <p>Boots a real Testcontainers Oracle XE 21, runs bootstrap-schema.sql as SYS,
- * then lets Flyway apply all migrations. Verifies CRUD and the custom queries
+ * <p>Boots a real Testcontainers Oracle XE 21, runs test-db-init.sql
+ * (accounts as SYS, then the full schema as PSK_APP_OWNER). Verifies CRUD and the custom queries
  * on the admin_user_tenant join table (composite PK: admin_user_id, tenant_id).
  */
 @SpringBootTest
@@ -50,28 +50,24 @@ class AdminUserTenantRepositoryTest {
                     .withUsername("PSK_APP_OWNER")
                     .withPassword(SYS_PASSWORD)
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                            "/tmp/bootstrap-schema.sql");
+                            MountableFile.forClasspathResource("test-db-init.sql"),
+                            "/tmp/test-db-init.sql");
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry reg) throws Exception {
         Container.ExecResult exec = ORACLE.execInContainer(
                 "bash", "-c",
                 "sqlplus -S sys/" + SYS_PASSWORD + "@localhost:1521/XEPDB1 as sysdba "
-                        + "@/tmp/bootstrap-schema.sql");
+                        + "@/tmp/test-db-init.sql");
         if (exec.getExitCode() != 0) {
             throw new IllegalStateException(
-                    "bootstrap-schema.sql failed (exit=" + exec.getExitCode() + ")\n"
+                    "test-db-init.sql failed (exit=" + exec.getExitCode() + ")\n"
                             + "STDOUT:\n" + exec.getStdout() + "\n"
                             + "STDERR:\n" + exec.getStderr());
         }
         reg.add("spring.datasource.url", ORACLE::getJdbcUrl);
         reg.add("spring.datasource.username", () -> "PSK_APP_ADMIN_USER");
         reg.add("spring.datasource.password", () -> "admin_pw");
-        // Flyway 는 스키마 OWNER 로 — 런타임 유저(PSK_APP_ADMIN_USER)에는 DDL 권한이 없다(ORA-01031).
-        reg.add("spring.flyway.url", ORACLE::getJdbcUrl);
-        reg.add("spring.flyway.user", () -> "PSK_APP_OWNER");
-        reg.add("spring.flyway.password", () -> SYS_PASSWORD);
     }
 
     @Autowired AdminUserTenantRepository repo;

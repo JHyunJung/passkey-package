@@ -58,7 +58,7 @@ private const val KEY_HASH = "\$2a\$10\$abcdefghijklmnopqrstuv"
  * (last_used_at) so the assertions never depend on the service under test for
  * their own ground truth.
  *
- * Mirrors the Testcontainers Oracle XE 21 / bootstrap-schema.sql /
+ * Mirrors the Testcontainers Oracle XE 21 / test-db-init.sql /
  * application-test.yml pattern used by `AppLevelIsolationIT`.
  */
 @SpringBootTest
@@ -71,14 +71,14 @@ class ApiKeyLookupServiceIT @Autowired constructor(
 
     // ── Minimal Spring Boot test app ────────────────────────────────────────
     // @EntityScan/@EnableJpaRepositories on core keep ddl-auto=validate happy
-    // (every Flyway table is mapped). The single extra bean is the service
+    // (every schema table is mapped). The single extra bean is the service
     // under test, wired against the primary DataSource.
     //
     // scanBasePackages is pinned to this class's own (otherwise empty for
     // component purposes) scope so the default component scan does NOT pick up
     // the production security @Components (ApiKeyAuthFilter etc.) that would
     // drag in PasswordEncoder and the rest of the security stack. We only need
-    // DataSource + Flyway + the one service under test.
+    // DataSource + the one service under test.
     @SpringBootApplication(scanBasePackages = ["com.crosscert.passkey.app.security.itscope"])
     @EntityScan("com.crosscert.passkey.core.entity")
     @EnableJpaRepositories("com.crosscert.passkey.core.repository")
@@ -102,8 +102,8 @@ class ApiKeyLookupServiceIT @Autowired constructor(
             .withUsername("PSK_APP_OWNER")
             .withPassword(SYS_PASSWORD)
             .withCopyFileToContainer(
-                MountableFile.forClasspathResource("bootstrap-schema.sql"),
-                "/tmp/bootstrap-schema.sql",
+                MountableFile.forClasspathResource("test-db-init.sql"),
+                "/tmp/test-db-init.sql",
             )
 
         @JvmStatic
@@ -111,10 +111,10 @@ class ApiKeyLookupServiceIT @Autowired constructor(
         fun registerProps(reg: DynamicPropertyRegistry) {
             val exec = ORACLE.execInContainer(
                 "bash", "-c",
-                "sqlplus -S sys/$SYS_PASSWORD@localhost:1521/XEPDB1 as sysdba @/tmp/bootstrap-schema.sql",
+                "sqlplus -S sys/$SYS_PASSWORD@localhost:1521/XEPDB1 as sysdba @/tmp/test-db-init.sql",
             )
             check(exec.exitCode == 0) {
-                "bootstrap-schema.sql failed (exit=${exec.exitCode})\nSTDOUT:\n${exec.stdout}\nSTDERR:\n${exec.stderr}"
+                "test-db-init.sql failed (exit=${exec.exitCode})\nSTDOUT:\n${exec.stdout}\nSTDERR:\n${exec.stderr}"
             }
             // Runtime DataSource → PSK_APP_ADMIN_USER, the production runtime user, so
             // the native SELECT mirrors the post-VPD-removal state (no DB row filter).
@@ -122,10 +122,6 @@ class ApiKeyLookupServiceIT @Autowired constructor(
             reg.add("spring.datasource.url", ORACLE::getJdbcUrl)
             reg.add("spring.datasource.username") { "PSK_APP_ADMIN_USER" }
             reg.add("spring.datasource.password") { "admin_pw" }
-            // Flyway runs as PSK_APP_OWNER (schema owner) — same split as the core ITs.
-            reg.add("spring.flyway.url", ORACLE::getJdbcUrl)
-            reg.add("spring.flyway.user") { "PSK_APP_OWNER" }
-            reg.add("spring.flyway.password") { SYS_PASSWORD }
         }
     }
 
