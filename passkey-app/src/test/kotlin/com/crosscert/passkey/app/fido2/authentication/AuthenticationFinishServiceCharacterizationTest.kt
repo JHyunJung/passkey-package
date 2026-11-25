@@ -433,7 +433,7 @@ class AuthenticationFinishServiceCharacterizationTest {
         order.verify(credentials).saveAndFlush(cred)
         order.verify(authEvents).recordAfterCommit(CRED_UUID, TENANT, CredentialAuthResult.SUCCESS, null, 2L)
         order.verify(idTokens).issue(TENANT.toString(), USER, CRED_UUID, AAGUID)
-        order.verify(ceremonyEvents).recordAfterCommit(TENANT, CeremonyAction.AUTHENTICATION_SUCCESS)
+        order.verify(ceremonyEvents).recordInTransaction(TENANT, CeremonyAction.AUTHENTICATION_SUCCESS)
         assertThat(lockArg.lastValue).isEqualTo(CRED_ID)
         verify(credentials, never()).findByCredentialId(anyOrNull())
         verify(authEvents, never()).recordAfterRollback(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), any<Long>())
@@ -478,8 +478,21 @@ class AuthenticationFinishServiceCharacterizationTest {
 
         assertThatThrownBy { svc().finish(validReq()) }.isSameAs(boom)
         verify(credentials).saveAndFlush(cred)
-        verify(ceremonyEvents, never()).recordAfterCommit(anyOrNull(), eq(CeremonyAction.AUTHENTICATION_SUCCESS))
+        verify(ceremonyEvents, never()).recordInTransaction(anyOrNull(), eq(CeremonyAction.AUTHENTICATION_SUCCESS))
         assertThat(count("failure")).isEqualTo(1.0)
         assertThat(count("success")).isEqualTo(0.0)
+    }
+
+    @Test
+    fun ledgerRecordFailure_propagates_andCountsAsFailureNotSuccess() {
+        stubChallenge(USER)
+        whenever(verifier.verifyAuthentication(anyOrNull()))
+            .thenReturn(AuthenticationResult(CRED_ID, 1, true, true, false))
+        val boom: RuntimeException = IllegalStateException("ledger")
+        whenever(ceremonyEvents.recordInTransaction(anyOrNull(), anyOrNull())).thenThrow(boom)
+
+        assertThatThrownBy { svc().finish(validReq()) }.isSameAs(boom)
+        assertThat(count("success")).isEqualTo(0.0)
+        assertThat(count("failure")).isEqualTo(1.0)
     }
 }

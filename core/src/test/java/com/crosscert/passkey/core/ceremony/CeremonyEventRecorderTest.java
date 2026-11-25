@@ -7,11 +7,14 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.UnexpectedRollbackException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -65,5 +68,40 @@ class CeremonyEventRecorderTest {
     void record_rejectsNullArgs() {
         assertThatCode(() -> recorder.record(null, CeremonyAction.REGISTRATION_BEGIN))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recordInTransaction_withoutActiveTransaction_throws() {
+        assertThatThrownBy(() -> recorder.recordInTransaction(UUID.randomUUID(), CeremonyAction.REGISTRATION_SUCCESS))
+            .isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void recordInTransaction_flushesInCallerTransaction_andDoesNotOpenNewOne() {
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            UUID tenant = UUID.randomUUID();
+            recorder.recordInTransaction(tenant, CeremonyAction.AUTHENTICATION_SUCCESS);
+            ArgumentCaptor<CeremonyEvent> c = ArgumentCaptor.forClass(CeremonyEvent.class);
+            verify(repo).saveAndFlush(c.capture());
+            assertThat(c.getValue().getTenantId()).isEqualTo(tenant);
+            assertThat(c.getValue().getAction()).isEqualTo(CeremonyAction.AUTHENTICATION_SUCCESS);
+            verifyNoInteractions(txManager);
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+    }
+
+    @Test
+    void recordInTransaction_propagatesRepositoryFailure() {
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            when(repo.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("boom"));
+            assertThatThrownBy(() -> recorder.recordInTransaction(UUID.randomUUID(), CeremonyAction.REGISTRATION_SUCCESS))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
     }
 }

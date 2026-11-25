@@ -220,7 +220,7 @@ class AuthenticationFinishService(
             log.info("id-token issued: subTail={} aud={} ttlSec={}", subTail, ch.tenantId, ttlSec)
 
             val response = AuthenticationFinishResponse(jwt, "Bearer", ttlSec)
-            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId), CeremonyAction.AUTHENTICATION_SUCCESS)
+            ceremonyEvents.recordInTransaction(UUID.fromString(ch.tenantId), CeremonyAction.AUTHENTICATION_SUCCESS)
             ceremonyMetrics.recordSuccess("authentication", "finish")
             return response
         } catch (e: RuntimeException) {

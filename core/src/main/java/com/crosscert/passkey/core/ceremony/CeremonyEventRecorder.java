@@ -23,6 +23,9 @@ import java.util.UUID;
  * TransactionTemplate(REQUIRES_NEW)을 직접 호출하고 그 호출을 try/catch 로 감싼다 —
  * executeWithoutResult 가 커밋을 동기적으로 수행하므로 커밋 실패까지 여기서 삼켜진다.
  * REQUIRES_NEW: 호출 측이 readOnly 이거나 롤백돼도 집계 기록이 독립 커밋된다.
+ *
+ * <p>성공 행은 청구 장부라 호출 측 트랜잭션에 참여한다({@link #recordInTransaction}).
+ * BEGIN 행은 기존 best-effort 메서드를 쓴다.
  */
 @Slf4j
 @Component
@@ -71,5 +74,21 @@ public class CeremonyEventRecorder {
         } else {
             record(tenantId, action);
         }
+    }
+
+    /**
+     * 청구 장부용 성공 행을 호출 측 트랜잭션 안에서 기록한다. 본 처리가 롤백되면 이 행도 함께 사라지고,
+     * INSERT 실패는 삼키지 않고 호출자에게 전파한다(장부 누락 = 과소 청구).
+     * 새 트랜잭션을 열지 않으며 {@code saveAndFlush} 로 즉시 INSERT 해 제약 위반을 이 시점에 드러낸다.
+     *
+     * @throws IllegalStateException 활성 트랜잭션이 없을 때
+     */
+    public void recordInTransaction(UUID tenantId, String action) {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(action, "action");
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("recordInTransaction 은 활성 트랜잭션 안에서만 호출할 수 있다");
+        }
+        repo.saveAndFlush(new CeremonyEvent(tenantId, action));
     }
 }

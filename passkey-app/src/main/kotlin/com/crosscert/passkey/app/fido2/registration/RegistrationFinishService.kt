@@ -159,7 +159,7 @@ class RegistrationFinishService(
                 fmt,
                 clock.instant(),
             )
-            ceremonyEvents.recordAfterCommit(UUID.fromString(ch.tenantId), CeremonyAction.REGISTRATION_SUCCESS)
+            ceremonyEvents.recordInTransaction(UUID.fromString(ch.tenantId), CeremonyAction.REGISTRATION_SUCCESS)
             ceremonyMetrics.recordSuccess("registration", "finish")
             return response
         } catch (e: RuntimeException) {

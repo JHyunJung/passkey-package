@@ -37,6 +37,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
@@ -359,7 +360,8 @@ class RegistrationFinishServiceCharacterizationTest {
             "registration/finish ok: credentialIdTail=...MDQ4PEBESExQ" +
                 " aaguid=01020304-0506-0708-090a-0b0c0d0e0f10 format=packed",
         )
-        verify(ceremonyEvents).recordAfterCommit(TENANT, CeremonyAction.REGISTRATION_SUCCESS)
+        verify(ceremonyEvents).recordInTransaction(TENANT, CeremonyAction.REGISTRATION_SUCCESS)
+        verify(ceremonyEvents, never()).recordAfterCommit(anyOrNull(), eq(CeremonyAction.REGISTRATION_SUCCESS))
         assertThat(count("success")).isEqualTo(1.0)
         assertThat(count("failure")).isEqualTo(0.0)
 
@@ -370,7 +372,7 @@ class RegistrationFinishServiceCharacterizationTest {
         order.verify(mds).verify(true, AAGUID)
         order.verify(policy).check(anyOrNull(), anyOrNull())
         order.verify(credentials).saveAndFlush(anyOrNull<Credential>())
-        order.verify(ceremonyEvents).recordAfterCommit(anyOrNull(), anyOrNull())
+        order.verify(ceremonyEvents).recordInTransaction(anyOrNull(), anyOrNull())
     }
 
     @Test
@@ -433,5 +435,18 @@ class RegistrationFinishServiceCharacterizationTest {
         )
         assertThat(count("failure")).isEqualTo(1.0)
         verifyNoInteractions(ceremonyEvents)
+    }
+
+    @Test
+    fun ledgerRecordFailure_propagates_andCountsAsFailureNotSuccess() {
+        stubChallenge()
+        whenever(verifier.verifyRegistration(anyOrNull())).thenReturn(result(AAGUID, "packed", setOf()))
+        whenever(mds.verify(true, AAGUID)).thenReturn(true)
+        val boom: RuntimeException = IllegalStateException("ledger")
+        whenever(ceremonyEvents.recordInTransaction(anyOrNull(), anyOrNull())).thenThrow(boom)
+
+        assertThatThrownBy { svc().finish(RegistrationFinishRequest("tok", null)) }.isSameAs(boom)
+        assertThat(count("success")).isEqualTo(0.0)
+        assertThat(count("failure")).isEqualTo(1.0)
     }
 }
