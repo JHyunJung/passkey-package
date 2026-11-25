@@ -108,6 +108,7 @@ class UsageCloseServiceTest {
         val close = savedClose()
         assertThat(close.period).isEqualTo("2026-11")
         assertThat(close.status).isEqualTo(UsagePeriodClose.STATUS_CLOSED)
+        assertThat(close.isNew).`as`("새 인스턴스라 save 가 persist(INSERT)가 된다").isTrue()
         val req = auditRequests().single()
         assertThat(req.action).isEqualTo("USAGE_MONTH_CLOSED")
         assertThat(req.actorId).isNull()
@@ -285,6 +286,19 @@ class UsageCloseServiceTest {
         verifyNoInteractions(audit)
         // 재집계까지 되돌리도록 트랜잭션은 롤백 전용으로 끝난다.
         assertThat(txStatuses.single().isRollbackOnly).isTrue()
+    }
+
+    @Test
+    fun close_monthlyConstraintViolation_isFailureNotSkip() {
+        // "이미 마감됨" 으로 보는 무결성 위반은 마감 행 INSERT 의 것뿐이다. usage_monthly 쪽 위반은 실패로 전파된다.
+        whenever(daily.sumByTenant(any(), any())).thenReturn(listOf(row(tenantA, 1, 2, 3, 4)))
+        whenever(monthly.saveAllAndFlush(any<Iterable<UsageMonthly>>()))
+            .thenThrow(DataIntegrityViolationException("ORA-00001 on USAGE_MONTHLY"))
+
+        assertThatThrownBy { service().closeMonth(YearMonth.of(2026, 11), UsagePeriodClose.STATUS_CLOSED) }
+            .isInstanceOf(DataIntegrityViolationException::class.java)
+        verify(txManager).rollback(txStatuses.single())
+        verifyNoInteractions(audit)
     }
 
     @Test

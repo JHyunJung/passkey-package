@@ -172,8 +172,8 @@ class UsageCloseService(
         val regSuccess = tenants.sumOf { it.regSuccess }
         val authSuccess = tenants.sumOf { it.authSuccess }
 
-        // 확인은 INSERT 직전에 한다. 엔티티 ID 가 지정값이라 saveAndFlush 는 merge(SELECT 후 없으면 INSERT)여서,
-        // 이미 있는 행에는 예외 없이 아무것도 하지 않는다 — 그래서 기존 행은 여기서 직접 걸러 낸다.
+        // 이미 커밋된 마감은 여기서 빨리 걸러 낸다(빠른 경로). 정확성은 이 확인이 아니라 아래 INSERT 의 PK 가 보장한다 —
+        // UsagePeriodClose 는 Persistable 이라 saveAndFlush 가 항상 persist(INSERT)다.
         if (closes.existsById(period)) {
             log.info("usage month already closed — skip: period={}", period)
             txStatus.setRollbackOnly()
@@ -188,7 +188,9 @@ class UsageCloseService(
                 ),
             )
         } catch (e: DataIntegrityViolationException) {
-            // 확인과 INSERT 사이에 다른 인스턴스가 먼저 마감했다(PK 중복). 이 트랜잭션은 통째로 버린다.
+            // 다른 트랜잭션이 같은 기간을 먼저 INSERT 했다(그쪽 커밋까지 PK 에서 기다린 뒤 ORA-00001). 이 트랜잭션은 통째로 버린다.
+            // 이 try 는 마감 행 INSERT 하나만 감싼다 — 앞의 재집계(MERGE)는 즉시 실행되고 clearAutomatically 로 영속성 컨텍스트가
+            // 비워져 flush 할 다른 변경이 없으므로, 여기서 나는 무결성 위반은 마감 행의 것뿐이다. usage_monthly 등 그 뒤의 위반은 실패로 전파된다.
             log.info("usage month closed by another instance — skip: period={}", period)
             txStatus.setRollbackOnly()
             return false
