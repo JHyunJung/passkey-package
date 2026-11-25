@@ -135,15 +135,30 @@ class UsageSettlementService(
             .filter { it.path("period").asString("") == period }
         if (entries.size != 1) return UsageDto.Verification.MISMATCH
         val p = entries.single()
-        val audited = p.path("tenants").mapNotNull { t ->
-            val id = runCatching { UUID.fromString(t.path("tenantId").asString("")) }.getOrNull() ?: return@mapNotNull null
-            TenantCount(id, t.path("registrationSuccess").asLong(-1), t.path("authenticationSuccess").asLong(-1))
-        }
-        val sameRows = audited.size == p.path("tenants").size() && audited.toSet() == data.counts.toSet() && audited.size == data.counts.size
-        val sameTotals = p.path("registrationSuccess").asLong(-1) == close.regSuccess &&
-            p.path("authenticationSuccess").asLong(-1) == close.authSuccess
+        // 구조가 하나라도 빠지거나 틀리면 일치로 보지 않는다(fail-closed): tenants 배열, 각 원소의 tenantId·두 수치, 두 합계.
+        val audited = auditedTenants(p.path("tenants")) ?: return UsageDto.Verification.MISMATCH
+        val auditedReg = integral(p.path("registrationSuccess")) ?: return UsageDto.Verification.MISMATCH
+        val auditedAuth = integral(p.path("authenticationSuccess")) ?: return UsageDto.Verification.MISMATCH
+        val sameRows = audited.size == data.counts.size && audited.toSet() == data.counts.toSet()
+        val sameTotals = auditedReg == close.regSuccess && auditedAuth == close.authSuccess
         return if (sameRows && sameTotals) UsageDto.Verification.MATCH else UsageDto.Verification.MISMATCH
     }
+
+    /** payload 의 tenants. 배열이 아니거나 원소 하나라도 깨졌으면 null. */
+    private fun auditedTenants(node: JsonNode): List<TenantCount>? {
+        if (!node.isArray) return null
+        val result = mutableListOf<TenantCount>()
+        for (t in node) {
+            val id = runCatching { UUID.fromString(t.path("tenantId").asString("")) }.getOrNull() ?: return null
+            val reg = integral(t.path("registrationSuccess")) ?: return null
+            val auth = integral(t.path("authenticationSuccess")) ?: return null
+            result += TenantCount(id, reg, auth)
+        }
+        return result
+    }
+
+    /** JSON 정수(문자열 "0" 은 불가)만 Long 으로. */
+    private fun integral(n: JsonNode): Long? = if (n.isIntegralNumber && n.canConvertToLong()) n.asLong() else null
 
     private fun parse(payload: String?): JsonNode? =
         try {

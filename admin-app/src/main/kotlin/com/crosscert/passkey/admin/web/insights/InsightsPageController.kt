@@ -290,6 +290,12 @@ class InsightsPageController(
         internal const val FRAG_PATH = "/admin/_/insights"
         internal const val CSV_PATH = "/admin/insights.csv"
 
+        /** CSV 성공률 칸: 소수 4자리, 시도가 0 이면 빈 칸. 사용량 정산 CSV 도 같은 형식을 쓴다. */
+        internal fun rate4(success: Long, attempts: Long): String {
+            val r = FunnelHelpers.rate(success, attempts)
+            return if (r == null) "" else FunnelHelpers.toFixed(r, 4)
+        }
+
         internal const val TAB_INSIGHTS = "insights"
         internal const val TAB_USAGE = "usage"
 
@@ -325,11 +331,6 @@ class InsightsPageController(
             }
             return Comparator.comparingDouble(key).reversed()
                 .thenComparing(Function<PlatformInsightsDto.TenantRow, String> { r -> r.name ?: "" })
-        }
-
-        private fun rate4(success: Long, attempts: Long): String {
-            val r = FunnelHelpers.rate(success, attempts)
-            return if (r == null) "" else FunnelHelpers.toFixed(r, 4)
         }
 
         private fun trim(d: Double): String = if (d == Math.rint(d)) d.toLong().toString() else d.toString()

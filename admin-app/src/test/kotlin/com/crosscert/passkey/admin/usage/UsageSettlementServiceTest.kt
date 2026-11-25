@@ -282,4 +282,69 @@ class UsageSettlementServiceTest {
         assertThat(v.totalAuth).isZero()
         assertThat(v.tenants).hasSize(2)
     }
+
+    /** 행이 없는 마감 월(close 합계 0)에 감사 payload 만 바꿔 끼운다. */
+    private fun emptyClosedOctober(auditPayload: String) {
+        whenever(closes.findById("2026-10")).thenReturn(Optional.of(close("2026-10", reg = 0, auth = 0)))
+        whenever(monthly.findByPeriod("2026-10")).thenReturn(listOf())
+        val entry = audit("USAGE_MONTH_CLOSED", auditPayload)
+        whenever(auditRepo.findByActionIn(any())).thenReturn(listOf(entry))
+    }
+
+    @Test
+    fun emptyClosedMonth_withEmptyTenantsArray_match() {
+        emptyClosedOctober("""{"period":"2026-10","registrationSuccess":0,"authenticationSuccess":0,"tenants":[]}""")
+
+        assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MATCH)
+    }
+
+    @Test
+    fun auditPayload_missingTenants_mismatch() {
+        emptyClosedOctober("""{"period":"2026-10","registrationSuccess":0,"authenticationSuccess":0}""")
+
+        assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MISMATCH)
+    }
+
+    @Test
+    fun auditPayload_tenantsNotArray_mismatch() {
+        emptyClosedOctober("""{"period":"2026-10","registrationSuccess":0,"authenticationSuccess":0,"tenants":{}}""")
+
+        assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MISMATCH)
+    }
+
+    @Test
+    fun auditPayload_missingTotals_mismatch() {
+        emptyClosedOctober("""{"period":"2026-10","tenants":[]}""")
+
+        assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MISMATCH)
+    }
+
+    @Test
+    fun auditPayload_nonNumericTotal_mismatch() {
+        emptyClosedOctober("""{"period":"2026-10","registrationSuccess":"0","authenticationSuccess":0,"tenants":[]}""")
+
+        assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MISMATCH)
+    }
+
+    @Test
+    fun auditPayload_tenantElementMalformed_mismatch() {
+        // 마감 행·monthly 는 정상이고 payload 의 한 원소만 tenantId 가 깨졌다 — 건너뛰고 일치로 보면 안 된다
+        closedOctober(
+            """{"period":"2026-10","registrationSuccess":8,"authenticationSuccess":12,"tenants":""" +
+                """[{"tenantId":"$a","registrationSuccess":5,"authenticationSuccess":5},""" +
+                """{"tenantId":"not-a-uuid","registrationSuccess":3,"authenticationSuccess":7}]}""",
+        )
+
+        assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MISMATCH)
+    }
+
+    @Test
+    fun auditPayload_tenantElementMissingNumber_mismatch() {
+        closedOctober(
+            """{"period":"2026-10","registrationSuccess":8,"authenticationSuccess":12,"tenants":""" +
+                """[{"tenantId":"$a","registrationSuccess":5,"authenticationSuccess":5},{"tenantId":"$b","registrationSuccess":3}]}""",
+        )
+
+        assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MISMATCH)
+    }
 }

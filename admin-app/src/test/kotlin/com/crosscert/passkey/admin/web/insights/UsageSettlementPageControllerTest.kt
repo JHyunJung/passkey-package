@@ -254,4 +254,13 @@ class UsageSettlementPageControllerTest {
     fun csvUnknownKind() {
         assertThat(mvc.perform(get("/admin/insights/usage.csv?kind=evil").with(authentication(platform()))).andReturn().response.status).isEqualTo(404)
     }
+
+    @Test
+    @DisplayName("REST /admin/api/platform/usage: PLATFORM_OPERATOR 200(JSON), RP_ADMIN 403")
+    fun rest_platformOnly() {
+        val ok = mvc.perform(get("/admin/api/platform/usage?period=2026-10").with(authentication(platform()))).andReturn()
+        assertThat(ok.response.status).isEqualTo(200)
+        assertThat(body(ok)).contains("\"period\":\"2026-10\"")
+        assertThat(mvc.perform(get("/admin/api/platform/usage").with(authentication(rp()))).andReturn().response.status).isEqualTo(403)
+    }
 }

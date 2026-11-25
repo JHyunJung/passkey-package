@@ -130,7 +130,7 @@ class UsageSettlementPageController(
                     rows.add(
                         listOf(
                             m.period, m.status.name, m.regSuccess.toString(), m.authSuccess.toString(), m.activeTenants.toString(),
-                            m.authAttempt.toString(), rate4(m.authSuccess, m.authAttempt),
+                            m.authAttempt.toString(), InsightsPageController.rate4(m.authSuccess, m.authAttempt),
                         ),
                     )
                 }
@@ -156,12 +156,6 @@ class UsageSettlementPageController(
             UsageDto.Status.IN_PROGRESS -> "진행 중"
             UsageDto.Status.CLOSED -> "마감"
             UsageDto.Status.PARTIAL -> "부분(원본 삭제됨)"
-        }
-
-        /** 시도가 0 이면 빈 칸(기존 현황 CSV 와 같은 형식). */
-        private fun rate4(success: Long, attempts: Long): String {
-            val r = FunnelHelpers.rate(success, attempts)
-            return if (r == null) "" else FunnelHelpers.toFixed(r, 4)
         }
 
         private fun me(model: Model): CurrentAdmin =
