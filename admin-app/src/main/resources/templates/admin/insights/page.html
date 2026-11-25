@@ -8,13 +8,14 @@
   루트에 두면 안의 테넌트 링크(boost)가 물려받아 이동한 페이지가 루트 안에 그려진다. 루트 상태는 Alpine funnelTab(app.js) —
   요청 중 pending(스켈레톤·CSV 막음), 교체 없이 실패하면 세그먼트를 보이는 기간(data-win)으로 되돌린다.
   모델: win, sort, segOptions, retryAttrs, loadError, hasData, period, kpis(AdoptKpi 6장), alerts(AlertView), thresholdText,
-        tenants(TenantView), sortHeaders, seriesCard/seriesColumns, months/monthColumns, devices, csvTenants/csvMonthly/csvDevices
+        tenants(TenantView), sortHeaders, seriesCard/seriesColumns, months/monthColumns, devices, csvTenants/csvMonthly/csvDevices, tabItems/tabActive(현황 | 사용량 정산 탭 줄)
   사용자 값(테넌트 이름·slug)은 th:text/th:href 로만 쓴다.
 -->
 <th:block th:fragment="crumbs"><th:block th:replace="~{admin/fragments/shell/breadcrumb :: breadcrumb(${breadcrumbs})}"></th:block></th:block>
 <main>
 <div class="page">
   <th:block th:replace="~{admin/fragments/ui/pageHeader :: pageHeader('현황', '전체 테넌트의 패스키 사용량 · 인증 품질 · 확인이 필요한 곳을 한눈에 봅니다.', null)}"></th:block>
+  <th:block th:replace="~{admin/fragments/ui/tabs :: tabs(${tabItems}, ${tabActive}, '현황 보기')}"></th:block>
   <th:block th:replace="~{:: root}"></th:block>
 </div>
 </main>
@@ -27,6 +28,7 @@
     <a th:if="${hasData}" class="btn" th:href="${csvTenants}" hx-boost="false" download data-csv-download
        x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">
       <th:block th:replace="~{admin/fragments/icons :: download(14)}"></th:block>테넌트별 내보내기</a>
+    <span th:if="${hasData}" class="hint" style="margin: 0">청구 기준 아님 · 사용량 정산 탭 참조</span>
   </div>
 
   <div x-show="pending" x-cloak><th:block th:replace="~{admin/fragments/ui/skeleton :: skeleton(6, '현황 불러오는 중')}"></th:block></div>
@@ -93,7 +95,7 @@
 
     <div class="grid-2">
       <th:block th:replace="~{admin/fragments/ui/stats :: seriesCard(${seriesCard}, ${seriesColumns})}"></th:block>
-      <th:block th:replace="~{admin/fragments/ui/stats :: monthCard(${months}, ${monthColumns}, ${csvMonthly}, '인증 기록은 90일 보관돼요. 활성 사용자는 테넌트별 사용자 수의 합이에요.')}"></th:block>
+      <th:block th:replace="~{admin/fragments/ui/stats :: monthCard(${months}, ${monthColumns}, ${csvMonthly}, '인증 기록은 90일 보관돼요. 활성 사용자는 테넌트별 사용자 수의 합이에요. 청구 기준 아님 · 사용량 정산 탭 참조')}"></th:block>
     </div>
 
     <th:block th:replace="~{admin/fragments/ui/stats :: devicesCard(${devices}, ${csvDevices}, '전체 테넌트에 등록된 패스키를 만든 인증기별 비율이에요.')}"></th:block>

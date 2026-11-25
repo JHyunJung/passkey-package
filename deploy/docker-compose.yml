@@ -116,6 +116,8 @@ services:
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
       - PASSKEY_MAIL_FROM
+      # 사용량 정산 장부 시작일(YYYY-MM-DD). 값 없는 리스트형 — 없으면 키가 빠져 "이전 방식" 으로 동작한다.
+      - PASSKEY_USAGE_LEDGER_START_DATE
       - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
       # P6: admin-app DB 풀 상한(기본 10). 설정하면 passkey-app 과 같은 .env 값을 공유한다.
       - SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE

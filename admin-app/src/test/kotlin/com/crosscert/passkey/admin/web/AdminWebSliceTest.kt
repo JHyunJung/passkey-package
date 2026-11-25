@@ -81,6 +81,9 @@ import kotlin.reflect.KClass
         com.crosscert.passkey.core.repository.CredentialAuthEventRepository::class,
         com.crosscert.passkey.core.repository.AdminUserTenantRepository::class,
         com.crosscert.passkey.core.repository.SecurityIncidentRepository::class,
+        com.crosscert.passkey.core.repository.UsageDailyRepository::class,
+        com.crosscert.passkey.core.repository.UsageMonthlyRepository::class,
+        com.crosscert.passkey.core.repository.UsagePeriodCloseRepository::class,
     ],
 )
 annotation class AdminWebSliceTest(

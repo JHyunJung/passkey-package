@@ -105,6 +105,8 @@ class InsightsPageController(
     private fun populate(model: Model, w: Int, sort: String) {
         model.addAttribute("win", w.toString())
         model.addAttribute("sort", sort)
+        model.addAttribute("tabItems", tabItems())
+        model.addAttribute("tabActive", TAB_INSIGHTS)
         val options = ArrayList<Map<String, Any?>>()
         for (k in WINDOWS) {
             val o = LinkedHashMap<String, Any?>()
@@ -215,7 +217,7 @@ class InsightsPageController(
         model.addAttribute("csvDevices", "$CSV_PATH$q&kind=devices")
     }
 
-    /** CSV: 테넌트별 비교(과금·라이선스 자료), 일별 인증, 월간 사용량, 기기 분포. */
+    /** CSV: 테넌트별 비교, 일별 인증, 월간 사용량, 기기 분포(운영 참고용. 청구 기준은 사용량 정산 탭). */
     @GetMapping(CSV_PATH)
     fun export(
         @RequestParam(name = "win", defaultValue = "7") win: String,
@@ -288,6 +290,21 @@ class InsightsPageController(
         internal const val FRAG_PATH = "/admin/_/insights"
         internal const val CSV_PATH = "/admin/insights.csv"
 
+        /** CSV 성공률 칸: 소수 4자리, 시도가 0 이면 빈 칸. 사용량 정산 CSV 도 같은 형식을 쓴다. */
+        internal fun rate4(success: Long, attempts: Long): String {
+            val r = FunnelHelpers.rate(success, attempts)
+            return if (r == null) "" else FunnelHelpers.toFixed(r, 4)
+        }
+
+        internal const val TAB_INSIGHTS = "insights"
+        internal const val TAB_USAGE = "usage"
+
+        /** 현황 화면의 탭 줄(현황 | 사용량 정산). 사용량 정산 화면도 같은 줄을 쓴다. */
+        internal fun tabItems(): List<Map<String, Any?>> = listOf(
+            mapOf("id" to TAB_INSIGHTS, "label" to "현황", "href" to PAGE_PATH),
+            mapOf("id" to TAB_USAGE, "label" to "사용량 정산", "href" to "$PAGE_PATH/usage"),
+        )
+
         // ── 도우미 ──────────────────────────────────────────────
 
         private fun window(s: String): Int {
@@ -314,11 +331,6 @@ class InsightsPageController(
             }
             return Comparator.comparingDouble(key).reversed()
                 .thenComparing(Function<PlatformInsightsDto.TenantRow, String> { r -> r.name ?: "" })
-        }
-
-        private fun rate4(success: Long, attempts: Long): String {
-            val r = FunnelHelpers.rate(success, attempts)
-            return if (r == null) "" else FunnelHelpers.toFixed(r, 4)
         }
 
         private fun trim(d: Double): String = if (d == Math.rint(d)) d.toLong().toString() else d.toString()

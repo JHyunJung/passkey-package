@@ -1,6 +1,7 @@
 package com.crosscert.passkey.admin.retention
 
 import com.crosscert.passkey.admin.mds.MdsHistoryService
+import com.crosscert.passkey.admin.usage.UsageCloseService
 import com.crosscert.passkey.core.repository.AdminPasswordResetTokenRepository
 import com.crosscert.passkey.core.repository.AdminSignupRequestRepository
 import com.crosscert.passkey.core.repository.AdminUserRecoveryCodeRepository
@@ -29,6 +30,7 @@ class RetentionPurgeService(
     private val mdsHistory: MdsHistoryService,
     private val ceremonyEvents: CeremonyEventRepository,
     private val credentialAuthEvents: CredentialAuthEventRepository,
+    private val usageClose: UsageCloseService,
 ) {
 
     /** 보존기간 지난 미처리 가입 요청 삭제 — 방치된 요청이 대기 상한을 영구 점유하지 않게. */
@@ -47,8 +49,15 @@ class RetentionPurgeService(
     fun purgeMdsHistory(cutoff: OffsetDateTime): Int =
         purgeInBatches { mdsHistory.purgeStartedBefore(cutoff, BATCH) }
 
-    fun purgeCeremonyEvents(cutoff: OffsetDateTime): Int =
-        purgeInBatches { ceremonyEvents.deleteCreatedBefore(cutoff, BATCH) }
+    /**
+     * 속한 달이 마감되기 전에는 지우지 않는다. 청구 근거 원본이다.
+     * 실제 삭제 기준은 보존 cutoff 와 [UsageCloseService.releasedBefore] 중 더 이른 시각이다.
+     * releasedBefore 조회가 실패하면 예외를 그대로 전파해 이번 실행의 삭제를 건너뛴다(cutoff 로 대체하지 않는다).
+     */
+    fun purgeCeremonyEvents(cutoff: OffsetDateTime): Int {
+        val effective = minOf(cutoff, usageClose.releasedBefore())
+        return purgeInBatches { ceremonyEvents.deleteCreatedBefore(effective, BATCH) }
+    }
 
     fun purgeCredentialAuthEvents(cutoff: OffsetDateTime): Int =
         purgeInBatches { credentialAuthEvents.deleteCreatedBefore(cutoff, BATCH) }

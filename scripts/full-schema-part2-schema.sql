@@ -243,6 +243,49 @@ CREATE TABLE ceremony_event (
     PRIMARY KEY (id)
 );
 
+-- 1-12a. USAGE_DAILY / USAGE_MONTHLY / USAGE_PERIOD_CLOSE (사용량 정산 — tenant FK 없음)
+-- ceremony_event 와 같은 방침: 테넌트를 지워도 정산 기록은 남긴다.
+-- usage_daily  : 테넌트·KST 일별 등록/인증 성공·시도 건수. 장부(ceremony_event) 재집계 시 덮어쓴다.
+-- usage_monthly: 마감된 달의 테넌트별 확정값. INSERT 전용(수정·삭제 없음).
+-- usage_period_close: 월 마감 기록(전체 합계). INSERT 전용.
+CREATE TABLE usage_daily (
+    tenant_id     RAW(16)                     NOT NULL,
+    usage_date    DATE                        NOT NULL,
+    reg_success   NUMBER(12)   DEFAULT 0      NOT NULL,
+    auth_success  NUMBER(12)   DEFAULT 0      NOT NULL,
+    reg_attempt   NUMBER(12)   DEFAULT 0      NOT NULL,
+    auth_attempt  NUMBER(12)   DEFAULT 0      NOT NULL,
+    basis         VARCHAR2(8)                 NOT NULL,
+    aggregated_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    CONSTRAINT ck_usage_daily_basis CHECK (basis IN ('LEDGER','LEGACY')),
+    CONSTRAINT pk_usage_daily PRIMARY KEY (tenant_id, usage_date)
+);
+
+CREATE TABLE usage_monthly (
+    tenant_id     RAW(16)      NOT NULL,
+    period        VARCHAR2(7)  NOT NULL,          -- 'YYYY-MM' (KST)
+    reg_success   NUMBER(14)   NOT NULL,
+    auth_success  NUMBER(14)   NOT NULL,
+    reg_attempt   NUMBER(14)   NOT NULL,
+    auth_attempt  NUMBER(14)   NOT NULL,
+    CONSTRAINT pk_usage_monthly PRIMARY KEY (tenant_id, period)
+);
+
+CREATE TABLE usage_period_close (
+    period        VARCHAR2(7)                 NOT NULL,
+    status        VARCHAR2(8)                 NOT NULL,
+    basis         VARCHAR2(8)                 NOT NULL,
+    reg_success   NUMBER(14)                  NOT NULL,
+    auth_success  NUMBER(14)                  NOT NULL,
+    reg_attempt   NUMBER(14)                  NOT NULL,
+    auth_attempt  NUMBER(14)                  NOT NULL,
+    tenant_count  NUMBER(8)                   NOT NULL,
+    closed_at     TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    CONSTRAINT ck_usage_close_status CHECK (status IN ('CLOSED','PARTIAL')),
+    CONSTRAINT ck_usage_close_basis  CHECK (basis IN ('LEDGER','LEGACY')),
+    CONSTRAINT pk_usage_period_close PRIMARY KEY (period)
+);
+
 -- 1-13. TENANT_AAGUID_POLICY (FK → TENANT)
 CREATE TABLE tenant_aaguid_policy (
     tenant_id   RAW(16)                     DEFAULT SYS_GUID() NOT NULL,
@@ -645,7 +688,7 @@ END signing_key_bootstrap_pkg;
 
 
 -- ============================================================
--- 6. GRANT (123건 — PSK_APP_ADMIN / PSK_APP_RUNTIME 객체 권한)
+-- 6. GRANT (142건 — PSK_APP_ADMIN / PSK_APP_RUNTIME 객체 권한)
 -- ============================================================
 
 GRANT DELETE ON admin_password_reset_token TO PSK_APP_ADMIN;
@@ -758,6 +801,20 @@ GRANT SELECT ON tenant_webauthn_snapshot TO PSK_APP_ADMIN;
 GRANT SELECT ON tenant_webauthn_snapshot TO PSK_APP_RUNTIME;
 GRANT SELECT ON tenant_webauthn_snapshot_seq TO PSK_APP_ADMIN;
 GRANT SELECT ON tenant_webauthn_snapshot_seq TO PSK_APP_RUNTIME;
+GRANT SELECT ON usage_daily TO PSK_APP_ADMIN;
+GRANT INSERT ON usage_daily TO PSK_APP_ADMIN;
+GRANT UPDATE ON usage_daily TO PSK_APP_ADMIN;
+GRANT SELECT ON usage_daily TO PSK_APP_RUNTIME;
+GRANT SELECT ON usage_monthly TO PSK_APP_ADMIN;
+GRANT INSERT ON usage_monthly TO PSK_APP_ADMIN;
+GRANT SELECT ON usage_monthly TO PSK_APP_RUNTIME;
+GRANT SELECT ON usage_period_close TO PSK_APP_ADMIN;
+GRANT INSERT ON usage_period_close TO PSK_APP_ADMIN;
+GRANT SELECT ON usage_period_close TO PSK_APP_RUNTIME;
+-- usage_* 의 PSK_APP_RUNTIME SELECT 는 passkey-app 이 읽기 위해서가 아니다. @EntityScan 이 core.entity 를
+-- 통째로 스캔하고 hibernate.ddl-auto=validate 가 전부의 테이블 존재를 검증하므로, 권한이 없으면
+-- "Schema-validation: missing table [usage_daily]" 로 부팅이 실패한다(security_incident 선례와 같다).
+-- usage_monthly·usage_period_close 는 PSK_APP_ADMIN 에도 UPDATE·DELETE 를 주지 않는다(마감값은 불변).
 GRANT SELECT ON v_admin_user TO PSK_APP_ADMIN;
 GRANT SELECT ON v_admin_user TO PSK_APP_RUNTIME;
 GRANT SELECT ON v_api_key TO PSK_APP_ADMIN;

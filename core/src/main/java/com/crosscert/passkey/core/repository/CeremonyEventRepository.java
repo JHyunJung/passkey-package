@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -47,9 +48,14 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
             @Param("actions") List<String> actions,
             @Param("since") OffsetDateTime since);
 
+    /** 장부에서 가장 오래된 행의 created_at. 행이 없으면 empty. (usage_daily 백필 시작점 판단용) */
+    @Query("select min(c.createdAt) from CeremonyEvent c")
+    Optional<OffsetDateTime> findMinCreatedAt();
+
     /**
-     * retention: created_at 이 cutoff 이전인 ceremony 이벤트 삭제. funnel 쿼리는
-     * 최대 30일까지만 조회하므로 윈도 초과분은 안전하게 제거 가능(append-only 지표 정리).
+     * retention: created_at 이 cutoff 이전인 ceremony 이벤트 삭제.
+     * 이 행은 사용량 정산(청구)의 원본이다. 호출자는 마감되지 않은 달이 cutoff 에 걸리지 않게
+     * 넘겨야 한다(RetentionPurgeService 가 UsageCloseService.releasedBefore 로 제한한다).
      *
      * <p>Batched: ROWNUM 캡으로 batchSize 단위 삭제(nativeQuery + 실제 컬럼명).
      */

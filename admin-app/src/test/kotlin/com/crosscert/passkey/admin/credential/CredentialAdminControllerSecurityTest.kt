@@ -21,6 +21,9 @@ import com.crosscert.passkey.core.repository.CredentialAuthEventRepository
 import com.crosscert.passkey.core.repository.CredentialRepository
 import com.crosscert.passkey.core.repository.SchedulerLeaseRepository
 import com.crosscert.passkey.core.repository.SecurityIncidentRepository
+import com.crosscert.passkey.core.repository.UsageDailyRepository
+import com.crosscert.passkey.core.repository.UsageMonthlyRepository
+import com.crosscert.passkey.core.repository.UsagePeriodCloseRepository
 import com.crosscert.passkey.core.repository.SecurityPolicyRepository
 import com.crosscert.passkey.core.repository.SigningKeyRepository
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository
@@ -185,6 +188,15 @@ class CredentialAdminControllerSecurityTest {
 
     @MockitoBean
     lateinit var securityIncidentRepository: SecurityIncidentRepository
+
+    @MockitoBean
+    lateinit var usageDailyRepository: UsageDailyRepository
+
+    @MockitoBean
+    lateinit var usageMonthlyRepository: UsageMonthlyRepository
+
+    @MockitoBean
+    lateinit var usagePeriodCloseRepository: UsagePeriodCloseRepository
 
     /**
      * AdminSecurityConfig 가 설치하는 TenantContextAdminFilter 는 컨트롤러 진입 전

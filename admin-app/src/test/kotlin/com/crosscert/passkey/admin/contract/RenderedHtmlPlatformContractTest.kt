@@ -216,6 +216,14 @@ class RenderedHtmlPlatformContractTest : HtmlContractSupport() {
         snap("platform/insights.root.frag.rp-admin-denied.html", frag("/admin/_/insights", rpAdmin()))
     }
 
+    // ── UsageSettlementPageController ──────────────────────
+
+    @Test
+    fun usageSettlementPage() {
+        snap("platform/usage.page.platform.html", page("/admin/insights/usage", operator()))
+        snap("platform/usage.page.rp-admin.html", page("/admin/insights/usage", rpAdmin()))
+    }
+
     // ── LicensePageController ──────────────────────────────
 
     @Test

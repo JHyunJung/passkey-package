@@ -28,6 +28,8 @@ import com.crosscert.passkey.admin.web.auth.LoginPageController
 import com.crosscert.passkey.admin.web.auth.PasswordPagesController
 import com.crosscert.passkey.admin.web.auth.SignupPageController
 import com.crosscert.passkey.admin.web.insights.InsightsPageController
+import com.crosscert.passkey.admin.web.insights.UsageSettlementPageController
+import com.crosscert.passkey.admin.usage.UsageSettlementController
 import com.crosscert.passkey.admin.web.license.LicensePageController
 import com.crosscert.passkey.admin.web.settings.AccountTabController
 import com.crosscert.passkey.admin.web.settings.AdminUsersTabController
@@ -102,7 +104,7 @@ abstract class HtmlContractSupport {
             CredentialsTabController::class, FunnelTabController::class,
             SettingsPageController::class, AccountTabController::class, AdminUsersTabController::class,
             MdsTabController::class, SecurityPolicyTabController::class, SystemInfoTabController::class,
-            LicensePageController::class, InsightsPageController::class, ActivityPageController::class,
+            LicensePageController::class, InsightsPageController::class, UsageSettlementPageController::class, ActivityPageController::class,
             AuditChainPageController::class, ShellController::class, CommandPaletteController::class,
             LoginPageController::class, PasswordPagesController::class, SignupPageController::class,
             HomeRedirectController::class,
@@ -132,7 +134,7 @@ abstract class HtmlContractSupport {
                 SecurityPolicyController::class.java,
                 MfaController::class.java, SystemInfoController::class.java, AdminUserController::class.java,
                 MdsAdminController::class.java, LicenseController::class.java, PasswordResetController::class.java,
-                ActiveTenantController::class.java,
+                ActiveTenantController::class.java, UsageSettlementController::class.java,
             )
             val ALL: MutableList<Any> = ArrayList()
         }
@@ -153,6 +155,7 @@ abstract class HtmlContractSupport {
     @Autowired lateinit var credentials: CredentialAdminController
     @Autowired lateinit var adoption: AdoptionController
     @Autowired lateinit var insights: PlatformInsightsController
+    @Autowired lateinit var usage: UsageSettlementController
     @Autowired lateinit var signups: SignupRequestController
     @Autowired lateinit var securityPolicy: SecurityPolicyController
     @Autowired lateinit var mfa: MfaController

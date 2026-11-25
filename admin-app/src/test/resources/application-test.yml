@@ -30,3 +30,9 @@ passkey:
     expiration-job:
       initial-delay: PT99H
       fixed-delay: PT99H
+  # UsageRollupJob 은 백필·월 마감 때 감사 로그를 쓴다 — 긴 IT 도중 자동 실행되어 감사 건수·체인을 바꾸지 않도록 끈다.
+  # 필요한 테스트는 UsageCloseService·UsageRollupService 를 직접 호출한다(UsageCloseIT).
+  usage:
+    rollup:
+      initial-delay: PT99H
+      fixed-delay: PT99H

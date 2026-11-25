@@ -14,10 +14,15 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * ceremony 집계 이벤트를 best-effort 로 기록한다. 기록 실패가 등록/인증 ceremony
- * 자체를 깨면 안 된다.
+ * ceremony 집계 이벤트를 기록한다. 기록 방식은 메서드마다 다르다.
+ * <ul>
+ *   <li>{@link #record}·{@link #recordAfterCommit} (BEGIN 행 등): best-effort — 기록 실패가 등록/인증
+ *       ceremony 자체를 깨면 안 되므로 실패를 로그만 남기고 삼킨다.</li>
+ *   <li>{@link #recordInTransaction} (청구 장부의 성공 행): 일부러 실패를 전파한다 — 호출 측 트랜잭션에
+ *       참여하므로 기록이 실패하면 본 처리도 롤백된다(성공했는데 장부에 없는 경우를 만들지 않는다).</li>
+ * </ul>
  *
- * <p>핵심: 트랜잭션 <b>경계 전체</b>를 try/catch 로 감싼다. {@code @Transactional}
+ * <p>best-effort 경로의 핵심: 트랜잭션 <b>경계 전체</b>를 try/catch 로 감싼다. {@code @Transactional}
  * 메서드 안의 try/catch 는 커밋 시점 예외(JPA flush 지연으로 INSERT 가 커밋 때 실행되거나,
  * tenant_id NOT NULL 등 제약 위반)를 잡지 못하고 호출자로 전파시킨다. 그래서
  * TransactionTemplate(REQUIRES_NEW)을 직접 호출하고 그 호출을 try/catch 로 감싼다 —
@@ -71,5 +76,21 @@ public class CeremonyEventRecorder {
         } else {
             record(tenantId, action);
         }
+    }
+
+    /**
+     * 청구 장부용 성공 행을 호출 측 트랜잭션 안에서 기록한다. 본 처리가 롤백되면 이 행도 함께 사라지고,
+     * INSERT 실패는 삼키지 않고 호출자에게 전파한다(장부 누락 = 과소 청구).
+     * 새 트랜잭션을 열지 않으며 {@code saveAndFlush} 로 즉시 INSERT 해 제약 위반을 이 시점에 드러낸다.
+     *
+     * @throws IllegalStateException 활성 트랜잭션이 없을 때
+     */
+    public void recordInTransaction(UUID tenantId, String action) {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(action, "action");
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("recordInTransaction 은 활성 트랜잭션 안에서만 호출할 수 있다");
+        }
+        repo.saveAndFlush(new CeremonyEvent(tenantId, action));
     }
 }
