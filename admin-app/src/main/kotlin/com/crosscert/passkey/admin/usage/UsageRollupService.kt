@@ -1,5 +1,7 @@
 package com.crosscert.passkey.admin.usage
 
+import com.crosscert.passkey.core.config.KstTime
+import com.crosscert.passkey.core.repository.CeremonyEventRepository
 import com.crosscert.passkey.core.repository.UsageDailyRepository
 import com.crosscert.passkey.core.repository.UsagePeriodCloseRepository
 import org.springframework.beans.factory.annotation.Value
@@ -25,6 +27,7 @@ private const val RECENT_DAYS = 3L
 class UsageRollupService(
     private val daily: UsageDailyRepository,
     private val closes: UsagePeriodCloseRepository,
+    private val ceremonyEvents: CeremonyEventRepository,
     private val clock: Clock,
     @Value("\${passkey.usage.ledger-start-date:}") ledgerStartRaw: String,
 ) {
@@ -69,12 +72,21 @@ class UsageRollupService(
         return aggregated
     }
 
-    /** 정기 실행분: 기본은 오늘 포함 최근 3일. usage_daily 의 마지막 날이 그보다 앞서면 그날부터. */
+    /**
+     * 정기 실행분: 기본은 오늘 포함 최근 3일. usage_daily 의 마지막 날이 그보다 앞서면 그날부터.
+     * usage_daily 가 비어 있으면(기준점 없음 — 빈 설치에서 백필이 끝난 뒤 admin-app 이 꺼져 있던 동안 기록이 쌓인 경우 등)
+     * 장부의 가장 오래된 행이 속한 날(KST)부터 센다. 장부도 비어 있으면 최근 3일.
+     * 범위를 정하는 두 조회는 락 전이어도 된다 — 닫힌 달 확인과 MERGE 는 [rollupDays] 안, 락 뒤에서 한다.
+     */
     @Transactional // 내부의 rollupDays 호출은 같은 객체 안이라 프록시를 거치지 않는다 — 여기서 트랜잭션을 연다.
     fun rollupRecent(): Int {
         val today = LocalDate.now(clock)
         val default = today.minusDays(RECENT_DAYS - 1)
-        val from = daily.findMaxUsageDate().map { minOf(default, it) }.orElse(default)
+        val from = daily.findMaxUsageDate().map { minOf(default, it) }.orElseGet {
+            ceremonyEvents.findMinCreatedAt()
+                .map { minOf(default, it.atZoneSameInstant(KstTime.ZONE).toLocalDate()) }
+                .orElse(default)
+        }
         return rollupDays(from, today)
     }
 

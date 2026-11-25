@@ -2,6 +2,7 @@ package com.crosscert.passkey.admin.usage
 
 import com.crosscert.passkey.core.config.KstTime
 import com.crosscert.passkey.core.entity.UsagePeriodClose
+import com.crosscert.passkey.core.repository.CeremonyEventRepository
 import com.crosscert.passkey.core.repository.UsageDailyRepository
 import com.crosscert.passkey.core.repository.UsagePeriodCloseRepository
 import org.assertj.core.api.Assertions.assertThat
@@ -24,10 +25,11 @@ class UsageRollupServiceTest {
 
     private val daily: UsageDailyRepository = mock()
     private val closes: UsagePeriodCloseRepository = mock()
+    private val ceremonyEvents: CeremonyEventRepository = mock()
     private val clock: Clock = Clock.fixed(Instant.parse("2026-11-25T01:00:00Z"), KstTime.ZONE) // 10:00 KST
     private val ledgerStart = LocalDate.of(2026, 11, 20)
 
-    private fun service(raw: String = "2026-11-20") = UsageRollupService(daily, closes, clock, raw)
+    private fun service(raw: String = "2026-11-20") = UsageRollupService(daily, closes, ceremonyEvents, clock, raw)
 
     private fun kst(s: String): OffsetDateTime = OffsetDateTime.parse(s)
 
@@ -35,6 +37,7 @@ class UsageRollupServiceTest {
     fun setUp() {
         whenever(daily.findMaxUsageDate()).thenReturn(Optional.empty())
         whenever(closes.existsById(any())).thenReturn(false)
+        whenever(ceremonyEvents.findMinCreatedAt()).thenReturn(Optional.empty())
     }
 
     @Test
@@ -62,6 +65,34 @@ class UsageRollupServiceTest {
         verify(daily).mergeFromLedger(
             eq(kst("2026-11-23T00:00+09:00")), eq(kst("2026-11-26T00:00+09:00")), eq(ledgerStart), any(),
         )
+    }
+
+    @Test
+    fun rollupRecent_emptyDaily_startsFromOldestLedgerRow() {
+        // 빈 설치에서 백필이 끝난 뒤(요약 0행) 10월에 기록이 쌓이고 admin-app 이 11월 말까지 꺼져 있었다.
+        // 요약에 기준점이 없으니 최근 3일이 아니라 장부의 가장 오래된 행이 속한 날(KST)부터 다시 센다 — 10월이 빠지면 마감도 안 된다.
+        whenever(ceremonyEvents.findMinCreatedAt()).thenReturn(Optional.of(OffsetDateTime.parse("2026-10-09T16:30:00Z"))) // 10-10 01:30 KST
+        val days = service().rollupRecent()
+        verify(daily).mergeFromLedger(
+            eq(kst("2026-10-10T00:00+09:00")), eq(kst("2026-11-26T00:00+09:00")), eq(ledgerStart), any(),
+        )
+        assertThat(days).isEqualTo(47)
+    }
+
+    @Test
+    fun rollupRecent_emptyDaily_recentOldestRow_stillLast3Days() {
+        whenever(ceremonyEvents.findMinCreatedAt()).thenReturn(Optional.of(kst("2026-11-25T09:00+09:00")))
+        service().rollupRecent()
+        verify(daily).mergeFromLedger(
+            eq(kst("2026-11-23T00:00+09:00")), eq(kst("2026-11-26T00:00+09:00")), eq(ledgerStart), any(),
+        )
+    }
+
+    @Test
+    fun rollupRecent_withDailyRows_doesNotReadLedgerMin() {
+        whenever(daily.findMaxUsageDate()).thenReturn(Optional.of(LocalDate.of(2026, 11, 24)))
+        service().rollupRecent()
+        verify(ceremonyEvents, never()).findMinCreatedAt()
     }
 
     @Test

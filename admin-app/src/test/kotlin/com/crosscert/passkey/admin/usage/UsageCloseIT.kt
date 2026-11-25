@@ -205,6 +205,9 @@ class UsageCloseIT {
         val marker = mapper.readTree(auditRepo.findByActionIn(listOf("USAGE_BACKFILL_DONE")).single().payload)
         assertThat(marker.get("partialPeriods").size()).isZero()
         assertThat(countAudit("USAGE_MONTH_PARTIAL")).isZero()
+        // 시작 표식은 대상 인덱스로 찾을 수 있고, 완료 표식의 백필 시각과 같다.
+        val started = auditRepo.findByTargetTypeAndTargetIdAndActionIn("usage_period", "backfill", listOf("USAGE_BACKFILL_STARTED")).single()
+        assertThat(mapper.readTree(started.payload).get("backfillAt").asString()).isEqualTo(marker.get("backfilledAt").asString())
     }
 
     @Test

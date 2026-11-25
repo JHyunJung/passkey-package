@@ -17,6 +17,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.TransactionTemplate
+import tools.jackson.databind.ObjectMapper
 import java.sql.SQLException
 import java.time.Clock
 import java.time.Duration
@@ -30,6 +31,8 @@ private val log = LoggerFactory.getLogger(UsageCloseService::class.java)
 private const val ACTION_MONTH_CLOSED = "USAGE_MONTH_CLOSED"
 private const val ACTION_MONTH_PARTIAL = "USAGE_MONTH_PARTIAL"
 private const val ACTION_BACKFILL_DONE = "USAGE_BACKFILL_DONE"
+private const val ACTION_BACKFILL_STARTED = "USAGE_BACKFILL_STARTED"
+private const val BACKFILL_TARGET_ID = "backfill"
 private const val ACTOR_SCHEDULER = "(scheduler)"
 private const val TARGET_PERIOD = "usage_period"
 private const val CLOSE_PK_NAME = "pk_usage_period_close"
@@ -59,6 +62,7 @@ class UsageCloseService(
     private val ceremonyEvents: CeremonyEventRepository,
     private val auditRepo: AuditLogRepository,
     private val audit: AuditLogService,
+    private val json: ObjectMapper,
     private val tx: TransactionTemplate,
     private val clock: Clock,
     @Value("\${passkey.retention.ceremony-event:P90D}") private val retention: Duration,
@@ -69,10 +73,14 @@ class UsageCloseService(
      * 한 번만 실행된다. 실행했으면 true.
      * 완료 표식은 감사 로그 USAGE_BACKFILL_DONE 한 건이고 맨 마지막에 쓴다. 중간에 실패하면 예외를 그대로 던지고
      * 다음 실행이 처음부터 다시 한다(일별 집계는 멱등, 이미 확정된 부분 월은 건너뛴다).
+     *
+     * 부분 월 판정 시각(백필 시각)은 첫 시도에 한 번 정한다: 첫 시도는 다른 일보다 먼저 USAGE_BACKFILL_STARTED 를 따로
+     * 커밋하고, 모든 시도는 그중 가장 이른 기록의 backfillAt 을 쓴다. 재시도마다 지금 시각으로 다시 계산하면, 원본 보존 덕에
+     * 온전한 달까지 부분 월로 확정돼 청구에서 영영 빠질 수 있다.
      */
     fun backfillIfNeeded(): Boolean {
         if (auditRepo.existsByAction(ACTION_BACKFILL_DONE)) return false
-        val now = OffsetDateTime.now(clock)
+        val now = backfillStartedAt()
         val oldest = ceremonyEvents.findMinCreatedAt().orElse(null)
         val partialPeriods = mutableListOf<String>()
         if (oldest != null) {
@@ -84,7 +92,7 @@ class UsageCloseService(
             val cutoff = now.minus(retention)
             val closed = closedPeriods()
             var m = YearMonth.from(fromDay)
-            val lastMonth = YearMonth.now(clock).minusMonths(1)
+            val lastMonth = YearMonth.from(now.atZoneSameInstant(KstTime.ZONE)).minusMonths(1)
             while (m <= lastMonth && UsagePeriods.monthStart(m).isBefore(cutoff)) {
                 val period = UsagePeriods.periodOf(m)
                 if (period !in closed) closeMonth(m, UsagePeriodClose.STATUS_PARTIAL)
@@ -105,17 +113,43 @@ class UsageCloseService(
     }
 
     /**
+     * 백필 시각. 앞선 시도의 USAGE_BACKFILL_STARTED 가 있으면 가장 이른 것의 backfillAt, 없으면 지금 시각을 표식으로 남기고
+     * (자체 트랜잭션으로 커밋 — 뒤의 일이 실패해도 남는다) 그 시각을 쓴다. 표식을 읽을 수 없으면 판정하지 않고 실패한다.
+     */
+    private fun backfillStartedAt(): OffsetDateTime {
+        val earliest = auditRepo.findByTargetTypeAndTargetIdAndActionIn(TARGET_PERIOD, BACKFILL_TARGET_ID, listOf(ACTION_BACKFILL_STARTED))
+            .minByOrNull { it.createdAt }
+        if (earliest != null) {
+            val raw = runCatching { json.readTree(earliest.payload).path("backfillAt").asString("") }.getOrDefault("")
+            return runCatching { OffsetDateTime.parse(raw) }.getOrElse {
+                throw IllegalStateException("$ACTION_BACKFILL_STARTED 의 backfillAt 을 읽을 수 없음: '$raw'", it)
+            }
+        }
+        val now = OffsetDateTime.now(clock)
+        val payload = linkedMapOf<String, Any?>("backfillAt" to now.toString())
+        tx.executeWithoutResult {
+            checkNotNull(audit.append(AuditAppendRequest(null, ACTOR_SCHEDULER, ACTION_BACKFILL_STARTED, TARGET_PERIOD, BACKFILL_TARGET_ID, null, payload))) {
+                "$ACTION_BACKFILL_STARTED 감사 기록 실패"
+            }
+        }
+        return now
+    }
+
+    /**
      * 마감한 기간 목록(오래된 달부터).
-     * 대상은 usage_daily 의 첫 날이 속한 달부터 지난 달까지 중 아직 마감되지 않은 달이고, 다음 달 1일 00:00 KST +
+     * 대상은 usage_daily 의 첫 날과 장부(ceremony_event)의 가장 오래된 행 중 이른 쪽이 속한 달부터 지난 달까지 중 아직 마감되지
+     * 않은 달이다(원본은 있는데 요약이 없는 달도 마감해야 보존 배치의 삭제 경계가 거기서 멈추지 않는다). 다음 달 1일 00:00 KST +
      * close-after 가 지나야 마감한다(자정을 넘겨 커밋된 기록을 기다리는 여유). 한 달이 실패하면 순서를 지키기 위해 그 뒤 달은
      * 이번 실행에서 시도하지 않는다 — 오류 로그를 남기고 그때까지 마감한 목록을 돌려준다(다음 실행이 다시 시도).
      */
     fun closeDueMonths(): List<String> {
-        val first = daily.findMinUsageDate().orElse(null) ?: return emptyList()
+        val firstDaily = daily.findMinUsageDate().map { YearMonth.from(it) }.orElse(null)
+        val firstLedger = ceremonyEvents.findMinCreatedAt().map { YearMonth.from(it.atZoneSameInstant(KstTime.ZONE)) }.orElse(null)
+        val first = listOfNotNull(firstDaily, firstLedger).minOrNull() ?: return emptyList()
         val now = OffsetDateTime.now(clock)
         val closed = closedPeriods()
         val result = mutableListOf<String>()
-        var m = YearMonth.from(first)
+        var m = first
         val currentMonth = YearMonth.now(clock)
         while (m < currentMonth) {
             if (now.isBefore(UsagePeriods.monthStart(m.plusMonths(1)).plus(closeAfter))) break

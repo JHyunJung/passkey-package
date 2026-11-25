@@ -130,6 +130,12 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     /** action 이 주어진 값 중 하나인 감사 로그. */
     List<AuditLog> findByActionIn(Collection<String> actions);
 
+    /**
+     * 대상(target_type, target_id) 하나의 감사 로그 중 action 이 주어진 값 중 하나인 것.
+     * action 에는 인덱스가 없어 대상 인덱스(audit_log_target_ix)로 먼저 좁힌다 — 사용량 정산의 마감 대조·백필 시작 표식 조회용.
+     */
+    List<AuditLog> findByTargetTypeAndTargetIdAndActionIn(String targetType, String targetId, Collection<String> actions);
+
     /** Read API for the audit-log page. Filters are all optional. */
     @Query("select a from AuditLog a " +
            "where (:action is null or a.action = :action) " +

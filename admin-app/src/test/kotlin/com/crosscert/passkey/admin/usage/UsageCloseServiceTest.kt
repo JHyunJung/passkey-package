@@ -17,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.argThat
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -28,6 +30,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.SimpleTransactionStatus
 import org.springframework.transaction.support.TransactionTemplate
+import tools.jackson.databind.json.JsonMapper
 import java.sql.SQLIntegrityConstraintViolationException
 import java.time.Clock
 import java.time.Duration
@@ -57,10 +60,24 @@ class UsageCloseServiceTest {
 
     private fun clockAt(kst: String): Clock = Clock.fixed(OffsetDateTime.parse(kst).toInstant(), KstTime.ZONE)
 
-    private fun service(clock: Clock = clockAt("2026-12-01T03:00+09:00")) = UsageCloseService(
-        rollup, daily, monthly, closes, ceremonyEvents, auditRepo, audit,
+    private fun service(clock: Clock = clockAt("2026-12-01T03:00+09:00"), rollup: UsageRollupService = this.rollup) = UsageCloseService(
+        rollup, daily, monthly, closes, ceremonyEvents, auditRepo, audit, JsonMapper.builder().build(),
         TransactionTemplate(txManager), clock, Duration.ofDays(90), Duration.ofHours(2),
     )
+
+    /** 앞선 시도가 남긴 USAGE_BACKFILL_STARTED 감사 기록. */
+    private fun startedEntry(backfillAt: String, createdAt: String = backfillAt): AuditLog {
+        val l: AuditLog = mock()
+        whenever(l.action).thenReturn("USAGE_BACKFILL_STARTED")
+        whenever(l.payload).thenReturn("""{"backfillAt":"$backfillAt"}""")
+        whenever(l.createdAt).thenReturn(OffsetDateTime.parse(createdAt))
+        return l
+    }
+
+    private fun stubStarted(vararg entries: AuditLog) {
+        whenever(auditRepo.findByTargetTypeAndTargetIdAndActionIn("usage_period", "backfill", listOf("USAGE_BACKFILL_STARTED")))
+            .thenReturn(entries.toList())
+    }
 
     private fun closeRow(period: String) =
         UsagePeriodClose(period, UsagePeriodClose.STATUS_CLOSED, "LEDGER", 0, 0, 0, 0, 0, OffsetDateTime.now())
@@ -359,7 +376,8 @@ class UsageCloseServiceTest {
         assertThatThrownBy { service(clockAt("2026-11-25T10:00+09:00")).backfillIfNeeded() }
             .isInstanceOf(DataIntegrityViolationException::class.java)
         verify(rollup, never()).rollupMonthForClose(YearMonth.of(2026, 8))
-        verifyNoInteractions(audit)
+        // 시작 표식만 남고 완료 표식은 없다.
+        assertThat(auditRequests().map { it.action }).containsExactly("USAGE_BACKFILL_STARTED")
     }
 
     @Test
@@ -416,10 +434,10 @@ class UsageCloseServiceTest {
         assertThat(close.period).isEqualTo("2026-08")
         assertThat(close.status).isEqualTo(UsagePeriodClose.STATUS_PARTIAL)
 
-        val reqs = auditRequests(2)
-        assertThat(reqs.map { it.action }).containsExactly("USAGE_MONTH_PARTIAL", "USAGE_BACKFILL_DONE")
-        assertThat(reqs[0].payload!!["status"]).isEqualTo("PARTIAL")
-        val marker = reqs[1].payload!!
+        val reqs = auditRequests(3)
+        assertThat(reqs.map { it.action }).containsExactly("USAGE_BACKFILL_STARTED", "USAGE_MONTH_PARTIAL", "USAGE_BACKFILL_DONE")
+        assertThat(reqs[1].payload!!["status"]).isEqualTo("PARTIAL")
+        val marker = reqs[2].payload!!
         assertThat(marker["partialPeriods"]).isEqualTo(listOf("2026-08"))
         assertThat(marker["oldestLedgerAt"]).isEqualTo("2026-08-27T10:00+09:00")
         assertThat(marker["backfilledAt"]).isEqualTo("2026-11-25T10:00+09:00")
@@ -429,13 +447,13 @@ class UsageCloseServiceTest {
     fun backfill_partialCloseFails_noMarker_andPropagates() {
         whenever(ceremonyEvents.findMinCreatedAt())
             .thenReturn(Optional.of(OffsetDateTime.parse("2026-07-27T10:00+09:00")))
-        whenever(audit.append(any())).thenThrow(IllegalStateException("audit down"))
+        whenever(audit.append(argThat { action == "USAGE_MONTH_PARTIAL" })).thenThrow(IllegalStateException("audit down"))
 
         assertThatThrownBy { service(clockAt("2026-11-25T10:00+09:00")).backfillIfNeeded() }
             .isInstanceOf(IllegalStateException::class.java)
 
         verify(rollup, never()).rollupMonthForClose(YearMonth.of(2026, 8))
-        assertThat(auditRequests().map { it.action }).containsExactly("USAGE_MONTH_PARTIAL")
+        assertThat(auditRequests(2).map { it.action }).containsExactly("USAGE_BACKFILL_STARTED", "USAGE_MONTH_PARTIAL")
     }
 
     @Test
@@ -443,6 +461,7 @@ class UsageCloseServiceTest {
         whenever(ceremonyEvents.findMinCreatedAt())
             .thenReturn(Optional.of(OffsetDateTime.parse("2026-07-27T10:00+09:00")))
         whenever(closes.findAll()).thenReturn(listOf(closeRow("2026-07")))
+        stubStarted(startedEntry("2026-11-25T10:00+09:00")) // 앞선 시도가 같은 시각에 시작했다
 
         service(clockAt("2026-11-25T10:00+09:00")).backfillIfNeeded()
 
@@ -462,7 +481,7 @@ class UsageCloseServiceTest {
 
         verify(rollup).rollupDays(LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 25))
         verify(rollup, never()).rollupMonthForClose(any())
-        val marker = auditRequests().single()
+        val marker = auditRequests(2).last()
         assertThat(marker.action).isEqualTo("USAGE_BACKFILL_DONE")
         assertThat(marker.payload!!["partialPeriods"]).isEqualTo(emptyList<String>())
     }
@@ -473,12 +492,151 @@ class UsageCloseServiceTest {
 
         verifyNoInteractions(rollup, monthly)
         verify(closes, never()).saveAndFlush(any())
-        val marker = auditRequests().single()
-        assertThat(marker.action).isEqualTo("USAGE_BACKFILL_DONE")
+        val reqs = auditRequests(2)
+        assertThat(reqs.map { it.action }).containsExactly("USAGE_BACKFILL_STARTED", "USAGE_BACKFILL_DONE")
+        val marker = reqs[1]
         assertThat(marker.actorEmail).isEqualTo("(scheduler)")
         assertThat(marker.tenantId).isNull()
         assertThat(marker.payload!!["oldestLedgerAt"]).isNull()
         assertThat(marker.payload["partialPeriods"]).isEqualTo(emptyList<String>())
+    }
+
+    @Test
+    fun backfill_firstAttempt_writesStartedMarkerInItsOwnCommittedTx_beforeAnyWork() {
+        whenever(ceremonyEvents.findMinCreatedAt())
+            .thenReturn(Optional.of(OffsetDateTime.parse("2026-08-27T10:00+09:00")))
+
+        service(clockAt("2026-11-25T10:00+09:00")).backfillIfNeeded()
+
+        val started = auditRequests(3).first()
+        assertThat(started.action).isEqualTo("USAGE_BACKFILL_STARTED")
+        assertThat(started.actorId).isNull()
+        assertThat(started.actorEmail).isEqualTo("(scheduler)")
+        assertThat(started.targetType).isEqualTo("usage_period")
+        assertThat(started.targetId).isEqualTo("backfill")
+        assertThat(started.tenantId).isNull()
+        assertThat(started.payload).isEqualTo(mapOf("backfillAt" to "2026-11-25T10:00+09:00"))
+        // 표식 트랜잭션이 먼저 커밋되고, 그 뒤에 집계·부분 월 마감이 시작된다.
+        val order = inOrder(audit, txManager, rollup)
+        order.verify(audit).append(argThat { action == "USAGE_BACKFILL_STARTED" })
+        order.verify(txManager).commit(txStatuses[0])
+        order.verify(rollup).rollupDays(any(), any())
+    }
+
+    @Test
+    fun backfill_startedMarkerFailure_stopsBeforeAnyWork() {
+        whenever(ceremonyEvents.findMinCreatedAt())
+            .thenReturn(Optional.of(OffsetDateTime.parse("2026-08-27T10:00+09:00")))
+        whenever(audit.append(any())).thenReturn(null)
+
+        assertThatThrownBy { service(clockAt("2026-11-25T10:00+09:00")).backfillIfNeeded() }
+            .isInstanceOf(IllegalStateException::class.java)
+        verifyNoInteractions(rollup)
+        verify(closes, never()).saveAndFlush(any())
+    }
+
+    @Test
+    fun backfill_retryAtLaterClock_classifiesWithOriginalStartTime() {
+        // 1차 시도(11-25)는 시작 표식을 남긴 뒤 집계에서 실패했다. 2차 시도는 12-20 — 지금 시각으로 다시 계산하면
+        // (12-20 − 90일 = 09-21) 9월까지 부분 월이 되지만, 원본 보존 덕에 9월 원본은 온전하다. 1차 시각 기준이면 8월만 부분이다.
+        whenever(ceremonyEvents.findMinCreatedAt())
+            .thenReturn(Optional.of(OffsetDateTime.parse("2026-08-27T10:00+09:00")))
+        whenever(rollup.rollupDays(any(), any())).thenThrow(IllegalStateException("db down"))
+
+        assertThatThrownBy { service(clockAt("2026-11-25T10:00+09:00")).backfillIfNeeded() }
+            .isInstanceOf(IllegalStateException::class.java)
+        val first = auditRequests().single()
+        assertThat(first.action).isEqualTo("USAGE_BACKFILL_STARTED")
+        val startedAt = first.payload!!["backfillAt"] as String
+
+        // 2차 시도: 1차의 표식이 감사 로그에 있다.
+        org.mockito.Mockito.reset(rollup, audit)
+        whenever(rollup.ledgerStart).thenReturn(LocalDate.of(2026, 1, 1))
+        whenever(audit.append(any())).thenReturn(mock<AuditLog>())
+        stubStarted(startedEntry(startedAt))
+
+        assertThat(service(clockAt("2026-12-20T10:00+09:00")).backfillIfNeeded()).isTrue()
+
+        verify(rollup).rollupDays(LocalDate.of(2026, 8, 27), LocalDate.of(2026, 12, 20)) // 집계는 오늘까지
+        verify(rollup).rollupMonthForClose(YearMonth.of(2026, 8))
+        verify(rollup, never()).rollupMonthForClose(YearMonth.of(2026, 9))
+        val reqs = auditRequests(2)
+        assertThat(reqs.map { it.action }).`as`("시작 표식은 다시 쓰지 않는다").containsExactly("USAGE_MONTH_PARTIAL", "USAGE_BACKFILL_DONE")
+        assertThat(reqs[1].payload!!["partialPeriods"]).isEqualTo(listOf("2026-08"))
+        assertThat(reqs[1].payload!!["backfilledAt"]).isEqualTo("2026-11-25T10:00+09:00")
+    }
+
+    @Test
+    fun backfill_severalStartedMarkers_usesEarliest() {
+        whenever(ceremonyEvents.findMinCreatedAt())
+            .thenReturn(Optional.of(OffsetDateTime.parse("2026-08-27T10:00+09:00")))
+        stubStarted(
+            startedEntry("2026-12-20T10:00+09:00"),
+            startedEntry("2026-11-25T10:00+09:00"),
+        )
+
+        service(clockAt("2026-12-21T10:00+09:00")).backfillIfNeeded()
+
+        verify(rollup, never()).rollupMonthForClose(YearMonth.of(2026, 9))
+        assertThat(auditRequests(2).last().payload!!["backfilledAt"]).isEqualTo("2026-11-25T10:00+09:00")
+    }
+
+    @Test
+    fun backfill_startedMarkerUnreadable_failsWithoutClassifying() {
+        whenever(ceremonyEvents.findMinCreatedAt())
+            .thenReturn(Optional.of(OffsetDateTime.parse("2026-08-27T10:00+09:00")))
+        val broken: AuditLog = mock()
+        whenever(broken.payload).thenReturn("""{"backfillAt":"not-a-time"}""")
+        whenever(broken.createdAt).thenReturn(OffsetDateTime.parse("2026-11-25T10:00+09:00"))
+        stubStarted(broken)
+
+        assertThatThrownBy { service(clockAt("2026-12-20T10:00+09:00")).backfillIfNeeded() }
+            .isInstanceOf(IllegalStateException::class.java)
+        verifyNoInteractions(rollup, audit)
+    }
+
+    // ---------------------------------------------------------------- 요약이 비어 있을 때의 복구 (F1)
+
+    @Test
+    fun closeDueMonths_startsFromOldestLedgerMonth_whenEarlierThanDaily() {
+        // 원본은 10월부터 있는데 요약은 11월부터 — 10월도 마감 대상이다(0 건이면 0 으로 마감).
+        whenever(daily.findMinUsageDate()).thenReturn(Optional.of(LocalDate.of(2026, 11, 3)))
+        whenever(ceremonyEvents.findMinCreatedAt()).thenReturn(Optional.of(OffsetDateTime.parse("2026-10-20T10:00+09:00")))
+
+        assertThat(service().closeDueMonths()).containsExactly("2026-10", "2026-11")
+    }
+
+    @Test
+    fun closeDueMonths_onlyLedgerRows_noDaily_stillCloses() {
+        whenever(ceremonyEvents.findMinCreatedAt()).thenReturn(Optional.of(OffsetDateTime.parse("2026-10-31T23:59+09:00")))
+
+        assertThat(service().closeDueMonths()).containsExactly("2026-10", "2026-11")
+        verify(rollup).rollupMonthForClose(YearMonth.of(2026, 10))
+    }
+
+    @Test
+    fun scenario_emptyBackfill_thenTraffic_thenOutageAcrossMonthBoundary_octoberIsAggregatedAndClosed() {
+        // 실제 집계 서비스를 쓴다(저장소는 mock). 요약 표에는 아무 것도 쌓이지 않는다고 본다 — 기준점이 생기지 않는 최악의 경우.
+        val realRollup = UsageRollupService(daily, closes, ceremonyEvents, clockAt("2026-11-28T10:00+09:00"), "2026-10-01")
+
+        // ① 10-05: 빈 설치에서 백필 — 장부가 비어 있어 표식만 남는다.
+        assertThat(service(clockAt("2026-10-05T10:00+09:00"), realRollup).backfillIfNeeded()).isTrue()
+        verify(daily, never()).mergeFromLedger(any(), any(), any(), any())
+
+        // ② 그 뒤 10월에 기록이 쌓이는 동안 admin-app 은 꺼져 있었다. ③ 11-28 에 돌아와 정기 실행.
+        whenever(auditRepo.existsByAction("USAGE_BACKFILL_DONE")).thenReturn(true)
+        whenever(ceremonyEvents.findMinCreatedAt()).thenReturn(Optional.of(OffsetDateTime.parse("2026-10-12T09:00+09:00")))
+        realRollup.rollupRecent()
+        verify(daily).mergeFromLedger(
+            eq(OffsetDateTime.parse("2026-10-12T00:00+09:00")), eq(OffsetDateTime.parse("2026-11-29T00:00+09:00")), any(), any(),
+        )
+        val closed = service(clockAt("2026-11-28T10:00+09:00"), realRollup).closeDueMonths()
+
+        assertThat(closed).containsExactly("2026-10")
+        verify(daily).mergeFromLedger(
+            eq(OffsetDateTime.parse("2026-10-01T00:00+09:00")), eq(OffsetDateTime.parse("2026-11-01T00:00+09:00")), any(), any(),
+        )
+        assertThat(savedClose().period).isEqualTo("2026-10")
     }
 
     // ---------------------------------------------------------------- releasedBefore
