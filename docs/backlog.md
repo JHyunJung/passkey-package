@@ -315,6 +315,7 @@
 
 - **lockout lost-update** — defender-favorable 방향이라 변경 불요. **pwreset confirm TOCTOU** — 1회용·operator-initiated. [admin-account-security 2026-05-31]
 - **audit_log purge 제외** — 이중 hash-chain 때문. 감사 보존기간 단축 요구가 생기면 anchor-based purge 를 별도 phase 로. [data-retention-D 2026-05-31]
+- **ceremony_event 보존은 마감 기준으로 제한** — 90일 보존이어도 마감되지 않은 달의 원본은 지우지 않는다(`RetentionPurgeService` 가 `UsageCloseService.releasedBefore()` 와 cutoff 중 이른 쪽으로 삭제). 마감이 오래 밀리면 원본이 계속 쌓인다. [usage-settlement-ledger 2026-11-25]
 - **credential soft-delete 미도입** — revoke 즉시 hard-delete, 이력은 audit_log 로 남긴다. [data-retention-D 2026-05-31, admin-tenant-detail 2026-05-27]
 
 ## 7. 운영 지식 (코드 백로그 아님)
