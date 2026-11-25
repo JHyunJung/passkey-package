@@ -253,14 +253,13 @@ class UsageCloseIT {
     }
 
     /**
-     * 진짜 경합: 두 트랜잭션이 같은 달(2026-09)을 동시에 확정한다. 앞 트랜잭션은 마감 행을 INSERT 한 채 열려 있고, 그동안 뒤
-     * 트랜잭션이 존재 확인(아직 커밋 전이라 false)을 지나 같은 PK INSERT 에서 기다리다가, 앞 트랜잭션 커밋 뒤 ORA-00001 로 건너뛴다.
+     * 진짜 경합: 두 트랜잭션이 같은 달(2026-09)을 동시에 확정한다. 앞 트랜잭션은 마감 행을 INSERT 한 채 열려 있고, 뒤 트랜잭션은
+     * 첫 문장인 usage_period_close EXCLUSIVE 락에서 앞 트랜잭션 커밋까지 기다린 뒤, 존재 확인으로 건너뛴다.
+     * (락이 없던 때는 같은 PK INSERT 에서 기다린 뒤 ORA-00001 로 건너뛰었다 — PK 는 지금도 마지막 방어선이다.)
      *
-     * 공개 메서드(closeDueMonths) 두 번으로는 이 겹침을 확정적으로 만들 수 없다 — 트랜잭션을 붙잡아 둘 지점이 없고, 그달
-     * usage_daily 행이 있으면 재집계 MERGE 의 행 락에서 먼저 줄 서므로 뒤 트랜잭션은 빠른 경로(존재 확인)로 빠진다.
-     * 그래서 한 달 확정 루틴(closeMonth)을 두 스레드에서 직접 돌리고, 앞 스레드는 바깥 트랜잭션으로 커밋을 latch 뒤로 미룬다.
-     * 2026-09 는 원본(ceremony_event)이 없고 usage_daily 만 직접 넣었다 — 재집계 MERGE 가 잠그는 행이 없어 뒤 트랜잭션이
-     * 마감 행 INSERT 까지 간다. 2026-10 바로 앞 달이라 다른 테스트의 closeDueMonths 결과(빈 목록)도 바뀌지 않는다.
+     * 공개 메서드(closeDueMonths) 두 번으로는 겹침을 확정적으로 만들 수 없어(트랜잭션을 붙잡아 둘 지점이 없다) 한 달 확정 루틴
+     * (closeMonth)을 두 스레드에서 직접 돌리고, 앞 스레드는 바깥 트랜잭션으로 커밋을 latch 뒤로 미룬다.
+     * 2026-09 는 usage_daily 만 직접 넣었다. 2026-10 바로 앞 달이라 다른 테스트의 closeDueMonths 결과(빈 목록)도 바뀌지 않는다.
      */
     @Test
     fun concurrentClose_samePeriod_exactlyOneWins(output: CapturedOutput) {
@@ -281,7 +280,7 @@ class UsageCloseIT {
                 txTemplate.execute {
                     val r = close.closeMonth(sep, UsagePeriodClose.STATUS_CLOSED)
                     firstInserted.countDown()
-                    Thread.sleep(holdMs) // 뒤 트랜잭션이 PK 에서 기다리는 동안 커밋을 미룬다
+                    Thread.sleep(holdMs) // 뒤 트랜잭션이 기다리는 동안 커밋을 미룬다
                     r
                 }
             }
@@ -295,9 +294,9 @@ class UsageCloseIT {
             assertThat(first.get(60, TimeUnit.SECONDS)).isTrue()
             val (secondResult, secondElapsedMs) = second.get(60, TimeUnit.SECONDS) // 예외가 나면 여기서 터진다
             assertThat(secondResult).isFalse()
-            // 뒤 트랜잭션이 앞 트랜잭션 커밋까지 막혀 있었다 = 존재 확인을 지나 PK INSERT 에서 기다렸다.
+            // 뒤 트랜잭션이 앞 트랜잭션 커밋까지 막혀 있었고(테이블 락), 그 뒤 커밋된 마감을 보고 건너뛰었다.
             assertThat(secondElapsedMs).isGreaterThan(holdMs / 2)
-            assertThat(output.out).contains("usage month closed by another instance — skip: period=2026-09")
+            assertThat(output.out).contains("usage month already closed — skip: period=2026-09")
         } finally {
             pool.shutdownNow()
         }
@@ -326,6 +325,66 @@ class UsageCloseIT {
                 )
             }
         }.isInstanceOf(org.springframework.dao.DataIntegrityViolationException::class.java)
+            // UsageCloseService 가 "이미 마감됨" 으로 판정하는 모양을 실제 드라이버 예외로 확인한다.
+            .satisfies({ e ->
+                val sql = generateSequence(e) { it.cause }.filterIsInstance<java.sql.SQLException>().first()
+                assertThat(sql.errorCode).isEqualTo(1)
+                assertThat(sql.message).containsIgnoringCase("pk_usage_period_close")
+            })
         assertThat(closes.findById("2026-10").orElseThrow().regSuccess).isEqualTo(2L)
+    }
+
+    /**
+     * 마감과 일반 집계의 경합(리뷰 지적 1). 마감 트랜잭션이 재집계를 끝내고 마감 행을 넣은 채 열려 있는 동안 그달 원본이 늘고
+     * 일반 집계(rollupDays)가 돈다. 일반 집계는 SHARE 락에서 마감 커밋까지 기다린 뒤 "마감됨" 을 보고 건너뛰어야 한다.
+     * 락이 없으면 "마감 전" 으로 확인한 뒤 usage_daily 행 락에서 기다렸다가, 커밋 뒤 마감된 달의 usage_daily 를 덮어쓴다.
+     * 2027-02 는 고정 시계(2026-11-25)보다 뒤라 다른 테스트의 마감 대상·releasedBefore·rollupRecent 구간에 들지 않는다.
+     */
+    @Test
+    fun rollupDuringClose_waits_andSkipsClosedMonth() {
+        val feb = java.time.YearMonth.of(2027, 2)
+        seed(TENANT_A, CeremonyAction.REGISTRATION_SUCCESS, 2, "2027-02-10 12:00:00")
+        rollup.rollupDays(feb.atDay(1), feb.atEndOfMonth())
+        val dailyBefore = dailyRowsFor("2027-02-01", "2027-03-01")
+        assertThat(dailyBefore).hasSize(1)
+
+        val holdMs = 3000L
+        val closeInserted = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val closing = pool.submit<Boolean> {
+                txTemplate.execute {
+                    val r = close.closeMonth(feb, UsagePeriodClose.STATUS_CLOSED)
+                    closeInserted.countDown()
+                    Thread.sleep(holdMs)
+                    r
+                }
+            }
+            val rolling = pool.submit<Pair<Int, Long>> {
+                check(closeInserted.await(30, TimeUnit.SECONDS)) { "close did not reach insert" }
+                seed(TENANT_A, CeremonyAction.REGISTRATION_SUCCESS, 1, "2027-02-10 13:00:00") // 늦게 커밋된 원본
+                val t0 = System.nanoTime()
+                val days = rollup.rollupDays(feb.atDay(1), feb.atEndOfMonth())
+                days to TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0)
+            }
+            assertThat(closing.get(60, TimeUnit.SECONDS)).isTrue()
+            val (days, elapsedMs) = rolling.get(60, TimeUnit.SECONDS)
+            assertThat(elapsedMs).`as`("rollup must wait for the open close").isGreaterThan(holdMs / 2)
+            assertThat(days).`as`("closed month must be skipped").isZero()
+        } finally {
+            pool.shutdownNow()
+        }
+
+        assertThat(dailyRowsFor("2027-02-01", "2027-03-01")).isEqualTo(dailyBefore)
+        assertThat(monthlySnapshot("2027-02")).containsExactly(listOf(TENANT_A, 2L, 0L, 0L, 0L))
+    }
+
+    /** 리뷰 지적 2: 마감 행 INSERT 의 PK 외 무결성 위반(CHECK)은 "이미 마감됨" 이 아니라 실패다. */
+    @Test
+    fun closeRowCheckViolation_propagates_andLeavesNothing() {
+        assertThatThrownBy { close.closeMonth(java.time.YearMonth.of(2027, 3), "BOGUS") }
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException::class.java)
+        assertThat(countCloseRows("2027-03")).isZero()
+        assertThat(countClosedAudit("2027-03")).isZero()
     }
 }

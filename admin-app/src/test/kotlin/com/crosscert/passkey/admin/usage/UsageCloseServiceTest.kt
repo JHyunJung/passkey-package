@@ -28,6 +28,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.SimpleTransactionStatus
 import org.springframework.transaction.support.TransactionTemplate
+import java.sql.SQLIntegrityConstraintViolationException
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
@@ -66,6 +67,22 @@ class UsageCloseServiceTest {
 
     private fun row(t: UUID, reg: Long, auth: Long, regAtt: Long, authAtt: Long): Array<Any> =
         arrayOf(t, reg, auth, regAtt, authAtt)
+
+    /** Oracle 드라이버가 마감 행 PK 충돌에서 내는 모양(원인에 ORA-00001 + 제약 이름). */
+    private fun pkCollision() = DataIntegrityViolationException(
+        "could not execute statement",
+        SQLIntegrityConstraintViolationException(
+            "ORA-00001: unique constraint (PSK_APP_OWNER.PK_USAGE_PERIOD_CLOSE) violated", "23000", 1,
+        ),
+    )
+
+    /** 마감 행 INSERT 의 다른 무결성 위반(CHECK) — "이미 마감됨" 이 아니다. */
+    private fun checkViolation() = DataIntegrityViolationException(
+        "could not execute statement",
+        SQLIntegrityConstraintViolationException(
+            "ORA-02290: check constraint (PSK_APP_OWNER.CK_USAGE_CLOSE_STATUS) violated", "23000", 2290,
+        ),
+    )
 
     @BeforeEach
     fun setUp() {
@@ -188,9 +205,10 @@ class UsageCloseServiceTest {
         assertThat(service().closeMonth(YearMonth.of(2026, 11), UsagePeriodClose.STATUS_CLOSED)).isTrue()
 
         val order = inOrder(rollup, daily, closes, monthly, audit)
+        order.verify(closes).lockForClose()
+        order.verify(closes).existsById("2026-11")
         order.verify(rollup).rollupMonthForClose(YearMonth.of(2026, 11))
         order.verify(daily).sumByTenant(any(), any())
-        order.verify(closes).existsById("2026-11")
         order.verify(closes).saveAndFlush(any())
         order.verify(monthly).saveAllAndFlush(any<Iterable<UsageMonthly>>())
         order.verify(audit).append(any())
@@ -277,7 +295,7 @@ class UsageCloseServiceTest {
     @Test
     fun close_duplicatePeriod_isSkippedSilently() {
         whenever(daily.findMinUsageDate()).thenReturn(Optional.of(LocalDate.of(2026, 11, 3)))
-        whenever(closes.saveAndFlush(any<UsagePeriodClose>())).thenThrow(DataIntegrityViolationException("ORA-00001"))
+        whenever(closes.saveAndFlush(any<UsagePeriodClose>())).thenThrow(pkCollision())
 
         val closed = service().closeDueMonths()
 
@@ -286,6 +304,62 @@ class UsageCloseServiceTest {
         verifyNoInteractions(audit)
         // 재집계까지 되돌리도록 트랜잭션은 롤백 전용으로 끝난다.
         assertThat(txStatuses.single().isRollbackOnly).isTrue()
+    }
+
+    @Test
+    fun closeDueMonths_pkCollision_skipsThatMonth_andContinues() {
+        whenever(daily.findMinUsageDate()).thenReturn(Optional.of(LocalDate.of(2026, 9, 10)))
+        whenever(closes.saveAndFlush(any<UsagePeriodClose>())).thenAnswer { inv ->
+            val row = inv.getArgument<UsagePeriodClose>(0)
+            if (row.period == "2026-09") throw pkCollision()
+            row
+        }
+
+        assertThat(service().closeDueMonths()).containsExactly("2026-10", "2026-11")
+        assertThat(auditRequests(2).map { it.targetId }).containsExactly("2026-10", "2026-11")
+    }
+
+    @Test
+    fun closeDueMonths_nonPkIntegrityViolation_isFailure_andStopsLoop() {
+        whenever(daily.findMinUsageDate()).thenReturn(Optional.of(LocalDate.of(2026, 9, 10)))
+        whenever(closes.saveAndFlush(any<UsagePeriodClose>())).thenThrow(checkViolation())
+
+        assertThat(service().closeDueMonths()).isEmpty()
+        verify(rollup, never()).rollupMonthForClose(YearMonth.of(2026, 10))
+        verify(txManager).rollback(txStatuses.single())
+        verifyNoInteractions(audit)
+    }
+
+    @Test
+    fun close_nonPkIntegrityViolation_propagates() {
+        whenever(closes.saveAndFlush(any<UsagePeriodClose>())).thenThrow(checkViolation())
+
+        assertThatThrownBy { service().closeMonth(YearMonth.of(2026, 11), UsagePeriodClose.STATUS_CLOSED) }
+            .isInstanceOf(DataIntegrityViolationException::class.java)
+    }
+
+    @Test
+    fun close_pkViolationOfAnotherConstraint_isNotTreatedAsDuplicate() {
+        // ORA-00001 이어도 다른 제약이면 중복 마감이 아니다.
+        whenever(closes.saveAndFlush(any<UsagePeriodClose>())).thenThrow(
+            DataIntegrityViolationException(
+                "x", SQLIntegrityConstraintViolationException("ORA-00001: unique constraint (PSK_APP_OWNER.SOMETHING_ELSE) violated", "23000", 1),
+            ),
+        )
+        assertThatThrownBy { service().closeMonth(YearMonth.of(2026, 11), UsagePeriodClose.STATUS_CLOSED) }
+            .isInstanceOf(DataIntegrityViolationException::class.java)
+    }
+
+    @Test
+    fun backfill_partialCloseNonPkViolation_propagates_noMarker() {
+        whenever(ceremonyEvents.findMinCreatedAt())
+            .thenReturn(Optional.of(OffsetDateTime.parse("2026-07-27T10:00+09:00")))
+        whenever(closes.saveAndFlush(any<UsagePeriodClose>())).thenThrow(checkViolation())
+
+        assertThatThrownBy { service(clockAt("2026-11-25T10:00+09:00")).backfillIfNeeded() }
+            .isInstanceOf(DataIntegrityViolationException::class.java)
+        verify(rollup, never()).rollupMonthForClose(YearMonth.of(2026, 8))
+        verifyNoInteractions(audit)
     }
 
     @Test
@@ -308,6 +382,9 @@ class UsageCloseServiceTest {
         val closedNow = service().closeMonth(YearMonth.of(2026, 11), UsagePeriodClose.STATUS_CLOSED)
 
         assertThat(closedNow).isFalse()
+        // 락을 쥔 뒤 확인하므로 재집계까지 가지 않는다.
+        verify(closes).lockForClose()
+        verify(rollup, never()).rollupMonthForClose(any())
         verify(closes, never()).saveAndFlush(any())
         verifyNoInteractions(audit)
         assertThat(txStatuses.single().isRollbackOnly).isTrue()

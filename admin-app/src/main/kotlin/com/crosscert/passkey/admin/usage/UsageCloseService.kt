@@ -17,6 +17,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.TransactionTemplate
+import java.sql.SQLException
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
@@ -31,6 +32,8 @@ private const val ACTION_MONTH_PARTIAL = "USAGE_MONTH_PARTIAL"
 private const val ACTION_BACKFILL_DONE = "USAGE_BACKFILL_DONE"
 private const val ACTOR_SCHEDULER = "(scheduler)"
 private const val TARGET_PERIOD = "usage_period"
+private const val CLOSE_PK_NAME = "pk_usage_period_close"
+private const val ORA_UNIQUE_VIOLATION = 1 // ORA-00001
 
 /** sumByTenant 한 행. */
 private data class TenantSum(
@@ -146,8 +149,12 @@ class UsageCloseService(
 
     /**
      * 한 달을 한 트랜잭션으로 확정한다. 확정했으면 true, 이미 마감된 달이면 false(트랜잭션은 롤백 — 재집계도 되돌린다).
-     * 순서: ① 그달 재집계 ② 합산 ③ 마감 여부 확인 후 usage_period_close INSERT(flush — PK 충돌을 여기서 드러낸다)
-     * ④ usage_monthly INSERT ⑤ 맨 마지막에 감사 기록. 감사 기록이 실패하면 예외가 트랜잭션 밖으로 나가 전체가 롤백된다.
+     * 순서: ⓪ usage_period_close EXCLUSIVE 락(일반 집계·다른 마감과 직렬화) ① 마감 여부 확인 ② 그달 재집계 ③ 합산
+     * ④ usage_period_close INSERT(flush — PK 충돌을 여기서 드러낸다) ⑤ usage_monthly INSERT ⑥ 맨 마지막에 감사 기록.
+     * 감사 기록이 실패하면 예외가 트랜잭션 밖으로 나가 전체가 롤백된다.
+     *
+     * 락 순서: 마감은 테이블 락 → usage_daily 행 → 감사 체인 락, 일반 집계는 테이블 락 → usage_daily 행. 둘 다 테이블 락을
+     * 첫 문장으로 잡고 그 모드가 서로 배타라, usage_daily 행 락을 쥔 채 상대를 기다리는 순환(교착)이 생기지 않는다.
      *
      * internal: 같은 모듈 테스트가 직접 호출한다.
      */
@@ -157,6 +164,14 @@ class UsageCloseService(
     private fun closeInTx(month: YearMonth, status: String, txStatus: TransactionStatus): Boolean {
         val period = UsagePeriods.periodOf(month)
         val from = month.atDay(1)
+        closes.lockForClose()
+        // 락을 쥔 뒤라 이 확인 이후 다른 마감이 끼어들 수 없다. 아래 PK 는 그래도 남겨 둔 마지막 방어선이다
+        // (UsagePeriodClose 는 Persistable 이라 saveAndFlush 가 항상 persist(INSERT)다).
+        if (closes.existsById(period)) {
+            log.info("usage month already closed — skip: period={}", period)
+            txStatus.setRollbackOnly()
+            return false
+        }
         rollup.rollupMonthForClose(month)
         val tenants = daily.sumByTenant(from, month.plusMonths(1).atDay(1))
             .map { r ->
@@ -172,13 +187,6 @@ class UsageCloseService(
         val regSuccess = tenants.sumOf { it.regSuccess }
         val authSuccess = tenants.sumOf { it.authSuccess }
 
-        // 이미 커밋된 마감은 여기서 빨리 걸러 낸다(빠른 경로). 정확성은 이 확인이 아니라 아래 INSERT 의 PK 가 보장한다 —
-        // UsagePeriodClose 는 Persistable 이라 saveAndFlush 가 항상 persist(INSERT)다.
-        if (closes.existsById(period)) {
-            log.info("usage month already closed — skip: period={}", period)
-            txStatus.setRollbackOnly()
-            return false
-        }
         try {
             closes.saveAndFlush(
                 UsagePeriodClose(
@@ -188,9 +196,10 @@ class UsageCloseService(
                 ),
             )
         } catch (e: DataIntegrityViolationException) {
-            // 다른 트랜잭션이 같은 기간을 먼저 INSERT 했다(그쪽 커밋까지 PK 에서 기다린 뒤 ORA-00001). 이 트랜잭션은 통째로 버린다.
-            // 이 try 는 마감 행 INSERT 하나만 감싼다 — 앞의 재집계(MERGE)는 즉시 실행되고 clearAutomatically 로 영속성 컨텍스트가
-            // 비워져 flush 할 다른 변경이 없으므로, 여기서 나는 무결성 위반은 마감 행의 것뿐이다. usage_monthly 등 그 뒤의 위반은 실패로 전파된다.
+            // 같은 기간의 PK 충돌(ORA-00001 on pk_usage_period_close)만 "이미 마감됨" 이다. CHECK 위반·NUMBER 자릿수 초과 같은
+            // 다른 무결성 위반은 진짜 실패라 그대로 던진다(이후 달 마감·백필 표식을 막는다).
+            // try 는 마감 행 INSERT 하나만 감싼다 — 앞의 재집계(MERGE)는 즉시 실행되고 flush 할 다른 변경이 없다.
+            if (!isClosePkCollision(e)) throw e
             log.info("usage month closed by another instance — skip: period={}", period)
             txStatus.setRollbackOnly()
             return false
@@ -224,4 +233,11 @@ class UsageCloseService(
     }
 
     private fun closedPeriods(): Set<String> = closes.findAll().mapTo(HashSet()) { it.period }
+
+    /** 원인 사슬에 pk_usage_period_close 를 지목한 ORA-00001(unique constraint) 이 있는가. 제약 이름은 대소문자 무시. */
+    private fun isClosePkCollision(e: Throwable): Boolean =
+        generateSequence(e) { c -> c.cause?.takeIf { it !== c } }.any { c ->
+            c is SQLException && c.errorCode == ORA_UNIQUE_VIOLATION &&
+                c.message?.contains(CLOSE_PK_NAME, ignoreCase = true) == true
+        }
 }

@@ -4,6 +4,7 @@ import com.crosscert.passkey.core.repository.UsageDailyRepository
 import com.crosscert.passkey.core.repository.UsagePeriodCloseRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -16,6 +17,9 @@ private const val RECENT_DAYS = 3L
 /**
  * 장부(ceremony_event)를 일별 요약(usage_daily)으로 집계한다. 병합은 멱등이라 같은 구간을 다시 돌려도 안전하다.
  * 닫힌 달은 [rollupDays]/[rollupRecent] 가 건너뛴다 — 마감된 숫자가 다시 바뀌지 않게 하는 방어선.
+ * 이 확인과 MERGE 는 한 트랜잭션이고, 그 트랜잭션은 먼저 usage_period_close 에 SHARE 락을 건다
+ * ([UsagePeriodCloseRepository.lockForRollup]). 마감([UsageCloseService])은 EXCLUSIVE 락을 쥐므로, 진행 중인 마감이 커밋된 뒤에
+ * 확인해 그달을 건너뛰고, 진행 중인 집계가 있으면 마감이 그 커밋을 기다린다.
  */
 @Service
 class UsageRollupService(
@@ -29,8 +33,11 @@ class UsageRollupService(
     val ledgerStart: LocalDate = UsagePeriods.parseLedgerStart(ledgerStartRaw)
 
     /** 닫힌 달에 속한 날은 건너뛴다. 반환값은 실제로 집계한 날 수. */
+    @Transactional
     fun rollupDays(fromDay: LocalDate, toDayInclusive: LocalDate): Int {
         if (fromDay > toDayInclusive) return 0
+        // 첫 문장 — 마감 확인보다 먼저. 진행 중인 마감이 있으면 그 커밋까지 기다린다.
+        closes.lockForRollup()
         var aggregated = 0
         // 열린 날들의 연속 구간. 닫힌 달을 만나면 거기서 끊어 병합 한 번으로 처리한다.
         var runStart: LocalDate? = null
@@ -63,6 +70,7 @@ class UsageRollupService(
     }
 
     /** 정기 실행분: 기본은 오늘 포함 최근 3일. usage_daily 의 마지막 날이 그보다 앞서면 그날부터. */
+    @Transactional // 내부의 rollupDays 호출은 같은 객체 안이라 프록시를 거치지 않는다 — 여기서 트랜잭션을 연다.
     fun rollupRecent(): Int {
         val today = LocalDate.now(clock)
         val default = today.minusDays(RECENT_DAYS - 1)
@@ -70,7 +78,7 @@ class UsageRollupService(
         return rollupDays(from, today)
     }
 
-    /** 닫힌 달 검사 없이 한 달 전체를 다시 센다. 마감 직전에만 쓴다. */
+    /** 닫힌 달 검사 없이 한 달 전체를 다시 센다. 마감 직전, 마감 트랜잭션(EXCLUSIVE 락 보유) 안에서만 쓴다. */
     fun rollupMonthForClose(month: YearMonth) {
         merge(month.atDay(1), month.plusMonths(1).atDay(1))
     }

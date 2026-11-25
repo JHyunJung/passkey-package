@@ -124,4 +124,20 @@ class UsageRollupServiceTest {
         verify(daily, never()).mergeFromLedger(any(), any(), any(), any())
         verify(closes, never()).existsById(any())
     }
+
+    @Test
+    fun rollupDays_takesShareLockBeforeClosedCheck() {
+        // 마감 확인과 MERGE 가 진행 중인 마감과 엇갈리지 않도록, 확인보다 먼저 usage_period_close SHARE 락을 건다.
+        service().rollupDays(LocalDate.of(2026, 10, 30), LocalDate.of(2026, 11, 2))
+        val order = org.mockito.kotlin.inOrder(closes, daily)
+        order.verify(closes).lockForRollup()
+        order.verify(closes).existsById("2026-10")
+        order.verify(daily).mergeFromLedger(any(), any(), any(), any())
+    }
+
+    @Test
+    fun rollupDays_reversedRange_takesNoLock() {
+        service().rollupDays(LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 1))
+        verify(closes, never()).lockForRollup()
+    }
 }
