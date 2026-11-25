@@ -53,6 +53,10 @@
       카탈로그 `kotlin = "2.4.21"` 로 올리고 passkey-app 에 적용, Boot BOM `kotlin.version` 도 루트 `build.gradle.kts` 에서
       같은 값으로 덮어쓴다. passkey-app 은 본 코드·테스트 모두 Kotlin. [boot4-upgrade 2026-11-06]
 
+- [ ] **사용량 정산 장부 — QA 번들 이미지 재빌드** — passkey-app(성공 행을 장부에 기록)·admin-app(집계·마감·정산 탭) 이미지를
+      이 기능 기준으로 다시 빌드해야 한다. 그때 `qa-bundle/deploy/docker-compose.yml` 의 admin-app 에
+      `PASSKEY_USAGE_LEDGER_START_DATE` 패스스루를 추가한다(`deploy/docker-compose.yml` 과 같게). [usage-settlement-ledger 2026-11-25]
+
 ## 1. 기능 개발 (별도 spec 필요)
 
 - [x] ~~**F01 mfaRequired 강제화**~~ — 정책 on 이면 MFA 미등록 운영자는 로그인 직후 등록 필요 세션(`MFA_ENROLL_REQUIRED`)이 되어
@@ -205,6 +209,12 @@
       `qa-bundle/setup.sh:200` 은 passkey FQDN(`https://${PASSKEY_FQDN}`)을 넣는다. admin-app 은 nginx 뒤가 아니라
       `deploy/docker-compose.yml:73` 의 `ADMIN_BIND_ADDR:ADMIN_HOST_PORT` 로 직접 바인딩되므로 메일 링크가
       실제 콘솔 주소와 다르다. 변수명(invite)도 초대 기능 제거 후 낡았다. [2026-09-13 문서 감사에서 발견]
+
+- [ ] **사용량 정산 후속** [usage-settlement-ledger 2026-11-25]
+  - [ ] `UsageDailyRepository` MERGE 의 일 버킷을 `TRUNC(created_at AT TIME ZONE 'Asia/Seoul')` 로 굳히기(지금은 DB 세션 시간대 KST 에 기댄다).
+  - [ ] `UsageCloseIT` 의 동시성 테스트 두 개(`concurrentClose_samePeriod_exactlyOneWins`, `rollupDuringClose_waits_andSkipsClosedMonth`)에
+        시각 기반 단언 추가(상대가 실제로 락을 기다렸는지 — 지금은 결과 값만 본다).
+  - [ ] 기존 현황 화면의 월별·테넌트별 CSV 파일 안에 "청구 기준 아님" 표식이 없다(넣을지 결정 대기).
 
 ## 4. 구조·위생 (P3)
 

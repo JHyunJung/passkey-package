@@ -187,7 +187,7 @@ compose 기본값으로 동작한다:
 | QA (rp-app) | `WK_ANDROID_SHA256` | `63:0C:F8:85:C6:9A:80:A0:87:B0:A2:72:83:61:00:29:F8:36:65:FF:EF:8E:FE:71:71:74:13:ED:34:9D:7C:54` | `assetlinks.json` 의 서명키 SHA-256 지문. 자체 빌드 앱을 쓰면 반드시 교체한다 |
 | QA (rp-app) | `WK_IOS_APPID` | `LTPC88ZFE8.com.crosscert.sample.passkey` | `/.well-known/apple-app-site-association` 의 `<TeamID>.<BundleID>` |
 | SMTP (admin) | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `PASSKEY_MAIL_FROM` | 미설정 | 미설정이면 `LogMailSender` — **메일이 발송되지 않는다**(가입 승인·비밀번호 재설정 메일이 안 나가고 로그로만 남는다). 판정은 `SPRING_MAIL_HOST` 하나로 한다. `docker-compose.yml` 의 admin-app 에 패스스루됨 — **빈 값 금지**(`SPRING_MAIL_HOST=` 처럼 두면 빈 값도 '설정됨' 으로 취급돼 mail health 가 DOWN 이 된다). 쓰지 않으면 주석 처리로 끈다 |
-| 사용량 정산 (admin) | `PASSKEY_USAGE_LEDGER_START_DATE` | 미설정 | 장부 기록이 배포된 **다음 날**(`YYYY-MM-DD`). 이 날부터 사용량이 "장부" 기준, 이전은 "이전 방식" 으로 표시된다. 비우면 모든 날이 "이전 방식". 형식이 틀리면 경고를 남기고 미설정으로 처리한다. `docker-compose.yml` 의 admin-app 에 패스스루됨 |
+| 사용량 정산 (admin) | `PASSKEY_USAGE_LEDGER_START_DATE` | 미설정 | 장부 기록이 배포된 **다음 날**(`YYYY-MM-DD`). 이 날부터 사용량이 "장부" 기준, 이전은 "이전 방식" 으로 표시된다. 비우면 모든 날이 "이전 방식". 형식이 틀리면 경고를 남기고 미설정으로 처리한다. **기동 시 한 번만 읽는다** — 나중에 바꾸면 admin-app 재기동이 필요하므로, passkey-app 배포 때 그 다음 날짜로 미리 넣어 둔다. `docker-compose.yml` 의 admin-app 에 패스스루됨 |
 | actuator | `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE` | `health,info` | prometheus 를 켜려면 `health,info,prometheus`. passkey-app 은 인증이 없으니 내부망 스크레이퍼만 접근 가능하게 둔다 |
 | DB 풀 | `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | passkey-app `20`, admin-app `10` | 컨테이너당 DB 커넥션 상한. `.env` 에 넣으면 **두 앱 모두** 이 값이 된다. Oracle 최대 세션 = (서버별 passkey-app 인스턴스 수 × 서버 수, 롤링 업데이트 피크 `--scale passkey-app=6` 포함) × passkey 풀 + admin 풀. 올리기 전에 `SELECT name, value FROM v$parameter WHERE name IN ('processes','sessions')` 로 여유를 확인한다 |
 | DB 풀 | `SERVER_TOMCAT_THREADS_MAX` | `19` | passkey-app 요청 워커 상한. **반드시 풀 상한 − 1 이하** — 아니면 동시 ceremony 가 몰릴 때 이벤트 기록이 풀을 고갈시켜 30초 정지할 수 있다. 풀을 바꾸면 함께 바꾼다 |
@@ -342,6 +342,14 @@ nginx 는 `/actuator;x/health` 를 `;` 까지 포함한 하나의 경로로 보�
   UPDATE security_policy SET mfa_required='N' WHERE id=1;
   COMMIT;
   ```
+
+### 사용량 정산 장부 — 롤백
+
+- 이전 버전으로 되돌릴 때 장부 테이블 3개(`usage_daily`·`usage_monthly`·`usage_period_close`)는 **지우지 않고 둬도 된다**.
+  이전 버전의 passkey-app·admin-app 은 이 테이블이 있어도 그대로 동작한다.
+- 단, **이전 admin-app 의 보존 배치에는 마감 보호가 없다** — 마감되지 않은 달의 `ceremony_event` 원본도 보존 기간
+  (`passkey.retention.ceremony-event`, 기본 90일)이 지나면 지운다. 마감되지 않은 달이 있는 채로 이전 admin-app 을 보존 기간을
+  넘겨 돌려 두지 않는다(그 달의 청구 근거 원본이 사라진다).
 
 ## 마이그레이션 후속 조치
 

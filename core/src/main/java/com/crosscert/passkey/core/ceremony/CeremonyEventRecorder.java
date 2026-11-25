@@ -14,18 +14,20 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * ceremony 집계 이벤트를 best-effort 로 기록한다. 기록 실패가 등록/인증 ceremony
- * 자체를 깨면 안 된다.
+ * ceremony 집계 이벤트를 기록한다. 기록 방식은 메서드마다 다르다.
+ * <ul>
+ *   <li>{@link #record}·{@link #recordAfterCommit} (BEGIN 행 등): best-effort — 기록 실패가 등록/인증
+ *       ceremony 자체를 깨면 안 되므로 실패를 로그만 남기고 삼킨다.</li>
+ *   <li>{@link #recordInTransaction} (청구 장부의 성공 행): 일부러 실패를 전파한다 — 호출 측 트랜잭션에
+ *       참여하므로 기록이 실패하면 본 처리도 롤백된다(성공했는데 장부에 없는 경우를 만들지 않는다).</li>
+ * </ul>
  *
- * <p>핵심: 트랜잭션 <b>경계 전체</b>를 try/catch 로 감싼다. {@code @Transactional}
+ * <p>best-effort 경로의 핵심: 트랜잭션 <b>경계 전체</b>를 try/catch 로 감싼다. {@code @Transactional}
  * 메서드 안의 try/catch 는 커밋 시점 예외(JPA flush 지연으로 INSERT 가 커밋 때 실행되거나,
  * tenant_id NOT NULL 등 제약 위반)를 잡지 못하고 호출자로 전파시킨다. 그래서
  * TransactionTemplate(REQUIRES_NEW)을 직접 호출하고 그 호출을 try/catch 로 감싼다 —
  * executeWithoutResult 가 커밋을 동기적으로 수행하므로 커밋 실패까지 여기서 삼켜진다.
  * REQUIRES_NEW: 호출 측이 readOnly 이거나 롤백돼도 집계 기록이 독립 커밋된다.
- *
- * <p>성공 행은 청구 장부라 호출 측 트랜잭션에 참여한다({@link #recordInTransaction}).
- * BEGIN 행은 기존 best-effort 메서드를 쓴다.
  */
 @Slf4j
 @Component
