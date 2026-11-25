@@ -43,6 +43,7 @@ import java.util.TreeSet
  *   <tr><td>SystemInfoTabController</td><td>2</td><td>설정 ?tab=system</td><td>2</td><td>-</td><td>O (RP 403)</td><td>-</td></tr>
  *   <tr><td>LicensePageController</td><td>5</td><td>3 (+RP 302)</td><td>2 (재확인 성공·실패)</td><td>-</td><td>O</td><td>View.onprem</td></tr>
  *   <tr><td>InsightsPageController</td><td>4</td><td>1 + RP 302</td><td>2 (+RP 403)</td><td>-</td><td>O</td><td>riskWarn(위험 0/12)</td></tr>
+ *   <tr><td>UsageSettlementPageController</td><td>2</td><td>1 + RP 302</td><td>-</td><td>-</td><td>O</td><td>-</td></tr>
  *   <tr><td>ActivityPageController</td><td>9</td><td>2 + RP 302</td><td>6 (+잘못된 ID 422·RP 403)</td><td>-</td><td>O</td><td>필터 selected</td></tr>
  *   <tr><td>AuditChainPageController</td><td>12</td><td>1 + RP 302</td><td>10 (+400·409)</td><td>1 (해결 메모 422)</td><td>O</td><td>Row.intact, Incident.open</td></tr>
  *   <tr><td>ShellController</td><td>7</td><td>-</td><td>7 (+비 htmx 302)</td><td>-</td><td>O</td><td>SwitcherItem.active, showLink</td></tr>
@@ -88,6 +89,7 @@ class RenderedHtmlContractCoverage {
             "SystemInfoTabController" to listOf("settings/system."),
             "LicensePageController" to listOf("platform/license."),
             "InsightsPageController" to listOf("platform/insights."),
+            "UsageSettlementPageController" to listOf("platform/usage."),
             "ActivityPageController" to listOf("platform/activity."),
             "AuditChainPageController" to listOf("platform/audit-chain."),
             "ShellController" to
@@ -112,9 +114,9 @@ class RenderedHtmlContractCoverage {
             .toCollection(TreeSet())
         val slice = HtmlContractSupport.HtmlContractSlice::class.java.getAnnotation(AdminWebSliceTest::class.java)
         val covered: Set<String> = slice.controllers.map { it.java.name }.toCollection(TreeSet())
-        // 24 = Task 2 시점 admin.web 의 @Controller 전수(화면 23 + HomeRedirect). 화면 컨트롤러가 늘거나 줄면 이 수와
+        // 25 = admin.web 의 @Controller 전수(Task 2 시점 24 + 사용량 정산 화면). 화면 컨트롤러가 늘거나 줄면 이 수와
         // HtmlContractSlice·SNAPSHOT_PREFIX·KDoc 표를 함께 고친다(스캔이 0개를 돌려주는 설정 오류도 여기서 잡힌다).
-        assertThat(screens).hasSize(24)
+        assertThat(screens).hasSize(25)
         assertThat(covered).containsAll(screens)
         val simple: Set<String> = screens.map { n -> n.substring(n.lastIndexOf('.') + 1) }.toSet()
         assertThat(SNAPSHOT_PREFIX.keys).containsAll(simple)

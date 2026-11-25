@@ -155,6 +155,27 @@
   </div>
   
 </div>
+  <div aria-label="현황 보기" class="tabs" role="tablist" x-data="tabs" x-on:keydown="onKeydown($event)">
+  <a aria-selected="true" class="tabs__btn tabs__btn--active" href="/admin/insights" role="tab"
+     tabindex="0">
+    현황
+    <!-- 배지 자리(id=<elId>-badge): 저장 같은 화면 동작이 OOB 로 이 안쪽만 새로 바꾼다 -->
+    
+    
+    <!-- 개수 자리(id=<elId>-count): 승인·거절 같은 화면 동작이 OOB 로 이 안쪽을 새로 바꾼다 -->
+    
+    
+  </a><a aria-selected="false" class="tabs__btn" href="/admin/insights/usage" role="tab"
+     tabindex="-1">
+    사용량 정산
+    <!-- 배지 자리(id=<elId>-badge): 저장 같은 화면 동작이 OOB 로 이 안쪽만 새로 바꾼다 -->
+    
+    
+    <!-- 개수 자리(id=<elId>-count): 승인·거절 같은 화면 동작이 OOB 로 이 안쪽을 새로 바꾼다 -->
+    
+    
+  </a>
+</div>
   <div class="stack-6" data-win="7" id="insights-root" x-data="funnelTab" x-on:htmx:after-request="end($event)" x-on:htmx:before-request="begin()">
   <div class="row" style="gap: 16px">
     <div aria-label="기간" class="seg" role="group" x-data="segmented({&quot;value&quot;:&quot;7&quot;})">
@@ -174,6 +195,7 @@
     <a class="btn" data-csv-download download href="/admin/insights.csv?win=7&amp;kind=tenants" hx-boost="false"
        x-bind:aria-disabled="pending" x-on:click="if (pending) $event.preventDefault()">
       <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>테넌트별 내보내기</a>
+    <span class="hint" style="margin: 0">청구 기준 아님 · 사용량 정산 탭 참조</span>
   </div>
 
   <div x-cloak x-show="pending"><div aria-busy="true" aria-label="현황 불러오는 중" class="skeleton-block" role="status" x-data="skeleton">
@@ -378,7 +400,7 @@
   <div class="card__head-main">
     
     <h2 class="card__title">월간 사용량</h2>
-    <p class="card__sub">인증 기록은 90일 보관돼요. 활성 사용자는 테넌트별 사용자 수의 합이에요.</p>
+    <p class="card__sub">인증 기록은 90일 보관돼요. 활성 사용자는 테넌트별 사용자 수의 합이에요. 청구 기준 아님 · 사용량 정산 탭 참조</p>
   </div>
   
 </div>

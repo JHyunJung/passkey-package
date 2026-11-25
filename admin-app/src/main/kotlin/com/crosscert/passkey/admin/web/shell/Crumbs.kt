@@ -38,6 +38,8 @@ object Crumbs {
 
     fun insights(): List<Crumb> = java.util.List.of(Crumb.of("현황"))
 
+    fun usageSettlement(): List<Crumb> = java.util.List.of(Crumb.link("현황", "/admin/insights"), Crumb.of("사용량 정산"))
+
     fun activity(): List<Crumb> = java.util.List.of(Crumb.of("활동"))
 
     fun auditChain(): List<Crumb> = java.util.List.of(Crumb.of("감사 체인 모니터"))

@@ -248,4 +248,19 @@ class InsightsPageControllerTest {
         assertThat(splitLines(monthly)).containsExactly("month,inProgress,authSuccess,activeUsers,newPasskeys", "2026-09,N,500,30,4", "2026-10,Y,180,28,2")
         assertThat(htmx("/admin/insights.csv?kind=evil", platform()).response.status).isEqualTo(404)
     }
+
+    @Test
+    @DisplayName("청구 기준 아님 문구와 사용량 정산 탭 링크, 기존 CSV 헤더는 그대로")
+    fun usageSettlementPointer() {
+        val d = page("/admin/insights")
+        assertThat(d.text()).contains("청구 기준 아님 · 사용량 정산 탭 참조")
+        assertThat(d.select("section[data-monthly] .card__sub").text()).endsWith("청구 기준 아님 · 사용량 정산 탭 참조")
+        assertThat(d.select(".tabs__btn").eachText()).containsExactly("현황", "사용량 정산")
+        assertThat(d.select(".tabs__btn--active").text()).isEqualTo("현황")
+        assertThat(d.select("a.tabs__btn").eachAttr("href")).contains("/admin/insights/usage")
+        val tenants = String(htmx("/admin/insights.csv?kind=tenants", platform()).response.contentAsByteArray, StandardCharsets.UTF_8).substring(1)
+        assertThat(splitLines(tenants)[0]).isEqualTo("slug,name,status,activeUsers,authAttempts,authSuccess,authSuccessRate,regAttempts,regSuccess,regSuccessRate,riskBlocked,passkeys,users,singlePasskeyUsers")
+        val monthly = String(htmx("/admin/insights.csv?kind=monthly", platform()).response.contentAsByteArray, StandardCharsets.UTF_8).substring(1)
+        assertThat(splitLines(monthly)[0]).isEqualTo("month,inProgress,authSuccess,activeUsers,newPasskeys")
+    }
 }
