@@ -5,7 +5,7 @@
 <!--
   사용량 정산(PLATFORM 전용). 청구 근거는 마감된 달의 숫자이고 감사 로그에 남긴 같은 숫자와 대조한 결과를 함께 보인다.
   화면 템플릿 규약: layout 한 줄 + title / crumbs / main. 기간 선택은 일반 GET 폼(JS 없음).
-  모델: tabItems/tabActive, period, statusLabel/statusClass, basisLabel, verificationLabel(null=표시 안 함)/verificationClass,
+  모델: tabItems/tabActive, period, statusLabel/statusClass, pendingClose(마감 대기 안내 표시), basisLabel, verificationLabel(null=표시 안 함)/verificationClass,
         asOfLabel/asOfText, periodOptions(value, selected), tenants(TenantView), totalReg/totalAuth/totalAll,
         trend(TrendView), csvTenants/csvTrend
   사용자 값(테넌트 이름·slug)은 th:text 로만 쓴다.
@@ -33,6 +33,7 @@
         <div class="row" style="gap: 12px; flex-wrap: wrap" data-usage-status>
           <strong data-usage-period th:text="${period}">2026-10</strong>
           <span class="badge" th:classappend="${statusClass}" th:text="${statusLabel}">마감</span>
+          <span th:if="${pendingClose}" class="hint" style="margin: 0" data-usage-pending-note>아직 마감되지 않은 숫자예요. 청구에 쓰지 마세요.</span>
           <span class="hint" style="margin: 0">집계 기준 <span th:text="${basisLabel}">장부</span></span>
           <span th:if="${verificationLabel != null}" class="badge" th:classappend="${verificationClass}" th:text="${verificationLabel}">감사 로그와 일치</span>
           <span th:if="${asOfText != null}" class="hint" style="margin: 0"><th:block th:text="${asOfLabel}">마감</th:block> <span th:text="${asOfText}">2026-11-01 02:00</span></span>

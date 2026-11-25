@@ -21,12 +21,13 @@ private val log = LoggerFactory.getLogger(UsageSettlementService::class.java)
 
 private const val ACTION_MONTH_CLOSED = "USAGE_MONTH_CLOSED"
 private const val ACTION_MONTH_PARTIAL = "USAGE_MONTH_PARTIAL"
+private const val TARGET_PERIOD = "usage_period"
 private const val TREND_MONTHS = 12L
 
 /** 한 달의 테넌트별 성공 건수(성공 건수가 0 이어도 시도가 있었으면 행이 있다). */
 private data class TenantCount(val tenantId: UUID, val regSuccess: Long, val authSuccess: Long)
 
-/** 한 달치 원자료. 마감된 달은 usage_monthly·usage_period_close, 아니면 usage_daily 에서 읽는다. */
+/** 한 달치 원자료. 마감된 달은 usage_monthly·usage_period_close, 아니면 usage_daily 에서 읽는다(이번 달은 진행 중, 지난 달은 마감 대기). */
 private class MonthData(
     val status: UsageDto.Status,
     val basis: String,
@@ -118,8 +119,10 @@ class UsageSettlementService(
         val counts = sums.map { TenantCount(it[0] as UUID, (it[1] as Number).toLong(), (it[2] as Number).toLong()) }
         // 마감과 같은 규칙: 그달 1일이 장부 시작일 이상이면 장부, 아니면 이전 방식.
         val basis = if (from >= rollup.ledgerStart) UsageDaily.BASIS_LEDGER else UsageDaily.BASIS_LEGACY
+        // 지난 달인데 마감 행이 없으면 배치가 아직 안 돌았거나 마감이 실패하고 있다 — 이번 달(진행 중)과 구분해 드러낸다.
+        val status = if (month < YearMonth.now(clock)) UsageDto.Status.PENDING_CLOSE else UsageDto.Status.IN_PROGRESS
         return MonthData(
-            UsageDto.Status.IN_PROGRESS, basis, daily.findMaxAggregatedAt(from, to).orElse(null), counts,
+            status, basis, daily.findMaxAggregatedAt(from, to).orElse(null), counts,
             counts.sumOf { it.regSuccess }, counts.sumOf { it.authSuccess }, sums.sumOf { (it[4] as Number).toLong() }, null,
         )
     }
@@ -127,10 +130,11 @@ class UsageSettlementService(
     /**
      * 마감된 달: 마감 때 남긴 감사 기록(그 기간 것이 정확히 한 건)이 usage_monthly 의 테넌트별 두 수치와
      * 마감 행의 전체 합계에 모두 같아야 MATCH. 없거나 둘 이상이거나 하나라도 다르면 MISMATCH.
+     * 감사 로그는 대상(usage_period, 기간) 인덱스로 그 기간 것만 읽고, payload 의 period 도 다시 확인한다.
      */
     private fun verify(period: String, data: MonthData): UsageDto.Verification {
         val close = data.close ?: return UsageDto.Verification.NOT_APPLICABLE
-        val entries = auditRepo.findByActionIn(listOf(ACTION_MONTH_CLOSED, ACTION_MONTH_PARTIAL))
+        val entries = auditRepo.findByTargetTypeAndTargetIdAndActionIn(TARGET_PERIOD, period, listOf(ACTION_MONTH_CLOSED, ACTION_MONTH_PARTIAL))
             .mapNotNull { parse(it.payload) }
             .filter { it.path("period").asString("") == period }
         if (entries.size != 1) return UsageDto.Verification.MISMATCH

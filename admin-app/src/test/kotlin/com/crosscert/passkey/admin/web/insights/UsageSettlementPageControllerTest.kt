@@ -83,7 +83,7 @@ class UsageSettlementPageControllerTest {
             listOf(UsageDto.TenantRow(B, "beta", "Beta<b>", 30, 40), UsageDto.TenantRow(A, null, "Acme", 5, 6))
         }
         return UsageDto.View(
-            period, status, basis, if (status == UsageDto.Status.IN_PROGRESS) null else CLOSED_AT, verification, rows,
+            period, status, basis, if (status == UsageDto.Status.CLOSED || status == UsageDto.Status.PARTIAL) CLOSED_AT else null, verification, rows,
             rows.sumOf { it.regSuccess }, rows.sumOf { it.authSuccess },
             listOf(
                 UsageDto.MonthRow("2026-11", UsageDto.Status.IN_PROGRESS, 7, 9, 2, 12),
@@ -102,10 +102,11 @@ class UsageSettlementPageControllerTest {
         whenever(service.view(any())).thenAnswer { inv ->
             val m: YearMonth = inv.getArgument(0)
             val current = m == YearMonth.of(2026, 11)
-            if (current) {
-                view(m.toString(), UsageDto.Status.IN_PROGRESS, verification = UsageDto.Verification.NOT_APPLICABLE)
-            } else {
-                view(m.toString(), UsageDto.Status.CLOSED, zero = m.year < 2026)
+            when {
+                current -> view(m.toString(), UsageDto.Status.IN_PROGRESS, verification = UsageDto.Verification.NOT_APPLICABLE)
+                // 데이터 없는 옛 달 — 마감 행이 없으니 마감 대기다.
+                m.year < 2026 -> view(m.toString(), UsageDto.Status.PENDING_CLOSE, verification = UsageDto.Verification.NOT_APPLICABLE, zero = true)
+                else -> view(m.toString(), UsageDto.Status.CLOSED)
             }
         }
     }
@@ -149,8 +150,8 @@ class UsageSettlementPageControllerTest {
     fun closedMonth_showsLabels() {
         val s = page("/admin/insights/usage?period=2026-10").selectFirst("[data-usage-status]")!!.text()
 
-        assertThat(s).contains("마감").contains("장부").contains("감사 로그와 일치").contains("2026-11-01 02:00")
-        assertThat(s).doesNotContain("이전 방식").doesNotContain("불일치")
+        assertThat(s).contains("마감").contains("장부").contains("감사 로그와 일치").contains("마감 2026-11-01 02:00")
+        assertThat(s).doesNotContain("이전 방식").doesNotContain("불일치").doesNotContain("마감 대기").doesNotContain("청구에 쓰지 마세요")
     }
 
     @Test
@@ -176,16 +177,51 @@ class UsageSettlementPageControllerTest {
     fun partial_showsLabel() {
         stubView(view("2026-10", status = UsageDto.Status.PARTIAL))
 
-        assertThat(page("/admin/insights/usage?period=2026-10").selectFirst("[data-usage-status]")!!.text()).contains("부분(원본 삭제됨)")
+        val s = page("/admin/insights/usage?period=2026-10").selectFirst("[data-usage-status]")!!
+        assertThat(s.text()).contains("부분(원본 삭제됨)")
+        // 청구 근거가 아니므로 성공 색이 아니라 경고 색.
+        assertThat(s.selectFirst(".badge")!!.classNames()).contains("badge--warning").doesNotContain("badge--success")
+    }
+
+    @Test
+    @DisplayName("마감 대기(지난 달, 마감 행 없음): 경고 배지 '마감 대기'와 청구 금지 안내, 집계 시각, 대조 결과 없음")
+    fun pendingClose_showsWarningAndNote() {
+        stubView(
+            view("2026-10", status = UsageDto.Status.PENDING_CLOSE, verification = UsageDto.Verification.NOT_APPLICABLE)
+                .copy(asOf = OffsetDateTime.parse("2026-11-25T09:00:00+09:00")),
+        )
+
+        val s = page("/admin/insights/usage?period=2026-10").selectFirst("[data-usage-status]")!!
+        val badge = s.selectFirst(".badge")!!
+        assertThat(badge.text()).isEqualTo("마감 대기")
+        assertThat(badge.classNames()).contains("badge--warning")
+        assertThat(s.selectFirst("[data-usage-pending-note]")!!.text()).isEqualTo("아직 마감되지 않은 숫자예요. 청구에 쓰지 마세요.")
+        assertThat(s.text()).contains("집계 시각 2026-11-25 09:00").doesNotContain("진행 중").doesNotContain("감사 로그")
     }
 
     @Test
     @DisplayName("진행 중인 달: '진행 중', 대조 결과는 표시하지 않는다")
     fun inProgress_showsLabel() {
+        val s = page("/admin/insights/usage").selectFirst("[data-usage-status]")!!
+
+        assertThat(s.text()).contains("진행 중")
+        assertThat(s.text()).doesNotContain("감사 로그").doesNotContain("마감 대기")
+        assertThat(s.selectFirst(".badge")!!.classNames()).contains("badge--info")
+        assertThat(s.select("[data-usage-pending-note]")).isEmpty()
+    }
+
+    @Test
+    @DisplayName("진행 중인 달의 마지막 집계 시각은 '집계 시각'(장부 기준 표기 '집계 기준'과 겹치지 않게)")
+    fun inProgress_asOfIsLabelledAggregationTime() {
+        stubView(
+            view("2026-11", UsageDto.Status.IN_PROGRESS, verification = UsageDto.Verification.NOT_APPLICABLE)
+                .copy(asOf = OffsetDateTime.parse("2026-11-25T09:00:00+09:00")),
+        )
+
         val s = page("/admin/insights/usage").selectFirst("[data-usage-status]")!!.text()
 
-        assertThat(s).contains("진행 중")
-        assertThat(s).doesNotContain("감사 로그")
+        assertThat(s).contains("집계 기준 장부").contains("집계 시각 2026-11-25 09:00")
+        assertThat(s.split("집계 기준")).hasSize(2) // '집계 기준' 은 한 번만
     }
 
     @Test
@@ -214,6 +250,9 @@ class UsageSettlementPageControllerTest {
         assertThat(d.select("select[name=period] option[selected]").attr("value")).isEqualTo("2020-01") // periods 밖이어도 선택값은 보인다
         assertThat(d.selectFirst("[data-usage-period]")!!.text()).contains("2020-01")
         assertThat(d.select("section[data-usage-tenants] tfoot td").eachText()).containsExactly("전체", "0", "0", "0")
+        // 마감 행이 없는 지난 달이라 '진행 중' 이 아니라 '마감 대기'.
+        val s = d.selectFirst("[data-usage-status]")!!.text()
+        assertThat(s).contains("마감 대기").contains("아직 마감되지 않은 숫자예요. 청구에 쓰지 마세요.").doesNotContain("진행 중")
     }
 
     @Test
@@ -235,6 +274,30 @@ class UsageSettlementPageControllerTest {
         val lines = csvText(mvc.perform(get("/admin/insights/usage.csv?kind=tenants").with(authentication(platform()))).andReturn()).trim().split("\r\n", "\n")
 
         assertThat(lines[1]).endsWith(",LEDGER,IN_PROGRESS,")
+    }
+
+    @Test
+    @DisplayName("CSV 마감 대기인 달: status PENDING_CLOSE, closedAt 빈 칸")
+    fun csvTenants_pendingClose() {
+        stubView(
+            view("2026-10", status = UsageDto.Status.PENDING_CLOSE, verification = UsageDto.Verification.NOT_APPLICABLE)
+                .copy(asOf = OffsetDateTime.parse("2026-11-25T09:00:00+09:00")),
+        )
+
+        val lines = csvText(mvc.perform(get("/admin/insights/usage.csv?period=2026-10&kind=tenants").with(authentication(platform()))).andReturn()).trim().split("\r\n", "\n")
+
+        assertThat(lines[1]).endsWith(",LEDGER,PENDING_CLOSE,")
+    }
+
+    @Test
+    @DisplayName("CSV 추이: 마감 대기인 달은 PENDING_CLOSE")
+    fun csvTrend_pendingClose() {
+        val base = view("2026-11", UsageDto.Status.IN_PROGRESS, verification = UsageDto.Verification.NOT_APPLICABLE)
+        stubView(base.copy(trend = listOf(base.trend[0], UsageDto.MonthRow("2026-10", UsageDto.Status.PENDING_CLOSE, 35, 46, 2, 50))))
+
+        val lines = csvText(mvc.perform(get("/admin/insights/usage.csv?kind=trend").with(authentication(platform()))).andReturn()).trim().split("\r\n", "\n")
+
+        assertThat(lines[2]).isEqualTo("2026-10,PENDING_CLOSE,35,46,2,50,0.9200")
     }
 
     @Test

@@ -6,10 +6,13 @@ import java.util.UUID
 /** 사용량 정산 화면·REST 응답. 엔티티는 JSON·템플릿에 직접 내보내지 않고 이 값 객체로만 옮긴다. */
 object UsageDto {
 
-    /** 진행 중(마감 전) / 마감 / 부분 마감(원본 일부 삭제 후 마감). */
-    enum class Status { IN_PROGRESS, CLOSED, PARTIAL }
+    /**
+     * 진행 중(이번 달) / 마감 대기(지난 달인데 마감 행이 없음 — 배치가 아직 안 돌았거나 마감이 실패하고 있다, 청구 근거 아님)
+     * / 마감 / 부분 마감(원본 일부 삭제 후 마감).
+     */
+    enum class Status { IN_PROGRESS, PENDING_CLOSE, CLOSED, PARTIAL }
 
-    /** 마감 숫자와 감사 로그 기록의 대조 결과. 진행 중인 달은 대조할 기록이 없어 [NOT_APPLICABLE]. */
+    /** 마감 숫자와 감사 로그 기록의 대조 결과. 진행 중·마감 대기인 달은 대조할 기록이 없어 [NOT_APPLICABLE]. */
     enum class Verification { MATCH, MISMATCH, NOT_APPLICABLE }
 
     /** 테넌트 한 줄. 테넌트 목록에 없는 id 는 name = id 문자열, slug = null. */

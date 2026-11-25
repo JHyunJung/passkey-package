@@ -60,9 +60,18 @@ class UsageSettlementPageController(
         model.addAttribute("tabActive", InsightsPageController.TAB_USAGE)
         model.addAttribute("period", v.period)
         model.addAttribute("statusLabel", statusLabel(v.status))
-        model.addAttribute("statusClass", if (v.status == UsageDto.Status.IN_PROGRESS) "badge--info" else "badge--success")
+        // 청구 근거는 '마감' 뿐이라 성공 색은 마감에만 쓴다. 마감 대기·부분 마감은 경고 색.
+        model.addAttribute(
+            "statusClass",
+            when (v.status) {
+                UsageDto.Status.IN_PROGRESS -> "badge--info"
+                UsageDto.Status.CLOSED -> "badge--success"
+                UsageDto.Status.PENDING_CLOSE, UsageDto.Status.PARTIAL -> "badge--warning"
+            },
+        )
+        model.addAttribute("pendingClose", v.status == UsageDto.Status.PENDING_CLOSE)
         model.addAttribute("basisLabel", if (v.basis == "LEDGER") "장부" else "이전 방식")
-        // 진행 중인 달은 대조할 기록이 없어 결과를 보이지 않는다.
+        // 진행 중·마감 대기인 달은 대조할 기록이 없어 결과를 보이지 않는다.
         model.addAttribute(
             "verificationLabel",
             when (v.verification) {
@@ -72,7 +81,8 @@ class UsageSettlementPageController(
             },
         )
         model.addAttribute("verificationClass", if (v.verification == UsageDto.Verification.MISMATCH) "badge--danger" else "badge--success")
-        model.addAttribute("asOfLabel", if (v.status == UsageDto.Status.IN_PROGRESS) "집계 기준" else "마감")
+        // 마감 행이 없는 달의 시각은 마지막 집계 시각이다('집계 기준' 은 장부/이전 방식 표기에 쓴다).
+        model.addAttribute("asOfLabel", if (isClosed(v.status)) "마감" else "집계 시각")
         model.addAttribute("asOfText", if (v.asOf == null) null else KstFormat.kstDateTimeMin(v.asOf))
 
         model.addAttribute(
@@ -109,8 +119,8 @@ class UsageSettlementPageController(
         val filename: String
         when (kind) {
             "tenants" -> {
-                // 진행 중인 달은 마감 시각이 없다(빈 칸).
-                val closedAt = if (v.status == UsageDto.Status.IN_PROGRESS) "" else KstFormat.kstDateTime(v.asOf)
+                // 진행 중·마감 대기인 달은 마감 시각이 없다(빈 칸).
+                val closedAt = if (isClosed(v.status)) KstFormat.kstDateTime(v.asOf) else ""
                 for (t in v.tenants) {
                     rows.add(
                         listOf(
@@ -154,9 +164,13 @@ class UsageSettlementPageController(
 
         private fun statusLabel(s: UsageDto.Status): String = when (s) {
             UsageDto.Status.IN_PROGRESS -> "진행 중"
+            UsageDto.Status.PENDING_CLOSE -> "마감 대기"
             UsageDto.Status.CLOSED -> "마감"
             UsageDto.Status.PARTIAL -> "부분(원본 삭제됨)"
         }
+
+        /** 마감 행이 있는 달(마감·부분 마감). */
+        private fun isClosed(s: UsageDto.Status): Boolean = s == UsageDto.Status.CLOSED || s == UsageDto.Status.PARTIAL
 
         private fun me(model: Model): CurrentAdmin =
             model.getAttribute("me") as? CurrentAdmin ?: throw AccessDeniedException("no authenticated admin")

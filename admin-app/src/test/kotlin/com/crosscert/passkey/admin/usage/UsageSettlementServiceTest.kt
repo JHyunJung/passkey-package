@@ -15,6 +15,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import tools.jackson.databind.json.JsonMapper
 import java.time.Clock
@@ -83,7 +85,7 @@ class UsageSettlementServiceTest {
         whenever(daily.sumByTenant(any(), any())).thenReturn(listOf())
         whenever(daily.findMinUsageDate()).thenReturn(Optional.of(LocalDate.of(2026, 9, 3)))
         whenever(daily.findMaxAggregatedAt(any(), any())).thenReturn(Optional.empty())
-        whenever(auditRepo.findByActionIn(any())).thenReturn(listOf())
+        whenever(auditRepo.findByTargetTypeAndTargetIdAndActionIn(any(), any(), any())).thenReturn(listOf())
     }
 
     private fun closedOctober(auditPayload: String?, monthlyAuth: Long = 7) {
@@ -92,7 +94,7 @@ class UsageSettlementServiceTest {
             listOf(UsageMonthly(a, "2026-10", 5, 5, 6, 8), UsageMonthly(b, "2026-10", 3, monthlyAuth, 4, 12)),
         )
         val entries = if (auditPayload == null) listOf() else listOf(audit("USAGE_MONTH_CLOSED", auditPayload))
-        whenever(auditRepo.findByActionIn(any())).thenReturn(entries)
+        whenever(auditRepo.findByTargetTypeAndTargetIdAndActionIn(any(), any(), any())).thenReturn(entries)
     }
 
     @Test
@@ -108,6 +110,33 @@ class UsageSettlementServiceTest {
         assertThat(v.totalReg).isEqualTo(8)
         assertThat(v.totalAuth).isEqualTo(12)
         assertThat(v.tenants.map { it.name }).containsExactly("Acme", "Beta") // 합계가 10 으로 같아 이름순
+    }
+
+    @Test
+    fun closedMonth_queriesOnlyThatPeriodsAuditEntries() {
+        // 감사 로그 전체를 읽지 않고 대상 인덱스(target_type, target_id)로 그 기간 것만 읽는다.
+        closedOctober(payload("2026-10", 8, 12, Triple(a, 5, 5), Triple(b, 3, 7)))
+
+        service().view(oct)
+
+        verify(auditRepo).findByTargetTypeAndTargetIdAndActionIn("usage_period", "2026-10", listOf("USAGE_MONTH_CLOSED", "USAGE_MONTH_PARTIAL"))
+        verify(auditRepo, never()).findByActionIn(any())
+    }
+
+    @Test
+    fun pastMonthWithoutClose_isPendingClose_notInProgress() {
+        // 지난 달인데 마감 행이 없다 — 배치가 아직 안 돌았거나 마감이 실패하고 있다. 청구에 쓰면 안 되는 숫자라 이번 달과 구분한다.
+        val asOf = OffsetDateTime.parse("2026-11-25T09:00:00+09:00")
+        whenever(daily.sumByTenant(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1))).thenReturn(listOf(daily(a, 2, 4, 3, 5)))
+        whenever(daily.findMaxAggregatedAt(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1))).thenReturn(Optional.of(asOf))
+
+        val v = service().view(oct)
+
+        assertThat(v.status).isEqualTo(UsageDto.Status.PENDING_CLOSE)
+        assertThat(v.verification).isEqualTo(UsageDto.Verification.NOT_APPLICABLE)
+        assertThat(v.asOf).isEqualTo(asOf)
+        assertThat(v.totalReg).isEqualTo(2)
+        assertThat(v.trend.map { it.status }.take(2)).containsExactly(UsageDto.Status.IN_PROGRESS, UsageDto.Status.PENDING_CLOSE)
     }
 
     @Test
@@ -138,7 +167,7 @@ class UsageSettlementServiceTest {
         val p = payload("2026-10", 8, 12, Triple(a, 5, 5), Triple(b, 3, 7))
         closedOctober(p)
         val two = listOf(audit("USAGE_MONTH_CLOSED", p), audit("USAGE_MONTH_PARTIAL", p))
-        whenever(auditRepo.findByActionIn(any())).thenReturn(two)
+        whenever(auditRepo.findByTargetTypeAndTargetIdAndActionIn(any(), any(), any())).thenReturn(two)
 
         assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MISMATCH)
     }
@@ -148,7 +177,7 @@ class UsageSettlementServiceTest {
         closedOctober(payload("2026-10", 8, 12, Triple(a, 5, 5), Triple(b, 3, 7)))
         val other = audit("USAGE_MONTH_CLOSED", payload("2026-09", 1, 1, Triple(a, 1, 1)))
         val mine = audit("USAGE_MONTH_CLOSED", payload("2026-10", 8, 12, Triple(a, 5, 5), Triple(b, 3, 7)))
-        whenever(auditRepo.findByActionIn(any())).thenReturn(listOf(other, mine))
+        whenever(auditRepo.findByTargetTypeAndTargetIdAndActionIn(any(), any(), any())).thenReturn(listOf(other, mine))
 
         assertThat(service().view(oct).verification).isEqualTo(UsageDto.Verification.MATCH)
     }
@@ -182,7 +211,7 @@ class UsageSettlementServiceTest {
         whenever(closes.findById("2026-10")).thenReturn(Optional.of(close("2026-10", UsagePeriodClose.STATUS_PARTIAL, "LEGACY", reg = 1, auth = 2)))
         whenever(monthly.findByPeriod("2026-10")).thenReturn(listOf(UsageMonthly(a, "2026-10", 1, 2, 0, 0)))
         val entry = audit("USAGE_MONTH_PARTIAL", payload("2026-10", 1, 2, Triple(a, 1, 2)))
-        whenever(auditRepo.findByActionIn(any())).thenReturn(listOf(entry))
+        whenever(auditRepo.findByTargetTypeAndTargetIdAndActionIn(any(), any(), any())).thenReturn(listOf(entry))
 
         val v = service().view(oct)
 
@@ -244,6 +273,7 @@ class UsageSettlementServiceTest {
         assertThat(trend[1].status).isEqualTo(UsageDto.Status.CLOSED)
         assertThat(trend[1].activeTenants).isEqualTo(2)
         val empty = trend[5] // 2026-06
+        assertThat(empty.status).isEqualTo(UsageDto.Status.PENDING_CLOSE)
         assertThat(empty.regSuccess).isZero()
         assertThat(empty.authSuccess).isZero()
         assertThat(empty.activeTenants).isZero()
@@ -278,6 +308,7 @@ class UsageSettlementServiceTest {
         val v = service().view(YearMonth.of(2020, 1))
 
         assertThat(v.period).isEqualTo("2020-01")
+        assertThat(v.status).isEqualTo(UsageDto.Status.PENDING_CLOSE)
         assertThat(v.totalReg).isZero()
         assertThat(v.totalAuth).isZero()
         assertThat(v.tenants).hasSize(2)
@@ -288,7 +319,7 @@ class UsageSettlementServiceTest {
         whenever(closes.findById("2026-10")).thenReturn(Optional.of(close("2026-10", reg = 0, auth = 0)))
         whenever(monthly.findByPeriod("2026-10")).thenReturn(listOf())
         val entry = audit("USAGE_MONTH_CLOSED", auditPayload)
-        whenever(auditRepo.findByActionIn(any())).thenReturn(listOf(entry))
+        whenever(auditRepo.findByTargetTypeAndTargetIdAndActionIn(any(), any(), any())).thenReturn(listOf(entry))
     }
 
     @Test
