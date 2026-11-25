@@ -79,6 +79,11 @@ passkey:
     risk-min: 1                 # 차단된 위험 인증이 이 건수 이상이면
     single-passkey-ratio: 0.5   # 패스키 1개뿐인 사용자 비율이 이 값 이상이면
     single-passkey-min-users: 10 #  단, 사용자가 이 수 이상일 때만
+  usage:
+    ledger-start-date:          # 비우면 모든 날이 "이전 방식". 형식 YYYY-MM-DD (환경변수 PASSKEY_USAGE_LEDGER_START_DATE)
+    rollup:
+      fixed-delay: PT1H         # 일별 집계 주기
+      initial-delay: PT2M       # 부팅 후 2분
   retention:
     fixed-delay: P1D            # 하루 1회 실행
     initial-delay: PT5M         # 부팅 후 5분
