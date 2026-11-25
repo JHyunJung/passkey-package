@@ -20,6 +20,9 @@ import com.crosscert.passkey.core.repository.CredentialAuthEventRepository
 import com.crosscert.passkey.core.repository.CredentialRepository
 import com.crosscert.passkey.core.repository.SchedulerLeaseRepository
 import com.crosscert.passkey.core.repository.SecurityIncidentRepository
+import com.crosscert.passkey.core.repository.UsageDailyRepository
+import com.crosscert.passkey.core.repository.UsageMonthlyRepository
+import com.crosscert.passkey.core.repository.UsagePeriodCloseRepository
 import com.crosscert.passkey.core.repository.SecurityPolicyRepository
 import com.crosscert.passkey.core.repository.SigningKeyRepository
 import com.crosscert.passkey.core.repository.TenantAaguidPolicyRepository
@@ -164,6 +167,15 @@ class SystemInfoControllerSecurityTest {
 
     @MockitoBean
     lateinit var securityIncidentRepository: SecurityIncidentRepository
+
+    @MockitoBean
+    lateinit var usageDailyRepository: UsageDailyRepository
+
+    @MockitoBean
+    lateinit var usageMonthlyRepository: UsageMonthlyRepository
+
+    @MockitoBean
+    lateinit var usagePeriodCloseRepository: UsagePeriodCloseRepository
 
     @MockitoBean
     lateinit var adminUserTenantRepository: AdminUserTenantRepository
