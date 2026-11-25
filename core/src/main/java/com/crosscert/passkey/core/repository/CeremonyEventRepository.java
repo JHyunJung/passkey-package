@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -46,6 +47,10 @@ public interface CeremonyEventRepository extends JpaRepository<CeremonyEvent, UU
             @Param("tenantId") UUID tenantId,
             @Param("actions") List<String> actions,
             @Param("since") OffsetDateTime since);
+
+    /** 장부에서 가장 오래된 행의 created_at. 행이 없으면 empty. (usage_daily 백필 시작점 판단용) */
+    @Query("select min(c.createdAt) from CeremonyEvent c")
+    Optional<OffsetDateTime> findMinCreatedAt();
 
     /**
      * retention: created_at 이 cutoff 이전인 ceremony 이벤트 삭제. funnel 쿼리는

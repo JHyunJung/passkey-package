@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -122,6 +123,12 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
      */
     @Query("select a.tenantId, max(a.createdAt) from AuditLog a where a.tenantId is not null group by a.tenantId")
     java.util.List<Object[]> findLatestCreatedAtGroupedByTenantId();
+
+    /** 해당 action 의 감사 로그가 한 건이라도 있는지. */
+    boolean existsByAction(String action);
+
+    /** action 이 주어진 값 중 하나인 감사 로그. */
+    List<AuditLog> findByActionIn(Collection<String> actions);
 
     /** Read API for the audit-log page. Filters are all optional. */
     @Query("select a from AuditLog a " +

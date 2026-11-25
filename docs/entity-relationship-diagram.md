@@ -18,7 +18,7 @@ Crosscert Passkey Platform 의 JPA 엔티티(`core/src/main/java/com/crosscert/p
 > FK 제약이 **없는** 테이블은 루트 테이블(`tenant`·`admin_user` — 참조할 상위가 없다)과,
 > tenant 를 참조하지 않는 독립 테이블(`signing_key`·`mds_blob_cache`·
 > `mds_sync_history`·`scheduler_lease`·`security_policy`)과, tenant 컬럼을 갖되 제약을 걸지 않은
-> `audit_log`·`ceremony_event`·`security_incident`, 그리고 `admin_signup_request` 입니다.
+> `audit_log`·`ceremony_event`·`security_incident`·`usage_daily`·`usage_monthly`·`usage_period_close`, 그리고 `admin_signup_request` 입니다.
 > `admin_user` 도 tenant 를 직접 참조하지 않습니다(위 N:M 매핑 참조).
 >
 > 아래 다이어그램의 **"(soft)" 는 "JPA 연관 어노테이션(`@ManyToOne`/`@OneToMany`)이 없고
@@ -42,6 +42,8 @@ erDiagram
     TENANT ||--o{ API_KEY : "has (soft)"
     API_KEY ||--o{ API_KEY_SCOPE : "has (JPA)"
     TENANT ||--o{ CEREMONY_EVENT : "has (soft, no FK)"
+    TENANT ||--o{ USAGE_DAILY : "일별 요약 (soft, no FK)"
+    TENANT ||--o{ USAGE_MONTHLY : "월 확정값 (soft, no FK)"
     ADMIN_USER ||--o{ ADMIN_USER_TENANT : "scopes RP_ADMIN (soft)"
     TENANT ||--o{ ADMIN_USER_TENANT : "scoped by (soft)"
     ADMIN_USER ||--o{ ADMIN_USER_RECOVERY_CODE : "has (soft)"
@@ -129,6 +131,35 @@ erDiagram
         RAW16 id PK
         RAW16 tenant_id "soft, FK 없음"
         string action
+    }
+    USAGE_DAILY {
+        RAW16 tenant_id PK "soft, FK 없음"
+        date usage_date PK "KST 일"
+        number reg_success
+        number auth_success
+        number reg_attempt
+        number auth_attempt
+        string basis "LEDGER|LEGACY"
+        instant aggregated_at
+    }
+    USAGE_MONTHLY {
+        RAW16 tenant_id PK "soft, FK 없음"
+        string period PK "YYYY-MM (KST)"
+        number reg_success
+        number auth_success
+        number reg_attempt
+        number auth_attempt
+    }
+    USAGE_PERIOD_CLOSE {
+        string period PK "YYYY-MM (KST)"
+        string status "CLOSED|PARTIAL"
+        string basis "LEDGER|LEGACY"
+        number reg_success
+        number auth_success
+        number reg_attempt
+        number auth_attempt
+        number tenant_count
+        instant closed_at
     }
     ADMIN_USER {
         RAW16 id PK
@@ -227,6 +258,9 @@ soft 로만 표기합니다. `ADMIN_USER_INVITATION` 테이블(초대 흐름)은
 | TENANT | API_KEY | 1:N | soft | `fk_api_key_tenant` |
 | API_KEY | API_KEY_SCOPE | 1:N | JPA `@ManyToOne` | `fk_aks_api_key` ON DELETE CASCADE + JPA orphanRemoval |
 | TENANT | CEREMONY_EVENT | 1:N | soft | **FK 없음** |
+| TENANT | USAGE_DAILY | 1:N | soft (복합 PK `tenant_id`+`usage_date`, `@IdClass`) | **FK 없음** — 장부(`ceremony_event`)에서 재집계하는 요약 |
+| TENANT | USAGE_MONTHLY | 1:N | soft (복합 PK `tenant_id`+`period`, `@IdClass`) | **FK 없음** — 마감된 달의 확정값, INSERT 전용 |
+| (독립) | USAGE_PERIOD_CLOSE | — | PK `period` | 월 마감 기록(전체 합계), INSERT 전용 |
 | ADMIN_USER ↔ TENANT | ADMIN_USER_TENANT | **N:M** | soft (복합 PK 매핑 엔티티) | `fk_aut_admin_user` ON DELETE CASCADE / `fk_aut_tenant` |
 | ADMIN_USER | ADMIN_USER_RECOVERY_CODE | 1:N | soft (`admin_user_id`) | `fk_recovery_admin_user` ON DELETE CASCADE |
 | ADMIN_USER | ADMIN_PASSWORD_RESET_TOKEN | 1:N | soft | `fk_pwd_reset_admin_user` ON DELETE CASCADE |

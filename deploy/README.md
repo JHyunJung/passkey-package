@@ -259,6 +259,8 @@ admin-app 은 1개 고정이라 이 방식이 불가능하다. 재기동 시 수
 - [ ] 스키마가 `scripts/full-schema-part2-schema.sql` 과 일치 — 새 환경은 이 파일로 생성,
       운영 중인 DB 는 이번 릴리스의 변경 SQL 을 DBA 가 적용 완료(어긋나면 두 앱이 기동 시
       `Schema-validation: missing table/column` 으로 멈춘다)
+- [ ] 증분 스크립트(`scripts/upgrade/*.sql`, PSK_APP_OWNER 로 실행)를 **앱보다 먼저** 적용한다.
+      순서가 바뀌면 passkey-app 이 스키마 검증 실패(`missing table`)로 뜨지 않는다
 - [ ] 서버 A·B 의 `MASTER_KEY` 가 **동일한 값**인지 확인
 - [ ] 앞단 LB 가 클라이언트발 `X-Forwarded-*` 헤더를 스트립하는지 확인
 - [ ] LB → nginx 로 `X-Forwarded-Proto: https` 가 전달되는지 확인
