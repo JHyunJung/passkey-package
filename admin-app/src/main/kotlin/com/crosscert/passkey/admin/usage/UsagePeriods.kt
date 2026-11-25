@@ -15,9 +15,15 @@ object UsagePeriods {
     /** 장부 시작일이 없다는 뜻의 표식. 어떤 날짜도 이 날 이후가 아니므로 전부 "이전 방식" 이 된다. */
     val NO_LEDGER: LocalDate = LocalDate.of(9999, 12, 31)
 
-    /** null·빈 값·형식 오류는 [NO_LEDGER]. 형식 오류만 경고를 남긴다(호출자가 한 번만 파싱한다). */
+    /** null·빈 값·형식 오류는 [NO_LEDGER] 이고 경고를 남긴다(호출자가 한 번만 파싱한다). */
     fun parseLedgerStart(raw: String?): LocalDate {
-        if (raw.isNullOrBlank()) return NO_LEDGER
+        if (raw.isNullOrBlank()) {
+            log.warn(
+                "사용량 장부 시작일이 설정되지 않았습니다(passkey.usage.ledger-start-date / PASSKEY_USAGE_LEDGER_START_DATE)" +
+                    " — 모든 날이 \"이전 방식\" 으로 분류됩니다",
+            )
+            return NO_LEDGER
+        }
         return try {
             LocalDate.parse(raw.trim())
         } catch (e: DateTimeParseException) {

@@ -30,6 +30,7 @@ class UsageRollupService(
 
     /** 닫힌 달에 속한 날은 건너뛴다. 반환값은 실제로 집계한 날 수. */
     fun rollupDays(fromDay: LocalDate, toDayInclusive: LocalDate): Int {
+        if (fromDay > toDayInclusive) return 0
         var aggregated = 0
         // 열린 날들의 연속 구간. 닫힌 달을 만나면 거기서 끊어 병합 한 번으로 처리한다.
         var runStart: LocalDate? = null

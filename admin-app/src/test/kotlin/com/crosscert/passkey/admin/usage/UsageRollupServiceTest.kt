@@ -116,4 +116,12 @@ class UsageRollupServiceTest {
             eq(kst("2026-10-01T00:00+09:00")), eq(kst("2026-11-01T00:00+09:00")), eq(ledgerStart), any(),
         )
     }
+
+    @Test
+    fun rollupDays_reversedRange_returnsZeroWithoutTouchingRepositories() {
+        assertThat(service().rollupDays(LocalDate.of(2026, 11, 25), LocalDate.of(2026, 11, 23))).isEqualTo(0)
+        assertThat(service().rollupDays(LocalDate.of(2026, 12, 2), LocalDate.of(2026, 11, 23))).isEqualTo(0)
+        verify(daily, never()).mergeFromLedger(any(), any(), any(), any())
+        verify(closes, never()).existsById(any())
+    }
 }
