@@ -688,7 +688,7 @@ END signing_key_bootstrap_pkg;
 
 
 -- ============================================================
--- 6. GRANT (133건 — PSK_APP_ADMIN / PSK_APP_RUNTIME 객체 권한)
+-- 6. GRANT (142건 — PSK_APP_ADMIN / PSK_APP_RUNTIME 객체 권한)
 -- ============================================================
 
 GRANT DELETE ON admin_password_reset_token TO PSK_APP_ADMIN;

@@ -75,7 +75,7 @@ public interface UsageDailyRepository extends JpaRepository<UsageDaily, UsageDai
     /**
      * 구간 {@code [from, toExclusive)} (usage_date 기준) 의 테넌트별 합계. JPQL 이라 tenant_id 는 UUID 로 나온다.
      * 반환 행: {@code [UUID tenantId, Long regSuccess, Long authSuccess, Long regAttempt, Long authAttempt]}
-     * (열 순서 고정; 합계가 NULL 일 수 없다 — 행이 있으면 모든 열이 NOT NULL).
+     * (열 순서·타입 고정 — UsageDailyRepositoryIT 가 요소 타입을 단언한다. 합계가 NULL 일 수 없다: 행이 있으면 모든 열이 NOT NULL).
      */
     @Query("select u.tenantId, sum(u.regSuccess), sum(u.authSuccess), sum(u.regAttempt), sum(u.authAttempt) "
          + "from UsageDaily u where u.usageDate >= :from and u.usageDate < :toExclusive "

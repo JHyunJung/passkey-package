@@ -185,6 +185,11 @@ class UsageDailyRepositoryIT {
 
         Object[] mine = rows.stream().filter(r -> a.equals(r[0])).findFirst().orElseThrow();
         assertThat(mine).hasSize(5);
+        assertThat(mine[0]).isInstanceOf(UUID.class);
+        assertThat(mine[1]).isInstanceOf(Long.class);
+        assertThat(mine[2]).isInstanceOf(Long.class);
+        assertThat(mine[3]).isInstanceOf(Long.class);
+        assertThat(mine[4]).isInstanceOf(Long.class);
         assertThat(((Number) mine[1]).longValue()).isEqualTo(1);   // reg_success
         assertThat(((Number) mine[2]).longValue()).isEqualTo(2);   // auth_success (11월분 제외)
         assertThat(((Number) mine[3]).longValue()).isZero();       // reg_attempt
@@ -201,8 +206,10 @@ class UsageDailyRepositoryIT {
         repo.mergeFromLedger(OffsetDateTime.parse("2031-03-10T00:00:00+09:00"),
                 OffsetDateTime.parse("2031-03-12T00:00:00+09:00"), LocalDate.of(2031, 3, 1), stamp);
 
-        assertThat(repo.findMinUsageDate()).hasValueSatisfying(d -> assertThat(d).isBeforeOrEqualTo(D_OCT31.plusYears(5)));
+        // 이 테스트가 넣은 3/10~3/11 은 다른 테스트 행(2026-10~11)보다 뒤라서 max 는 정확히 3/11 이고,
+        // min 은 그보다 이르다(다른 테스트 행이 있든 없든 3/11 이 될 수 없다). min 이 max 를 돌려주면 여기서 걸린다.
         assertThat(repo.findMaxUsageDate()).hasValue(LocalDate.of(2031, 3, 11));
+        assertThat(repo.findMinUsageDate()).hasValueSatisfying(d -> assertThat(d).isBefore(LocalDate.of(2031, 3, 11)));
         assertThat(repo.findMaxAggregatedAt(LocalDate.of(2031, 3, 10), LocalDate.of(2031, 3, 12)))
                 .hasValueSatisfying(t -> assertThat(t.toInstant()).isEqualTo(stamp.toInstant()));
         assertThat(repo.findMaxAggregatedAt(LocalDate.of(2000, 1, 1), LocalDate.of(2000, 1, 2))).isEmpty();

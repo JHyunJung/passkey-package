@@ -1,6 +1,8 @@
 -- 사용량 정산 장부: usage_daily / usage_monthly / usage_period_close 추가.
 -- PSK_APP_OWNER 로 실행한다. 재실행해도 안전하다(테이블이 이미 있으면 건너뛰고, GRANT 는 매번 실행).
 -- 기준 스키마(scripts/full-schema-part2-schema.sql)와 같은 정의를 유지할 것.
+WHENEVER OSERROR EXIT FAILURE
+WHENEVER SQLERROR EXIT SQL.SQLCODE
 SET SERVEROUTPUT ON
 
 DECLARE
@@ -64,3 +66,5 @@ GRANT SELECT ON usage_monthly TO PSK_APP_RUNTIME;
 GRANT SELECT ON usage_period_close TO PSK_APP_ADMIN;
 GRANT INSERT ON usage_period_close TO PSK_APP_ADMIN;
 GRANT SELECT ON usage_period_close TO PSK_APP_RUNTIME;
+
+EXIT;
